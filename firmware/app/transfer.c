@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
+/* Modified 2026-10-30 (fm1-ipad): routes iPad link frames and polls the link. */
 #include "instrument.h"
 #include "tuning_hook.h"
 #include "fm_patch.h"
 #include "fm1_engine_control.h"
+#include "link.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,6 +39,11 @@ static void barrier(void)
 }
 void fm1_app_sysex(const uint8_t *m, size_t n)
 {
+    /* fm1-ipad link frames have their own mailbox; see link.c. */
+    if (m && n >= 9 && m[0] == 0xf0 && m[1] == 0x7d && m[2] == 'F' && m[3] == 'I') {
+        groove_link_sysex(m, n);
+        return;
+    }
     if (!m || n < 6 || n > sizeof incoming.bytes || m[0] != 0xf0 || m[n - 1] != 0xf7 ||
         incoming.length)
         return;
@@ -61,6 +68,7 @@ void groove_transfer_init(void)
     transfer_cancel();
     incoming.length = 0; memset(replies,0,sizeof replies);
     session_source = FM1_MIDI_USB;
+    groove_link_init();
 }
 static int transfer_begin(unsigned kind, unsigned target, unsigned size, unsigned writing)
 {
@@ -233,6 +241,7 @@ static int command(unsigned cmd, const uint8_t *data, unsigned n, uint8_t *out, 
 }
 void groove_transfer_poll(void)
 {
+    groove_link_poll();
     uint32_t now = fm1_millis();
     if (transfer && now - last_activity > 10000U)
         transfer_cancel();

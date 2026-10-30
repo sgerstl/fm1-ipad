@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
 /* Modified 2026-10-17: reserve the final flash sector during sample imports. */
+/* Modified 2026-10-30 (fm1-ipad): SysEx input and firmware MIDI output for the iPad link. */
 (() => {
   'use strict';
   // One portable C instance owns the panel, project and sound state. Before
@@ -45,6 +46,13 @@
             if (!message.data || message.data.length>1024) throw Error('MIDI 数据无效');
             new Uint8Array(c.memory.buffer,c.sim_file(),message.data.length).set(message.data);
             result=c.sim_midi(message.data.length); break;
+          case 'link-out':
+            // fm1-ipad link: drain what the firmware queued for its MIDI outputs.
+            if(!this.linkCapture){c.sim_midi_capture(1);this.linkCapture=true;}
+            data=[];
+            for(let r=c.sim_midi_output();r;r=c.sim_midi_output())
+              data.push({port:r>>>8,bytes:new Uint8Array(c.memory.buffer,c.sim_file(),r&255).slice()});
+            break;
           case 'export':
             result=message.timbre?c.sim_timbre_export():message.patch?c.sim_patch_export():c.sim_export();
             if (!result) data=new Uint8Array(c.memory.buffer,c.sim_file(),message.timbre?223:message.patch?156:4264).slice();
@@ -821,7 +829,7 @@
     midiConnecting=true;availability();
     try{
     const audioReady=muted?Promise.resolve():start(true);
-    const access=await deadline(navigator.requestMIDIAccess({sysex:false}),30000,
+    const access=await deadline(navigator.requestMIDIAccess({sysex:true}),30000,
       'MIDI 访问尚未就绪。请检查网站 MIDI 权限；若已允许且没有弹窗，请重启浏览器后重试。');await audioReady;
     if(midiAccess)midiAccess.onstatechange=null;midiAccess=access;
     const refresh=()=>{
@@ -834,6 +842,8 @@
     $('sim-midi-port').onchange=()=>{
       if(midiInput)midiInput.onmidimessage=null;
       midiInput=access.inputs.get($('sim-midi-port').value);release();send('panic');
+      link.output=midiInput&&[...access.outputs.values()].find(port=>port.name===midiInput.name);
+      if(midiInput)linkStart();
       if(midiInput)midiInput.onmidimessage=event=>{
         if(!ready)return;
         const data=new Uint8Array(event.data);
@@ -847,6 +857,26 @@
     say($('sim-midi-port').options.length>1?'选择一个输入端口；MIDI 通道沿用设备的轨道映射。':'未发现 MIDI 输入设备。');
     }finally{midiConnecting=false;availability();}
   });
+  // fm1-ipad link: SysEx from the selected input already reaches the firmware
+  // through 'midi'. Firmware output on the USB port goes to the output with
+  // the input's name (network sessions and IAC buses use one name both ways).
+  // FM1Link lets a test page or the console talk to the firmware without MIDI.
+  const link={output:undefined,listeners:new Set(),timer:0,busy:false};
+  async function linkPump(){
+    if(!ready||link.busy)return;link.busy=true;
+    try{
+      for(const message of await request('link-out')||[]){
+        if(message.port!==1)continue;
+        try{link.output?.send(message.bytes);}catch{}
+        for(const listener of link.listeners)listener(message.bytes);
+      }
+    }catch{}finally{link.busy=false;}
+  }
+  function linkStart(){if(!link.timer)link.timer=setInterval(linkPump,20);}
+  globalThis.FM1Link={
+    send(bytes){if(!ready)throw Error('Simulator not loaded');linkStart();send('midi',{data:Uint8Array.from(bytes)});},
+    listen(listener){link.listeners.add(listener);linkStart();return()=>link.listeners.delete(listener);}
+  };
   const keyCodes=['KeyZ','KeyS','KeyX','KeyD','KeyC','KeyF','KeyV','KeyB','KeyH','KeyN','KeyJ','KeyM','Comma','KeyL','Period','Semicolon','Slash','Quote','KeyQ','Digit2','KeyW','Digit3','KeyE','KeyR','Digit5','KeyT','Digit6'];
   window.addEventListener('keydown',event=>{
     if(!ready||$('tab-sim').hidden||document.hidden||document.querySelector('dialog[open]'))return;

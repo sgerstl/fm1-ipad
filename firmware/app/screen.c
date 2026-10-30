@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
+/* Modified 2026-10-30 (fm1-ipad): selection read and select for the iPad link. */
 #include "instrument.h"
 #include "fm_patch.h"
 #include "version.h"
 #include "fm1_engine_control.h"
+#include "link.h"
 #include <string.h>
 enum {
     BACK = 0x0000,
@@ -1830,6 +1832,30 @@ static void select_track(int delta)
         drum %= groove_pad_count(track);
         selected_note = groove_pad_note(track, drum);
     }
+}
+/* fm1-ipad link: the iPad reads and moves the same selection as the panel.
+ * A step select enters the step page like the browser's step shortcut. */
+void groove_screen_selection(unsigned out[3])
+{
+    out[0] = track;
+    out[1] = cursor;
+    out[2] = page;
+}
+int groove_screen_select(unsigned target, unsigned step)
+{
+    if (target >= GROOVE_TRACKS) return -1;
+    if (step != GROOVE_LINK_TRACK_ONLY && step >= groove_sequence_length(target)) return -1;
+    if (step != GROOVE_LINK_TRACK_ONLY && ((page != OVERVIEW && page != STEPS) || !release_keys())) return -2;
+    if (target != track) select_track((int)target - (int)track);
+    if (step != GROOVE_LINK_TRACK_ONLY) {
+        blocked_keys |= previous_keys;
+        writing = 0; step_follow = 0; cursor = step;
+        if (page == OVERVIEW) seq_page = 0;
+        page = music_page = STEPS;
+        groove_edit_record(0, track, cursor);
+    }
+    cache->shown_page = ~0U;
+    return 0;
 }
 void groove_screen_tap(uint32_t now)
 {
