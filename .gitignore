@@ -1,0 +1,11 @@
+.DS_Store
+# Xcode
+ios/**/xcuserdata/
+ios/**/DerivedData/
+*.xcuserstate
+# Secrets
+.env
+.env.*
+*.p12
+*.pem
+*.key
