@@ -103,7 +103,9 @@ static void request(const uint8_t *m, unsigned n, unsigned source)
         if (m[i] >= 128) return;
         sum += m[i];
     }
-    if ((sum & 127U) || m[5] >= LINK_REPLY) return;
+    /* Only request types get a reply. Events and replies that loop back (a
+     * shared virtual MIDI bus echoes them) are ignored. */
+    if ((sum & 127U) || m[5] >= LINK_SELECTION) return;
     uint8_t data[LINK_REQUEST_BYTES], out[40];
     unsigned bytes = 0, value = 0, bits = 0, count = 1, status = LINK_OK;
     for (unsigned i = 7; i + 2 < n; ++i) {

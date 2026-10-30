@@ -15,7 +15,7 @@ F0 7D 46 49 01 <type> <seq> <packed payload ...> <checksum> F7
 | `7D` | MIDI ID for non-commercial use, as FM1 Open and the workbench use |
 | `46 49` | `'F' 'I'`, which keeps these messages apart from the workbench's `'F' 'M'` |
 | `01` | Framing version |
-| `type` | Message type, below. Replies set bit 6 (`0x40`) |
+| `type` | Message type, below. `0x01`–`0x1F` are requests, `0x20`–`0x3F` are events, and replies set bit 6 (`0x40`). The FM-1 ignores anything that isn't a request, so frames echoed back by a shared MIDI bus are harmless. The iPad should likewise ignore request types it receives |
 | `seq` | 0–127. In a request it's the iPad's choice, and the reply echoes it. In an event it's the FM-1's event counter |
 | payload | 8-bit bytes packed into 7-bit MIDI data, LSB first. Same packing as `firmware/app/transfer.c` |
 | `checksum` | Makes the sum of every byte from `7D` through the checksum zero modulo 128 |
