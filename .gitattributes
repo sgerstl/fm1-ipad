@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# Pinned third-party files: store byte for byte
+vendor/** -text
