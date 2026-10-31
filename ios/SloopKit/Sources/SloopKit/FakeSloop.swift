@@ -22,6 +22,8 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                               "DIGITAL": ["RHODES", "DX RHODES", "WURLI", "CLAV", "M1 PIANO", "GLASS PAD"],
                               "SAMPLE": ["LOFI KEYS", "TAPE STR", "CHOIR"]]
 
+    static let kits = ["ORIGINAL", "TIGHT", "BOOM", "LOFI", "DUST", "GM KIT", "808", "909", "TAPE", "SYN1"]
+    var userPresets: [Int: (engine: Int, name: String)] = [0: (1, "MY RHODES"), 1: (0, "WIDE BASS"), 4: (4, "TAPE CHOIR")]
     var selected = 0
     var engine = [1, 4, 1, 12]
     var preset = [1, 0, 5, 0]
@@ -157,6 +159,32 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         case Cmd.get:
             let id = Int(a[1])
             emit(cmd, [a[0], a[1]] + Frame.v14(id == Global.bpm ? bpm : id == Global.swing ? swing : id == Global.drumLevel ? drumLevel : 0))
+        case Cmd.preset:
+            let e = Int(a[0]), i = Int(a[1])
+            if selected < 3, e < Self.engines.count { engine[selected] = e; preset[selected] = i }
+            emit(cmd, [UInt8(engine[selected] % 13), UInt8(preset[selected])])
+            if watching { emit(Cmd.reload, [UInt8(engine[selected] % 13), UInt8(preset[selected]), UInt8(selected)]) }
+        case Cmd.userList:
+            let start = Int(a[0]), n = max(0, min(Int(a[1]), 32 - start))
+            var b: [UInt8] = [a[0], UInt8(n), 32]
+            for slot in start..<(start + n) {
+                if let u = userPresets[slot] { b += [1, UInt8(u.engine)] + Array(u.name.utf8) + [0] } else { b += [0, 0, 0] }
+            }
+            emit(cmd, b)
+        case Cmd.userLoad:
+            let slot = Int(a[0])
+            if selected < 3, let u = userPresets[slot] {
+                engine[selected] = u.engine
+                emit(cmd, [a[0], 0])
+                if watching { emit(Cmd.reload, [UInt8(u.engine), UInt8(preset[selected]), UInt8(selected)]) }
+            } else { emit(cmd, [a[0], 1]) }
+        case Cmd.desc:
+            let scope = a[0], id = Int(a[1])
+            if scope == 0, id == 63, selected == 3 {
+                var b: [UInt8] = [0, 63, 8] + Frame.v14(0) + Frame.v14(Self.kits.count - 1) + Frame.v14(0) + Array("KIT".utf8) + [0, 0]
+                for k in Self.kits { b += Array(k.utf8) + [0] }
+                emit(cmd, b)
+            }
         case Cmd.watch:
             watching = a.first ?? 0 != 0
             emit(cmd, [a.first ?? 0])

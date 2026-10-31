@@ -142,6 +142,27 @@ public extension SloopClient {
     func setTrackParam(track: Int, id: Int, value: Int) async throws -> Int {
         try ParamValue(await send(.setTrackParam(track: track, id: id, value: value)), cmd: Cmd.trackParam).value
     }
+    /// Loads a factory preset onto the selected track; returns its engine and preset after the load.
+    func preset(engine: Int, index: Int) async throws -> (engine: Int, preset: Int) {
+        let b = try await send(.preset(engine: engine, index: index))
+        return (Int(b.first ?? 0), Int(b.count > 1 ? b[1] : 0))
+    }
+    func userPresets() async throws -> [UserPreset] {
+        var all: [UserPreset] = []
+        var start = 0
+        while true {
+            let l = try UserPresetList(await send(.userList(start: start, count: 16)))
+            all += l.used
+            start += 16
+            if start >= l.total { break }
+        }
+        return all
+    }
+    /// 0: loaded; 1: empty or invalid (or the drum track).
+    func userLoad(slot: Int) async throws -> Int {
+        let b = try await send(.userLoad(slot: slot))
+        return Int(b.count > 1 ? b[1] : 1)
+    }
     func setGlobal(id: Int, value: Int) async throws -> Int {
         try ParamValue(await send(.setGlobal(id: id, value: value)), cmd: Cmd.set).value
     }

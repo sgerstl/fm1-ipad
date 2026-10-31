@@ -56,4 +56,5 @@ final class EditorUI {
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
     var keyboardOpen = false
+    var librarySection: LibrarySection = .engine(0)
 }

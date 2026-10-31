@@ -21,7 +21,11 @@ struct AppView: View {
             case .sound:
                 ComingLater(title: "Sound", detail: "Shaping the selected track's sound comes in pass 1, step 4.")
             case .library:
-                ComingLater(title: "Library", detail: "Browsing presets by name comes in pass 1, step 3.")
+                if case .connected = session.status {
+                    LibraryPage(session: session, ui: ui)
+                } else {
+                    ConnectionState(status: session.status, useDemo: $useDemo)
+                }
             }
         }
         .padding(24)

@@ -13,7 +13,10 @@ struct Overview: View {
                 row(t)
             }
         }
-        .padding(12)
+        // rows reach to 4 pt from the panel edge so their highlight has room; their content sits at 12
+        .padding(.vertical, 12)
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
         .panel()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("All tracks")
@@ -28,7 +31,7 @@ struct Overview: View {
                 Text(track.displayName)
                     .font(.system(size: 13))
                     .lineLimit(1)
-                    .frame(width: 166, alignment: .leading)
+                    .frame(width: 154, alignment: .leading)
                 ZStack(alignment: .leading) {
                     Canvas { ctx, _ in draw(ctx, track) }
                     OverviewPlayhead(session: session, track: t)
@@ -36,15 +39,14 @@ struct Overview: View {
                 .frame(width: 64 * (Self.cell.width + Self.gap) - Self.gap, height: Self.cell.height)
                 .padding(3)
                 .recessed(5)
-                Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 28)
             .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(selected ? 0.06 : 0)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, -8)
         .accessibilityLabel("Track \(t + 1), \(track.displayName)")
         .accessibilityValue("\((0..<track.length).filter(track.isOn).count) of \(track.length) steps on")
         .accessibilityAddTraits(selected ? [.isSelected] : [])

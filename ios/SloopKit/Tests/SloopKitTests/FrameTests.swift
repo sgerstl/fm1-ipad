@@ -113,4 +113,12 @@ import Testing
         // F3 (key 0) in WHITE C major: three degrees below C4 = F3
         #expect(Music.keyPitch(0, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == 53)
     }
+
+    @Test func userPresetListFromTheDoc() throws {
+        // start 0, count 3, total 32; slot 0 used DIGITAL "MY RHODES", slot 1 empty, slot 2 used ANALOG "BASS"
+        let body: [UInt8] = [0, 3, 32, 1, 1] + Array("MY RHODES".utf8) + [0, 0, 0, 0, 1, 0] + Array("BASS".utf8) + [0]
+        let l = try UserPresetList(body)
+        #expect(l.total == 32)
+        #expect(l.used == [UserPreset(slot: 0, engine: 1, name: "MY RHODES"), UserPreset(slot: 2, engine: 0, name: "BASS")])
+    }
 }

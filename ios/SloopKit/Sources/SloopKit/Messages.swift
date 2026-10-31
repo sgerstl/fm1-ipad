@@ -5,7 +5,10 @@ public enum Cmd {
     public static let get: UInt8 = 2
     public static let set: UInt8 = 3
     public static let desc: UInt8 = 5
+    public static let preset: UInt8 = 8
     public static let names: UInt8 = 10
+    public static let userList: UInt8 = 16
+    public static let userLoad: UInt8 = 20
     public static let watch: UInt8 = 22
     public static let changed: UInt8 = 23
     public static let reload: UInt8 = 24
@@ -55,6 +58,9 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case setDrumStep(index: Int, DrumStep)
     case setTrackParam(track: Int, id: Int, value: Int)
     case setGlobal(id: Int, value: Int)
+    case preset(engine: Int, index: Int)       // loads onto the selected track; switches its engine if needed
+    case userList(start: Int, count: Int)
+    case userLoad(slot: Int)
 
     public var cmd: UInt8 {
         switch self {
@@ -73,6 +79,9 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .setDrumStep: Cmd.drumStep
         case .setTrackParam: Cmd.trackParam
         case .setGlobal: Cmd.set
+        case .preset: Cmd.preset
+        case .userList: Cmd.userList
+        case .userLoad: Cmd.userLoad
         }
     }
 
@@ -93,6 +102,9 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .setDrumStep(let i, let step): [UInt8(i)] + step.encoded
         case .setTrackParam(let t, let id, let v): [UInt8(t), UInt8(id)] + Frame.v14(v)
         case .setGlobal(let id, let v): [1, UInt8(id)] + Frame.v14(v)
+        case .preset(let e, let i): [UInt8(e), UInt8(i)]
+        case .userList(let s, let n): [UInt8(s), UInt8(n)]
+        case .userLoad(let slot): [UInt8(slot)]
         }
     }
 
@@ -115,6 +127,9 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .setDrumStep(let i, _): body.first == UInt8(i)
         case .setTrackParam(let t, let id, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(id)
         case .setGlobal(let id, _): body.count >= 2 && body[0] == 1 && body[1] == UInt8(id)
+        case .preset: true                     // the reply is the track's engine and preset after the load
+        case .userList(let s, _): body.first == UInt8(s)
+        case .userLoad(let slot): body.first == UInt8(slot)
         }
     }
 
@@ -138,6 +153,9 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .setDrumStep: "DRUM_STEP set"
         case .setTrackParam: "TRACK_PARAM set"
         case .setGlobal: "SET"
+        case .preset: "PRESET"
+        case .userList: "UP_LIST"
+        case .userLoad: "UP_LOAD"
         }
     }
 }
@@ -389,6 +407,32 @@ public struct LiveState: Equatable, Sendable {
         cpu = try r.u8()
         for _ in 0..<5 { _ = try r.u8() }               // song entry, entries, bar, bars, sections stored
         tracks = try (0..<4).map { _ in TrackPosition(step: try r.u8(), length: try r.u8(), meter: try r.u8()) }
+    }
+}
+
+/// A user preset slot (U01..U32 on the device).
+public struct UserPreset: Equatable, Sendable, Identifiable {
+    public var slot: Int
+    public var engine: Int
+    public var name: String
+    public var id: Int { slot }
+    public init(slot: Int, engine: Int, name: String) { self.slot = slot; self.engine = engine; self.name = name }
+}
+
+public struct UserPresetList: Equatable, Sendable {
+    public var start: Int, total: Int
+    public var used: [UserPreset]          // empty slots left out
+    public init(_ body: [UInt8]) throws {
+        var r = ByteReader(body, cmd: Cmd.userList)
+        start = try r.u8()
+        let n = try r.u8()
+        total = try r.u8()
+        var u: [UserPreset] = []
+        for k in 0..<n {
+            let isUsed = try r.u8() != 0, e = try r.u8(), name = try r.string()
+            if isUsed { u.append(UserPreset(slot: start + k, engine: e, name: name)) }
+        }
+        used = u
     }
 }
 

@@ -10,6 +10,8 @@ struct PianoRoll: View {
     @State private var request: TwoFingerScrollView<PianoRollContent>.ScrollRequest?
 
     static let gridSize = CGSize(width: 1216, height: 460)
+    /// Both editors are this tall, so switching to the drum track moves nothing below them.
+    static let panelHeight: CGFloat = 616
 
     var body: some View {
         let t = session.tracks[track]
@@ -35,8 +37,8 @@ struct PianoRoll: View {
                         Text(Music.noteName(n) + (Music.inScale(n, root: t.root, scale: t.scale) ? "" : " ∗"))
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.textSecondary)
-                            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
                             .padding(.trailing, 8)
+                            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
                     }
                 }
                 .offset(y: -offset.y)
@@ -59,7 +61,7 @@ struct PianoRoll: View {
 
             HStack(spacing: 8) {
                 Text("Velocity").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    .frame(width: 80, alignment: .trailing).padding(.trailing, 8)
+                    .padding(.trailing, 8).frame(width: 80, alignment: .trailing)
                 VelocityLane(track: t, selected: ui.selectedStep[track])
                     .offset(x: -offset.x)
                     .frame(width: Self.gridSize.width, height: 56, alignment: .leading)
@@ -69,6 +71,7 @@ struct PianoRoll: View {
             }
         }
         .padding(12)
+        .frame(height: PianoRoll.panelHeight)
         .panel()
         .onReceive(NotificationCenter.default.publisher(for: .gridPannedByHand)) { _ in ui.handPannedAt = Date() }
         .onChange(of: session.positions[track].step) { _, step in follow(step) }

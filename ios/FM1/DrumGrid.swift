@@ -8,7 +8,8 @@ struct DrumGrid: View {
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<DrumGridContent>.ScrollRequest?
 
-    static let gridSize = CGSize(width: 1216, height: 494)
+    /// 500 = the piano roll's grid, gap and velocity lane (460 + 8 + 56) less the lane hint and its gap
+    static let gridSize = CGSize(width: 1216, height: 500)
     static let contentSize = CGSize(width: 64 * Theme.stepWidth, height: 16 * Theme.rowHeight)
 
     var body: some View {
@@ -30,8 +31,8 @@ struct DrumGrid: View {
                         Text(Music.drumLanes[l])
                             .font(.system(size: 13, weight: l == ui.selectedLane ? .semibold : .regular))
                             .foregroundStyle(l == ui.selectedLane ? Theme.text : Theme.textSecondary)
-                            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
                             .padding(.trailing, 8)
+                            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
                     }
                 }
                 .offset(y: -offset.y)
@@ -59,6 +60,7 @@ struct DrumGrid: View {
                 .accessibilityHidden(true)
         }
         .padding(12)
+        .frame(height: PianoRoll.panelHeight)
         .panel()
         .onReceive(NotificationCenter.default.publisher(for: .gridPannedByHand)) { _ in ui.handPannedAt = Date() }
         .onChange(of: session.positions[3].step) { _, step in

@@ -30,7 +30,7 @@ public struct TrackState: Equatable, Sendable {
     }
 
     public var displayName: String {
-        if isDrums { return "Drums" }
+        if isDrums { return presetName.isEmpty ? "Drums" : "Drums · \(presetName.capitalized)" }
         let e = engineName.capitalized
         return presetName.isEmpty ? e : "\(e) · \(presetName.capitalized)"
     }
@@ -77,7 +77,11 @@ public final class SloopSession {
 
     private var client: SloopClient?
     private var tasks: [Task<Void, Never>] = []
-    private var namesCache: [Int: [String]] = [:]
+    /// Factory preset names per engine (NAMES), all read at connect: the library's lists.
+    public private(set) var namesCache: [Int: [String]] = [:]
+    public private(set) var userPresets: [UserPreset] = []
+    /// The drum track's kits (DESC of P_E0 while it is selected; empty until then).
+    public private(set) var kitNames: [String] = []
     private var pendingSteps: Set<Int> = []        // track * 64 + index
     /// Steps and parameters the iPad wrote lately. SLOOP doesn't push about the editor's own writes,
     /// and a read already queued before a write would bring back the old value, so reads leave these
@@ -171,6 +175,33 @@ public final class SloopSession {
         for t in 0..<4 { try await readParams(t) }
         try await readGlobals()
         for t in 0..<4 { try await readSteps(t) }
+        try await readLibrary()
+    }
+
+    private func readLibrary() async throws {
+        guard let c = client, let i = info else { return }
+        for e in 0..<i.engines.count { _ = try await presetNames(e) }
+        userPresets = try await c.userPresets()
+        if selectedTrack == 3 { try await readKits() }
+    }
+
+    private func readKits() async throws {
+        guard let c = client, let i = info, selectedTrack == 3 else { return }
+        let d = try await c.desc(scope: 0, id: i.firstEngineParam)       // the drum track selected: the enum KIT
+        if d.format == 8, !d.names.isEmpty {
+            kitNames = d.names
+            if tracks[3].preset < d.names.count { tracks[3].presetName = d.names[tracks[3].preset] }
+        }
+    }
+
+    /// The library page asks for this: user presets may have changed on the device, and the kit names
+    /// can only be read while the drum track is selected.
+    public func refreshLibrary() {
+        guard let c = client else { return }
+        Task {
+            if let u = try? await c.userPresets() { self.userPresets = u }
+            if self.selectedTrack == 3, self.kitNames.isEmpty { try? await self.readKits() }
+        }
     }
 
     private func readTrackList() async throws {
@@ -187,7 +218,8 @@ public final class SloopSession {
                 let names = try await presetNames(s.engine)
                 tracks[k].presetName = s.preset < names.count ? names[s.preset] : "Preset \(s.preset + 1)"
             } else {
-                tracks[k].engineName = "Drums"; tracks[k].presetName = ""
+                tracks[k].engineName = "Drums"
+                tracks[k].presetName = tracks[k].preset < kitNames.count ? kitNames[tracks[k].preset] : ""
             }
         }
     }
@@ -202,7 +234,9 @@ public final class SloopSession {
 
     private func readParams(_ t: Int) async throws {
         guard let c = client else { return }
-        for id in Param.all {
+        var ids = Param.all
+        if t == 3, let i = info { ids.append(i.firstEngineParam) }      // the drum track's kit
+        for id in ids {
             let v = try await c.trackParam(track: t, id: id)
             if !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
         }
@@ -255,6 +289,11 @@ public final class SloopSession {
 
     private func apply(track t: Int, id: Int, value v: Int) {
         guard t < 4 else { return }
+        if t == 3, id == info?.firstEngineParam {               // the drum track's kit
+            tracks[3].preset = v
+            if v < kitNames.count { tracks[3].presetName = kitNames[v] }
+            return
+        }
         switch id {
         case Param.level: if t < 3 { tracks[t].level = v }
         case Param.root: tracks[t].root = v
@@ -293,6 +332,7 @@ public final class SloopSession {
             case .reload(_, _, let t):
                 selectedTrack = t
                 Task {
+                    if t == 3, self.kitNames.isEmpty { try? await self.readKits() }
                     try? await self.readTrackList()
                     try? await self.readParams(t)
                     try? await self.readSteps(t)
@@ -403,7 +443,10 @@ public final class SloopSession {
         guard t != selectedTrack else { return }
         selectedTrack = t
         guard let c = client else { return }
-        Task { _ = try? await c.selectTrack(t) }
+        Task {
+            _ = try? await c.selectTrack(t)
+            if t == 3, self.kitNames.isEmpty { try? await self.readKits() }
+        }
     }
 
     // MARK: Playing from the iPad's keyboard
@@ -557,6 +600,34 @@ public final class SloopSession {
             }
             self.paramSending.remove(key)
         }
+    }
+
+    // MARK: The library (step 3)
+
+    /// Loads a factory preset onto the selected synth track. SLOOP switches the engine if needed and
+    /// keeps the pattern, mix and key; it pushes RELOAD, which re-reads the track.
+    public func loadPreset(engine e: Int, index i: Int) {
+        let t = selectedTrack
+        guard t < 3, let info else { return }
+        tracks[t].engine = e; tracks[t].preset = i
+        tracks[t].engineName = info.engines[e]
+        tracks[t].presetName = i < (namesCache[e]?.count ?? 0) ? namesCache[e]![i] : "Preset \(i + 1)"
+        guard let c = client else { return }
+        Task { _ = try? await c.preset(engine: e, index: i) }
+    }
+
+    public func loadUserPreset(_ p: UserPreset) {
+        let t = selectedTrack
+        guard t < 3, let info else { return }
+        if p.engine < info.engines.count { tracks[t].engine = p.engine; tracks[t].engineName = info.engines[p.engine] }
+        tracks[t].presetName = p.name
+        guard let c = client else { return }
+        Task { _ = try? await c.userLoad(slot: p.slot) }
+    }
+
+    public func loadKit(_ k: Int) {
+        guard let i = info else { return }
+        set(track: 3, param: i.firstEngineParam, to: k)
     }
 
     public func setPlaying(_ on: Bool) {

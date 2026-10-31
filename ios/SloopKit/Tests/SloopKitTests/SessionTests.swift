@@ -77,6 +77,28 @@ import Testing
         run.cancel()
     }
 
+    @Test func libraryLoadsPresetsUserPresetsAndKits() async throws {
+        let fake = FakeSloop(autoEdits: false)
+        var once = false
+        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor { if case .connected = session.status { true } else { false } }
+        #expect(session.namesCache.count == 12)                      // every engine's names, read at connect
+        #expect(session.userPresets.map(\.slot) == [0, 1, 4])
+
+        session.loadPreset(engine: 0, index: 3)                       // ANALOG REESE onto track 1 (was DIGITAL)
+        #expect(session.tracks[0].engineName == "ANALOG" && session.tracks[0].presetName == "REESE")
+        try await waitFor { fake.engine[0] == 0 && fake.preset[0] == 3 }
+
+        session.select(track: 3)                                      // the drum track: kits come from DESC
+        try await waitFor { !session.kitNames.isEmpty }
+        session.loadKit(6)
+        try await waitFor { fake.params[3][63] == 6 }
+        #expect(session.tracks[3].displayName == "Drums · 808")
+        run.cancel()
+    }
+
     @Test func playheadInterpolatesBetweenPolls() {
         let session = SloopSession(transport: { nil })
         let t0 = Date()
