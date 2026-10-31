@@ -1,0 +1,37 @@
+name: FM1
+options:
+  bundleIdPrefix: com.scottgerstl
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+packages:
+  SloopKit:
+    path: SloopKit
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: K3CNX79952
+    CODE_SIGN_STYLE: Automatic
+targets:
+  FM1:
+    type: application
+    platform: iOS
+    sources: [FM1]
+    dependencies:
+      - package: SloopKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scottgerstl.fm1ipad
+        PRODUCT_NAME: FM1
+        TARGETED_DEVICE_FAMILY: "2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: FM1
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIStatusBarHidden: YES
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+    scheme:
+      testTargets: []

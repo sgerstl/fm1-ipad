@@ -1,0 +1,4 @@
+.build/
+.swiftpm/
+FM1.xcodeproj/
+xcuserdata/
