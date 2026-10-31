@@ -59,8 +59,11 @@ public final class SloopSession {
     public struct Stats: Equatable, Sendable {
         public var polls = 0
         public var pushes = 0
-        public var resyncFixes = 0         // steps the background re-sync found out of date
+        public var stepPushes = 0
+        public var resyncFixes = 0         // steps a re-sync found out of date: a push that never came
         public var timeouts = 0
+        public var connectedAt = Date()
+        public var pollsPerSecond: Double { Double(polls) / max(1, Date().timeIntervalSince(connectedAt)) }
     }
 
     /// When each track's current step began (for interpolating the playhead between polls).
@@ -73,8 +76,12 @@ public final class SloopSession {
     private var pendingSteps: Set<Int> = []        // track * 64 + index
     private let makeTransport: () -> SysExTransport?
 
-    public var pollInterval: Duration = .milliseconds(40)       // 25 a second
-    public var resyncInterval: Duration = .seconds(3)           // one track per pass
+    /// About 20 a second once a reply's 2 ms is added. SLOOP pushes only while its USB send ring is
+    /// at most half full (editor.c ed_room), so polling harder can hold the pushes back.
+    public var pollInterval: Duration = .milliseconds(48)
+    /// The selected track is re-read this often: the device only edits the selected track, and a
+    /// push it held back shows up here at the latest. Each pass also re-reads one other track.
+    public var resyncInterval: Duration = .seconds(1)
 
     public init(demo: Bool = false) {
         isDemo = demo
@@ -120,6 +127,7 @@ public final class SloopSession {
             try await readEverything()
             _ = try await c.watch(3)
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
+            stats = Stats()
         } catch {
             status = .lost("Lost the FM-1 while reading it")
             await c.close()
@@ -249,6 +257,7 @@ public final class SloopSession {
             stats.pushes += 1
             switch p {
             case .stepChanged(let i, let t):
+                stats.stepPushes += 1
                 Task { await self.readStep(t, i) }
             case .reload(_, _, let t):
                 selectedTrack = t
@@ -296,15 +305,21 @@ public final class SloopSession {
     }
 
     private func resyncLoop(_ c: SloopClient) async {
-        var t = 0
+        var pass = 0
         while !Task.isCancelled {
             try? await Task.sleep(for: resyncInterval)
             do {
-                if t == 0 { try await readTrackList(); try await readGlobals() }
-                try await readParams(t)
-                stats.resyncFixes += try await readSteps(t)
+                let sel = selectedTrack
+                stats.resyncFixes += try await readSteps(sel)
+                if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
+                    let other = (sel + 1 + (pass / 3) % 3) % 4
+                    if other == 0 { try await readTrackList(); try await readGlobals() }
+                    try await readParams(sel)
+                    try await readParams(other)
+                    stats.resyncFixes += try await readSteps(other)
+                }
             } catch ClientError.closed { return } catch { stats.timeouts += 1 }
-            t = (t + 1) % 4
+            pass += 1
         }
     }
 

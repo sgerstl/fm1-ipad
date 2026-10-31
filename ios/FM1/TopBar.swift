@@ -25,6 +25,15 @@ struct TopBar: View {
                 Text("FM-1 over USB").tag(false)
                 Text("Demo FM-1 (no device)").tag(true)
             }
+            if isConnected {
+                // Diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?
+                let s = session.stats
+                Section("Since connecting") {
+                    Text("Step pushes \(s.stepPushes) · all pushes \(s.pushes)")
+                    Text("Steps fixed by re-sync \(s.resyncFixes)")
+                    Text(String(format: "LIVE %.1f a second · timeouts %d", s.pollsPerSecond, s.timeouts))
+                }
+            }
         } label: {
             HStack(spacing: 10) {
                 LED(on: isConnected, colour: Theme.text)
