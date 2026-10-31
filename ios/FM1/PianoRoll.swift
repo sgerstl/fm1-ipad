@@ -9,9 +9,11 @@ struct PianoRoll: View {
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<PianoRollContent>.ScrollRequest?
 
-    static let gridSize = CGSize(width: 1216, height: 460)
+    static let gridSize = CGSize(width: 1216, height: 414)    // 9 note rows (the strip above took the 10th)
     /// Both editors are this tall, so switching to the drum track moves nothing below them.
-    static let panelHeight: CGFloat = 616
+    static let panelHeight: CGFloat = 564
+    static let velocityHeight: CGFloat = 50
+    static func rows(_ n: Int) -> String { n == 1 ? "1 row" : "\(n) rows" }
 
     var body: some View {
         let t = session.tracks[track]
@@ -19,12 +21,12 @@ struct PianoRoll: View {
         let contentSize = CGSize(width: 64 * Theme.stepWidth, height: max(Self.gridSize.height, CGFloat(rows.count) * Theme.rowHeight))
         let first = Int((offset.x / Theme.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / Theme.rowHeight).rounded())
-        let hidden = (above: topRow, below: max(0, rows.count - topRow - 10))
-        let rowsNote = hidden.below > 0 ? " · \(hidden.below) rows below" : hidden.above > 0 ? " · \(hidden.above) rows above" : ""
+        let hidden = (above: topRow, below: max(0, rows.count - topRow - 9))
+        let rowsNote = hidden.below > 0 ? " · \(Self.rows(hidden.below)) below" : hidden.above > 0 ? " · \(Self.rows(hidden.above)) above" : ""
         let scaleName = t.scale == 0 ? "chromatic, folded to the notes used" : "\(Music.noteNames[t.root % 12]) \(Music.scales[min(t.scale, 15)].spoken)"
 
         VStack(spacing: 8) {
-            EditorHeader(track: track, title: t.displayName,
+            EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
                          detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64\(rowsNote)")
 
             StepNumbers(offsetX: offset.x, selected: ui.selectedStep[track])
@@ -64,7 +66,7 @@ struct PianoRoll: View {
                     .padding(.trailing, 8).frame(width: 80, alignment: .trailing)
                 VelocityLane(track: t, selected: ui.selectedStep[track])
                     .offset(x: -offset.x)
-                    .frame(width: Self.gridSize.width, height: 56, alignment: .leading)
+                    .frame(width: Self.gridSize.width, height: Self.velocityHeight, alignment: .leading)
                     .clipped()
                     .recessed()
                     .accessibilityHidden(true)
@@ -92,7 +94,7 @@ struct PianoRoll: View {
     static func rows(_ t: TrackState, keeping kept: Set<Int> = []) -> [Int] {
         var used = Set<Int>()
         for s in t.steps where s.time == .note { used.formUnion(s.notes) }
-        let folded = Music.foldedRows(used: used, root: t.root, scale: t.scale, minRows: 10)
+        let folded = Music.foldedRows(used: used, root: t.root, scale: t.scale, minRows: 9)
         return Set(folded).union(kept).sorted(by: >)
     }
 }
@@ -100,11 +102,12 @@ struct PianoRoll: View {
 struct EditorHeader: View {
     let track: Int
     let title: String
+    var muted = false
     let detail: String
     var body: some View {
         HStack {
             HStack(spacing: 10) {
-                TrackChip(track: track)
+                TrackChip(track: track, muted: muted)
                 Text(title).font(.system(size: 17, weight: .semibold))
             }
             .accessibilityElement(children: .combine)
@@ -145,9 +148,10 @@ struct EditorPlayhead: View {
     let offsetX: CGFloat
     let height: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pageVisible) private var visible
 
     var body: some View {
-        TimelineView(.animation(paused: !session.playing)) { tl in
+        TimelineView(.animation(paused: !session.playing || !visible)) { tl in
             let pos = session.playhead(track: track, at: tl.date, interpolate: !reduceMotion)
             let x = CGFloat(pos) * Theme.stepWidth - offsetX
             ZStack(alignment: .top) {
@@ -216,7 +220,7 @@ struct PianoRollContent: View {
         for b in stride(from: 1, to: 16, by: 2) {
             ctx.fill(Path(CGRect(x: CGFloat(b * 4) * w, y: 0, width: 4 * w, height: size.height)), with: .color(.white.opacity(0.025)))
         }
-        for r in 1..<max(rows.count, 10) {
+        for r in 1..<max(rows.count, 9) {
             ctx.fill(Path(CGRect(x: 0, y: CGFloat(r) * h, width: size.width, height: 1)), with: .color(.black.opacity(0.45)))
         }
         for bar in stride(from: 16, to: 64, by: 16) {
@@ -284,7 +288,7 @@ struct VelocityLane: View {
                 }
             }
         }
-        .frame(width: 64 * Theme.stepWidth, height: 56)
+        .frame(width: 64 * Theme.stepWidth, height: PianoRoll.velocityHeight)
     }
 }
 

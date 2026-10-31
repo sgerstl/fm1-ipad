@@ -8,18 +8,18 @@ struct DrumGrid: View {
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<DrumGridContent>.ScrollRequest?
 
-    /// 500 = the piano roll's grid, gap and velocity lane (460 + 8 + 56) less the lane hint and its gap
-    static let gridSize = CGSize(width: 1216, height: 500)
+    /// 448 = the piano roll's grid, gap and velocity lane (414 + 8 + 50) less the lane hint and its gap
+    static let gridSize = CGSize(width: 1216, height: 448)
     static let contentSize = CGSize(width: 64 * Theme.stepWidth, height: 16 * Theme.rowHeight)
 
     var body: some View {
         let t = session.tracks[3]
         let first = Int((offset.x / Theme.stepWidth).rounded()) + 1
         let topLane = Int((offset.y / Theme.rowHeight).rounded())
-        let below = max(0, 16 - topLane - 10)
+        let below = max(0, 16 - topLane - 9)       // 9 whole lanes in view
 
         VStack(spacing: 8) {
-            EditorHeader(track: 3, title: "Drums",
+            EditorHeader(track: 3, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
                          detail: "16 lanes · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64")
 
             StepNumbers(offsetX: offset.x, selected: ui.selectedStep[3])
@@ -53,7 +53,8 @@ struct DrumGrid: View {
                 .accessibilityLabel("Drum steps")
             }
 
-            Text(below > 0 ? "\(below) more lanes below · pan with two fingers" : topLane > 0 ? "\(topLane) lanes above · pan with two fingers" : " ")
+            Text(below > 0 ? "\(below) more \(below == 1 ? "lane" : "lanes") below · pan with two fingers"
+                 : topLane > 0 ? "\(topLane) \(topLane == 1 ? "lane" : "lanes") above · pan with two fingers" : " ")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(height: 16)

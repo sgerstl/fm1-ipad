@@ -192,7 +192,8 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             emit(cmd, [0])
         case Cmd.live:
             if a.first == 1, a.count > 1 { playing = a[1] != 0 }
-            var b: [UInt8] = [a.first ?? 0, playing ? 1 : 0, 0] + Frame.v14(bpm) + [1, 0, 0, 0, 0, 0, 0, UInt8(selected), 0, playing ? 24 : 8, 0, 0, 0, 0, 1]
+            let mutes = UInt8((0..<4).reduce(0) { $0 | (params[$1][Param.mute] != 0 ? 1 << $1 : 0) })   // as editor_live.c
+            var b: [UInt8] = [a.first ?? 0, playing ? 1 : 0, 0] + Frame.v14(bpm) + [1, 0, 0, 0, mutes, 0, 0, UInt8(selected), 0, playing ? 24 : 8, 0, 0, 0, 0, 1]
             for t in 0..<4 { b += [UInt8(stepAt(t)), UInt8(params[t][Param.length]), playing ? 72 : 0] }
             emit(cmd, b + [0, 0] + Array(repeating: 0x48, count: 16))
         default:

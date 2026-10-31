@@ -400,6 +400,11 @@ public final class SloopSession {
         if l.selected != selectedTrack, l.selected < 4 { selectedTrack = l.selected }
         playing = l.playing
         bpm = l.bpm
+        // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
+        for k in 0..<4 where !recentlyWritten("p\(k).\(Param.mute)") {
+            let m = l.mutes >> k & 1 == 1
+            if tracks[k].mute != m { tracks[k].mute = m }
+        }
         for k in 0..<min(4, l.tracks.count) {
             let new = l.tracks[k], old = positions[k]
             if new.step != old.step || !wasPlaying {
@@ -623,6 +628,10 @@ public final class SloopSession {
         tracks[t].presetName = p.name
         guard let c = client else { return }
         Task { _ = try? await c.userLoad(slot: p.slot) }
+    }
+
+    public func toggleMute(track t: Int) {
+        set(track: t, param: Param.mute, to: tracks[t].mute ? 0 : 1)
     }
 
     public func loadKit(_ k: Int) {

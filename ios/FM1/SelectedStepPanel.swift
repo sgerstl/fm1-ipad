@@ -24,7 +24,7 @@ struct SelectedStepPanel: View {
             KnobRow(session: session, ui: ui)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)       // the page's height budget leaves this panel 104 pt; the knob tray needs about 86
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .panel()
         .accessibilityElement(children: .contain)

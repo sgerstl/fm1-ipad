@@ -9,93 +9,12 @@ struct LibraryPage: View {
     let ui: EditorUI
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(spacing: 16) {
-                trackPicker
-                if session.selectedTrack < 3 { engineList }
-                Spacer(minLength: 0)
-            }
-            .frame(width: 320)
-            presetGrid
-        }
+        // the track it loads onto is the track strip, collapsed beside it; the engines sit under that
+        presetGrid
         .task(id: session.selectedTrack) {
             session.refreshLibrary()
             if session.selectedTrack < 3 { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
         }
-    }
-
-    // MARK: Which track the presets load onto (selects it on the FM-1)
-
-    private var trackPicker: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Load onto").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                .padding(.leading, 8).padding(.bottom, 4)
-                .accessibilityAddTraits(.isHeader)
-            ForEach(0..<4, id: \.self) { t in
-                let selected = session.selectedTrack == t
-                Button { session.select(track: t) } label: {
-                    HStack(spacing: 12) {
-                        TrackChip(track: t)
-                        Text(session.tracks[t].displayName).font(.system(size: 15, weight: selected ? .semibold : .regular))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 8)
-                    .frame(height: 48)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(selected ? 0.06 : 0)))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-                .accessibilityLabel("Track \(t + 1), \(session.tracks[t].displayName)")
-                .accessibilityAddTraits(selected ? .isSelected : [])
-            }
-        }
-        .padding(12)
-        .panel()
-    }
-
-    // MARK: Engines (synth tracks), then user presets
-
-    private var engineList: some View {
-        let t = session.tracks[session.selectedTrack]
-        let engines = session.info?.engines ?? []
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 0) {       // 12 engines + user presets fit without scrolling
-                Text("Engines").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    .padding(.leading, 8).padding(.bottom, 6)
-                    .accessibilityAddTraits(.isHeader)
-                ForEach(Array(engines.enumerated()), id: \.offset) { e, name in
-                    row(name.capitalized, count: session.namesCache[e]?.count ?? 0,
-                        current: t.engine == e, browsing: ui.librarySection == .engine(e)) { ui.librarySection = .engine(e) }
-                }
-                row("User presets", count: session.userPresets.count, current: false,
-                    browsing: ui.librarySection == .user) { ui.librarySection = .user }
-                    .padding(.top, 4)
-            }
-        }
-        .scrollIndicators(.hidden)
-        .padding(12)
-        .panel()
-    }
-
-    /// A list row: raised while it's the one being browsed; an LED marks the track's own engine.
-    private func row(_ name: String, count: Int, current: Bool, browsing: Bool, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                LED(on: current)
-                Text(name).fontWeight(browsing ? .semibold : .regular)
-                Spacer()
-                Text("\(count)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-            }
-            .foregroundStyle(browsing ? Theme.text : Theme.textSecondary)
-            .padding(.horizontal, 12)
-            .frame(height: 44)
-            .background { if browsing { Color.clear.raisedKey(10) } }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressSink())
-        .accessibilityLabel("\(name), \(count) presets\(current ? ", the track's engine" : "")")
-        .accessibilityAddTraits(browsing ? .isSelected : [])
     }
 
     // MARK: The presets (or kits, or user presets) as keys
@@ -202,6 +121,60 @@ struct LibraryPage: View {
         Text(text).font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .center).padding(.top, 24)
     }
+}
+
+/// The engines (and user presets) for the library, in the left column under the track strip.
+struct LibraryEngines: View {
+    let session: SloopSession
+    let ui: EditorUI
+
+    var body: some View { engineList }
+
+    // MARK: Engines (synth tracks), then user presets
+
+    var engineList: some View {
+        let t = session.tracks[session.selectedTrack]
+        let engines = session.info?.engines ?? []
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {       // 12 engines + user presets fit without scrolling
+                Text("Engines").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .padding(.leading, 8).padding(.bottom, 6)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(Array(engines.enumerated()), id: \.offset) { e, name in
+                    row(name.capitalized, count: session.namesCache[e]?.count ?? 0,
+                        current: t.engine == e, browsing: ui.librarySection == .engine(e)) { ui.librarySection = .engine(e) }
+                }
+                row("User presets", count: session.userPresets.count, current: false,
+                    browsing: ui.librarySection == .user) { ui.librarySection = .user }
+                    .padding(.top, 4)
+            }
+        }
+        .scrollIndicators(.hidden)
+        .padding(12)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .panel()
+    }
+
+    /// A list row: raised while it's the one being browsed; an LED marks the track's own engine.
+    private func row(_ name: String, count: Int, current: Bool, browsing: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                LED(on: current)
+                Text(name).fontWeight(browsing ? .semibold : .regular)
+                Spacer()
+                Text("\(count)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            }
+            .foregroundStyle(browsing ? Theme.text : Theme.textSecondary)
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .background { if browsing { Color.clear.raisedKey(10) } }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .accessibilityLabel("\(name), \(count) presets\(current ? ", the track's engine" : "")")
+        .accessibilityAddTraits(browsing ? .isSelected : [])
+    }
+
 }
 
 enum LibrarySection: Equatable {

@@ -11,21 +11,10 @@ struct AppView: View {
     var body: some View {
         VStack(spacing: 16) {
             TopBar(session: session, ui: ui, useDemo: $useDemo)
-            switch ui.page {
-            case .sequencer:
-                if case .connected = session.status {
-                    SequencerPage(session: session, ui: ui)
-                } else {
-                    ConnectionState(status: session.status, useDemo: $useDemo)
-                }
-            case .sound:
-                ComingLater(title: "Sound", detail: "Shaping the selected track's sound comes in pass 1, step 4.")
-            case .library:
-                if case .connected = session.status {
-                    LibraryPage(session: session, ui: ui)
-                } else {
-                    ConnectionState(status: session.status, useDemo: $useDemo)
-                }
+            if case .connected = session.status {
+                pages.animation(pageAnimation, value: ui.page)
+            } else {
+                ConnectionState(status: session.status, useDemo: $useDemo)
             }
         }
         .padding(24)
@@ -39,6 +28,56 @@ struct AppView: View {
 }
 
 extension AppView {
+    /// The track selector sits on top, always in the same place; each page leaves room for its
+    /// chips-and-names box (top left) and, on the Sequencer, for the timeline beside it.
+    @ViewBuilder var pages: some View {
+        ZStack(alignment: .topLeading) {
+            // The Sequencer stays alive underneath and only fades, so coming back to it never rebuilds
+            // its scroll views mid-animation; its playheads pause while it's hidden.
+            let onSequencer = ui.page == .sequencer
+            VStack(spacing: 16) {
+                Color.clear.frame(height: Overview.height)
+                SequencerPage(session: session, ui: ui)
+            }
+            .opacity(onSequencer ? 1 : 0)
+            .allowsHitTesting(onSequencer)
+            .accessibilityHidden(!onSequencer)
+            .environment(\.pageVisible, onSequencer)
+            Group {
+                switch ui.page {
+                case .sequencer:
+                    EmptyView()
+                case .library:
+                    HStack(alignment: .top, spacing: 16) {
+                        leftColumn { if session.selectedTrack < 3 { LibraryEngines(session: session, ui: ui) } }
+                        LibraryPage(session: session, ui: ui)
+                    }
+                case .sound:
+                    HStack(alignment: .top, spacing: 16) {
+                        leftColumn { EmptyView() }
+                        ComingLater(title: "Sound", detail: "Shaping the selected track's sound comes in pass 1, step 4.")
+                    }
+                }
+            }
+            .transition(.opacity)
+            .id(ui.page)
+            Overview(session: session, expanded: ui.page == .sequencer)
+        }
+    }
+
+    /// The left column under the track box.
+    private func leftColumn<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        VStack(spacing: 16) {
+            Color.clear.frame(height: Overview.height)
+            content()
+            Spacer(minLength: 0)
+        }
+        .frame(width: Overview.boxWidth)
+    }
+
+    /// Matches the track strip's accordion, so the page and the strip move as one.
+    var pageAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.3) }
+
     /// The keyboard comes up from the bottom over the step panel; two fingers still pan the grid above it.
     @ViewBuilder var keyboard: some View {
         ZStack(alignment: .bottom) {
@@ -53,6 +92,11 @@ extension AppView {
     }
 }
 
+extension EnvironmentValues {
+    /// False while a page is kept alive but hidden: its animations pause.
+    @Entry var pageVisible = true
+}
+
 struct SequencerPage: View {
     let session: SloopSession
     let ui: EditorUI
@@ -60,7 +104,6 @@ struct SequencerPage: View {
     var body: some View {
         let t = session.selectedTrack
         VStack(spacing: 16) {
-            Overview(session: session)
             if t == 3 {
                 DrumGrid(session: session, ui: ui)
             } else {

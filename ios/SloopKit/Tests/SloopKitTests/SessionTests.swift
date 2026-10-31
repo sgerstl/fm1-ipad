@@ -91,6 +91,10 @@ import Testing
         #expect(session.tracks[0].engineName == "ANALOG" && session.tracks[0].presetName == "REESE")
         try await waitFor { fake.engine[0] == 0 && fake.preset[0] == 3 }
 
+        session.toggleMute(track: 0)                                  // mute holds past the write guard, via LIVE
+        try await Task.sleep(for: .milliseconds(1700))
+        #expect(session.tracks[0].mute && fake.params[0][Param.mute] == 1)
+
         session.select(track: 3)                                      // the drum track: kits come from DESC
         try await waitFor { !session.kitNames.isEmpty }
         session.loadKit(6)
