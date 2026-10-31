@@ -22,19 +22,49 @@ public enum Frame {
     }
 }
 
+/// A note from the device's keys (or its sequencer, with MIDI OUT = SEQ).
+public struct NoteEvent: Equatable, Sendable {
+    public var on: Bool
+    public var channel: UInt8
+    public var note: UInt8
+    public init(on: Bool, channel: UInt8, note: UInt8) { self.on = on; self.channel = channel; self.note = note }
+}
+
 /// Collects MIDI bytes into whole SysEx frames. Real-time bytes (F8 and up) may land inside a frame
-/// and are skipped; a new F0 drops an unfinished frame; anything outside a frame is ignored.
+/// and are skipped; a new F0 drops an unfinished frame. Outside a frame it reads note on / off
+/// (running status included) into `notes`, which the caller drains; other messages are skipped.
 public struct SysExAssembler {
     private var partial: [UInt8] = []
     private var inFrame = false
+    private var status: UInt8 = 0
+    private var data: [UInt8] = []
+    public private(set) var notes: [NoteEvent] = []
     public init() {}
+
+    public mutating func drainNotes() -> [NoteEvent] { defer { notes = [] }; return notes }
+
+    private mutating func channelByte(_ b: UInt8) {
+        if b & 0x80 != 0 {
+            status = b < 0xF0 ? b : 0; data = []
+            return
+        }
+        guard status != 0 else { return }
+        data.append(b)
+        let need = (status & 0xF0 == 0xC0 || status & 0xF0 == 0xD0) ? 1 : 2
+        guard data.count == need else { return }
+        let kind = status & 0xF0
+        if kind == 0x90 || kind == 0x80 {
+            notes.append(NoteEvent(on: kind == 0x90 && data[1] > 0, channel: status & 0x0F, note: data[0]))
+        }
+        data = []
+    }
 
     public mutating func feed(_ bytes: some Sequence<UInt8>) -> [[UInt8]] {
         var out: [[UInt8]] = []
         for b in bytes {
             if b >= 0xF8 { continue }
-            if b == 0xF0 { partial = [b]; inFrame = true; continue }
-            guard inFrame else { continue }
+            if b == 0xF0 { partial = [b]; inFrame = true; status = 0; continue }
+            guard inFrame else { channelByte(b); continue }
             if b == 0xF7 { partial.append(b); out.append(partial); partial = []; inFrame = false }
             else if b & 0x80 != 0 { partial = []; inFrame = false }   // a status byte ends a broken frame
             else { partial.append(b) }

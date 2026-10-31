@@ -4,6 +4,8 @@ import Foundation
 public protocol SysExTransport: AnyObject, Sendable {
     /// Complete frames from the device, in arrival order. Finishes when the device goes away.
     var frames: AsyncStream<[UInt8]> { get }
+    /// Notes the device sends (its keys, with KEY OUT on). The fake sends none.
+    var notes: AsyncStream<NoteEvent> { get }
     func send(_ frame: [UInt8])
 }
 
@@ -41,6 +43,9 @@ public actor SloopClient {
         self.transport = transport
         (pushes, pushSink) = AsyncStream.makeStream(of: Push.self, bufferingPolicy: .bufferingNewest(256))
     }
+
+    /// A plain MIDI message (a note from the iPad's keyboard), sent at once, outside the request queue.
+    public nonisolated func sendMIDI(_ bytes: [UInt8]) { transport.send(bytes) }
 
     public func start() {
         guard reader == nil else { return }
@@ -127,4 +132,17 @@ public extension SloopClient {
     func ping() async throws { _ = try await send(.ping) }
     func live() async throws -> LiveState { try LiveState(await send(.live, timeout: .milliseconds(150), retries: 0)) }
     func transport(play: Bool) async throws -> LiveState { try LiveState(await send(.transport(play: play))) }
+    /// Writes return the value as the device stored it (clamped, levels of off lanes cleared).
+    func setSynthStep(track: Int, index: Int, _ step: SynthStep) async throws -> SynthStep {
+        try TrackStepReply(await send(.setTrackStep(track: track, index: index, step))).step
+    }
+    func setDrumStep(index: Int, _ step: DrumStep) async throws -> DrumStep {
+        try DrumStepReply(await send(.setDrumStep(index: index, step))).step
+    }
+    func setTrackParam(track: Int, id: Int, value: Int) async throws -> Int {
+        try ParamValue(await send(.setTrackParam(track: track, id: id, value: value)), cmd: Cmd.trackParam).value
+    }
+    func setGlobal(id: Int, value: Int) async throws -> Int {
+        try ParamValue(await send(.setGlobal(id: id, value: value)), cmd: Cmd.set).value
+    }
 }

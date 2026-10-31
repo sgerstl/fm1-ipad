@@ -3,6 +3,7 @@
 public enum Cmd {
     public static let info: UInt8 = 1
     public static let get: UInt8 = 2
+    public static let set: UInt8 = 3
     public static let desc: UInt8 = 5
     public static let names: UInt8 = 10
     public static let watch: UInt8 = 22
@@ -23,12 +24,17 @@ public enum Cmd {
 
 /// Track parameter ids (`P_*`, firmware core.h) and global ids (`G_*`) that pass 1 reads.
 public enum Param {
-    public static let level = 0, root = 25, scale = 26, quant = 27, length = 29, division = 30, pan = 39, mute = 40
-    public static let all = [level, root, scale, quant, length, division, pan, mute]
+    public static let level = 0, root = 25, scale = 26, quant = 27, transpose = 28, length = 29, division = 30, pan = 39, mute = 40
+    public static let chord = 49
+    public static let all = [level, root, scale, quant, transpose, length, division, pan, mute, chord]
 }
 public enum Global {
     public static let bpm = 0, swing = 1, drumLevel = 25
-    public static let all = [bpm, swing, drumLevel]
+    /// GLO > MIDI > OTHER: what channels no track owns play (0 SEL: the selected track, 1 OFF).
+    public static let otherChannels = 36
+    /// GLO > MIDI 3 > DR MAP: how MIDI notes pick drum lanes (0 GM notes, 1 any 16 notes in a row from 36).
+    public static let drumMap = 46
+    public static let all = [bpm, swing, drumLevel, otherChannels, drumMap]
 }
 
 public enum Request: Equatable, Sendable, CustomStringConvertible {
@@ -45,6 +51,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case ping
     case live
     case transport(play: Bool)                 // LIVE op 1
+    case setTrackStep(track: Int, index: Int, SynthStep)
+    case setDrumStep(index: Int, DrumStep)
+    case setTrackParam(track: Int, id: Int, value: Int)
+    case setGlobal(id: Int, value: Int)
 
     public var cmd: UInt8 {
         switch self {
@@ -59,6 +69,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .watch: Cmd.watch
         case .ping: Cmd.ping
         case .live, .transport: Cmd.live
+        case .setTrackStep: Cmd.trackStep
+        case .setDrumStep: Cmd.drumStep
+        case .setTrackParam: Cmd.trackParam
+        case .setGlobal: Cmd.set
         }
     }
 
@@ -75,6 +89,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .watch(let on): [UInt8(on)]
         case .live: [0]
         case .transport(let play): [1, play ? 1 : 0]
+        case .setTrackStep(let t, let i, let step): [UInt8(t), UInt8(i)] + step.encoded
+        case .setDrumStep(let i, let step): [UInt8(i)] + step.encoded
+        case .setTrackParam(let t, let id, let v): [UInt8(t), UInt8(id)] + Frame.v14(v)
+        case .setGlobal(let id, let v): [1, UInt8(id)] + Frame.v14(v)
         }
     }
 
@@ -93,6 +111,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc(let s, let id): body.count >= 2 && body[0] == UInt8(s) && body[1] == UInt8(id)
         case .live: body.first == 0
         case .transport: body.first == 1
+        case .setTrackStep(let t, let i, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(i)
+        case .setDrumStep(let i, _): body.first == UInt8(i)
+        case .setTrackParam(let t, let id, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(id)
+        case .setGlobal(let id, _): body.count >= 2 && body[0] == 1 && body[1] == UInt8(id)
         }
     }
 
@@ -112,6 +134,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .watch: "WATCH"
         case .ping: "PING"
         case .live, .transport: "LIVE"
+        case .setTrackStep: "TRACK_STEP set"
+        case .setDrumStep: "DRUM_STEP set"
+        case .setTrackParam: "TRACK_PARAM set"
+        case .setGlobal: "SET"
         }
     }
 }
@@ -216,6 +242,20 @@ public struct SynthStep: Equatable, Sendable {
 
     public var isOn: Bool { time == .note && !notes.isEmpty }
 
+    /// The bytes after `track, index` in a TRACK_STEP write: n, note0..3, time, flags, vel, then the
+    /// v5 lvl, hi, rat (without them SLOOP zeroes the levels and ratchets).
+    public var encoded: [UInt8] {
+        let n = min(notes.count, 4)
+        let ns = (0..<4).map { $0 < n ? UInt8(notes[$0] & 0x7F) : 0 }
+        var lvl = 0, rat = 0
+        for k in 0..<n {
+            lvl |= (k < levels.count ? levels[k] & 3 : 0) << (2 * k)
+            rat |= (k < ratchets.count ? ratchets[k] & 3 : 0) << (2 * k)
+        }
+        return [UInt8(n)] + ns + [UInt8(time.rawValue), UInt8((accent ? 1 : 0) | (slide ? 2 : 0)), UInt8(min(max(velocity, 1), 127)),
+                UInt8(lvl & 0x7F), UInt8((lvl >> 7 & 1) | (rat >> 7 & 1) << 1), UInt8(rat & 0x7F)]
+    }
+
     /// Decodes the body after `track, index` (TRACK_STEP) or after `index` (STEP_GET).
     public init(reader r: inout ByteReader) throws {
         let n = min(try r.u8(), 4)
@@ -257,6 +297,26 @@ public struct DrumStep: Equatable, Sendable {
     public func ratchet(_ lane: Int) -> Int { Int(ratchets >> (2 * lane) & 3) }
     public var lanes: [Int] { (0..<16).filter(has) }
     public var isOn: Bool { on != 0 }
+
+    /// A lane switched on (level and ratchet as given) or off (its level and ratchet cleared, as SLOOP reads them back).
+    public func setting(_ lane: Int, on enabled: Bool, level: Int = 0, ratchet: Int = 0) -> DrumStep {
+        var d = self
+        let sh = UInt32(2 * lane)
+        d.levels &= ~(3 << sh); d.ratchets &= ~(3 << sh)
+        if enabled {
+            d.on |= 1 << UInt16(lane)
+            d.levels |= UInt32(level & 3) << sh; d.ratchets |= UInt32(ratchet & 3) << sh
+        } else {
+            d.on &= ~(1 << UInt16(lane))
+        }
+        return d
+    }
+
+    /// The bytes after `index` in a DRUM_STEP write: on (3 x 7 bits), lvl and rat (5 x 7 bits each), LSB first.
+    public var encoded: [UInt8] {
+        func b(_ v: UInt64, _ n: Int) -> [UInt8] { (0..<n).map { UInt8((v >> (7 * UInt64($0))) & 0x7F) } }
+        return b(UInt64(on), 3) + b(UInt64(levels), 5) + b(UInt64(ratchets), 5)
+    }
 }
 
 public struct DrumStepReply: Equatable, Sendable {

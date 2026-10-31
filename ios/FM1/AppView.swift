@@ -2,9 +2,11 @@ import SloopKit
 import SwiftUI
 
 struct AppView: View {
+    static let space = "canvas"
     let session: SloopSession
     let ui: EditorUI
     @Binding var useDemo: Bool
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     var body: some View {
         VStack(spacing: 16) {
@@ -23,9 +25,27 @@ struct AppView: View {
             }
         }
         .padding(24)
+        .overlay(alignment: .bottom) { keyboard }
+        .overlay { GrownKnobLayer(session: session, ui: ui) }
+        .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
         .font(.system(size: 15))
         .monospacedDigit()
+    }
+}
+
+extension AppView {
+    /// The keyboard comes up from the bottom over the step panel; two fingers still pan the grid above it.
+    @ViewBuilder var keyboard: some View {
+        ZStack(alignment: .bottom) {
+            if ui.keyboardOpen, case .connected = session.status {
+                KeyboardDrawer(session: session, ui: ui)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.keyboardOpen)
     }
 }
 

@@ -47,6 +47,36 @@ import Testing
         run.cancel()
     }
 
+    @Test func editsFromTheIPadReachTheDeviceAndStick() async throws {
+        let fake = FakeSloop(autoEdits: false)
+        var once = false
+        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .milliseconds(200)        // re-reads race the writes on purpose
+        let run = Task { await session.run() }
+        try await waitFor { if case .connected = session.status { true } else { false } }
+
+        session.toggle(track: 0, index: 2, note: 72)            // step 3 was a TIE: becomes a C5 note
+        #expect(session.tracks[0].steps[2].notes == [72])        // shown at once
+        session.toggle(track: 0, index: 8, note: 79)            // remove G5 from the chord on step 9
+        session.toggle(drumIndex: 1, lane: 2)                    // a snare on step 2
+        session.set(track: 1, param: Param.pan, to: -20)
+        session.set(global: Global.swing, to: 40)
+        try await Task.sleep(for: .milliseconds(800))            // several re-sync passes later
+
+        // what the device stored (the fake's state; its frames stream has one reader, the session)
+        #expect(fake.steps[0][2].notes == [72])
+        #expect(fake.steps[0][8].notes == [70, 72, 75])
+        #expect(fake.drums[1].has(2))
+        #expect(fake.params[1][Param.pan] == -20)
+        #expect(fake.swing == 40)
+        #expect(session.tracks[0].steps[2].notes == [72])        // and the app still agrees
+        #expect(session.tracks[1].pan == -20 && session.swing == 40)
+
+        session.toggle(track: 0, index: 2, note: 72)            // off again: an empty REST
+        try await waitFor { session.tracks[0].steps[2].time == .rest }
+        run.cancel()
+    }
+
     @Test func playheadInterpolatesBetweenPolls() {
         let session = SloopSession(transport: { nil })
         let t0 = Date()

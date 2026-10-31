@@ -82,8 +82,12 @@ struct DrumGridContent: View {
                 .frame(width: DrumGrid.contentSize.width, height: DrumGrid.contentSize.height)
                 .contentShape(Rectangle())
                 .gesture(SpatialTapGesture().onEnded { e in
-                    ui.selectedStep[3] = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
-                    ui.selectedLane = max(0, min(15, Int(e.location.y / Theme.rowHeight)))
+                    // a tap turns that hit on or off, and selects it
+                    let i = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
+                    let l = max(0, min(15, Int(e.location.y / Theme.rowHeight)))
+                    ui.selectedStep[3] = i
+                    ui.selectedLane = l
+                    session.toggle(drumIndex: i, lane: l)
                 })
                 .accessibilityHidden(true)
             HStack(spacing: 0) {
@@ -94,6 +98,14 @@ struct DrumGridContent: View {
                         .accessibilityLabel(StepLabels.drums(index: i, t))
                         .accessibilityAddTraits(i == selected ? [.isButton, .isSelected] : .isButton)
                         .accessibilityAction { ui.selectedStep[3] = i }
+                        .accessibilityActions {
+                            ForEach(0..<16, id: \.self) { l in
+                                Button("\(Music.drumLanes[l]) \(t.drumSteps[i].has(l) ? "off" : "on")") {
+                                    ui.selectedStep[3] = i; ui.selectedLane = l
+                                    session.toggle(drumIndex: i, lane: l)
+                                }
+                            }
+                        }
                 }
             }
             .allowsHitTesting(false)

@@ -1,17 +1,20 @@
 import Foundation
 
 /// A pretend FM-1 on SLOOP 2.8.4, so the app runs without the device. It answers the requests pass 1
-/// sends, plays at 108 BPM, and, while watched, now and then edits a step on the selected track or
-/// switches tracks and pushes about it, as the real one does.
+/// sends, plays at 108 BPM, and, while watched, edits a step on the selected track every few
+/// seconds and pushes about it, as the real one does. It never switches tracks by itself (that
+/// read as the app misbehaving); `switchesTracks` turns that on for tests.
 public final class FakeSloop: SysExTransport, @unchecked Sendable {
     public let frames: AsyncStream<[UInt8]>
     private let sink: AsyncStream<[UInt8]>.Continuation
+    public let notes = AsyncStream<NoteEvent> { _ in }
     private let queue = DispatchQueue(label: "FakeSloop")
     private let started = Date()
 
     public var version = DeviceInfo.expectedVersion
     public var protocolVersion = DeviceInfo.expectedProtocol
     public var autoEdits: Bool
+    public var switchesTracks = false
     public var replyDelay: TimeInterval = 0.002
 
     static let engines = ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "FM6", "PHYS", "NOISE"]
@@ -35,7 +38,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self, bufferingPolicy: .unbounded)
         seedPattern()
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now() + 3, repeating: 2.5)
+        t.schedule(deadline: .now() + 6, repeating: 6)
         t.setEventHandler { [weak self] in self?.randomEdit() }
         t.resume()
         editTimer = t
@@ -112,12 +115,45 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             emit(cmd, b + Array("SOUND".utf8) + [0] + Array("SHAPE".utf8) + [0])
         case Cmd.trackStep:
             let t = Int(a[0]), i = Int(a[1])
+            if a.count >= 10, t < 3 {                     // a write: n, notes, time, flags, vel [, lvl, hi, rat]
+                var r = ByteReader(Array(a[2...]))
+                if var st = try? SynthStep(reader: &r) {
+                    if st.time != .note { st.notes = []; st.levels = []; st.ratchets = [] }
+                    steps[t][i] = st
+                }
+            }
             emit(cmd, [a[0], a[1]] + synthBody(t < 3 ? steps[t][i] : .empty))
         case Cmd.drumStep:
+            if a.count >= 14 {
+                var r = ByteReader(Array(a[1...]))
+                if let on = try? r.bits(3), let lv = try? r.bits(5), let rt = try? r.bits(5) {
+                    let d = DrumStep(on: UInt16(truncatingIfNeeded: on), levels: UInt32(truncatingIfNeeded: lv), ratchets: UInt32(truncatingIfNeeded: rt))
+                    var clean = DrumStep(on: d.on, levels: 0, ratchets: 0)
+                    for l in d.lanes { clean = clean.setting(l, on: true, level: d.level(l), ratchet: d.ratchet(l)) }
+                    drums[Int(a[0])] = clean
+                }
+            }
             let d = drums[Int(a[0])]
             emit(cmd, [a[0]] + bits(UInt64(d.on), 3) + bits(UInt64(d.levels), 5) + bits(UInt64(d.ratchets), 5))
         case Cmd.trackParam:
-            emit(cmd, [a[0], a[1]] + Frame.v14(params[Int(a[0])][Int(a[1])]))
+            let t = Int(a[0]), id = Int(a[1])
+            if a.count >= 4 {
+                var r = ByteReader(Array(a[2...]))
+                if let v = try? r.v14() {
+                    let range = id == Param.length ? 1...64 : id == Param.pan ? -64...63 : 0...127
+                    params[t][id] = min(max(v, range.lowerBound), range.upperBound)
+                }
+            }
+            emit(cmd, [a[0], a[1]] + Frame.v14(params[t][id]))
+        case Cmd.set:
+            let id = Int(a[1])
+            var r = ByteReader(Array(a[2...]))
+            if a[0] == 1, let v = try? r.v14() {
+                if id == Global.swing { swing = min(max(v, 0), 100) }
+                if id == Global.drumLevel { drumLevel = min(max(v, 0), 127) }
+                if id == Global.bpm { bpm = min(max(v, 40), 240) }
+            }
+            emit(cmd, [a[0], a[1]] + Frame.v14(id == Global.bpm ? bpm : id == Global.swing ? swing : id == Global.drumLevel ? drumLevel : 0))
         case Cmd.get:
             let id = Int(a[1])
             emit(cmd, [a[0], a[1]] + Frame.v14(id == Global.bpm ? bpm : id == Global.swing ? swing : id == Global.drumLevel ? drumLevel : 0))
@@ -146,7 +182,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
 
     private func randomEdit() {
         guard autoEdits, watching else { return }
-        if Int.random(in: 0..<6) == 0 {
+        if switchesTracks, Int.random(in: 0..<6) == 0 {
             selected = (selected + 1) % 4
             emit(Cmd.reload, [UInt8(engine[selected] % 13), UInt8(preset[selected]), UInt8(selected)])
             return

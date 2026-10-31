@@ -27,5 +27,5 @@ The earlier plan (custom protocol, 8 tracks, FM1 Open firmware) is archived on t
 
 - Tests: `cd SloopKit && swift test`.
 - On Blue Lion: `xcodegen generate`, open `FM1.xcodeproj`, pick **My Mac (Designed for iPad)**, ⌘R, with the FM-1 plugged into the Mac. Signing is the free personal team (`K3CNX79952`). Launching the built `.app` outside Xcode doesn't work: macOS calls the bare iOS bundle damaged.
-- Without the FM-1: pass `-demo` as a launch argument, or pick "Demo FM-1" from the connection menu (top left). The demo edits steps and switches tracks by itself every few seconds.
+- Without the FM-1: pass `-demo` as a launch argument, or pick "Demo FM-1" from the connection menu (top left). The demo edits a step on the selected track every 6 seconds; it never switches tracks by itself.
 - Close SLOOP's web editor while the app runs. Both editors share the FM-1's one MIDI port, and the device holds one incoming request at a time.

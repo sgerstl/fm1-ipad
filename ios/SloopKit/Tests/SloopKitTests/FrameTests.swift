@@ -65,4 +65,52 @@ import Testing
         let chr = Music.foldedRows(used: [71, 88, 95, 96], root: 0, scale: 0, minRows: 10)
         #expect(chr.count == 10 && chr.contains(71) && chr.contains(96) && !chr.contains(80))
     }
+
+    @Test func synthStepWriteRoundTrips() throws {
+        let st = SynthStep(notes: [60, 64, 67, 71], time: .note, accent: true, slide: true, velocity: 90,
+                           levels: [0, 1, 2, 3], ratchets: [3, 2, 1, 0])
+        let req = Request.setTrackStep(track: 2, index: 9, st)
+        #expect(req.bytes.prefix(7) == [0xF0, 0x7D, 0x46, 0x4C, Cmd.trackStep, 2, 9])
+        #expect(req.args.count == 2 + 11)
+        var r = ByteReader(Array(req.args.dropFirst(2)))
+        #expect(try SynthStep(reader: &r) == st)    // levels bit 7 and ratchet bit 7 go through hi
+    }
+
+    @Test func drumStepWriteRoundTrips() throws {
+        let d = DrumStep.empty.setting(0, on: true).setting(15, on: true, level: 3, ratchet: 1)
+        let back = try DrumStepReply([4] + d.encoded)
+        #expect(back.step == d && back.step.lanes == [0, 15])
+        #expect(d.setting(15, on: false).level(15) == 0)
+    }
+
+    @Test func writesMatchTheirEchoes() {
+        #expect(Request.setTrackParam(track: 1, id: Param.pan, value: -3).matches([1, UInt8(Param.pan)] + Frame.v14(-3)))
+        #expect(Request.setGlobal(id: Global.swing, value: 20).bytes == Frame.encode(Cmd.set, [1, 1] + Frame.v14(20)))
+    }
+
+    @Test func notesOutsideSysEx() {
+        var a = SysExAssembler()
+        // note on C4, running-status note on E4, a SysEx frame in between, note on with velocity 0 = off
+        let frames = a.feed([0x90, 60, 100, 64, 90, 0xF0, 0x7D, 0x46, 0x4C, 0x19, 0x00, 0xF7, 0x80, 60, 0, 0x91, 64, 0, 0xB0, 1, 2])
+        #expect(frames.count == 1)
+        #expect(a.drainNotes() == [NoteEvent(on: true, channel: 0, note: 60), NoteEvent(on: true, channel: 0, note: 64),
+                                   NoteEvent(on: false, channel: 0, note: 60), NoteEvent(on: false, channel: 1, note: 64)])
+        #expect(a.drainNotes().isEmpty)
+    }
+
+    @Test func keyPitchFollowsTheFM1() {
+        // OFF: chromatic from F3; OCT and TRN shift it
+        #expect(Music.keyPitch(0, root: 0, scale: 0, quant: 0, chord: 0, transpose: 0, octave: 0) == 53)
+        #expect(Music.keyPitch(7, root: 0, scale: 0, quant: 0, chord: 0, transpose: -12, octave: -1) == 36)
+        // SNAP to C minor: E4 (key 11) rounds down to D#4
+        #expect(Music.keyPitch(11, root: 0, scale: 2, quant: 1, chord: 0, transpose: 0, octave: 0) == 63)
+        // WHITE, C major: C4 (key 7) is the root, D4 the next degree, black keys silent
+        #expect(Music.keyPitch(7, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == 60)
+        #expect(Music.keyPitch(9, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == 62)
+        #expect(Music.keyPitch(8, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == nil)
+        // WHITE, C minor pentatonic: the white key after C4 walks to D#4
+        #expect(Music.keyPitch(9, root: 0, scale: 6, quant: 2, chord: 0, transpose: 0, octave: 0) == 63)
+        // F3 (key 0) in WHITE C major: three degrees below C4 = F3
+        #expect(Music.keyPitch(0, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == 53)
+    }
 }

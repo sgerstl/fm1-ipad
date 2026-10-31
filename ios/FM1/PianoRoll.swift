@@ -13,7 +13,7 @@ struct PianoRoll: View {
 
     var body: some View {
         let t = session.tracks[track]
-        let rows = Self.rows(t)
+        let rows = Self.rows(t, keeping: ui.keptRows[track] ?? [])
         let contentSize = CGSize(width: 64 * Theme.stepWidth, height: max(Self.gridSize.height, CGFloat(rows.count) * Theme.rowHeight))
         let first = Int((offset.x / Theme.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / Theme.rowHeight).rounded())
@@ -72,6 +72,8 @@ struct PianoRoll: View {
         .panel()
         .onReceive(NotificationCenter.default.publisher(for: .gridPannedByHand)) { _ in ui.handPannedAt = Date() }
         .onChange(of: session.positions[track].step) { _, step in follow(step) }
+        .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
+        .onChange(of: track) { _, _ in ui.keptRows = [:] }
     }
 
     /// While playing, page the grid along with the playhead, unless a hand panned it in the last few seconds.
@@ -82,10 +84,13 @@ struct PianoRoll: View {
         request = .init(x: CGFloat(step / 32 * 32) * Theme.stepWidth, id: (request?.id ?? 0) + 1)
     }
 
-    static func rows(_ t: TrackState) -> [Int] {
+    /// Rows shown before stay while the track is on screen, so removing the highest or lowest note
+    /// doesn't pull its row out from under the finger.
+    static func rows(_ t: TrackState, keeping kept: Set<Int> = []) -> [Int] {
         var used = Set<Int>()
         for s in t.steps where s.time == .note { used.formUnion(s.notes) }
-        return Music.foldedRows(used: used, root: t.root, scale: t.scale, minRows: 10)
+        let folded = Music.foldedRows(used: used, root: t.root, scale: t.scale, minRows: 10)
+        return Set(folded).union(kept).sorted(by: >)
     }
 }
 
@@ -171,7 +176,11 @@ struct PianoRollContent: View {
                 .frame(width: 64 * Theme.stepWidth, height: height)
                 .contentShape(Rectangle())
                 .gesture(SpatialTapGesture().onEnded { e in
-                    ui.selectedStep[track] = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
+                    // one finger edits: a tap turns that note on or off in that step, and selects the step
+                    let i = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
+                    let r = Int(e.location.y / Theme.rowHeight)
+                    ui.selectedStep[track] = i
+                    if r >= 0, r < rows.count { session.toggle(track: track, index: i, note: rows[r]) }
                 })
                 .accessibilityHidden(true)
             // VoiceOver: each step is a button, read in step order.
@@ -183,6 +192,15 @@ struct PianoRollContent: View {
                         .accessibilityLabel(StepLabels.synth(track: track, index: i, t))
                         .accessibilityAddTraits(i == selected ? [.isButton, .isSelected] : .isButton)
                         .accessibilityAction { ui.selectedStep[track] = i }
+                        .accessibilityActions {
+                            ForEach(rows, id: \.self) { n in
+                                let has = t.steps[i].time == .note && t.steps[i].notes.contains(n)
+                                Button("\(has ? "Remove" : "Add") \(Music.spokenNoteName(n))") {
+                                    ui.selectedStep[track] = i
+                                    session.toggle(track: track, index: i, note: n)
+                                }
+                            }
+                        }
                 }
             }
             .allowsHitTesting(false)

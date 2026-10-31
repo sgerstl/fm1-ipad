@@ -14,6 +14,9 @@ public struct TrackState: Equatable, Sendable {
     public var level = 100          // P_LEVEL; the drum track's is G_DRLVL
     public var root = 0
     public var scale = 0
+    public var quant = 0            // P_QNT: 0 OFF, 1 SNAP, 2 WHITE (how the FM-1's keys map to notes)
+    public var transpose = 0        // P_TRN, semitones
+    public var chord = 0            // P_CHORD: 0 OFF
     public var length = 16          // P_SLEN
     public var division = 2         // P_SDIV, 1/16
     public var pan = 0
@@ -52,6 +55,8 @@ public final class SloopSession {
     public private(set) var playing = false
     public private(set) var bpm = 120
     public private(set) var swing = 0
+    public private(set) var otherChannelsPlaySelected = true
+    public private(set) var drumMapGM = true
     public private(set) var positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: 4)
     public private(set) var isDemo = false
     public private(set) var stats = Stats()
@@ -74,6 +79,16 @@ public final class SloopSession {
     private var tasks: [Task<Void, Never>] = []
     private var namesCache: [Int: [String]] = [:]
     private var pendingSteps: Set<Int> = []        // track * 64 + index
+    /// Steps and parameters the iPad wrote lately. SLOOP doesn't push about the editor's own writes,
+    /// and a read already queued before a write would bring back the old value, so reads leave these
+    /// alone for a moment. Keys: "s<track*64+index>", "p<track>.<id>", "g<id>".
+    private var recentWrites: [String: Date] = [:]
+    private var paramWrites: [String: Int] = [:]      // latest value waiting to be sent (knob drags)
+    private var paramSending: Set<String> = []
+    private func recentlyWritten(_ key: String) -> Bool {
+        guard let d = recentWrites[key] else { return false }
+        return Date().timeIntervalSince(d) < 1.5
+    }
     private let makeTransport: () -> SysExTransport?
 
     /// About 20 a second once a reply's 2 ms is added. SLOOP pushes only while its USB send ring is
@@ -124,6 +139,7 @@ public final class SloopSession {
                 return
             }
             info = i
+            deviceNotes = []          // whatever the USB buffer held from before isn't live
             try await readEverything()
             _ = try await c.watch(3)
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
@@ -139,6 +155,7 @@ public final class SloopSession {
             group.addTask { await self.pingLoop(c) }
             group.addTask { await self.liveLoop(c) }
             group.addTask { await self.resyncLoop(c) }
+            group.addTask { await self.noteLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             await group.next()           // any loop ending means the device went away
             group.cancelAll()
         }
@@ -186,13 +203,17 @@ public final class SloopSession {
     private func readParams(_ t: Int) async throws {
         guard let c = client else { return }
         for id in Param.all {
-            apply(track: t, id: id, value: try await c.trackParam(track: t, id: id))
+            let v = try await c.trackParam(track: t, id: id)
+            if !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
         }
     }
 
     private func readGlobals() async throws {
         guard let c = client else { return }
-        for id in Global.all { applyGlobal(id: id, value: try await c.global(id: id)) }
+        for id in Global.all {
+            let v = try await c.global(id: id)
+            if !recentlyWritten("g\(id)") { applyGlobal(id: id, value: v) }
+        }
     }
 
     /// Reads a track's 64 steps; returns how many differed from what the app had.
@@ -203,10 +224,10 @@ public final class SloopSession {
         for i in 0..<64 {
             if t == 3 {
                 let s = try await c.drumStep(index: i)
-                if tracks[3].drumSteps[i] != s { tracks[3].drumSteps[i] = s; fixes += 1 }
+                if tracks[3].drumSteps[i] != s, !recentlyWritten("s\(3 * 64 + i)") { tracks[3].drumSteps[i] = s; fixes += 1 }
             } else {
                 let s = try await c.synthStep(track: t, index: i)
-                if tracks[t].steps[i] != s { tracks[t].steps[i] = s; fixes += 1 }
+                if tracks[t].steps[i] != s, !recentlyWritten("s\(t * 64 + i)") { tracks[t].steps[i] = s; fixes += 1 }
             }
         }
         tracks[t].loaded = true
@@ -220,8 +241,13 @@ public final class SloopSession {
         pendingSteps.insert(key)
         defer { pendingSteps.remove(key) }
         do {
-            if t == 3 { tracks[3].drumSteps[i] = try await c.drumStep(index: i) }
-            else { tracks[t].steps[i] = try await c.synthStep(track: t, index: i) }
+            if t == 3 {
+                let s = try await c.drumStep(index: i)
+                if !recentlyWritten("s\(key)") { tracks[3].drumSteps[i] = s }
+            } else {
+                let s = try await c.synthStep(track: t, index: i)
+                if !recentlyWritten("s\(key)") { tracks[t].steps[i] = s }
+            }
         } catch { stats.timeouts += 1 }
     }
 
@@ -233,6 +259,9 @@ public final class SloopSession {
         case Param.level: if t < 3 { tracks[t].level = v }
         case Param.root: tracks[t].root = v
         case Param.scale: tracks[t].scale = v
+        case Param.quant: tracks[t].quant = v
+        case Param.transpose: tracks[t].transpose = v
+        case Param.chord: tracks[t].chord = v
         case Param.length: tracks[t].length = max(1, min(64, v))
         case Param.division: tracks[t].division = v
         case Param.pan: tracks[t].pan = v
@@ -246,6 +275,8 @@ public final class SloopSession {
         case Global.bpm: bpm = v
         case Global.swing: swing = v
         case Global.drumLevel: tracks[3].level = v
+        case Global.otherChannels: otherChannelsPlaySelected = v == 0
+        case Global.drumMap: drumMapGM = v == 0
         default: break
         }
     }
@@ -373,6 +404,159 @@ public final class SloopSession {
         selectedTrack = t
         guard let c = client else { return }
         Task { _ = try? await c.selectTrack(t) }
+    }
+
+    // MARK: Playing from the iPad's keyboard
+
+    /// The channel the keyboard plays on: 16, which no track owns by default, so SLOOP plays the
+    /// selected track with it (GLO > MIDI > OTHER = SEL, seq.c midi_route), drums included.
+    public static let keyboardChannel: UInt8 = 15
+    private var held: [Int: Int] = [:]        // key id -> MIDI note sent, so a note-off matches its note-on
+    /// The FM-1's OCT buttons (song.octave), which the protocol doesn't report. The iPad keeps its own
+    /// and follows the FM-1: a note from the FM-1's keys that only fits another octave moves it there.
+    public var keyboardOctave = 0
+
+    /// What key k (0 = F3 ... 26 = G5, as on the FM-1) plays on the selected track, as the FM-1's own
+    /// keyboard would; nil for a silent key (black keys in WHITE mode).
+    public func pitch(ofKey k: Int, octave: Int? = nil) -> Int? {
+        let t = tracks[selectedTrack]
+        return Music.keyPitch(k, root: t.root, scale: t.scale, quant: t.quant, chord: t.chord,
+                              transpose: t.transpose, octave: octave ?? keyboardOctave)
+    }
+    /// Notes held on the FM-1's own keys right now (MIDI notes it sends), to light the iPad's keys too.
+    public private(set) var deviceNotes: Set<Int> = []
+
+    /// The key id a note from the device lights: the note itself, or on the drum track its lane.
+    public func keyID(forDeviceNote n: Int) -> Int {
+        guard selectedTrack == 3 else { return n }
+        if drumMapGM { return Music.laneNotes.firstIndex(of: n) ?? Music.laneNotes.enumerated().min { abs($0.element - n) < abs($1.element - n) }!.offset }
+        return ((n - 36) % 16 + 16) % 16
+    }
+
+    private func noteLoop(_ t: SysExTransport) async {
+        for await e in t.notes {
+            let n = Int(e.note)
+            if e.on { deviceNotes.insert(n); followOctave(n) } else { deviceNotes.remove(n) }
+        }
+    }
+
+    /// A note from the FM-1 that no key plays at the iPad's octave, but one does at another: the FM-1's
+    /// OCT buttons moved, so follow them (nearest octave first).
+    private func followOctave(_ n: Int) {
+        guard selectedTrack < 3 else { return }
+        func fits(_ o: Int) -> Bool { (0..<27).contains { pitch(ofKey: $0, octave: o) == n } }
+        guard !fits(keyboardOctave) else { return }
+        for d in [1, -1, 2, -2, 3, -3] where fits(keyboardOctave + d) && abs(keyboardOctave + d) <= 3 {
+            keyboardOctave += d
+            return
+        }
+    }
+
+    /// A key down. `key` is the FM-1 key index on a synth track (0...26), the lane (0...15) on drums.
+    public func keyDown(_ key: Int, velocity: Int = 100) {
+        let note: Int
+        if selectedTrack == 3 { note = drumMapGM ? Music.laneNotes[key % 16] : 36 + key % 16 }
+        else if let p = pitch(ofKey: key) { note = p } else { return }
+        held[key] = note
+        client?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
+    }
+
+    public func keyUp(_ key: Int) {
+        guard let note = held.removeValue(forKey: key) else { return }
+        client?.sendMIDI([0x80 | Self.keyboardChannel, UInt8(note & 0x7F), 0])
+    }
+
+    /// The notes (or drum lanes) the selected track plays at the playhead, to light the keys.
+    public var sounding: Set<Int> {
+        guard playing else { return [] }
+        let t = selectedTrack, i = positions[t].step % 64
+        if t == 3 { return Set(tracks[3].drumSteps[i].lanes) }
+        // a held note sounds through its TIE steps
+        var k = i
+        while k > 0, tracks[t].steps[k].time == .tie { k -= 1 }
+        let s = tracks[t].steps[k]
+        return s.time == .note ? Set(s.notes) : []
+    }
+
+    // MARK: Editing from the iPad (step 2). The app shows each change at once; the reply is what
+    // the device stored, and it wins.
+
+    public func write(track t: Int, index i: Int, _ step: SynthStep) {
+        guard t < 3 else { return }
+        var st = step
+        if st.time != .note { st.notes = []; st.levels = []; st.ratchets = [] }
+        tracks[t].steps[i] = st
+        recentWrites["s\(t * 64 + i)"] = Date()
+        guard let c = client else { return }
+        Task {
+            do {
+                let stored = try await c.setSynthStep(track: t, index: i, st)
+                self.tracks[t].steps[i] = stored
+            } catch { self.stats.timeouts += 1 }
+            self.recentWrites["s\(t * 64 + i)"] = Date()
+        }
+    }
+
+    public func write(drumIndex i: Int, _ step: DrumStep) {
+        tracks[3].drumSteps[i] = step
+        recentWrites["s\(3 * 64 + i)"] = Date()
+        guard let c = client else { return }
+        Task {
+            do {
+                let stored = try await c.setDrumStep(index: i, step)
+                self.tracks[3].drumSteps[i] = stored
+            } catch { self.stats.timeouts += 1 }
+            self.recentWrites["s\(3 * 64 + i)"] = Date()
+        }
+    }
+
+    /// A note in a synth step on or off. Adding to a step that holds four replaces nothing and returns false.
+    @discardableResult
+    public func toggle(track t: Int, index i: Int, note: Int) -> Bool {
+        var st = tracks[t].steps[i]
+        if st.time == .note, let k = st.notes.firstIndex(of: note) {
+            st.notes.remove(at: k)
+            if k < st.levels.count { st.levels.remove(at: k) }
+            if k < st.ratchets.count { st.ratchets.remove(at: k) }
+            if st.notes.isEmpty { st.time = .rest }
+        } else {
+            if st.time != .note { st = SynthStep(notes: [], time: .note, accent: st.accent, slide: st.slide, velocity: st.velocity > 0 ? st.velocity : 100) }
+            guard st.notes.count < 4 else { return false }
+            st.notes.append(note); st.levels.append(0); st.ratchets.append(0)
+        }
+        write(track: t, index: i, st)
+        return true
+    }
+
+    public func toggle(drumIndex i: Int, lane: Int) {
+        let d = tracks[3].drumSteps[i]
+        write(drumIndex: i, d.setting(lane, on: !d.has(lane)))
+    }
+
+    /// A track parameter from a knob: shown at once, sent latest-value-wins so a drag never queues up.
+    public func set(track t: Int, param id: Int, to v: Int) {
+        apply(track: t, id: id, value: v)
+        if t == 3 && id == Param.level { sendParam("g\(Global.drumLevel)", v) { c, v in try await c.setGlobal(id: Global.drumLevel, value: v) } ; return }
+        sendParam("p\(t).\(id)", v) { c, v in try await c.setTrackParam(track: t, id: id, value: v) }
+    }
+
+    public func set(global id: Int, to v: Int) {
+        applyGlobal(id: id, value: v)
+        sendParam("g\(id)", v) { c, v in try await c.setGlobal(id: id, value: v) }
+    }
+
+    private func sendParam(_ key: String, _ v: Int, _ op: @escaping (SloopClient, Int) async throws -> Int) {
+        recentWrites[key] = Date()
+        paramWrites[key] = v
+        guard let c = client, !paramSending.contains(key) else { return }
+        paramSending.insert(key)
+        Task {
+            while let next = self.paramWrites.removeValue(forKey: key) {
+                _ = try? await op(c, next)
+                self.recentWrites[key] = Date()
+            }
+            self.paramSending.remove(key)
+        }
     }
 
     public func setPlaying(_ on: Bool) {

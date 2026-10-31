@@ -54,8 +54,43 @@ public enum Music {
         return r.reversed()
     }
 
+    /// What the FM-1's key k plays (firmware seq.c kb_pitch): k = 0 is F3 (53), chromatic up to G5.
+    /// quant 1 SNAP rounds down into the scale; quant 2 WHITE (or chord mode) walks the scale on the
+    /// white keys, C4 the root, and silences the black keys. Then the OCT buttons and TRN. nil: silent.
+    public static func keyPitch(_ k: Int, root: Int, scale: Int, quant: Int, chord: Int, transpose: Int, octave: Int) -> Int? {
+        let masks = scales.map { $0.intervals.reduce(0) { $0 | 1 << $1 } }
+        let mask = masks[max(0, min(masks.count - 1, scale))]
+        var n = 53 + k
+        if quant == 1 && chord == 0 {
+            n += 12 * octave + transpose
+            var guardCount = 12
+            while guardCount > 0, (mask >> ((n - root + 120) % 12)) & 1 == 0 { n -= 1; guardCount -= 1 }
+            return max(0, min(127, n))
+        }
+        if quant == 2 || chord != 0 {
+            let m = chord != 0 && scale == 0 ? masks[2] : mask
+            let degreeOf = [0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6]
+            var degree = degreeOf[n % 12]
+            guard degree >= 0 else { return nil }
+            degree += (n / 12 - 5) * 7
+            let count = (0..<12).filter { (m >> $0) & 1 == 1 }.count
+            var wo = degree / count
+            degree %= count
+            if degree < 0 { degree += count; wo -= 1 }
+            var i = 0
+            while i < 12 {
+                if (m >> i) & 1 == 1 { if degree == 0 { break }; degree -= 1 }
+                i += 1
+            }
+            n = 60 + root + 12 * wo + i
+        }
+        return max(0, min(127, n + 12 * octave + transpose))
+    }
+
     public static let drumLanes = ["Kick", "Kick 2", "Snare", "Clap", "Hat", "Open hat", "Pedal", "Rim",
                                    "Snare 2", "Low tom", "Hi tom", "Crash", "Ride", "Shaker", "Conga", "Cowbell"]
+    /// The GM note SLOOP plays each drum lane from (drums.c LANE_NOTE).
+    public static let laneNotes = [36, 35, 38, 39, 42, 46, 44, 37, 40, 43, 48, 49, 51, 70, 63, 56]
     public static let levelNames = ["Normal", "Ghost", "Soft", "Hard"]
 
     /// P_SDIV: a step's length in beats.

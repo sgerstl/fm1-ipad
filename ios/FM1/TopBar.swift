@@ -8,11 +8,11 @@ struct TopBar: View {
 
     var body: some View {
         HStack {
-            connection.frame(width: 300, alignment: .leading)
+            connection.frame(width: 420, alignment: .leading)
             Spacer()
             tabs
             Spacer()
-            transport.frame(width: 300, alignment: .trailing)
+            transport.frame(width: 420, alignment: .trailing)
         }
         .frame(height: 64)
     }
@@ -99,6 +99,8 @@ struct TopBar: View {
     private var transport: some View {
         let pos = session.positions[session.selectedTrack]
         return HStack(spacing: 20) {
+            ToggleKey(name: "Keys", on: ui.keyboardOpen, enabled: isConnected) { ui.keyboardOpen.toggle() }
+                .accessibilityHint("Shows the FM-1's keyboard")
             readout(session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –", "bar · step")
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(session.playing ? "Bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "Stopped")

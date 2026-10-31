@@ -53,4 +53,7 @@ final class EditorUI {
     var selectedStep = [0, 0, 0, 0]
     var selectedLane = 0
     var handPannedAt = Date.distantPast
+    var keptRows: [Int: Set<Int>] = [:]
+    var knobGrab: KnobGrab?
+    var keyboardOpen = false
 }
