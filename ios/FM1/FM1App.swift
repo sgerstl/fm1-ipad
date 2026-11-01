@@ -64,4 +64,6 @@ final class EditorUI {
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
     var lastClear: SloopSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = .engine(0)
+    /// The Presets panel is up on the Sequencer, in place of the step panel and knobs.
+    var presetsPanel = false
 }

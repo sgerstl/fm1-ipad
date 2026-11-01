@@ -17,6 +17,7 @@ public struct TrackState: Equatable, Sendable {
     public var quant = 0            // P_QNT: 0 OFF, 1 SNAP, 2 WHITE (how the FM-1's keys map to notes)
     public var transpose = 0        // P_TRN, semitones
     public var chord = 0            // P_CHORD: 0 OFF
+    public var arpMode = 0          // P_AMODE: 0 OFF
     public var length = 16          // P_SLEN
     public var division = 2         // P_SDIV, 1/16
     public var pan = 0
@@ -480,7 +481,8 @@ public final class SloopSession {
         case Param.scale: tracks[t].scale = max(0, min(Music.scales.count - 1, v))
         case Param.quant: tracks[t].quant = v
         case Param.transpose: tracks[t].transpose = v
-        case Param.chord: tracks[t].chord = v
+        case Param.chord: tracks[t].chord = max(0, v)
+        case Param.arpMode: tracks[t].arpMode = max(0, v)
         case Param.length: tracks[t].length = max(1, min(64, v))
         case Param.division: tracks[t].division = max(0, min(Music.divisionBeats.count - 1, v))
         case Param.pan: tracks[t].pan = v

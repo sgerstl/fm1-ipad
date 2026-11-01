@@ -87,6 +87,41 @@ public enum Music {
         return max(0, min(127, n + 12 * octave + transpose))
     }
 
+    /// SLOOP's names (params.c N_CHORD, N_AMODE: append-only), as the FM-1's screen shows them.
+    public static let chordNames = ["OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER"]
+    public static let arpModes = ["OFF", "UP", "DN", "UPDN", "RND", "ORD", "REPEAT", "DNUP", "UP+8", "CONV", "DIVG",
+                                  "PINKY", "THUMB", "WALK", "CHORD"]
+
+    /// The chord a key plays in chord mode (firmware seq.c chord_notes): the chord of the scale built
+    /// on note n, by scale degrees (CHR uses minor); POWER is 1 5 8 in semitones. At most 4 notes.
+    public static func chordNotes(on n: Int, root: Int, scale: Int, type: Int) -> [Int] {
+        let degrees: [[Int]] = [[0], [0, 2, 4], [0, 2, 4, 6], [0, 2, 6, 8], [0, 3, 4], []]
+        let t = max(0, min(5, type))
+        if t == 5 { return [0, 7, 12].map { n + $0 }.filter { $0 < 128 } }
+        let iv = scales[scale > 0 && scale < scales.count ? scale : 2].intervals
+        return degrees[t].compactMap { d -> Int? in
+            var m = n, left = d, guardCount = 48
+            while left > 0 && guardCount > 0 {
+                m += 1; guardCount -= 1
+                if iv.contains(((m - root) % 12 + 12) % 12) { left -= 1 }
+            }
+            return m < 128 ? m : nil
+        }
+    }
+
+    /// In chord mode the black keys change the chord held with a white key (seq.c chord_mod_of_key,
+    /// SLOOP's CHORD+): F# flips the third, G# adds the 7th, A# makes it sus4, C# adds the 9th, D# inverts.
+    public static func chordModifier(ofKey k: Int) -> String? {
+        switch (53 + k) % 12 {
+        case 6: return "maj/min"
+        case 8: return "+7"
+        case 10: return "sus4"
+        case 1: return "+9"
+        case 3: return "inv"
+        default: return nil
+        }
+    }
+
     public static let drumLanes = ["Kick", "Kick 2", "Snare", "Clap", "Hat", "Open hat", "Pedal", "Rim",
                                    "Snare 2", "Low tom", "Hi tom", "Crash", "Ride", "Shaker", "Conga", "Cowbell"]
     /// The GM note SLOOP plays each drum lane from (drums.c LANE_NOTE).
@@ -96,4 +131,9 @@ public enum Music {
     /// P_SDIV: a step's length in beats.
     public static let divisionBeats: [Double] = [1, 0.5, 0.25, 0.125, 1.0 / 3, 1.0 / 6, 2, 4, 8]
     public static let divisionNames = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1 bar", "2 bars"]
+}
+
+extension Array {
+    /// nil past the ends: for tables indexed by a value from the device.
+    public subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }

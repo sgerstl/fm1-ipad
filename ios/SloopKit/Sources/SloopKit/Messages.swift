@@ -33,8 +33,8 @@ public enum Cmd {
 /// Track parameter ids (`P_*`, firmware core.h) and global ids (`G_*`) that pass 1 reads.
 public enum Param {
     public static let level = 0, root = 25, scale = 26, quant = 27, transpose = 28, length = 29, division = 30, pan = 39, mute = 40
-    public static let chord = 49
-    public static let all = [level, root, scale, quant, transpose, length, division, pan, mute, chord]
+    public static let chord = 49, arpMode = 17
+    public static let all = [level, root, scale, quant, transpose, length, division, pan, mute, chord, arpMode]
 }
 public enum Global {
     public static let bpm = 0, swing = 1, drumLevel = 25

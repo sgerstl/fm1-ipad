@@ -192,6 +192,8 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                 params[t][id] = v
             }
             for id in 63..<71 { params[t][id] = 64 }
+            params[t][Param.arpMode] = t == 0 ? 1 : 0          // the demo: track 1 arpeggiates UP,
+            params[t][Param.chord] = t == 2 ? 2 : 0            // track 3 plays 7TH chords
         }
         let chords: [(Int, [Int], Int)] = [(0, [63, 67, 70], 4), (6, [63, 67, 70], 1), (8, [70, 72, 75, 79], 1),
                                            (12, [70, 72, 75, 79], 1), (15, [63, 67, 70], 1), (18, [67, 70, 74, 77], 1),

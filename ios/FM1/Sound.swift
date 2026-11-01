@@ -195,6 +195,7 @@ struct SoundTab: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
+            graph(for: p)
             HStack(spacing: 0) {
                 ForEach(0..<4, id: \.self) { slot in
                     if let id = p.ids[slot] {
@@ -235,6 +236,26 @@ struct SoundTab: View {
         .id(p.id)
     }
 
+    /// The page's graph, as the FM-1 draws it on that page: ENV's shape, the LFO's wave.
+    @ViewBuilder private func graph(for p: SoundPage) -> some View {
+        let v = session.params
+        let colour = Theme.track[session.selectedTrack]
+        // the knob being turned, here (its ring) or on the FM-1 (marked), lights its part
+        let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s0.\($0)" } == g.id } }
+            ?? marked.flatMap { m in p.ids.firstIndex { $0.map { "s0.\($0)" } == m } }
+        if p.fw == 0, v.count > 4 {
+            EnvelopeGraph(attack: v[1], decay: v[2], sustain: v[3], release: v[4], colour: colour, active: turning)
+                .frame(height: 88)
+                .padding(.horizontal, 4)
+                .recessed(10)
+        } else if p.fw == 2, v.count > 11 {
+            LFOGraph(wave: v[10], phase: v[11], colour: colour)
+                .frame(height: 88)
+                .padding(.horizontal, 4)
+                .recessed(10)
+        }
+    }
+
     /// The FM-1 changed page (a button pressed on it): show that button's pages here. Holding SEL
     /// (its key layer) brings up SEL.
     private func followScreen(_ s: UIState?) {
@@ -262,16 +283,23 @@ struct SoundTab: View {
 }
 
 /// SEL: what each of the FM-1's 27 keys plays now (root, scale, SNAP / WHITE, transpose, OCT), the
-/// thing the device's SEL pages change but its screen can't show all at once.
+/// thing the device's SEL pages change but its screen can't show all at once. In chord mode each white
+/// key plays a chord of the scale: tap one to light its notes across the keys; the black keys are
+/// labelled with how they change it (SLOOP's CHORD+), as the FM-1's SEL layer lights them.
 struct KeyMapStrip: View {
     let session: SloopSession
+    @State private var picked: Int?            // chord mode: the white key whose chord is shown
 
     var body: some View {
         let t = session.tracks[session.selectedTrack]
+        let chordMode = t.chord != 0 && session.selectedTrack < 3
+        let key = picked ?? KeyboardDrawer.whiteOffsets.first { session.pitch(ofKey: $0) != nil } ?? 0
+        let chord = chordMode ? session.pitch(ofKey: key).map { Music.chordNotes(on: $0, root: t.root, scale: t.scale, type: t.chord) } ?? [] : []
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("What the FM-1's keys play").font(.system(size: 15, weight: .semibold))
-                Text(t.quant == 2 || t.chord != 0 ? "white keys walk the scale" : t.quant == 1 ? "snapped to the scale" : "every key, chromatic")
+                Text(chordMode ? "chord mode: each white key plays a \(Music.chordNames[safe: t.chord] ?? "chord"); the black keys change it"
+                     : t.quant == 2 ? "white keys walk the scale" : t.quant == 1 ? "snapped to the scale" : "every key, chromatic")
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Spacer()
             }
@@ -279,33 +307,59 @@ struct KeyMapStrip: View {
                 let w = geo.size.width / 16
                 ZStack(alignment: .topLeading) {
                     ForEach(KeyboardDrawer.blackAfter, id: \.self) { k in
-                        keyCell(KeyboardDrawer.whiteOffsets[k] + 1, t: t).frame(width: w - 6, height: 34)
+                        keyCell(KeyboardDrawer.whiteOffsets[k] + 1, t: t, chordMode: chordMode, chord: chord, picked: key)
+                            .frame(width: w - 6, height: 34)
                             .offset(x: CGFloat(k + 1) * w - (w - 6) / 2)
                     }
                     ForEach(0..<16, id: \.self) { k in
-                        keyCell(KeyboardDrawer.whiteOffsets[k], t: t).frame(width: w - 6, height: 34)
+                        keyCell(KeyboardDrawer.whiteOffsets[k], t: t, chordMode: chordMode, chord: chord, picked: key)
+                            .frame(width: w - 6, height: 34)
                             .offset(x: CGFloat(k) * w + 3, y: 40)
                     }
                 }
             }
             .frame(height: 74)
+            if chordMode {
+                // the picked key's chord, spelled out
+                HStack(spacing: 8) {
+                    Text(session.pitch(ofKey: key).map(Music.noteName) ?? "–").font(.system(size: 13, weight: .semibold))
+                    Text("plays").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    Text(chord.map(Music.noteName).joined(separator: " · ")).font(.system(size: 13, weight: .semibold))
+                    Text("Tap a white key to see its chord.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                }
+                .accessibilityElement(children: .combine)
+            }
         }
         .padding(16)
         .panel()
         .padding(.bottom, 16)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
+        .onChange(of: session.selectedTrack) { _, _ in picked = nil }
     }
 
-    /// A key: the note it plays, lit when it's the root; silent keys are blank.
-    private func keyCell(_ key: Int, t: TrackState) -> some View {
+    /// A key: the note it plays, lit when it's the root (or, in chord mode, a note of the picked chord);
+    /// silent keys are blank; in chord mode the black keys say what they do.
+    @ViewBuilder private func keyCell(_ key: Int, t: TrackState, chordMode: Bool, chord: [Int], picked: Int) -> some View {
         let p = session.pitch(ofKey: key)
-        let root = p.map { (($0 - t.root) % 12 + 12) % 12 == 0 } ?? false
-        return Text(p.map(Music.noteName) ?? "")
-            .font(.system(size: 12, weight: root ? .semibold : .regular))
-            .foregroundStyle(root ? Theme.onColour : Theme.text)
+        let black = !KeyboardDrawer.whiteOffsets.contains(key)
+        let lit = chordMode ? p.map { chord.contains($0) } ?? false : p.map { (($0 - t.root) % 12 + 12) % 12 == 0 } ?? false
+        let label = chordMode && black ? (Music.chordModifier(ofKey: key) ?? "") : (p.map(Music.noteName) ?? "")
+        let cell = Text(label)
+            .font(.system(size: chordMode && black ? 11 : 12, weight: lit ? .semibold : .regular))
+            .foregroundStyle(lit ? Theme.onColour : chordMode && black ? Theme.textSecondary : Theme.text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(RoundedRectangle(cornerRadius: 8).fill(root ? Theme.track[session.selectedTrack] : Color(hex: 0x232427)))
-            .opacity(p == nil ? 0.35 : 1)
+            .background(RoundedRectangle(cornerRadius: 8).fill(lit ? Theme.track[session.selectedTrack] : Color(hex: 0x232427)))
+            .overlay { if chordMode && key == picked { RoundedRectangle(cornerRadius: 9).stroke(Theme.text, lineWidth: 2).padding(-2) } }
+            .opacity(p == nil && !(chordMode && black) ? 0.35 : 1)
+        if chordMode && !black && p != nil {
+            Button { self.picked = key } label: { cell.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(p.map(Music.spokenNoteName) ?? "") chord")
+                .accessibilityAddTraits(key == picked ? .isSelected : [])
+        } else {
+            cell.accessibilityLabel(chordMode && black ? "Black key: \(label)" : (p.map(Music.spokenNoteName) ?? "silent"))
+        }
     }
 }
 

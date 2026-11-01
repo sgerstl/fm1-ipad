@@ -83,9 +83,28 @@ extension AppView {
             }
             .transition(.opacity)
             .id(ui.page)
+            // the Presets panel: from the right, over the page; the page dims and a tap on it closes the
+            // panel, while the track box stays lit and live above the dimming, to switch tracks
+            if ui.presetsPanel {
+                Color.black.opacity(0.35)
+                    .contentShape(Rectangle())
+                    .onTapGesture { ui.presetsPanel = false }
+                    .accessibilityLabel("Close the presets")
+                    .accessibilityAddTraits(.isButton)
+                    .transition(.opacity)
+            }
             Overview(session: session, ui: ui, expanded: ui.timelineOpen)
+            if ui.presetsPanel {
+                PresetsPanel(session: session, ui: ui)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+            }
         }
-        .onChange(of: ui.page) { _, _ in ui.timelineOpen = false }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: ui.presetsPanel)
+        .onChange(of: ui.page) { _, _ in
+            ui.timelineOpen = false
+            ui.presetsPanel = false
+        }
     }
 
     /// The left column under the track box.
@@ -112,6 +131,21 @@ extension AppView {
                         TrackChip(track: m.track, size: 24)
                         Text("Track \(m.track + 1)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                     }
+                    // the sound, from here: the Presets panel slides out over the page
+                    Button {
+                        session.select(track: m.track)
+                        ui.timelineOpen = false            // the open timeline would run under the panel
+                        ui.presetsPanel = true
+                        ui.trackMenu = nil
+                    } label: {
+                        Label(m.track == 3 ? "Kits…" : "Presets…", systemImage: "square.grid.2x2")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
+                            .raisedKey()
+                    }
+                    .buttonStyle(PressSink())
+                    .accessibilityHint("Pick this track's sound without leaving the page")
                     Button {
                         ui.lastClear = session.clearAll(track: m.track)
                         ui.trackMenu = nil

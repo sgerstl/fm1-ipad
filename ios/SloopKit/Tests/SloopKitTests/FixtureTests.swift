@@ -150,3 +150,27 @@ func request(cmd: UInt8, args a: [UInt8]) -> Request? {
     default: nil
     }
 }
+
+@Suite struct ChordTests {
+    @Test func chordsAreBuiltOnTheScaleAsSLOOPDoes() {
+        // C minor (root C, scale MIN)
+        #expect(Music.chordNotes(on: 60, root: 0, scale: 2, type: 1) == [60, 63, 67])          // TRIAD on C: C Eb G
+        #expect(Music.chordNotes(on: 67, root: 0, scale: 2, type: 2) == [67, 70, 74, 77])      // 7TH on G: G Bb D F
+        #expect(Music.chordNotes(on: 60, root: 0, scale: 2, type: 3) == [60, 63, 70, 74])      // 9TH: 1 3 7 9
+        #expect(Music.chordNotes(on: 60, root: 0, scale: 2, type: 4) == [60, 65, 67])          // SUS4: C F G
+        #expect(Music.chordNotes(on: 60, root: 0, scale: 2, type: 5) == [60, 67, 72])          // POWER
+        // C major: TRIAD on D is D F A; chromatic builds on minor
+        #expect(Music.chordNotes(on: 62, root: 0, scale: 1, type: 1) == [62, 65, 69])
+        #expect(Music.chordNotes(on: 60, root: 0, scale: 0, type: 1) == [60, 63, 67])
+    }
+
+    @Test func blackKeysAreChordModifiers() {
+        // key 0 is F3; F# is key 1, G# key 3, A# key 5, C# key 8, D# key 10
+        #expect(Music.chordModifier(ofKey: 1) == "maj/min")
+        #expect(Music.chordModifier(ofKey: 3) == "+7")
+        #expect(Music.chordModifier(ofKey: 5) == "sus4")
+        #expect(Music.chordModifier(ofKey: 8) == "+9")
+        #expect(Music.chordModifier(ofKey: 10) == "inv")
+        #expect(Music.chordModifier(ofKey: 0) == nil)
+    }
+}

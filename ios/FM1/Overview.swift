@@ -107,7 +107,7 @@ struct Overview: View {
         .background(alignment: .leading) {
             let raised = ui.trackMenu?.track == t
             RoundedRectangle(cornerRadius: 10)
-                .fill(.white.opacity(raised ? 0.10 : selected ? 0.06 : 0))
+                .fill(raised ? Color.white.opacity(0.10) : selected ? Theme.track[t].opacity(0.16) : .clear)
                 .shadow(color: .black.opacity(raised ? 0.5 : 0), radius: raised ? 8 : 0, y: raised ? 4 : 0)
                 .frame(width: hitWidth)
         }
@@ -127,11 +127,16 @@ struct Overview: View {
                     Text(track.displayName)
                         .font(.system(size: 15, weight: selected ? .semibold : .regular))
                         .lineLimit(1)
+                        .layoutPriority(-1)                 // the name gives way to the tags
                     if track.mute {
                         Text("muted").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     }
+                    // CHORD and ARP, by SLOOP's names, on every page; a tag opens its Sound page
+                    if t < 3, track.chord > 0 { modeTag(Music.chordNames[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
+                    if t < 3, track.arpMode > 0 { modeTag("ARP " + (Music.arpModes[safe: track.arpMode] ?? ""), track: t, family: .arp) }
                     Spacer(minLength: 0)
                 }
+                .padding(.trailing, 14)                     // clear of the timeline's pull
                 .frame(width: Self.boxWidth - 8 - 44 - 4, alignment: .leading)
                 .padding(.leading, 4)
                 // the playhead is taller than the cells: as an overlay it can't shift them off centre
@@ -148,6 +153,30 @@ struct Overview: View {
             .frame(width: Self.rowWidth - 44, height: Self.rowHeight, alignment: .leading)
             // collapsed, the hidden timeline catches no taps (clipping alone doesn't stop hit-testing)
             .contentShape(Path(CGRect(x: 0, y: 0, width: hitWidth - 44, height: Self.rowHeight)))
+    }
+
+    /// A small tag after the name: what the track's notes become (a chord, an arpeggio).
+    private func modeTag(_ text: String, track t: Int, family: SoundFamily) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Theme.text)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .frame(height: 20)
+            .background(Capsule().fill(Theme.track[t].opacity(0.28)))
+            .contentShape(Rectangle().inset(by: -8))
+            .highPriorityGesture(TapGesture().onEnded {
+                session.select(track: t)
+                ui.page = .sound
+                ui.soundFamily = family
+                if session.screenLinked, ui.followDevice, let p = SoundPage.shown(session, family).first {
+                    session.showOnDevice(page: p.fw)
+                }
+            })
+            .accessibilityLabel(family == .arp ? "Arpeggio \(text.dropFirst(4))" : "Chord \(text)")
+            .accessibilityHint("Opens its Sound page")
+            .accessibilityAddTraits(.isButton)
     }
 
     private func draw(_ ctx: GraphicsContext, _ track: TrackState) {

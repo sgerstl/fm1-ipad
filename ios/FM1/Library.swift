@@ -7,6 +7,7 @@ import SwiftUI
 struct LibraryPage: View {
     let session: SloopSession
     let ui: EditorUI
+    var columns = 4                 // 2 in the Presets panel on the Sequencer
 
     var body: some View {
         // the track it loads onto is the track strip, collapsed beside it; the engines sit under that
@@ -22,7 +23,7 @@ struct LibraryPage: View {
     private var presetGrid: some View {
         let t = session.selectedTrack
         let track = session.tracks[t]
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: self.columns)
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 Text(gridTitle).font(.system(size: 22, weight: .semibold))
@@ -84,7 +85,7 @@ struct LibraryPage: View {
             return session.userPresets.count
         }()
         let what = t == 3 ? "kits" : ui.librarySection == .user ? "saved" : "presets"
-        return "\(n) \(what) · Tap one to load it onto track \(t + 1); its pattern, mix and key stay."
+        return columns < 4 ? "\(n) \(what)" : "\(n) \(what) · Tap one to load it onto track \(t + 1); its pattern, mix and key stay."
     }
 
     private func engineName(_ e: Int) -> String {
