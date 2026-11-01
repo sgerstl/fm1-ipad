@@ -168,8 +168,8 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         }
     }
 
-    /// The doc says requests that toggle are never sent twice. None of these toggle (transport sets
-    /// an explicit state), so every request may be retried after a timeout.
+    /// The doc says requests that toggle are never sent twice: REC, layer keys and chains are sent with
+    /// retries: 0 (Client); the rest set an explicit state and may be retried after a timeout.
     public var description: String { "\(self.cmdName)(\(args.map(String.init).joined(separator: ",")))" }
     var cmdName: String {
         switch self {

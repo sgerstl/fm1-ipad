@@ -70,9 +70,10 @@ public struct SongOrder: Equatable, Sendable {
 
     public init(steps: [Step], loop: Bool) { self.steps = steps; self.loop = loop }
 
-    /// Reads it out of the settings object; nil if the object isn't SLOOP's settings.
+    /// Reads it out of the settings object; nil if the object isn't SLOOP's settings (magic "PER3",
+    /// stored little-endian, so the bytes read "3REP").
     public init?(settings s: [UInt8]) {
-        guard s.count >= Self.offset + Self.size, Array(s.prefix(4)) == Array("PER3".utf8.reversed()) || Array(s.prefix(4)) == Array("3REP".utf8) else { return nil }
+        guard s.count >= Self.offset + Self.size, Array(s.prefix(4)) == Array("3REP".utf8) else { return nil }
         let b = Array(s[Self.offset..<(Self.offset + Self.size)])
         let n = Int(b[0])
         guard (1...Self.maxSteps).contains(n) else { return nil }

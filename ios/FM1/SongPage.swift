@@ -10,7 +10,7 @@ struct SectionsPanel: View {
     let session: SloopSession
     let ui: EditorUI
     @State private var confirmStore: Int?
-    @State private var confirmSong = false
+    @State private var confirmLoad: Int?
     /// The key just held: its release isn't a tap (a tap loads the section, over the tracks being saved).
     @State private var held: Int?
 
@@ -21,12 +21,11 @@ struct SectionsPanel: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(0..<4, id: \.self) { k in sectionKey(k) }
             }
-            Text(session.playing ? "Tap: plays from the next bar. Hold: store the loop." : "Tap: loads it as the loop. Hold: store the loop.")
+            Text(session.playing ? "Tap: plays from the next bar, over the tracks. Hold: save the tracks here." : "Tap: loads it over the tracks. Hold: save the tracks here.")
                 .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             SegmentedKeys(label: "Mode", options: ["Loop", "Song"], selected: session.song.songMode ? 1 : 0) { k in
-                guard (k == 1) != session.song.songMode else { return }
-                // into song mode: PLAY will load sections over the tracks, so ask first
-                if k == 1 { confirmSong = true } else { session.toggleSongMode() }
+                // song mode keeps the loop: PLAY puts it aside, STOP brings it back (arranger_scene.c)
+                if (k == 1) != session.song.songMode { session.toggleSongMode() }
             }
             ToggleKey(name: session.song.songRecording ? "SONG REC: recording" : "SONG REC", on: session.song.songRecording) {
                 session.toggleSongRec()
@@ -36,21 +35,30 @@ struct SectionsPanel: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .panel()
-        .confirmationDialog("PLAY will play the song order", isPresented: $confirmSong, titleVisibility: .visible) {
+        // in loop mode a section replaces the tracks and SLOOP keeps no copy: ask when there are edits
+        .confirmationDialog("Load section \(SloopSession.sectionName(confirmLoad ?? 0)) over the tracks?",
+                            isPresented: Binding(get: { confirmLoad != nil }, set: { if !$0 { confirmLoad = nil } }),
+                            titleVisibility: .visible) {
             if let e = (0..<4).first(where: { !session.song.stored($0) }) {
-                Button("Save the tracks to \(SloopSession.sectionName(e)), then switch") { session.storeThenSongMode(in: e) }
+                Button("Save the tracks to \(SloopSession.sectionName(e)) first") {
+                    let k = confirmLoad ?? 0
+                    session.storeLoop(in: e)
+                    session.playSection(k)
+                    confirmLoad = nil
+                }
             }
-            Button("Switch without saving", role: .destructive) { session.toggleSongMode() }
-            Button("Stay in Loop mode", role: .cancel) {}
+            Button("Load it, replacing my edits", role: .destructive) {
+                if let k = confirmLoad { session.playSection(k) }
+                confirmLoad = nil
+            }
+            Button("Keep my tracks", role: .cancel) { confirmLoad = nil }
         } message: {
-            Text((0..<4).contains(where: { !session.song.stored($0) })
-                 ? "Each step loads its section over the tracks on screen. Anything not saved in a section is lost."
-                 : "Each step loads its section over the tracks on screen. All four sections are used: hold one to save the tracks there first, or they're lost.")
+            Text("The tracks have changes that aren't in a section. Loading \(SloopSession.sectionName(confirmLoad ?? 0)) replaces them, and the FM-1 keeps no copy.")
         }
-        .confirmationDialog("Section \(SloopSession.sectionName(confirmStore ?? 0)) already holds a loop",
+        .confirmationDialog("Section \(SloopSession.sectionName(confirmStore ?? 0)) already holds tracks",
                             isPresented: Binding(get: { confirmStore != nil }, set: { if !$0 { confirmStore = nil } }),
                             titleVisibility: .visible) {
-            Button("Replace it with the loop", role: .destructive) {
+            Button("Replace it with the tracks", role: .destructive) {
                 if let k = confirmStore { session.storeLoop(in: k) }
                 confirmStore = nil
             }
@@ -68,7 +76,8 @@ struct SectionsPanel: View {
         let colour = Theme.track[k]
         return Button {
             if held == k { held = nil; return }
-            session.playSection(k)
+            // a section picked in loop mode replaces the tracks (now, or on the next bar)
+            if session.tracksEdited, stored, !session.song.songMode { confirmLoad = k } else { session.playSection(k) }
         } label: {
             VStack(spacing: 2) {
                 Text(SloopSession.sectionName(k)).font(.system(size: 30, weight: .semibold))
@@ -129,7 +138,6 @@ struct SongPage: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onChange(of: session.songOrder) { _, o in if !saving { draft = nil; _ = o } }
         // save a second after the last change: every save writes the FM-1's flash
         .task(id: draft) {
             guard let d = draft else { return }

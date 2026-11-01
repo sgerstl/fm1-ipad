@@ -20,7 +20,7 @@ struct DrumGrid: View {
 
         VStack(spacing: 8) {
             EditorHeader(track: 3, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
-                         detail: "16 lanes · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64")
+                         detail: "16 lanes · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
             StepNumbers(offsetX: offset.x, selected: ui.selectedStep[3]) { ui.selectedStep[3] = $0 }
                 .padding(.leading, 88)

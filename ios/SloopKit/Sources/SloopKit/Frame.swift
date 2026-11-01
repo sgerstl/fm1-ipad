@@ -67,7 +67,8 @@ public struct SysExAssembler {
             guard inFrame else { channelByte(b); continue }
             if b == 0xF7 { partial.append(b); out.append(partial); partial = []; inFrame = false }
             else if b & 0x80 != 0 { partial = []; inFrame = false }   // a status byte ends a broken frame
-            else { partial.append(b) }
+            else if partial.count < 4096 { partial.append(b) }               // SLOOP's frames stay far below this
+            else { partial = []; inFrame = false }
         }
         return out
     }

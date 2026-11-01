@@ -176,6 +176,8 @@ public extension SloopClient {
     /// LIVE op 2: a key of a layer (pressed and let go). Sent once each: these toggle.
     func layerTap(layer: Int, key: Int) async throws -> [UInt8] {
         _ = try await send(.layerKey(layer: layer, key: key, down: true), retries: 0)
+        // a key left held would keep the layer on: a lost key-up is sent again (releasing twice is harmless)
+        if let up = try? await send(.layerKey(layer: layer, key: key, down: false), retries: 0) { return up }
         return try await send(.layerKey(layer: layer, key: key, down: false), retries: 0)
     }
     func chain(_ sections: [Int]) async throws -> [UInt8] { try await send(.chain(sections), retries: 0) }
@@ -191,13 +193,15 @@ public extension SloopClient {
             if id == 1 { length = len }
             r += 11
         }
-        guard length > 0 else { throw ClientError.timeout("no settings object") }
+        guard length > 0, length <= 4096 else { throw ClientError.timeout("no settings object (length \(length))") }
         var out: [UInt8] = []
         while out.count < length {
             let n = min(256, length - out.count)
             let b = try await send(.bkGet(id: 1, offset: out.count, count: n), timeout: .milliseconds(600))
             guard b.count > 9, b[1] == 0 else { throw ClientError.timeout("BK_GET rc \(b.count > 1 ? b[1] : 99)") }
-            out += Pack7.decode(Array(b[9...])).prefix(n)
+            let chunk = Pack7.decode(Array(b[9...])).prefix(n)
+            guard !chunk.isEmpty else { throw ClientError.timeout("BK_GET returned no data") }
+            out += chunk
         }
         return out
     }
@@ -213,7 +217,7 @@ public extension SloopClient {
             guard b.count >= 3, b[2] == 0 else { _ = try? await send(.bkPut(op: 3, id: 1, args: [])); return Int(b.count >= 3 ? b[2] : 99) }
             off += chunk.count
         }
-        b = try await send(.bkPut(op: 2, id: 1, args: []), timeout: .seconds(2))
+        b = try await send(.bkPut(op: 2, id: 1, args: []), timeout: .seconds(5), retries: 0)    // a resent commit would answer "nothing staged"
         return Int(b.count >= 3 ? b[2] : 99)
     }
 

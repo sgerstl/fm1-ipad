@@ -9,7 +9,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     private let sink: AsyncStream<[UInt8]>.Continuation
     public let notes = AsyncStream<NoteEvent> { _ in }
     private let queue = DispatchQueue(label: "FakeSloop")
-    private let started = Date()
+    private var started = Date()
 
     public var version = DeviceInfo.expectedVersion
     public var protocolVersion = DeviceInfo.expectedProtocol
@@ -94,8 +94,42 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     }()
     var lastBar = -1, songStep = 0, songBarInStep = 0, recSteps: [SongOrder.Step] = []
     private var bkStaged: [UInt8] = [], bkLen = 0, bkCRC: UInt32 = 0
+    var corruptNextPut = false                 // tests: the next commit fails its CRC check
 
     var order: SongOrder { SongOrder(settings: settings) ?? .standard }
+
+    /// What a section holds, as on SLOOP: the four tracks' steps and lengths. Storing copies the tracks
+    /// in; a section that starts playing (picked when stopped, from the next bar, a chain or a song
+    /// step) copies them back out over the tracks, which is why unsaved edits are lost in song mode.
+    struct Snapshot: Equatable { var steps: [[SynthStep]]; var drums: [DrumStep]; var lengths: [Int] }
+    var sections: [Snapshot?] = [nil, nil, nil, nil]
+    private func snapshot() -> Snapshot { Snapshot(steps: steps, drums: drums, lengths: (0..<4).map { params[$0][Param.length] }) }
+    private func load(_ k: Int) {
+        guard k >= 0, k < 4, let snap = sections[k] else { return }
+        sectionPlaying = k
+        guard snap != snapshot() else { return }
+        steps = snap.steps; drums = snap.drums
+        for t in 0..<4 { params[t][Param.length] = snap.lengths[t] }
+        if watching { emit(Cmd.reload, [UInt8(engine[selected] % 13), UInt8(preset[selected]), UInt8(selected)]) }  // as SLOOP: the selected track only
+    }
+
+    /// Song mode keeps the loop you made (arranger_scene.c): PLAY puts it aside, STOP brings it back.
+    private var songKeep: Snapshot?
+
+    private func restoreKept(_ keep: Snapshot) {
+        songKeep = nil
+        steps = keep.steps; drums = keep.drums
+        for t in 0..<4 { params[t][Param.length] = keep.lengths[t] }
+        if watching { emit(Cmd.reload, [UInt8(engine[selected] % 13), UInt8(preset[selected]), UInt8(selected)]) }
+    }
+
+    /// Tests: moves the song's clock on by whole bars, as if they had played.
+    public func advanceBars(_ n: Int) {
+        queue.sync {
+            let bar = 60.0 / Double(bpm) * 4
+            for _ in 0..<n { started -= bar; manualTime += bar; tickSong() }
+        }
+    }
 
     /// The song's clock: on every new bar, a queued section starts, a chain moves on, the song steps.
     private func tickSong() {
@@ -111,15 +145,18 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             if songBarInStep >= o.steps[songStep].bars {
                 songBarInStep = 0
                 songStep += 1
-                if songStep >= o.steps.count { songStep = 0; if !o.loop { playing = false; return } }
+                if songStep >= o.steps.count {
+                    songStep = 0
+                    if !o.loop { playing = false; if let keep = songKeep { restoreKept(keep) }; return }
+                }
             }
-            sectionPlaying = o.steps[songStep].section
+            load(o.steps[songStep].section)
             return
         }
         if !chain.isEmpty {
-            if bar % 2 == 0 { chainAt = (chainAt + 1) % chain.count; sectionPlaying = chain[chainAt] }
+            if bar % 2 == 0 { chainAt = (chainAt + 1) % chain.count; load(chain[chainAt]) }
         } else if let q = sectionQueued {
-            sectionPlaying = q; sectionQueued = nil
+            sectionQueued = nil; load(q)
         }
         if songRec, let s = sectionPlaying {
             if let last = recSteps.last, last.section == s, recSteps.count > 0 { recSteps[recSteps.count - 1].bars += 1 }
@@ -132,6 +169,11 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         self.autoEdits = autoEdits
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self, bufferingPolicy: .unbounded)
         seedPattern()
+        // A holds the loop as it starts; B the same with track 1 empty; C with no drums; D is empty
+        let a = snapshot()
+        var b = a; b.steps[0] = Array(repeating: .empty, count: 64)
+        var c = a; c.drums = Array(repeating: .empty, count: 64)
+        sections = [a, b, c, nil]
         let t = DispatchSource.makeTimerSource(queue: queue)
         t.schedule(deadline: .now() + 6, repeating: 6)
         t.setEventHandler { [weak self] in self?.randomEdit() }
@@ -167,13 +209,19 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         drums[30].on |= 1 << 5; drums[30].ratchets |= 1 << 10
     }
 
-    private func now() -> TimeInterval { Date().timeIntervalSince(started) }
+    private func now() -> TimeInterval { manualClock ? manualTime : Date().timeIntervalSince(started) }
+    /// Tests: the clock moves only with advanceBars, so no real bar ticks in between.
+    public var manualClock = false
+    private var manualTime: TimeInterval = 0
     private func stepAt(_ t: Int) -> Int {
         guard playing else { return 0 }
         let beats = Music.divisionBeats[params[t][Param.division]]
         let len = max(1, params[t][Param.length])
         return Int(now() / (60.0 / Double(bpm) * beats)) % len
     }
+
+    /// Tests: a push as a faulty or hostile device might send it.
+    func inject(_ cmd: UInt8, _ body: [UInt8]) { queue.sync { emit(cmd, body) } }
 
     private func emit(_ cmd: UInt8, _ body: [UInt8]) {
         let f = Frame.encode(cmd, body)
@@ -312,6 +360,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             else if op == 1 { bkStaged += Pack7.decode(Array(a[7...])); rc = 0 }
             else if op == 2 {
                 if songMode && playing { rc = 3 }
+                else if corruptNextPut { corruptNextPut = false; rc = 2 }
                 else if bkStaged.count == bkLen, CRC32.of(bkStaged) == bkCRC, SongOrder(settings: bkStaged) != nil { settings = bkStaged; rc = 0 }
                 else { rc = 2 }
             }
@@ -323,7 +372,16 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         case Cmd.ping:
             emit(cmd, [0])
         case Cmd.live:
-            if a.first == 1, a.count > 1 { playing = a[1] != 0 }
+            if a.first == 1, a.count > 1 {
+                let was = playing
+                playing = a[1] != 0
+                if playing, !was, songMode, !order.steps.isEmpty {
+                    songKeep = snapshot()
+                    songStep = 0; songBarInStep = 0; lastBar = -1
+                    load(order.steps[0].section)
+                }
+                if !playing, was, let keep = songKeep { restoreKept(keep) }
+            }
             if a.first == 4 { recOn.toggle() }
             if a.first == 2, a.count >= 4, a[1] == 7, a[3] == 1 { saveLayerKey(Int(a[2])) }
             if a.first == 9, a.count >= 2 {
@@ -362,12 +420,13 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         case 0..<4:
             guard stored >> w & 1 == 1, !(songMode && playing) else { return }
             chain = []
-            if playing { sectionQueued = w } else { sectionPlaying = w }
+            if playing { sectionQueued = w } else { load(w) }
         case 4..<8:
             let s = w - 4
             if stored >> s & 1 == 1, !(armed?.section == s && Date().timeIntervalSince(armed!.at) < 3) { armed = (s, Date()); return }
             armed = nil
             stored |= 1 << s
+            sections[s] = snapshot()
         case 12:
             if !songRec { songMode.toggle(); songStep = 0; songBarInStep = 0 }
         case 13:

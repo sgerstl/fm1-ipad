@@ -12,6 +12,7 @@ settings:
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: K3CNX79952
     CODE_SIGN_STYLE: Automatic
+    ALWAYS_SEARCH_USER_PATHS: NO
 targets:
   FM1:
     type: application

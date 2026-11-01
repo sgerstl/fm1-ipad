@@ -27,7 +27,7 @@ struct PianoRoll: View {
 
         VStack(spacing: 8) {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
-                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64\(rowsNote)")
+                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
             StepNumbers(offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)

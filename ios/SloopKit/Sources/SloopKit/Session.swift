@@ -56,11 +56,17 @@ public final class SloopSession {
     /// The song: sections A–D, the mode, the position (LIVE), and the order (the settings object).
     public private(set) var song = SongState()
     public private(set) var songOrder: SongOrder?
+    /// The tracks were edited from the iPad since the last section was stored or loaded: picking a
+    /// section in loop mode would replace those edits (SLOOP keeps no copy there).
+    public private(set) var tracksEdited = false
     /// The chain the iPad last asked for (LIVE reports its length and position, not its sections).
     public private(set) var chainAsked: [Int] = []
     /// Why the last song edit didn't take, for the Song page to say (nil: fine).
     public private(set) var songMessage: String?
     private var settingsCache: [UInt8]?
+    @ObservationIgnored private var pendingOrder: SongOrder?
+    @ObservationIgnored private var orderWriting = false
+    @ObservationIgnored private var orderWriteBefore: SongOrder?
 
     /// Recording (a track is REC) or armed and waiting for a note: the REC pad lights.
     public private(set) var recording = false
@@ -115,7 +121,11 @@ public final class SloopSession {
     /// alone for a moment. Keys: "s<track*64+index>", "p<track>.<id>", "g<id>".
     private var recentWrites: [String: Date] = [:]
     private var stepWrites: [Int: SynthStep] = [:]
+    @ObservationIgnored private var reloadingAll = false
+    @ObservationIgnored private var reloadAgain = false
     private var stepSending: Set<Int> = []
+    @ObservationIgnored private var drumWrites: [Int: DrumStep] = [:]
+    @ObservationIgnored private var drumSending: Set<Int> = []
     private var paramWrites: [String: Int] = [:]      // latest value waiting to be sent (knob drags)
     private var paramSending: Set<String> = []
     private func recentlyWritten(_ key: String) -> Bool {
@@ -161,6 +171,7 @@ public final class SloopSession {
     private func connect(_ transport: SysExTransport) async {
         let c = SloopClient(transport: transport)
         client = c
+        settingsCache = nil; songOrder = nil      // never write a settings object read from another FM-1
         await c.start()
         if case .wrongFirmware = status {} else { status = .connecting }
         do {
@@ -229,7 +240,12 @@ public final class SloopSession {
         if !song.stored(k) { songMessage = "Section \(Self.sectionName(k)) is empty: store a loop in it first"; return }
         songMessage = nil
         if playing { song.sectionQueued = k } else { song.sectionPlaying = k }
-        Task { _ = try? await c.layerTap(layer: saveLayer, key: k) }
+        Task {
+            _ = try? await c.layerTap(layer: saveLayer, key: k)
+            // stopped, the section loads at once: read what it put on the tracks (when playing, the
+            // change of section in LIVE triggers the same on the bar)
+            if !self.playing { self.tracksEdited = false; self.reloadAllTracks() }
+        }
     }
 
     /// Stores the working loop into a section, as SAVE + key 5–8 (over a used one the FM-1 wants the key
@@ -238,24 +254,11 @@ public final class SloopSession {
         guard let c = client else { return }
         let twice = song.stored(k)
         song.sectionsStored |= 1 << k
+        tracksEdited = false
         songMessage = nil
         Task {
             _ = try? await c.layerTap(layer: saveLayer, key: 4 + k)
             if twice { _ = try? await c.layerTap(layer: saveLayer, key: 4 + k) }
-            try? await self.readSongOrder()
-        }
-    }
-
-    /// Stores the tracks in an empty section, then turns song mode on, in that order (song mode's PLAY
-    /// loads sections over the tracks, so whatever isn't stored is lost).
-    public func storeThenSongMode(in k: Int) {
-        guard let c = client, !song.songMode else { return }
-        song.sectionsStored |= 1 << k
-        song.songMode = true
-        songMessage = nil
-        Task {
-            _ = try? await c.layerTap(layer: saveLayer, key: 4 + k)
-            _ = try? await c.layerTap(layer: saveLayer, key: 12)
             try? await self.readSongOrder()
         }
     }
@@ -273,8 +276,14 @@ public final class SloopSession {
         guard let c = client else { return }
         if !song.songRecording && song.songPlaying { songMessage = "Stop the song first"; return }
         songMessage = nil
+        let ending = song.songRecording
         song.songRecording.toggle()
-        Task { _ = try? await c.layerTap(layer: saveLayer, key: 13) }
+        Task {
+            _ = try? await c.layerTap(layer: saveLayer, key: 13)
+            // ending it writes the order on the FM-1: read it back (the flag above already flipped, so
+            // the LIVE check for "SONG REC just ended" won't see it)
+            if ending { try? await self.readSongOrder() }
+        }
     }
 
     /// A chain: the sections in turn, each for its pattern length, round and round. Only while playing.
@@ -294,19 +303,33 @@ public final class SloopSession {
     }
 
     /// Writes a new song order (only while the song is stopped, as on the device).
+    /// Each write re-reads the settings object first and changes only the order's bytes, so settings
+    /// changed on the FM-1 since connect are kept; one write runs at a time and the latest order wins.
     public func setSongOrder(_ order: SongOrder) {
-        guard let c = client, let cache = settingsCache else { return }
+        guard let c = client, songOrder != nil else { return }     // never over an order the app couldn't read
         if song.songPlaying || song.songRecording { songMessage = "Stop the song to change its order"; return }
-        let before = songOrder
+        if orderWriteBefore == nil { orderWriteBefore = songOrder }
         songOrder = order
         songMessage = nil
-        let bytes = order.written(into: cache)
+        pendingOrder = order
+        guard !orderWriting else { return }
+        orderWriting = true
         Task {
-            let rc = (try? await c.putSettings(bytes)) ?? 99
-            if rc == 0 { self.settingsCache = bytes } else {
-                self.songOrder = before
-                self.songMessage = rc == 3 ? "Stop the song to change its order" : "The FM-1 didn't take the order (code \(rc))"
+            while let next = self.pendingOrder {
+                self.pendingOrder = nil
+                var rc = 99
+                if let fresh = try? await c.settingsObject(), SongOrder(settings: fresh) != nil {
+                    let bytes = next.written(into: fresh)
+                    rc = (try? await c.putSettings(bytes)) ?? 99
+                    if rc == 0 { self.settingsCache = bytes }
+                }
+                if rc != 0, self.pendingOrder == nil {
+                    self.songOrder = self.orderWriteBefore
+                    self.songMessage = rc == 3 ? "Stop the song to change its order" : "The FM-1 didn't take the order (code \(rc))"
+                }
             }
+            self.orderWriteBefore = nil
+            self.orderWriting = false
         }
     }
 
@@ -318,7 +341,7 @@ public final class SloopSession {
             for id in 0..<i.paramCount where id < i.firstEngineParam { trackDescs[id] = try await c.desc(scope: 0, id: id) }
             for id in 0..<i.globalCount { globalDescs[id] = try await c.desc(scope: 1, id: id) }
         }
-        for id in i.firstEngineParam..<i.paramCount { trackDescs[id] = try await c.desc(scope: 0, id: id) }
+        for id in min(i.firstEngineParam, i.paramCount)..<i.paramCount { trackDescs[id] = try await c.desc(scope: 0, id: id) }
         let d = try await c.dump(paramCount: i.paramCount, globalCount: i.globalCount)
         let t = selectedTrack
         for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
@@ -357,7 +380,7 @@ public final class SloopSession {
     private func readTrackList() async throws {
         guard let c = client, let i = info else { return }
         let list = try await c.tracks()
-        selectedTrack = list.selected
+        if (0..<4).contains(list.selected) { selectedTrack = list.selected }
         for (k, s) in list.tracks.enumerated() where k < 4 {
             tracks[k].engine = s.engine
             tracks[k].preset = s.preset
@@ -369,7 +392,7 @@ public final class SloopSession {
                 tracks[k].presetName = s.preset < names.count ? names[s.preset] : "Preset \(s.preset + 1)"
             } else {
                 tracks[k].engineName = "Drums"
-                tracks[k].presetName = tracks[k].preset < kitNames.count ? kitNames[tracks[k].preset] : ""
+                tracks[k].presetName = kitNames.indices.contains(tracks[k].preset) ? kitNames[tracks[k].preset] : ""
             }
         }
     }
@@ -406,16 +429,18 @@ public final class SloopSession {
 
     /// Reads a track's 64 steps; returns how many differed from what the app had.
     @discardableResult
-    private func readSteps(_ t: Int) async throws -> Int {
-        guard let c = client else { return 0 }
+    /// `deviceWins`: after a section loaded over the tracks, the device's steps replace even ones the
+    /// iPad just wrote.
+    private func readSteps(_ t: Int, deviceWins: Bool = false) async throws -> Int {
+        guard let c = client, (0..<4).contains(t) else { return 0 }
         var fixes = 0
         for i in 0..<64 {
             if t == 3 {
                 let s = try await c.drumStep(index: i)
-                if tracks[3].drumSteps[i] != s, !recentlyWritten("s\(3 * 64 + i)") { tracks[3].drumSteps[i] = s; fixes += 1 }
+                if tracks[3].drumSteps[i] != s, deviceWins || !recentlyWritten("s\(3 * 64 + i)") { tracks[3].drumSteps[i] = s; fixes += 1 }
             } else {
                 let s = try await c.synthStep(track: t, index: i)
-                if tracks[t].steps[i] != s, !recentlyWritten("s\(t * 64 + i)") { tracks[t].steps[i] = s; fixes += 1 }
+                if tracks[t].steps[i] != s, deviceWins || !recentlyWritten("s\(t * 64 + i)") { tracks[t].steps[i] = s; fixes += 1 }
             }
         }
         tracks[t].loaded = true
@@ -446,18 +471,18 @@ public final class SloopSession {
         if t == selectedTrack, id < params.count { params[id] = v }
         if t == 3, id == info?.firstEngineParam {               // the drum track's kit
             tracks[3].preset = v
-            if v < kitNames.count { tracks[3].presetName = kitNames[v] }
+            if kitNames.indices.contains(v) { tracks[3].presetName = kitNames[v] }
             return
         }
         switch id {
         case Param.level: if t < 3 { tracks[t].level = v }
-        case Param.root: tracks[t].root = v
-        case Param.scale: tracks[t].scale = v
+        case Param.root: tracks[t].root = max(0, min(11, v))
+        case Param.scale: tracks[t].scale = max(0, min(Music.scales.count - 1, v))
         case Param.quant: tracks[t].quant = v
         case Param.transpose: tracks[t].transpose = v
         case Param.chord: tracks[t].chord = v
         case Param.length: tracks[t].length = max(1, min(64, v))
-        case Param.division: tracks[t].division = v
+        case Param.division: tracks[t].division = max(0, min(Music.divisionBeats.count - 1, v))
         case Param.pan: tracks[t].pan = v
         case Param.mute: tracks[t].mute = v != 0
         default: break
@@ -484,15 +509,17 @@ public final class SloopSession {
             switch p {
             case .stepChanged(let i, let t):
                 stats.stepPushes += 1
+                guard (0..<4).contains(t), (0..<64).contains(i) else { break }
                 Task { await self.readStep(t, i) }
             case .reload(_, _, let t):
+                guard (0..<4).contains(t) else { break }
                 selectedTrack = t
                 Task {
                     if t == 3, self.kitNames.isEmpty { try? await self.readKits() }
                     try? await self.readSoundParams(descs: false)
                     try? await self.readTrackList()
                     try? await self.readParams(t)
-                    try? await self.readSteps(t)
+                    _ = try? await self.readSteps(t)
                 }
             case .changed(let scope, let id, let v):
                 if scope == 0 { apply(track: selectedTrack, id: id, value: v) } else { applyGlobal(id: id, value: v) }
@@ -555,6 +582,22 @@ public final class SloopSession {
         }
     }
 
+    /// Every track's steps and settings again, once (a call while one runs asks for one more pass).
+    private func reloadAllTracks() {
+        guard !reloadingAll else { reloadAgain = true; return }
+        reloadingAll = true
+        Task {
+            repeat {
+                reloadAgain = false
+                for t in 0..<4 {
+                    try? await self.readParams(t)
+                    _ = try? await self.readSteps(t, deviceWins: true)
+                }
+            } while reloadAgain
+            reloadingAll = false
+        }
+    }
+
     func applyLive(_ l: LiveState, at now: Date = Date()) {
         stats.polls += 1
         let wasPlaying = playing
@@ -568,6 +611,11 @@ public final class SloopSession {
         if (before.songRecording && !l.song.songRecording) || before.sectionsStored != l.song.sectionsStored {
             Task { try? await self.readSongOrder() }
         }
+        // a section loaded over the tracks, or the song stopped and SLOOP put the loop back: SLOOP only
+        // pushes RELOAD for the selected track, so re-read all four (arranger_scene.c)
+        let songStopped = before.songPlaying && !l.song.songPlaying
+        if before.sectionPlaying != l.song.sectionPlaying || songStopped { reloadAllTracks() }
+        if before.sectionPlaying != l.song.sectionPlaying, !l.song.songPlaying { tracksEdited = false }
         bpm = l.bpm
         // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
         for k in 0..<4 where !recentlyWritten("p\(k).\(Param.mute)") {
@@ -589,7 +637,7 @@ public final class SloopSession {
                 }
             }
             positions[k] = new
-            tracks[k].length = max(1, new.length)
+            tracks[k].length = max(1, min(64, new.length))
         }
         lastPoll = now
     }
@@ -597,7 +645,7 @@ public final class SloopSession {
     /// Seconds per step for a track, from BPM and its division.
     public func stepDuration(_ t: Int) -> TimeInterval {
         let div = tracks[t].division
-        let beats = div < Music.divisionBeats.count ? Music.divisionBeats[div] : 0.25
+        let beats = Music.divisionBeats.indices.contains(div) ? Music.divisionBeats[div] : 0.25
         return 60.0 / Double(max(bpm, 20)) * beats
     }
 
@@ -711,6 +759,7 @@ public final class SloopSession {
         var st = step
         if st.time != .note { st.notes = []; st.levels = []; st.ratchets = [] }
         tracks[t].steps[i] = st
+        tracksEdited = true
         let key = t * 64 + i
         recentWrites["s\(key)"] = Date()
         // latest value wins, one write in flight per step: a dial turned fast sends what it passes
@@ -733,14 +782,21 @@ public final class SloopSession {
 
     public func write(drumIndex i: Int, _ step: DrumStep) {
         tracks[3].drumSteps[i] = step
+        tracksEdited = true
         recentWrites["s\(3 * 64 + i)"] = Date()
-        guard let c = client else { return }
+        // as synth steps: latest value wins, one write in flight, a reply lands only if nothing newer waits
+        drumWrites[i] = step
+        guard let c = client, !drumSending.contains(i) else { return }
+        drumSending.insert(i)
         Task {
-            do {
-                let stored = try await c.setDrumStep(index: i, step)
-                self.tracks[3].drumSteps[i] = stored
-            } catch { self.stats.timeouts += 1 }
-            self.recentWrites["s\(3 * 64 + i)"] = Date()
+            while let next = self.drumWrites.removeValue(forKey: i) {
+                do {
+                    let stored = try await c.setDrumStep(index: i, next)
+                    if self.drumWrites[i] == nil { self.tracks[3].drumSteps[i] = stored }
+                } catch { self.stats.timeouts += 1 }
+                self.recentWrites["s\(3 * 64 + i)"] = Date()
+            }
+            self.drumSending.remove(i)
         }
     }
 

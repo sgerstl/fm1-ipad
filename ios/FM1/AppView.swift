@@ -8,6 +8,8 @@ struct AppView: View {
     @Binding var useDemo: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
+    private var isConnected: Bool { if case .connected = session.status { true } else { false } }
+
     var body: some View {
         VStack(spacing: 16) {
             TopBar(session: session, ui: ui, useDemo: $useDemo)
@@ -22,6 +24,8 @@ struct AppView: View {
                 ConnectionState(status: session.status, useDemo: $useDemo)
             }
         }
+        // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
+        .onChange(of: isConnected, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .padding(24)
         .overlay(alignment: .bottom) { keyboard }
         .overlay(alignment: .bottom) { undoToast }
