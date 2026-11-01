@@ -42,7 +42,7 @@ struct RootView: View {
 }
 
 enum Page: String, CaseIterable, Identifiable {
-    case sequencer = "Sequencer", sound = "Sound", library = "Library"
+    case sequencer = "Sequencer", sound = "Sound", song = "Song", library = "Library"
     var id: String { rawValue }
 }
 
@@ -52,7 +52,6 @@ final class EditorUI {
     var page: Page = .sequencer
     var selectedStep = [0, 0, 0, 0]
     var selectedLane = 0
-    var handPannedAt = Date.distantPast
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
     @ObservationIgnored var grabbedSpec: (() -> KnobSpec)?

@@ -29,7 +29,7 @@ struct PianoRoll: View {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
                          detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64\(rowsNote)")
 
-            StepNumbers(offsetX: offset.x, selected: ui.selectedStep[track])
+            StepNumbers(offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
@@ -46,7 +46,8 @@ struct PianoRoll: View {
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request) {
+                    TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request,
+                                        rowKeys: rows, rowHeight: Theme.rowHeight) {
                         PianoRollContent(session: session, ui: ui, track: track, rows: rows)
                     }
                     EditorPlayhead(session: session, track: track, offsetX: offset.x, height: Self.gridSize.height)
@@ -72,19 +73,12 @@ struct PianoRoll: View {
         .padding(12)
         .frame(height: PianoRoll.panelHeight)
         .panel()
-        .onReceive(NotificationCenter.default.publisher(for: .gridPannedByHand)) { _ in ui.handPannedAt = Date() }
-        .onChange(of: session.positions[track].step) { _, step in follow(step) }
         .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
         .onChange(of: track) { _, _ in ui.keptRows = [:] }
     }
 
-    /// While playing, page the grid along with the playhead, unless a hand panned it in the last few seconds.
-    private func follow(_ step: Int) {
-        guard session.playing, Date().timeIntervalSince(ui.handPannedAt) > 4 else { return }
-        let first = Int((offset.x / Theme.stepWidth).rounded())
-        guard step < first || step >= first + 32 else { return }
-        request = .init(x: CGFloat(step / 32 * 32) * Theme.stepWidth, id: (request?.id ?? 0) + 1)
-    }
+    // No paging with the playhead (removed 2026-11-01, Scott): the grid moves only when panned, since
+    // what's on it is read by where it sits.
 
     /// Rows shown before stay while the track is on screen, so removing the highest or lowest note
     /// doesn't pull its row out from under the finger.
@@ -147,9 +141,12 @@ struct EditorHeader: View {
     }
 }
 
+/// The step numbers over a grid. Tapping one selects its step without touching its notes, as tapping a
+/// row's name auditions it without writing one.
 struct StepNumbers: View {
     let offsetX: CGFloat
     let selected: Int
+    let select: (Int) -> Void
     var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<64, id: \.self) { i in
@@ -158,7 +155,9 @@ struct StepNumbers: View {
                     .font(.system(size: 11, weight: i == selected ? .semibold : .regular))
                     .foregroundStyle(i == selected ? Theme.text : Theme.textSecondary)
                     .padding(.leading, 4)
-                    .frame(width: Theme.stepWidth, alignment: .leading)
+                    .frame(width: Theme.stepWidth, height: 20, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { select(i) }
             }
         }
         .offset(x: -offsetX)
@@ -200,7 +199,10 @@ struct PianoRollContent: View {
     let ui: EditorUI
     let track: Int
     let rows: [Int]
-    @State private var lengthDrag: Int?        // the step whose note is being stretched (-1: this drag isn't one)
+    /// What a one-finger slide does, decided where it starts.
+    enum Slide { case length(start: Int), paint(note: Int, on: Bool) }
+    @State private var slide: Slide?
+    @State private var painted: Set<Int> = []  // the steps a paint slide has already passed
 
     var body: some View {
         let t = session.tracks[track]
@@ -210,7 +212,8 @@ struct PianoRollContent: View {
             Canvas { ctx, size in draw(ctx, size, t, selected) }
                 .frame(width: 64 * Theme.stepWidth, height: height)
                 .contentShape(Rectangle())
-                // one finger edits: drag a note sideways to set its length; a tap turns a note on or off
+                // one finger edits: drag a note's grip (its right end) to set its length; slide along a row
+                // to paint, adding from an empty cell, erasing from a note; a tap turns a note on or off
                 .gesture(lengthGesture.exclusively(before: SpatialTapGesture().onEnded { e in
                     let i = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
                     let r = Int(e.location.y / Theme.rowHeight)
@@ -242,17 +245,49 @@ struct PianoRollContent: View {
         }
     }
 
-    /// Starts on a note (or the held part of one): the drag's end step becomes the note's last step.
+    /// From a note's grip (the last 14 pt of it): the drag's end step becomes the note's last step.
+    /// Anywhere else, a slide along the row it began in: from an empty cell it adds that note on every
+    /// step it passes, from a note it removes it, and never the other way (an adding slide leaves notes
+    /// that are there alone). Held parts of other notes and full four-note steps are skipped.
     private var lengthGesture: some Gesture {
         DragGesture(minimumDistance: 6)
             .onChanged { e in
-                if lengthDrag == nil { lengthDrag = noteStart(at: e.startLocation) ?? -1 }
-                guard let start = lengthDrag, start >= 0 else { return }
-                let end = max(start, min(63, Int(e.location.x / Theme.stepWidth)))
-                session.setLength(track: track, start: start, steps: end - start + 1)
-                ui.selectedStep[track] = start
+                if slide == nil { slide = slideKind(at: e.startLocation) }
+                switch slide {
+                case .length(let start):
+                    let end = max(start, min(63, Int(e.location.x / Theme.stepWidth)))
+                    session.setLength(track: track, start: start, steps: end - start + 1)
+                    ui.selectedStep[track] = start
+                case .paint(let note, let on):
+                    let a = max(0, min(63, Int(e.startLocation.x / Theme.stepWidth)))
+                    let b = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
+                    for i in min(a, b)...max(a, b) where !painted.contains(i) {
+                        painted.insert(i)
+                        let st = session.tracks[track].steps[i]
+                        guard st.time == .note || (on && st.time == .rest) else { continue }
+                        guard (st.time == .note && st.notes.contains(note)) != on else { continue }
+                        // removing a step's only note: its held steps go with it
+                        if !on, st.notes.count == 1, i < 63, session.tracks[track].steps[i + 1].time == .tie {
+                            session.setLength(track: track, start: i, steps: 1)
+                        }
+                        session.toggle(track: track, index: i, note: note)
+                    }
+                    ui.selectedStep[track] = b
+                case nil: break
+                }
             }
-            .onEnded { _ in lengthDrag = nil }
+            .onEnded { _ in slide = nil; painted = [] }
+    }
+
+    private func slideKind(at p: CGPoint) -> Slide? {
+        let r = Int(p.y / Theme.rowHeight)
+        guard r >= 0, r < rows.count else { return nil }
+        guard let start = noteStart(at: p) else { return .paint(note: rows[r], on: true) }
+        let steps = session.tracks[track].steps
+        var len = 1
+        while start + len < 64, steps[start + len].time == .tie { len += 1 }
+        let gripFrom = CGFloat(start + len) * Theme.stepWidth - 2 - 14
+        return p.x >= gripFrom ? .length(start: start) : .paint(note: rows[r], on: false)
     }
 
     /// The NOTE step a touch is on: that step, or the one a held (TIE) step belongs to, if the touched

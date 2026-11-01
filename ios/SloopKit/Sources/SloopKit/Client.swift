@@ -173,6 +173,50 @@ public extension SloopClient {
         let b = try await send(.userLoad(slot: slot))
         return Int(b.count > 1 ? b[1] : 1)
     }
+    /// LIVE op 2: a key of a layer (pressed and let go). Sent once each: these toggle.
+    func layerTap(layer: Int, key: Int) async throws -> [UInt8] {
+        _ = try await send(.layerKey(layer: layer, key: key, down: true), retries: 0)
+        return try await send(.layerKey(layer: layer, key: key, down: false), retries: 0)
+    }
+    func chain(_ sections: [Int]) async throws -> [UInt8] { try await send(.chain(sections), retries: 0) }
+
+    /// The settings object (backup object 1), which holds the song order: LIST snapshots it, GET reads it.
+    func settingsObject() async throws -> [UInt8] {
+        let list = try await send(.bkList)
+        guard list.count >= 2, list[0] == 0 else { throw ClientError.timeout("BK_LIST rc \(list.first ?? 99)") }
+        var r = 2, length = 0
+        for _ in 0..<Int(list[1]) {
+            guard r + 11 <= list.count else { break }
+            let id = Int(list[r]), len = Int(Pack7.readU35(list[(r + 1)...]))
+            if id == 1 { length = len }
+            r += 11
+        }
+        guard length > 0 else { throw ClientError.timeout("no settings object") }
+        var out: [UInt8] = []
+        while out.count < length {
+            let n = min(256, length - out.count)
+            let b = try await send(.bkGet(id: 1, offset: out.count, count: n), timeout: .milliseconds(600))
+            guard b.count > 9, b[1] == 0 else { throw ClientError.timeout("BK_GET rc \(b.count > 1 ? b[1] : 99)") }
+            out += Pack7.decode(Array(b[9...])).prefix(n)
+        }
+        return out
+    }
+
+    /// Writes the settings object back (the song order changed). rc: 0 ok, 2 invalid, 3 stop the song first.
+    func putSettings(_ s: [UInt8]) async throws -> Int {
+        var b = try await send(.bkPut(op: 0, id: 1, args: Pack7.u35(UInt32(s.count)) + Pack7.u35(CRC32.of(s))))
+        guard b.count >= 3, b[2] == 0 else { return Int(b.count >= 3 ? b[2] : 99) }
+        var off = 0
+        while off < s.count {
+            let chunk = Array(s[off..<min(off + 256, s.count)])
+            b = try await send(.bkPut(op: 1, id: 1, args: Pack7.u35(UInt32(off)) + Pack7.encode(chunk)), timeout: .milliseconds(600))
+            guard b.count >= 3, b[2] == 0 else { _ = try? await send(.bkPut(op: 3, id: 1, args: [])); return Int(b.count >= 3 ? b[2] : 99) }
+            off += chunk.count
+        }
+        b = try await send(.bkPut(op: 2, id: 1, args: []), timeout: .seconds(2))
+        return Int(b.count >= 3 ? b[2] : 99)
+    }
+
     func setGlobal(id: Int, value: Int) async throws -> Int {
         try ParamValue(await send(.setGlobal(id: id, value: value)), cmd: Cmd.set).value
     }

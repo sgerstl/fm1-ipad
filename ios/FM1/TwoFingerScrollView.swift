@@ -8,6 +8,11 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     var contentSize: CGSize
     @Binding var offset: CGPoint
     var request: ScrollRequest?
+    /// The grid's rows, top to bottom, and their height. When rows come or go above the view (the piano
+    /// roll's padding rebalancing around a new note), the offset moves with them in the same update, so
+    /// the row under the finger stays put.
+    var rowKeys: [Int]? = nil
+    var rowHeight: CGFloat = 0
     @ViewBuilder var content: () -> Content
 
     struct ScrollRequest: Equatable {
@@ -43,9 +48,25 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     func updateUIView(_ sv: UIScrollView, context: Context) {
         let c = context.coordinator
         c.host?.rootView = content()
+        var y = sv.contentOffset.y, shifted = false
+        if let keys = rowKeys, let old = c.lastRowKeys, keys != old, rowHeight > 0 {
+            let top = max(0, min(old.count - 1, Int((y / rowHeight).rounded())))
+            if old.indices.contains(top), let now = keys.firstIndex(of: old[top]) {
+                y += CGFloat(now - top) * rowHeight
+                shifted = now != top
+            }
+        }
+        c.lastRowKeys = rowKeys
         if sv.contentSize != contentSize {
             sv.contentSize = contentSize
             c.host?.view.frame = CGRect(origin: .zero, size: contentSize)
+        }
+        if shifted {
+            c.adjusting = true
+            sv.contentOffset.y = min(max(0, y), max(0, contentSize.height - sv.bounds.height))
+            c.adjusting = false
+            let o = sv.contentOffset
+            DispatchQueue.main.async { if c.offset.wrappedValue != o { c.offset.wrappedValue = o } }
         }
         if let r = request, r != c.lastRequest {
             c.lastRequest = r
@@ -58,8 +79,11 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         var host: UIHostingController<Content>?
         var offset: Binding<CGPoint>
         var lastRequest: ScrollRequest?
+        var lastRowKeys: [Int]?
+        var adjusting = false          // a shift made inside updateUIView: the binding is set after it
         init(offset: Binding<CGPoint>) { self.offset = offset }
         func scrollViewDidScroll(_ sv: UIScrollView) {
+            guard !adjusting else { return }
             let o = sv.contentOffset
             if o != offset.wrappedValue { offset.wrappedValue = o }
         }

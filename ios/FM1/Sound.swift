@@ -70,15 +70,18 @@ struct SoundPage: Identifiable {
     static func page(fw: Int) -> SoundPage? { all.first { $0.fw == fw } }
 
     /// SLOOP's pages the app shows outside the Sound tab (params.c PAGES): TRACKS is HOME in SLOOP's
-    /// song build; NOTES, SONG and the drum screen are the sequencer's; SAVE's pages are the library's.
-    static let sequencerPages: Set<Int> = [34, 36, 37, 38]
-    static let libraryPages: Set<Int> = [28, 29, 30, 31]
-    static let home = 37, presets = 28
+    /// song build; NOTES and the drum screen are the sequencer's; SECTION, SONG and the SAVE layer
+    /// are the Song tab's; SAVE's other pages are the library's.
+    static let sequencerPages: Set<Int> = [34, 37, 38]
+    static let songPages: Set<Int> = [30, 36]
+    static let libraryPages: Set<Int> = [28, 29, 31]
+    static let home = 37, presets = 28, section = 30
 
     /// The tab that shows what the FM-1's screen shows, if any.
     static func tab(for s: UIState) -> Page? {
         if s.menu != 0 { return nil }
         if s.layer == 5 { return .sound }                              // SEL held: its key layer
+        if s.layer == 7 || songPages.contains(s.page) { return .song } // SAVE held: the song layer
         if s.home || sequencerPages.contains(s.page) { return .sequencer }
         if libraryPages.contains(s.page) { return .library }
         return page(fw: s.page) != nil ? .sound : nil

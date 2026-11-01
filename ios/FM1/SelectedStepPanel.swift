@@ -52,12 +52,6 @@ struct SelectedStepPanel: View {
                 }
             }
         }
-        field("Velocity") {
-            StepperKeys(label: "Velocity", value: s.velocity, range: 1...127, enabled: on) { v in
-                var st = s; st.velocity = v
-                session.write(track: track, index: i, st)
-            }
-        }
         field("Step") {
             // Note needs a note: with none, it waits for a tap in the grid.
             SegmentedKeys(label: "Step", options: ["Note", "Tie", "Rest"], selected: s.time.rawValue,
@@ -67,6 +61,22 @@ struct SelectedStepPanel: View {
             }
         }
         } else {
+        // the step's own values, grouped bottom left: velocity turns like the track knobs (touch, trace
+        // the ring; tap for − / +), in the track's colour; ratchet is x1..x4 hits in the step (SLOOP
+        // keeps one per note: the keys set every note of the step)
+        HStack(alignment: .bottom, spacing: 16) {
+            KnobControl(ui: ui) { velocitySpec(track: track, index: i) }
+                .disabled(!on)
+                .opacity(on ? 1 : 0.4)
+            field("Ratchet") {
+                SegmentedKeys(label: "Ratchet", options: ["×1", "×2", "×3", "×4"], selected: on ? (s.ratchets.max() ?? 0) : -1,
+                              enabled: Array(repeating: on, count: 4), minWidth: 44) { k in
+                    var st = session.tracks[track].steps[i]
+                    st.ratchets = Array(repeating: k, count: st.notes.count)
+                    session.write(track: track, index: i, st)
+                }
+            }
+        }
         field("Feel") {
             HStack(spacing: 8) {
                 ToggleKey(name: "Accent", on: s.accent && on, enabled: on) {
@@ -77,6 +87,17 @@ struct SelectedStepPanel: View {
                 }
             }
         }
+        }
+    }
+
+    /// Read fresh on every turn: the grown ring re-asks while the finger moves.
+    private func velocitySpec(track: Int, index i: Int) -> KnobSpec {
+        let st = session.tracks[track].steps[i]
+        return KnobSpec(id: "stepVelocity", colour: Theme.track[track], label: "VELOCITY", value: st.velocity, range: 1...127,
+                        stepperStep: 8, shown: "\(st.velocity)", spoken: "\(st.velocity)", bipolar: false) { v in
+            var now = session.tracks[track].steps[i]
+            now.velocity = v
+            session.write(track: track, index: i, now)
         }
     }
 

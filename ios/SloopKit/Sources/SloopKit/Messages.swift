@@ -20,6 +20,7 @@ public enum Cmd {
     public static let trackParam: UInt8 = 31
     public static let trackChanged: UInt8 = 32
     public static let drumStep: UInt8 = 33
+    public static let bkList: UInt8 = 34, bkGet: UInt8 = 35, bkPut: UInt8 = 36
     public static let live: UInt8 = 77
     /// fm1-ipad's addition to SLOOP (not in stock 2.8.4): the FM-1's screen state, queried or pushed.
     public static let ui: UInt8 = 90
@@ -59,6 +60,11 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case live
     case transport(play: Bool)                 // LIVE op 1
     case rec                                   // LIVE op 4: REC, as the FM-1's REC button
+    case layerKey(layer: Int, key: Int, down: Bool)   // LIVE op 2: a layer's key (SAVE = 7: sections, store, mode, SONG REC)
+    case chain([Int])                          // LIVE op 9: play these sections in turn (only while playing; [] stops)
+    case bkList                                // backup: list the objects (and snapshot them)
+    case bkGet(id: Int, offset: Int, count: Int)
+    case bkPut(op: Int, id: Int, args: [UInt8])  // 0 begin, 1 data, 2 commit, 3 abort
     case setTrackStep(track: Int, index: Int, SynthStep)
     case setDrumStep(index: Int, DrumStep)
     case setTrackParam(track: Int, id: Int, value: Int)
@@ -82,7 +88,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: Cmd.desc
         case .watch: Cmd.watch
         case .ping: Cmd.ping
-        case .live, .transport, .rec: Cmd.live
+        case .live, .transport, .rec, .layerKey, .chain: Cmd.live
+        case .bkList: Cmd.bkList
+        case .bkGet: Cmd.bkGet
+        case .bkPut: Cmd.bkPut
         case .setTrackStep: Cmd.trackStep
         case .setDrumStep: Cmd.drumStep
         case .setTrackParam: Cmd.trackParam
@@ -110,6 +119,11 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .live: [0]
         case .transport(let play): [1, play ? 1 : 0]
         case .rec: [4]
+        case .layerKey(let l, let k, let d): [2, UInt8(l), UInt8(k), d ? 1 : 0]
+        case .chain(let s): [9, UInt8(min(s.count, 8))] + s.prefix(8).map { UInt8($0 & 3) }
+        case .bkList: []
+        case .bkGet(let id, let off, let n): [UInt8(id)] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)]
+        case .bkPut(let op, let id, let a): [UInt8(op), UInt8(id)] + a
         case .setTrackStep(let t, let i, let step): [UInt8(t), UInt8(i)] + step.encoded
         case .setDrumStep(let i, let step): [UInt8(i)] + step.encoded
         case .setTrackParam(let t, let id, let v): [UInt8(t), UInt8(id)] + Frame.v14(v)
@@ -138,6 +152,11 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .live: body.first == 0
         case .transport: body.first == 1
         case .rec: body.first == 4
+        case .layerKey: body.first == 2
+        case .chain: body.first == 9
+        case .bkList: true
+        case .bkGet(let id, let off, _): body.count >= 7 && body[0] == UInt8(id) && Pack7.readU35(body[2...]) == UInt32(off)
+        case .bkPut(let op, let id, _): body.count >= 3 && body[0] == UInt8(op) && body[1] == UInt8(id)
         case .setTrackStep(let t, let i, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(i)
         case .setDrumStep(let i, _): body.first == UInt8(i)
         case .setTrackParam(let t, let id, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(id)
@@ -164,7 +183,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: "DESC"
         case .watch: "WATCH"
         case .ping: "PING"
-        case .live, .transport, .rec: "LIVE"
+        case .live, .transport, .rec, .layerKey, .chain: "LIVE"
+        case .bkList: "BK_LIST"
+        case .bkGet: "BK_GET"
+        case .bkPut: "BK_PUT"
         case .setTrackStep: "TRACK_STEP set"
         case .setDrumStep: "DRUM_STEP set"
         case .setTrackParam: "TRACK_PARAM set"
@@ -406,6 +428,7 @@ public struct LiveState: Equatable, Sendable {
     public var selected: Int
     public var cpu: Int
     public var tracks: [TrackPosition]
+    public var song = SongState()
 
     public init(playing: Bool, songMode: Bool = false, bpm: Int, section: Int? = nil, mutes: Int = 0, solos: Int = 0,
                 recTracks: Int = 0, selected: Int, cpu: Int = 0, tracks: [TrackPosition]) {
@@ -428,6 +451,7 @@ public struct LiveState: Equatable, Sendable {
         cpu = try r.u8()
         for _ in 0..<5 { _ = try r.u8() }               // song entry, entries, bar, bars, sections stored
         tracks = try (0..<4).map { _ in TrackPosition(step: try r.u8(), length: try r.u8(), meter: try r.u8()) }
+        song = LiveState.song(body) ?? SongState()
     }
 }
 

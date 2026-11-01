@@ -53,6 +53,15 @@ public final class SloopSession {
     public private(set) var tracks = (0..<4).map(TrackState.init)
     public private(set) var selectedTrack = 0
     public private(set) var playing = false
+    /// The song: sections A–D, the mode, the position (LIVE), and the order (the settings object).
+    public private(set) var song = SongState()
+    public private(set) var songOrder: SongOrder?
+    /// The chain the iPad last asked for (LIVE reports its length and position, not its sections).
+    public private(set) var chainAsked: [Int] = []
+    /// Why the last song edit didn't take, for the Song page to say (nil: fine).
+    public private(set) var songMessage: String?
+    private var settingsCache: [UInt8]?
+
     /// Recording (a track is REC) or armed and waiting for a note: the REC pad lights.
     public private(set) var recording = false
     public private(set) var bpm = 120
@@ -105,6 +114,8 @@ public final class SloopSession {
     /// and a read already queued before a write would bring back the old value, so reads leave these
     /// alone for a moment. Keys: "s<track*64+index>", "p<track>.<id>", "g<id>".
     private var recentWrites: [String: Date] = [:]
+    private var stepWrites: [Int: SynthStep] = [:]
+    private var stepSending: Set<Int> = []
     private var paramWrites: [String: Int] = [:]      // latest value waiting to be sent (knob drags)
     private var paramSending: Set<String> = []
     private func recentlyWritten(_ key: String) -> Bool {
@@ -197,7 +208,109 @@ public final class SloopSession {
         for t in 0..<4 { try await readSteps(t) }
         try await readLibrary()
         try await readSoundParams(descs: true)
+        try? await readSongOrder()
     }
+
+    // MARK: The song
+
+    public func readSongOrder() async throws {
+        guard let c = client else { return }
+        let s = try await c.settingsObject()
+        settingsCache = s
+        songOrder = SongOrder(settings: s)
+    }
+
+    private let saveLayer = 7          // LIVE op 2's layer for SAVE held (ui_layers.c LY_SONG)
+
+    /// Plays a section from the next bar (playing) or loads it as the loop (stopped), as SAVE + key 1–4.
+    public func playSection(_ k: Int) {
+        guard let c = client else { return }
+        if song.songPlaying { songMessage = "The song is playing: stop it to pick a section"; return }
+        if !song.stored(k) { songMessage = "Section \(Self.sectionName(k)) is empty: store a loop in it first"; return }
+        songMessage = nil
+        if playing { song.sectionQueued = k } else { song.sectionPlaying = k }
+        Task { _ = try? await c.layerTap(layer: saveLayer, key: k) }
+    }
+
+    /// Stores the working loop into a section, as SAVE + key 5–8 (over a used one the FM-1 wants the key
+    /// twice within 3 s: the iPad asks first, then sends both).
+    public func storeLoop(in k: Int) {
+        guard let c = client else { return }
+        let twice = song.stored(k)
+        song.sectionsStored |= 1 << k
+        songMessage = nil
+        Task {
+            _ = try? await c.layerTap(layer: saveLayer, key: 4 + k)
+            if twice { _ = try? await c.layerTap(layer: saveLayer, key: 4 + k) }
+            try? await self.readSongOrder()
+        }
+    }
+
+    /// Stores the tracks in an empty section, then turns song mode on, in that order (song mode's PLAY
+    /// loads sections over the tracks, so whatever isn't stored is lost).
+    public func storeThenSongMode(in k: Int) {
+        guard let c = client, !song.songMode else { return }
+        song.sectionsStored |= 1 << k
+        song.songMode = true
+        songMessage = nil
+        Task {
+            _ = try? await c.layerTap(layer: saveLayer, key: 4 + k)
+            _ = try? await c.layerTap(layer: saveLayer, key: 12)
+            try? await self.readSongOrder()
+        }
+    }
+
+    /// Loop mode / song mode (SAVE + key 13): in song mode PLAY plays the song order.
+    public func toggleSongMode() {
+        guard let c = client else { return }
+        if song.songRecording { songMessage = "SONG REC is on"; return }
+        song.songMode.toggle()
+        Task { _ = try? await c.layerTap(layer: saveLayer, key: 12) }
+    }
+
+    /// SONG REC (SAVE + key 14): from the next bar, every section played (and how long) becomes the song.
+    public func toggleSongRec() {
+        guard let c = client else { return }
+        if !song.songRecording && song.songPlaying { songMessage = "Stop the song first"; return }
+        songMessage = nil
+        song.songRecording.toggle()
+        Task { _ = try? await c.layerTap(layer: saveLayer, key: 13) }
+    }
+
+    /// A chain: the sections in turn, each for its pattern length, round and round. Only while playing.
+    public func playChain(_ sections: [Int]) {
+        guard let c = client else { return }
+        guard playing else { songMessage = "Press play first: a chain starts on the next bar"; return }
+        guard sections.allSatisfy(song.stored) else { songMessage = "A chain can only use stored sections"; return }
+        songMessage = nil
+        chainAsked = Array(sections.prefix(8))
+        Task { _ = try? await c.chain(chainAsked) }
+    }
+
+    public func stopChain() {
+        guard let c = client else { return }
+        chainAsked = []
+        Task { _ = try? await c.chain([]) }
+    }
+
+    /// Writes a new song order (only while the song is stopped, as on the device).
+    public func setSongOrder(_ order: SongOrder) {
+        guard let c = client, let cache = settingsCache else { return }
+        if song.songPlaying || song.songRecording { songMessage = "Stop the song to change its order"; return }
+        let before = songOrder
+        songOrder = order
+        songMessage = nil
+        let bytes = order.written(into: cache)
+        Task {
+            let rc = (try? await c.putSettings(bytes)) ?? 99
+            if rc == 0 { self.settingsCache = bytes } else {
+                self.songOrder = before
+                self.songMessage = rc == 3 ? "Stop the song to change its order" : "The FM-1 didn't take the order (code \(rc))"
+            }
+        }
+    }
+
+    public static func sectionName(_ k: Int) -> String { ["A", "B", "C", "D"][k & 3] }
 
     private func readSoundParams(descs all: Bool) async throws {
         guard let c = client, let i = info else { return }
@@ -448,6 +561,13 @@ public final class SloopSession {
         if l.selected != selectedTrack, l.selected < 4 { selectedTrack = l.selected }
         playing = l.playing
         recording = l.recTracks != 0 || l.recArmed
+        let before = song
+        song = l.song
+        if l.song.chainLength == 0 { chainAsked = [] }
+        // SONG REC just ended, or a section was stored on the device: the order may have changed
+        if (before.songRecording && !l.song.songRecording) || before.sectionsStored != l.song.sectionsStored {
+            Task { try? await self.readSongOrder() }
+        }
         bpm = l.bpm
         // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
         for k in 0..<4 where !recentlyWritten("p\(k).\(Param.mute)") {
@@ -591,14 +711,23 @@ public final class SloopSession {
         var st = step
         if st.time != .note { st.notes = []; st.levels = []; st.ratchets = [] }
         tracks[t].steps[i] = st
-        recentWrites["s\(t * 64 + i)"] = Date()
-        guard let c = client else { return }
+        let key = t * 64 + i
+        recentWrites["s\(key)"] = Date()
+        // latest value wins, one write in flight per step: a dial turned fast sends what it passes
+        // through without queueing, and a reply only lands if nothing newer is waiting (else an older
+        // velocity would snap the dial back mid-turn)
+        stepWrites[key] = st
+        guard let c = client, !stepSending.contains(key) else { return }
+        stepSending.insert(key)
         Task {
-            do {
-                let stored = try await c.setSynthStep(track: t, index: i, st)
-                self.tracks[t].steps[i] = stored
-            } catch { self.stats.timeouts += 1 }
-            self.recentWrites["s\(t * 64 + i)"] = Date()
+            while let next = self.stepWrites.removeValue(forKey: key) {
+                do {
+                    let stored = try await c.setSynthStep(track: t, index: i, next)
+                    if self.stepWrites[key] == nil { self.tracks[t].steps[i] = stored }
+                } catch { self.stats.timeouts += 1 }
+                self.recentWrites["s\(key)"] = Date()
+            }
+            self.stepSending.remove(key)
         }
     }
 

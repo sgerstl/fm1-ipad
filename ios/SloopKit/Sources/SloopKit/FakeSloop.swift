@@ -80,6 +80,52 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     var watchingUI = false
     var uiPage = 5, uiHome = false        // FX, page 1
     var recOn = false
+
+    // The song (as SLOOP: four sections, an order of up to 16 steps, chains, loop / song mode, SONG REC)
+    var stored = 0b0111                        // A, B, C hold loops; D is empty
+    var sectionPlaying: Int? = 0, sectionQueued: Int?
+    var songMode = false, songRec = false
+    var chain: [Int] = [], chainAt = 0
+    var settings: [UInt8] = {
+        var s = [UInt8](repeating: 0, count: 96)
+        s[0] = 0x33; s[1] = 0x52; s[2] = 0x45; s[3] = 0x50          // "PER3", little-endian
+        return SongOrder(steps: [.init(section: 0, bars: 4), .init(section: 1, bars: 4), .init(section: 0, bars: 4), .init(section: 2, bars: 8)],
+                         loop: false).written(into: s)
+    }()
+    var lastBar = -1, songStep = 0, songBarInStep = 0, recSteps: [SongOrder.Step] = []
+    private var bkStaged: [UInt8] = [], bkLen = 0, bkCRC: UInt32 = 0
+
+    var order: SongOrder { SongOrder(settings: settings) ?? .standard }
+
+    /// The song's clock: on every new bar, a queued section starts, a chain moves on, the song steps.
+    private func tickSong() {
+        guard playing else { lastBar = -1; return }
+        let bar = Int(now() / (60.0 / Double(bpm) * 4))
+        guard bar != lastBar else { return }
+        let first = lastBar < 0
+        lastBar = bar
+        if first { return }
+        if songMode {
+            let o = order
+            songBarInStep += 1
+            if songBarInStep >= o.steps[songStep].bars {
+                songBarInStep = 0
+                songStep += 1
+                if songStep >= o.steps.count { songStep = 0; if !o.loop { playing = false; return } }
+            }
+            sectionPlaying = o.steps[songStep].section
+            return
+        }
+        if !chain.isEmpty {
+            if bar % 2 == 0 { chainAt = (chainAt + 1) % chain.count; sectionPlaying = chain[chainAt] }
+        } else if let q = sectionQueued {
+            sectionPlaying = q; sectionQueued = nil
+        }
+        if songRec, let s = sectionPlaying {
+            if let last = recSteps.last, last.section == s, recSteps.count > 0 { recSteps[recSteps.count - 1].bars += 1 }
+            else if recSteps.count < 16 { recSteps.append(.init(section: s, bars: 1)) }
+        }
+    }
     private var editTimer: DispatchSourceTimer?
 
     public init(autoEdits: Bool = true) {
@@ -252,6 +298,24 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         case Cmd.uiGoto where hasUIPush:
             if let p = a.first { uiPage = Int(p); uiHome = false }
             emit(Cmd.ui, uiBody())
+        case Cmd.bkList:
+            // rc, count, then per object: id, length (5), CRC-32 (5). Only the settings object here.
+            emit(cmd, [0, 1, 1] + Pack7.u35(UInt32(settings.count)) + Pack7.u35(CRC32.of(settings)))
+        case Cmd.bkGet:
+            let off = Int(Pack7.readU35(a[1...])), n = Int(a[6]) | Int(a[7]) << 7
+            let chunk = Array(settings[min(off, settings.count)..<min(off + n, settings.count)])
+            emit(cmd, [a[0], 0] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)] + Pack7.encode(chunk))
+        case Cmd.bkPut:
+            let op = Int(a[0]), id = a[1]
+            var rc: UInt8 = 1
+            if op == 0, a.count == 12 { bkLen = Int(Pack7.readU35(a[2...])); bkCRC = Pack7.readU35(a[7...]); bkStaged = []; rc = 0 }
+            else if op == 1 { bkStaged += Pack7.decode(Array(a[7...])); rc = 0 }
+            else if op == 2 {
+                if songMode && playing { rc = 3 }
+                else if bkStaged.count == bkLen, CRC32.of(bkStaged) == bkCRC, SongOrder(settings: bkStaged) != nil { settings = bkStaged; rc = 0 }
+                else { rc = 2 }
+            }
+            emit(cmd, [UInt8(op), id, rc])
         case Cmd.watch:
             watching = a.first ?? 0 != 0
             watchingUI = hasUIPush && (a.first ?? 0) & 4 != 0
@@ -261,8 +325,20 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         case Cmd.live:
             if a.first == 1, a.count > 1 { playing = a[1] != 0 }
             if a.first == 4 { recOn.toggle() }
+            if a.first == 2, a.count >= 4, a[1] == 7, a[3] == 1 { saveLayerKey(Int(a[2])) }
+            if a.first == 9, a.count >= 2 {
+                let n = Int(a[1])
+                chain = n == 0 ? [] : a.dropFirst(2).prefix(n).map { Int($0) }
+                chainAt = 0
+            }
+            tickSong()
             let mutes = UInt8((0..<4).reduce(0) { $0 | (params[$1][Param.mute] != 0 ? 1 << $1 : 0) })   // as editor_live.c
-            var b: [UInt8] = [a.first ?? 0, playing ? 1 : 0, 0] + Frame.v14(bpm) + [1, 0, 0, 0, mutes, 0, recOn ? UInt8(1 << selected) : 0, UInt8(selected), 0, playing ? 24 : 8, 0, 0, 0, 0, 1]
+            let songPlays = songMode && playing
+            let flags: UInt8 = (playing ? 1 : 0) | (songMode ? 4 : 0) | (songPlays ? 8 : 0) | (songRec ? 64 : 0)
+            var b: [UInt8] = [a.first ?? 0, flags, 0] + Frame.v14(bpm)
+            b += [UInt8((sectionPlaying ?? -1) + 1), UInt8((sectionQueued ?? -1) + 1), UInt8(chain.count), UInt8(chainAt)]
+            b += [mutes, 0, recOn ? UInt8(1 << selected) : 0, UInt8(selected), 0, playing ? 24 : 8]
+            b += [UInt8(songStep), UInt8(order.steps.count), UInt8(songBarInStep), UInt8(order.steps[min(songStep, order.steps.count - 1)].bars), UInt8(stored)]
             for t in 0..<4 { b += [UInt8(stepAt(t)), UInt8(params[t][Param.length]), playing ? 72 : 0] }
             emit(cmd, b + [0, 0] + Array(repeating: 0x48, count: 16))
         default:
@@ -275,6 +351,33 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         queue.async { [self] in
             if track < 3 { steps[track][index] = step }
             if watching { emit(Cmd.stepChanged, [UInt8(index), UInt8(track)]) }
+        }
+    }
+
+    /// SAVE held + a white key (ui_layers.c LY_SONG): 0–3 play / load a section, 4–7 store the loop
+    /// (a used section on the second press), 12 loop / song, 13 SONG REC.
+    private var armed: (section: Int, at: Date)?
+    private func saveLayerKey(_ w: Int) {
+        switch w {
+        case 0..<4:
+            guard stored >> w & 1 == 1, !(songMode && playing) else { return }
+            chain = []
+            if playing { sectionQueued = w } else { sectionPlaying = w }
+        case 4..<8:
+            let s = w - 4
+            if stored >> s & 1 == 1, !(armed?.section == s && Date().timeIntervalSince(armed!.at) < 3) { armed = (s, Date()); return }
+            armed = nil
+            stored |= 1 << s
+        case 12:
+            if !songRec { songMode.toggle(); songStep = 0; songBarInStep = 0 }
+        case 13:
+            if songRec {
+                songRec = false
+                if !recSteps.isEmpty { settings = SongOrder(steps: recSteps, loop: false).written(into: settings) }
+            } else if !(songMode && playing) {
+                songMode = false; songRec = true; recSteps = []
+            }
+        default: break
         }
     }
 

@@ -21,6 +21,7 @@ struct PadSurface: View {
 struct FunctionPads: View {
     let session: SloopSession
     let ui: EditorUI
+    @State private var heldSave = false
 
     enum Pad: String, CaseIterable, Identifiable {
         case fx = "FX", sel = "SEL", env = "ENV", lfo = "LFO", edit = "EDIT", glo = "GLO"
@@ -72,6 +73,12 @@ struct FunctionPads: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
+        // held, SAVE is the song, as holding SAVE on the FM-1 brings up its song layer
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+            guard pad == .save else { return }
+            heldSave = true
+            openSong()
+        })
         .disabled(!usable)
         .accessibilityLabel(pad == .play && session.playing ? "Stop" : pad.rawValue.capitalized)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -84,9 +91,9 @@ struct FunctionPads: View {
         case .play: return session.playing
         case .rec: return session.recording
         case .home: return ui.page == .sequencer
-        case .save: return ui.page == .library
+        case .save: return ui.page == .library || ui.page == .song
         case .seq:
-            if session.screenLinked, let s = session.deviceScreen { return !s.home && [34, 35, 36].contains(s.page) && ui.page != .library }
+            if session.screenLinked, let s = session.deviceScreen { return !s.home && [34, 35].contains(s.page) && ui.page != .library }
             return ui.page == .sound && ui.soundFamily == .seq
         default:
             guard ui.page == .sound, let f = pad.family else { return false }
@@ -99,7 +106,13 @@ struct FunctionPads: View {
         return !SoundPage.shown(session, f).isEmpty
     }
 
+    private func openSong() {
+        ui.page = .song
+        if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.section) }
+    }
+
     private func press(_ pad: Pad) {
+        if pad == .save, heldSave { heldSave = false; return }    // the release after a hold isn't a press
         switch pad {
         case .play: session.setPlaying(!session.playing)
         case .rec: session.toggleRec()
@@ -107,8 +120,11 @@ struct FunctionPads: View {
             ui.page = .sequencer
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.home) }
         case .save:
-            ui.page = .library
-            if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.presets) }
+            // as the FM-1's SAVE: the presets first; pressed again, the song (SLOOP's SECTION page)
+            if ui.page == .library { openSong() } else {
+                ui.page = .library
+                if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.presets) }
+            }
         case .seq:
             // as on the FM-1: SEQ opens the notes (the sequencer), again for PATTERN
             if ui.page == .sequencer {

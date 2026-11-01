@@ -110,6 +110,7 @@ struct TopBar: View {
         switch p {
         case .sequencer: session.showOnDevice(page: SoundPage.home)
         case .library: session.showOnDevice(page: SoundPage.presets)
+        case .song: session.showOnDevice(page: SoundPage.section)
         case .sound:
             if let first = SoundPage.shown(session, ui.soundFamily).first { session.showOnDevice(page: first.fw) }
         }
@@ -122,9 +123,11 @@ struct TopBar: View {
         return HStack(spacing: 20) {
             ToggleKey(name: "Keys", on: ui.keyboardOpen, enabled: isConnected) { ui.keyboardOpen.toggle() }
                 .accessibilityHint("Shows the FM-1's keyboard")
+            if session.song.songMode { songMarker }
             readout(session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –", "bar · step")
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(session.playing ? "Bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "Stopped")
+                .frame(width: 72, alignment: .trailing)     // "4 · 16" at its widest: nothing beside it moves
             readout("\(session.bpm)", "BPM")
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(session.bpm) BPM")
@@ -145,8 +148,30 @@ struct TopBar: View {
             .buttonStyle(.plain)
             .disabled(!isConnected)
             .opacity(isConnected ? 1 : 0.4)
-            .accessibilityLabel(session.playing ? "Stop" : "Play")
+            .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
         }
+        .fixedSize()            // the controls keep their size; the connection label gives way
+    }
+
+    /// Song mode is on: PLAY plays the song order and loads sections over the tracks. Shown on every
+    /// page, since it changes what PLAY does to the grid; tap for the Song tab.
+    private var songMarker: some View {
+        Button {
+            ui.page = .song
+            if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.section) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "music.note.list").font(.system(size: 13, weight: .semibold))
+                Text(session.song.songRecording ? "SONG REC" : "SONG").font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(Theme.onColour)
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .background(Capsule().fill(Theme.text))
+        }
+        .buttonStyle(PressSink())
+        .accessibilityLabel(session.song.songRecording ? "Song recording is on" : "Song mode is on")
+        .accessibilityHint("PLAY plays the song order. Opens the Song tab")
     }
 
     private func readout(_ value: String, _ label: String) -> some View {

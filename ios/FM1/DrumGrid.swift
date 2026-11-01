@@ -22,7 +22,7 @@ struct DrumGrid: View {
             EditorHeader(track: 3, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
                          detail: "16 lanes · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64")
 
-            StepNumbers(offsetX: offset.x, selected: ui.selectedStep[3])
+            StepNumbers(offsetX: offset.x, selected: ui.selectedStep[3]) { ui.selectedStep[3] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
@@ -59,19 +59,14 @@ struct DrumGrid: View {
         .padding(12)
         .frame(height: PianoRoll.panelHeight)
         .panel()
-        .onReceive(NotificationCenter.default.publisher(for: .gridPannedByHand)) { _ in ui.handPannedAt = Date() }
-        .onChange(of: session.positions[3].step) { _, step in
-            guard session.playing, Date().timeIntervalSince(ui.handPannedAt) > 4 else { return }
-            let first = Int((offset.x / Theme.stepWidth).rounded())
-            guard step < first || step >= first + 32 else { return }
-            request = .init(x: CGFloat(step / 32 * 32) * Theme.stepWidth, id: (request?.id ?? 0) + 1)
-        }
     }
 }
 
 struct DrumGridContent: View {
     let session: SloopSession
     let ui: EditorUI
+    @State private var paintOn: Bool?          // a slide: lighting (true) or clearing (false) its lane
+    @State private var painted: Set<Int> = []
 
     var body: some View {
         let t = session.tracks[3]
@@ -80,14 +75,14 @@ struct DrumGridContent: View {
             Canvas { ctx, size in draw(ctx, size, t, selected, ui.selectedLane) }
                 .frame(width: DrumGrid.contentSize.width, height: DrumGrid.contentSize.height)
                 .contentShape(Rectangle())
-                .gesture(SpatialTapGesture().onEnded { e in
+                .gesture(paint.exclusively(before: SpatialTapGesture().onEnded { e in
                     // a tap turns that hit on or off, and selects it
                     let i = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
                     let l = max(0, min(15, Int(e.location.y / Theme.rowHeight)))
                     ui.selectedStep[3] = i
                     ui.selectedLane = l
                     session.toggle(drumIndex: i, lane: l)
-                })
+                }))
                 .accessibilityHidden(true)
             HStack(spacing: 0) {
                 ForEach(0..<64, id: \.self) { i in
@@ -109,6 +104,26 @@ struct DrumGridContent: View {
             }
             .allowsHitTesting(false)
         }
+    }
+
+    /// A slide along a lane: from an empty step it lights every step the finger passes, from a lit one
+    /// it clears them. The lane is the one the slide began in.
+    private var paint: some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { e in
+                let l = max(0, min(15, Int(e.startLocation.y / Theme.rowHeight)))
+                let a = max(0, min(63, Int(e.startLocation.x / Theme.stepWidth)))
+                let b = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
+                if paintOn == nil { paintOn = !session.tracks[3].drumSteps[a].has(l) }
+                guard let on = paintOn else { return }
+                for i in min(a, b)...max(a, b) where !painted.contains(i) {
+                    painted.insert(i)
+                    if session.tracks[3].drumSteps[i].has(l) != on { session.toggle(drumIndex: i, lane: l) }
+                }
+                ui.selectedStep[3] = b
+                ui.selectedLane = l
+            }
+            .onEnded { _ in paintOn = nil; painted = [] }
     }
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize, _ t: TrackState, _ selected: Int, _ lane: Int) {

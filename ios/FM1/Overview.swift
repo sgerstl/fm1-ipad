@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The track selector: one component on every page, in one place. Its box of chips and names never
 /// changes (top left, the left column's width, 44 pt rows). The timeline, each track's 64 steps, is
-/// attached to its right, shut unless pulled open with the handle on the box's edge (drag, or tap);
+/// attached to its right, shut unless pulled open with the pill inside the box's right edge (drag, or tap);
 /// open, it slides over whatever is beside the box. Only the visible width moves; the rows keep their
 /// full layout, so nothing reflows. A tap on a row selects the track on the FM-1.
 struct Overview: View {
@@ -47,8 +47,8 @@ struct Overview: View {
         .accessibilityLabel("Tracks")
     }
 
-    /// The pull on the box's right edge, in the gap beside it: drag it out to open the timeline,
-    /// back to shut it; a tap toggles.
+    /// The pull: a light grey pill inside the box's right edge (the open timeline ends 16 pt short of
+    /// it, so it never covers a step). Drag it out to open the timeline, back to shut it; a tap toggles.
     private var handle: some View {
         // measured on the screen, not on the handle: the handle moves with the panel as it opens
         let drag = DragGesture(minimumDistance: 4, coordinateSpace: .global)
@@ -65,14 +65,12 @@ struct Overview: View {
         let tap = TapGesture().onEnded {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { ui.timelineOpen.toggle() }
         }
-        return VStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { _ in Capsule().fill(Theme.textSecondary).frame(width: 2, height: 14) }
-        }
-        .frame(width: 10, height: 48)
-        .background(Capsule().fill(Theme.raisedTop).shadow(color: .black.opacity(0.5), radius: 2, y: 1))
-        .frame(width: 32, height: 72)                  // a 32 × 72 pt target around the 10 pt pull
-        .contentShape(Rectangle())
-        .offset(x: 16)
+        return Capsule()
+            .fill(dragX != 0 ? Theme.text : Theme.textSecondary)       // brightens while held
+            .frame(width: 5, height: 40)
+            .padding(.trailing, 6)
+            .frame(width: 28, height: 72, alignment: .trailing)    // a 28 × 72 pt target, inside the box
+            .contentShape(Rectangle())
         .gesture(drag.exclusively(before: tap))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(expanded ? "Hide the timeline" : "Show the timeline")
@@ -82,25 +80,28 @@ struct Overview: View {
 
     private func row(_ t: Int) -> some View {
         let track = session.tracks[t]
-        let selected = session.selectedTrack == t
+        // On the Song page a section is all four tracks, so picking one means nothing there: the box
+        // shows no selection and every tap mutes, a live move while sections play.
+        let muteOnly = ui.page == .song
+        let selected = session.selectedTrack == t && !muteOnly
         let hitWidth = expanded ? Self.rowWidth : Self.boxWidth - 8
         return HStack(spacing: 0) {
             // The chip is its own key: on the selected track it mutes and unmutes; on another track it
             // selects, so a stray tap can't mute a track you weren't on.
-            Button { selected ? session.toggleMute(track: t) : session.select(track: t) } label: {
+            Button { selected || muteOnly ? session.toggleMute(track: t) : session.select(track: t) } label: {
                 TrackChip(track: t, muted: track.mute)
                     .frame(width: 44, height: Self.rowHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressSink())
-            .accessibilityLabel(selected ? (track.mute ? "Unmute track \(t + 1)" : "Mute track \(t + 1)") : "Track \(t + 1)")
+            .accessibilityLabel(selected || muteOnly ? (track.mute ? "Unmute track \(t + 1)" : "Mute track \(t + 1)") : "Track \(t + 1)")
             .accessibilityValue(track.mute ? "muted" : "")
-            Button { session.select(track: t) } label: { rowBody(t, track: track, selected: selected, hitWidth: hitWidth) }
+            Button { muteOnly ? session.toggleMute(track: t) : session.select(track: t) } label: { rowBody(t, track: track, selected: selected, hitWidth: hitWidth) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Track \(t + 1), \(track.displayName)\(track.mute ? ", muted" : "")")
                 .accessibilityValue(expanded ? "\((0..<track.length).filter(track.isOn).count) of \(track.length) steps on" : "")
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
-                .accessibilityHint(selected ? "" : "Selects the track on the FM-1")
+                .accessibilityHint(muteOnly ? (track.mute ? "Unmutes it" : "Mutes it") : selected ? "" : "Selects the track on the FM-1")
         }
         .frame(width: Self.rowWidth, height: Self.rowHeight, alignment: .leading)
         .background(alignment: .leading) {
@@ -133,13 +134,15 @@ struct Overview: View {
                 }
                 .frame(width: Self.boxWidth - 8 - 44 - 4, alignment: .leading)
                 .padding(.leading, 4)
-                ZStack(alignment: .leading) {
-                    Canvas { ctx, _ in draw(ctx, track) }
-                    OverviewPlayhead(session: session, track: t, running: progress > 0)
-                }
+                // the playhead is taller than the cells: as an overlay it can't shift them off centre
+                Canvas { ctx, _ in draw(ctx, track) }
                 .frame(width: Self.timelineWidth - 6, height: Self.cell.height)
+                .overlay(alignment: .leading) { OverviewPlayhead(session: session, track: t, running: progress > 0) }
                 .padding(3)
-                .recessed(5)
+                // a flat, even well: the deep inset shadow of the bigger wells made the cells read high on
+                // a strip this thin; read-only, so nothing here looks raised
+                .background(RoundedRectangle(cornerRadius: 5).fill(Theme.well)
+                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.black.opacity(0.5), lineWidth: 1)))
                 .opacity(Double(progress) * (track.mute ? 0.45 : 1))
             }
             .frame(width: Self.rowWidth - 44, height: Self.rowHeight, alignment: .leading)
@@ -156,7 +159,6 @@ struct Overview: View {
                 ctx.fill(p, with: .color(Theme.stepOutside))
             } else if track.isOn(i) {
                 ctx.fill(p, with: .color(Theme.track[track.index]))
-                ctx.fill(Path(CGRect(x: r.minX + 2, y: r.minY, width: w - 4, height: 1)), with: .color(.white.opacity(0.35)))
             } else {
                 ctx.fill(p, with: .color(Theme.stepEmpty))
             }

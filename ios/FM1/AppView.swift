@@ -59,6 +59,14 @@ extension AppView {
                         }
                         LibraryPage(session: session, ui: ui)
                     }
+                case .song:
+                    HStack(alignment: .top, spacing: 16) {
+                        leftColumn {
+                            FunctionPads(session: session, ui: ui)
+                            SectionsPanel(session: session, ui: ui)
+                        }
+                        SongPage(session: session, ui: ui)
+                    }
                 case .sound:
                     HStack(alignment: .top, spacing: 16) {
                         leftColumn {
