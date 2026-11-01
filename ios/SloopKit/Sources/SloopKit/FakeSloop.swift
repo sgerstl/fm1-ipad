@@ -75,6 +75,10 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     var bpm = 108, swing = 16, drumLevel = 92
     var playing = true
     var watching = false
+    /// The demo behaves like the fm1-ipad firmware: it reports its page (90 UI) and opens pages (91).
+    public var hasUIPush = true
+    var watchingUI = false
+    var uiPage = 5, uiHome = false        // FX, page 1
     private var editTimer: DispatchSourceTimer?
 
     public init(autoEdits: Bool = true) {
@@ -242,8 +246,14 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             for id in 0..<71 { b += Frame.v14(params[selected][id]) }
             for id in 0..<50 { b += Frame.v14(id == Global.bpm ? bpm : id == Global.swing ? swing : id == Global.drumLevel ? drumLevel : globals[id]) }
             emit(cmd, b)
+        case Cmd.ui where hasUIPush:
+            emit(cmd, uiBody())
+        case Cmd.uiGoto where hasUIPush:
+            if let p = a.first { uiPage = Int(p); uiHome = false }
+            emit(Cmd.ui, uiBody())
         case Cmd.watch:
             watching = a.first ?? 0 != 0
+            watchingUI = hasUIPush && (a.first ?? 0) & 4 != 0
             emit(cmd, [a.first ?? 0])
         case Cmd.ping:
             emit(cmd, [0])
@@ -263,6 +273,16 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         queue.async { [self] in
             if track < 3 { steps[track][index] = step }
             if watching { emit(Cmd.stepChanged, [UInt8(index), UInt8(track)]) }
+        }
+    }
+
+    private func uiBody() -> [UInt8] { [uiHome ? 1 : 0, UInt8(uiPage), 0, 0] }
+
+    /// A button pressed "on the device": the page changes, then UI is pushed while watched.
+    public func showPage(_ p: Int) {
+        queue.async { [self] in
+            uiPage = p; uiHome = false
+            if watchingUI { emit(Cmd.ui, uiBody()) }
         }
     }
 

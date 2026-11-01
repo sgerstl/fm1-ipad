@@ -1,0 +1,83 @@
+diff --git a/firmware/src/editor.c b/firmware/src/editor.c
+index 8c70a41..ac8fdb1 100644
+--- a/firmware/src/editor.c
++++ b/firmware/src/editor.c
+@@ -73,6 +73,23 @@ UI_SMALL static void ed_send(void)
+ }
+ UI_SMALL static int32_t ed_rv(const uint8_t *p) { return (int32_t)(p[0] | p[1] << 7) - 8192; }
+ 
++/* fm1-ipad addition (not in SLOOP 2.8.4): the screen state, so an editor can follow and set the page.
++ *   90 UI       -> home (0/1), page (index into PAGES), layer (LY_*, 0 none), menu (0 off)
++ *                  also pushed whenever it changes, while WATCH was sent with bit 2 (4)
++ *   91 UI_GOTO  page -> opens that page as its family's button would (no reply for a page that is not
++ *                  shown); the reply is the state, as UI
++ * Stock editors never send bit 2 or these commands, so they see no difference. */
++#define ED_UI 90u
++#define ED_UI_GOTO 91u
++static uint8_t ed_ui_on, ed_ui_last[4];
++UI_SMALL static void ed_ui_state(void)
++{
++    ed_b(ui.home);
++    ed_b(ui.page);
++    ed_b(ui.layer);
++    ed_b(ui.menu);
++}
++
+ /* ---- user sample slots (eng_sample.c): flash SMP_USER_OFF(k) (USR1..3 at 0xA0000.., USR4 at 0xE7000) ----
+  * BEGIN erases the header sector (the slot is invalid from then on), WRITE fills the data
+  * (offset >= 512, erasing each further sector when the write reaches its start), END sends
+@@ -308,6 +325,18 @@ UI_SMALL static void ed_sync(void)                                /* main loop *
+         ed_w.on = 0;                                     /* no host, USB reset, or 3 s without a request */
+         return;
+     }
++    if (ed_ui_on) {                                      /* fm1-ipad: the screen changed */
++        uint8_t s[4] = {ui.home, ui.page, ui.layer, ui.menu};
++        if (s[0] != ed_ui_last[0] || s[1] != ed_ui_last[1] || s[2] != ed_ui_last[2] || s[3] != ed_ui_last[3]) {
++            if (!ed_room())
++                return;
++            ed_ui_last[0] = s[0], ed_ui_last[1] = s[1], ed_ui_last[2] = s[2], ed_ui_last[3] = s[3];
++            ed_begin(ED_UI);
++            ed_ui_state();
++            ed_send();
++            n++;
++        }
++    }
+     if (sync_reload || ed_eng(TSEL) != ed_w.eng || TSEL->preset != ed_w.preset || song.sel != ed_w.sel) {
+         if (!ed_room())
+             return;
+@@ -691,6 +720,21 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
+         return;
+     }
+     switch (cmd) {
++    case ED_UI:                                            /* fm1-ipad: the screen state */
++        ed_ui_state();
++        break;
++    case ED_UI_GOTO:                                       /* fm1-ipad: open a page */
++        if (na < 1u || a[0] >= NPAGES || !page_shown(&PAGES[a[0]]) || (is_drum(TSEL) && !page_for_drum(&PAGES[a[0]])
++            && PAGES[a[0]].scope != SC_DRUM && PAGES[a[0]].scope != SC_TRK))
++            return;
++        ui.menu = 0;
++        ui.page = a[0];
++        ui.fam_last[PAGES[a[0]].fam] = a[0];
++        ui.home = 0;
++        page_entered();
++        ui.force = 1;
++        ed_ui_state();
++        break;
+     case ED_LIVE:                                          /* v12: the LIVE page */
+         if (na < 1u)
+             return;
+@@ -956,10 +1000,12 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
+             return;
+         ed_w.on = a[0] & 1u;
+         ed_w.v4 = (uint8_t)(ed_w.on && (a[0] & 2u));     /* v4: also TRACK_CHANGED; the reply says it is known */
++        ed_ui_on = (uint8_t)(ed_w.on && (a[0] & 4u));    /* fm1-ipad: also UI */
++        ed_ui_last[1] = 0xFF;                            /* (pushes the state at once) */
+         ed_w.resets = usb.resets;
+         if (ed_w.on)
+             ed_shadow();
+-        ed_b(ed_w.on | ed_w.v4 << 1);
++        ed_b(ed_w.on | ed_w.v4 << 1 | ed_ui_on << 2);
+         break;
+     case ED_PING:
+         ed_b(0);

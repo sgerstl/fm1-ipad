@@ -105,6 +105,8 @@ public actor SloopClient {
             if let push = try? Push(cmd: cmd, body: body) { pushSink.yield(push) }
             return
         }
+        // UI (fm1-ipad firmware) is both a reply and a push: every one updates the screen state
+        if cmd == Cmd.ui, let push = try? Push(cmd: cmd, body: body) { pushSink.yield(push) }
         guard let p = inFlight, p.request.cmd == cmd, p.request.matches(body) else { return }
         lastRoundTrip = ContinuousClock.now - sentAt
         inFlight = nil
@@ -150,6 +152,9 @@ public extension SloopClient {
     func dump(paramCount: Int, globalCount: Int) async throws -> ParamDump {
         try ParamDump(await send(.dump), paramCount: paramCount, globalCount: globalCount)
     }
+    /// The FM-1's screen state; throws on stock SLOOP, which doesn't answer.
+    func uiState() async throws -> UIState { try UIState(await send(.uiState, timeout: .milliseconds(200), retries: 0)) }
+    func uiGoto(page: Int) async throws -> UIState { try UIState(await send(.uiGoto(page: page))) }
     func userPresets() async throws -> [UserPreset] {
         var all: [UserPreset] = []
         var start = 0

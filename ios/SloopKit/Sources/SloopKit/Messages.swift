@@ -21,6 +21,9 @@ public enum Cmd {
     public static let trackChanged: UInt8 = 32
     public static let drumStep: UInt8 = 33
     public static let live: UInt8 = 77
+    /// fm1-ipad's addition to SLOOP (not in stock 2.8.4): the FM-1's screen state, queried or pushed.
+    public static let ui: UInt8 = 90
+    public static let uiGoto: UInt8 = 91
 
     /// Frames the device sends on its own; they are never replies.
     public static let pushes: Set<UInt8> = [changed, reload, stepChanged, trackChanged]
@@ -63,6 +66,8 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case userList(start: Int, count: Int)
     case userLoad(slot: Int)
     case dump                                  // the selected track's parameters and every global
+    case uiState                               // fm1-ipad firmware only: the FM-1's page
+    case uiGoto(page: Int)                     // fm1-ipad firmware only: open a page (index into SLOOP's PAGES)
 
     public var cmd: UInt8 {
         switch self {
@@ -85,6 +90,8 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .userList: Cmd.userList
         case .userLoad: Cmd.userLoad
         case .dump: Cmd.dump
+        case .uiState: Cmd.ui
+        case .uiGoto: Cmd.uiGoto
         }
     }
 
@@ -108,7 +115,8 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset(let e, let i): [UInt8(e), UInt8(i)]
         case .userList(let s, let n): [UInt8(s), UInt8(n)]
         case .userLoad(let slot): [UInt8(slot)]
-        case .dump: []
+        case .dump, .uiState: []
+        case .uiGoto(let p): [UInt8(p)]
         }
     }
 
@@ -134,7 +142,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset: true                     // the reply is the track's engine and preset after the load
         case .userList(let s, _): body.first == UInt8(s)
         case .userLoad(let slot): body.first == UInt8(slot)
-        case .dump: true
+        case .dump, .uiState, .uiGoto: true
         }
     }
 
@@ -162,6 +170,8 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .userList: "UP_LIST"
         case .userLoad: "UP_LOAD"
         case .dump: "DUMP"
+        case .uiState: "UI"
+        case .uiGoto: "UI_GOTO"
         }
     }
 }
@@ -454,6 +464,17 @@ public struct UserPresetList: Equatable, Sendable {
     }
 }
 
+/// What the FM-1's screen shows (fm1-ipad firmware): HOME or a page (index into SLOOP's PAGES table),
+/// the layer of a held function button (0 none), and the menu (0 off).
+public struct UIState: Equatable, Sendable {
+    public var home: Bool, page: Int, layer: Int, menu: Int
+    public init(home: Bool, page: Int, layer: Int = 0, menu: Int = 0) { self.home = home; self.page = page; self.layer = layer; self.menu = menu }
+    public init(_ body: [UInt8]) throws {
+        var r = ByteReader(body, cmd: Cmd.ui)
+        home = try r.u8() != 0; page = try r.u8(); layer = try r.u8(); menu = try r.u8()
+    }
+}
+
 // MARK: - Pushes
 
 public enum Push: Equatable, Sendable {
@@ -461,6 +482,7 @@ public enum Push: Equatable, Sendable {
     case reload(engine: Int, preset: Int, track: Int)
     case stepChanged(index: Int, track: Int)
     case trackChanged(track: Int, id: Int, value: Int)
+    case ui(UIState)
 
     public init?(cmd: UInt8, body: [UInt8]) throws {
         var r = ByteReader(body, cmd: cmd)
@@ -469,6 +491,7 @@ public enum Push: Equatable, Sendable {
         case Cmd.reload: self = .reload(engine: try r.u8(), preset: try r.u8(), track: try r.u8())
         case Cmd.stepChanged: self = .stepChanged(index: try r.u8(), track: try r.u8())
         case Cmd.trackChanged: self = .trackChanged(track: try r.u8(), id: try r.u8(), value: try r.v14())
+        case Cmd.ui: self = .ui(try UIState(body))
         default: return nil
         }
     }

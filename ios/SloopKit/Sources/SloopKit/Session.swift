@@ -91,6 +91,10 @@ public final class SloopSession {
     /// whenever the selected track or its engine changes.
     public private(set) var trackDescs: [Int: ParamDesc] = [:]
     public private(set) var globalDescs: [Int: ParamDesc] = [:]
+    /// fm1-ipad firmware (SLOOP 2.8.4 plus the UI push): the FM-1 reports its page and the iPad can set it.
+    public private(set) var screenLinked = false
+    /// What the FM-1's screen shows, when screenLinked.
+    public private(set) var deviceScreen: UIState?
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
 
@@ -157,7 +161,9 @@ public final class SloopSession {
             info = i
             deviceNotes = []          // whatever the USB buffer held from before isn't live
             try await readEverything()
-            _ = try await c.watch(3)
+            // fm1-ipad firmware answers UI; stock SLOOP doesn't (a short timeout, then the link stays off)
+            if let s = try? await c.uiState() { deviceScreen = s; screenLinked = true } else { screenLinked = false }
+            _ = try await c.watch(screenLinked ? 7 : 3)
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
             stats = Stats()
         } catch {
@@ -378,6 +384,9 @@ public final class SloopSession {
                 lastTouched = (scope, id, Date())
             case .trackChanged(let t, let id, let v):
                 apply(track: t, id: id, value: v)
+            case .ui(let s):
+                screenLinked = true
+                if s != deviceScreen { deviceScreen = s }
             }
         }
     }
@@ -389,7 +398,7 @@ public final class SloopSession {
             n += 1
             do {
                 try await c.ping()
-                if n % 10 == 0 { _ = try await c.watch(3) }   // watching ends on a USB reset: renew it
+                if n % 10 == 0 { _ = try await c.watch(screenLinked ? 7 : 3) }   // watching ends on a USB reset: renew it
             } catch ClientError.closed { return } catch { stats.timeouts += 1 }
         }
     }
@@ -721,6 +730,13 @@ public final class SloopSession {
                 write(track: c.track, index: i, c.steps[i])
             }
         }
+    }
+
+    /// Opens a page on the FM-1 (fm1-ipad firmware): its screen switches as if its button had been pressed.
+    public func showOnDevice(page: Int) {
+        guard screenLinked, let c = client else { return }
+        deviceScreen = UIState(home: false, page: page)
+        Task { if let s = try? await c.uiGoto(page: page) { self.deviceScreen = s } }
     }
 
     public func toggleMute(track t: Int) {

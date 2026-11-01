@@ -139,6 +139,31 @@ import Testing
         run.cancel()
     }
 
+    @Test func screenLinkWithTheModifiedFirmware() async throws {
+        let fake = FakeSloop(autoEdits: false)
+        var once = false
+        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor { if case .connected = session.status { true } else { false } }
+        #expect(session.screenLinked && session.deviceScreen?.page == 5)
+        fake.showPage(12)                                              // SEL pressed on the device
+        try await waitFor { session.deviceScreen?.page == 12 }
+        session.showOnDevice(page: 10)                                 // the iPad opens DLY on the device
+        try await waitFor { fake.uiPage == 10 }
+        run.cancel()
+    }
+
+    @Test func stockFirmwareHasNoScreenLink() async throws {
+        let fake = FakeSloop(autoEdits: false); fake.hasUIPush = false
+        var once = false
+        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let run = Task { await session.run() }
+        try await waitFor { if case .connected = session.status { true } else { false } }
+        #expect(!session.screenLinked && session.deviceScreen == nil)
+        run.cancel()
+    }
+
     @Test func playheadInterpolatesBetweenPolls() {
         let session = SloopSession(transport: { nil })
         let t0 = Date()
