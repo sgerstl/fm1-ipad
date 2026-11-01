@@ -147,6 +147,9 @@ public extension SloopClient {
         let b = try await send(.preset(engine: engine, index: index))
         return (Int(b.first ?? 0), Int(b.count > 1 ? b[1] : 0))
     }
+    func dump(paramCount: Int, globalCount: Int) async throws -> ParamDump {
+        try ParamDump(await send(.dump), paramCount: paramCount, globalCount: globalCount)
+    }
     func userPresets() async throws -> [UserPreset] {
         var all: [UserPreset] = []
         var start = 0

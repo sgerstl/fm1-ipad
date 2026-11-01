@@ -8,6 +8,7 @@ import SwiftUI
 /// the track on the FM-1, so the selection is the device's and carries across tabs by itself.
 struct Overview: View {
     let session: SloopSession
+    let ui: EditorUI
     var expanded = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -20,6 +21,7 @@ struct Overview: View {
     static let timelineWidth: CGFloat = fullWidth - boxWidth - 4 - 8
     static let cell = CGSize(width: (timelineWidth - 6 - 63 * gap) / 64, height: 20)
     static var rowWidth: CGFloat { fullWidth - 8 }
+    @State private var pressAt = CGPoint.zero
 
     var body: some View {
         let visible = expanded ? Self.fullWidth : Self.boxWidth
@@ -62,9 +64,20 @@ struct Overview: View {
         }
         .frame(width: Self.rowWidth, height: Self.rowHeight, alignment: .leading)
         .background(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 10).fill(.white.opacity(selected ? 0.06 : 0))
+            let raised = ui.trackMenu?.track == t
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.white.opacity(raised ? 0.10 : selected ? 0.06 : 0))
+                .shadow(color: .black.opacity(raised ? 0.5 : 0), radius: raised ? 8 : 0, y: raised ? 4 : 0)
                 .frame(width: hitWidth)
         }
+        .animation(.easeOut(duration: 0.15), value: ui.trackMenu?.track)
+        // long press: the track's menu by the finger (only Clear all for now; no confirm, it offers Undo)
+        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
+            .onChanged { pressAt = $0.location })
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            ui.trackMenu = TrackMenu(track: t, at: pressAt)
+        })
+        .accessibilityAction(named: "Track menu") { ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: 200, y: 160 + CGFloat(t) * 48)) }
     }
 
     private func rowBody(_ t: Int, track: TrackState, selected: Bool, hitWidth: CGFloat) -> some View {
@@ -136,6 +149,11 @@ private struct OverviewPlayhead: View {
 
 /// A track's number on its colour, raised. Muted, it sinks into the panel and greys, as a pressed
 /// toggle does (the brief's physical rule), with the colour kept as a thin underline.
+struct TrackMenu: Equatable {
+    var track: Int
+    var at: CGPoint
+}
+
 struct TrackChip: View {
     let track: Int
     var size: CGFloat = 28

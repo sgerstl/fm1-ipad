@@ -36,17 +36,14 @@ struct PianoRoll: View {
                 VStack(spacing: 0) {
                     ForEach(rows, id: \.self) { n in
                         // off-scale rows (quantise off) keep readable grey and say so with a mark, not a fainter grey
-                        Text(Music.noteName(n) + (Music.inScale(n, root: t.root, scale: t.scale) ? "" : " ∗"))
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.textSecondary)
-                            .padding(.trailing, 8)
-                            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
+                        AuditionLabel(text: Music.noteName(n) + (Music.inScale(n, root: t.root, scale: t.scale) ? "" : " ∗"),
+                                      spoken: Music.spokenNoteName(n),
+                                      down: { session.noteDown(n) }, up: { session.noteUp(n) })
                     }
                 }
                 .offset(y: -offset.y)
                 .frame(width: 80, height: Self.gridSize.height, alignment: .top)
                 .clipped()
-                .accessibilityHidden(true)
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request) {
@@ -96,6 +93,36 @@ struct PianoRoll: View {
         for s in t.steps where s.time == .note { used.formUnion(s.notes) }
         let folded = Music.foldedRows(used: used, root: t.root, scale: t.scale, minRows: 9)
         return Set(folded).union(kept).sorted(by: >)
+    }
+}
+
+/// A row label you can play: touch a note name (or a drum lane) to hear it, held while touched.
+struct AuditionLabel: View {
+    let text: String
+    let spoken: String
+    var bold = false
+    let down: () -> Void
+    let up: () -> Void
+    @State private var pressed = false
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: bold ? .semibold : .regular))
+            .foregroundStyle(pressed || bold ? Theme.text : Theme.textSecondary)
+            .padding(.trailing, 8)
+            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
+            .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(pressed ? 0.08 : 0)).padding(.vertical, 4))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in if !pressed { pressed = true; down() } }
+                .onEnded { _ in pressed = false; up() })
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Play \(spoken)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                down()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { up() }
+            }
     }
 }
 
@@ -173,6 +200,7 @@ struct PianoRollContent: View {
     let ui: EditorUI
     let track: Int
     let rows: [Int]
+    @State private var lengthDrag: Int?        // the step whose note is being stretched (-1: this drag isn't one)
 
     var body: some View {
         let t = session.tracks[track]
@@ -182,13 +210,13 @@ struct PianoRollContent: View {
             Canvas { ctx, size in draw(ctx, size, t, selected) }
                 .frame(width: 64 * Theme.stepWidth, height: height)
                 .contentShape(Rectangle())
-                .gesture(SpatialTapGesture().onEnded { e in
-                    // one finger edits: a tap turns that note on or off in that step, and selects the step
+                // one finger edits: drag a note sideways to set its length; a tap turns a note on or off
+                .gesture(lengthGesture.exclusively(before: SpatialTapGesture().onEnded { e in
                     let i = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
                     let r = Int(e.location.y / Theme.rowHeight)
                     ui.selectedStep[track] = i
                     if r >= 0, r < rows.count { session.toggle(track: track, index: i, note: rows[r]) }
-                })
+                }))
                 .accessibilityHidden(true)
             // VoiceOver: each step is a button, read in step order.
             HStack(spacing: 0) {
@@ -212,6 +240,30 @@ struct PianoRollContent: View {
             }
             .allowsHitTesting(false)
         }
+    }
+
+    /// Starts on a note (or the held part of one): the drag's end step becomes the note's last step.
+    private var lengthGesture: some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { e in
+                if lengthDrag == nil { lengthDrag = noteStart(at: e.startLocation) ?? -1 }
+                guard let start = lengthDrag, start >= 0 else { return }
+                let end = max(start, min(63, Int(e.location.x / Theme.stepWidth)))
+                session.setLength(track: track, start: start, steps: end - start + 1)
+                ui.selectedStep[track] = start
+            }
+            .onEnded { _ in lengthDrag = nil }
+    }
+
+    /// The NOTE step a touch is on: that step, or the one a held (TIE) step belongs to, if the touched
+    /// row is one of its notes.
+    private func noteStart(at p: CGPoint) -> Int? {
+        let steps = session.tracks[track].steps
+        var i = max(0, min(63, Int(p.x / Theme.stepWidth)))
+        let r = Int(p.y / Theme.rowHeight)
+        guard r >= 0, r < rows.count else { return nil }
+        while i > 0, steps[i].time == .tie { i -= 1 }
+        return steps[i].time == .note && steps[i].notes.contains(rows[r]) ? i : nil
     }
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize, _ t: TrackState, _ selected: Int) {
@@ -239,6 +291,9 @@ struct PianoRollContent: View {
                 let rect = CGRect(x: CGFloat(i) * w + 2, y: CGFloat(r) * h + 4, width: CGFloat(len) * w - 4, height: h - 8)
                 let soft = k < s.levels.count && (s.levels[k] == 1 || s.levels[k] == 2)
                 drawPad(ctx, rect, track: track, dim: soft || i >= t.length, selected: i == selected)
+                // a grip at the note's end: it can be dragged longer or shorter
+                ctx.fill(Path(roundedRect: CGRect(x: rect.maxX - 7, y: rect.minY + 9, width: 2, height: rect.height - 18), cornerRadius: 1),
+                         with: .color(Theme.onColour.opacity(0.35)))
             }
             i += len
         }

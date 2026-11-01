@@ -5,7 +5,8 @@ import SwiftUI
 /// ui_studio.c, studio_tracks_draw): swing (the global groove), level, steps, pan. Values are shown
 /// as the device shows them.
 struct KnobSpec {
-    let index: Int
+    let id: String
+    let colour: Color
     let label: String
     let value: Int
     let range: ClosedRange<Int>
@@ -15,8 +16,10 @@ struct KnobSpec {
     let bipolar: Bool
     let set: (Int) -> Void
 
-    var colour: Color { Theme.knob[index] }
-    var fraction: Double { Double(value - range.lowerBound) / Double(range.upperBound - range.lowerBound) }
+    var fraction: Double {
+        let span = range.upperBound - range.lowerBound
+        return span > 0 ? Double(value - range.lowerBound) / Double(span) : 0     // (a fixed value: CPU)
+    }
 
     @MainActor
     static func all(_ session: SloopSession) -> [KnobSpec] {
@@ -24,17 +27,17 @@ struct KnobSpec {
         let t = session.tracks[k]
         let pct = t.level * 100 / 127
         return [
-            KnobSpec(index: 0, label: "SWING", value: session.swing, range: 0...100, stepperStep: 5,
+            KnobSpec(id: "home0", colour: Theme.knob[0], label: "SWING", value: session.swing, range: 0...100, stepperStep: 5,
                      shown: "\(session.swing)", spoken: "\(session.swing)", bipolar: false) { session.set(global: Global.swing, to: $0) },
-            KnobSpec(index: 1, label: "LEVEL", value: t.mute ? 0 : t.level, range: 0...127, stepperStep: 8,
+            KnobSpec(id: "home1", colour: Theme.knob[1], label: "LEVEL", value: t.mute ? 0 : t.level, range: 0...127, stepperStep: 8,
                      shown: t.mute ? "0" : "\(pct)", spoken: t.mute ? "muted" : "\(pct) percent", bipolar: false) { v in
                 // as on the device, turning LEVEL unmutes the track
                 if t.mute { session.set(track: k, param: Param.mute, to: 0) }
                 session.set(track: k, param: Param.level, to: v)
             },
-            KnobSpec(index: 2, label: "STEPS", value: t.length, range: 1...64, stepperStep: 1,
+            KnobSpec(id: "home2", colour: Theme.knob[2], label: "STEPS", value: t.length, range: 1...64, stepperStep: 1,
                      shown: "\(t.length)", spoken: "\(t.length) steps", bipolar: false) { session.set(track: k, param: Param.length, to: $0) },
-            KnobSpec(index: 3, label: "PAN", value: t.pan, range: -64...63, stepperStep: 4,
+            KnobSpec(id: "home3", colour: Theme.knob[3], label: "PAN", value: t.pan, range: -64...63, stepperStep: 4,
                      shown: "\(t.pan)", spoken: t.pan == 0 ? "centre" : t.pan < 0 ? "\(-t.pan) left" : "\(t.pan) right",
                      bipolar: true) { session.set(track: k, param: Param.pan, to: $0) },
         ]
@@ -44,7 +47,7 @@ struct KnobSpec {
 /// A held knob: the grown ring sits at `center`, just above the knob and fully on screen (drawn by
 /// GrownKnobLayer over everything).
 struct KnobGrab: Equatable {
-    var index: Int
+    var id: String
     var center: CGPoint
 }
 
@@ -54,8 +57,8 @@ struct KnobRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ForEach(KnobSpec.all(session), id: \.index) { spec in
-                KnobControl(spec: spec, ui: ui)
+            ForEach(0..<4, id: \.self) { k in
+                KnobControl(ui: ui) { KnobSpec.all(session)[k] }
             }
         }
         .padding(.horizontal, 12)
@@ -71,9 +74,11 @@ struct KnobRow: View {
 /// far the finger goes round and never jumps to where it lands, so touching never changes a value.
 /// Works at any screen edge, which a vertical slide from the bottom row didn't. A quick tap without
 /// moving opens − / + keys (WCAG 2.2, 2.5.7: a way in without dragging).
-private struct KnobControl: View {
-    let spec: KnobSpec
+struct KnobControl: View {
     let ui: EditorUI
+    var size: CGFloat = 40
+    /// Builds the knob's description each time, so the grown ring shows live values.
+    let make: () -> KnobSpec
     @State private var startValue = 0
     @State private var turned = 0.0           // in value units since the grab
     @State private var lastAngle: Double?
@@ -85,14 +90,16 @@ private struct KnobControl: View {
     static let discRadius: CGFloat = 102      // the lifted disc around the ring
 
     var body: some View {
+        let spec = make()
         let turn = DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
             .updating($holding) { _, state, _ in state = true }
             .onChanged { drag in
-                if ui.knobGrab?.index != spec.index {
+                if ui.knobGrab?.id != spec.id {
                     let edge = Self.discRadius + 4
                     let c = CGPoint(x: min(max(drag.startLocation.x, edge), Theme.canvas.width - edge),
                                     y: min(max(drag.startLocation.y, edge), Theme.canvas.height - edge))
-                    ui.knobGrab = KnobGrab(index: spec.index, center: c)
+                    ui.knobGrab = KnobGrab(id: spec.id, center: c)
+                    ui.grabbedSpec = make
                     startValue = spec.value; turned = 0; lastAngle = nil; touchStart = drag.time
                 }
                 guard let c = ui.knobGrab?.center else { return }
@@ -118,11 +125,11 @@ private struct KnobControl: View {
                 }
             }
 
-        KnobDial(spec: spec, size: 40)
-            .opacity(ui.knobGrab?.index == spec.index ? 0.3 : 1)
+        KnobDial(spec: spec, size: size)
+            .opacity(ui.knobGrab?.id == spec.id ? 0.3 : 1)
             .contentShape(Rectangle())
             .gesture(turn)
-            .onChange(of: holding) { _, h in if !h, ui.knobGrab?.index == spec.index { ui.knobGrab = nil; lastAngle = nil } }
+            .onChange(of: holding) { _, h in if !h, ui.knobGrab?.id == spec.id { ui.knobGrab = nil; lastAngle = nil } }
             .popover(isPresented: $showKeys, arrowEdge: .top) {
                 VStack(spacing: 8) {
                     Text(spec.label).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
@@ -150,12 +157,13 @@ struct KnobDial: View {
 
     var body: some View {
         VStack(spacing: 3) {
-            Canvas { ctx, sz in drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 17, line: 4, cap: 11) }
+            let k = size / 40
+            Canvas { ctx, sz in drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 17 * k, line: 4 * k, cap: 11 * k) }
                 .frame(width: size, height: size)
-            Text(spec.label).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
-            Text(spec.shown).font(.system(size: 13, weight: .semibold))
+            Text(spec.label).font(.system(size: size > 40 ? 12 : 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            Text(spec.shown).font(.system(size: size > 40 ? 15 : 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
         }
-        .frame(width: 56)
+        .frame(width: size > 40 ? 88 : 56)
     }
 }
 
@@ -192,8 +200,8 @@ struct GrownKnobLayer: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            if let g = ui.knobGrab {
-                let spec = KnobSpec.all(session)[g.index]
+            if let g = ui.knobGrab, let make = ui.grabbedSpec {
+                let spec = make()
                 let r: CGFloat = 80
                 ZStack {
                     // a lifted disc: it is being held, so it is raised off the panel
@@ -222,7 +230,7 @@ struct GrownKnobLayer: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.knobGrab?.index)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.knobGrab?.id)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

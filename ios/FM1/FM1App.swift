@@ -55,6 +55,10 @@ final class EditorUI {
     var handPannedAt = Date.distantPast
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
+    @ObservationIgnored var grabbedSpec: (() -> KnobSpec)?
+    var soundFamily: SoundFamily = .fx
     var keyboardOpen = false
+    var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
+    var lastClear: SloopSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = .engine(0)
 }

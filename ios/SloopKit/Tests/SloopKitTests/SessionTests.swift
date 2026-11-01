@@ -95,11 +95,47 @@ import Testing
         try await Task.sleep(for: .milliseconds(1700))
         #expect(session.tracks[0].mute && fake.params[0][Param.mute] == 1)
 
+        session.setLength(track: 0, start: 8, steps: 3)               // stretch step 9's chord over 3 steps
+        #expect(session.tracks[0].steps[9].time == .tie && session.tracks[0].steps[10].time == .tie)
+        try await waitFor { fake.steps[0][10].time == .tie }
+        session.setLength(track: 0, start: 8, steps: 1)               // and back
+        try await waitFor { fake.steps[0][9].time == .rest && fake.steps[0][10].time == .rest }
+        session.setLength(track: 0, start: 8, steps: 20)              // stops before step 13's own notes
+        #expect(session.tracks[0].steps[11].time == .tie && session.tracks[0].steps[12].time == .note)
+        session.setLength(track: 0, start: 8, steps: 1)
+
+        let cleared = session.clearAll(track: 1)                       // clear all, then undo
+        #expect(session.tracks[1].steps.allSatisfy { $0 == .empty })
+        try await waitFor { fake.steps[1].allSatisfy { !$0.isOn } }
+        session.undo(cleared)
+        try await waitFor { fake.steps[1][0].notes == [36] }
+        #expect(session.tracks[1].steps[0].notes == [36])
+
         session.select(track: 3)                                      // the drum track: kits come from DESC
         try await waitFor { !session.kitNames.isEmpty }
         session.loadKit(6)
         try await waitFor { fake.params[3][63] == 6 }
         #expect(session.tracks[3].displayName == "Drums · 808")
+        run.cancel()
+    }
+
+    @Test func everyParameterAndFollowingTheKnobs() async throws {
+        let fake = FakeSloop(autoEdits: false)
+        var once = false
+        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor { if case .connected = session.status { true } else { false } }
+        #expect(session.trackDescs.count == 71 && session.globalDescs.count == 50)
+        #expect(session.trackDescs[Param.scale]?.names == Music.scales.map(\.name))
+        #expect(session.params.count == 71 && session.params[Param.length] == 32 && session.params[1] == 10)
+
+        fake.turnKnob(scope: 0, id: 34, to: 99)                       // CHO on the device
+        try await waitFor { session.params[34] == 99 }
+        #expect(session.lastTouched?.scope == 0 && session.lastTouched?.id == 34)
+        session.set(track: 0, param: 35, to: 80)                      // DLY from the iPad
+        try await waitFor { fake.params[0][35] == 80 }
+        #expect(session.params[35] == 80)
         run.cancel()
     }
 

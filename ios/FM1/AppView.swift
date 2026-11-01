@@ -19,6 +19,8 @@ struct AppView: View {
         }
         .padding(24)
         .overlay(alignment: .bottom) { keyboard }
+        .overlay(alignment: .bottom) { undoToast }
+        .overlay { trackMenuLayer }
         .overlay { GrownKnobLayer(session: session, ui: ui) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
@@ -54,14 +56,14 @@ extension AppView {
                     }
                 case .sound:
                     HStack(alignment: .top, spacing: 16) {
-                        leftColumn { EmptyView() }
-                        ComingLater(title: "Sound", detail: "Shaping the selected track's sound comes in pass 1, step 4.")
+                        leftColumn { FollowCard(session: session, ui: ui) }
+                        SoundTab(session: session, ui: ui)
                     }
                 }
             }
             .transition(.opacity)
             .id(ui.page)
-            Overview(session: session, expanded: ui.page == .sequencer)
+            Overview(session: session, ui: ui, expanded: ui.page == .sequencer)
         }
     }
 
@@ -73,6 +75,78 @@ extension AppView {
             Spacer(minLength: 0)
         }
         .frame(width: Overview.boxWidth)
+    }
+
+    /// A long-pressed track's menu, by the finger. A tap anywhere else closes it.
+    @ViewBuilder var trackMenuLayer: some View {
+        ZStack(alignment: .topLeading) {
+            if let m = ui.trackMenu {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture { ui.trackMenu = nil }
+                    .accessibilityHidden(true)
+                let empty = (0..<64).allSatisfy { !session.tracks[m.track].isOn($0) }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        TrackChip(track: m.track, size: 24)
+                        Text("Track \(m.track + 1)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    }
+                    Button {
+                        ui.lastClear = session.clearAll(track: m.track)
+                        ui.trackMenu = nil
+                    } label: {
+                        Label("Clear all steps", systemImage: "trash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(empty ? Theme.textTertiary : Color(hex: 0xFF6B6B))
+                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
+                            .raisedKey()
+                    }
+                    .buttonStyle(PressSink())
+                    .disabled(empty)
+                    .accessibilityHint(empty ? "The track has no steps" : "Clears all 64 steps; Undo appears for a few seconds")
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.45), radius: 18, y: 10))
+                // beside the finger (to its right, centred on it), kept on screen
+                .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 260), y: min(max(m.at.y - 50, 12), Theme.canvas.height - 120))
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                .accessibilityAddTraits(.isModal)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackMenu)
+    }
+
+    /// After Clear all: what happened and a way back, for 8 seconds.
+    @ViewBuilder var undoToast: some View {
+        ZStack {
+            if let c = ui.lastClear {
+                HStack(spacing: 16) {
+                    TrackChip(track: c.track)
+                    Text("Cleared track \(c.track + 1)").font(.system(size: 15, weight: .semibold))
+                    Button {
+                        session.undo(c)
+                        ui.lastClear = nil
+                    } label: {
+                        Text("Undo clear").fontWeight(.semibold).padding(.horizontal, 16).frame(height: 44).raisedKey()
+                    }
+                    .buttonStyle(PressSink())
+                }
+                .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.4), radius: 16, y: 8))
+                .padding(.bottom, 132)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                .task(id: c) {
+                    try? await Task.sleep(for: .seconds(8))
+                    if ui.lastClear == c { ui.lastClear = nil }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Cleared track \(c.track + 1)")
+            }
+        }
+        .animation(pageAnimation, value: ui.lastClear)
     }
 
     /// Matches the track strip's accordion, so the page and the strip move as one.

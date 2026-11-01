@@ -4,6 +4,7 @@ public enum Cmd {
     public static let info: UInt8 = 1
     public static let get: UInt8 = 2
     public static let set: UInt8 = 3
+    public static let dump: UInt8 = 4
     public static let desc: UInt8 = 5
     public static let preset: UInt8 = 8
     public static let names: UInt8 = 10
@@ -61,6 +62,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case preset(engine: Int, index: Int)       // loads onto the selected track; switches its engine if needed
     case userList(start: Int, count: Int)
     case userLoad(slot: Int)
+    case dump                                  // the selected track's parameters and every global
 
     public var cmd: UInt8 {
         switch self {
@@ -82,6 +84,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset: Cmd.preset
         case .userList: Cmd.userList
         case .userLoad: Cmd.userLoad
+        case .dump: Cmd.dump
         }
     }
 
@@ -105,6 +108,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset(let e, let i): [UInt8(e), UInt8(i)]
         case .userList(let s, let n): [UInt8(s), UInt8(n)]
         case .userLoad(let slot): [UInt8(slot)]
+        case .dump: []
         }
     }
 
@@ -130,6 +134,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset: true                     // the reply is the track's engine and preset after the load
         case .userList(let s, _): body.first == UInt8(s)
         case .userLoad(let slot): body.first == UInt8(slot)
+        case .dump: true
         }
     }
 
@@ -156,6 +161,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset: "PRESET"
         case .userList: "UP_LIST"
         case .userLoad: "UP_LOAD"
+        case .dump: "DUMP"
         }
     }
 }
@@ -407,6 +413,18 @@ public struct LiveState: Equatable, Sendable {
         cpu = try r.u8()
         for _ in 0..<5 { _ = try r.u8() }               // song entry, entries, bar, bars, sections stored
         tracks = try (0..<4).map { _ in TrackPosition(step: try r.u8(), length: try r.u8(), meter: try r.u8()) }
+    }
+}
+
+/// DUMP: engine, preset, then P_COUNT values (the selected track), then G_COUNT values (globals).
+public struct ParamDump: Equatable, Sendable {
+    public var engine: Int, preset: Int
+    public var track: [Int], globals: [Int]
+    public init(_ body: [UInt8], paramCount: Int, globalCount: Int) throws {
+        var r = ByteReader(body, cmd: Cmd.dump)
+        engine = try r.u8(); preset = try r.u8()
+        track = try (0..<paramCount).map { _ in try r.v14() }
+        globals = try (0..<globalCount).map { _ in try r.v14() }
     }
 }
 

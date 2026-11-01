@@ -28,17 +28,13 @@ struct DrumGrid: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(spacing: 0) {
                     ForEach(0..<16, id: \.self) { l in
-                        Text(Music.drumLanes[l])
-                            .font(.system(size: 13, weight: l == ui.selectedLane ? .semibold : .regular))
-                            .foregroundStyle(l == ui.selectedLane ? Theme.text : Theme.textSecondary)
-                            .padding(.trailing, 8)
-                            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
+                        AuditionLabel(text: Music.drumLanes[l], spoken: Music.drumLanes[l], bold: l == ui.selectedLane,
+                                      down: { session.keyDown(l) }, up: { session.keyUp(l) })
                     }
                 }
                 .offset(y: -offset.y)
                 .frame(width: 80, height: Self.gridSize.height, alignment: .top)
                 .clipped()
-                .accessibilityHidden(true)
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: Self.contentSize, offset: $offset, request: request) {

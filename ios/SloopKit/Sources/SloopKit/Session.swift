@@ -82,6 +82,18 @@ public final class SloopSession {
     public private(set) var userPresets: [UserPreset] = []
     /// The drum track's kits (DESC of P_E0 while it is selected; empty until then).
     public private(set) var kitNames: [String] = []
+
+    // Every parameter, for the Sound tab (step 4).
+    /// The selected track's P_* values (DUMP), kept current from CHANGED pushes and the iPad's writes.
+    public private(set) var params: [Int] = []
+    public private(set) var globals: [Int] = []
+    /// DESC of every parameter: label, range, format, enum names. The engine's P_E0..P_E7 are re-read
+    /// whenever the selected track or its engine changes.
+    public private(set) var trackDescs: [Int: ParamDesc] = [:]
+    public private(set) var globalDescs: [Int: ParamDesc] = [:]
+    /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
+    public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
+
     private var pendingSteps: Set<Int> = []        // track * 64 + index
     /// Steps and parameters the iPad wrote lately. SLOOP doesn't push about the editor's own writes,
     /// and a read already queued before a write would bring back the old value, so reads leave these
@@ -176,6 +188,23 @@ public final class SloopSession {
         try await readGlobals()
         for t in 0..<4 { try await readSteps(t) }
         try await readLibrary()
+        try await readSoundParams(descs: true)
+    }
+
+    private func readSoundParams(descs all: Bool) async throws {
+        guard let c = client, let i = info else { return }
+        if all {
+            for id in 0..<i.paramCount where id < i.firstEngineParam { trackDescs[id] = try await c.desc(scope: 0, id: id) }
+            for id in 0..<i.globalCount { globalDescs[id] = try await c.desc(scope: 1, id: id) }
+        }
+        for id in i.firstEngineParam..<i.paramCount { trackDescs[id] = try await c.desc(scope: 0, id: id) }
+        let d = try await c.dump(paramCount: i.paramCount, globalCount: i.globalCount)
+        let t = selectedTrack
+        for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
+        if params.count != i.paramCount { params = Array(repeating: 0, count: i.paramCount) }
+        for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") { params[id] = v }
+        if globals.count != i.globalCount { globals = Array(repeating: 0, count: i.globalCount) }
+        for (id, v) in d.globals.enumerated() where !recentlyWritten("g\(id)") { globals[id] = v; applyGlobal(id: id, value: v) }
     }
 
     private func readLibrary() async throws {
@@ -227,10 +256,14 @@ public final class SloopSession {
     private func presetNames(_ engine: Int) async throws -> [String] {
         if let n = namesCache[engine] { return n }
         guard let c = client else { return [] }
-        let n = try await c.names(engine: engine).names
-        namesCache[engine] = n
-        return n
+        let r = try await c.names(engine: engine)
+        namesCache[engine] = r.names
+        editPageTitles[engine] = r.pageTitles
+        return r.names
     }
+
+    /// Each engine's two edit-page titles (NAMES ends with them): what EDIT 1 and EDIT 2 are called.
+    public private(set) var editPageTitles: [Int: [String]] = [:]
 
     private func readParams(_ t: Int) async throws {
         guard let c = client else { return }
@@ -289,6 +322,7 @@ public final class SloopSession {
 
     private func apply(track t: Int, id: Int, value v: Int) {
         guard t < 4 else { return }
+        if t == selectedTrack, id < params.count { params[id] = v }
         if t == 3, id == info?.firstEngineParam {               // the drum track's kit
             tracks[3].preset = v
             if v < kitNames.count { tracks[3].presetName = kitNames[v] }
@@ -310,6 +344,7 @@ public final class SloopSession {
     }
 
     private func applyGlobal(id: Int, value v: Int) {
+        if id < globals.count { globals[id] = v }
         switch id {
         case Global.bpm: bpm = v
         case Global.swing: swing = v
@@ -333,12 +368,14 @@ public final class SloopSession {
                 selectedTrack = t
                 Task {
                     if t == 3, self.kitNames.isEmpty { try? await self.readKits() }
+                    try? await self.readSoundParams(descs: false)
                     try? await self.readTrackList()
                     try? await self.readParams(t)
                     try? await self.readSteps(t)
                 }
             case .changed(let scope, let id, let v):
                 if scope == 0 { apply(track: selectedTrack, id: id, value: v) } else { applyGlobal(id: id, value: v) }
+                lastTouched = (scope, id, Date())
             case .trackChanged(let t, let id, let v):
                 apply(track: t, id: id, value: v)
             }
@@ -451,6 +488,7 @@ public final class SloopSession {
         Task {
             _ = try? await c.selectTrack(t)
             if t == 3, self.kitNames.isEmpty { try? await self.readKits() }
+            try? await self.readSoundParams(descs: false)
         }
     }
 
@@ -509,6 +547,13 @@ public final class SloopSession {
         client?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
     }
 
+    /// A piano-roll row: that exact note, held while touched (drum lanes go through keyDown).
+    public func noteDown(_ note: Int) {
+        held[1000 + note] = note
+        client?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), 100])
+    }
+    public func noteUp(_ note: Int) { keyUp(1000 + note) }
+
     public func keyUp(_ key: Int) {
         guard let note = held.removeValue(forKey: key) else { return }
         client?.sendMIDI([0x80 | Self.keyboardChannel, UInt8(note & 0x7F), 0])
@@ -555,6 +600,25 @@ public final class SloopSession {
                 self.tracks[3].drumSteps[i] = stored
             } catch { self.stats.timeouts += 1 }
             self.recentWrites["s\(3 * 64 + i)"] = Date()
+        }
+    }
+
+    /// Sets how many steps the note on `start` lasts: the steps after it become TIEs (a tie holds the
+    /// whole step, every note of a chord), or go back to empty when it gets shorter. Stops before the
+    /// next step with notes of its own, so a drag never overwrites them.
+    public func setLength(track t: Int, start: Int, steps want: Int) {
+        guard t < 3, tracks[t].steps[start].time == .note else { return }
+        var limit = 1
+        while start + limit < 64, tracks[t].steps[start + limit].time != .note { limit += 1 }
+        let len = max(1, min(want, limit))
+        var cur = 1
+        while start + cur < 64, tracks[t].steps[start + cur].time == .tie { cur += 1 }
+        guard len != cur else { return }
+        let tie = SynthStep(notes: [], time: .tie, accent: false, slide: false, velocity: tracks[t].steps[start].velocity)
+        if len > cur {
+            for i in (start + cur)..<(start + len) { write(track: t, index: i, tie) }
+        } else {
+            for i in (start + len)..<(start + cur) { write(track: t, index: i, .empty) }
         }
     }
 
@@ -628,6 +692,35 @@ public final class SloopSession {
         tracks[t].presetName = p.name
         guard let c = client else { return }
         Task { _ = try? await c.userLoad(slot: p.slot) }
+    }
+
+    /// What a clear took away, so the iPad can put it back (SLOOP's own undo covers device edits only).
+    public struct ClearedTrack: Equatable, Sendable {
+        public let track: Int
+        let steps: [SynthStep]
+        let drumSteps: [DrumStep]
+    }
+
+    /// Empties all 64 steps of a track (only the ones not already empty are written).
+    @discardableResult
+    public func clearAll(track t: Int) -> ClearedTrack {
+        let before = ClearedTrack(track: t, steps: tracks[t].steps, drumSteps: tracks[t].drumSteps)
+        for i in 0..<64 {
+            if t == 3 { if tracks[3].drumSteps[i] != .empty { write(drumIndex: i, .empty) } }
+            else if tracks[t].steps[i] != .empty { write(track: t, index: i, .empty) }
+        }
+        return before
+    }
+
+    /// Writes back whatever a clear took away (steps edited since are left as they are now).
+    public func undo(_ c: ClearedTrack) {
+        for i in 0..<64 {
+            if c.track == 3 {
+                if tracks[3].drumSteps[i] == .empty, c.drumSteps[i] != .empty { write(drumIndex: i, c.drumSteps[i]) }
+            } else if tracks[c.track].steps[i] == .empty, c.steps[i] != .empty {
+                write(track: c.track, index: i, c.steps[i])
+            }
+        }
     }
 
     public func toggleMute(track t: Int) {

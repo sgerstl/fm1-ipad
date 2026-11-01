@@ -22,6 +22,48 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                               "DIGITAL": ["RHODES", "DX RHODES", "WURLI", "CLAV", "M1 PIANO", "GLASS PAD"],
                               "SAMPLE": ["LOFI KEYS", "TAPE STR", "CHOIR"]]
 
+    var globals = Array(repeating: 0, count: 50)
+
+    /// A rough stand-in for SLOOP's parameter table (firmware params.c), enough to draw the Sound tab.
+    static func trackDesc(_ id: Int) -> (label: String, fmt: Int, min: Int, max: Int, unit: String, names: [String]) {
+        let labels = ["LVL", "ATK", "DEC", "SUS", "REL", "FLT", "PIT", "SHP", "TRIM", "RATE", "WAVE", "PHS", "FADE", "PIT", "FLT", "SHP",
+                      "AMP", "MODE", "RATE", "OCT", "GATE", "SWG", "PROB", "HOLD", "ORD", "ROOT", "SCL", "QNT", "TRN", "LEN", "DIV",
+                      "SWG", "GATE", "DST", "CHO", "DLY", "REV", "VCE", "GLD", "PAN", "MUTE", "GLMOD", "PRIO", "ALLOC", "DTUNE",
+                      "SLCR", "PAT", "RATE", "DEPTH", "CHORD", "FILT", "STRUM", "VLEAD", "INSRT", "INS A", "INS B", "INS C", "MIX",
+                      "TYPE", "ESYNC", "SYNC", "TRIG", "POL"]
+        let enums: [Int: [String]] = [10: ["SINE", "TRI", "SAW", "SQR", "S&H"], 17: ["OFF", "UP", "DOWN", "UPDN", "RAND"],
+                                      23: ["OFF", "ON"], 26: Music.scales.map(\.name), 27: ["OFF", "SNAP", "WHITE"],
+                                      30: Music.divisionNames, 37: ["POLY", "MONO", "LEGATO", "UNISON"], 40: ["OFF", "ON"],
+                                      49: ["OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER"], 52: ["OFF", "ON"], 59: ["OFF", "ON"]]
+        if id >= 63 { return ("E\(id - 62)", 1, 0, 127, "", []) }
+        let label = id < labels.count ? labels[id] : "P\(id)"
+        if let n = enums[id] { return (label, 8, 0, n.count - 1, "", n) }
+        switch id {
+        case 5, 6, 7, 13, 14, 15, 39: return (label, 2, -64, 63, "", [])
+        case 8: return (label, 0, -64, 63, "", [])
+        case 25: return (label, 10, 0, 11, "", [])
+        case 28: return (label, 7, -24, 24, "", [])
+        case 29: return (label, 13, 1, 64, "", [])
+        case 19: return (label, 0, 1, 4, "", [])
+        case 21, 31: return (label, 14, 0, 100, "", [])
+        case 50: return (label, 15, -64, 63, "", [])
+        default: return (label, 1, 0, 127, "", [])
+        }
+    }
+
+    static func globalDesc(_ id: Int) -> (label: String, fmt: Int, min: Int, max: Int, unit: String, names: [String]) {
+        switch id {
+        case 0: return ("BPM", 9, 40, 240, "", [])
+        case 1: return ("SWING", 14, 0, 100, "", [])
+        case 3: return ("TUNE", 0, -50, 50, "", [])
+        case 29: return ("FILT", 15, -64, 63, "", [])
+        default:
+            let labels = [4: "TIME", 5: "FDBK", 6: "COLR", 7: "MIX", 8: "SIZE", 9: "DAMP", 10: "CRT", 11: "CDP", 25: "LVL", 26: "REV",
+                          27: "DUST", 28: "DUCK", 32: "DLY", 38: "LEVEL", 39: "TONE", 40: "MOVE"]
+            return (labels[id] ?? "G\(id)", 1, 0, 127, "", [])
+        }
+    }
+
     static let kits = ["ORIGINAL", "TIGHT", "BOOM", "LOFI", "DUST", "GM KIT", "808", "909", "TAPE", "SYN1"]
     var userPresets: [Int: (engine: Int, name: String)] = [0: (1, "MY RHODES"), 1: (0, "WIDE BASS"), 4: (4, "TAPE CHOIR")]
     var selected = 0
@@ -53,6 +95,10 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             params[t][Param.level] = [100, 90, 84, 0][t]
             params[t][Param.root] = 0; params[t][Param.scale] = 2
             params[t][Param.length] = 32; params[t][Param.division] = 2
+            for (id, v) in [(1, 10), (2, 70), (3, 90), (4, 60), (9, 60), (20, 64), (22, 127), (32, 64), (34, 24), (35, 40), (36, 52)] {
+                params[t][id] = v
+            }
+            for id in 63..<71 { params[t][id] = 64 }
         }
         let chords: [(Int, [Int], Int)] = [(0, [63, 67, 70], 4), (6, [63, 67, 70], 1), (8, [70, 72, 75, 79], 1),
                                            (12, [70, 72, 75, 79], 1), (15, [63, 67, 70], 1), (18, [67, 70, 74, 77], 1),
@@ -184,7 +230,18 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                 var b: [UInt8] = [0, 63, 8] + Frame.v14(0) + Frame.v14(Self.kits.count - 1) + Frame.v14(0) + Array("KIT".utf8) + [0, 0]
                 for k in Self.kits { b += Array(k.utf8) + [0] }
                 emit(cmd, b)
+            } else {
+                let d = scope == 0 ? Self.trackDesc(id) : Self.globalDesc(id)
+                var b: [UInt8] = [scope, UInt8(id), UInt8(d.fmt)] + Frame.v14(d.min) + Frame.v14(d.max) + Frame.v14(d.min)
+                b += Array(d.label.utf8) + [0] + Array(d.unit.utf8) + [0]
+                for n in d.names { b += Array(n.utf8) + [0] }
+                emit(cmd, b)
             }
+        case Cmd.dump:
+            var b: [UInt8] = [UInt8(engine[selected] % 13), UInt8(preset[selected])]
+            for id in 0..<71 { b += Frame.v14(params[selected][id]) }
+            for id in 0..<50 { b += Frame.v14(id == Global.bpm ? bpm : id == Global.swing ? swing : id == Global.drumLevel ? drumLevel : globals[id]) }
+            emit(cmd, b)
         case Cmd.watch:
             watching = a.first ?? 0 != 0
             emit(cmd, [a.first ?? 0])
@@ -209,8 +266,23 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         }
     }
 
+    /// A knob turned "on the device": the value changes, then CHANGED is pushed while watched.
+    public func turnKnob(scope: Int, id: Int, to v: Int) {
+        queue.async { [self] in
+            if scope == 0 { params[selected][id] = v } else if id == Global.swing { swing = v } else { globals[id] = v }
+            if watching { emit(Cmd.changed, [UInt8(scope), UInt8(id)] + Frame.v14(v)) }
+        }
+    }
+
     private func randomEdit() {
         guard autoEdits, watching else { return }
+        if Int.random(in: 0..<3) == 0 {              // now and then a knob turned "on the device" (CHANGED)
+            let id = [1, 4, 9, 33, 34, 35, 36, 39].randomElement()!
+            let v = id == 39 ? Int.random(in: -40...40) : Int.random(in: 10...120)
+            params[selected][id] = v
+            emit(Cmd.changed, [0, UInt8(id)] + Frame.v14(v))
+            return
+        }
         if switchesTracks, Int.random(in: 0..<6) == 0 {
             selected = (selected + 1) % 4
             emit(Cmd.reload, [UInt8(engine[selected] % 13), UInt8(preset[selected]), UInt8(selected)])
