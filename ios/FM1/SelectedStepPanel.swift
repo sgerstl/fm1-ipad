@@ -10,30 +10,36 @@ struct SelectedStepPanel: View {
     var body: some View {
         let t = session.selectedTrack
         let i = ui.selectedStep[t]
-        HStack(spacing: 24) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Selected").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                Text("Step \(i + 1)").font(.system(size: 22, weight: .semibold))
+        // two rows, beside the track box: the step's notes and timing, then its feel and the knobs
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .bottom, spacing: 24) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Selected").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Step \(i + 1)").font(.system(size: 22, weight: .semibold))
+                }
+                .frame(width: 96, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                if t == 3 { drumDetails(session.tracks[3].drumSteps[i], part: 0) } else { synthDetails(session.tracks[t].steps[i], track: t, part: 0) }
+                Spacer(minLength: 0)
             }
-            .frame(width: 96, alignment: .leading)
-            .accessibilityElement(children: .combine)
-
-            if t == 3 { drumDetails(session.tracks[3].drumSteps[i]) } else { synthDetails(session.tracks[t].steps[i], track: t) }
-
-            Spacer(minLength: 0)
-            KnobRow(session: session, ui: ui)
+            HStack(alignment: .bottom, spacing: 24) {
+                if t == 3 { drumDetails(session.tracks[3].drumSteps[i], part: 1) } else { synthDetails(session.tracks[t].steps[i], track: t, part: 1) }
+                Spacer(minLength: 0)
+                KnobRow(session: session, ui: ui)
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 8)       // the page's height budget leaves this panel 104 pt; the knob tray needs about 86
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .panel()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Selected step")
     }
 
-    @ViewBuilder private func synthDetails(_ s: SynthStep, track: Int) -> some View {
+    @ViewBuilder private func synthDetails(_ s: SynthStep, track: Int, part: Int) -> some View {
         let i = ui.selectedStep[track]
         let on = s.isOn
+        if part == 0 {
         // Notes are read here and added or removed in the grid, so they stay read-outs.
         field("Notes") {
             HStack(spacing: 6) {
@@ -60,6 +66,7 @@ struct SelectedStepPanel: View {
                 session.write(track: track, index: i, st)
             }
         }
+        } else {
         field("Feel") {
             HStack(spacing: 8) {
                 ToggleKey(name: "Accent", on: s.accent && on, enabled: on) {
@@ -70,12 +77,14 @@ struct SelectedStepPanel: View {
                 }
             }
         }
+        }
     }
 
-    @ViewBuilder private func drumDetails(_ s: DrumStep) -> some View {
+    @ViewBuilder private func drumDetails(_ s: DrumStep, part: Int) -> some View {
         let lane = ui.selectedLane
         let i = ui.selectedStep[3]
         let has = s.has(lane)
+        if part == 0 {
         field("Hits") {
             HStack(spacing: 6) {
                 if s.lanes.isEmpty { readout("Tap the grid", dim: true) }
@@ -99,11 +108,13 @@ struct SelectedStepPanel: View {
                 session.write(drumIndex: i, s.setting(lane, on: true, level: k, ratchet: s.ratchet(lane)))
             }
         }
+        } else {
         field("\(Music.drumLanes[lane]) ratchet") {
             SegmentedKeys(label: "\(Music.drumLanes[lane]) ratchet", options: ["×1", "×2", "×3", "×4"], selected: has ? s.ratchet(lane) : -1,
                           enabled: Array(repeating: has, count: 4), minWidth: 36) { k in
                 session.write(drumIndex: i, s.setting(lane, on: true, level: s.level(lane), ratchet: k))
             }
+        }
         }
     }
 

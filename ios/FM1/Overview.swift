@@ -1,11 +1,11 @@
 import SloopKit
 import SwiftUI
 
-/// The track selector: one component on every tab, in one place. Its box of chips and names never
+/// The track selector: one component on every page, in one place. Its box of chips and names never
 /// changes (top left, the left column's width, 44 pt rows). The timeline, each track's 64 steps, is
-/// attached to its right and accordions open on the Sequencer and shut elsewhere. Only the visible
-/// width animates; the rows keep their full layout, so nothing reflows mid-animation. A tap selects
-/// the track on the FM-1, so the selection is the device's and carries across tabs by itself.
+/// attached to its right, shut unless pulled open with the handle on the box's edge (drag, or tap);
+/// open, it slides over whatever is beside the box. Only the visible width moves; the rows keep their
+/// full layout, so nothing reflows. A tap on a row selects the track on the FM-1.
 struct Overview: View {
     let session: SloopSession
     let ui: EditorUI
@@ -22,9 +22,15 @@ struct Overview: View {
     static let cell = CGSize(width: (timelineWidth - 6 - 63 * gap) / 64, height: 20)
     static var rowWidth: CGFloat { fullWidth - 8 }
     @State private var pressAt = CGPoint.zero
+    @State private var dragX: CGFloat = 0          // the handle's drag, following the finger
+
+    private var visible: CGFloat {
+        min(max((expanded ? Self.fullWidth : Self.boxWidth) + dragX, Self.boxWidth), Self.fullWidth)
+    }
+    /// 0 shut … 1 open: the timeline fades in as it slides out.
+    private var progress: CGFloat { (visible - Self.boxWidth) / (Self.fullWidth - Self.boxWidth) }
 
     var body: some View {
-        let visible = expanded ? Self.fullWidth : Self.boxWidth
         VStack(spacing: 4) {
             ForEach(0..<4, id: \.self) { t in row(t) }
         }
@@ -34,10 +40,44 @@ struct Overview: View {
         .padding(.horizontal, 4)
         .frame(width: visible, height: Self.height, alignment: .leading)
         .panel()
+        .overlay(alignment: .trailing) { handle }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: expanded)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tracks")
+    }
+
+    /// The pull on the box's right edge, in the gap beside it: drag it out to open the timeline,
+    /// back to shut it; a tap toggles.
+    private var handle: some View {
+        // measured on the screen, not on the handle: the handle moves with the panel as it opens
+        let drag = DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { dragX = $0.translation.width }
+            .onEnded { v in
+                // a pull of 80 pt, or a flick, either way is enough
+                let dx = max(v.translation.width, v.predictedEndTranslation.width * 0.5)
+                let dxClose = min(v.translation.width, v.predictedEndTranslation.width * 0.5)
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                    ui.timelineOpen = expanded ? dxClose > -80 : dx > 80
+                    dragX = 0
+                }
+            }
+        let tap = TapGesture().onEnded {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { ui.timelineOpen.toggle() }
+        }
+        return VStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { _ in Capsule().fill(Theme.textSecondary).frame(width: 2, height: 14) }
+        }
+        .frame(width: 10, height: 48)
+        .background(Capsule().fill(Theme.raisedTop).shadow(color: .black.opacity(0.5), radius: 2, y: 1))
+        .frame(width: 32, height: 72)                  // a 32 × 72 pt target around the 10 pt pull
+        .contentShape(Rectangle())
+        .offset(x: 16)
+        .gesture(drag.exclusively(before: tap))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(expanded ? "Hide the timeline" : "Show the timeline")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { ui.timelineOpen.toggle() }
     }
 
     private func row(_ t: Int) -> some View {
@@ -95,12 +135,12 @@ struct Overview: View {
                 .padding(.leading, 4)
                 ZStack(alignment: .leading) {
                     Canvas { ctx, _ in draw(ctx, track) }
-                    OverviewPlayhead(session: session, track: t, running: expanded)
+                    OverviewPlayhead(session: session, track: t, running: progress > 0)
                 }
                 .frame(width: Self.timelineWidth - 6, height: Self.cell.height)
                 .padding(3)
                 .recessed(5)
-                .opacity(expanded ? (track.mute ? 0.45 : 1) : 0)
+                .opacity(Double(progress) * (track.mute ? 0.45 : 1))
             }
             .frame(width: Self.rowWidth - 44, height: Self.rowHeight, alignment: .leading)
             // collapsed, the hidden timeline catches no taps (clipping alone doesn't stop hit-testing)

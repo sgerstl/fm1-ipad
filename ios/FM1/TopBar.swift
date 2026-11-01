@@ -74,6 +74,8 @@ struct TopBar: View {
 
     // MARK: Tabs: tap only (two fingers pan the grid on this page)
 
+    // MARK: Tabs (three raised keys were tried 2026-11-01 and didn't work: back to the tabs)
+
     private var tabs: some View {
         HStack(spacing: 4) {
             ForEach(Page.allCases) { p in

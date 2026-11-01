@@ -8,15 +8,15 @@ struct DrumGrid: View {
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<DrumGridContent>.ScrollRequest?
 
-    /// 448 = the piano roll's grid, gap and velocity lane (414 + 8 + 50) less the lane hint and its gap
-    static let gridSize = CGSize(width: 1216, height: 448)
+    /// 568 = the piano roll's grid, gap and velocity lane (534 + 8 + 50) less the lane hint and its gap
+    static let gridSize = CGSize(width: 1216, height: 568)
     static let contentSize = CGSize(width: 64 * Theme.stepWidth, height: 16 * Theme.rowHeight)
 
     var body: some View {
         let t = session.tracks[3]
         let first = Int((offset.x / Theme.stepWidth).rounded()) + 1
         let topLane = Int((offset.y / Theme.rowHeight).rounded())
-        let below = max(0, 16 - topLane - 9)       // 9 whole lanes in view
+        let below = max(0, 16 - topLane - 12)      // 12 whole lanes in view
 
         VStack(spacing: 8) {
             EditorHeader(track: 3, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,

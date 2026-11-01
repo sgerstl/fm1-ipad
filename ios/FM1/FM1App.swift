@@ -60,6 +60,8 @@ final class EditorUI {
     var keyboardOpen = false
     /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there.
     var followDevice = true
+    /// The track box's timeline, pulled open with its handle; shut again on a page change.
+    var timelineOpen = false
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
     var lastClear: SloopSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = .engine(0)

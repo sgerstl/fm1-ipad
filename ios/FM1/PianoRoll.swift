@@ -9,9 +9,9 @@ struct PianoRoll: View {
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<PianoRollContent>.ScrollRequest?
 
-    static let gridSize = CGSize(width: 1216, height: 414)    // 9 note rows (the strip above took the 10th)
+    static let gridSize = CGSize(width: 1216, height: 534)    // 11 note rows and a bit (the step panel moved up)
     /// Both editors are this tall, so switching to the drum track moves nothing below them.
-    static let panelHeight: CGFloat = 564
+    static let panelHeight: CGFloat = 684
     static let velocityHeight: CGFloat = 50
     static func rows(_ n: Int) -> String { n == 1 ? "1 row" : "\(n) rows" }
 
@@ -21,7 +21,7 @@ struct PianoRoll: View {
         let contentSize = CGSize(width: 64 * Theme.stepWidth, height: max(Self.gridSize.height, CGFloat(rows.count) * Theme.rowHeight))
         let first = Int((offset.x / Theme.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / Theme.rowHeight).rounded())
-        let hidden = (above: topRow, below: max(0, rows.count - topRow - 9))
+        let hidden = (above: topRow, below: max(0, rows.count - topRow - 11))
         let rowsNote = hidden.below > 0 ? " · \(Self.rows(hidden.below)) below" : hidden.above > 0 ? " · \(Self.rows(hidden.above)) above" : ""
         let scaleName = t.scale == 0 ? "chromatic, folded to the notes used" : "\(Music.noteNames[t.root % 12]) \(Music.scales[min(t.scale, 15)].spoken)"
 
@@ -91,7 +91,7 @@ struct PianoRoll: View {
     static func rows(_ t: TrackState, keeping kept: Set<Int> = []) -> [Int] {
         var used = Set<Int>()
         for s in t.steps where s.time == .note { used.formUnion(s.notes) }
-        let folded = Music.foldedRows(used: used, root: t.root, scale: t.scale, minRows: 9)
+        let folded = Music.foldedRows(used: used, root: t.root, scale: t.scale, minRows: 11)
         return Set(folded).union(kept).sorted(by: >)
     }
 }
@@ -272,7 +272,7 @@ struct PianoRollContent: View {
         for b in stride(from: 1, to: 16, by: 2) {
             ctx.fill(Path(CGRect(x: CGFloat(b * 4) * w, y: 0, width: 4 * w, height: size.height)), with: .color(.white.opacity(0.025)))
         }
-        for r in 1..<max(rows.count, 9) {
+        for r in 1..<max(rows.count, 12) {
             ctx.fill(Path(CGRect(x: 0, y: CGFloat(r) * h, width: size.width, height: 1)), with: .color(.black.opacity(0.45)))
         }
         for bar in stride(from: 16, to: 64, by: 16) {

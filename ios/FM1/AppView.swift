@@ -42,10 +42,7 @@ extension AppView {
             // The Sequencer stays alive underneath and only fades, so coming back to it never rebuilds
             // its scroll views mid-animation; its playheads pause while it's hidden.
             let onSequencer = ui.page == .sequencer
-            VStack(spacing: 16) {
-                Color.clear.frame(height: Overview.height)
-                SequencerPage(session: session, ui: ui)
-            }
+            SequencerPage(session: session, ui: ui)
             .opacity(onSequencer ? 1 : 0)
             .allowsHitTesting(onSequencer)
             .accessibilityHidden(!onSequencer)
@@ -74,8 +71,9 @@ extension AppView {
             }
             .transition(.opacity)
             .id(ui.page)
-            Overview(session: session, ui: ui, expanded: ui.page == .sequencer)
+            Overview(session: session, ui: ui, expanded: ui.timelineOpen)
         }
+        .onChange(of: ui.page) { _, _ in ui.timelineOpen = false }
     }
 
     /// The left column under the track box.
@@ -189,12 +187,17 @@ struct SequencerPage: View {
     var body: some View {
         let t = session.selectedTrack
         VStack(spacing: 16) {
+            // beside the track box: the selected step and the knobs (the timeline opens over them)
+            HStack(alignment: .top, spacing: 16) {
+                Color.clear.frame(width: Overview.boxWidth, height: Overview.height)
+                SelectedStepPanel(session: session, ui: ui)
+                    .frame(height: Overview.height)
+            }
             if t == 3 {
                 DrumGrid(session: session, ui: ui)
             } else {
                 PianoRoll(session: session, ui: ui, track: t)
             }
-            SelectedStepPanel(session: session, ui: ui)
         }
     }
 }

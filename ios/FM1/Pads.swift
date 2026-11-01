@@ -6,6 +6,18 @@ import SwiftUI
 /// pages and, pressed again, steps to the next one; HOME is the sequencer, SAVE the library. With the
 /// screen link the FM-1's screen moves with them. The active pad sinks and its label lights, as the
 /// FM-1 lights the active button.
+/// A rubber pad, as the keyboard's keys: raised; pressed in when it is the active one.
+struct PadSurface: View {
+    var pressed: Bool
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(pressed ? Color(hex: 0x1C1D20) : Color(hex: 0x26272B))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.black.opacity(pressed ? 0.6 : 0.45), lineWidth: 6).blur(radius: 5)
+                .clipShape(RoundedRectangle(cornerRadius: 10)))
+            .shadow(color: .black.opacity(pressed ? 0.2 : 0.55), radius: pressed ? 1 : 4, y: pressed ? 0 : 3)
+    }
+}
+
 struct FunctionPads: View {
     let session: SloopSession
     let ui: EditorUI
@@ -53,14 +65,7 @@ struct FunctionPads: View {
                 .foregroundStyle(on ? Theme.text : usable ? Theme.textSecondary : Theme.textTertiary)
                 .shadow(color: on ? Theme.text.opacity(0.8) : .clear, radius: 5)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background {
-                    // rubber, as the keyboard's keys: raised; the active one pressed in
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(on ? Color(hex: 0x1C1D20) : Color(hex: 0x26272B))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.black.opacity(on ? 0.6 : 0.45), lineWidth: 6).blur(radius: 5)
-                            .clipShape(RoundedRectangle(cornerRadius: 10)))
-                        .shadow(color: .black.opacity(on ? 0.2 : 0.55), radius: on ? 1 : 4, y: on ? 0 : 3)
-                }
+                .background { PadSurface(pressed: on) }
                 .overlay(alignment: .topTrailing) {
                     if pad == .rec { LED(on: session.recording, colour: Theme.knob[3]).padding(6) }
                 }
