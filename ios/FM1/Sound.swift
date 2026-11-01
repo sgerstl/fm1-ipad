@@ -69,6 +69,21 @@ struct SoundPage: Identifiable {
 
     static func page(fw: Int) -> SoundPage? { all.first { $0.fw == fw } }
 
+    /// SLOOP's pages the app shows outside the Sound tab (params.c PAGES): TRACKS is HOME in SLOOP's
+    /// song build; NOTES, SONG and the drum screen are the sequencer's; SAVE's pages are the library's.
+    static let sequencerPages: Set<Int> = [34, 36, 37, 38]
+    static let libraryPages: Set<Int> = [28, 29, 30, 31]
+    static let home = 37, presets = 28
+
+    /// The tab that shows what the FM-1's screen shows, if any.
+    static func tab(for s: UIState) -> Page? {
+        if s.menu != 0 { return nil }
+        if s.layer == 5 { return .sound }                              // SEL held: its key layer
+        if s.home || sequencerPages.contains(s.page) { return .sequencer }
+        if libraryPages.contains(s.page) { return .library }
+        return page(fw: s.page) != nil ? .sound : nil
+    }
+
     /// The page a parameter is on, the first one when it appears on several (as MIDI's channels do).
     static func page(scope: Int, id: Int) -> SoundPage? {
         all.first { $0.scope == scope && $0.ids.contains(id) && !$0.analogOnly }
@@ -134,58 +149,27 @@ struct SoundTab: View {
     @State private var marked: String?          // the knob last turned on the FM-1, marked for a moment
 
     var body: some View {
-        let drums = session.selectedTrack == 3
         let pages = SoundPage.shown(session, ui.soundFamily)
         VStack(alignment: .leading, spacing: 16) {
-            familyBar(drums)
+            // the button is chosen on the pads in the left column, as on the FM-1
             ScrollView {
                 if ui.soundFamily == .sel { KeyMapStrip(session: session) }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
-                    ForEach(pages) { p in pagePanel(p) }
+                    ForEach(pages) { p in pagePanel(p, of: pages) }
                 }
                 .padding(.bottom, 8)
             }
             .scrollIndicators(.hidden)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)   // the page area fills its column
         .onChange(of: session.lastTouched?.at) { _, _ in follow() }
         .onChange(of: session.deviceScreen) { _, s in followScreen(s) }
-    }
-
-    // MARK: The FM-1's function buttons
-
-    private func familyBar(_ drums: Bool) -> some View {
-        HStack(spacing: 4) {
-            ForEach(SoundFamily.allCases) { f in
-                let on = ui.soundFamily == f
-                let has = !SoundPage.shown(session, f).isEmpty
-                Button {
-                    ui.soundFamily = f
-                    // linked: the FM-1 opens the same button's first page
-                    if session.screenLinked, let first = SoundPage.shown(session, f).first { session.showOnDevice(page: first.fw) }
-                } label: {
-                    Text(f.rawValue)
-                        .font(.system(size: 15, weight: on ? .semibold : .regular))
-                        .foregroundStyle(on ? Theme.text : has ? Theme.textSecondary : Theme.textTertiary)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background { if on { Color.clear.raisedKey() } }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-                .disabled(!has)
-                .accessibilityLabel(f.rawValue)
-                .accessibilityAddTraits(on ? .isSelected : [])
-                .accessibilityHint(has ? "" : "The drum track has no \(f.rawValue) pages")
-            }
-        }
-        .padding(4)
-        .recessed(12)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("FM-1 buttons")
+        .onAppear { followScreen(session.deviceScreen) }     // opened by the FM-1: start on its button
     }
 
     // MARK: A page: its four knobs, as on the FM-1
 
-    private func pagePanel(_ p: SoundPage) -> some View {
+    private func pagePanel(_ p: SoundPage, of pages: [SoundPage]) -> some View {
         let touchedHere = marked != nil && p.ids.contains { id in id.map { "s\(p.scope).\($0)" } == marked }
         // linked (fm1-ipad firmware): the light is the FM-1's own page; otherwise the knob just turned
         let onDevice = session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == p.fw } == true
@@ -193,6 +177,14 @@ struct SoundTab: View {
             HStack(spacing: 8) {
                 LED(on: session.screenLinked ? onDevice : touchedHere)
                 Text(p.title(session)).font(.system(size: 15, weight: .semibold))
+                if onDevice, let k = pages.firstIndex(where: { $0.fw == p.fw }) {
+                    // the page the FM-1 shows, counted as its screen counts them ("FX 1/7")
+                    Text("On the FM-1 · \(k + 1)/\(pages.count)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(.white.opacity(0.10)))
+                        .transition(.opacity)
+                }
                 if p.scope == 1 {
                     Text("all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
@@ -219,6 +211,20 @@ struct SoundTab: View {
         }
         .padding(16)
         .panel()
+        // the page on the FM-1's screen: a lit edge along the top, the playhead's light
+        .overlay(alignment: .top) {
+            if onDevice {
+                RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
+                    .frame(height: 3)
+                    .padding(.horizontal, 14)
+                    .offset(y: 1)                    // on the panel's top edge
+                    .shadow(color: Theme.text.opacity(0.7), radius: 6)
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: onDevice)
+        .accessibilityValue(onDevice ? "on the FM-1" : "")
         .contentShape(Rectangle())
         // tap a page (outside its knobs) to show it on the FM-1
         .onTapGesture { if session.screenLinked { session.showOnDevice(page: p.fw) } }
@@ -239,7 +245,8 @@ struct SoundTab: View {
     /// A knob turned on the FM-1: show its button's pages and mark it for a few seconds.
     private func follow() {
         guard let t = session.lastTouched, let page = SoundPage.page(scope: t.scope, id: t.id) else { return }
-        if SoundPage.shown(session, page.family).contains(where: { $0.id == page.id }) {
+        // with the screen link the FM-1's page decides the button; a knob turn only marks its knob
+        if !session.screenLinked, SoundPage.shown(session, page.family).contains(where: { $0.id == page.id }) {
             ui.soundFamily = page.family
         }
         let key = "s\(t.scope).\(t.id)"

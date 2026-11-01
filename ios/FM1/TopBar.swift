@@ -25,6 +25,9 @@ struct TopBar: View {
                 Text("FM-1 over USB").tag(false)
                 Text("Demo FM-1 (no device)").tag(true)
             }
+            if session.screenLinked {
+                Toggle("Follow the FM-1's screen", isOn: Binding(get: { ui.followDevice }, set: { ui.followDevice = $0 }))
+            }
             if isConnected {
                 // Diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?
                 let s = session.stats
@@ -75,7 +78,10 @@ struct TopBar: View {
         HStack(spacing: 4) {
             ForEach(Page.allCases) { p in
                 let current = ui.page == p
-                Button { ui.page = p } label: {
+                Button {
+                    ui.page = p
+                    driveDevice(to: p)
+                } label: {
                     Text(p.rawValue)
                         .fontWeight(current ? .semibold : .regular)
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
@@ -92,6 +98,19 @@ struct TopBar: View {
         .recessed(12)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pages")
+    }
+
+    /// A tab tapped on the iPad: the FM-1's screen goes to the same place (HOME, the preset browser,
+    /// or the Sound tab's button), when linked and following.
+    private func driveDevice(to p: Page) {
+        guard session.screenLinked, ui.followDevice else { return }
+        if let s = session.deviceScreen, SoundPage.tab(for: s) == p { return }    // already there
+        switch p {
+        case .sequencer: session.showOnDevice(page: SoundPage.home)
+        case .library: session.showOnDevice(page: SoundPage.presets)
+        case .sound:
+            if let first = SoundPage.shown(session, ui.soundFamily).first { session.showOnDevice(page: first.fw) }
+        }
     }
 
     // MARK: Position, tempo, play / stop

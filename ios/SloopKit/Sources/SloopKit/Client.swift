@@ -134,6 +134,8 @@ public extension SloopClient {
     func ping() async throws { _ = try await send(.ping) }
     func live() async throws -> LiveState { try LiveState(await send(.live, timeout: .milliseconds(150), retries: 0)) }
     func transport(play: Bool) async throws -> LiveState { try LiveState(await send(.transport(play: play))) }
+    /// REC, as the FM-1's button: arms, records, or stops recording. Sent once (it toggles).
+    func rec() async throws -> LiveState { try LiveState(await send(.rec, retries: 0)) }
     /// Writes return the value as the device stored it (clamped, levels of off lanes cleared).
     func setSynthStep(track: Int, index: Int, _ step: SynthStep) async throws -> SynthStep {
         try TrackStepReply(await send(.setTrackStep(track: track, index: index, step))).step

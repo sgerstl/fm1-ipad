@@ -58,6 +58,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case ping
     case live
     case transport(play: Bool)                 // LIVE op 1
+    case rec                                   // LIVE op 4: REC, as the FM-1's REC button
     case setTrackStep(track: Int, index: Int, SynthStep)
     case setDrumStep(index: Int, DrumStep)
     case setTrackParam(track: Int, id: Int, value: Int)
@@ -81,7 +82,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: Cmd.desc
         case .watch: Cmd.watch
         case .ping: Cmd.ping
-        case .live, .transport: Cmd.live
+        case .live, .transport, .rec: Cmd.live
         case .setTrackStep: Cmd.trackStep
         case .setDrumStep: Cmd.drumStep
         case .setTrackParam: Cmd.trackParam
@@ -108,6 +109,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .watch(let on): [UInt8(on)]
         case .live: [0]
         case .transport(let play): [1, play ? 1 : 0]
+        case .rec: [4]
         case .setTrackStep(let t, let i, let step): [UInt8(t), UInt8(i)] + step.encoded
         case .setDrumStep(let i, let step): [UInt8(i)] + step.encoded
         case .setTrackParam(let t, let id, let v): [UInt8(t), UInt8(id)] + Frame.v14(v)
@@ -135,6 +137,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc(let s, let id): body.count >= 2 && body[0] == UInt8(s) && body[1] == UInt8(id)
         case .live: body.first == 0
         case .transport: body.first == 1
+        case .rec: body.first == 4
         case .setTrackStep(let t, let i, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(i)
         case .setDrumStep(let i, _): body.first == UInt8(i)
         case .setTrackParam(let t, let id, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(id)
@@ -161,7 +164,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: "DESC"
         case .watch: "WATCH"
         case .ping: "PING"
-        case .live, .transport: "LIVE"
+        case .live, .transport, .rec: "LIVE"
         case .setTrackStep: "TRACK_STEP set"
         case .setDrumStep: "DRUM_STEP set"
         case .setTrackParam: "TRACK_PARAM set"
@@ -393,6 +396,7 @@ public struct LiveState: Equatable, Sendable {
         public init(step: Int, length: Int, meter: Int) { self.step = step; self.length = length; self.meter = meter }
     }
     public var playing: Bool
+    public var recArmed: Bool          // REC pressed, waiting for the first note
     public var songMode: Bool
     public var bpm: Int
     public var section: Int?          // 0..3 = A..D
@@ -405,15 +409,16 @@ public struct LiveState: Equatable, Sendable {
 
     public init(playing: Bool, songMode: Bool = false, bpm: Int, section: Int? = nil, mutes: Int = 0, solos: Int = 0,
                 recTracks: Int = 0, selected: Int, cpu: Int = 0, tracks: [TrackPosition]) {
-        self.playing = playing; self.songMode = songMode; self.bpm = bpm; self.section = section; self.mutes = mutes
+        self.playing = playing; self.recArmed = false; self.songMode = songMode; self.bpm = bpm; self.section = section; self.mutes = mutes
         self.solos = solos; self.recTracks = recTracks; self.selected = selected; self.cpu = cpu; self.tracks = tracks
     }
 
     public init(_ body: [UInt8]) throws {
         var r = ByteReader(body, cmd: Cmd.live)
         _ = try r.u8()                                  // op
-        let flags = try r.u8(); _ = try r.u8()
+        let flags = try r.u8(), flags2 = try r.u8()
         playing = flags & 1 != 0; songMode = flags & 4 != 0
+        recArmed = flags2 & 1 != 0
         bpm = try r.v14()
         let sec = try r.u8(); section = sec == 0 ? nil : sec - 1
         _ = try r.u8(); _ = try r.u8(); _ = try r.u8()  // section asked for, chain entries, chain index

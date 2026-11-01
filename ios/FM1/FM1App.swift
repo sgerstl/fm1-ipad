@@ -58,6 +58,8 @@ final class EditorUI {
     @ObservationIgnored var grabbedSpec: (() -> KnobSpec)?
     var soundFamily: SoundFamily = .fx
     var keyboardOpen = false
+    /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there.
+    var followDevice = true
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
     var lastClear: SloopSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = .engine(0)

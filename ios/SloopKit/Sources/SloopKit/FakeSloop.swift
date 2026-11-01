@@ -79,6 +79,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     public var hasUIPush = true
     var watchingUI = false
     var uiPage = 5, uiHome = false        // FX, page 1
+    var recOn = false
     private var editTimer: DispatchSourceTimer?
 
     public init(autoEdits: Bool = true) {
@@ -259,8 +260,9 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             emit(cmd, [0])
         case Cmd.live:
             if a.first == 1, a.count > 1 { playing = a[1] != 0 }
+            if a.first == 4 { recOn.toggle() }
             let mutes = UInt8((0..<4).reduce(0) { $0 | (params[$1][Param.mute] != 0 ? 1 << $1 : 0) })   // as editor_live.c
-            var b: [UInt8] = [a.first ?? 0, playing ? 1 : 0, 0] + Frame.v14(bpm) + [1, 0, 0, 0, mutes, 0, 0, UInt8(selected), 0, playing ? 24 : 8, 0, 0, 0, 0, 1]
+            var b: [UInt8] = [a.first ?? 0, playing ? 1 : 0, 0] + Frame.v14(bpm) + [1, 0, 0, 0, mutes, 0, recOn ? UInt8(1 << selected) : 0, UInt8(selected), 0, playing ? 24 : 8, 0, 0, 0, 0, 1]
             for t in 0..<4 { b += [UInt8(stepAt(t)), UInt8(params[t][Param.length]), playing ? 72 : 0] }
             emit(cmd, b + [0, 0] + Array(repeating: 0x48, count: 16))
         default:

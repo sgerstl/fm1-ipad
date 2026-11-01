@@ -13,6 +13,11 @@ struct AppView: View {
             TopBar(session: session, ui: ui, useDemo: $useDemo)
             if case .connected = session.status {
                 pages.animation(pageAnimation, value: ui.page)
+                    // a button pressed on the FM-1 brings up the tab that shows its screen
+                    .onChange(of: session.deviceScreen) { _, s in
+                        guard ui.followDevice, let s, let tab = SoundPage.tab(for: s), tab != ui.page else { return }
+                        ui.page = tab
+                    }
             } else {
                 ConnectionState(status: session.status, useDemo: $useDemo)
             }
@@ -51,12 +56,18 @@ extension AppView {
                     EmptyView()
                 case .library:
                     HStack(alignment: .top, spacing: 16) {
-                        leftColumn { if session.selectedTrack < 3 { LibraryEngines(session: session, ui: ui) } }
+                        leftColumn {
+                            FunctionPads(session: session, ui: ui)
+                            if session.selectedTrack < 3 { LibraryEngines(session: session, ui: ui) }
+                        }
                         LibraryPage(session: session, ui: ui)
                     }
                 case .sound:
                     HStack(alignment: .top, spacing: 16) {
-                        leftColumn { FollowCard(session: session, ui: ui) }
+                        leftColumn {
+                            FunctionPads(session: session, ui: ui)
+                            FollowCard(session: session, ui: ui)
+                        }
                         SoundTab(session: session, ui: ui)
                     }
                 }

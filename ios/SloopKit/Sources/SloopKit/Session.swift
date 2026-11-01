@@ -53,6 +53,8 @@ public final class SloopSession {
     public private(set) var tracks = (0..<4).map(TrackState.init)
     public private(set) var selectedTrack = 0
     public private(set) var playing = false
+    /// Recording (a track is REC) or armed and waiting for a note: the REC pad lights.
+    public private(set) var recording = false
     public private(set) var bpm = 120
     public private(set) var swing = 0
     public private(set) var otherChannelsPlaySelected = true
@@ -445,6 +447,7 @@ public final class SloopSession {
         let wasPlaying = playing
         if l.selected != selectedTrack, l.selected < 4 { selectedTrack = l.selected }
         playing = l.playing
+        recording = l.recTracks != 0 || l.recArmed
         bpm = l.bpm
         // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
         for k in 0..<4 where !recentlyWritten("p\(k).\(Param.mute)") {
@@ -746,6 +749,11 @@ public final class SloopSession {
     public func loadKit(_ k: Int) {
         guard let i = info else { return }
         set(track: 3, param: i.firstEngineParam, to: k)
+    }
+
+    public func toggleRec() {
+        guard let c = client else { return }
+        Task { if let l = try? await c.rec() { self.applyLive(l) } }
     }
 
     public func setPlaying(_ on: Bool) {
