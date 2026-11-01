@@ -46,6 +46,7 @@ import Testing
 @Suite(.serialized) @MainActor struct SongSessionTests {
     @Test func sectionsChainsOrderAndSongRec() async throws {
         let fake = FakeSloop(autoEdits: false)
+        fake.manualClock = true                                 // no bar ticks mid-test
         var once = false
         let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
@@ -80,8 +81,11 @@ import Testing
         session.toggleSongMode()
         try await waitFor { !fake.songMode }
 
-        // a chain needs playback; the demo plays from the start
+        // a chain needs playback, and the session has to have seen it (playChain refuses otherwise)
+        session.setPlaying(true)
+        try await waitFor { fake.playing && session.playing }
         session.playChain([0, 2])
+        #expect(session.songMessage == nil)
         try await waitFor { fake.chain == [0, 2] }
         session.stopChain()
         try await waitFor { fake.chain.isEmpty }

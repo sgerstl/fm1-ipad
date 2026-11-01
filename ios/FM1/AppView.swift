@@ -18,6 +18,7 @@ struct AppView: View {
                     // a button pressed on the FM-1 brings up the tab that shows its screen
                     .onChange(of: session.deviceScreen) { _, s in
                         guard ui.followDevice, let s, let tab = SoundPage.tab(for: s), tab != ui.page else { return }
+                        ui.pageFromDevice = true
                         ui.page = tab
                     }
             } else {

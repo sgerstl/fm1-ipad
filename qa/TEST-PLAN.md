@@ -2,7 +2,7 @@
 
 What each part of the app is checked by. **A**: automated (`cd ios/SloopKit && swift test`), runs against the demo FM-1, which mirrors SLOOP's behaviour where it matters (sections hold the tracks, song mode keeps the loop, RELOAD only for the selected track). **H**: by hand on the FM-1. **S**: in the simulator with `-demo`.
 
-Last full pass: 2026-11-01, branch `app-pass-1`. 49 automated tests pass; build has no warnings; the static analyzer and Swift's strict concurrency checks find nothing in SloopKit.
+Last full pass: 2026-11-01, branch `app-pass-1`. 51 automated tests pass (8 runs in a row after the chain-test fix); build has no warnings; the static analyzer and Swift's strict concurrency checks find nothing in SloopKit.
 
 ## 1. Connection and protocol
 
@@ -53,6 +53,9 @@ Last full pass: 2026-11-01, branch `app-pass-1`. 49 automated tests pass; build 
 | Tabs follow the FM-1's buttons and the other way | H | pass |
 | SAVE pad: Library, again for Song; held for Song | H | pass |
 | Track box mute-only on the Song page | H | pass |
+| Drum track: SEL, ENV, LFO, EDIT, ARP pressed on the FM-1 open those pages greyed, with the reason | H (2026-11-01) | pass |
+| Drum track: the same pads on the iPad send the FM-1 to its "DRUM TRACK" page | S | pass; **re-check on H** |
+| Drum track FX: which of FILTER, SLICER, INSERT the FM-1 allows | H | **to do** (source allows all three) |
 
 ## 5. Device safety
 

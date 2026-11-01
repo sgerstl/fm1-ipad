@@ -66,4 +66,6 @@ final class EditorUI {
     var librarySection: LibrarySection = .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs.
     var presetsPanel = false
+    /// The last page change came from the FM-1 (its button pressed), not from a tab or pad here.
+    var pageFromDevice = false
 }

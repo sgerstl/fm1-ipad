@@ -69,6 +69,14 @@ struct SoundPage: Identifiable {
 
     static func page(fw: Int) -> SoundPage? { all.first { $0.fw == fw } }
 
+    /// The pages a button opens on the FM-1 for the selected track: its own, or on the drum track for a
+    /// button without drum pages, the synth pages the FM-1 shows as "DRUM TRACK" (params.c page_for_drum).
+    @MainActor static func reached(_ session: SloopSession, _ family: SoundFamily) -> [SoundPage] {
+        let own = shown(session, family)
+        guard own.isEmpty, session.selectedTrack == 3 else { return own }
+        return all.filter { $0.family == family && !$0.analogOnly && !$0.drums }
+    }
+
     /// SLOOP's pages the app shows outside the Sound tab (params.c PAGES): TRACKS is HOME in SLOOP's
     /// song build; NOTES and the drum screen are the sequencer's; SECTION, SONG and the SAVE layer
     /// are the Song tab's; SAVE's other pages are the library's.
@@ -150,24 +158,41 @@ struct SoundTab: View {
     let session: SloopSession
     let ui: EditorUI
     @State private var marked: String?          // the knob last turned on the FM-1, marked for a moment
+    @State private var followed: UIState?       // the FM-1's screen as last followed
 
     var body: some View {
         let pages = SoundPage.shown(session, ui.soundFamily)
         VStack(alignment: .leading, spacing: 16) {
             // the button is chosen on the pads in the left column, as on the FM-1
             ScrollView {
-                if ui.soundFamily == .sel { KeyMapStrip(session: session) }
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
-                    ForEach(pages) { p in pagePanel(p, of: pages) }
+                VStack(spacing: 0) {
+                    if session.selectedTrack == 3, pages.isEmpty {
+                        DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
+                    }
+                    if ui.soundFamily == .sel, session.selectedTrack < 3 { KeyMapStrip(session: session) }
+                    // a plain grid (seven pages at most): a lazy one kept stale positions when the strip
+                    // above it changed height, and drew a panel over the strip
+                    Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                        ForEach(Array(stride(from: 0, to: pages.count, by: 2)), id: \.self) { i in
+                            GridRow {
+                                pagePanel(pages[i], of: pages)
+                                if i + 1 < pages.count { pagePanel(pages[i + 1], of: pages) } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
+                            }
+                        }
+                    }
+                    .padding(.bottom, 8)
                 }
-                .padding(.bottom, 8)
             }
             .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)   // the page area fills its column
         .onChange(of: session.lastTouched?.at) { _, _ in follow() }
         .onChange(of: session.deviceScreen) { _, s in followScreen(s) }
-        .onAppear { followScreen(session.deviceScreen) }     // opened by the FM-1: start on its button
+        .onAppear {
+            // opened by the FM-1: start on its button; opened here (a tab, a pad): keep the choice made
+            if ui.pageFromDevice { followScreen(session.deviceScreen) } else { followed = session.deviceScreen }
+            ui.pageFromDevice = false
+        }
     }
 
     // MARK: A page: its four knobs, as on the FM-1
@@ -186,7 +211,6 @@ struct SoundTab: View {
                         .font(.system(size: 12, weight: .semibold))
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(.white.opacity(0.10)))
-                        .transition(.opacity)
                 }
                 if p.scope == 1 {
                     Text("all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
@@ -217,17 +241,15 @@ struct SoundTab: View {
         .panel()
         // the page on the FM-1's screen: a lit edge along the top, the playhead's light
         .overlay(alignment: .top) {
-            if onDevice {
-                RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
-                    .frame(height: 3)
-                    .padding(.horizontal, 14)
-                    .offset(y: 1)                    // on the panel's top edge
-                    .shadow(color: Theme.text.opacity(0.7), radius: 6)
-                    .transition(.opacity)
-                    .accessibilityHidden(true)
-            }
+            RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
+                .frame(height: 3)
+                .padding(.horizontal, 14)
+                .offset(y: 1)                    // on the panel's top edge
+                .shadow(color: Theme.text.opacity(0.7), radius: 6)
+                .opacity(onDevice ? 1 : 0)
+                .animation(.easeOut(duration: 0.15), value: onDevice)   // the light fades; nothing else animates
+                .accessibilityHidden(true)
         }
-        .animation(.easeOut(duration: 0.15), value: onDevice)
         .accessibilityValue(onDevice ? "on the FM-1" : "")
         .contentShape(Rectangle())
         // tap a page (outside its knobs) to show it on the FM-1
@@ -259,10 +281,15 @@ struct SoundTab: View {
     /// The FM-1 changed page (a button pressed on it): show that button's pages here. Holding SEL
     /// (its key layer) brings up SEL.
     private func followScreen(_ s: UIState?) {
-        guard let s else { return }
+        // only a real change on the FM-1 moves the page here: the same screen reported again must not
+        // undo a button chosen on the iPad (on the drum track SEL, ENV, LFO, EDIT, ARP can't move the
+        // FM-1, which stays on its page)
+        guard let s, s.home != followed?.home || s.page != followed?.page || s.layer != followed?.layer else { return }
+        followed = s
         if s.layer == 5 { ui.soundFamily = .sel; return }              // LY_SCALE: SEL held
+        // (on the drum track the FM-1 opens the synth pages too, showing "DRUM TRACK": follow those as well)
         guard !s.home, let page = SoundPage.page(fw: s.page),
-              SoundPage.shown(session, page.family).contains(where: { $0.fw == page.fw }) else { return }
+              SoundPage.reached(session, page.family).contains(where: { $0.fw == page.fw }) else { return }
         ui.soundFamily = page.family
     }
 
@@ -319,8 +346,9 @@ struct KeyMapStrip: View {
                 }
             }
             .frame(height: 74)
+            // the picked key's chord, spelled out; the line is always there (empty without chords), so
+            // turning CHORD on or off never moves the pages below
             if chordMode {
-                // the picked key's chord, spelled out
                 HStack(spacing: 8) {
                     Text(session.pitch(ofKey: key).map(Music.noteName) ?? "–").font(.system(size: 13, weight: .semibold))
                     Text("plays").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
@@ -328,7 +356,10 @@ struct KeyMapStrip: View {
                     Text("Tap a white key to see its chord.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                 }
+                .frame(height: 18)
                 .accessibilityElement(children: .combine)
+            } else {
+                Color.clear.frame(height: 18).accessibilityHidden(true)
             }
         }
         .padding(16)

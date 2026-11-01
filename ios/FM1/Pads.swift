@@ -63,7 +63,7 @@ struct FunctionPads: View {
         return Button { press(pad) } label: {
             Text(pad == .play && session.playing ? "STOP" : pad.rawValue)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? Theme.text : usable ? Theme.textSecondary : Theme.textTertiary)
+                .foregroundStyle(on ? Theme.text : usable && hasPages(pad) ? Theme.textSecondary : Theme.textTertiary)
                 .shadow(color: on ? Theme.text.opacity(0.8) : .clear, radius: 5)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background { PadSurface(pressed: on) }
@@ -101,7 +101,10 @@ struct FunctionPads: View {
         }
     }
 
-    private func isUsable(_ pad: Pad) -> Bool {
+    /// Every pad presses. On the drum track SEL, ENV, LFO, EDIT and ARP have no pages: they open an
+    /// explanation instead (DrumNoPages) and keep a dim label as a hint.
+    private func isUsable(_ pad: Pad) -> Bool { true }
+    private func hasPages(_ pad: Pad) -> Bool {
         guard let f = pad.family else { return true }
         return !SoundPage.shown(session, f).isEmpty
     }
@@ -136,7 +139,9 @@ struct FunctionPads: View {
             }
         default:
             guard let f = pad.family else { return }
-            let pages = SoundPage.shown(session, f)
+            // on the drum track a button without drum pages still opens its pages on the FM-1 ("DRUM
+            // TRACK" there), so both screens show the same button
+            let pages = SoundPage.reached(session, f)
             let again = ui.page == .sound && ui.soundFamily == f
             ui.page = .sound
             ui.soundFamily = f
