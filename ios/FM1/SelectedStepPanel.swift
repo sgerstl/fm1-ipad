@@ -110,22 +110,14 @@ struct SelectedStepPanel: View {
         let has = s.has(lane)
         if part == 0 {
         VStack(alignment: .leading, spacing: 16) {
-        field("Hits") {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading), GridItem(.flexible(), spacing: 6, alignment: .leading)],
-                      alignment: .leading, spacing: 6) {
-                if s.lanes.isEmpty { readout("Tap the grid", dim: true) }
-                // a hit picks the lane the level and ratchet keys act on
-                ForEach(s.lanes.prefix(4), id: \.self) { l in
-                    Button { ui.selectedLane = l } label: {
-                        Text(Music.drumLanes[l]).fontWeight(l == lane ? .semibold : .regular)
-                            .foregroundStyle(l == lane ? Theme.text : Theme.textSecondary)
-                            .padding(.horizontal, 12).frame(minHeight: 44)
-                            .background { if l == lane { RoundedRectangle(cornerRadius: 9).fill(Theme.pressed).recessed(9) } else { Color.clear.raisedKey() } }
-                    }
-                    .buttonStyle(PressSink())
-                    .accessibilityAddTraits(l == lane ? .isSelected : [])
-                }
-                if s.lanes.count > 4 { readout("+\(s.lanes.count - 4)", dim: true) }
+        // the hit the keys below edit: picked by a lane name or a tap in the grid (the list of hits
+        // that was here repeated the grid's column, 2026-11-02)
+        field("Editing") {
+            VStack(alignment: .leading, spacing: 6) {
+                readout(has ? "\(Music.drumLanes[lane]) · step \(i + 1)" : "No \(Music.drumLanes[lane].lowercased()) on step \(i + 1)", dim: !has)
+                Text(has ? "Tap a lane name to edit another hit." : "Tap the grid to add one, or a lane name to pick another.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         field("\(Music.drumLanes[lane]) level") {

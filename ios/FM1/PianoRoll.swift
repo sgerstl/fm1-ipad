@@ -93,11 +93,13 @@ struct PianoRoll: View {
     }
 }
 
-/// A row label you can play: touch a note name (or a drum lane) to hear it, held while touched.
+/// A row label you can play: touch a note name (or a drum lane) to hear it, held while touched. A drum
+/// lane's name also picks the lane the step panel edits (`select`), without touching the grid.
 struct AuditionLabel: View {
     let text: String
     let spoken: String
     var bold = false
+    var select: (() -> Void)? = nil
     let down: () -> Void
     let up: () -> Void
     @State private var pressed = false
@@ -111,7 +113,7 @@ struct AuditionLabel: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(pressed ? 0.08 : 0)).padding(.vertical, 4))
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !pressed { pressed = true; down() } }
+                .onChanged { _ in if !pressed { pressed = true; select?(); down() } }
                 .onEnded { _ in pressed = false; up() })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Play \(spoken)")
@@ -119,6 +121,9 @@ struct AuditionLabel: View {
             .accessibilityAction {
                 down()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { up() }
+            }
+            .accessibilityActions {
+                if let select { Button("Edit \(spoken) on the selected step") { select() } }
             }
     }
 }
@@ -157,8 +162,7 @@ struct StepNumbers: View {
                 Text("\(i + 1)")
                     .font(.system(size: 11, weight: i == selected || i % 4 == 0 ? .semibold : .regular))
                     .foregroundStyle(i == selected ? Theme.text : Theme.textSecondary)
-                    .padding(.leading, 4)
-                    .frame(width: Theme.stepWidth, height: 20, alignment: .leading)
+                    .frame(width: Theme.stepWidth, height: 20)       // centred over its column
                     .contentShape(Rectangle())
                     .onTapGesture { select(i) }
             }
@@ -310,6 +314,8 @@ struct PianoRollContent: View {
         for b in stride(from: 1, to: 16, by: 2) {
             ctx.fill(Path(CGRect(x: CGFloat(b * 4) * w, y: 0, width: 4 * w, height: size.height)), with: .color(.white.opacity(0.025)))
         }
+        // the selected step's column, lit faintly the whole height
+        ctx.fill(Path(CGRect(x: CGFloat(selected) * w, y: 0, width: w, height: size.height)), with: .color(.white.opacity(0.07)))
         for r in 1..<max(rows.count, 12) {
             ctx.fill(Path(CGRect(x: 0, y: CGFloat(r) * h, width: size.width, height: 1)), with: .color(.black.opacity(0.45)))
         }

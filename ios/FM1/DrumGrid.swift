@@ -30,6 +30,7 @@ struct DrumGrid: View {
                 VStack(spacing: 0) {
                     ForEach(0..<16, id: \.self) { l in
                         AuditionLabel(text: Music.drumLanes[l], spoken: Music.drumLanes[l], bold: l == ui.selectedLane,
+                                      select: { ui.selectedLane = l },
                                       down: { session.keyDown(l) }, up: { session.keyUp(l) })
                     }
                 }
@@ -136,6 +137,8 @@ struct DrumGridContent: View {
         for bar in stride(from: 16, to: 64, by: 16) {
             ctx.fill(Path(CGRect(x: CGFloat(bar) * w, y: 0, width: 2, height: size.height)), with: .color(Color(hex: 0x34343C)))
         }
+        // the selected step's column, lit faintly the whole height
+        ctx.fill(Path(CGRect(x: CGFloat(selected) * w, y: 0, width: w, height: size.height)), with: .color(.white.opacity(0.07)))
         for i in 0..<64 {
             let s = t.drumSteps[i]
             for l in 0..<16 {
