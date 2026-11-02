@@ -183,7 +183,9 @@ final class AudioCore: @unchecked Sendable {
                 // iPad has no receiver to avoid, and that option kept the sound on the speaker with
                 // headphones connected (2026-11-02); not .allowBluetooth either, which is the phone-call profile
                 try s.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
-                try s.setPreferredIOBufferDuration(0.005)
+                // 20 ms, not 5: this is for listening, never for playing live (the round trip already
+                // lags), and a quarter as many audio wake-ups a second saves battery (2026-11-02)
+                try s.setPreferredIOBufferDuration(0.02)
                 try s.setActive(true)
                 sessionReady = true
             }

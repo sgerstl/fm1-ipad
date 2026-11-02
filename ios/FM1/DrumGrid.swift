@@ -139,6 +139,9 @@ struct DrumGridContent: View {
         }
         // the selected step's column, lit faintly the whole height
         ctx.fill(Path(CGRect(x: CGFloat(selected) * w, y: 0, width: w, height: size.height)), with: .color(.white.opacity(0.07)))
+        // empty cells: small recessed wells, collected into two paths and filled once each (a fill and a
+        // path subtraction per cell cost about a third of the main thread, 2026-11-02)
+        var wells = Path(), lips = Path()
         for i in 0..<64 {
             let s = t.drumSteps[i]
             for l in 0..<16 {
@@ -161,10 +164,9 @@ struct DrumGridContent: View {
                         }
                     }
                 } else {
-                    // an empty cell: a small recessed well
                     let r = CGRect(x: x + (w - 8) / 2, y: y + (h - 8) / 2, width: 8, height: 8)
-                    ctx.fill(Path(ellipseIn: r), with: .color(Color(hex: 0x0B0B0D)))
-                    ctx.fill(Path(ellipseIn: r.offsetBy(dx: 0, dy: 1)).subtracting(Path(ellipseIn: r)), with: .color(.white.opacity(0.05)))
+                    wells.addEllipse(in: r)
+                    lips.addEllipse(in: r.offsetBy(dx: 0, dy: 1))
                     if i == selected && l == lane {
                         ctx.stroke(Path(roundedRect: CGRect(x: x + 4, y: y + 6, width: w - 8, height: h - 12), cornerRadius: 6),
                                    with: .color(Theme.text), lineWidth: 2)
@@ -172,6 +174,9 @@ struct DrumGridContent: View {
                 }
             }
         }
+        // the lip first, the well over it: the 1 pt of lip left showing below each well is its highlight
+        ctx.fill(lips, with: .color(.white.opacity(0.05)))
+        ctx.fill(wells, with: .color(Color(hex: 0x0B0B0D)))
         if t.length < 64 {
             ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(64 - t.length) * w, height: size.height)),
                      with: .color(.black.opacity(0.4)))

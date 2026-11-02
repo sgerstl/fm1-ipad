@@ -88,7 +88,9 @@ public final class SloopSession {
     public private(set) var drumMapGM = true
     public private(set) var positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: 4)
     public private(set) var isDemo = false
-    public private(set) var stats = Stats()
+    /// Counted on every poll, and no view reads it: kept out of observation so a poll doesn't count
+    /// as a change.
+    @ObservationIgnored public private(set) var stats = Stats()
 
     public struct Stats: Equatable, Sendable {
         public var polls = 0
@@ -101,8 +103,10 @@ public final class SloopSession {
     }
 
     /// When each track's current step began (for interpolating the playhead between polls).
-    private var stepStart = Array(repeating: Date.distantPast, count: 4)
-    private var lastPoll = Date.distantPast
+    /// (Not observed: the playheads read these inside their own animation timeline, so a poll needn't
+    /// redraw them.)
+    @ObservationIgnored private var stepStart = Array(repeating: Date.distantPast, count: 4)
+    @ObservationIgnored private var lastPoll = Date.distantPast
 
     private var client: SloopClient?
     private var tasks: [Task<Void, Never>] = []
@@ -149,6 +153,8 @@ public final class SloopSession {
     /// About 20 a second once a reply's 2 ms is added. SLOOP pushes only while its USB send ring is
     /// at most half full (editor.c ed_room), so polling harder can hold the pushes back.
     public var pollInterval: Duration = .milliseconds(48)
+    /// While nothing plays.
+    public var stoppedPollInterval: Duration = .milliseconds(120)
     /// The selected track is re-read this often: the device only edits the selected track, and a
     /// push it held back shows up here at the latest. Each pass also re-reads one other track.
     public var resyncInterval: Duration = .seconds(1)
@@ -520,7 +526,7 @@ public final class SloopSession {
                 if tracks[t].steps[i] != s, deviceWins || !recentlyWritten("s\(t * 64 + i)") { tracks[t].steps[i] = s; fixes += 1 }
             }
         }
-        tracks[t].loaded = true
+        if !tracks[t].loaded { tracks[t].loaded = true }
         return fixes
     }
 
@@ -533,10 +539,10 @@ public final class SloopSession {
         do {
             if t == 3 {
                 let s = try await c.drumStep(index: i)
-                if !recentlyWritten("s\(key)") { tracks[3].drumSteps[i] = s }
+                if !recentlyWritten("s\(key)"), tracks[3].drumSteps[i] != s { tracks[3].drumSteps[i] = s }
             } else {
                 let s = try await c.synthStep(track: t, index: i)
-                if !recentlyWritten("s\(key)") { tracks[t].steps[i] = s }
+                if !recentlyWritten("s\(key)"), tracks[t].steps[i] != s { tracks[t].steps[i] = s }
             }
         } catch { stats.timeouts += 1 }
     }
@@ -637,7 +643,9 @@ public final class SloopSession {
                 stats.timeouts += 1
                 if misses > 40 { return }     // about 6 s with no answer: treat it as gone
             }
-            try? await Task.sleep(for: pollInterval)
+            // stopped, there is no playhead to keep smooth: a slower poll still catches a track switch or
+            // PLAY quickly, with about half the traffic (2026-11-02, battery)
+            try? await Task.sleep(for: playing ? pollInterval : stoppedPollInterval)
         }
     }
 
@@ -678,12 +686,16 @@ public final class SloopSession {
 
     func applyLive(_ l: LiveState, at now: Date = Date()) {
         stats.polls += 1
+        // About 20 a second: every write here is guarded, because writing an observed property (even
+        // the same value, and any element of `tracks`) makes every view that reads it draw again; the
+        // drum grid redrew its whole canvas on every poll (2026-11-02, battery)
         let wasPlaying = playing
         if l.selected != selectedTrack, l.selected < 4 { selectedTrack = l.selected }
-        playing = l.playing
-        recording = l.recTracks != 0 || l.recArmed
+        if playing != l.playing { playing = l.playing }
+        let rec = l.recTracks != 0 || l.recArmed
+        if recording != rec { recording = rec }
         let before = song
-        song = l.song
+        if song != l.song { song = l.song }
         if l.song.chainLength == 0 { chainAsked = [] }
         // SONG REC just ended, or a section was stored on the device: the order may have changed
         if (before.songRecording && !l.song.songRecording) || before.sectionsStored != l.song.sectionsStored {
@@ -694,7 +706,7 @@ public final class SloopSession {
         let songStopped = before.songPlaying && !l.song.songPlaying
         if before.sectionPlaying != l.song.sectionPlaying || songStopped { reloadAllTracks() }
         if before.sectionPlaying != l.song.sectionPlaying, !l.song.songPlaying { tracksEdited = false }
-        bpm = l.bpm
+        if bpm != l.bpm { bpm = l.bpm }
         // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
         for k in 0..<4 where !recentlyWritten("p\(k).\(Param.mute)") {
             let m = l.mutes >> k & 1 == 1
@@ -714,8 +726,9 @@ public final class SloopSession {
                     stepStart[k] = lastPoll > now.addingTimeInterval(-0.25) ? lastPoll.addingTimeInterval(now.timeIntervalSince(lastPoll) / 2) : now
                 }
             }
-            positions[k] = new
-            tracks[k].length = max(1, min(64, new.length))
+            if positions[k] != new { positions[k] = new }
+            let len = max(1, min(64, new.length))
+            if tracks[k].length != len { tracks[k].length = len }
         }
         lastPoll = now
     }
