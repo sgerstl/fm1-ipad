@@ -94,6 +94,8 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     }()
     var lastBar = -1, songStep = 0, songBarInStep = 0, recSteps: [SongOrder.Step] = []
     private var bkStaged: [UInt8] = [], bkLen = 0, bkCRC: UInt32 = 0
+    private var bkBegun = false
+    private var stopPending = Date.distantPast  // as project_apply's transport_req: cleared on the next audio block                // as SLOOP: a LIST snapshots into the restore's buffer, dropping it
     var corruptNextPut = false                 // tests: the next commit fails its CRC check
 
     var order: SongOrder { SongOrder(settings: settings) ?? .standard }
@@ -106,6 +108,29 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     struct Snapshot: Equatable { var steps: [[SynthStep]]; var drums: [DrumStep]; var lengths: [Int] }
     var sections: [Snapshot?] = [nil, nil, nil, nil]
     private func snapshot() -> Snapshot { Snapshot(steps: steps, drums: drums, lengths: (0..<4).map { params[$0][Param.length] }) }
+    private var bkSnap: [Int: [UInt8]] = [:]
+
+    /// A snapshot as SLOOP's project bytes (FUN6): the blank project with these steps, lengths and tempo.
+    private func projectBytes(_ snap: Snapshot) -> [UInt8] {
+        var f = Fun6.blank
+        for t in 0..<3 { f.setSteps(track: t, snap.steps[t]) }
+        f.setDrumSteps(snap.drums)
+        for t in 0..<4 { f.setLength(track: t, snap.lengths[t]) }
+        f.bpm = bpm
+        var b = f.sealed.bytes
+        b[72] = UInt8(selected)                 // the selected track rides along, as in proj_capture
+        return Fun6(b)!.sealed.bytes
+    }
+    private func snapshot(of f: Fun6) -> Snapshot {
+        Snapshot(steps: (0..<3).map { f.steps(track: $0) }, drums: f.drumSteps(), lengths: (0..<4).map { f.length(track: $0) })
+    }
+    /// A loop restored: it plays from now (stopped), and the app is told the way SLOOP tells it, which is not at all.
+    private func apply(_ f: Fun6) {
+        let snap = snapshot(of: f)
+        steps = snap.steps; drums = snap.drums
+        for t in 0..<4 { params[t][Param.length] = snap.lengths[t] }
+        bpm = f.bpm
+    }
     private func load(_ k: Int) {
         guard k >= 0, k < 4, let snap = sections[k] else { return }
         sectionPlaying = k
@@ -351,21 +376,34 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             if let p = a.first { uiPage = Int(p); uiHome = false }
             emit(Cmd.ui, uiBody())
         case Cmd.bkList:
-            // rc, count, then per object: id, length (5), CRC-32 (5). Only the settings object here.
-            emit(cmd, [0, 1, 1] + Pack7.u35(UInt32(settings.count)) + Pack7.u35(CRC32.of(settings)))
+            // rc, count, then per object: id, length (5), CRC-32 (5): the loop, the settings, sections A–D
+            bkSnap = [0: projectBytes(snapshot()), 1: settings]
+            bkBegun = false
+            for k in 0..<4 { bkSnap[2 + k] = sections[k].map(projectBytes) ?? [] }
+            var b: [UInt8] = [0, UInt8(bkSnap.count)]
+            for id in bkSnap.keys.sorted() { b += [UInt8(id)] + Pack7.u35(UInt32(bkSnap[id]!.count)) + Pack7.u35(CRC32.of(bkSnap[id]!)) }
+            emit(cmd, b)
         case Cmd.bkGet:
             let off = Int(Pack7.readU35(a[1...])), n = Int(a[6]) | Int(a[7]) << 7
-            let chunk = Array(settings[min(off, settings.count)..<min(off + n, settings.count)])
+            let obj = bkSnap[Int(a[0])] ?? []
+            let chunk = Array(obj[min(off, obj.count)..<min(off + n, obj.count)])
             emit(cmd, [a[0], 0] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)] + Pack7.encode(chunk))
         case Cmd.bkPut:
             let op = Int(a[0]), id = a[1]
             var rc: UInt8 = 1
-            if op == 0, a.count == 12 { bkLen = Int(Pack7.readU35(a[2...])); bkCRC = Pack7.readU35(a[7...]); bkStaged = []; rc = 0 }
+            if op == 0, a.count == 12 { bkLen = Int(Pack7.readU35(a[2...])); bkCRC = Pack7.readU35(a[7...]); bkStaged = []; bkBegun = true; rc = 0 }
+            else if !bkBegun { rc = 5 }
             else if op == 1 { bkStaged += Pack7.decode(Array(a[7...])); rc = 0 }
-            else if op == 2, (2...5).contains(Int(id)) {
-                // a section emptied (project_restore with no bytes), only stopped
-                if playing { rc = 3 }
-                else if bkLen == 0 { sections[Int(id) - 2] = nil; stored &= ~(1 << (Int(id) - 2)); rc = 0 }
+            else if op == 2, id == 0 || (2...5).contains(Int(id)) {
+                // the loop (loaded at once) or a section, as project_restore: only stopped, and not while the
+                // stop a loop load queued is still pending (transport_req); no bytes empties a section
+                if playing || Date() < stopPending { rc = 3 }
+                else if id != 0, bkLen == 0 { sections[Int(id) - 2] = nil; stored &= ~(1 << (Int(id) - 2)); rc = 0 }
+                else if corruptNextPut { corruptNextPut = false; rc = 2 }
+                else if bkStaged.count == bkLen, CRC32.of(bkStaged) == bkCRC, let f = Fun6(bkStaged), f.sealed == f {
+                    if id == 0 { apply(f); stopPending = Date().addingTimeInterval(0.03) } else { sections[Int(id) - 2] = snapshot(of: f); stored |= 1 << (Int(id) - 2) }
+                    rc = 0
+                }
                 else { rc = 2 }
             }
             else if op == 2 {

@@ -6,12 +6,16 @@ struct TopBar: View {
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(AudioThrough.self) private var through
+    @Environment(ProjectStore.self) private var projects
+    @State private var projectsOpen = false
+    @State private var naming: NamePrompt?
 
     var body: some View {
         // the tabs sit in the middle of the bar whatever the two sides hold
         ZStack {
             HStack(spacing: 0) {
                 connection
+                project
                 Spacer(minLength: 12)
                 transport
             }
@@ -24,6 +28,7 @@ struct TopBar: View {
 
     private var connection: some View {
         Menu {
+            Text("\(statusLine) · \(versionLine)")
             Picker("Source", selection: $useDemo) {
                 Text("FM-1 over USB").tag(false)
                 Text("Demo FM-1 (no device)").tag(true)
@@ -55,9 +60,8 @@ struct TopBar: View {
             HStack(spacing: 10) {
                 LED(on: isConnected, colour: Theme.text)
                     .frame(width: 8, height: 8)
-                Text(statusLine).font(.system(size: 15, weight: .semibold))
-                Text(versionLine).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1).truncationMode(.tail)
+                // short: the project name beside it needs the room (the version is in the menu, 2026-11-02)
+                Text(shortStatus).font(.system(size: 15, weight: .semibold)).lineLimit(1)
             }
             .frame(height: 44)
             .contentShape(Rectangle())
@@ -68,6 +72,87 @@ struct TopBar: View {
     }
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
+
+    private var shortStatus: String {
+        switch session.status {
+        case .connected: session.isDemo ? "Demo" : "FM-1"
+        default: statusLine
+        }
+    }
+
+    // MARK: The project on the FM-1: tap for the Projects sheet; Save when there's something to save
+
+    private var project: some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(Theme.ledOff).frame(width: 1, height: 24).padding(.horizontal, 12)
+                .accessibilityHidden(true)
+            Button { projectsOpen = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                    Text(projectName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(projectNamed ? Theme.text : Theme.textSecondary)
+                        .lineLimit(1).truncationMode(.tail)
+                        .frame(maxWidth: 170, alignment: .leading)
+                        .fixedSize(horizontal: true, vertical: false)
+                    if showsEdited {
+                        // said in words, the dot only repeats it
+                        Circle().fill(Theme.text).frame(width: 6, height: 6)
+                        Text("edited").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    }
+                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textTertiary)
+                }
+                .frame(height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(projectAccessibility)
+            .accessibilityHint("Opens your projects")
+            if isConnected, projects.needsSaving, projects.busy == nil {
+                Button {
+                    if projects.canSaveInPlace { Task { await projects.save() } } else { naming = .saveAs(projects.nextName()) }
+                } label: {
+                    Text("Save").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
+                        .padding(.horizontal, 16).frame(height: 44)
+                        .background { Color.clear.raisedKey() }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .accessibilityLabel(projects.canSaveInPlace ? "Save \(projectName)" : "Save as a new project")
+            } else if projects.busy != nil {
+                ProgressView().controlSize(.small).frame(width: 44, height: 44)
+                    .accessibilityLabel(projects.busy?.label ?? "Working")
+            }
+        }
+        .sheet(isPresented: $projectsOpen) { ProjectsSheet(store: projects, session: session) }
+        .namePrompt($naming, store: projects)
+    }
+
+    private var projectName: String {
+        switch projects.state {
+        case .project(let n): n
+        case .untitled: "Untitled"
+        case .unknown: "Not saved · on FM-1"
+        case .offline(let n): n ?? "Projects"
+        }
+    }
+
+    private var projectNamed: Bool { if case .project = projects.state { true } else { false } }
+    private var showsEdited: Bool {
+        switch projects.state {
+        case .project, .untitled: projects.edited
+        default: false
+        }
+    }
+
+    private var projectAccessibility: String {
+        switch projects.state {
+        case .project(let n): projects.edited ? "Project \(n), edited" : "Project \(n)"
+        case .untitled: projects.edited ? "Untitled project, edited" : "Untitled project"
+        case .unknown: "What's on the FM-1 isn't saved as a project"
+        case .offline(let n): n.map { "Project \($0)" } ?? "Projects"
+        }
+    }
 
     private var statusLine: String {
         switch session.status {

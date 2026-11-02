@@ -105,6 +105,17 @@ public final class SloopSession {
     /// When each track's current step began (for interpolating the playhead between polls).
     /// (Not observed: the playheads read these inside their own animation timeline, so a poll needn't
     /// redraw them.)
+    /// Called on anything that may change the project: an edit from the iPad, or a push about one made
+    /// on the FM-1. Not observed: a knob drag would otherwise redraw whoever watched a counter.
+    @ObservationIgnored public var onEdit: (@MainActor () -> Void)?
+    /// A project being written: the settings writer waits, so the two never interleave their BK_PUTs.
+    @ObservationIgnored private var projectBusy = false
+    /// One backup operation at a time. SLOOP stages a restore in the buffer BK_LIST snapshots into, so a
+    /// LIST between a BK_PUT begin and its commit drops what was staged (rc 5): that broke New project
+    /// on the FM-1, when emptying sections made LIVE ask for the song order mid-write (2026-11-02).
+    @ObservationIgnored private var backupHeld = false
+    @ObservationIgnored private var backupWaiting: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var loopFingerprint: (raw: UInt32, music: UInt32)?
     @ObservationIgnored private var stepStart = Array(repeating: Date.distantPast, count: 4)
     @ObservationIgnored private var lastPoll = Date.distantPast
 
@@ -242,9 +253,21 @@ public final class SloopSession {
 
     // MARK: The song
 
+    /// Runs `body` when no other backup operation is under way (the session is on the main actor, so
+    /// the flag needs no lock of its own).
+    private func backupTurn<T>(_ body: @MainActor () async throws -> T) async rethrows -> T {
+        while backupHeld { await withCheckedContinuation { backupWaiting.append($0) } }
+        backupHeld = true
+        defer {
+            backupHeld = false
+            if !backupWaiting.isEmpty { backupWaiting.removeFirst().resume() }
+        }
+        return try await body()
+    }
+
     public func readSongOrder() async throws {
         guard let c = client else { return }
-        let s = try await c.settingsObject()
+        let s = try await backupTurn { try await c.settingsObject() }
         settingsCache = s
         songOrder = SongOrder(settings: s)
         usbAudioFull = Self.usbFull(in: s)
@@ -252,6 +275,139 @@ public final class SloopSession {
 
     /// USB AUDIO = FULL: bit 11 of the settings' last word (persist_t.lights at byte 84, panel.c lights_word).
     static func usbFull(in s: [UInt8]) -> Bool? { s.count >= 88 ? s[85] & 0x08 != 0 : nil }
+
+    // MARK: Projects (kept on the iPad; the FM-1 holds one at a time)
+
+    public enum ProjectError: Error, Equatable {
+        case notConnected, playing, unreadable(String), refused(object: Int, rc: Int)
+    }
+
+    /// What the FM-1 holds now, as a project. Reading doesn't need a stop.
+    public func readProject() async throws -> ProjectData {
+        try await backupTurn { try await readProjectNow() }
+    }
+
+    private func readProjectNow() async throws -> ProjectData {
+        guard let c = client else { throw ProjectError.notConnected }
+        var attempt = 0
+        while true {
+            do {
+                let list = try await c.objectList()
+                let working = try await c.object(id: 0, length: list[0]?.length ?? 0)
+                var sections: [[UInt8]] = []
+                for k in 0..<4 { sections.append(try await c.object(id: 2 + k, length: list[2 + k]?.length ?? 0)) }
+                let settings = try await c.object(id: 1, length: list[1]?.length ?? 0)
+                guard Fun6(working) != nil else { throw ProjectError.unreadable("the loop isn't a SLOOP 2.8 project") }
+                guard settings.count >= SongOrder.offset + SongOrder.size else { throw ProjectError.unreadable("no song order") }
+                return ProjectData(working: working, sections: sections,
+                                   songOrder: Array(settings[SongOrder.offset..<(SongOrder.offset + SongOrder.size)]))
+            } catch let e as ProjectError {
+                throw e
+            } catch {
+                // the settings writer's LIST between ours and a GET drops the snapshot (rc 5): once more
+                attempt += 1
+                if attempt > 1 { throw error }
+            }
+        }
+    }
+
+    /// The fingerprint of what the FM-1 holds (ProjectData.fingerprint), cheaply: BK_LIST gives the
+    /// sections' CRCs, the settings are one GET, and the loop is read again only when its snapshot changed.
+    public func deviceFingerprint() async throws -> String {
+        try await backupTurn { try await deviceFingerprintNow() }
+    }
+
+    private func deviceFingerprintNow() async throws -> String {
+        guard let c = client else { throw ProjectError.notConnected }
+        let list = try await c.objectList()
+        var music: UInt32
+        if let l = list[0], let known = loopFingerprint, known.raw == l.crc {
+            music = known.music
+        } else {
+            let working = try await c.object(id: 0, length: list[0]?.length ?? 0)
+            music = Fun6(working).map { CRC32.of($0.musicOnly) } ?? CRC32.of(working)
+            if let l = list[0] { loopFingerprint = (l.crc, music) }
+        }
+        let sections = (2...5).map { (list[$0]?.length ?? 0) == 0 ? CRC32.of([]) : list[$0]!.crc }
+        let settings = try await c.object(id: 1, length: list[1]?.length ?? 0)
+        guard settings.count >= SongOrder.offset + SongOrder.size else { throw ProjectError.unreadable("no song order") }
+        let order = CRC32.of(Array(settings[SongOrder.offset..<(SongOrder.offset + SongOrder.size)]))
+        return ([music] + sections + [order]).map { String($0, radix: 16) }.joined(separator: "-")
+    }
+
+    /// Puts a project on the FM-1: the loop (loaded at once), sections A–D, then the song order spliced
+    /// into the settings as they are now. SLOOP takes all of it only stopped. `progress` goes 0…1.
+    public func writeProject(_ p: ProjectData, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {
+        guard client != nil else { throw ProjectError.notConnected }
+        guard !playing, !song.songPlaying else { throw ProjectError.playing }
+        guard p.loop != nil else { throw ProjectError.unreadable("not a SLOOP 2.8 project") }
+        projectBusy = true
+        defer { projectBusy = false; drainSettings() }
+        pendingOrder = nil
+        do {
+            try await backupTurn { try await writeProjectNow(p, progress: progress) }
+        } catch {
+            await rereadAfterProject()          // part of it may be on the FM-1 now: show what is
+            throw error
+        }
+        await rereadAfterProject()
+    }
+
+    /// A BK_PUT, once more if SLOOP lost what was staged (rc 5).
+    /// A BK_PUT, again if SLOOP lost what was staged (rc 5), or briefly said "stop first" (rc 3) while
+    /// the app knows it is stopped: loading a loop queues a stop (project_apply, transport_req) that the
+    /// audio clears on its next block, and a commit before then is refused (2026-11-02, the FM-1).
+    private func put(_ c: SloopClient, id: Int, _ bytes: [UInt8]) async throws -> Int {
+        var rc = try await c.putObject(id: id, bytes)
+        if rc == 5 { rc = try await c.putObject(id: id, bytes) }
+        var tries = 0
+        while rc == 3, !playing, tries < 10 {
+            try await Task.sleep(for: .milliseconds(50))
+            rc = try await c.putObject(id: id, bytes)
+            tries += 1
+        }
+        return rc
+    }
+
+    /// The order matters: the song order and the sections first, the loop last, since only the loop
+    /// queues a stop on the FM-1 (and with it, a moment of "stop first" for whatever comes next).
+    private func writeProjectNow(_ p: ProjectData, progress: @escaping @MainActor (Double) -> Void) async throws {
+        guard let c = client else { throw ProjectError.notConnected }
+        guard let loop = p.loop?.sealed else { throw ProjectError.unreadable("not a SLOOP 2.8 project") }
+        func check(_ id: Int, _ rc: Int) throws {
+            if rc == 3 { throw ProjectError.playing }
+            guard rc == 0 else { throw ProjectError.refused(object: id, rc: rc) }
+        }
+        progress(0)
+        let fresh = try await c.settingsObject()
+        guard fresh.count >= SongOrder.offset + SongOrder.size, p.songOrder.count == SongOrder.size else {
+            throw ProjectError.unreadable("no song order")
+        }
+        var settings = fresh
+        settings.replaceSubrange(SongOrder.offset..<(SongOrder.offset + SongOrder.size), with: p.songOrder)
+        if settings != fresh { try check(1, try await put(c, id: 1, settings)) }
+        settingsCache = settings
+        songOrder = SongOrder(settings: settings)
+        orderWriteBefore = nil
+        for k in 0..<4 {
+            progress(Double(1 + k) / 6)
+            try check(2 + k, try await put(c, id: 2 + k, k < p.sections.count ? p.sections[k] : []))
+        }
+        progress(5.0 / 6)
+        try check(0, try await put(c, id: 0, loop.bytes))
+        progress(1)
+    }
+
+    private func rereadAfterProject() async {
+        // SLOOP pushes nothing for the editor's own restore: read everything the app shows again
+        try? await readTrackList()
+        for t in 0..<4 { try? await readParams(t) }
+        try? await readGlobals()
+        for t in 0..<4 { _ = try? await readSteps(t, deviceWins: true) }
+        try? await readSoundParams(descs: false)
+        try? await readSongOrder()
+        tracksEdited = false
+    }
 
     // MARK: The FM-1's speaker while the iPad plays
 
@@ -296,9 +452,10 @@ public final class SloopSession {
         guard !playing else { songMessage = "Stop the FM-1 to clear a section"; return }
         songMessage = nil
         Task {
-            let rc = (try? await c.putObject(id: 2 + k, [])) ?? 99
+            let rc = await self.backupTurn { (try? await c.putObject(id: 2 + k, [])) ?? 99 }
             if rc == 0 {
                 self.song.sectionsStored &= ~(1 << k)
+                self.onEdit?()
             } else {
                 self.songMessage = rc == 3 ? "Stop the FM-1 to clear a section" : "The FM-1 didn't clear section \(Self.sectionName(k)) (code \(rc))"
             }
@@ -310,6 +467,7 @@ public final class SloopSession {
         let twice = song.stored(k)
         song.sectionsStored |= 1 << k
         tracksEdited = false
+        onEdit?()
         songMessage = nil
         Task {
             _ = try? await c.layerTap(layer: saveLayer, key: 4 + k)
@@ -366,6 +524,7 @@ public final class SloopSession {
         if orderWriteBefore == nil { orderWriteBefore = songOrder }
         songOrder = order
         songMessage = nil
+        onEdit?()
         pendingOrder = order
         drainSettings()
     }
@@ -373,7 +532,7 @@ public final class SloopSession {
     /// The one writer of the settings object: the song order and USB AUDIO = FULL go through here, one
     /// write at a time, each on a fresh read so settings changed on the FM-1 since are kept.
     private func drainSettings() {
-        guard let c = client, !orderWriting else { return }
+        guard let c = client, !orderWriting, !projectBusy else { return }
         orderWriting = true
         Task {
             while self.pendingOrder != nil || self.wantUSBFull {
@@ -383,10 +542,14 @@ public final class SloopSession {
                 if order != nil { self.pendingOrder = nil }
                 self.wantUSBFull = false
                 var rc = 99
-                if let fresh = try? await c.settingsObject(), SongOrder(settings: fresh) != nil {
+                let written: [UInt8]? = await self.backupTurn {
+                    guard let fresh = try? await c.settingsObject(), SongOrder(settings: fresh) != nil else { return nil }
                     var bytes = order.map { $0.written(into: fresh) } ?? fresh
                     if full, bytes.count >= 88 { bytes[85] |= 0x08 }
                     rc = bytes == fresh ? 0 : (try? await c.putSettings(bytes)) ?? 99
+                    return bytes
+                }
+                if let bytes = written {
                     if rc == 0 {
                         self.settingsCache = bytes
                         self.usbAudioFull = Self.usbFull(in: bytes)
@@ -590,6 +753,7 @@ public final class SloopSession {
     private func pushLoop(_ c: SloopClient) async {
         for await p in c.pushes {
             stats.pushes += 1
+            if case .ui = p {} else { onEdit?() }
             switch p {
             case .stepChanged(let i, let t):
                 stats.stepPushes += 1
@@ -699,6 +863,7 @@ public final class SloopSession {
         if l.song.chainLength == 0 { chainAsked = [] }
         // SONG REC just ended, or a section was stored on the device: the order may have changed
         if (before.songRecording && !l.song.songRecording) || before.sectionsStored != l.song.sectionsStored {
+            onEdit?()
             Task { try? await self.readSongOrder() }
         }
         // a section loaded over the tracks, or the song stopped and SLOOP put the loop back: SLOOP only
@@ -851,6 +1016,7 @@ public final class SloopSession {
         if st.time != .note { st.notes = []; st.levels = []; st.ratchets = [] }
         tracks[t].steps[i] = st
         tracksEdited = true
+        onEdit?()
         let key = t * 64 + i
         recentWrites["s\(key)"] = Date()
         // latest value wins, one write in flight per step: a dial turned fast sends what it passes
@@ -874,6 +1040,7 @@ public final class SloopSession {
     public func write(drumIndex i: Int, _ step: DrumStep) {
         tracks[3].drumSteps[i] = step
         tracksEdited = true
+        onEdit?()
         recentWrites["s\(3 * 64 + i)"] = Date()
         // as synth steps: latest value wins, one write in flight, a reply lands only if nothing newer waits
         drumWrites[i] = step
@@ -947,6 +1114,7 @@ public final class SloopSession {
 
     private func sendParam(_ key: String, _ v: Int, _ op: @escaping (SloopClient, Int) async throws -> Int) {
         recentWrites[key] = Date()
+        onEdit?()
         paramWrites[key] = v
         guard let c = client, !paramSending.contains(key) else { return }
         paramSending.insert(key)
@@ -969,6 +1137,7 @@ public final class SloopSession {
         tracks[t].engine = e; tracks[t].preset = i
         tracks[t].engineName = info.engines[e]
         tracks[t].presetName = i < (namesCache[e]?.count ?? 0) ? namesCache[e]![i] : "Preset \(i + 1)"
+        onEdit?()
         guard let c = client else { return }
         Task { _ = try? await c.preset(engine: e, index: i) }
     }
@@ -978,6 +1147,7 @@ public final class SloopSession {
         guard t < 3, let info else { return }
         if p.engine < info.engines.count { tracks[t].engine = p.engine; tracks[t].engineName = info.engines[p.engine] }
         tracks[t].presetName = p.name
+        onEdit?()
         guard let c = client else { return }
         Task { _ = try? await c.userLoad(slot: p.slot) }
     }

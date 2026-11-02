@@ -19,6 +19,7 @@ struct RootView: View {
     @State private var session: SloopSession
     @State private var ui = EditorUI()
     @State private var through = AudioThrough()
+    @State private var projects = ProjectStore()
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
@@ -30,6 +31,7 @@ struct RootView: View {
             let s = min(geo.size.width / Theme.canvas.width, geo.size.height / Theme.canvas.height)
             AppView(session: session, ui: ui, useDemo: $useDemo)
                 .environment(through)
+                .environment(projects)
                 .frame(width: Theme.canvas.width, height: Theme.canvas.height)
                 .scaleEffect(s)
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -38,6 +40,7 @@ struct RootView: View {
         .ignoresSafeArea()
         .task(id: useDemo) {
             if session.isDemo != useDemo { session = SloopSession(demo: useDemo) }
+            projects.attach(session)
             await session.run()
         }
     }

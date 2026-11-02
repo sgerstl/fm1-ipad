@@ -8,6 +8,7 @@ struct AppView: View {
     @Binding var useDemo: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(AudioThrough.self) private var through
+    @Environment(ProjectStore.self) private var projects
     @Environment(\.scenePhase) private var scenePhase
 
     /// The iPad is playing the FM-1's sound, in front: the FM-1's own speaker goes quiet. Anything else
@@ -40,6 +41,9 @@ struct AppView: View {
                 ConnectionState(status: session.status, useDemo: $useDemo)
             }
         }
+        // what the FM-1 holds: matched against the saved projects at connect, re-checked at each stop
+        .onChange(of: isConnected, initial: true) { _, on in if on { projects.connected() } }
+        .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
         // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
         .onChange(of: isConnected, initial: true) { _, on in
             UIApplication.shared.isIdleTimerDisabled = on

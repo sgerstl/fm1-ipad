@@ -184,22 +184,27 @@ public extension SloopClient {
     /// The FM-1's master level (speaker and headphones), 0..126; 127 gives it back to the MASTER knob. Sets a state: may be resent.
     func masterLevel(_ v: Int) async throws -> [UInt8] { try await send(.masterLevel(v)) }
 
-    /// The settings object (backup object 1), which holds the song order: LIST snapshots it, GET reads it.
-    func settingsObject() async throws -> [UInt8] {
+    /// BK_LIST: every backup object's length and CRC-32, and a snapshot of the working loop and the
+    /// settings for the GETs that follow.
+    func objectList() async throws -> [Int: (length: Int, crc: UInt32)] {
         let list = try await send(.bkList)
         guard list.count >= 2, list[0] == 0 else { throw ClientError.timeout("BK_LIST rc \(list.first ?? 99)") }
-        var r = 2, length = 0
+        var r = 2, out: [Int: (length: Int, crc: UInt32)] = [:]
         for _ in 0..<Int(list[1]) {
             guard r + 11 <= list.count else { break }
-            let id = Int(list[r]), len = Int(Pack7.readU35(list[(r + 1)...]))
-            if id == 1 { length = len }
+            out[Int(list[r])] = (Int(Pack7.readU35(list[(r + 1)...])), Pack7.readU35(list[(r + 6)...]))
             r += 11
         }
-        guard length > 0, length <= 4096 else { throw ClientError.timeout("no settings object (length \(length))") }
+        return out
+    }
+
+    /// A backup object's bytes (BK_GET, 256 at a time), from the snapshot the last BK_LIST took.
+    func object(id: Int, length: Int) async throws -> [UInt8] {
+        guard length >= 0, length <= 8192 else { throw ClientError.timeout("object \(id): length \(length)") }
         var out: [UInt8] = []
         while out.count < length {
             let n = min(256, length - out.count)
-            let b = try await send(.bkGet(id: 1, offset: out.count, count: n), timeout: .milliseconds(600))
+            let b = try await send(.bkGet(id: id, offset: out.count, count: n), timeout: .milliseconds(600))
             guard b.count > 9, b[1] == 0 else { throw ClientError.timeout("BK_GET rc \(b.count > 1 ? b[1] : 99)") }
             let chunk = Pack7.decode(Array(b[9...])).prefix(n)
             guard !chunk.isEmpty else { throw ClientError.timeout("BK_GET returned no data") }
@@ -208,11 +213,18 @@ public extension SloopClient {
         return out
     }
 
+    /// The settings object (backup object 1), which holds the song order: LIST snapshots it, GET reads it.
+    func settingsObject() async throws -> [UInt8] {
+        let length = try await objectList()[1]?.length ?? 0
+        guard length > 0, length <= 4096 else { throw ClientError.timeout("no settings object (length \(length))") }
+        return try await object(id: 1, length: length)
+    }
+
     /// Writes the settings object back (the song order, USB AUDIO). rc: 0 ok, 2 invalid, 3 stop the song first.
     func putSettings(_ s: [UInt8]) async throws -> Int { try await putObject(id: 1, s) }
 
-    /// Writes a backup object (editor.c BK_PUT): 1 the settings, 2…5 sections A–D (no bytes: the section
-    /// emptied). rc: 0 ok, 2 invalid, 3 stop first.
+    /// Writes a backup object (editor.c BK_PUT): 0 the working loop (loaded at once), 1 the settings, 2…5
+    /// sections A–D (no bytes: the section emptied). rc: 0 ok, 2 invalid, 3 stop first.
     func putObject(id: Int, _ s: [UInt8]) async throws -> Int {
         var b = try await send(.bkPut(op: 0, id: id, args: Pack7.u35(UInt32(s.count)) + Pack7.u35(CRC32.of(s))))
         guard b.count >= 3, b[2] == 0 else { return Int(b.count >= 3 ? b[2] : 99) }

@@ -79,7 +79,8 @@ import Testing
         #expect(fake.order.steps.map(\.section) == [0, 1, 0, 2])
         session.setPlaying(false)
         try await waitFor { fake.order.steps.map(\.section) == [3, 1] && fake.order.loop }
-        #expect(!session.orderWaitingForStop)
+        // the writer clears the flag once its loop ends, a moment after the fake took the order
+        try await waitFor { !session.orderWaitingForStop }
 
         // song mode, then back
         session.toggleSongMode()
