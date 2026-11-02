@@ -40,7 +40,7 @@ struct TopBar: View {
                                                       : "Setting the FM-1's USB AUDIO to FULL…")
                 }
                 if through.state == .noInput { Text("Plug in the FM-1 (USB AUDIO on)") }
-                if through.state == .denied { Text("Turn on Microphone for FM1 in Settings") }
+                if through.state == .denied { Text("Turn on Microphone for Jib in Settings") }
             }
             if isConnected {
                 // Diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?
@@ -188,7 +188,7 @@ struct TopBar: View {
         }
         .buttonStyle(PressSink())
         .accessibilityLabel(session.song.songRecording ? "Song recording is on" : "Song mode is on")
-        .accessibilityHint("PLAY plays the song order. Opens the Song tab")
+        .accessibilityHint("PLAY plays the song order. Opens the Arrange tab")
     }
 
     private func readout(_ value: String, _ label: String) -> some View {

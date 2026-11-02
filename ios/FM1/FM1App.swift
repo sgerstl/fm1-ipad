@@ -44,7 +44,8 @@ struct RootView: View {
 }
 
 enum Page: String, CaseIterable, Identifiable {
-    case sequencer = "Sequencer", sound = "Sound", song = "Song", library = "Library"
+    // labels name what each tab is for (2026-11-02): sequence a pattern, shape its sound, arrange the song, browse sounds
+    case sequencer = "Sequence", sound = "Shape", song = "Arrange", library = "Browse"
     var id: String { rawValue }
 }
 

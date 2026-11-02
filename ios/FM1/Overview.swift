@@ -185,7 +185,7 @@ struct Overview: View {
                 }
             })
             .accessibilityLabel(family == .arp ? "Arpeggio \(text.dropFirst(4))" : "Chord \(text)")
-            .accessibilityHint("Opens its Sound page")
+            .accessibilityHint("Opens its Shape page")
             .accessibilityAddTraits(.isButton)
     }
 

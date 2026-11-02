@@ -26,13 +26,13 @@ targets:
         PRODUCT_NAME: FM1
         TARGETED_DEVICE_FAMILY: "2"
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: FM1
+        INFOPLIST_KEY_CFBundleDisplayName: Jib
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UIRequiresFullScreen: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIStatusBarHidden: YES
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "FM1 plays the FM-1's sound through the iPad. iOS counts the FM-1's USB audio as a microphone."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Jib plays the FM-1's sound through the iPad. iOS counts the FM-1's USB audio as a microphone."
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
