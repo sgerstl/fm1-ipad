@@ -49,6 +49,11 @@ enum Page: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+struct ViewJump: Equatable {
+    var bar: Int
+    var id: Int
+}
+
 /// What the iPad alone decides: which step is selected (per track), which drum lane, which page.
 @MainActor @Observable
 final class EditorUI {
@@ -62,8 +67,13 @@ final class EditorUI {
     var keyboardOpen = false
     /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there.
     var followDevice = true
-    /// The track box's timeline, pulled open with its handle; shut again on a page change.
+    /// The track box's timeline, pulled open with its handle on the other tabs; shut again on a page change.
+    /// On Sequence it is always open.
     var timelineOpen = false
+    /// The grid's first step in view (fractional while panning): the view box on the timeline follows it.
+    var viewStep: CGFloat = 0
+    /// A bar picked on the timeline: the grid scrolls there.
+    var viewJump: ViewJump?
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: SloopSession.ClearedTrack?   // offered for undo for a few seconds

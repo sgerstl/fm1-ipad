@@ -22,7 +22,7 @@ enum Theme {
     static let trackTop = [Color(hex: 0x4A93FF), Color(hex: 0x4ADB8C), Color(hex: 0xFFD54D), Color(hex: 0xFF8247)]
     static let knob = [Color(hex: 0x287CFF), Color(hex: 0x1ECC70), Color(hex: 0xFFC618), Color(hex: 0xFF2C34)]
 
-    static let stepWidth: CGFloat = 38
+    static let stepWidth: CGFloat = 55          // one bar (16 steps) fills the grid (2026-11-02)
     static let rowHeight: CGFloat = 46
     static let canvas = CGSize(width: 1376, height: 1032)    // 13-inch iPad Air, landscape
 

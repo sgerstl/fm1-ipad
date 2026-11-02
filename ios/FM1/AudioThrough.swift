@@ -50,6 +50,13 @@ final class AudioThrough {
         core.set(enabled)
     }
 
+    /// Looks again: the app came to the front, or the FM-1 connected. At launch the switch could be on
+    /// with nothing playing, because the start ran before the FM-1's USB audio was ready and nothing
+    /// asked again (2026-11-02).
+    func recheck() {
+        if enabled { core.recheck() }
+    }
+
     /// Short, for the connection menu and VoiceOver.
     var summary: String {
         switch state {
@@ -84,6 +91,10 @@ final class AudioCore: @unchecked Sendable {
     private var sessionReady = false
     private var pending: DispatchWorkItem?
     private var last: AudioThrough.State?
+    private var lastRoute: String?
+    /// Whether any sound has come in from the FM-1 since the engine started: the connection menu says
+    /// "signal" or "silent so far", so a silent start shows where it stopped.
+    private let meter = InputMeter()
     private var observers: [NSObjectProtocol] = []
 
     init() {
@@ -118,12 +129,25 @@ final class AudioCore: @unchecked Sendable {
         }
     }
 
+    func recheck() {
+        queue.async {
+            self.pending?.cancel()
+            self.check()
+        }
+    }
+
     /// A check a moment from now; another request before then replaces it.
-    private func schedule() {
+    private func schedule(after delay: TimeInterval = 0.3) {
         pending?.cancel()
         let w = DispatchWorkItem { [weak self] in self?.check() }
         pending = w
-        queue.asyncAfter(deadline: .now() + 0.3, execute: w)
+        queue.asyncAfter(deadline: .now() + delay, execute: w)
+    }
+
+    /// On but not playing (no input yet, a format of zero, a start iOS refused): try again shortly.
+    /// Nothing else would: with the FM-1 already plugged in at launch, no route change comes.
+    private func retry() {
+        if enabled { schedule(after: 1.5) }
     }
 
     private static func usbInputInRoute() -> Bool {
@@ -166,6 +190,7 @@ final class AudioCore: @unchecked Sendable {
             guard let usb = s.availableInputs?.first(where: { $0.portType == .usbAudio }) else {
                 stopEngine()
                 publish(.noInput)
+                retry()
                 return
             }
             if s.preferredInput?.uid != usb.uid {
@@ -174,6 +199,7 @@ final class AudioCore: @unchecked Sendable {
             guard Self.usbInputInRoute() else {
                 stopEngine()
                 publish(.noInput)
+                retry()
                 return
             }
             let out = s.currentRoute.outputs.first
@@ -189,18 +215,32 @@ final class AudioCore: @unchecked Sendable {
             let format = input.inputFormat(forBus: 0)
             guard format.sampleRate > 0, format.channelCount > 0 else {
                 publish(.noInput)
+                retry()
                 return
             }
             engine.connect(input, to: engine.mainMixerNode, format: format)
+            meter.reset()
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [meter] buffer, _ in meter.take(buffer) }
             engine.connect(engine.mainMixerNode, to: engine.outputNode, format: engine.outputNode.outputFormat(forBus: 0))
             engine.prepare()
             try engine.start()
             builtFor = out?.uid
             reportRoute()
             publish(.playing(to: output))
+            watchSignal()
         } catch {
             stopEngine()
             publish(.failed("iPad audio couldn't start"))
+            retry()
+        }
+    }
+
+    /// Refreshes the connection menu's line once a second until sound arrives (or the engine stops).
+    private func watchSignal() {
+        queue.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self, self.engine.isRunning else { return }
+            self.reportRoute()
+            if !self.meter.heard { self.watchSignal() }
         }
     }
 
@@ -224,14 +264,20 @@ final class AudioCore: @unchecked Sendable {
         if engine.isRunning {
             let i = engine.inputNode.inputFormat(forBus: 0).sampleRate, o = engine.outputNode.outputFormat(forBus: 0).sampleRate
             line += String(format: " · %.1f → %.1f kHz", i / 1000, o / 1000)
+            line += meter.heard ? " · signal" : " · silent so far"
         } else {
             line += " · stopped"
         }
+        guard line != lastRoute else { return }
+        lastRoute = line
         onRoute?(line)
     }
 
     private func stopEngine() {
-        if engine.isRunning { engine.stop() }
+        if engine.isRunning {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+        }
         builtFor = nil
     }
 
@@ -239,6 +285,27 @@ final class AudioCore: @unchecked Sendable {
         guard s != last else { return }
         last = s
         onState?(s)
+    }
+}
+
+/// Notes whether anything above digital silence has come in. Written on the audio thread, read on
+/// the audio queue.
+final class InputMeter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var any = false
+
+    var heard: Bool { lock.withLock { any } }
+    func reset() { lock.withLock { any = false } }
+
+    func take(_ buffer: AVAudioPCMBuffer) {
+        guard !heard, let data = buffer.floatChannelData else { return }
+        let n = Int(buffer.frameLength)
+        for c in 0..<Int(buffer.format.channelCount) {
+            for i in 0..<n where abs(data[c][i]) > 1e-5 {
+                lock.withLock { any = true }
+                return
+            }
+        }
     }
 }
 

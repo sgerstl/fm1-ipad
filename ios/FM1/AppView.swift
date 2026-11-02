@@ -41,8 +41,13 @@ struct AppView: View {
             }
         }
         // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
-        .onChange(of: isConnected, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
+        .onChange(of: isConnected, initial: true) { _, on in
+            UIApplication.shared.isIdleTimerDisabled = on
+            if on { through.recheck() }
+        }
         .onChange(of: speakerQuiet, initial: true) { _, quiet in session.muteSpeaker(quiet) }
+        // iPad audio left on from last time: look again once the app is in front, as when the FM-1 connects
+        .onChange(of: scenePhase) { _, p in if p == .active { through.recheck() } }
         .onChange(of: [audioThrough ? 1 : 0, session.playing ? 1 : 0, session.song.songMode ? 1 : 0], initial: true) { _, _ in
             NowPlaying.shared.update(active: audioThrough, session: session)
         }
@@ -115,7 +120,7 @@ extension AppView {
                     .transition(.opacity)
                     .zIndex(1)
             }
-            Overview(session: session, ui: ui, expanded: ui.timelineOpen)
+            Overview(session: session, ui: ui, expanded: ui.page == .sequencer || ui.timelineOpen)
                 .zIndex(2)
             if ui.presetsPanel {
                 PresetsPanel(session: session, ui: ui)
@@ -357,17 +362,21 @@ struct SequencerPage: View {
 
     var body: some View {
         let t = session.selectedTrack
+        // the track box and its timeline (always open here) across the top; under the box, the selected
+        // step and the whole track's knobs; the grid, one bar wide, takes the rest (2026-11-02)
         VStack(spacing: 16) {
-            // beside the track box: the selected step and the knobs (the timeline opens over them)
+            Color.clear.frame(height: Overview.height)
             HStack(alignment: .top, spacing: 16) {
-                Color.clear.frame(width: Overview.boxWidth, height: Overview.height)
-                SelectedStepPanel(session: session, ui: ui)
-                    .frame(height: Overview.height)
-            }
-            if t == 3 {
-                DrumGrid(session: session, ui: ui)
-            } else {
-                PianoRoll(session: session, ui: ui, track: t)
+                VStack(spacing: 16) {
+                    SelectedStepPanel(session: session, ui: ui)
+                    TrackPanel(session: session, ui: ui)
+                }
+                .frame(width: Overview.boxWidth, height: PianoRoll.panelHeight)
+                if t == 3 {
+                    DrumGrid(session: session, ui: ui)
+                } else {
+                    PianoRoll(session: session, ui: ui, track: t)
+                }
             }
         }
     }

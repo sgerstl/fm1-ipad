@@ -1,8 +1,10 @@
 import SloopKit
 import SwiftUI
 
-/// The selected step. Raised keys change it; read-outs (the notes) sit in wells, under the brief's
-/// "raised to press, recessed to read".
+/// The selected step, in the left column under the track box. Raised keys change it; read-outs (the
+/// notes) sit in wells, under the brief's "raised to press, recessed to read". Only the step's own values
+/// live here: the knobs that act on the whole track are in `TrackPanel` below it (2026-11-02: inside this
+/// box they read as the step's).
 struct SelectedStepPanel: View {
     let session: SloopSession
     let ui: EditorUI
@@ -10,27 +12,24 @@ struct SelectedStepPanel: View {
     var body: some View {
         let t = session.selectedTrack
         let i = ui.selectedStep[t]
-        // two rows, beside the track box: the step's notes and timing, then its feel and the knobs
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .bottom, spacing: 24) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Selected").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    Text("Step \(i + 1)").font(.system(size: 22, weight: .semibold))
-                }
-                .frame(width: 96, alignment: .leading)
-                .accessibilityElement(children: .combine)
-                if t == 3 { drumDetails(session.tracks[3].drumSteps[i], part: 0) } else { synthDetails(session.tracks[t].steps[i], track: t, part: 0) }
-                Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Selected step").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text("Step \(i + 1)").font(.system(size: 22, weight: .semibold))
             }
-            HStack(alignment: .bottom, spacing: 24) {
-                if t == 3 { drumDetails(session.tracks[3].drumSteps[i], part: 1) } else { synthDetails(session.tracks[t].steps[i], track: t, part: 1) }
-                Spacer(minLength: 0)
-                KnobRow(session: session, ui: ui)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            if t == 3 {
+                drumDetails(session.tracks[3].drumSteps[i], part: 0)
+                drumDetails(session.tracks[3].drumSteps[i], part: 1)
+            } else {
+                synthDetails(session.tracks[t].steps[i], track: t, part: 0)
+                synthDetails(session.tracks[t].steps[i], track: t, part: 1)
             }
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .panel()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Selected step")
@@ -40,6 +39,7 @@ struct SelectedStepPanel: View {
         let i = ui.selectedStep[track]
         let on = s.isOn
         if part == 0 {
+        VStack(alignment: .leading, spacing: 16) {
         // Notes are read here and added or removed in the grid, so they stay read-outs.
         field("Notes") {
             HStack(spacing: 6) {
@@ -60,7 +60,9 @@ struct SelectedStepPanel: View {
                 session.write(track: track, index: i, st)
             }
         }
+        }
         } else {
+        VStack(alignment: .leading, spacing: 16) {
         // the step's own values, grouped bottom left: velocity turns like the track knobs (touch, trace
         // the ring; tap for − / +), in the track's colour; ratchet is x1..x4 hits in the step (SLOOP
         // keeps one per note: the keys set every note of the step)
@@ -88,6 +90,7 @@ struct SelectedStepPanel: View {
             }
         }
         }
+        }
     }
 
     /// Read fresh on every turn: the grown ring re-asks while the finger moves.
@@ -106,8 +109,10 @@ struct SelectedStepPanel: View {
         let i = ui.selectedStep[3]
         let has = s.has(lane)
         if part == 0 {
+        VStack(alignment: .leading, spacing: 16) {
         field("Hits") {
-            HStack(spacing: 6) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading), GridItem(.flexible(), spacing: 6, alignment: .leading)],
+                      alignment: .leading, spacing: 6) {
                 if s.lanes.isEmpty { readout("Tap the grid", dim: true) }
                 // a hit picks the lane the level and ratchet keys act on
                 ForEach(s.lanes.prefix(4), id: \.self) { l in
@@ -128,6 +133,7 @@ struct SelectedStepPanel: View {
                           enabled: Array(repeating: has, count: 4)) { k in
                 session.write(drumIndex: i, s.setting(lane, on: true, level: k, ratchet: s.ratchet(lane)))
             }
+        }
         }
         } else {
         field("\(Music.drumLanes[lane]) ratchet") {
@@ -156,5 +162,36 @@ struct SelectedStepPanel: View {
             .padding(.horizontal, 12)
             .frame(minWidth: 52, minHeight: 44)
             .recessed(9)
+    }
+}
+
+/// The knobs that act on the whole track (and swing, on all four), as on the FM-1's home screen. Its own
+/// panel under the step, headed with the track, so they don't read as the step's.
+struct TrackPanel: View {
+    let session: SloopSession
+    let ui: EditorUI
+
+    var body: some View {
+        let t = session.selectedTrack
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                TrackChip(track: t, muted: session.tracks[t].mute)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Whole track").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text(t == 3 ? "Drums" : session.tracks[t].displayName)
+                        .font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Whole track: track \(t + 1), \(session.tracks[t].displayName)")
+            .accessibilityAddTraits(.isHeader)
+            KnobRow(session: session, ui: ui)
+            Text("Swing sets all four tracks.")
+                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panel()
+        .accessibilityElement(children: .contain)
     }
 }

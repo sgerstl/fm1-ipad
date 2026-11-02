@@ -1,7 +1,8 @@
 import SloopKit
 import SwiftUI
 
-/// The selected synth track as a piano roll folded to its scale: 32 steps in view, two fingers pan.
+/// The selected synth track as a piano roll folded to its scale: one bar in view, two fingers pan (it
+/// settles on a bar), or move the view box on the track's timeline row.
 struct PianoRoll: View {
     let session: SloopSession
     let ui: EditorUI
@@ -9,10 +10,11 @@ struct PianoRoll: View {
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<PianoRollContent>.ScrollRequest?
 
-    static let gridSize = CGSize(width: 1216, height: 534)    // 11 note rows and a bit (the step panel moved up)
+    static let gridSize = CGSize(width: 16 * Theme.stepWidth, height: 534)    // one bar; 11 note rows and a bit
     /// Both editors are this tall, so switching to the drum track moves nothing below them.
     static let panelHeight: CGFloat = 684
     static let velocityHeight: CGFloat = 50
+    static let barWidth: CGFloat = 16 * Theme.stepWidth
     static func rows(_ n: Int) -> String { n == 1 ? "1 row" : "\(n) rows" }
 
     var body: some View {
@@ -27,7 +29,7 @@ struct PianoRoll: View {
 
         VStack(spacing: 8) {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
-                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(64, first + 15)) of 64\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
             StepNumbers(offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)
@@ -47,7 +49,7 @@ struct PianoRoll: View {
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request,
-                                        rowKeys: rows, rowHeight: Theme.rowHeight) {
+                                        rowKeys: rows, rowHeight: Theme.rowHeight, snapX: PianoRoll.barWidth) {
                         PianoRollContent(session: session, ui: ui, track: track, rows: rows)
                     }
                     EditorPlayhead(session: session, track: track, offsetX: offset.x, height: Self.gridSize.height)
@@ -73,6 +75,7 @@ struct PianoRoll: View {
         .padding(12)
         .frame(height: PianoRoll.panelHeight)
         .panel()
+        .followsView(ui: ui, offset: offset) { request = .init(x: $0, id: $1) }
         .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
         .onChange(of: track) { _, _ in ui.keptRows = [:] }
     }
@@ -150,9 +153,9 @@ struct StepNumbers: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<64, id: \.self) { i in
-                let show = i % 4 == 0 || i == selected
-                Text(show ? "\(i + 1)" : "")
-                    .font(.system(size: 11, weight: i == selected ? .semibold : .regular))
+                // every step numbered now a bar fills the grid; beats a step heavier
+                Text("\(i + 1)")
+                    .font(.system(size: 11, weight: i == selected || i % 4 == 0 ? .semibold : .regular))
                     .foregroundStyle(i == selected ? Theme.text : Theme.textSecondary)
                     .padding(.leading, 4)
                     .frame(width: Theme.stepWidth, height: 20, alignment: .leading)
@@ -369,7 +372,7 @@ struct VelocityLane: View {
             for i in 0..<64 where track.steps[i].isOn {
                 let v = CGFloat(track.steps[i].velocity) / 127
                 let h = (size.height - 12) * v
-                let r = CGRect(x: CGFloat(i) * Theme.stepWidth + 13, y: size.height - 6 - h, width: 12, height: h)
+                let r = CGRect(x: CGFloat(i) * Theme.stepWidth + (Theme.stepWidth - 12) / 2, y: size.height - 6 - h, width: 12, height: h)
                 var c = ctx
                 c.opacity = i >= track.length ? 0.5 : 1
                 c.fill(Path(roundedRect: r, cornerRadius: 3), with: .color(Theme.track[track.index]))

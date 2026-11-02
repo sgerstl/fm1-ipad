@@ -1,7 +1,8 @@
 import SloopKit
 import SwiftUI
 
-/// The drum track: 16 lanes by 64 steps, 10 lanes and 32 steps in view, two fingers pan.
+/// The drum track: 16 lanes by 64 steps, 12 lanes and one bar in view, two fingers pan (settling on a
+/// bar), or move the view box on the timeline.
 struct DrumGrid: View {
     let session: SloopSession
     let ui: EditorUI
@@ -9,7 +10,7 @@ struct DrumGrid: View {
     @State private var request: TwoFingerScrollView<DrumGridContent>.ScrollRequest?
 
     /// 568 = the piano roll's grid, gap and velocity lane (534 + 8 + 50) less the lane hint and its gap
-    static let gridSize = CGSize(width: 1216, height: 568)
+    static let gridSize = CGSize(width: PianoRoll.barWidth, height: 568)
     static let contentSize = CGSize(width: 64 * Theme.stepWidth, height: 16 * Theme.rowHeight)
 
     var body: some View {
@@ -20,7 +21,7 @@ struct DrumGrid: View {
 
         VStack(spacing: 8) {
             EditorHeader(track: 3, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
-                         detail: "16 lanes · length \(t.length) · steps \(first)–\(min(64, first + 31)) of 64" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+                         detail: "16 lanes · length \(t.length) · steps \(first)–\(min(64, first + 15)) of 64" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
             StepNumbers(offsetX: offset.x, selected: ui.selectedStep[3]) { ui.selectedStep[3] = $0 }
                 .padding(.leading, 88)
@@ -37,7 +38,7 @@ struct DrumGrid: View {
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: Self.contentSize, offset: $offset, request: request) {
+                    TwoFingerScrollView(contentSize: Self.contentSize, offset: $offset, request: request, snapX: PianoRoll.barWidth) {
                         DrumGridContent(session: session, ui: ui)
                     }
                     EditorPlayhead(session: session, track: 3, offsetX: offset.x, height: Self.gridSize.height)
@@ -59,6 +60,7 @@ struct DrumGrid: View {
         .padding(12)
         .frame(height: PianoRoll.panelHeight)
         .panel()
+        .followsView(ui: ui, offset: offset) { request = .init(x: $0, id: $1) }
     }
 }
 
@@ -157,7 +159,7 @@ struct DrumGridContent: View {
                     }
                 } else {
                     // an empty cell: a small recessed well
-                    let r = CGRect(x: x + 15, y: y + 19, width: 8, height: 8)
+                    let r = CGRect(x: x + (w - 8) / 2, y: y + (h - 8) / 2, width: 8, height: 8)
                     ctx.fill(Path(ellipseIn: r), with: .color(Color(hex: 0x0B0B0D)))
                     ctx.fill(Path(ellipseIn: r.offsetBy(dx: 0, dy: 1)).subtracting(Path(ellipseIn: r)), with: .color(.white.opacity(0.05)))
                     if i == selected && l == lane {

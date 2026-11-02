@@ -13,6 +13,8 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     /// the row under the finger stays put.
     var rowKeys: [Int]? = nil
     var rowHeight: CGFloat = 0
+    /// Where a horizontal pan comes to rest: a multiple of this (a bar), never between.
+    var snapX: CGFloat? = nil
     @ViewBuilder var content: () -> Content
 
     struct ScrollRequest: Equatable {
@@ -20,7 +22,7 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         var id: Int
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(offset: $offset) }
+    func makeCoordinator() -> Coordinator { Coordinator(offset: $offset, snapX: snapX) }
 
     func makeUIView(context: Context) -> UIScrollView {
         let sv = UIScrollView()
@@ -81,7 +83,8 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         var lastRequest: ScrollRequest?
         var lastRowKeys: [Int]?
         var adjusting = false          // a shift made inside updateUIView: the binding is set after it
-        init(offset: Binding<CGPoint>) { self.offset = offset }
+        let snapX: CGFloat?
+        init(offset: Binding<CGPoint>, snapX: CGFloat?) { self.offset = offset; self.snapX = snapX }
         func scrollViewDidScroll(_ sv: UIScrollView) {
             guard !adjusting else { return }
             let o = sv.contentOffset
@@ -90,9 +93,32 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         func scrollViewWillBeginDragging(_ sv: UIScrollView) {
             NotificationCenter.default.post(name: .gridPannedByHand, object: nil)
         }
+        /// A pan ends on the nearest bar in the direction it was thrown.
+        func scrollViewWillEndDragging(_ sv: UIScrollView, withVelocity v: CGPoint, targetContentOffset target: UnsafeMutablePointer<CGPoint>) {
+            guard let w = snapX, w > 0 else { return }
+            let maxX = max(0, sv.contentSize.width - sv.bounds.width)
+            let start = sv.contentOffset.x / w
+            let bar: CGFloat = abs(v.x) > 0.3 ? (v.x > 0 ? start.rounded(.up) : start.rounded(.down)) : (target.pointee.x / w).rounded()
+            target.pointee.x = min(max(0, bar * w), maxX)
+        }
     }
 }
 
 extension Notification.Name {
     static let gridPannedByHand = Notification.Name("gridPannedByHand")
+}
+
+extension View {
+    /// Keeps a grid and the timeline's view box together: the grid reports where it is, and scrolls to a
+    /// bar picked on the timeline (`scroll` takes the offset and a request id). A grid that appears picks
+    /// up the bar the other grid was on.
+    func followsView(ui: EditorUI, offset: CGPoint, scroll: @escaping (CGFloat, Int) -> Void) -> some View {
+        self
+            .onChange(of: offset.x) { _, x in ui.viewStep = x / Theme.stepWidth }
+            .onChange(of: ui.viewJump) { _, j in if let j { scroll(CGFloat(j.bar) * PianoRoll.barWidth, j.id) } }
+            .onAppear {
+                let bar = Int((ui.viewStep / 16).rounded())
+                if abs(offset.x - CGFloat(bar) * PianoRoll.barWidth) > 1 { scroll(CGFloat(bar) * PianoRoll.barWidth, -1 - bar) }
+            }
+    }
 }

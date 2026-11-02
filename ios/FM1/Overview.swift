@@ -3,9 +3,11 @@ import SwiftUI
 
 /// The track selector: one component on every page, in one place. Its box of chips and names never
 /// changes (top left, the left column's width, 44 pt rows). The timeline, each track's 64 steps, is
-/// attached to its right, shut unless pulled open with the pill inside the box's right edge (drag, or tap);
-/// open, it slides over whatever is beside the box. Only the visible width moves; the rows keep their
-/// full layout, so nothing reflows. A tap on a row selects the track on the FM-1.
+/// attached to its right: always open on Sequence, and on the other tabs shut unless pulled open with the
+/// pill inside the box's right edge (drag, or tap), sliding over whatever is beside the box. Only the
+/// visible width moves; the rows keep their full layout, so nothing reflows. A tap on a name selects the
+/// track on the FM-1. On Sequence the selected track's row carries the view box, the bar the grid shows:
+/// touch or drag a row's timeline to show that bar (2026-11-02).
 struct Overview: View {
     let session: SloopSession
     let ui: EditorUI
@@ -25,6 +27,7 @@ struct Overview: View {
     /// The row just long-pressed: its release opens the menu only, never also a tap (which would mute or select).
     @State private var held: Int?
     @State private var dragX: CGFloat = 0          // the handle's drag, following the finger
+    @State private var dragBar: Int?               // the bar a drag along a timeline last asked for
 
     private var visible: CGFloat {
         min(max((expanded ? Self.fullWidth : Self.boxWidth) + dragX, Self.boxWidth), Self.fullWidth)
@@ -42,7 +45,7 @@ struct Overview: View {
         .padding(.horizontal, 4)
         .frame(width: visible, height: Self.height, alignment: .leading)
         .panel()
-        .overlay(alignment: .trailing) { handle }
+        .overlay(alignment: .trailing) { if ui.page != .sequencer { handle } }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: expanded)
         .accessibilityElement(children: .contain)
@@ -88,6 +91,7 @@ struct Overview: View {
         let selected = session.selectedTrack == t && !muteOnly
         let hitWidth = expanded ? Self.rowWidth : Self.boxWidth - 8
         return HStack(spacing: 0) {
+            HStack(spacing: 0) {
             // The chip is its own key: on the selected track it mutes and unmutes; on another track it
             // selects, so a stray tap can't mute a track you weren't on.
             Button {
@@ -104,12 +108,22 @@ struct Overview: View {
             Button {
                 if held == t { held = nil; return }
                 muteOnly ? session.toggleMute(track: t) : session.select(track: t)
-            } label: { rowBody(t, track: track, selected: selected, hitWidth: hitWidth) }
+            } label: { nameBody(t, track: track, selected: selected) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Track \(t + 1), \(track.displayName)\(track.mute ? ", muted" : "")")
                 .accessibilityValue(expanded ? "\((0..<track.length).filter(track.isOn).count) of \(track.length) steps on" : "")
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
                 .accessibilityHint(muteOnly ? (track.mute ? "Unmutes it" : "Mutes it") : selected ? "" : "Selects the track on the FM-1")
+            }
+            // long press: the track's menu by the finger (only on the chip and name: on the timeline a
+            // slow drag of the view box would open it)
+            .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
+                .onChanged { pressAt = $0.location })
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                held = t
+                ui.trackMenu = TrackMenu(track: t, at: pressAt)
+            })
+            timeline(t, track: track, selected: selected, muteOnly: muteOnly)
         }
         .frame(width: Self.rowWidth, height: Self.rowHeight, alignment: .leading)
         .background(alignment: .leading) {
@@ -121,48 +135,86 @@ struct Overview: View {
         }
         .animation(.easeOut(duration: 0.15), value: ui.trackMenu?.track)
         .onChange(of: ui.trackMenu?.track) { _, open in if open == nil { held = nil } }   // (a press that slid off)
-        // long press: the track's menu by the finger (only Clear all for now; no confirm, it offers Undo)
-        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
-            .onChanged { pressAt = $0.location })
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-            held = t
-            ui.trackMenu = TrackMenu(track: t, at: pressAt)
-        })
         .accessibilityAction(named: "Track menu") { ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: 200, y: 160 + CGFloat(t) * 48)) }
     }
 
-    private func rowBody(_ t: Int, track: TrackState, selected: Bool, hitWidth: CGFloat) -> some View {
-            HStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    Text(track.displayName)
-                        .font(.system(size: 15, weight: selected ? .semibold : .regular))
-                        .lineLimit(1)
-                        .layoutPriority(-1)                 // the name gives way to the tags
-                    if track.mute {
-                        Text("muted").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    }
-                    // CHORD and ARP, by SLOOP's names, on every page; a tag opens its Sound page
-                    if t < 3, track.chord > 0 { modeTag(Music.chordNames[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
-                    if t < 3, track.arpMode > 0 { modeTag("ARP " + (Music.arpModes[safe: track.arpMode] ?? ""), track: t, family: .arp) }
-                    Spacer(minLength: 0)
-                }
-                .padding(.trailing, 14)                     // clear of the timeline's pull
-                .frame(width: Self.boxWidth - 8 - 44 - 4, alignment: .leading)
-                .padding(.leading, 4)
-                // the playhead is taller than the cells: as an overlay it can't shift them off centre
-                Canvas { ctx, _ in draw(ctx, track) }
-                .frame(width: Self.timelineWidth - 6, height: Self.cell.height)
-                .overlay(alignment: .leading) { OverviewPlayhead(session: session, track: t, running: progress > 0) }
-                .padding(3)
-                // a flat, even well: the deep inset shadow of the bigger wells made the cells read high on
-                // a strip this thin; read-only, so nothing here looks raised
-                .background(RoundedRectangle(cornerRadius: 5).fill(Theme.well)
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.black.opacity(0.5), lineWidth: 1)))
-                .opacity(Double(progress) * (track.mute ? 0.45 : 1))
+    private func nameBody(_ t: Int, track: TrackState, selected: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(track.displayName)
+                .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                .lineLimit(1)
+                .layoutPriority(-1)                 // the name gives way to the tags
+            if track.mute {
+                Text("muted").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
-            .frame(width: Self.rowWidth - 44, height: Self.rowHeight, alignment: .leading)
-            // collapsed, the hidden timeline catches no taps (clipping alone doesn't stop hit-testing)
-            .contentShape(Path(CGRect(x: 0, y: 0, width: hitWidth - 44, height: Self.rowHeight)))
+            // CHORD and ARP, by SLOOP's names, on every page; a tag opens its Sound page
+            if t < 3, track.chord > 0 { modeTag(Music.chordNames[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
+            if t < 3, track.arpMode > 0 { modeTag("ARP " + (Music.arpModes[safe: track.arpMode] ?? ""), track: t, family: .arp) }
+            Spacer(minLength: 0)
+        }
+        .padding(.trailing, 14)                     // clear of the timeline's pull
+        .frame(width: Self.boxWidth - 8 - 44 - 4, height: Self.rowHeight, alignment: .leading)
+        .padding(.leading, 4)
+        .contentShape(Rectangle())
+    }
+
+    /// A track's 64 steps. On Sequence, touching or dragging it shows the bar under the finger in the
+    /// grid (selecting the track first), and the selected track's row frames the bar in view.
+    @ViewBuilder
+    private func timeline(_ t: Int, track: TrackState, selected: Bool, muteOnly: Bool) -> some View {
+        let onSequence = ui.page == .sequencer
+        let strip = Canvas { ctx, _ in draw(ctx, track) }
+            .frame(width: Self.timelineWidth - 6, height: Self.cell.height)
+            // the playhead is taller than the cells: as an overlay it can't shift them off centre
+            .overlay(alignment: .leading) { OverviewPlayhead(session: session, track: t, running: progress > 0) }
+            .overlay(alignment: .leading) { if onSequence && selected { ViewBox(ui: ui) } }
+            .padding(3)
+            // a flat, even well: the deep inset shadow of the bigger wells made the cells read high on
+            // a strip this thin; read-only, so nothing here looks raised
+            .background(RoundedRectangle(cornerRadius: 5).fill(Theme.well)
+                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.black.opacity(0.5), lineWidth: 1)))
+            .opacity(Double(progress) * (track.mute ? 0.45 : 1))
+            .frame(height: Self.rowHeight)
+        if !expanded {
+            strip.allowsHitTesting(false).accessibilityHidden(true)
+        } else if onSequence {
+            strip
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { e in
+                        if session.selectedTrack != t { session.select(track: t) }
+                        // one request per bar the finger enters, so the grid's scroll isn't restarted on every move
+                        let bar = max(0, min(3, Int((e.location.x - 3) / (16 * (Self.cell.width + Self.gap)))))
+                        if bar != dragBar { dragBar = bar; show(bar: bar) }
+                    }
+                    .onEnded { _ in dragBar = nil })
+                // a quick tap can end before the drag reports a move: it picks the bar too
+                .simultaneousGesture(SpatialTapGesture().onEnded { e in
+                    if session.selectedTrack != t { session.select(track: t) }
+                    show(bar: Int((e.location.x - 3) / (16 * (Self.cell.width + Self.gap))))
+                })
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Track \(t + 1) bars")
+                .accessibilityValue(selected ? "Showing bar \(viewBar + 1) of 4" : "")
+                .accessibilityHint(selected ? "Swipe up or down to show another bar" : "Selects the track")
+                .accessibilityAdjustableAction { dir in
+                    if session.selectedTrack != t { session.select(track: t) }
+                    show(bar: viewBar + (dir == .increment ? 1 : -1))
+                }
+                .accessibilityAction { if session.selectedTrack != t { session.select(track: t) } }
+        } else {
+            // the other tabs: a tap selects (or mutes, on Arrange), as the name does
+            strip
+                .contentShape(Rectangle())
+                .onTapGesture { muteOnly ? session.toggleMute(track: t) : session.select(track: t) }
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var viewBar: Int { max(0, min(3, Int((ui.viewStep / 16).rounded()))) }
+
+    private func show(bar: Int) {
+        ui.viewJump = ViewJump(bar: max(0, min(3, bar)), id: (ui.viewJump?.id ?? 0) + 1)
     }
 
     /// A small tag after the name: what the track's notes become (a chord, an arpeggio).
@@ -202,6 +254,21 @@ struct Overview: View {
                 ctx.fill(p, with: .color(Theme.stepEmpty))
             }
         }
+    }
+}
+
+/// The bar the grid shows, framed on the selected track's timeline row. It follows the grid while it
+/// pans, so it can sit between bars mid-pan.
+private struct ViewBox: View {
+    let ui: EditorUI
+    var body: some View {
+        let pitch = Overview.cell.width + Overview.gap
+        RoundedRectangle(cornerRadius: 5)
+            .strokeBorder(Theme.text, lineWidth: 2)
+            .frame(width: 16 * pitch + 4, height: Overview.cell.height + 10)
+            .offset(x: max(0, min(48, ui.viewStep)) * pitch - 3)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
