@@ -39,6 +39,9 @@ extension Color {
 }
 
 // MARK: - The physical look: raised to press, recessed to read
+//
+// Drawn with gradients and offset shapes only: no blur, no mask, almost no shadow. Each of those makes
+// the GPU draw off screen, and with one per key the panels slid at a low frame rate (2026-11-02).
 
 /// A panel: a lighter surface with a faint top highlight and a soft drop shadow, no outline.
 struct PanelBackground: ViewModifier {
@@ -47,9 +50,9 @@ struct PanelBackground: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(LinearGradient(colors: [Theme.panelTop, Theme.panelBottom], startPoint: .top, endPoint: .bottom))
-                    .overlay(alignment: .top) {
-                        RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.05), lineWidth: 1).mask(
-                            LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(LinearGradient(colors: [.white.opacity(0.05), .clear], startPoint: .top, endPoint: .center), lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
                     .shadow(color: .black.opacity(0.35), radius: 12, y: 8)
@@ -64,15 +67,17 @@ struct Recessed: ViewModifier {
         content.background(
             RoundedRectangle(cornerRadius: radius)
                 .fill(Theme.well)
+                // the inner shadow: darkest at the top edge, gone by the middle
                 .overlay(
                     RoundedRectangle(cornerRadius: radius)
-                        .stroke(.black.opacity(0.7), lineWidth: 3).blur(radius: 3).offset(y: 2)
-                        .mask(RoundedRectangle(cornerRadius: radius))
+                        .strokeBorder(LinearGradient(colors: [.black.opacity(0.6), .black.opacity(0.15), .clear],
+                                                     startPoint: .top, endPoint: .center), lineWidth: 3)
                 )
-                .overlay(alignment: .bottom) {
-                    RoundedRectangle(cornerRadius: radius).stroke(.white.opacity(0.05), lineWidth: 1)
-                        .mask(LinearGradient(colors: [.clear, .white], startPoint: .center, endPoint: .bottom))
-                }
+                // the lip catching light at the bottom
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius)
+                        .strokeBorder(LinearGradient(colors: [.clear, .white.opacity(0.05)], startPoint: .center, endPoint: .bottom), lineWidth: 1)
+                )
         )
     }
 }
@@ -84,9 +89,10 @@ struct RaisedKey: ViewModifier {
         content.background(
             RoundedRectangle(cornerRadius: radius)
                 .fill(LinearGradient(colors: [Theme.raisedTop, Theme.raisedBottom], startPoint: .top, endPoint: .bottom))
-                .overlay(RoundedRectangle(cornerRadius: radius).inset(by: 0.5).stroke(.white.opacity(0.09), lineWidth: 1)
-                    .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center)))
-                .shadow(color: .black.opacity(0.6), radius: 1, y: 1)
+                .overlay(RoundedRectangle(cornerRadius: radius)
+                    .strokeBorder(LinearGradient(colors: [.white.opacity(0.09), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
+                // its edge on the panel: a dark copy a point lower, in place of a blurred shadow
+                .background(RoundedRectangle(cornerRadius: radius).fill(.black.opacity(0.6)).offset(y: 1))
         )
     }
 }

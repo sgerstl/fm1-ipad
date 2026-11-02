@@ -18,6 +18,7 @@ struct RootView: View {
     @State private var useDemo = ProcessInfo.processInfo.arguments.contains("-demo")
     @State private var session: SloopSession
     @State private var ui = EditorUI()
+    @State private var through = AudioThrough()
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
@@ -28,6 +29,7 @@ struct RootView: View {
         GeometryReader { geo in
             let s = min(geo.size.width / Theme.canvas.width, geo.size.height / Theme.canvas.height)
             AppView(session: session, ui: ui, useDemo: $useDemo)
+                .environment(through)
                 .frame(width: Theme.canvas.width, height: Theme.canvas.height)
                 .scaleEffect(s)
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -62,6 +64,7 @@ final class EditorUI {
     /// The track box's timeline, pulled open with its handle; shut again on a page change.
     var timelineOpen = false
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
+    var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: SloopSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs.

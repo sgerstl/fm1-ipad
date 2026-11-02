@@ -68,12 +68,18 @@ import Testing
         try await Task.sleep(for: .milliseconds(100))
         #expect(fake.stored == 0b1111)
 
-        // a new order, written back through the backup commands (CRC checked by the fake)
+        // a new order, written back through the backup commands (CRC checked by the fake); the demo
+        // plays from the start, and SLOOP takes an order only once stopped, so it waits for the stop
         var o = session.songOrder!
         o.steps = [.init(section: 3, bars: 2), .init(section: 1, bars: 16)]
         o.loop = true
+        try await waitFor { session.playing }
         session.setSongOrder(o)
+        try await waitFor { session.orderWaitingForStop }
+        #expect(fake.order.steps.map(\.section) == [0, 1, 0, 2])
+        session.setPlaying(false)
         try await waitFor { fake.order.steps.map(\.section) == [3, 1] && fake.order.loop }
+        #expect(!session.orderWaitingForStop)
 
         // song mode, then back
         session.toggleSongMode()

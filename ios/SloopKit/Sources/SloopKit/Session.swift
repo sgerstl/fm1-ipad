@@ -53,7 +53,10 @@ public final class SloopSession {
     public private(set) var info: DeviceInfo?
     public private(set) var tracks = (0..<4).map(TrackState.init)
     public private(set) var selectedTrack = 0
-    public private(set) var playing = false
+    public private(set) var playing = false {
+        // stopped (from the FM-1 or the iPad): the song order the iPad kept for now goes to the FM-1
+        didSet { if oldValue, !playing, pendingOrder != nil { drainSettings() } }
+    }
     /// The song: sections A–D, the mode, the position (LIVE), and the order (the settings object).
     public private(set) var song = SongState()
     public private(set) var songOrder: SongOrder?
@@ -68,6 +71,14 @@ public final class SloopSession {
     @ObservationIgnored private var pendingOrder: SongOrder?
     @ObservationIgnored private var orderWriting = false
     @ObservationIgnored private var orderWriteBefore: SongOrder?
+    /// The FM-1's HOME > AUDIO > USB AUDIO, from the settings object (nil until read): FULL sends a fixed
+    /// level over USB whatever the MASTER, so the speaker can be muted while the iPad plays the sound.
+    public private(set) var usbAudioFull: Bool?
+    /// The iPad plays the FM-1's sound and wants its speaker quiet (AudioThrough, via the app).
+    @ObservationIgnored private var speakerMuted = false
+    @ObservationIgnored private var wantUSBFull = false
+    /// A new song order the FM-1 will take once playback stops (SLOOP refuses one while anything plays).
+    public private(set) var orderWaitingForStop = false
 
     /// Recording (a track is REC) or armed and waiting for a note: the REC pad lights.
     public private(set) var recording = false
@@ -172,7 +183,7 @@ public final class SloopSession {
     private func connect(_ transport: SysExTransport) async {
         let c = SloopClient(transport: transport)
         client = c
-        settingsCache = nil; songOrder = nil      // never write a settings object read from another FM-1
+        settingsCache = nil; songOrder = nil; usbAudioFull = nil     // never write a settings object read from another FM-1
         await c.start()
         if case .wrongFirmware = status {} else { status = .connecting }
         do {
@@ -230,6 +241,27 @@ public final class SloopSession {
         let s = try await c.settingsObject()
         settingsCache = s
         songOrder = SongOrder(settings: s)
+        usbAudioFull = Self.usbFull(in: s)
+    }
+
+    /// USB AUDIO = FULL: bit 11 of the settings' last word (persist_t.lights at byte 84, panel.c lights_word).
+    static func usbFull(in s: [UInt8]) -> Bool? { s.count >= 88 ? s[85] & 0x08 != 0 : nil }
+
+    // MARK: The FM-1's speaker while the iPad plays
+
+    /// Quiets the FM-1's speaker (and its headphones) while the iPad plays its sound over USB, or gives
+    /// the MASTER knob back. Quieting needs USB AUDIO = FULL first, or the iPad would go quiet too: the
+    /// app writes that setting once (it's refused while the FM-1 plays, so it waits for a stop).
+    /// Unplugged while quiet, the FM-1 stays quiet until its MASTER knob turns (SLOOP gives the knob back then).
+    public func muteSpeaker(_ mute: Bool) {
+        speakerMuted = mute
+        guard let c = client else { return }
+        if mute, usbAudioFull != true {
+            wantUSBFull = true
+            drainSettings()
+            return
+        }
+        Task { _ = try? await c.masterLevel(mute ? 0 : 127) }
     }
 
     private let saveLayer = 7          // LIVE op 2's layer for SAVE held (ui_layers.c LY_SONG)
@@ -251,6 +283,22 @@ public final class SloopSession {
 
     /// Stores the working loop into a section, as SAVE + key 5–8 (over a used one the FM-1 wants the key
     /// twice within 3 s: the iPad asks first, then sends both).
+    /// Empties section k (the editor's restore of no bytes, project.c project_restore). SLOOP does it only
+    /// stopped, and keeps no copy.
+    public func clearSection(_ k: Int) {
+        guard let c = client, (0..<4).contains(k) else { return }
+        guard !playing else { songMessage = "Stop the FM-1 to clear a section"; return }
+        songMessage = nil
+        Task {
+            let rc = (try? await c.putObject(id: 2 + k, [])) ?? 99
+            if rc == 0 {
+                self.song.sectionsStored &= ~(1 << k)
+            } else {
+                self.songMessage = rc == 3 ? "Stop the FM-1 to clear a section" : "The FM-1 didn't clear section \(Self.sectionName(k)) (code \(rc))"
+            }
+        }
+    }
+
     public func storeLoop(in k: Int) {
         guard let c = client else { return }
         let twice = song.stored(k)
@@ -307,29 +355,51 @@ public final class SloopSession {
     /// Each write re-reads the settings object first and changes only the order's bytes, so settings
     /// changed on the FM-1 since connect are kept; one write runs at a time and the latest order wins.
     public func setSongOrder(_ order: SongOrder) {
-        guard let c = client, songOrder != nil else { return }     // never over an order the app couldn't read
+        guard client != nil, songOrder != nil else { return }     // never over an order the app couldn't read
         if song.songPlaying || song.songRecording { songMessage = "Stop the song to change its order"; return }
         if orderWriteBefore == nil { orderWriteBefore = songOrder }
         songOrder = order
         songMessage = nil
         pendingOrder = order
-        guard !orderWriting else { return }
+        drainSettings()
+    }
+
+    /// The one writer of the settings object: the song order and USB AUDIO = FULL go through here, one
+    /// write at a time, each on a fresh read so settings changed on the FM-1 since are kept.
+    private func drainSettings() {
+        guard let c = client, !orderWriting else { return }
         orderWriting = true
         Task {
-            while let next = self.pendingOrder {
-                self.pendingOrder = nil
+            while self.pendingOrder != nil || self.wantUSBFull {
+                // SLOOP takes a new order only when stopped (settings_restore): it waits for the stop
+                let order = self.playing ? nil : self.pendingOrder, full = self.wantUSBFull
+                if order == nil, !full { break }
+                if order != nil { self.pendingOrder = nil }
+                self.wantUSBFull = false
                 var rc = 99
                 if let fresh = try? await c.settingsObject(), SongOrder(settings: fresh) != nil {
-                    let bytes = next.written(into: fresh)
-                    rc = (try? await c.putSettings(bytes)) ?? 99
-                    if rc == 0 { self.settingsCache = bytes }
+                    var bytes = order.map { $0.written(into: fresh) } ?? fresh
+                    if full, bytes.count >= 88 { bytes[85] |= 0x08 }
+                    rc = bytes == fresh ? 0 : (try? await c.putSettings(bytes)) ?? 99
+                    if rc == 0 {
+                        self.settingsCache = bytes
+                        self.usbAudioFull = Self.usbFull(in: bytes)
+                    }
                 }
-                if rc != 0, self.pendingOrder == nil {
+                if let order, rc == 3 {
+                    // still playing as far as the FM-1 knows: keep it for the next stop, don't roll back
+                    if self.pendingOrder == nil { self.pendingOrder = order }
+                    break
+                }
+                if order != nil, rc != 0, self.pendingOrder == nil {
                     self.songOrder = self.orderWriteBefore
-                    self.songMessage = rc == 3 ? "Stop the song to change its order" : "The FM-1 didn't take the order (code \(rc))"
+                    self.songMessage = "The FM-1 didn't take the order (code \(rc))"
                 }
+                // FULL now: the speaker can go quiet without the iPad losing the sound
+                if full, self.usbAudioFull == true, self.speakerMuted { _ = try? await c.masterLevel(0) }
             }
-            self.orderWriteBefore = nil
+            self.orderWaitingForStop = self.pendingOrder != nil
+            if self.pendingOrder == nil { self.orderWriteBefore = nil }
             self.orderWriting = false
         }
     }
@@ -384,7 +454,7 @@ public final class SloopSession {
         if (0..<4).contains(list.selected) { selectedTrack = list.selected }
         for (k, s) in list.tracks.enumerated() where k < 4 {
             tracks[k].engine = s.engine
-            tracks[k].preset = s.preset
+            if s.engine < i.engines.count { tracks[k].preset = s.preset }
             tracks[k].mute = s.mute
             if k < 3 { tracks[k].level = s.level }
             if s.engine < i.engines.count {
@@ -392,8 +462,14 @@ public final class SloopSession {
                 let names = try await presetNames(s.engine)
                 tracks[k].presetName = s.preset < names.count ? names[s.preset] : "Preset \(s.preset + 1)"
             } else {
+                // the drum track's kit is its KIT parameter: TRACK's preset there is the last synth preset the
+                // track held (editor.c ed_b(trk.preset)), and naming the kit from it made the name flicker
                 tracks[k].engineName = "Drums"
-                tracks[k].presetName = kitNames.indices.contains(tracks[k].preset) ? kitNames[tracks[k].preset] : ""
+                if let kit = try? await c.trackParam(track: k, id: i.firstEngineParam) {
+                    tracks[k].preset = kit
+                    // (the names come with the drum track selected: readKits; until then, the kit number only)
+                    if kitNames.indices.contains(kit) { tracks[k].presetName = kitNames[kit] }
+                }
             }
         }
     }

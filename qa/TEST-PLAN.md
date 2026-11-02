@@ -43,8 +43,16 @@ Last full pass: 2026-11-01, branch `app-pass-1`. 51 automated tests pass (8 runs
 | The order can't change while the song plays | A | pass |
 | Writing the order: re-reads the settings first, one write at a time, refused write rolls back | A `aBadSettingsWriteIsRefusedAndTheOrderRollsBack` | pass; **H to do** (back up first) |
 | SONG REC writes what was played; the iPad shows it | A `songRecWritesWhatWasPlayed` | pass; **H to do** |
-| Chains | A (start/stop only) | **H to do** |
+| Chains | A (start/stop only); no longer in the app's UI (2026-11-02) | n/a |
 | SONG marker; grid header says edits end at STOP while the song plays | S | pass |
+| Song blocks: tap opens the menu (move ‹ ›, section, duplicate, delete) and the bars control | S (2026-11-02) | pass; **re-check on H** |
+| Press and drag a block moves it; the others slide aside | S | pass; **re-check on H** |
+| Swipe a block up: it goes, an empty slot stays, Undo for 6 s; the FM-1 gets the order without the slot | S | pass; **re-check on H** |
+| Tap an empty slot, pick a section: it fills | S | pass |
+| Drag a block's right edge: bars change, the row re-fits on release | S | pass |
+| Bar pills: one per bar, played bars fill while the song plays | S | pass; **re-check on H** |
+| SONG REC asks before replacing a song that has steps | code; no test | **re-check on H** |
+| Blocks locked while the song plays or SONG REC records | S | pass |
 
 ## 4. Screen link and pages
 

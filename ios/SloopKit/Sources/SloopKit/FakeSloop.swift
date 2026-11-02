@@ -97,6 +97,8 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     var corruptNextPut = false                 // tests: the next commit fails its CRC check
 
     var order: SongOrder { SongOrder(settings: settings) ?? .standard }
+    /// LIVE op 11 as last sent: 0..126 the level, 127 the MASTER knob's.
+    var masterLevel = 127
 
     /// What a section holds, as on SLOOP: the four tracks' steps and lengths. Storing copies the tracks
     /// in; a section that starts playing (picked when stopped, from the next bar, a chain or a song
@@ -360,8 +362,15 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             var rc: UInt8 = 1
             if op == 0, a.count == 12 { bkLen = Int(Pack7.readU35(a[2...])); bkCRC = Pack7.readU35(a[7...]); bkStaged = []; rc = 0 }
             else if op == 1 { bkStaged += Pack7.decode(Array(a[7...])); rc = 0 }
+            else if op == 2, (2...5).contains(Int(id)) {
+                // a section emptied (project_restore with no bytes), only stopped
+                if playing { rc = 3 }
+                else if bkLen == 0 { sections[Int(id) - 2] = nil; stored &= ~(1 << (Int(id) - 2)); rc = 0 }
+                else { rc = 2 }
+            }
             else if op == 2 {
-                if songMode && playing { rc = 3 }
+                // as settings_restore: a new song order only when stopped; the rest (USB AUDIO) any time
+                if playing, bkStaged.count >= 84, Array(bkStaged[48..<84]) != Array(settings[48..<84]) { rc = 3 }
                 else if corruptNextPut { corruptNextPut = false; rc = 2 }
                 else if bkStaged.count == bkLen, CRC32.of(bkStaged) == bkCRC, SongOrder(settings: bkStaged) != nil { settings = bkStaged; rc = 0 }
                 else { rc = 2 }
@@ -385,6 +394,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                 if !playing, was, let keep = songKeep { restoreKept(keep) }
             }
             if a.first == 4 { recOn.toggle() }
+            if a.first == 11, a.count >= 2 { masterLevel = Int(a[1]) }
             if a.first == 2, a.count >= 4, a[1] == 7, a[3] == 1 { saveLayerKey(Int(a[2])) }
             if a.first == 9, a.count >= 2 {
                 let n = Int(a[1])

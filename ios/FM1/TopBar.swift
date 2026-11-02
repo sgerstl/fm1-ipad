@@ -5,14 +5,17 @@ struct TopBar: View {
     let session: SloopSession
     let ui: EditorUI
     @Binding var useDemo: Bool
+    @Environment(AudioThrough.self) private var through
 
     var body: some View {
-        HStack {
-            connection.frame(width: 420, alignment: .leading)
-            Spacer()
+        // the tabs sit in the middle of the bar whatever the two sides hold
+        ZStack {
+            HStack(spacing: 0) {
+                connection
+                Spacer(minLength: 12)
+                transport
+            }
             tabs
-            Spacer()
-            transport.frame(width: 420, alignment: .trailing)
         }
         .frame(height: 64)
     }
@@ -27,6 +30,17 @@ struct TopBar: View {
             }
             if session.screenLinked {
                 Toggle("Follow the FM-1's screen", isOn: Binding(get: { ui.followDevice }, set: { ui.followDevice = $0 }))
+            }
+            Section("iPad audio") {
+                Toggle("Play through the iPad", isOn: Binding(get: { through.enabled }, set: { through.enabled = $0 }))
+                if through.enabled { Text(through.summary) }
+                if through.enabled, !through.route.isEmpty { Text(through.route) }
+                if case .playing = through.state {
+                    Text(session.usbAudioFull == true ? "The FM-1's speaker is off; turn its MASTER to bring it back if you unplug"
+                                                      : "Setting the FM-1's USB AUDIO to FULL…")
+                }
+                if through.state == .noInput { Text("Plug in the FM-1 (USB AUDIO on)") }
+                if through.state == .denied { Text("Turn on Microphone for FM1 in Settings") }
             }
             if isConnected {
                 // Diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?
@@ -43,6 +57,7 @@ struct TopBar: View {
                     .frame(width: 8, height: 8)
                 Text(statusLine).font(.system(size: 15, weight: .semibold))
                 Text(versionLine).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1).truncationMode(.tail)
             }
             .frame(height: 44)
             .contentShape(Rectangle())
@@ -87,7 +102,7 @@ struct TopBar: View {
                     Text(p.rawValue)
                         .fontWeight(current ? .semibold : .regular)
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
-                        .padding(.horizontal, 22)
+                        .padding(.horizontal, 18)
                         .frame(height: 44)
                         .background { if current { Color.clear.raisedKey() } }
                         .contentShape(Rectangle())
@@ -120,7 +135,9 @@ struct TopBar: View {
 
     private var transport: some View {
         let pos = session.positions[session.selectedTrack]
-        return HStack(spacing: 20) {
+        return HStack(spacing: 12) {
+            // the iPad's sound, beside the iPad's keyboard
+            AudioThroughKey(through: through)
             ToggleKey(name: "Keys", on: ui.keyboardOpen, enabled: isConnected) { ui.keyboardOpen.toggle() }
                 .accessibilityHint("Shows the FM-1's keyboard")
             if session.song.songMode { songMarker }

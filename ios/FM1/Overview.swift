@@ -22,6 +22,8 @@ struct Overview: View {
     static let cell = CGSize(width: (timelineWidth - 6 - 63 * gap) / 64, height: 20)
     static var rowWidth: CGFloat { fullWidth - 8 }
     @State private var pressAt = CGPoint.zero
+    /// The row just long-pressed: its release opens the menu only, never also a tap (which would mute or select).
+    @State private var held: Int?
     @State private var dragX: CGFloat = 0          // the handle's drag, following the finger
 
     private var visible: CGFloat {
@@ -88,7 +90,10 @@ struct Overview: View {
         return HStack(spacing: 0) {
             // The chip is its own key: on the selected track it mutes and unmutes; on another track it
             // selects, so a stray tap can't mute a track you weren't on.
-            Button { selected || muteOnly ? session.toggleMute(track: t) : session.select(track: t) } label: {
+            Button {
+                if held == t { held = nil; return }
+                selected || muteOnly ? session.toggleMute(track: t) : session.select(track: t)
+            } label: {
                 TrackChip(track: t, muted: track.mute)
                     .frame(width: 44, height: Self.rowHeight)
                     .contentShape(Rectangle())
@@ -96,7 +101,10 @@ struct Overview: View {
             .buttonStyle(PressSink())
             .accessibilityLabel(selected || muteOnly ? (track.mute ? "Unmute track \(t + 1)" : "Mute track \(t + 1)") : "Track \(t + 1)")
             .accessibilityValue(track.mute ? "muted" : "")
-            Button { muteOnly ? session.toggleMute(track: t) : session.select(track: t) } label: { rowBody(t, track: track, selected: selected, hitWidth: hitWidth) }
+            Button {
+                if held == t { held = nil; return }
+                muteOnly ? session.toggleMute(track: t) : session.select(track: t)
+            } label: { rowBody(t, track: track, selected: selected, hitWidth: hitWidth) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Track \(t + 1), \(track.displayName)\(track.mute ? ", muted" : "")")
                 .accessibilityValue(expanded ? "\((0..<track.length).filter(track.isOn).count) of \(track.length) steps on" : "")
@@ -112,10 +120,12 @@ struct Overview: View {
                 .frame(width: hitWidth)
         }
         .animation(.easeOut(duration: 0.15), value: ui.trackMenu?.track)
+        .onChange(of: ui.trackMenu?.track) { _, open in if open == nil { held = nil } }   // (a press that slid off)
         // long press: the track's menu by the finger (only Clear all for now; no confirm, it offers Undo)
         .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
             .onChanged { pressAt = $0.location })
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            held = t
             ui.trackMenu = TrackMenu(track: t, at: pressAt)
         })
         .accessibilityAction(named: "Track menu") { ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: 200, y: 160 + CGFloat(t) * 48)) }

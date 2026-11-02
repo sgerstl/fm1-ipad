@@ -169,6 +169,44 @@ import Testing
         #expect(s.tracks[0].steps[0].velocity == 120)          // no older reply snapped it back
     }
 
+    @Test func aSectionClearsOnlyWhenStopped() async throws {
+        let (s, fake, run) = try await connected()
+        defer { run.cancel() }
+        #expect(s.song.stored(2))
+
+        // playing: SLOOP refuses, and the app says why without sending
+        s.setPlaying(true)
+        try await waitFor { s.playing }
+        s.clearSection(2)
+        #expect(s.songMessage != nil)
+        #expect(fake.stored & 0b100 != 0)
+
+        // stopped: C empties on the FM-1 and on the iPad
+        s.setPlaying(false)
+        try await waitFor { !fake.playing && !s.playing }
+        s.clearSection(2)
+        try await waitFor { fake.stored & 0b100 == 0 && !s.song.stored(2) }
+    }
+
+    @Test func theSpeakerGoesQuietOnlyWithUSBAudioFull() async throws {
+        let (s, fake, run) = try await connected()
+        defer { run.cancel() }
+        #expect(s.usbAudioFull == false)
+
+        // quiet: USB AUDIO becomes FULL first (one settings write), then the master goes to 0
+        s.setPlaying(true)
+        try await waitFor { s.playing }
+        s.muteSpeaker(true)
+        try await waitFor { fake.settings[85] & 0x08 != 0 && fake.masterLevel == 0 }
+        #expect(s.usbAudioFull == true)
+        #expect(fake.order.steps.map(\.section) == [0, 1, 0, 2])        // the song order untouched
+
+        // the iPad stops playing the sound: the MASTER knob is the FM-1's again
+        s.muteSpeaker(false)
+        try await waitFor { fake.masterLevel == 127 }
+        s.setPlaying(false)
+    }
+
     @Test func aBadSettingsWriteIsRefusedAndTheOrderRollsBack() async throws {
         let (s, fake, run) = try await connected()
         defer { run.cancel() }

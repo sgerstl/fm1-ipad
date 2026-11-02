@@ -7,6 +7,21 @@ struct AppView: View {
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(AudioThrough.self) private var through
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// The iPad is playing the FM-1's sound, in front: the FM-1's own speaker goes quiet. Anything else
+    /// (the switch off, no input, the app in the background) gives its MASTER knob back.
+    /// The iPad plays the FM-1's sound (whatever the scene): the app is Now Playing.
+    private var audioThrough: Bool {
+        guard isConnected, case .playing = through.state else { return false }
+        return true
+    }
+
+    private var speakerQuiet: Bool {
+        guard isConnected, scenePhase == .active, case .playing = through.state else { return false }
+        return true
+    }
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
 
@@ -27,10 +42,15 @@ struct AppView: View {
         }
         // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
         .onChange(of: isConnected, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
+        .onChange(of: speakerQuiet, initial: true) { _, quiet in session.muteSpeaker(quiet) }
+        .onChange(of: [audioThrough ? 1 : 0, session.playing ? 1 : 0, session.song.songMode ? 1 : 0], initial: true) { _, _ in
+            NowPlaying.shared.update(active: audioThrough, session: session)
+        }
         .padding(24)
         .overlay(alignment: .bottom) { keyboard }
         .overlay(alignment: .bottom) { undoToast }
         .overlay { trackMenuLayer }
+        .overlay { sectionMenuLayer }
         .overlay { GrownKnobLayer(session: session, ui: ui) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
@@ -68,7 +88,7 @@ extension AppView {
                     HStack(alignment: .top, spacing: 16) {
                         leftColumn {
                             FunctionPads(session: session, ui: ui)
-                            SectionsPanel(session: session, ui: ui)
+                            SongModePanel(session: session)
                         }
                         SongPage(session: session, ui: ui)
                     }
@@ -93,15 +113,20 @@ extension AppView {
                     .accessibilityLabel("Close the presets")
                     .accessibilityAddTraits(.isButton)
                     .transition(.opacity)
+                    .zIndex(1)
             }
             Overview(session: session, ui: ui, expanded: ui.timelineOpen)
+                .zIndex(2)
             if ui.presetsPanel {
                 PresetsPanel(session: session, ui: ui)
+                    .geometryGroup()                      // moves as one piece: nothing inside trails it
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                    // on top while it leaves too: without an order a leaving view drops behind the rest
+                    .zIndex(3)
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: ui.presetsPanel)
+        .animation(slide(in: ui.presetsPanel), value: ui.presetsPanel)
         .onChange(of: ui.page) { _, _ in
             ui.timelineOpen = false
             ui.presetsPanel = false
@@ -119,6 +144,97 @@ extension AppView {
     }
 
     /// A long-pressed track's menu, by the finger. A tap anywhere else closes it.
+    /// A held stored section: replace it with the tracks, or clear it (asked again, with what clearing
+    /// costs). Beside the finger, as the track menu; a tap anywhere else closes it.
+    @ViewBuilder var sectionMenuLayer: some View {
+        ZStack(alignment: .topLeading) {
+            if let m = ui.sectionMenu {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture { ui.sectionMenu = nil }
+                    .accessibilityHidden(true)
+                let name = SloopSession.sectionName(m.section)
+                let inSong = session.songOrder?.steps.contains { $0.section == m.section } ?? false
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text(name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.onColour)
+                            .frame(width: 24, height: 24)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[m.section]))
+                        Text("Section \(name)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    }
+                    if m.mode == .confirmLoad {
+                        Text("Load \(name) over the tracks?").font(.system(size: 13, weight: .semibold))
+                            .frame(width: 240, alignment: .leading)
+                        Text("They have changes that aren't in a section. Loading \(name) replaces them, and the FM-1 keeps no copy.")
+                            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                            .frame(width: 240, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                        if let e = (0..<4).first(where: { !session.song.stored($0) }) {
+                            menuItem("Save them to \(SloopSession.sectionName(e)) first", icon: "square.and.arrow.down") {
+                                session.storeLoop(in: e)
+                                session.playSection(m.section)
+                                ui.sectionMenu = nil
+                            }
+                        }
+                        menuItem("Load it, replacing them", icon: "arrow.uturn.down", destructive: true) {
+                            session.playSection(m.section)
+                            ui.sectionMenu = nil
+                        }
+                        menuItem("Keep my tracks", icon: "xmark") { ui.sectionMenu = nil }
+                    } else if m.mode == .confirmClear {
+                        Text("Clear \(name)? The FM-1 keeps no copy.")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 220, alignment: .leading)
+                        if inSong {
+                            Text("It's in the song, which won't play until \(name) holds tracks again.")
+                                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                                .frame(width: 220, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                        }
+                        menuItem("Clear \(name)", icon: "trash", destructive: true) {
+                            session.clearSection(m.section)
+                            ui.sectionMenu = nil
+                        }
+                        menuItem("Keep it", icon: "xmark") { ui.sectionMenu = nil }
+                    } else {
+                        menuItem("Replace with the sequence", icon: "square.and.arrow.down") {
+                            session.storeLoop(in: m.section)
+                            ui.sectionMenu = nil
+                        }
+                        .accessibilityHint("The FM-1 has no undo for this")
+                        menuItem(session.playing ? "Clear (stop first)" : "Clear section", icon: "trash", destructive: true,
+                                 enabled: !session.playing) {
+                            ui.sectionMenu?.mode = .confirmClear
+                        }
+                        .accessibilityHint(session.playing ? "SLOOP clears a section only when stopped" : "Asks before clearing")
+                        Text("Neither has an undo on the FM-1.")
+                            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.45), radius: 18, y: 10))
+                // beside the finger (to its right, centred on it), kept on screen
+                .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 290), y: min(max(m.at.y - 60, 12), Theme.canvas.height - 300))
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                .accessibilityAddTraits(.isModal)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.sectionMenu)
+    }
+
+    private func menuItem(_ title: String, icon: String, destructive: Bool = false, enabled: Bool = true,
+                          _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(!enabled ? Theme.textTertiary : destructive ? Color(hex: 0xFF6B6B) : Theme.text)
+                .padding(.horizontal, 14).frame(minWidth: 220, minHeight: 44, alignment: .leading)
+                .raisedKey()
+        }
+        .buttonStyle(PressSink())
+        .disabled(!enabled)
+    }
+
     @ViewBuilder var trackMenuLayer: some View {
         ZStack(alignment: .topLeading) {
             if let m = ui.trackMenu {
@@ -213,12 +329,20 @@ extension AppView {
         ZStack(alignment: .bottom) {
             if ui.keyboardOpen, case .connected = session.status {
                 KeyboardDrawer(session: session, ui: ui)
+                    .geometryGroup()
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+                    .zIndex(1)
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.keyboardOpen)
+        .animation(slide(in: ui.keyboardOpen), value: ui.keyboardOpen)
+    }
+
+    /// A panel sliding in springs (about 0.4 s); sliding out it eases, a little quicker but never a snap.
+    func slide(in opening: Bool) -> Animation? {
+        guard !reduceMotion else { return nil }
+        return opening ? .spring(response: 0.42, dampingFraction: 0.9) : .easeInOut(duration: 0.32)
     }
 }
 

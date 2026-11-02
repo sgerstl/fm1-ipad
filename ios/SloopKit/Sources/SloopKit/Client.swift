@@ -181,6 +181,8 @@ public extension SloopClient {
         return try await send(.layerKey(layer: layer, key: key, down: false), retries: 0)
     }
     func chain(_ sections: [Int]) async throws -> [UInt8] { try await send(.chain(sections), retries: 0) }
+    /// The FM-1's master level (speaker and headphones), 0..126; 127 gives it back to the MASTER knob. Sets a state: may be resent.
+    func masterLevel(_ v: Int) async throws -> [UInt8] { try await send(.masterLevel(v)) }
 
     /// The settings object (backup object 1), which holds the song order: LIST snapshots it, GET reads it.
     func settingsObject() async throws -> [UInt8] {
@@ -206,18 +208,22 @@ public extension SloopClient {
         return out
     }
 
-    /// Writes the settings object back (the song order changed). rc: 0 ok, 2 invalid, 3 stop the song first.
-    func putSettings(_ s: [UInt8]) async throws -> Int {
-        var b = try await send(.bkPut(op: 0, id: 1, args: Pack7.u35(UInt32(s.count)) + Pack7.u35(CRC32.of(s))))
+    /// Writes the settings object back (the song order, USB AUDIO). rc: 0 ok, 2 invalid, 3 stop the song first.
+    func putSettings(_ s: [UInt8]) async throws -> Int { try await putObject(id: 1, s) }
+
+    /// Writes a backup object (editor.c BK_PUT): 1 the settings, 2…5 sections A–D (no bytes: the section
+    /// emptied). rc: 0 ok, 2 invalid, 3 stop first.
+    func putObject(id: Int, _ s: [UInt8]) async throws -> Int {
+        var b = try await send(.bkPut(op: 0, id: id, args: Pack7.u35(UInt32(s.count)) + Pack7.u35(CRC32.of(s))))
         guard b.count >= 3, b[2] == 0 else { return Int(b.count >= 3 ? b[2] : 99) }
         var off = 0
         while off < s.count {
             let chunk = Array(s[off..<min(off + 256, s.count)])
-            b = try await send(.bkPut(op: 1, id: 1, args: Pack7.u35(UInt32(off)) + Pack7.encode(chunk)), timeout: .milliseconds(600))
-            guard b.count >= 3, b[2] == 0 else { _ = try? await send(.bkPut(op: 3, id: 1, args: [])); return Int(b.count >= 3 ? b[2] : 99) }
+            b = try await send(.bkPut(op: 1, id: id, args: Pack7.u35(UInt32(off)) + Pack7.encode(chunk)), timeout: .milliseconds(600))
+            guard b.count >= 3, b[2] == 0 else { _ = try? await send(.bkPut(op: 3, id: id, args: [])); return Int(b.count >= 3 ? b[2] : 99) }
             off += chunk.count
         }
-        b = try await send(.bkPut(op: 2, id: 1, args: []), timeout: .seconds(5), retries: 0)    // a resent commit would answer "nothing staged"
+        b = try await send(.bkPut(op: 2, id: id, args: []), timeout: .seconds(5), retries: 0)    // a resent commit would answer "nothing staged"
         return Int(b.count >= 3 ? b[2] : 99)
     }
 

@@ -62,6 +62,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case rec                                   // LIVE op 4: REC, as the FM-1's REC button
     case layerKey(layer: Int, key: Int, down: Bool)   // LIVE op 2: a layer's key (SAVE = 7: sections, store, mode, SONG REC)
     case chain([Int])                          // LIVE op 9: play these sections in turn (only while playing; [] stops)
+    case masterLevel(Int)                      // LIVE op 11: the master level 0..126; 127 gives it back to the MASTER knob
     case bkList                                // backup: list the objects (and snapshot them)
     case bkGet(id: Int, offset: Int, count: Int)
     case bkPut(op: Int, id: Int, args: [UInt8])  // 0 begin, 1 data, 2 commit, 3 abort
@@ -88,7 +89,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: Cmd.desc
         case .watch: Cmd.watch
         case .ping: Cmd.ping
-        case .live, .transport, .rec, .layerKey, .chain: Cmd.live
+        case .live, .transport, .rec, .layerKey, .chain, .masterLevel: Cmd.live
         case .bkList: Cmd.bkList
         case .bkGet: Cmd.bkGet
         case .bkPut: Cmd.bkPut
@@ -121,6 +122,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .rec: [4]
         case .layerKey(let l, let k, let d): [2, UInt8(l), UInt8(k), d ? 1 : 0]
         case .chain(let s): [9, UInt8(min(s.count, 8))] + s.prefix(8).map { UInt8($0 & 3) }
+        case .masterLevel(let v): [11, UInt8(max(0, min(127, v)))]
         case .bkList: []
         case .bkGet(let id, let off, let n): [UInt8(id)] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)]
         case .bkPut(let op, let id, let a): [UInt8(op), UInt8(id)] + a
@@ -154,6 +156,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .rec: body.first == 4
         case .layerKey: body.first == 2
         case .chain: body.first == 9
+        case .masterLevel: body.first == 11
         case .bkList: true
         case .bkGet(let id, let off, _): body.count >= 7 && body[0] == UInt8(id) && Pack7.readU35(body[2...]) == UInt32(off)
         case .bkPut(let op, let id, _): body.count >= 3 && body[0] == UInt8(op) && body[1] == UInt8(id)
@@ -183,7 +186,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: "DESC"
         case .watch: "WATCH"
         case .ping: "PING"
-        case .live, .transport, .rec, .layerKey, .chain: "LIVE"
+        case .live, .transport, .rec, .layerKey, .chain, .masterLevel: "LIVE"
         case .bkList: "BK_LIST"
         case .bkGet: "BK_GET"
         case .bkPut: "BK_PUT"

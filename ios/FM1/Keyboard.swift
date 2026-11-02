@@ -122,19 +122,19 @@ private struct MembraneKey: View {
         ZStack {
             // rubber: matte, domed, no shine. Edges darkened from inside, one broad faint highlight,
             // a soft shadow onto the sheet. Pressed, it flattens.
+            // (gradients, no blur: 27 blurred keys made the drawer slide and redraw slowly)
             Capsule()
                 .fill(Color(hex: 0x232427))
                 .overlay(
-                    Capsule().stroke(.black.opacity(pressed ? 0.35 : 0.55), lineWidth: 8).blur(radius: 6)
-                        .clipShape(Capsule())
+                    Capsule().strokeBorder(LinearGradient(colors: [.black.opacity(pressed ? 0.25 : 0.4), .black.opacity(pressed ? 0.35 : 0.55)],
+                                                          startPoint: .top, endPoint: .bottom), lineWidth: 4)
                 )
                 .overlay(
-                    Ellipse().fill(.white.opacity(pressed ? 0.02 : 0.055))
-                        .frame(width: 30, height: 40).blur(radius: 10).offset(y: -18)
-                        .clipShape(Capsule())
+                    Capsule().fill(RadialGradient(colors: [.white.opacity(pressed ? 0.02 : 0.06), .clear],
+                                                  center: UnitPoint(x: 0.5, y: 0.22), startRadius: 0, endRadius: 30))
                 )
-                .shadow(color: .black.opacity(pressed ? 0.3 : 0.55), radius: pressed ? 2 : 6, y: pressed ? 1 : 4)
-                .shadow(color: .black.opacity(0.25), radius: 1, y: 1)
+                // its shadow on the sheet: a darker pill lower down
+                .background(Capsule().fill(.black.opacity(pressed ? 0.3 : 0.5)).offset(y: pressed ? 1 : 4))
             VStack(spacing: 6) {
                 // the slit: a groove, with white light behind it
                 Capsule()
@@ -142,7 +142,7 @@ private struct MembraneKey: View {
                     .overlay(Capsule().fill(Theme.text.opacity(glow)))
                     .overlay(Capsule().stroke(.white.opacity(0.05), lineWidth: 0.5).offset(y: 0.5))
                     .frame(width: 4, height: 38)
-                    .shadow(color: Theme.text.opacity(glow * 0.9), radius: 6)
+                    .shadow(color: Theme.text.opacity(glow * 0.9), radius: glow > 0 ? 6 : 0)   // the glow only while lit
                 if !name.isEmpty {
                     Text(name).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.7)
                 }

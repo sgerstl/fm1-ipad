@@ -34,7 +34,7 @@ struct PresetsPanel: View {
         .frame(width: Self.width)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(RoundedRectangle(cornerRadius: 20).fill(Theme.well)
-            .shadow(color: .black.opacity(0.55), radius: 24, x: -8))
+            .shadow(color: .black.opacity(0.5), radius: 14, x: -6))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(t == 3 ? "Kits for the drum track" : "Presets for track \(t + 1)")
     }
