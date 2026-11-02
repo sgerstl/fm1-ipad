@@ -104,7 +104,42 @@ struct ProjectsSheet: View {
 
     // MARK: Rows
 
+    /// The row opens the project; its ⋯ menu (and a long press, and a swipe) manages it. The menu sits
+    /// outside the open button so it still works with the FM-1 unplugged: rename used to live only in a
+    /// long press on that button, which is disabled then, and nothing on screen said it was there (2026-11-02).
     private func row(_ p: ProjectFile) -> some View {
+        HStack(spacing: 8) {
+            openButton(p)
+            Menu {
+                actions(p)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)           // its own target in the row, not part of the open button
+            .disabled(store.busy != nil)
+            .accessibilityLabel("Manage \(p.name)")
+            .accessibilityHint("Rename, duplicate or delete")
+        }
+        .contextMenu { actions(p) }
+        .swipeActions {
+            Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
+            Button { naming = .rename(p) } label: { Label("Rename", systemImage: "pencil") }
+        }
+    }
+
+    @ViewBuilder private func actions(_ p: ProjectFile) -> some View {
+        Button { naming = .rename(p) } label: { Label("Rename", systemImage: "pencil") }
+        if !p.isSafetyCopy {
+            Button { store.duplicate(p) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+        }
+        Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    private func openButton(_ p: ProjectFile) -> some View {
         let onFM1 = p.id == store.currentID && connected
         return Button { request(p) } label: {
             HStack(spacing: 16) {
@@ -131,16 +166,6 @@ struct ProjectsSheet: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(p, onFM1: onFM1))
         .accessibilityHint(connected ? "Opens it on the FM-1" : "Plug in the FM-1 to open it")
-        .contextMenu {
-            Button { naming = .rename(p) } label: { Label("Rename", systemImage: "pencil") }
-            if !p.isSafetyCopy {
-                Button { store.duplicate(p) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-            }
-            Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
-        }
-        .swipeActions {
-            Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
-        }
     }
 
     private func busyRow(_ b: (label: String, progress: Double?)) -> some View {
@@ -242,6 +267,7 @@ private struct NamePromptModifier: ViewModifier {
                 default: Task { await store.save(as: name) }
                 }
             }
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)    // an empty name did nothing, silently
         }
         .onChange(of: prompt?.id) {
             switch prompt {

@@ -235,7 +235,7 @@ final class ProjectStore {
         guard var q = (projects + safetyCopies).first(where: { $0.id == p.id }), let n = Self.cleaned(name) else { return }
         q.name = n
         q.isSafetyCopy = false                  // a named safety copy is a project now
-        try? write(q)
+        do { try write(q) } catch { message = "Couldn't rename it: \(error.localizedDescription)" }
     }
 
     func duplicate(_ p: ProjectFile) {
