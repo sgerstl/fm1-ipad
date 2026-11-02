@@ -172,7 +172,9 @@ public final class SloopSession {
 
     public init(demo: Bool = false) {
         isDemo = demo
-        makeTransport = demo ? { FakeSloop() } : { MIDITransport() }
+        // -demo-still: the demo FM-1 makes no edits of its own (screen recordings, screenshots)
+        let still = ProcessInfo.processInfo.arguments.contains("-demo-still")
+        makeTransport = demo ? { FakeSloop(autoEdits: !still) } : { MIDITransport() }
     }
 
     public init(transport: @escaping () -> SysExTransport?) {

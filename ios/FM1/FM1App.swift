@@ -38,6 +38,7 @@ struct RootView: View {
         }
         .background(Theme.page)
         .ignoresSafeArea()
+        .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         .task(id: useDemo) {
             if session.isDemo != useDemo { session = SloopSession(demo: useDemo) }
             projects.attach(session)
