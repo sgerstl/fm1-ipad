@@ -1,8 +1,8 @@
-# FM1 iPad: test plan
+# Jib (FM1 iPad): test plan
 
 What each part of the app is checked by. **A**: automated (`cd ios/SloopKit && swift test`), runs against the demo FM-1, which mirrors SLOOP's behaviour where it matters (sections hold the tracks, song mode keeps the loop, RELOAD only for the selected track). **H**: by hand on the FM-1. **S**: in the simulator with `-demo`.
 
-Last full pass: 2026-11-01, branch `app-pass-1`. 51 automated tests pass (8 runs in a row after the chain-test fix); build has no warnings; the static analyzer and Swift's strict concurrency checks find nothing in SloopKit.
+Last full pass: 2026-11-02, branch `app-pass-1`. 53 automated tests pass. Hardware pass on 2026-11-02 (after a backup): sections 1–4, every write path included, all pass. Accessibility (section 6) still not run.
 
 ## 1. Connection and protocol
 
@@ -14,7 +14,7 @@ Last full pass: 2026-11-01, branch `app-pass-1`. 51 automated tests pass (8 runs
 | Stock SLOOP vs the screen-link build told apart | A `stockFirmwareHasNoScreenLink`, `screenLinkWithTheModifiedFirmware` | pass |
 | Wrong firmware refused | A `refusesOtherFirmware` | pass |
 | Device values out of range (track 9, step 71, negative root, scale 99, division −1) never crash | A `pushesWithImpossibleValuesAreIgnoredOrClamped` | pass |
-| Unplug and replug the FM-1 mid-session | H | **to do** |
+| Unplug and replug the FM-1 mid-session (iPad audio on) | H (2026-11-02) | pass |
 | Settings object over 4 KB or a GET that returns nothing stops instead of looping | code review; no test | covered by guard |
 
 ## 2. Sequencer
@@ -23,12 +23,12 @@ Last full pass: 2026-11-01, branch `app-pass-1`. 51 automated tests pass (8 runs
 |---|---|---|
 | Tap a cell adds / removes a note; drum lanes the same | H (2026-11-01) | pass |
 | Slide along a row: adds from an empty cell, erases from a note, never the other way | H, S | pass |
-| Note length from the grip | S; H after the grip change | **re-check on H** |
+| Note length from the grip | H (2026-11-02) | pass |
 | Grid never moves unless panned (rows added above, playback) | H | pass |
 | Step numbers select a step | H | pass |
 | Velocity dial: no jumps; last value wins | A `aFastDialSendsTheLastValue`, H | pass |
-| Ratchet ×1–×4 audible | H | **to do** (listen for the hits) |
-| Fast drum toggles don't lose a lane (latest-wins added in QA) | code; no test | **re-check on H** |
+| Ratchet ×1–×4 audible | H (2026-11-02) | pass |
+| Fast drum toggles don't lose a lane (latest-wins added in QA) | H (2026-11-02) | pass |
 | Clear all, with Undo | H | pass |
 
 ## 3. Song
@@ -37,21 +37,23 @@ Last full pass: 2026-11-01, branch `app-pass-1`. 51 automated tests pass (8 runs
 |---|---|---|
 | A loop saved to a section comes back when the section is picked | A `aLoopSavedToASectionComesBack`, H | pass |
 | Picking a section replaces unsaved edits (SLOOP keeps no copy), and the app asks first | A `unsavedEditsAreReplacedWhenASectionLoads`, `editsMarkTheTracksUntilStoredOrReplaced`, S | pass |
-| A section load shows on **all four** tracks, not only the selected one (fixed in QA) | A | pass; **re-check on H** |
-| A song plays its sections in order, loops | A `aSongPlaysItsSectionsInOrder` | pass; **H to do** |
-| Song mode keeps the loop; STOP brings it back | A `songModeKeepsTheLoopAndStopBringsItBack` | pass; **H to do** |
+| A section load shows on **all four** tracks, not only the selected one (fixed in QA) | A, H (2026-11-02) | pass |
+| A song plays its sections in order, loops | A `aSongPlaysItsSectionsInOrder`, H (2026-11-02) | pass |
+| Song mode keeps the loop; STOP brings it back | A `songModeKeepsTheLoopAndStopBringsItBack`, H (2026-11-02) | pass |
 | The order can't change while the song plays | A | pass |
-| Writing the order: re-reads the settings first, one write at a time, refused write rolls back | A `aBadSettingsWriteIsRefusedAndTheOrderRollsBack` | pass; **H to do** (back up first) |
-| SONG REC writes what was played; the iPad shows it | A `songRecWritesWhatWasPlayed` | pass; **H to do** |
+| Writing the order: re-reads the settings first, one write at a time, refused write rolls back | A `aBadSettingsWriteIsRefusedAndTheOrderRollsBack`, H (2026-11-02) | pass |
+| An order edited while anything plays saves when it stops ("Saves to the FM-1 when you stop") | A `sectionsChainsOrderAndSongRec`, H (2026-11-02) | pass |
+| SONG REC writes what was played; the iPad shows it | A `songRecWritesWhatWasPlayed`, H (2026-11-02) | pass |
 | Chains | A (start/stop only); no longer in the app's UI (2026-11-02) | n/a |
 | SONG marker; grid header says edits end at STOP while the song plays | S | pass |
-| Song blocks: tap opens the menu (move ‹ ›, section, duplicate, delete) and the bars control | S (2026-11-02) | pass; **re-check on H** |
-| Press and drag a block moves it; the others slide aside | S | pass; **re-check on H** |
-| Swipe a block up: it goes, an empty slot stays, Undo for 6 s; the FM-1 gets the order without the slot | S | pass; **re-check on H** |
-| Tap an empty slot, pick a section: it fills | S | pass |
-| Drag a block's right edge: bars change, the row re-fits on release | S | pass |
-| Bar pills: one per bar, played bars fill while the song plays | S | pass; **re-check on H** |
-| SONG REC asks before replacing a song that has steps | code; no test | **re-check on H** |
+| Song blocks: tap opens the menu above the block (move ‹ ›, section, duplicate, delete) and the bars control below | S, H (2026-11-02) | pass |
+| Press and drag a block moves it, across rows too; the others slide aside | S, H (2026-11-02) | pass |
+| Flick a block up: it's deleted, Undo for 6 s | S, H (2026-11-02) | pass |
+| Drag a block's right edge: bars change, the row re-fits on release | S, H (2026-11-02) | pass |
+| Bar pills: one per bar, played bars fill while the song plays (the bar playing fills smoothly) | S, H (2026-11-02) | pass |
+| SONG REC asks before replacing a song that has steps | H (2026-11-02) | pass |
+| Section keys: empty, stored, loaded, playing, edited, next bar (outline drawn round), song | S, H (2026-11-02) | pass |
+| Clear a section (hold, Clear, confirm): empty on the iPad and the FM-1's SAVE screen; a song using it won't play; refused while playing | A `aSectionClearsOnlyWhenStopped`, H (2026-11-02) | pass |
 | Blocks locked while the song plays or SONG REC records | S | pass |
 
 ## 4. Screen link and pages
@@ -62,13 +64,13 @@ Last full pass: 2026-11-01, branch `app-pass-1`. 51 automated tests pass (8 runs
 | SAVE pad: Library, again for Song; held for Song | H | pass |
 | Track box mute-only on the Song page | H | pass |
 | Drum track: SEL, ENV, LFO, EDIT, ARP pressed on the FM-1 open those pages greyed, with the reason | H (2026-11-01) | pass |
-| Drum track: the same pads on the iPad send the FM-1 to its "DRUM TRACK" page | S | pass; **re-check on H** |
-| Drum track FX: which of FILTER, SLICER, INSERT the FM-1 allows | H | **to do** (source allows all three) |
+| Drum track: the same pads on the iPad send the FM-1 to its "DRUM TRACK" page | H (2026-11-02) | pass |
+| Drum track FX: the FM-1 offers FILTER, SLICER, INSERT, INSERT 2, DLY, REV/CHO; the app shows the same six | H (2026-11-02) | pass |
 
 ## 5. Device safety
 
 - **Back up the FM-1** in SLOOP's web editor before any hardware run of section 3's write checks.
-- Flash writes the app can cause: storing a section (SAVE + key), the song order (BK_PUT), user presets. Each is sent once; the order write re-reads the object first and changes only bytes 48–83; a commit is never retried.
+- Flash writes the app can cause: storing a section (SAVE + key), clearing one (BK_PUT of no bytes), the song order and USB AUDIO = FULL (BK_PUT of the settings), user presets. Each is sent once; the order write re-reads the object first and changes only bytes 48–83; a commit is never retried.
 - The app never sends firmware.
 
 ## 6. Accessibility (needs a person)
