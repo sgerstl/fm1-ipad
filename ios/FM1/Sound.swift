@@ -163,6 +163,7 @@ struct SoundTab: View {
     let ui: EditorUI
     @State private var marked: String?          // the knob last turned on the FM-1, marked for a moment
     @State private var followed: UIState?       // the FM-1's screen as last followed
+    @State private var activePage: String?      // not linked: the page last tapped here (linked, the FM-1's page)
 
     var body: some View {
         let pages = SoundPage.shown(session, ui.soundFamily)
@@ -205,6 +206,8 @@ struct SoundTab: View {
         let touchedHere = marked != nil && p.ids.contains { id in id.map { "s\(p.scope).\($0)" } == marked }
         // linked (fm1-ipad firmware): the light is the FM-1's own page; otherwise the knob just turned
         let onDevice = session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == p.fw } == true
+        // the page the knobs work on: the FM-1's, or (not linked) the one last tapped here
+        let active = session.screenLinked ? onDevice : activePage == p.id
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 LED(on: session.screenLinked ? onDevice : touchedHere)
@@ -255,11 +258,24 @@ struct SoundTab: View {
                 .accessibilityHidden(true)
         }
         .accessibilityValue(onDevice ? "on the FM-1" : "")
-        .contentShape(Rectangle())
-        // tap a page (outside its knobs) to show it on the FM-1
-        .onTapGesture { if session.screenLinked { session.showOnDevice(page: p.fw) } }
-        .accessibilityAction(named: "Show on the FM-1") { session.showOnDevice(page: p.fw) }
+        // an inactive page takes the first tap anywhere on it, knobs included, and becomes the active one
+        // (on the FM-1 too); then its knobs work. A tap meant for the page kept landing on a knob and
+        // opening its − / + keys (2026-11-03). VoiceOver reaches the knobs directly, as before.
+        .overlay {
+            if !active {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { activate(p) }
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityAction(named: "Show on the FM-1") { activate(p) }
         .id(p.id)
+    }
+
+    private func activate(_ p: SoundPage) {
+        activePage = p.id
+        if session.screenLinked { session.showOnDevice(page: p.fw) }
     }
 
     /// The page's graph, as the FM-1 draws it on that page: ENV's shape, the LFO's wave.
