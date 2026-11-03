@@ -33,7 +33,9 @@ public struct TrackState: Equatable, Sendable {
     public var displayName: String {
         if isDrums { return presetName.isEmpty ? "Drums" : "Drums · \(presetName.capitalized)" }
         let e = engineName.capitalized
-        return presetName.isEmpty ? e : "\(e) · \(presetName.capitalized)"
+        // a user sample slot keeps its name as the FM-1 shows it: USR2, not Usr2
+        let p = presetName.hasPrefix("USR") ? presetName : presetName.capitalized
+        return presetName.isEmpty ? e : "\(e) · \(p)"
     }
 }
 
@@ -71,6 +73,8 @@ public final class SloopSession {
     @ObservationIgnored private var pendingOrder: SongOrder?
     @ObservationIgnored private var orderWriting = false
     @ObservationIgnored private var orderWriteBefore: SongOrder?
+    /// False until the first LIVE after a connect: that one only fills `song` in, it isn't an edit.
+    @ObservationIgnored private var liveSeen = false
     /// The FM-1's HOME > AUDIO > USB AUDIO, from the settings object (nil until read): FULL sends a fixed
     /// level over USB whatever the MASTER, so the speaker can be muted while the iPad plays the sound.
     public private(set) var usbAudioFull: Bool?
@@ -126,6 +130,9 @@ public final class SloopSession {
     public private(set) var userPresets: [UserPreset] = []
     /// The drum track's kits (DESC of P_E0 while it is selected; empty until then).
     public private(set) var kitNames: [String] = []
+    /// The FM-1's user sample slots USR1..USR4 (SMP_INFO): [] until read; read on connect, after an
+    /// upload and after an erase. They belong to the FM-1, not to a project.
+    public private(set) var sampleSlots: [SampleSlot] = []
 
     // Every parameter, for the Sound tab (step 4).
     /// The selected track's P_* values (DUMP), kept current from CHANGED pushes and the iPad's writes.
@@ -203,6 +210,8 @@ public final class SloopSession {
         let c = SloopClient(transport: transport)
         client = c
         settingsCache = nil; songOrder = nil; usbAudioFull = nil     // never write a settings object read from another FM-1
+        sampleSlots = []
+        liveSeen = false
         await c.start()
         if case .wrongFirmware = status {} else { status = .connecting }
         do {
@@ -251,6 +260,7 @@ public final class SloopSession {
         try await readLibrary()
         try await readSoundParams(descs: true)
         try? await readSongOrder()
+        await refreshSampleSlots()
     }
 
     // MARK: The song
@@ -631,7 +641,14 @@ public final class SloopSession {
             if s.engine < i.engines.count {
                 tracks[k].engineName = i.engines[s.engine]
                 let names = try await presetNames(s.engine)
-                tracks[k].presetName = s.preset < names.count ? names[s.preset] : "Preset \(s.preset + 1)"
+                var name = s.preset < names.count ? names[s.preset] : "Preset \(s.preset + 1)"
+                if k < 3, i.engines[s.engine] == "SAMPLE" {
+                    // SET on a user slot (USR1..USR4) names the sound better than the preset it started from
+                    let set = i.firstEngineParam
+                    if recentlyWritten("p\(k).\(set)") { name = tracks[k].presetName }
+                    else if let v = try? await c.trackParam(track: k, id: set), let u = Self.sampleSlot(forSet: v) { name = "USR\(u + 1)" }
+                }
+                tracks[k].presetName = name
             } else {
                 // the drum track's kit is its KIT parameter: TRACK's preset there is the last synth preset the
                 // track held (editor.c ed_b(trk.preset)), and naming the kit from it made the name flicker
@@ -861,10 +878,14 @@ public final class SloopSession {
         let rec = l.recTracks != 0 || l.recArmed
         if recording != rec { recording = rec }
         let before = song
+        let firstLive = !liveSeen
+        liveSeen = true
         if song != l.song { song = l.song }
         if l.song.chainLength == 0 { chainAsked = [] }
-        // SONG REC just ended, or a section was stored on the device: the order may have changed
-        if (before.songRecording && !l.song.songRecording) || before.sectionsStored != l.song.sectionsStored {
+        // SONG REC just ended, or a section was stored on the device: the order may have changed. Not on
+        // the first LIVE after a connect, where `song` goes from blank to the device's (it marked a just-
+        // opened project edited, and failed the sample test when that poll landed mid-upload)
+        if !firstLive, (before.songRecording && !l.song.songRecording) || before.sectionsStored != l.song.sectionsStored {
             onEdit?()
             Task { try? await self.readSongOrder() }
         }
@@ -1213,4 +1234,98 @@ public final class SloopSession {
 
 extension ConnectionStatus {
     var isLost: Bool { if case .lost = self { true } else { false } }
+}
+
+// MARK: - User samples (EDITOR_PROTOCOL.md cmds 11–15)
+
+extension SloopSession {
+    public enum SampleError: Error, Equatable {
+        case notConnected
+        case tooLong                        // more than UserSample.maxSamples (a slot holds about 7.4 s)
+        case empty                          // no samples at all (sampleio refuses that too)
+        case refused(stage: String, rc: Int)   // "begin", "write", "end" or "erase", and the device's rc
+    }
+
+    /// SAMPLE's SET: eight factory sets, then USR1..USR4.
+    static let firstUserSet = 8
+    static func sampleSlot(forSet v: Int) -> Int? { (firstUserSet..<(firstUserSet + 4)).contains(v) ? v - firstUserSet : nil }
+
+    /// Reads the slots again (SMP_INFO). A failed read leaves what was there.
+    public func refreshSampleSlots() async {
+        guard let c = client, let s = try? await c.sampleSlots() else { return }
+        if s != sampleSlots { sampleSlots = s }
+    }
+
+    /// Builds the slot (one zone over the whole keyboard, one-shot) and writes it: SMP_BEGIN empties the
+    /// slot, SMP_WRITE sends the ADPCM 256 bytes at a time, SMP_END the header, which the FM-1 checks
+    /// against the data's CRC before it writes it. A failure part way leaves the slot empty. Samples
+    /// are the FM-1's, not the project's, so this is no project edit (no onEdit). SLOOP takes it while
+    /// playing too (editor.c checks no transport): a track on that slot goes quiet until END.
+    public func uploadSample(slot: Int, name: String, samples: [Int16], root: Int = 60,
+                             progress: @escaping @MainActor (Double) -> Void) async throws {
+        let (header, data) = try UserSample.slot(name: name, samples: samples, root: root)
+        guard let c = client else { throw SampleError.notConnected }
+        let slots = sampleSlots.isEmpty ? 4 : sampleSlots.count
+        guard (0..<slots).contains(slot) else { throw SampleError.refused(stage: "begin", rc: 1) }
+        do {
+            // a backup operation's turn: neither interleaves its frames with the other's
+            try await backupTurn {
+                progress(0)
+                var rc = try await c.sampleBegin(slot: slot)
+                guard rc == 0 else { throw SampleError.refused(stage: "begin", rc: rc) }
+                var off = 0
+                while off < data.count {
+                    let chunk = Array(data[off..<min(off + 256, data.count)])
+                    rc = try await c.sampleWrite(slot: slot, offset: UserSample.dataOffset + off, chunk)
+                    guard rc == 0 else { throw SampleError.refused(stage: "write", rc: rc) }
+                    off += chunk.count
+                    progress(Double(off) / Double(data.count))
+                }
+                rc = try await c.sampleEnd(slot: slot, header: header)
+                guard rc == 0 else { throw SampleError.refused(stage: "end", rc: rc) }
+            }
+        } catch ClientError.closed {
+            throw SampleError.notConnected
+        } catch {
+            await refreshSampleSlots()
+            throw error
+        }
+        await refreshSampleSlots()
+    }
+
+    /// Empties a slot (SMP_ERASE, about a second of flash erasing).
+    public func eraseSample(slot: Int) async throws {
+        guard let c = client else { throw SampleError.notConnected }
+        let rc: Int
+        do { rc = try await backupTurn { try await c.sampleErase(slot: slot) } }
+        catch ClientError.closed { throw SampleError.notConnected }
+        await refreshSampleSlots()
+        guard rc == 0 else { throw SampleError.refused(stage: "erase", rc: rc) }
+    }
+
+    /// Puts track t (0..2) on the SAMPLE engine with SET = USR(slot+1) and LOOP off. SAMPLE's edit params
+    /// (from the editor): index 0 SET [PIANO, BASS, VIBES, HORNS, STRGS, FLUTE, SCRCH, PERC, USR1, USR2, USR3, USR4],
+    /// 1 TUNE, 2 BITS, 3 LOOP (0 off / 1 on, default on). Param id = info.firstEngineParam + index.
+    /// PRESET loads onto the selected track, so the track is selected first; SAMPLE's preset 0 switches the
+    /// engine (keeping the pattern, mix and key), then SET and LOOP are written. A project edit (onEdit).
+    public func useSample(slot: Int, onTrack t: Int) async {
+        guard (0..<3).contains(t), (0..<4).contains(slot), let c = client, let info,
+              let e = info.engines.firstIndex(of: "SAMPLE") else { return }
+        let set = info.firstEngineParam, loop = info.firstEngineParam + 3
+        if selectedTrack != t {
+            selectedTrack = t
+            _ = try? await c.selectTrack(t)
+        }
+        // RELOAD (after PRESET) re-reads the track: these two are the iPad's for a moment
+        recentWrites["p\(t).\(set)"] = Date(); recentWrites["p\(t).\(loop)"] = Date()
+        tracks[t].engine = e; tracks[t].engineName = info.engines[e]
+        tracks[t].preset = 0; tracks[t].presetName = "USR\(slot + 1)"
+        onEdit?()
+        _ = try? await c.preset(engine: e, index: 0)
+        apply(track: t, id: set, value: Self.firstUserSet + slot)
+        apply(track: t, id: loop, value: 0)
+        _ = try? await c.setTrackParam(track: t, id: set, value: Self.firstUserSet + slot)
+        _ = try? await c.setTrackParam(track: t, id: loop, value: 0)
+        recentWrites["p\(t).\(set)"] = Date(); recentWrites["p\(t).\(loop)"] = Date()
+    }
 }

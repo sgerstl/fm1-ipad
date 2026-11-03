@@ -98,6 +98,12 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     private var stopPending = Date.distantPast  // as project_apply's transport_req: cleared on the next audio block                // as SLOOP: a LIST snapshots into the restore's buffer, dropping it
     var corruptNextPut = false                 // tests: the next commit fails its CRC check
 
+    /// User sample slots USR1..USR4 (editor.c ED_SMP_*): USR1 holds a sample so the app has a full slot to show.
+    struct SampleSlotState { var zones = 0; var name = ""; var dataLength = 0; var data: [UInt8] = []; var open = false }
+    var sampleSlots: [SampleSlotState] = [SampleSlotState(zones: 1, name: "GUITAR", dataLength: 41_200), .init(), .init(), .init()]
+    /// A flash write takes a while on the FM-1: the demo's progress bar should move, not jump.
+    public var sampleWriteDelay: TimeInterval = 0.008
+
     var order: SongOrder { SongOrder(settings: settings) ?? .standard }
     /// LIVE op 11 as last sent: 0..126 the level, 127 the MASTER knob's.
     var masterLevel = 127
@@ -252,9 +258,9 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     /// Tests: a push as a faulty or hostile device might send it.
     func inject(_ cmd: UInt8, _ body: [UInt8]) { queue.sync { emit(cmd, body) } }
 
-    private func emit(_ cmd: UInt8, _ body: [UInt8]) {
+    private func emit(_ cmd: UInt8, _ body: [UInt8], after delay: TimeInterval? = nil) {
         let f = Frame.encode(cmd, body)
-        queue.asyncAfter(deadline: .now() + replyDelay) { [sink] in sink.yield(f) }
+        queue.asyncAfter(deadline: .now() + (delay ?? replyDelay)) { [sink] in sink.yield(f) }
     }
 
     public func send(_ frame: [UInt8]) {
@@ -336,6 +342,9 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         case Cmd.preset:
             let e = Int(a[0]), i = Int(a[1])
             if selected < 3, e < Self.engines.count { engine[selected] = e; preset[selected] = i }
+            if selected < 3, e < Self.engines.count, Self.engines[e] == "SAMPLE" {     // the preset's sound: a factory SET, LOOP on
+                params[selected][63] = i % 8; params[selected][66] = 1
+            }
             emit(cmd, [UInt8(engine[selected] % 13), UInt8(preset[selected])])
             if watching { emit(Cmd.reload, [UInt8(engine[selected] % 13), UInt8(preset[selected]), UInt8(selected)]) }
         case Cmd.userList:
@@ -354,7 +363,15 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             } else { emit(cmd, [a[0], 1]) }
         case Cmd.desc:
             let scope = a[0], id = Int(a[1])
-            if scope == 0, id == 63, selected == 3 {
+            if scope == 0, (63...66).contains(id), selected < 3, Self.engines[engine[selected] % Self.engines.count] == "SAMPLE" {
+                // SAMPLE's first four (eng_sample.c): SET, TUNE, BITS, LOOP
+                let d: (String, Int, Int, Int, Int, [String]) = [
+                    63: ("SET", 8, 0, 11, 0, ["PIANO", "BASS", "VIBES", "HORNS", "STRGS", "FLUTE", "SCRCH", "PERC", "USR1", "USR2", "USR3", "USR4"]),
+                    64: ("TUNE", 7, -24, 24, 0, []), 65: ("BITS", 0, 0, 127, 0, []), 66: ("LOOP", 8, 0, 1, 1, ["OFF", "ON"])][id]!
+                var b: [UInt8] = [0, UInt8(id), UInt8(d.1)] + Frame.v14(d.2) + Frame.v14(d.3) + Frame.v14(d.4) + Array(d.0.utf8) + [0, 0]
+                for n in d.5 { b += Array(n.utf8) + [0] }
+                emit(cmd, b)
+            } else if scope == 0, id == 63, selected == 3 {
                 var b: [UInt8] = [0, 63, 8] + Frame.v14(0) + Frame.v14(Self.kits.count - 1) + Frame.v14(0) + Array("KIT".utf8) + [0, 0]
                 for k in Self.kits { b += Array(k.utf8) + [0] }
                 emit(cmd, b)
@@ -414,6 +431,44 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                 else { rc = 2 }
             }
             emit(cmd, [UInt8(op), id, rc])
+        case Cmd.smpBegin, Cmd.smpErase:
+            // the header sector (BEGIN) or the whole slot (ERASE): empty from here; BEGIN opens it for writes
+            guard let k = a.first.map(Int.init), k < sampleSlots.count else { break }
+            sampleSlots[k] = SampleSlotState(open: cmd == Cmd.smpBegin)
+            emit(cmd, [a[0], 0], after: cmd == Cmd.smpErase ? 0.3 : 0.05)
+        case Cmd.smpWrite:
+            guard a.count >= 5, Int(a[0]) < sampleSlots.count else { break }
+            let k = Int(a[0]), off = Int(a[1]) | Int(a[2]) << 7 | Int(a[3]) << 14
+            let d = Array(Pack7.decode(Array(a[4...])).prefix(256))
+            var rc: UInt8 = 0
+            // as the firmware: offset ≥ 512, a multiple of 256, inside the slot; and (stricter) in order
+            if off < UserSample.dataOffset || off & 0xFF != 0 || d.isEmpty || off + d.count > UserSample.slotSize
+                || off != UserSample.dataOffset + sampleSlots[k].data.count { rc = 1 }
+            else if sampleSlots[k].zones != 0 || !sampleSlots[k].open { rc = 4 }
+            else { sampleSlots[k].data += d }
+            emit(cmd, Array(a[0..<4]) + [rc], after: sampleWriteDelay)
+        case Cmd.smpEnd:
+            guard a.count >= 2, Int(a[0]) < sampleSlots.count else { break }
+            let k = Int(a[0]), h = Pack7.decode(Array(a[1...]))
+            func u32(_ o: Int) -> Int { Int(h[o]) | Int(h[o + 1]) << 8 | Int(h[o + 2]) << 16 | Int(h[o + 3]) << 24 }
+            var rc: UInt8 = 0
+            if !sampleSlots[k].open || sampleSlots[k].zones != 0 { rc = 6 }
+            else if h.count < UserSample.headerLength { rc = 1 }
+            else if UInt32(u32(0)) != UserSample.magic || h[4] != 1 || h[5] != 0 || !(1...16).contains(h[6]) || u32(16) > UserSample.maxData { rc = 2 }
+            else {
+                sampleSlots[k].open = false
+                let len = u32(16), data = sampleSlots[k].data
+                if data.count < len || CRC32.of(Array(data.prefix(len))) != UInt32(u32(20)) { rc = 3 }
+                else {
+                    sampleSlots[k].zones = Int(h[6]); sampleSlots[k].dataLength = len
+                    sampleSlots[k].name = String(decoding: h[8..<16].prefix { $0 != 0 }, as: UTF8.self)
+                }
+            }
+            emit(cmd, [a[0], rc], after: 0.05)
+        case Cmd.smpInfo:
+            var b: [UInt8] = [UInt8(sampleSlots.count), UInt8(UserSample.slotSize / 1024)]
+            for s in sampleSlots { b += [UInt8(s.zones)] + Array((s.zones != 0 ? s.name : "").utf8) + [0, UInt8(s.zones != 0 ? (s.dataLength + 1023) / 1024 : 0)] }
+            emit(cmd, b)
         case Cmd.watch:
             watching = a.first ?? 0 != 0
             watchingUI = hasUIPush && (a.first ?? 0) & 4 != 0

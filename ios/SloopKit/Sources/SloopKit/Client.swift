@@ -239,6 +239,33 @@ public extension SloopClient {
         return Int(b.count >= 3 ? b[2] : 99)
     }
 
+    // User sample slots (editor.c ED_SMP_*). Each returns the device's rc (0 ok; 99: no rc in the reply).
+
+    /// SMP_INFO: every slot's zone count (0 = empty), name and data KiB.
+    func sampleSlots() async throws -> [SampleSlot] { try SampleSlot.list(await send(.smpInfo, timeout: .seconds(1))) }
+    /// SMP_BEGIN: erases the slot's header sector (the slot is empty from here). Resending only erases it again.
+    func sampleBegin(slot: Int) async throws -> Int {
+        let b = try await send(.smpBegin(slot: slot), timeout: .seconds(2))
+        return Int(b.count > 1 ? b[1] : 99)
+    }
+    /// SMP_WRITE: rc 1 arguments, 2 erase, 3 write, 4 no BEGIN first. A write at a 4 KiB boundary erases that
+    /// sector first, so a resent one writes the same bytes again.
+    func sampleWrite(slot: Int, offset: Int, _ data: [UInt8]) async throws -> Int {
+        let b = try await send(.smpWrite(slot: slot, offset: offset, data: data), timeout: .seconds(1))
+        return Int(b.count > 4 ? b[4] : 99)
+    }
+    /// SMP_END: rc 1 size, 2 header, 3 data CRC, 4 flash, 5 zones, 6 no BEGIN. Sent once: the first END
+    /// closes the slot, so a resent one answers 6 even when the first worked.
+    func sampleEnd(slot: Int, header: [UInt8]) async throws -> Int {
+        let b = try await send(.smpEnd(slot: slot, header: header), timeout: .seconds(5), retries: 0)
+        return Int(b.count > 1 ? b[1] : 99)
+    }
+    /// SMP_ERASE: the whole slot, 20 sectors (~1 s).
+    func sampleErase(slot: Int) async throws -> Int {
+        let b = try await send(.smpErase(slot: slot), timeout: .seconds(10), retries: 0)
+        return Int(b.count > 1 ? b[1] : 99)
+    }
+
     func setGlobal(id: Int, value: Int) async throws -> Int {
         try ParamValue(await send(.setGlobal(id: id, value: value)), cmd: Cmd.set).value
     }

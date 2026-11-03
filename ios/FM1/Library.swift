@@ -8,6 +8,7 @@ struct LibraryPage: View {
     let session: SloopSession
     let ui: EditorUI
     var columns = 4                 // 2 in the Presets panel on the Sequencer
+    @State private var clearing: Int?
 
     var body: some View {
         // the track it loads onto is the track strip, collapsed beside it; the engines sit under that
@@ -58,6 +59,7 @@ struct LibraryPage: View {
                     }
                 }
                 .padding(4)
+                if t < 3, case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
             }
             .scrollIndicators(.hidden)
             if t == 3 && session.kitNames.isEmpty { emptyNote("Reading the kits from the FM-1…") }
@@ -116,6 +118,50 @@ struct LibraryPage: View {
         .accessibilityLabel(name.capitalized + (detail.map { ", \($0)" } ?? ""))
         .accessibilityAddTraits(current ? .isSelected : [])
         .accessibilityHint(current ? "" : "Loads onto track \(session.selectedTrack + 1)")
+    }
+
+    // MARK: The FM-1's four user sample slots (under the Sample engine)
+
+    private var sampleEngine: Int? { session.info?.engines.firstIndex(of: "SAMPLE") }
+
+    /// USR1–4, as sections work: an empty slot records (the sampler slides up), a full one plays on the
+    /// track at a tap, and a long press offers Record over and Clear.
+    private func userSamples(_ columns: [GridItem]) -> some View {
+        let t = session.selectedTrack
+        let slots = session.sampleSlots
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Your samples").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                .padding(.leading, 4).padding(.top, 16)
+                .accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(0..<max(4, slots.count), id: \.self) { k in
+                    let s = k < slots.count ? slots[k] : nil
+                    let full = s.map { !$0.isEmpty } ?? false
+                    let current = full && session.tracks[t].engine == sampleEngine && session.tracks[t].presetName == "USR\(k + 1)"
+                    presetKey(full ? s!.name : "Empty", detail: full ? "USR\(k + 1) · \(s!.kib) KB" : "USR\(k + 1) · Tap to record", current: current) {
+                        if full { Task { await session.useSample(slot: k, onTrack: t) } }
+                        else { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }
+                    }
+                    .contextMenu {
+                        if full {
+                            Button { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) } label: { Label("Record over", systemImage: "mic") }
+                            Button(role: .destructive) { clearing = k } label: { Label("Clear", systemImage: "trash") }
+                        }
+                    }
+                    .id("usr-\(k)")
+                }
+            }
+            .padding(4)
+        }
+        .task { await session.refreshSampleSlots() }
+        .alert("Clear USR\((clearing ?? 0) + 1)?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
+            Button("Clear USR\((clearing ?? 0) + 1)", role: .destructive) {
+                if let k = clearing { Task { try? await session.eraseSample(slot: k) } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The FM-1 keeps no copy of it.")
+        }
     }
 
     private func emptyNote(_ text: String) -> some View {

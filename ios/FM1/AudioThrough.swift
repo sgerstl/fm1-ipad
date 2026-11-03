@@ -31,8 +31,13 @@ final class AudioThrough {
         didSet {
             guard enabled != oldValue else { return }
             UserDefaults.standard.set(enabled, forKey: Self.key)
-            core.set(enabled)
+            core.set(enabled && !suspended)
         }
+    }
+    /// Held off while the sampler has the microphone (it plays the iPad's speaker too): the switch keeps
+    /// its setting and comes back on its own.
+    var suspended = false {
+        didSet { if suspended != oldValue { core.set(enabled && !suspended) } }
     }
 
     /// (A new key: the frozen first version may have left the old one on.)

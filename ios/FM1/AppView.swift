@@ -126,6 +126,16 @@ extension AppView {
             }
             Overview(session: session, ui: ui, expanded: ui.page == .sequencer || ui.timelineOpen)
                 .zIndex(2)
+            if let r = ui.sampler, r.fromBrowse {
+                Color.black.opacity(0.35).ignoresSafeArea()
+                    .transition(.opacity).zIndex(4)
+                    .accessibilityHidden(true)
+                SamplerPanel(session: session, ui: ui, request: r)
+                    .frame(height: PianoRoll.panelHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+                    .zIndex(5)
+            }
             if ui.presetsPanel {
                 PresetsPanel(session: session, ui: ui)
                     .geometryGroup()                      // moves as one piece: nothing inside trails it
@@ -136,6 +146,7 @@ extension AppView {
             }
         }
         .animation(slide(in: ui.presetsPanel), value: ui.presetsPanel)
+        .animation(slide(in: ui.sampler?.fromBrowse == true), value: ui.sampler)
         .onChange(of: ui.page) { _, _ in
             ui.timelineOpen = false
             ui.presetsPanel = false
@@ -272,6 +283,25 @@ extension AppView {
                     }
                     .buttonStyle(PressSink())
                     .accessibilityHint("Pick this track's sound without leaving the page")
+                    if m.track < 3 {
+                        // the grid turns over to the sampler; Use on track puts the take on this track
+                        Button {
+                            session.select(track: m.track)
+                            ui.presetsPanel = false
+                            ui.timelineOpen = false
+                            ui.page = .sequencer
+                            ui.sampler = SamplerRequest(track: m.track)
+                            ui.trackMenu = nil
+                        } label: {
+                            Label("Record sample…", systemImage: "mic")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Theme.text)
+                                .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
+                                .raisedKey()
+                        }
+                        .buttonStyle(PressSink())
+                        .accessibilityHint("Records the iPad's microphone into a USR slot for this track")
+                    }
                     Button {
                         ui.lastClear = session.clearAll(track: m.track)
                         ui.trackMenu = nil
@@ -290,7 +320,7 @@ extension AppView {
                 .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
                     .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.45), radius: 18, y: 10))
                 // beside the finger (to its right, centred on it), kept on screen
-                .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 260), y: min(max(m.at.y - 50, 12), Theme.canvas.height - 120))
+                .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 260), y: min(max(m.at.y - 50, 12), Theme.canvas.height - 180))
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
                 .accessibilityAddTraits(.isModal)
             }
@@ -363,6 +393,11 @@ extension EnvironmentValues {
 struct SequencerPage: View {
     let session: SloopSession
     let ui: EditorUI
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var back: SamplerRequest?        // on the card's back, kept while it turns back
+    @State private var turned = false
+    /// 0.4 s to turn (a panel-sized change); with Reduce Motion, a quick fade at the halfway point.
+    private var turn: Animation { reduceMotion ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.4) }
 
     var body: some View {
         let t = session.selectedTrack
@@ -376,10 +411,30 @@ struct SequencerPage: View {
                     TrackPanel(session: session, ui: ui)
                 }
                 .frame(width: Overview.boxWidth, height: PianoRoll.panelHeight)
-                if t == 3 {
-                    DrumGrid(session: session, ui: ui)
-                } else {
-                    PianoRoll(session: session, ui: ui, track: t)
+                // a track's Record sample turns the grid over: the sampler is on its back. The back goes in
+                // first, facing away, then the card turns (inserted already turned, it just appeared)
+                ZStack {
+                    Group {
+                        if t == 3 {
+                            DrumGrid(session: session, ui: ui)
+                        } else {
+                            PianoRoll(session: session, ui: ui, track: t)
+                        }
+                    }
+                    .modifier(FlipFace(angle: turned ? (reduceMotion ? 90 : 180) : 0))
+                    if let r = back {
+                        SamplerPanel(session: session, ui: ui, request: r)
+                            .frame(height: PianoRoll.panelHeight)
+                            .modifier(FlipFace(angle: turned ? 0 : (reduceMotion ? -90 : -180)))
+                    }
+                }
+                .onChange(of: ui.sampler) { _, r in
+                    if let r, !r.fromBrowse {
+                        back = r
+                        Task { @MainActor in withAnimation(turn) { turned = true } }
+                    } else if back != nil {
+                        withAnimation(turn) { turned = false } completion: { back = nil }
+                    }
                 }
             }
         }

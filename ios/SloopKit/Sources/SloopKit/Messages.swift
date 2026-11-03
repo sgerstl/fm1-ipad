@@ -8,6 +8,8 @@ public enum Cmd {
     public static let desc: UInt8 = 5
     public static let preset: UInt8 = 8
     public static let names: UInt8 = 10
+    /// User sample slots (USR1..USR4): begin (erases the header), data, header, erase, list.
+    public static let smpBegin: UInt8 = 11, smpWrite: UInt8 = 12, smpEnd: UInt8 = 13, smpErase: UInt8 = 14, smpInfo: UInt8 = 15
     public static let userList: UInt8 = 16
     public static let userLoad: UInt8 = 20
     public static let watch: UInt8 = 22
@@ -76,6 +78,11 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case dump                                  // the selected track's parameters and every global
     case uiState                               // fm1-ipad firmware only: the FM-1's page
     case uiGoto(page: Int)                     // fm1-ipad firmware only: open a page (index into SLOOP's PAGES)
+    case smpBegin(slot: Int)                   // erases the slot's header sector: the slot is empty from now on
+    case smpWrite(slot: Int, offset: Int, data: [UInt8])   // ≤ 256 bytes at offset ≥ 512, a multiple of 256, in order
+    case smpEnd(slot: Int, header: [UInt8])    // the 480-byte header: the device checks the data CRC, then writes it
+    case smpErase(slot: Int)                   // the whole slot (~1 s)
+    case smpInfo
 
     public var cmd: UInt8 {
         switch self {
@@ -103,6 +110,11 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .dump: Cmd.dump
         case .uiState: Cmd.ui
         case .uiGoto: Cmd.uiGoto
+        case .smpBegin: Cmd.smpBegin
+        case .smpWrite: Cmd.smpWrite
+        case .smpEnd: Cmd.smpEnd
+        case .smpErase: Cmd.smpErase
+        case .smpInfo: Cmd.smpInfo
         }
     }
 
@@ -135,6 +147,10 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .userLoad(let slot): [UInt8(slot)]
         case .dump, .uiState: []
         case .uiGoto(let p): [UInt8(p)]
+        case .smpBegin(let k), .smpErase(let k): [UInt8(k)]
+        case .smpWrite(let k, let off, let d): [UInt8(k), UInt8(off & 0x7F), UInt8(off >> 7 & 0x7F), UInt8(off >> 14 & 0x7F)] + Pack7.encode(d)
+        case .smpEnd(let k, let h): [UInt8(k)] + Pack7.encode(h)
+        case .smpInfo: []
         }
     }
 
@@ -168,12 +184,18 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .userList(let s, _): body.first == UInt8(s)
         case .userLoad(let slot): body.first == UInt8(slot)
         case .dump, .uiState, .uiGoto: true
+        case .smpBegin(let k), .smpEnd(let k, _), .smpErase(let k): body.first == UInt8(k)
+        case .smpWrite(let k, let off, _): body.count >= 5 && body[0] == UInt8(k) && Int(body[1]) | Int(body[2]) << 7 | Int(body[3]) << 14 == off
+        case .smpInfo: true
         }
     }
 
     /// The doc says requests that toggle are never sent twice: REC, layer keys and chains are sent with
     /// retries: 0 (Client); the rest set an explicit state and may be retried after a timeout.
-    public var description: String { "\(self.cmdName)(\(args.map(String.init).joined(separator: ",")))" }
+    public var description: String {
+        let a = args.prefix(8).map(String.init).joined(separator: ",")     // (a sample write carries ~290 bytes)
+        return "\(self.cmdName)(\(a)\(args.count > 8 ? ",…" : ""))"
+    }
     var cmdName: String {
         switch self {
         case .info: "INFO"
@@ -200,6 +222,11 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .dump: "DUMP"
         case .uiState: "UI"
         case .uiGoto: "UI_GOTO"
+        case .smpBegin: "SMP_BEGIN"
+        case .smpWrite: "SMP_WRITE"
+        case .smpEnd: "SMP_END"
+        case .smpErase: "SMP_ERASE"
+        case .smpInfo: "SMP_INFO"
         }
     }
 }
