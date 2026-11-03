@@ -36,10 +36,8 @@ public enum Cmd {
 public enum Param {
     public static let level = 0, root = 25, scale = 26, quant = 27, transpose = 28, length = 29, division = 30, pan = 39, mute = 40
     public static let chord = 49, arpMode = 17
-    /// Params whose label, range and names depend on another's value (params.c track_desc): the INSERT's
-    /// A B C on its TYPE, ATK DEC REL on ENV SYNC. Their DESC is the selected track's now, so it's read again.
+    /// INSRT names the INSERT's A B C, ENV SYNC turns ATK DEC REL into note values (DeviceDisplay).
     public static let insertType = 53, envSync = 59
-    public static let describedBy: [Int: [Int]] = [insertType: [54, 55, 56], envSync: [1, 2, 4]]
     public static let all = [level, root, scale, quant, transpose, length, division, pan, mute, chord, arpMode]
 }
 public enum Global {

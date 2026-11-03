@@ -110,14 +110,18 @@ struct SoundPage: Identifiable {
     }
 }
 
-/// A parameter's value as text, close to how the FM-1 shows it (EDITOR_PROTOCOL.md "fmt"). TIME,
-/// LFOHZ, CUTOFF and DB show the raw value with the unit SLOOP gives; the device's exact curves
-/// aren't in the protocol.
+/// A parameter's value as text, as the FM-1 shows it (EDITOR_PROTOCOL.md "fmt"; the curves for TIME,
+/// LFOHZ, CUTOFF and DB are SLOOP's own, in DeviceDisplay).
 func formatValue(_ d: ParamDesc?, _ v: Int) -> (shown: String, spoken: String) {
     guard let d else { return ("\(v)", "\(v)") }
+    // as the FM-1's screen: its curves for times, rates, cutoffs and levels, and name lists on numbers
+    if let (text, u) = DeviceDisplay.value(d, v) {
+        let shown = u.isEmpty ? text : u == "%" ? "\(text)%" : "\(text) \(u)"
+        let spoken = u == "%" ? "\(text) percent" : u == "dB" ? "\(text) decibels" : shown
+        return (shown, spoken)
+    }
     let unit = d.unit.isEmpty ? "" : " \(d.unit.lowercased())"
     switch d.format {
-    case 1: let p = d.max > 0 ? Int((Double(v) * 100 / Double(d.max)).rounded()) : v; return ("\(p)%", "\(p) percent")
     case 2: let p = Int((Double(v) * 100 / 64).rounded()); return (p > 0 ? "+\(p)%" : "\(p)%", "\(p) percent")
     case 7: return (v > 0 ? "+\(v) st" : "\(v) st", "\(v) semitones")
     case 8:
@@ -140,7 +144,7 @@ extension KnobSpec {
     /// Any parameter of the selected track (scope 0) or a global (scope 1), as a knob.
     @MainActor
     static func param(_ session: SloopSession, scope: Int, id: Int, slot: Int) -> KnobSpec {
-        let d = scope == 0 ? session.trackDescs[id] : session.globalDescs[id]
+        let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
         let values = scope == 0 ? session.params : session.globals
         let v = id < values.count ? values[id] : 0
         let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)

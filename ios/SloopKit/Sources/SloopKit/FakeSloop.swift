@@ -371,13 +371,6 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                 var b: [UInt8] = [0, UInt8(id), UInt8(d.1)] + Frame.v14(d.2) + Frame.v14(d.3) + Frame.v14(d.4) + Array(d.0.utf8) + [0, 0]
                 for n in d.5 { b += Array(n.utf8) + [0] }
                 emit(cmd, b)
-            } else if scope == 0, (54...56).contains(id), params[selected][53] > 0 {
-                // the INSERT's A B C named by its TYPE (params.c ins_desc): the drives, CRUSH, the swept ones
-                let type = params[selected][53]
-                let names = type < 5 ? ["DRIVE", "TONE", "LEVEL"] : type == 5 ? ["BITS", "RATE", "LPF"] : ["RATE", "DEPTH", "FDBK"]
-                var b: [UInt8] = [0, UInt8(id), 0] + Frame.v14(0) + Frame.v14(127) + Frame.v14(64)
-                b += Array(names[id - 54].utf8) + [0, 0]
-                emit(cmd, b)
             } else if scope == 0, id == 63, selected == 3 {
                 var b: [UInt8] = [0, 63, 8] + Frame.v14(0) + Frame.v14(Self.kits.count - 1) + Frame.v14(0) + Array("KIT".utf8) + [0, 0]
                 for k in Self.kits { b += Array(k.utf8) + [0] }
