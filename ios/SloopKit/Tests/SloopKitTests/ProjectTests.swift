@@ -12,6 +12,28 @@ import Testing
         #expect(b.drumSteps().allSatisfy { !$0.isOn })
     }
 
+    @Test func sloopSongRoundTrip() throws {
+        var p = ProjectData.blank
+        p.sections[0] = Fun6.blank.bytes
+        p.sections[2] = Array(repeating: 7, count: 100)
+        let file = SloopSong.encode(p, name: "Neukölln Nights")
+        let json = try #require(try JSONSerialization.jsonObject(with: file) as? [String: Any])
+        #expect(json["format"] as? String == "sloop-song" && json["version"] as? Int == 1)
+        // as the editor writes it: the loop and the filled sections only
+        #expect((json["objects"] as? [[String: Any]])?.compactMap { $0["id"] as? Int } == [0, 2, 4])
+        let back = try SloopSong.decode(file)
+        #expect(back.data == p && back.name == "Neukölln Nights")
+    }
+
+    @Test func sloopSongRejectsDamage() throws {
+        var json = try #require(try JSONSerialization.jsonObject(with: SloopSong.encode(.blank, name: "x")) as? [String: Any])
+        var objects = try #require(json["objects"] as? [[String: Any]])
+        objects[0]["crc"] = 1
+        json["objects"] = objects
+        #expect(throws: SloopSong.ReadError.damaged(object: 0)) { try SloopSong.decode(try JSONSerialization.data(withJSONObject: json)) }
+        #expect(throws: SloopSong.ReadError.notASong) { try SloopSong.decode(Data("{}".utf8)) }
+    }
+
     @Test func stepsRoundTrip() {
         var f = Fun6.blank
         var s = Array(repeating: SynthStep.empty, count: 64)

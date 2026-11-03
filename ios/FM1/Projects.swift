@@ -1,3 +1,4 @@
+import CoreTransferable
 import Foundation
 import SloopKit
 
@@ -311,5 +312,24 @@ final class ProjectStore {
             "the FM-1 didn't take \(object == 0 ? "the loop" : object == 1 ? "the song order" : "section \(SloopSession.sectionName(object - 2))") (code \(rc))"
         default: "the FM-1 didn't answer"
         }
+    }
+}
+
+/// A project as SLOOP's song file, for the share sheet: written when shared (AirDrop, Files, Mail), so
+/// it opens in SLOOP's web editor (Song file › Load) as well as in Jib.
+struct SloopSongExport: Transferable {
+    let project: ProjectFile
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .json) { e in SentTransferredFile(try e.write()) }
+    }
+
+    private func write() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "Export")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let name = project.name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        let url = dir.appending(path: "\(name).\(SloopSong.fileExtension)")
+        try SloopSong.encode(project.data, name: project.name).write(to: url, options: .atomic)
+        return url
     }
 }

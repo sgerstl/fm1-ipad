@@ -182,3 +182,51 @@ public struct ProjectData: Codable, Equatable, Sendable {
         return ([loopPart] + sections.map { CRC32.of($0) } + [CRC32.of(songOrder)]).map { String($0, radix: 16) }.joined(separator: "-")
     }
 }
+
+/// SLOOP's own song file (`.sloopsong`, the web editor's Song file and LIVE playlist): the loop, the
+/// filled sections and the song order, each object with its length and CRC. A Jib project is the same
+/// thing, so an export opens in SLOOP's editor and an import takes what that editor saves.
+public enum SloopSong {
+    public static let format = "sloop-song"
+    public static let fileExtension = "sloopsong"
+    static let orderLength = 36
+
+    public enum ReadError: Error, Equatable { case notASong, damaged(object: Int), noLoop }
+
+    /// The file for this project, as the editor's songCapture writes it (empty sections left out).
+    public static func encode(_ p: ProjectData, name: String, firmware: String = DeviceInfo.expectedVersion,
+                              date: Date = Date()) -> Data {
+        let parts = [(0, p.working)] + p.sections.enumerated().map { (2 + $0.offset, $0.element) }
+        let objects: [[String: Any]] = parts.filter { $0.0 == 0 || !$0.1.isEmpty }.map {
+            ["id": $0.0, "len": $0.1.count, "crc": CRC32.of($0.1), "data": Data($0.1).base64EncodedString()]
+        }
+        let file: [String: Any] = [
+            "format": format, "version": 1, "name": String(name.prefix(40)), "firmware": firmware,
+            "date": ISO8601DateFormatter().string(from: date),
+            "order": p.songOrder.count == orderLength ? Data(p.songOrder).base64EncodedString() : NSNull(),
+            "objects": objects,
+        ]
+        return (try? JSONSerialization.data(withJSONObject: file, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+    }
+
+    /// A song file back to a project and its name, every object checked as the editor's songObjects
+    /// checks it. No order in the file: the order SLOOP falls back on.
+    public static func decode(_ data: Data) throws -> (data: ProjectData, name: String) {
+        guard let f = try? JSONSerialization.jsonObject(with: data) as? [String: Any], f["format"] as? String == format,
+              (f["version"] as? Int ?? 0) >= 1, let objects = f["objects"] as? [[String: Any]] else { throw ReadError.notASong }
+        var byID: [Int: [UInt8]] = [:]
+        for o in objects {
+            let id = o["id"] as? Int ?? -1
+            guard id == 0 || (2...5).contains(id), let b = Data(base64Encoded: o["data"] as? String ?? "").map(Array.init),
+                  b.count == o["len"] as? Int, CRC32.of(b) == (o["crc"] as? NSNumber)?.uint32Value else { throw ReadError.damaged(object: id) }
+            byID[id] = b
+        }
+        guard let loop = byID[0] else { throw ReadError.noLoop }
+        var order = ProjectData.blank.songOrder
+        if let s = f["order"] as? String {
+            guard let b = Data(base64Encoded: s), b.count == orderLength else { throw ReadError.damaged(object: 1) }
+            order = Array(b)
+        }
+        return (ProjectData(working: loop, sections: (2...5).map { byID[$0] ?? [] }, songOrder: order), f["name"] as? String ?? "")
+    }
+}

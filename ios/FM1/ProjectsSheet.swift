@@ -122,7 +122,7 @@ struct ProjectsSheet: View {
             .buttonStyle(.borderless)           // its own target in the row, not part of the open button
             .disabled(store.busy != nil)
             .accessibilityLabel("Manage \(p.name)")
-            .accessibilityHint("Rename, duplicate or delete")
+            .accessibilityHint("Rename, duplicate, export or delete")
         }
         .contextMenu { actions(p) }
         .swipeActions {
@@ -135,6 +135,10 @@ struct ProjectsSheet: View {
         Button { naming = .rename(p) } label: { Label("Rename", systemImage: "pencil") }
         if !p.isSafetyCopy {
             Button { store.duplicate(p) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+        }
+        // SLOOP's song file: opens in SLOOP's web editor too
+        ShareLink(item: SloopSongExport(project: p), preview: SharePreview(p.name)) {
+            Label("Export…", systemImage: "square.and.arrow.up")
         }
         Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
     }
