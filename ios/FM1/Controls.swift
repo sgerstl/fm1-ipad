@@ -67,6 +67,34 @@ struct ToggleKey: View {
     }
 }
 
+/// A top-bar toggle as an icon: off, a grey outline on the bar; on, the filled symbol in white on a
+/// raised key (shape and brightness both change, so "on" isn't told by colour alone). No LED: the top
+/// bar's text buttons are the tabs, nothing else (2026-11-03).
+struct IconKey: View {
+    let label: String
+    let symbol: String              // the outline symbol; on uses its .fill unless onSymbol says otherwise
+    var onSymbol: String?
+    let on: Bool
+    var enabled = true
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            Image(systemName: on ? onSymbol ?? "\(symbol).fill" : symbol)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(!enabled ? Theme.textTertiary : on ? Theme.text : Theme.textSecondary)
+                .frame(width: 44, height: 44)
+                .background { if on { Color.clear.raisedKey() } }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .disabled(!enabled)
+        .accessibilityLabel(label)
+        .accessibilityValue(on ? "on" : "off")
+        .accessibilityAddTraits(.isToggle)
+    }
+}
+
 /// − value + : a number set with taps (WCAG 2.5.7: no drag needed), and swipe up/down with VoiceOver.
 struct StepperKeys: View {
     let label: String

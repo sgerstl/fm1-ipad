@@ -311,8 +311,8 @@ final class InputMeter: @unchecked Sendable {
     }
 }
 
-/// The top bar's key: a speaker with a light. Lit and a speaker when it plays; lit with a warning
-/// when it's on but can't (the connection menu says why).
+/// The top bar's key: a speaker, white and filled on a raised key when on (an IconKey); on but unable
+/// to play, the speaker carries a warning (the connection menu says why).
 struct AudioThroughKey: View {
     let through: AudioThrough
 
@@ -324,23 +324,9 @@ struct AudioThroughKey: View {
             default: on
             }
         }()
-        Button { through.enabled.toggle() } label: {
-            HStack(spacing: 8) {
-                LED(on: on)
-                Image(systemName: trouble ? "speaker.badge.exclamationmark" : on ? "speaker.wave.2.fill" : "speaker.wave.2")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 24)
-            }
-            .foregroundStyle(Theme.text)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .background {
-                if on { RoundedRectangle(cornerRadius: 9).fill(Theme.pressed).recessed(9) } else { Color.clear.raisedKey() }
-            }
-            .contentShape(Rectangle())
+        IconKey(label: "Play through the iPad", symbol: trouble ? "speaker.badge.exclamationmark" : "speaker.wave.2", on: on) {
+            through.enabled.toggle()
         }
-        .buttonStyle(PressSink())
-        .accessibilityLabel("Play through the iPad")
         .accessibilityValue(on ? through.summary : "off")
         .accessibilityAddTraits(.isToggle)
         .accessibilityHint("Plays the FM-1's sound on the iPad's speakers or headphones")

@@ -60,10 +60,12 @@ struct TopBar: View {
             HStack(spacing: 10) {
                 LED(on: isConnected, colour: Theme.text)
                     .frame(width: 8, height: 8)
-                // short: the project name beside it needs the room (the version is in the menu, 2026-11-02)
-                Text(shortStatus).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                // a real FM-1 is just the dot; words for the demo and for trouble (the version is in the menu)
+                if let s = shortStatus {
+                    Text(s).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                }
             }
-            .frame(height: 44)
+            .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -73,9 +75,9 @@ struct TopBar: View {
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
 
-    private var shortStatus: String {
+    private var shortStatus: String? {
         switch session.status {
-        case .connected: session.isDemo ? "Demo" : "FM-1"
+        case .connected: session.isDemo ? "Demo" : nil
         default: statusLine
         }
     }
@@ -95,11 +97,6 @@ struct TopBar: View {
                         .lineLimit(1).truncationMode(.tail)
                         .frame(maxWidth: 170, alignment: .leading)
                         .fixedSize(horizontal: true, vertical: false)
-                    if showsEdited {
-                        // said in words, the dot only repeats it
-                        Circle().fill(Theme.text).frame(width: 6, height: 6)
-                        Text("edited").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    }
                     Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textTertiary)
                 }
                 .frame(height: 44)
@@ -108,17 +105,26 @@ struct TopBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel(projectAccessibility)
             .accessibilityHint("Opens your projects")
-            if isConnected, projects.needsSaving, projects.busy == nil {
+            // Save as an icon that stays put; the dot on it is the "edited" mark (2026-11-03: the word
+            // "edited" and the Save text key took more room than the name)
+            if isConnected, projects.busy == nil {
+                let dirty = projects.needsSaving
                 Button {
                     if projects.canSaveInPlace { Task { await projects.save() } } else { naming = .saveAs(projects.nextName()) }
                 } label: {
-                    Text("Save").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
-                        .padding(.horizontal, 16).frame(height: 44)
-                        .background { Color.clear.raisedKey() }
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(dirty ? Theme.text : Theme.textTertiary)
+                        .frame(width: 44, height: 44)
+                        .overlay(alignment: .topTrailing) {
+                            if dirty { Circle().fill(Theme.text).frame(width: 7, height: 7).padding(8) }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink())
+                .disabled(!dirty)
                 .accessibilityLabel(projects.canSaveInPlace ? "Save \(projectName)" : "Save as a new project")
+                .accessibilityValue(dirty ? "unsaved changes" : "saved")
             } else if projects.busy != nil {
                 ProgressView().controlSize(.small).frame(width: 44, height: 44)
                     .accessibilityLabel(projects.busy?.label ?? "Working")
@@ -138,12 +144,6 @@ struct TopBar: View {
     }
 
     private var projectNamed: Bool { if case .project = projects.state { true } else { false } }
-    private var showsEdited: Bool {
-        switch projects.state {
-        case .project, .untitled: projects.edited
-        default: false
-        }
-    }
 
     private var projectAccessibility: String {
         switch projects.state {
@@ -218,68 +218,104 @@ struct TopBar: View {
 
     // MARK: Position, tempo, play / stop
 
+    /// iPad audio and Keys as icons, then one transport group: REC, play / stop, and the position over
+    /// the tempo. Recording turns the group red (the REC key filled, the well tinted, "REC" in the
+    /// readout); nothing else in the bar changes for it (a red line under the whole bar was tried in
+    /// the mockup and dropped, 2026-11-03).
     private var transport: some View {
-        let pos = session.positions[session.selectedTrack]
-        return HStack(spacing: 12) {
-            // the iPad's sound, beside the iPad's keyboard
+        HStack(spacing: 8) {
             AudioThroughKey(through: through)
-            ToggleKey(name: "Keys", on: ui.keyboardOpen, enabled: isConnected) { ui.keyboardOpen.toggle() }
-                .accessibilityHint("Shows the FM-1's keyboard")
-            if session.song.songMode { songMarker }
-            readout(session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –", "bar · step")
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(session.playing ? "Bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "Stopped")
-                .frame(width: 72, alignment: .trailing)     // "4 · 16" at its widest: nothing beside it moves
-            readout("\(session.bpm)", "BPM")
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(session.bpm) BPM")
-            Button { session.setPlaying(!session.playing) } label: {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(colors: [Color(hex: 0xF7F7F9), Color(hex: 0xCFCFD4)], startPoint: .top, endPoint: .bottom))
-                        .shadow(color: .black.opacity(0.6), radius: 1.5, y: 2)
-                        .shadow(color: .black.opacity(0.4), radius: 7, y: 6)
-                    if session.playing {
-                        RoundedRectangle(cornerRadius: 2).fill(Theme.onColour).frame(width: 16, height: 16)
-                    } else {
-                        Image(systemName: "play.fill").font(.system(size: 18)).foregroundStyle(Theme.onColour).offset(x: 1.5)
-                    }
-                }
-                .frame(width: 52, height: 52)
+            IconKey(label: "Keys", symbol: "pianokeys", onSymbol: "pianokeys.inverse", on: ui.keyboardOpen, enabled: isConnected) {
+                ui.keyboardOpen.toggle()
             }
-            .buttonStyle(.plain)
-            .disabled(!isConnected)
-            .opacity(isConnected ? 1 : 0.4)
-            .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
+            .accessibilityHint("Shows the FM-1's keyboard")
+            transportGroup.padding(.leading, 4)
         }
         .fixedSize()            // the controls keep their size; the connection label gives way
     }
 
-    /// Song mode is on: PLAY plays the song order and loads sections over the tracks. Shown on every
-    /// page, since it changes what PLAY does to the grid; tap for the Song tab.
-    private var songMarker: some View {
-        Button {
+    private var recording: Bool { session.recording || session.song.songRecording }
+
+    private var transportGroup: some View {
+        HStack(spacing: 4) {
+            recKey
+            playKey
+            readout
+        }
+        .padding(4)
+        .background {
+            if recording { RoundedRectangle(cornerRadius: 12).fill(Theme.recWell) } else { Color.clear.recessed(12) }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: recording)
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var recKey: some View {
+        Button { session.toggleRec() } label: {
+            Circle().fill(recording ? Theme.text : Theme.rec).frame(width: 14, height: 14)
+                .frame(width: 44, height: 44)
+                .background { if recording { RoundedRectangle(cornerRadius: 9).fill(Theme.rec) } }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .disabled(!isConnected)
+        .opacity(isConnected ? 1 : 0.4)
+        .accessibilityLabel("Record")
+        .accessibilityValue(session.song.songRecording ? "song recording" : session.recording ? "recording" : "off")
+        .accessibilityAddTraits(.isToggle)
+    }
+
+    private var playKey: some View {
+        Button { session.setPlaying(!session.playing) } label: {
+            Image(systemName: session.playing ? "stop.fill" : "play.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .frame(width: 44, height: 44)
+                .background { if session.playing { Color.clear.raisedKey() } }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .disabled(!isConnected)
+        .opacity(isConnected ? 1 : 0.4)
+        .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
+    }
+
+    /// Position over tempo. In song mode the tempo line says SONG and a tap opens Arrange (PLAY plays
+    /// the song order and loads sections over the tracks, so it shows on every page).
+    private var readout: some View {
+        let pos = session.positions[session.selectedTrack]
+        let song = session.song.songMode
+        let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
+        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : song ? "SONG" : nil
+        return Button {
             ui.page = .song
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.section) }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "music.note.list").font(.system(size: 13, weight: .semibold))
-                Text(session.song.songRecording ? "SONG REC" : "SONG").font(.system(size: 13, weight: .semibold))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(position).font(.system(size: 20, weight: .semibold)).monospacedDigit().lineLimit(1)
+                    .foregroundStyle(recording ? Theme.recText : Theme.text)
+                HStack(spacing: 4) {
+                    if let m = mode {
+                        Text(m).fontWeight(.semibold).foregroundStyle(recording ? Theme.recText : Theme.text)
+                        Text("·")
+                    }
+                    Text("\(session.bpm) BPM").monospacedDigit()
+                }
+                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             }
-            .foregroundStyle(Theme.onColour)
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(Capsule().fill(Theme.text))
+            .frame(width: 112, alignment: .leading)         // "SONG REC · 120 BPM" at its widest: nothing moves
+            .padding(.horizontal, 8)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PressSink())
-        .accessibilityLabel(session.song.songRecording ? "Song recording is on" : "Song mode is on")
-        .accessibilityHint("PLAY plays the song order. Opens the Arrange tab")
-    }
-
-    private func readout(_ value: String, _ label: String) -> some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            Text(value).font(.system(size: 22, weight: .semibold)).lineLimit(1)
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(song)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
+                             session.playing ? "bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "stopped",
+                             "\(session.bpm) BPM"].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityHint(song ? "Opens the Arrange tab" : "")
+        .accessibilityAddTraits(song ? .isButton : [])
     }
 }

@@ -20,6 +20,10 @@ enum Theme {
 
     static let track = [Color(hex: 0x287CFF), Color(hex: 0x1ECC70), Color(hex: 0xFFC618), Color(hex: 0xFF621A)]
     static let trackTop = [Color(hex: 0x4A93FF), Color(hex: 0x4ADB8C), Color(hex: 0xFFD54D), Color(hex: 0xFF8247)]
+    // recording: the one red in the top bar (the REC key, the transport's well, its REC readout)
+    static let rec = Color(hex: 0xFF2C34)
+    static let recWell = Color(hex: 0x3A1214)
+    static let recText = Color(hex: 0xFF8A8D)
     static let knob = [Color(hex: 0x287CFF), Color(hex: 0x1ECC70), Color(hex: 0xFFC618), Color(hex: 0xFF2C34)]
 
     static let stepWidth: CGFloat = 55          // one bar (16 steps) fills the grid (2026-11-02)
