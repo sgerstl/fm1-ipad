@@ -252,7 +252,7 @@ struct PianoRollContent: View {
         }
     }
 
-    /// From a note's grip (the last 14 pt of it): the drag's end step becomes the note's last step.
+    /// From a note's grip (its right end, see gripInside): the drag's end step becomes the note's last step.
     /// Anywhere else, a slide along the row it began in: from an empty cell it adds that note on every
     /// step it passes, from a note it removes it, and never the other way (an adding slide leaves notes
     /// that are there alone). Held parts of other notes and full four-note steps are skipped.
@@ -286,15 +286,28 @@ struct PianoRollContent: View {
             .onEnded { _ in slide = nil; painted = [] }
     }
 
+    /// A note's grip reaches 24 pt into it and 16 pt past its end (2026-11-03: the 14 pt inside alone
+    /// was hard to hit). A tap there still toggles; only a drag takes the length.
+    static let gripInside: CGFloat = 24, gripOutside: CGFloat = 16
+
     private func slideKind(at p: CGPoint) -> Slide? {
         let r = Int(p.y / Theme.rowHeight)
         guard r >= 0, r < rows.count else { return nil }
-        guard let start = noteStart(at: p) else { return .paint(note: rows[r], on: true) }
+        if let start = noteStart(at: p) {
+            return p.x >= noteEnd(start) - Self.gripInside ? .length(start: start) : .paint(note: rows[r], on: false)
+        }
+        // just past a note's end, in the empty cell after it: still that note's grip
+        let back = CGPoint(x: p.x - Self.gripOutside, y: p.y)
+        if back.x >= 0, let start = noteStart(at: back), p.x - noteEnd(start) <= Self.gripOutside { return .length(start: start) }
+        return .paint(note: rows[r], on: true)
+    }
+
+    /// Where a note's pad ends on screen, held steps included.
+    private func noteEnd(_ start: Int) -> CGFloat {
         let steps = session.tracks[track].steps
         var len = 1
         while start + len < 64, steps[start + len].time == .tie { len += 1 }
-        let gripFrom = CGFloat(start + len) * Theme.stepWidth - 2 - 14
-        return p.x >= gripFrom ? .length(start: start) : .paint(note: rows[r], on: false)
+        return CGFloat(start + len) * Theme.stepWidth - 2
     }
 
     /// The NOTE step a touch is on: that step, or the one a held (TIE) step belongs to, if the touched
@@ -335,9 +348,11 @@ struct PianoRollContent: View {
                 let rect = CGRect(x: CGFloat(i) * w + 2, y: CGFloat(r) * h + 4, width: CGFloat(len) * w - 4, height: h - 8)
                 let soft = k < s.levels.count && (s.levels[k] == 1 || s.levels[k] == 2)
                 drawPad(ctx, rect, track: track, dim: soft || i >= t.length, selected: i == selected)
-                // a grip at the note's end: it can be dragged longer or shorter
-                ctx.fill(Path(roundedRect: CGRect(x: rect.maxX - 7, y: rect.minY + 9, width: 2, height: rect.height - 18), cornerRadius: 1),
-                         with: .color(Theme.onColour.opacity(0.35)))
+                // a grip at the note's end (two lines): it can be dragged longer or shorter
+                for dx in [CGFloat(11), 6] {
+                    ctx.fill(Path(roundedRect: CGRect(x: rect.maxX - dx, y: rect.minY + 8, width: 2, height: rect.height - 16), cornerRadius: 1),
+                             with: .color(Theme.onColour.opacity(0.5)))
+                }
             }
             i += len
         }

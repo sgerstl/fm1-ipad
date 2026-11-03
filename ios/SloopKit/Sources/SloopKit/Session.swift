@@ -33,8 +33,8 @@ public struct TrackState: Equatable, Sendable {
     public var displayName: String {
         if isDrums { return presetName.isEmpty ? "Drums" : "Drums · \(presetName.capitalized)" }
         let e = engineName.capitalized
-        // a user sample slot keeps its name as the FM-1 shows it: USR2, not Usr2
-        let p = presetName.hasPrefix("USR") ? presetName : presetName.capitalized
+        // a user sample slot keeps its upper-case name: SMPL2, not Smpl2
+        let p = presetName.hasPrefix("SMPL") ? presetName : presetName.capitalized
         return presetName.isEmpty ? e : "\(e) · \(p)"
     }
 }
@@ -646,7 +646,7 @@ public final class SloopSession {
                     // SET on a user slot (USR1..USR4) names the sound better than the preset it started from
                     let set = i.firstEngineParam
                     if recentlyWritten("p\(k).\(set)") { name = tracks[k].presetName }
-                    else if let v = try? await c.trackParam(track: k, id: set), let u = Self.sampleSlot(forSet: v) { name = "USR\(u + 1)" }
+                    else if let v = try? await c.trackParam(track: k, id: set), let u = Self.sampleSlot(forSet: v) { name = "SMPL\(u + 1)" }
                 }
                 tracks[k].presetName = name
             } else {
@@ -1319,7 +1319,7 @@ extension SloopSession {
         // RELOAD (after PRESET) re-reads the track: these two are the iPad's for a moment
         recentWrites["p\(t).\(set)"] = Date(); recentWrites["p\(t).\(loop)"] = Date()
         tracks[t].engine = e; tracks[t].engineName = info.engines[e]
-        tracks[t].preset = 0; tracks[t].presetName = "USR\(slot + 1)"
+        tracks[t].preset = 0; tracks[t].presetName = "SMPL\(slot + 1)"
         onEdit?()
         _ = try? await c.preset(engine: e, index: 0)
         apply(track: t, id: set, value: Self.firstUserSet + slot)

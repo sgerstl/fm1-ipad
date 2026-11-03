@@ -137,8 +137,8 @@ struct LibraryPage: View {
                 ForEach(0..<max(4, slots.count), id: \.self) { k in
                     let s = k < slots.count ? slots[k] : nil
                     let full = s.map { !$0.isEmpty } ?? false
-                    let current = full && session.tracks[t].engine == sampleEngine && session.tracks[t].presetName == "USR\(k + 1)"
-                    presetKey(full ? s!.name : "Empty", detail: full ? "USR\(k + 1) · \(s!.kib) KB" : "USR\(k + 1) · Tap to record", current: current) {
+                    let current = full && session.tracks[t].engine == sampleEngine && session.tracks[t].presetName == "SMPL\(k + 1)"
+                    presetKey(full ? s!.name : "Empty", detail: full ? "SMPL\(k + 1) · \(s!.kib) KB" : "SMPL\(k + 1) · Tap to record", current: current) {
                         if full { Task { await session.useSample(slot: k, onTrack: t) } }
                         else { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }
                     }
@@ -154,8 +154,8 @@ struct LibraryPage: View {
             .padding(4)
         }
         .task { await session.refreshSampleSlots() }
-        .alert("Clear USR\((clearing ?? 0) + 1)?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
-            Button("Clear USR\((clearing ?? 0) + 1)", role: .destructive) {
+        .alert("Clear SMPL\((clearing ?? 0) + 1)?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
+            Button("Clear SMPL\((clearing ?? 0) + 1)", role: .destructive) {
                 if let k = clearing { Task { try? await session.eraseSample(slot: k) } }
             }
             Button("Cancel", role: .cancel) {}

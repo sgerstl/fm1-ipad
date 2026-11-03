@@ -3,7 +3,7 @@ import SloopKit
 
 /// The sampler's audio: records the iPad's own microphone (never the FM-1's USB input, which iOS would
 /// otherwise prefer while it's plugged in), up to what a USR slot holds, and plays the trimmed take back
-/// on the iPad. iPad audio is held off meanwhile (AudioThrough.suspended), so its speaker can't feed the mic.
+/// on the iPad as the FM-1 will have it. iPad audio is held off meanwhile (AudioThrough.suspended), so its speaker can't feed the mic.
 @MainActor @Observable
 final class SampleRecorder {
     enum State: Equatable { case idle, recording, playing, denied, failed(String) }
@@ -24,9 +24,51 @@ final class SampleRecorder {
     var trimmedSeconds: Double { Double(max(0, end - start)) / rate }
     /// The trimmed take's peak, in dBFS (before the upload's normalising).
     var peakDB: Double {
-        guard end > start else { return -.infinity }
-        let p = take[start..<end].reduce(Float(0)) { max($0, abs($1)) }
+        let p = trimmedPeak
         return p > 0 ? 20 * log10(Double(p)) : -.infinity
+    }
+    private var trimmedPeak: Float {
+        guard end > start else { return 0 }
+        return take[start..<end].reduce(Float(0)) { max($0, abs($1)) }
+    }
+    /// How far normalising raises the trimmed take, in dB.
+    var raiseDB: Double { peakDB.isFinite ? -peakDB : 0 }
+
+    // MARK: What the FM-1 gets (2026-11-03)
+
+    /// Drive, in dB: 0 is the take as SLOOP's pipeline sends it (peak normalised); more pushes it into a
+    /// soft limiter, so the quiet parts come up by that much while the peak stays where it is. The fix
+    /// for a take that's quiet after normalising because one spike sets its peak.
+    var driveDB = 0 {
+        didSet { if driveDB != oldValue { knee = Self.knee(forGain: pow(10, Double(driveDB) / 20)) } }
+    }
+    @ObservationIgnored private var knee: Double = 0
+
+    /// One sample of the raw take as the FM-1 will play it: normalised to the trimmed take's peak, then
+    /// driven (tanh(kx)/tanh(k), with k set so quiet sounds gain exactly driveDB).
+    func shape(_ v: Float, gain: Float) -> Float {
+        let x = Double(v * gain)
+        guard knee > 0 else { return Float(x) }
+        return Float(tanh(knee * x) / tanh(knee))
+    }
+    var normGain: Float { let p = trimmedPeak; return p > 0 ? 1 / p : 1 }
+
+    /// The trimmed take, shaped: what Play plays and what goes to the slot.
+    func shaped() -> [Float] {
+        guard end > start else { return [] }
+        let g = normGain
+        return take[start..<end].map { shape($0, gain: g) }
+    }
+
+    /// The k where tanh(kx)/tanh(k) has a small-signal gain of g (k/tanh(k) = g): 0 for no drive.
+    static func knee(forGain g: Double) -> Double {
+        guard g > 1.0001 else { return 0 }
+        var lo = 0.0, hi = g + 1
+        for _ in 0..<50 {
+            let k = (lo + hi) / 2
+            if k / tanh(k) < g { lo = k } else { hi = k }
+        }
+        return (lo + hi) / 2
     }
 
     @ObservationIgnored private var engine: AVAudioEngine?
@@ -106,10 +148,12 @@ final class SampleRecorder {
             try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try s.setActive(true)
             let e = AVAudioEngine(), p = AVAudioPlayerNode()
+            // the take as the FM-1 will have it: normalised and driven, not the raw recording
+            let x = shaped()
             guard let fmt = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1),
-                  let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(end - start)) else { return }
-            buf.frameLength = AVAudioFrameCount(end - start)
-            take.withUnsafeBufferPointer { src in buf.floatChannelData![0].update(from: src.baseAddress! + start, count: end - start) }
+                  let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(x.count)) else { return }
+            buf.frameLength = AVAudioFrameCount(x.count)
+            x.withUnsafeBufferPointer { src in buf.floatChannelData![0].update(from: src.baseAddress!, count: x.count) }
             e.attach(p)
             e.connect(p, to: e.mainMixerNode, format: fmt)
             try e.start()
@@ -139,10 +183,11 @@ final class SampleRecorder {
 
     // MARK: For the FM-1
 
-    /// The trimmed take as the slot wants it: 22,050 Hz, 16-bit, peak normalised (SLOOP's own pipeline).
+    /// The trimmed take as the slot wants it: shaped, then SLOOP's own pipeline (22,050 Hz, 16-bit, peak
+    /// normalised; the shaped take's peak is already 1, so that last step changes nothing audible).
     func samplesForSlot() -> [Int16] {
         guard end > start else { return [] }
-        let x = take[start..<end].map(Double.init)
+        let x = shaped().map(Double.init)
         let r = UserSample.resample(x, from: Int(rate.rounded()), to: UserSample.rate)
         return UserSample.toInt16(Array(r.prefix(UserSample.maxSamples)))
     }

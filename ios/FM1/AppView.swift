@@ -300,7 +300,7 @@ extension AppView {
                                 .raisedKey()
                         }
                         .buttonStyle(PressSink())
-                        .accessibilityHint("Records the iPad's microphone into a USR slot for this track")
+                        .accessibilityHint("Records the iPad's microphone into a sample slot for this track")
                     }
                     Button {
                         ui.lastClear = session.clearAll(track: m.track)

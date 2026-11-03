@@ -9,7 +9,7 @@ struct SamplerRequest: Equatable {
     var fromBrowse = false
 }
 
-/// Record a sample with the iPad's microphone and put it in a USR slot: the take as one big waveform in
+/// Record a sample with the iPad's microphone and put it in a sample slot: the take as one big waveform in
 /// the track's colour, trimmed with two handles, inside a small screen like the FM-1's (slot, name,
 /// length, rate, peak). "Use on track" uploads it and sets the track to Sample › USRn (2026-11-03,
 /// direction A with C's screen).
@@ -27,7 +27,7 @@ struct SamplerPanel: View {
     private var t: Int { request.track }
     private var colour: Color { Theme.track[t] }
     private var slots: [SampleSlot] { session.sampleSlots }
-    private var name: String { "TAPE \((slot ?? 0) + 1)" }
+    private var name: String { "SMPL\((slot ?? 0) + 1)" }
     private var hasTake: Bool { rec.end > rec.start && rec.state != .recording }
     private var busy: Bool { progress != nil }
 
@@ -49,7 +49,7 @@ struct SamplerPanel: View {
             through.suspended = false
         }
         .task { if slots.isEmpty { await session.refreshSampleSlots(); if slot == nil { slot = request.slot ?? slots.firstIndex(where: \.isEmpty) } } }
-        .alert("Replace USR\((slot ?? 0) + 1)?", isPresented: $replacing) {
+        .alert("Replace SMPL\((slot ?? 0) + 1)?", isPresented: $replacing) {
             Button("Replace \(slotName(slot ?? 0))", role: .destructive) { upload() }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -84,7 +84,7 @@ struct SamplerPanel: View {
             }
             .buttonStyle(PressSink())
             .disabled(!canUse)
-            .accessibilityHint(slot == nil ? "Pick a slot first" : "Puts the sample in USR\((slot ?? 0) + 1) and plays it on track \(t + 1)")
+            .accessibilityHint(slot == nil ? "Pick a slot first" : "Puts the sample in SMPL\((slot ?? 0) + 1) and plays it on track \(t + 1)")
         }
     }
 
@@ -98,7 +98,7 @@ struct SamplerPanel: View {
     private var screen: some View {
         VStack(spacing: 10) {
             HStack {
-                Text(slot.map { "USR\($0 + 1)  \(name)" } ?? "PICK A SLOT")
+                Text(slot == nil ? "PICK A SLOT" : name)
                 Spacer()
                 Text(rec.state == .recording ? String(format: "%.1fs / %.1fs", rec.seconds, rec.maxSeconds)
                                              : hasTake ? String(format: "%.1fs", rec.trimmedSeconds) : "")
@@ -124,7 +124,11 @@ struct SamplerPanel: View {
     private var footerRight: String {
         if let p = progress { return "SENDING TO FM-1 \(Int(p * 100))%" }
         if let m = message { return m }
-        if hasTake, rec.peakDB.isFinite { return String(format: "PEAK %.0f dB", rec.peakDB) }
+        // the FM-1 gets the take normalised, and the screen shows and plays that: say how far it came up
+        if hasTake, rec.peakDB.isFinite {
+            return rec.raiseDB > 30 ? String(format: "RAISED %.0f dB · NOISE CAME UP TOO", rec.raiseDB)
+                                    : String(format: "RAISED %.0f dB", rec.raiseDB)
+        }
         return ""
     }
 
@@ -133,7 +137,11 @@ struct SamplerPanel: View {
             let w = g.size.width, h = g.size.height
             // while recording the screen is the whole slot; after, the take fills it for trimming
             let span = rec.state == .recording ? Int(rec.maxSeconds * rec.rate) : max(rec.take.count, 1)
-            let bars = Self.bars(rec.take, span: span, count: Int(w / 4))
+            // after recording, the bars show the take as the FM-1 will have it (shaping is monotonic, so
+            // a column's shaped peak is its raw peak, shaped)
+            let raw = Self.bars(rec.take, span: span, count: Int(w / 4))
+            let g = rec.normGain
+            let bars = rec.state == .recording ? raw : raw.map { min(1, abs(rec.shape($0, gain: g))) }
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0x0A0A0C))
                 if rec.take.isEmpty {
@@ -210,23 +218,42 @@ struct SamplerPanel: View {
         HStack(spacing: 16) {
             recKey
             playKey
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Input").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.well)
-                        Capsule().fill(rec.level > 0.9 ? Theme.rec : colour)
-                            .frame(width: g.size.width * CGFloat(min(1, rec.level)))
-                    }
-                }
-                .frame(height: 8)
-            }
-            .frame(width: 180)
-            .accessibilityHidden(true)
+            // the input meter while there's nothing to shape; Drive once there's a take (same place)
+            if hasTake { drive } else { meter }
             Spacer(minLength: 12)
             slotPicker
         }
         .frame(height: 88)
+    }
+
+    private var meter: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Input").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.well)
+                    Capsule().fill(rec.level > 0.9 ? Theme.rec : colour)
+                        .frame(width: g.size.width * CGFloat(min(1, rec.level)))
+                }
+            }
+            .frame(height: 8)
+        }
+        .frame(width: 180)
+        .accessibilityHidden(true)
+    }
+
+    /// Drive: louder without a higher peak. Changing it while the take plays starts it again, so you
+    /// hear the new setting at once.
+    private var drive: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Drive").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
+            StepperKeys(label: "Drive", value: rec.driveDB, range: 0...18, step: 3, enabled: !busy,
+                        format: { $0 == 0 ? "Off" : "+\($0) dB" }) { v in
+                rec.driveDB = v
+                if rec.state == .playing { rec.play() }
+            }
+        }
+        .frame(width: 180, alignment: .leading)
     }
 
     private var recKey: some View {
@@ -274,7 +301,7 @@ struct SamplerPanel: View {
                 let picked = slot == k
                 Button { slot = k } label: {
                     VStack(spacing: 2) {
-                        Text("USR\(k + 1)").font(.system(size: 13, weight: .semibold))
+                        Text("SMPL\(k + 1)").font(.system(size: 13, weight: .semibold))
                         Text(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")
                             .font(.system(size: 10)).lineLimit(1)
                             .foregroundStyle(Theme.textSecondary)
@@ -286,7 +313,7 @@ struct SamplerPanel: View {
                 }
                 .buttonStyle(PressSink())
                 .disabled(busy)
-                .accessibilityLabel("USR\(k + 1), \(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")")
+                .accessibilityLabel("SMPL\(k + 1), \(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")")
                 .accessibilityAddTraits(picked ? .isSelected : [])
             }
         }

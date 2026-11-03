@@ -82,12 +82,12 @@ import Testing
         let info = try #require(session.info)
         await session.useSample(slot: 2, onTrack: 0)
         let e = try #require(info.engines.firstIndex(of: "SAMPLE"))
-        #expect(session.tracks[0].engine == e && session.tracks[0].presetName == "USR3")
+        #expect(session.tracks[0].engine == e && session.tracks[0].presetName == "SMPL3")
         #expect(edits >= 1)
         try await waitFor { fake.engine[0] == e && fake.params[0][info.firstEngineParam] == 10 && fake.params[0][info.firstEngineParam + 3] == 0 }
         // the RELOAD the preset pushed re-reads the track: the name holds, from SET
         try await Task.sleep(for: .milliseconds(300))
-        #expect(session.tracks[0].presetName == "USR3")
+        #expect(session.tracks[0].presetName == "SMPL3")
         #expect(session.params[info.firstEngineParam] == 10)
         run.cancel()
     }
