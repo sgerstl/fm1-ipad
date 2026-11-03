@@ -131,7 +131,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .watch(let on): [UInt8(on)]
         case .live: [0]
         case .transport(let play): [1, play ? 1 : 0]
-        case .rec: [4]
+        case .rec: [4, 0]                       // padded: SLOOP runs a LIVE op only with 2+ bytes (editor_live.c), as its editor pads
         case .layerKey(let l, let k, let d): [2, UInt8(l), UInt8(k), d ? 1 : 0]
         case .chain(let s): [9, UInt8(min(s.count, 8))] + s.prefix(8).map { UInt8($0 & 3) }
         case .masterLevel(let v): [11, UInt8(max(0, min(127, v)))]

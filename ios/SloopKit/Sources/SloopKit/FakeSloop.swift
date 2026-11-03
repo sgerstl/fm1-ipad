@@ -486,7 +486,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
                 }
                 if !playing, was, let keep = songKeep { restoreKept(keep) }
             }
-            if a.first == 4 { recOn.toggle() }
+            if a.first == 4, a.count >= 2 { recOn.toggle() }      // as ed_live: an op with no second byte does nothing
             if a.first == 11, a.count >= 2 { masterLevel = Int(a[1]) }
             if a.first == 2, a.count >= 4, a[1] == 7, a[3] == 1 { saveLayerKey(Int(a[2])) }
             if a.first == 9, a.count >= 2 {

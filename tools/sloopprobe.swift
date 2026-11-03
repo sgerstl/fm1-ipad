@@ -224,3 +224,66 @@ if mode == "steps" {
     print("steps that differ after: \(changed.count)")
     for k in changed { print("  \(k): \(before[k] ?? "-")  ->  \(after[k] ?? "-")") }
 }
+
+// rec: press REC the way Jib does (LIVE op 4) and show the replies, raw and decoded (2026-11-03: the
+// iPad's REC did nothing on the device, stopped or playing)
+if mode == "rec" {
+    func line(_ b: [UInt8]?) -> String {
+        guard let b else { return "no reply" }
+        guard b.count >= 3 else { return "short: " + hex(b) }
+        return "op \(b[0]) playing \(b[1] & 1) song \(b[1] >> 2 & 1) armed \(b[2] & 1) recTracks \(b.count > 11 ? String(b[11]) : "?")  [\(hex(Array(b.prefix(14))))]"
+    }
+    print("before    " + line(request(77, [0])))
+    print("REC       " + line(request(77, [4])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + line(request(77, [0])))
+    print("REC again " + line(request(77, [4])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + line(request(77, [0])))
+}
+
+// recplay: the same, with the FM-1 playing
+if mode == "recplay" {
+    func line(_ b: [UInt8]?) -> String {
+        guard let b, b.count >= 12 else { return b.map(hex) ?? "no reply" }
+        return "op \(b[0]) playing \(b[1] & 1) armed \(b[2] & 1) recTracks \(b[11])  [\(hex(Array(b.prefix(14))))]"
+    }
+    _ = request(77, [0])                                   // the first request after opening goes unanswered
+    print("PLAY      " + line(request(77, [1, 1])))
+    Thread.sleep(forTimeInterval: 0.5)
+    print("REC       " + line(request(77, [4])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + line(request(77, [0])))
+    print("REC again " + line(request(77, [4])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + line(request(77, [0])))
+    print("STOP      " + line(request(77, [1, 0])))
+}
+
+// recpage: which screen the FM-1 is on, REC there, then REC on the home screen (page 37)
+if mode == "recpage" {
+    func armed(_ b: [UInt8]?) -> String { b.map { $0.count >= 3 ? "armed \($0[2] & 1) [\(hex(Array($0.prefix(4))))]" : hex($0) } ?? "no reply" }
+    _ = request(77, [0])
+    print("screen    " + (request(90).map(hex) ?? "no reply") + "   (home, page, layer, menu)")
+    print("REC here  " + armed(request(77, [4])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + armed(request(77, [0])))
+    if let a = request(77, [0]), a.count >= 3, a[2] & 1 == 1 { _ = request(77, [4]) }     // leave it unarmed
+    print("go home   " + (request(91, [37]).map(hex) ?? "no reply"))
+    print("REC home  " + armed(request(77, [4])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + armed(request(77, [0])))
+    print("REC off   " + armed(request(77, [4])))
+}
+
+// rec2: REC with a padding byte (ed_live runs ops only when na >= 2: editor_live.c)
+if mode == "rec2" {
+    func armed(_ b: [UInt8]?) -> String { b.map { $0.count >= 3 ? "armed \($0[2] & 1) [\(hex(Array($0.prefix(4))))]" : hex($0) } ?? "no reply" }
+    _ = request(77, [0])
+    print("REC [4,0] " + armed(request(77, [4, 0])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + armed(request(77, [0])))
+    print("REC [4,0] " + armed(request(77, [4, 0])))
+    Thread.sleep(forTimeInterval: 0.3)
+    print("after     " + armed(request(77, [0])))
+}
