@@ -585,6 +585,20 @@ public final class SloopSession {
         }
     }
 
+    /// Reads those DESCs again once the knob rests (200 ms): after the iPad's own write has gone out,
+    /// and once for a TYPE knob turned through several values.
+    private func refreshDescs(_ ids: [Int]) {
+        guard let c = client else { return }
+        let key = ids.first ?? 0
+        descRefresh[key]?.cancel()
+        descRefresh[key] = Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            for id in ids { if let d = try? await c.desc(scope: 0, id: id) { self.trackDescs[id] = d } }
+        }
+    }
+    @ObservationIgnored private var descRefresh: [Int: Task<Void, Never>] = [:]
+
     public static func sectionName(_ k: Int) -> String { ["A", "B", "C", "D"][k & 3] }
 
     private func readSoundParams(descs all: Bool) async throws {
@@ -594,6 +608,8 @@ public final class SloopSession {
             for id in 0..<i.globalCount { globalDescs[id] = try await c.desc(scope: 1, id: id) }
         }
         for id in min(i.firstEngineParam, i.paramCount)..<i.paramCount { trackDescs[id] = try await c.desc(scope: 0, id: id) }
+        // the INSERT's A B C and ATK DEC REL are named by this track's settings: read them for it too
+        if !all { for id in Param.describedBy.values.joined() where id < i.paramCount { trackDescs[id] = try await c.desc(scope: 0, id: id) } }
         let d = try await c.dump(paramCount: i.paramCount, globalCount: i.globalCount)
         let t = selectedTrack
         for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
@@ -733,7 +749,11 @@ public final class SloopSession {
 
     private func apply(track t: Int, id: Int, value v: Int) {
         guard t < 4 else { return }
-        if t == selectedTrack, id < params.count { params[id] = v }
+        if t == selectedTrack, id < params.count {
+            // INSRT or ENV SYNC changed (here or on the FM-1): the knobs they name get their new labels (2026-11-03)
+            if params[id] != v, let ids = Param.describedBy[id] { refreshDescs(ids) }
+            params[id] = v
+        }
         if t == 3, id == info?.firstEngineParam {               // the drum track's kit
             tracks[3].preset = v
             if kitNames.indices.contains(v) { tracks[3].presetName = kitNames[v] }
