@@ -1,26 +1,24 @@
-# fm1-ipad
+# Jib (fm1-ipad)
 
-My own firmware for the M-VAVE FM-1 plus an iPad app, built to work as one instrument. The FM-1 makes the sound, stores the blocks (patterns) and plays them. The iPad is a bigger window onto it: it shows and edits what the FM-1 is doing, and arranges blocks into songs.
+An iPad app for the M-VAVE FM-1 running [SLOOP](https://github.com/isod89/sloop-fm1). The two work as one instrument. The FM-1 makes the sound, stores the patterns and plays them. The iPad is a bigger window onto it: it shows all four tracks, edits them, shapes sounds, records samples, and arranges sections into songs.
 
-Design notes, decisions and the interaction spec live in my vault (`Projects/Dev/fm1-ipad/`), not here.
+**To try it, start with [TESTING.md](TESTING.md).**
 
 ## Layout
 
-| Folder | What | Built on |
-|---|---|---|
-| `firmware/` | Fork of M-VAVE's [FM1 Open](https://github.com/m-vave/fm1_open) at `4c7496d` (tag `upstream/fm1-open-4c7496d`). Stays byte-identical to upstream until the stock build is verified | Red Lion (Windows) |
-| `ios/` | The iPad app (SwiftUI, CoreMIDI) | Blue Lion (Mac) |
-| `tokens/` | `tokens.json`: the one source for colours, labels and sizes on both devices | both |
-| `protocol/` | The SysEx protocol between the FM-1 and the iPad | both |
+| Path | What |
+|---|---|
+| `ios/` | The iPad app (SwiftUI, CoreMIDI) and `SloopKit`, the Swift package that speaks to the FM-1. See `ios/README.md` |
+| `sloop/` | SLOOP 2.8.4 with the screen-link patch: the patch, the built firmware package, and how to build it |
+| `vendor/sloop-2.8.4/` | Stock SLOOP 2.8.4, pinned: firmware, web editor, and the editor protocol the app is written from |
+| `protocol/` | Which of SLOOP's editor commands the app uses |
+| `tokens/` | `tokens.json`: SLOOP's track and knob colours, and the app's surfaces |
+| `qa/` | The test plan and the last pass |
+| `tools/` | Small Mac command-line probes for the FM-1's MIDI |
+| `design/` | The app icon |
 
-**One rule:** a change to `tokens/` or `protocol/` lands in the same commit as the code on both sides that depends on it.
-
-## Building
-
-- **Firmware (Red Lion):** see `firmware/README.md`. It needs Windows x64, PowerShell, and JieLi toolchain 2.5.3.
-- **Browser simulator (Red Lion):** `firmware/tools/Build-Web.ps1 -LocalPreview`.
-- **iPad app (Blue Lion):** not started yet.
+An earlier plan replaced the FM-1's firmware with my own fork of M-VAVE's FM1 Open. It's archived at the tag `archive/fm1-open-firmware` and the `slice-1-link` branch.
 
 ## Licence
 
-`firmware/` is GPLv3 with M-VAVE's SDK linking exception, and the engine is M-VAVE's binary under its own terms (see `firmware/LICENSE.md` and `firmware/THIRD_PARTY.md`). This repo is private. Sharing a firmware build means sharing its source.
+GPL-3.0 (see `LICENSE`), the same as SLOOP. The app contains no SLOOP code: it's written from SLOOP's published editor protocol. The SLOOP patch and the firmware package in `sloop/` are GPL-3.0 as SLOOP's derivatives. The files in `vendor/sloop-2.8.4/` are SLOOP's, under its own `LICENSE` and `LICENSING.md`.

@@ -1,6 +1,6 @@
 # Protocol
 
-The app speaks **SLOOP's own editor protocol**: SysEx `F0 7D 46 4C <cmd> ... F7` over USB MIDI. The reference is pinned in `vendor/sloop-2.8.4/EDITOR_PROTOCOL.md`; there is no protocol of my own and no firmware change.
+The app speaks **SLOOP's own editor protocol**: SysEx `F0 7D 46 4C <cmd> ... F7` over USB MIDI. The reference is pinned in `vendor/sloop-2.8.4/EDITOR_PROTOCOL.md`; there is no protocol of my own. The one firmware change is the screen link (`sloop/`): two commands, 90 UI and 91 UI_GOTO, which the app uses when the FM-1 answers them and does without when it doesn't.
 
 What pass 1 uses:
 

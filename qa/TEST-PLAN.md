@@ -2,7 +2,7 @@
 
 What each part of the app is checked by. **A**: automated (`cd ios/SloopKit && swift test`), runs against the demo FM-1, which mirrors SLOOP's behaviour where it matters (sections hold the tracks, song mode keeps the loop, RELOAD only for the selected track). **H**: by hand on the FM-1. **S**: in the simulator with `-demo`.
 
-Last full pass: 2026-11-02, branch `app-pass-1`. 53 automated tests pass. Hardware pass on 2026-11-02 (after a backup): sections 1–4, every write path included, all pass. Accessibility (section 6) still not run.
+Last full pass: 2026-11-02, branch `app-pass-1`. 53 automated tests passed then; 63 pass now (2026-11-03, sampler added). Hardware pass on 2026-11-02 (after a backup): sections 1–4, every write path included, all pass. Accessibility (section 6) still not run.
 
 ## 1. Connection and protocol
 
@@ -67,10 +67,20 @@ Last full pass: 2026-11-02, branch `app-pass-1`. 53 automated tests pass. Hardwa
 | Drum track: the same pads on the iPad send the FM-1 to its "DRUM TRACK" page | H (2026-11-02) | pass |
 | Drum track FX: the FM-1 offers FILTER, SLICER, INSERT, INSERT 2, DLY, REV/CHO; the app shows the same six | H (2026-11-02) | pass |
 
+## 4a. Sampler
+
+| Check | How | Status |
+|---|---|---|
+| Slots read on connect; a slot's name and size shown | A `uploadEraseAndUseOnTheDemo` | pass |
+| Upload: 256-byte writes in order, progress moves, the header's CRC checked; too long or empty refused | A `SampleTests` | pass |
+| The firmware's checks: END without BEGIN, writes out of order, a bad CRC | A `endRefusesBadData` | pass |
+| An upload or erase isn't a project edit; putting a slot on a track is | A | pass |
+| Record with the iPad mic, trim, upload, play it on a track | H (2026-11-03, Scott) | pass |
+
 ## 5. Device safety
 
 - **Back up the FM-1** in SLOOP's web editor before any hardware run of section 3's write checks.
-- Flash writes the app can cause: storing a section (SAVE + key), clearing one (BK_PUT of no bytes), the song order and USB AUDIO = FULL (BK_PUT of the settings), user presets. Each is sent once; the order write re-reads the object first and changes only bytes 48–83; a commit is never retried.
+- Flash writes the app can cause: uploading or erasing a sample slot, storing a section (SAVE + key), clearing one (BK_PUT of no bytes), the song order and USB AUDIO = FULL (BK_PUT of the settings), user presets. Each is sent once; the order write re-reads the object first and changes only bytes 48–83; a commit is never retried.
 - The app never sends firmware.
 
 ## 6. Accessibility (needs a person)
