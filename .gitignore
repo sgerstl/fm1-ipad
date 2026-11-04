@@ -10,3 +10,7 @@ ios/**/DerivedData/
 *.pem
 *.key
 .build/
+
+# skiff-sim
+skiff-sim/build/
+skiff-sim-flash.bin
