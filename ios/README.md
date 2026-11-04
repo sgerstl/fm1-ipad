@@ -19,7 +19,7 @@ The earlier plan (custom protocol, 8 tracks, FM1 Open firmware) is archived on t
 
 | Path | What |
 |---|---|
-| `SloopKit/` | Swift package: framing, typed requests and replies, `SloopClient` (one request in flight, replies matched by command and arguments, pushes as a stream), `MIDITransport` (CoreMIDI, finds the "Felucca" port), `SloopSession` (reads and follows the device), `FakeSloop` (a pretend FM-1). Tests run against captured traffic in `Tests/SloopKitTests/Fixtures`. |
+| `SloopKit/` | Swift package: framing, typed requests and replies, `SloopClient` (one request in flight, replies matched by command and arguments, pushes as a stream), `MIDITransport` (CoreMIDI, finds the "Felucca" port), `FirmwareDriver` (the seam: `FirmwareDetector` reads INFO and picks the driver, `DeviceShape` gives the track and step counts, `FirmwareCapabilities` what only some firmware has; `SloopDriver` is SLOOP 2.8.4's), `DeviceSession` (reads and follows the device through its driver; `SloopSession` is its old name), `FakeSloop` (a pretend FM-1). Tests run against captured traffic in `Tests/SloopKitTests/Fixtures`. |
 | `FM1/` | The SwiftUI app. On the iPad, drawn on a fixed 1376 × 1032 pt canvas (13-inch iPad Air, landscape), scaled to fit the window. A compact size class (a landscape iPhone) gets `PhoneAppView` instead: `PhoneSequence`, `PhoneShape`, `PhoneBrowse` and the compact `SongPage`, sharing the iPad's leaf views. Grid sizes come from `GridMetrics` in the environment. `Theme.swift` mirrors `tokens/tokens.json`. |
 | `project.yml` | XcodeGen spec. `FM1.xcodeproj` is generated from it (`xcodegen generate`). |
 
