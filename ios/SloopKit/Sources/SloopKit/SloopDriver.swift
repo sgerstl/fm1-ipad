@@ -12,6 +12,9 @@ public final class SloopDriver: FirmwareDriver {
         [.livePlayhead, .samples, .sloopSong, .projects, .userPresets, .recording, .masterLevel]
     }
     public var pushes: AsyncStream<Push> { client.pushes }
+    public var params: ParamIDs { .sloop }
+    public var pageLayout: [PageSpec]? { nil }
+    public func prepare() async throws {}
 
     public init(client: SloopClient, info: DeviceInfo) {
         self.client = client
@@ -49,4 +52,5 @@ public final class SloopDriver: FirmwareDriver {
     public func userPresets() async throws -> [UserPreset] { try await client.userPresets() }
     public func userLoad(slot: Int) async throws -> Int { try await client.userLoad(slot: slot) }
     public func transport(play: Bool) async throws -> LiveState? { try await client.transport(play: play) }
+    public func transportState() async throws -> TransportState? { nil }
 }

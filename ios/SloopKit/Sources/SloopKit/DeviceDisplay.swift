@@ -90,5 +90,8 @@ public enum DeviceDisplay {
 
 extension DeviceSession {
     /// The selected track's param `id` as the FM-1's screen names it (DeviceDisplay.trackDesc).
-    public func trackDesc(_ id: Int) -> ParamDesc? { DeviceDisplay.trackDesc(trackDescs[id], id: id, params: params) }
+    public func trackDesc(_ id: Int) -> ParamDesc? {
+        guard dialect != .skiff else { return trackDescs[id] }       // SLOOP's screen rules
+        return DeviceDisplay.trackDesc(trackDescs[id], id: id, params: params)
+    }
 }

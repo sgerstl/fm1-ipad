@@ -23,6 +23,9 @@ public struct TrackState: Equatable, Sendable {
     public var division = 2         // P_SDIV, 1/16
     public var pan = 0
     public var mute = false
+    /// Play direction (0 FWD, 1 RVRS, 2 PING, 3 RAND) and the track's swing, where the firmware has them.
+    public var direction = 0
+    public var swing = 0
     public var loaded = false
 
     public init(index: Int, shape: DeviceShape = .sloop) {
@@ -64,6 +67,10 @@ public final class DeviceSession {
     /// Tracks, steps and the drum track. SLOOP's until a device says otherwise.
     public private(set) var shape = DeviceShape.sloop
     public private(set) var capabilities: FirmwareCapabilities = []
+    /// The parameter ids this firmware uses for what the session follows.
+    public private(set) var ids = ParamIDs.sloop
+    /// The Sound tab's pages, when the firmware lays them out itself (Skiff, from DESC); nil: the app's own.
+    public private(set) var pageLayout: [PageSpec]?
     public private(set) var tracks = (0..<DeviceShape.sloop.trackCount).map { TrackState(index: $0) }
     public private(set) var selectedTrack = 0
     public private(set) var playing = false {
@@ -133,6 +140,8 @@ public final class DeviceSession {
     @ObservationIgnored private var loopFingerprint: (raw: UInt32, music: UInt32)?
     @ObservationIgnored private var stepStart = Array(repeating: Date.distantPast, count: DeviceShape.sloop.trackCount)
     @ObservationIgnored private var lastPoll = Date.distantPast
+    /// The playhead counted from MIDI clock, on firmware without LIVE (Skiff).
+    @ObservationIgnored private var counted = CountedPlayhead(tracks: DeviceShape.sloop.trackCount)
 
     private var driver: FirmwareDriver?
     /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
@@ -254,6 +263,8 @@ public final class DeviceSession {
             info = i
             dialect = c.dialect
             capabilities = c.capabilities
+            ids = c.params
+            pageLayout = c.pageLayout
             adopt(c.shape)
             deviceNotes = []          // whatever the USB buffer held from before isn't live
             try await readEverything()
@@ -273,7 +284,13 @@ public final class DeviceSession {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.pushLoop(c) }
             group.addTask { await self.pingLoop(c) }
-            if let s = self.sloop, self.capabilities.contains(.livePlayhead) { group.addTask { await self.liveLoop(s) } }
+            if let s = self.sloop, self.capabilities.contains(.livePlayhead) {
+                group.addTask { await self.liveLoop(s) }
+            } else {
+                // no step positions over SysEx: TRANSPORT polled, the playhead counted from MIDI clock
+                group.addTask { await self.transportLoop(c) }
+                group.addTask { await self.clockLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
+            }
             group.addTask { await self.resyncLoop(c) }
             group.addTask { await self.noteLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             await group.next()           // any loop ending means the device went away
@@ -291,6 +308,7 @@ public final class DeviceSession {
         tracks = (0..<s.trackCount).map { TrackState(index: $0, shape: s) }
         positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: s.trackCount)
         stepStart = Array(repeating: Date.distantPast, count: s.trackCount)
+        counted = CountedPlayhead(tracks: s.trackCount)
         if selectedTrack >= s.trackCount { selectedTrack = 0 }
     }
 
@@ -720,9 +738,9 @@ public final class DeviceSession {
 
     private func readParams(_ t: Int) async throws {
         guard let c = driver else { return }
-        var ids = Param.all
-        if isDrums(t), let i = info { ids.append(i.firstEngineParam) }      // the drum track's kit
-        for id in ids {
+        var reads = ids.trackReads
+        if isDrums(t), let i = info { reads.append(i.firstEngineParam) }      // the drum track's kit
+        for id in reads {
             let v = try await c.trackParam(track: t, id: id)
             if !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
         }
@@ -730,7 +748,7 @@ public final class DeviceSession {
 
     private func readGlobals() async throws {
         guard let c = driver else { return }
-        for id in Global.all {
+        for id in ids.globalReads {
             let v = try await c.global(id: id)
             if !recentlyWritten("g\(id)") { applyGlobal(id: id, value: v) }
         }
@@ -784,17 +802,19 @@ public final class DeviceSession {
             return
         }
         switch id {
-        case Param.level: if !isDrums(t) { tracks[t].level = v }
-        case Param.root: tracks[t].root = max(0, min(11, v))
-        case Param.scale: tracks[t].scale = max(0, min(Music.scales.count - 1, v))
-        case Param.quant: tracks[t].quant = v
-        case Param.transpose: tracks[t].transpose = v
-        case Param.chord: tracks[t].chord = max(0, v)
-        case Param.arpMode: tracks[t].arpMode = max(0, v)
-        case Param.length: tracks[t].length = max(1, min(stepCount, v))
-        case Param.division: tracks[t].division = max(0, min(Music.divisionBeats.count - 1, v))
-        case Param.pan: tracks[t].pan = v
-        case Param.mute: tracks[t].mute = v != 0
+        case ids.level: if !isDrums(t) { tracks[t].level = v }
+        case ids.root: tracks[t].root = max(0, min(11, v))
+        case ids.scale: tracks[t].scale = max(0, min(Music.scales.count - 1, v))
+        case ids.quant: tracks[t].quant = v
+        case ids.transpose: tracks[t].transpose = v
+        case ids.chord: tracks[t].chord = max(0, v)
+        case ids.arpMode: tracks[t].arpMode = max(0, v)
+        case ids.length: tracks[t].length = max(1, min(stepCount, v))
+        case ids.division: tracks[t].division = max(0, min(Music.divisionBeats.count - 1, v))
+        case ids.pan: tracks[t].pan = v
+        case ids.mute: tracks[t].mute = v != 0
+        case ids.direction: tracks[t].direction = v
+        case ids.swing: tracks[t].swing = v
         default: break
         }
     }
@@ -802,11 +822,11 @@ public final class DeviceSession {
     private func applyGlobal(id: Int, value v: Int) {
         if id < globals.count { globals[id] = v }
         switch id {
-        case Global.bpm: bpm = v
-        case Global.swing: swing = v
-        case Global.drumLevel: if let dt = drumTrack { tracks[dt].level = v }
-        case Global.otherChannels: otherChannelsPlaySelected = v == 0
-        case Global.drumMap: drumMapGM = v == 0
+        case ids.bpm: bpm = v
+        case ids.globalSwing: swing = v
+        case ids.drumLevel: if let dt = drumTrack { tracks[dt].level = v }
+        case ids.otherChannels: otherChannelsPlaySelected = v == 0
+        case ids.drumMap: drumMapGM = v == 0
         default: break
         }
     }
@@ -876,6 +896,64 @@ public final class DeviceSession {
         }
     }
 
+    /// TRANSPORT about every 150 ms playing, 250 ms stopped: PLAY, STOP, REC and the selected track (Skiff
+    /// pushes nothing when they change on the device), and the keep-alive.
+    private func transportLoop(_ c: FirmwareDriver) async {
+        var misses = 0
+        while !Task.isCancelled {
+            do {
+                if let s = try await c.transportState() { misses = 0; applyTransport(s) }
+            } catch ClientError.closed {
+                return
+            } catch {
+                misses += 1
+                stats.timeouts += 1
+                if misses > 30 { return }     // several seconds with no answer: treat it as gone
+            }
+            try? await Task.sleep(for: playing ? .milliseconds(150) : .milliseconds(250))
+        }
+    }
+
+    func applyTransport(_ s: TransportState) {
+        stats.polls += 1
+        // a poll already in flight when the iPad selected a track or pressed PLAY answers what was before
+        if s.selected != selectedTrack, trackIndices.contains(s.selected), !recentlyWritten("select") {
+            selectedTrack = s.selected
+            Task {
+                try? await self.readSoundParams(descs: false)
+                _ = try? await self.readSteps(s.selected)
+            }
+        }
+        if playing != s.playing, !recentlyWritten("play") { playing = s.playing }
+        let rec = s.armedTracks != 0 || s.countingIn
+        if recording != rec { recording = rec }
+    }
+
+    /// MIDI clock from the device: Start resets the count, each pulse walks the tracks (CountedPlayhead).
+    private func clockLoop(_ t: SysExTransport) async {
+        for await e in t.clock {
+            switch e {
+            case .start: counted.start()
+            case .stop: counted.stop()
+            case .resume: break
+            case .tick:
+                let settings = tracks.map { CountedPlayhead.Settings(length: $0.length, division: $0.division, direction: $0.direction, swing: $0.swing) }
+                if counted.tick(settings, globalSwing: swing) { applyCounted() }
+            }
+        }
+    }
+
+    private func applyCounted(at now: Date = Date()) {
+        stats.polls += 1
+        for (k, step) in counted.steps.enumerated() where k < positions.count && step >= 0 {
+            let new = LiveState.TrackPosition(step: step, length: tracks[k].length, meter: 0)
+            if positions[k] != new {
+                if positions[k].step != step { stepStart[k] = now }
+                positions[k] = new
+            }
+        }
+    }
+
     private func resyncLoop(_ c: FirmwareDriver) async {
         var pass = 0
         while !Task.isCancelled {
@@ -941,7 +1019,7 @@ public final class DeviceSession {
         if before.sectionPlaying != l.song.sectionPlaying, !l.song.songPlaying { tracksEdited = false }
         if bpm != l.bpm { bpm = l.bpm }
         // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
-        for k in trackIndices where !recentlyWritten("p\(k).\(Param.mute)") {
+        for k in trackIndices where !recentlyWritten("p\(k).\(ids.mute)") {
             let m = l.mutes >> k & 1 == 1
             if tracks[k].mute != m { tracks[k].mute = m }
         }
@@ -988,6 +1066,7 @@ public final class DeviceSession {
     public func select(track t: Int) {
         guard t != selectedTrack else { return }
         selectedTrack = t
+        recentWrites["select"] = Date()
         guard let c = driver else { return }
         Task {
             _ = try? await c.selectTrack(t)
@@ -1174,7 +1253,7 @@ public final class DeviceSession {
     /// A track parameter from a knob: shown at once, sent latest-value-wins so a drag never queues up.
     public func set(track t: Int, param id: Int, to v: Int) {
         apply(track: t, id: id, value: v)
-        if isDrums(t) && id == Param.level { sendParam("g\(Global.drumLevel)", v) { c, v in try await c.setGlobal(id: Global.drumLevel, value: v) } ; return }
+        if isDrums(t), id == ids.level, let dl = ids.drumLevel { sendParam("g\(dl)", v) { c, v in try await c.setGlobal(id: dl, value: v) } ; return }
         sendParam("p\(t).\(id)", v) { c, v in try await c.setTrackParam(track: t, id: id, value: v) }
     }
 
@@ -1260,7 +1339,7 @@ public final class DeviceSession {
     }
 
     public func toggleMute(track t: Int) {
-        set(track: t, param: Param.mute, to: tracks[t].mute ? 0 : 1)
+        set(track: t, param: ids.mute, to: tracks[t].mute ? 0 : 1)
     }
 
     public func loadKit(_ k: Int) {
@@ -1269,12 +1348,14 @@ public final class DeviceSession {
     }
 
     public func toggleRec() {
+        if let s = driver as? SkiffDriver { Task { try? await s.rec() }; return }
         guard let c = sloop else { return }
         Task { if let l = try? await c.rec() { self.applyLive(l) } }
     }
 
     public func setPlaying(_ on: Bool) {
         playing = on
+        recentWrites["play"] = Date()
         guard let c = driver else { return }
         Task { if let l = try? await c.transport(play: on) { self.applyLive(l) } }
     }
