@@ -225,6 +225,7 @@ struct PhoneTopBar: View {
             Toggle("Play through the iPhone", isOn: Binding(get: { through.enabled }, set: { through.enabled = $0 }))
             if through.enabled { Text(through.summary) }
             Button(useDemo ? "Use the FM-1" : "Use the demo FM-1") { useDemo.toggle() }
+            DeveloperMenu()
         } label: {
             Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)

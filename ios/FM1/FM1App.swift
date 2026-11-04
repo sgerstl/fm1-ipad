@@ -20,6 +20,8 @@ struct RootView: View {
     @State private var ui = EditorUI()
     @State private var through = AudioThrough()
     @State private var projects = ProjectStore()
+    @AppStorage(Look.styleKey) private var lookStyle = LookStyle.flat
+    @AppStorage(Look.strengthKey) private var lookStrength = ElevationStrength.medium
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
@@ -55,6 +57,7 @@ struct RootView: View {
             }
         }
         .background(Theme.page)
+        .environment(\.look, Look(style: lookStyle, strength: lookStrength))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         .task(id: useDemo) {
             if session.isDemo != useDemo { session = DeviceSession(demo: useDemo) }

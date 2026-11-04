@@ -56,6 +56,7 @@ struct TopBar: View {
                     Text(String(format: "LIVE %.1f a second · timeouts %d", s.pollsPerSecond, s.timeouts))
                 }
             }
+            DeveloperMenu()
         } label: {
             HStack(spacing: 10) {
                 LED(on: isConnected, colour: Theme.text)

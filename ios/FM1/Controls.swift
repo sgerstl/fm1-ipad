@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Keys you can press: raised. A segmented choice sits in a recessed track with the chosen segment
-// raised (as the tabs). A toggle sinks in and lights its LED when on.
+// Keys you can press: raised (chiclets, on the flat look). A segmented choice sits in a recessed track
+// with the chosen segment raised. A toggle sinks in and lights its LED when on.
 
 /// One of several, as raised segments in a well. `selected` -1 means none (shown, but nothing raised).
 struct SegmentedKeys: View {
@@ -54,12 +54,10 @@ struct ToggleKey: View {
             .foregroundStyle(enabled ? Theme.text : Theme.textTertiary)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background {
-                if on { RoundedRectangle(cornerRadius: 9).fill(Theme.pressed).recessed(9) } else { Color.clear.raisedKey() }
-            }
+            .latchedKey(on)
             .contentShape(Rectangle())
         }
-        .buttonStyle(PressSink())
+        .buttonStyle(PressSink(latched: on))
         .disabled(!enabled)
         .accessibilityLabel(name)
         .accessibilityValue(on ? "on" : "off")
@@ -139,13 +137,52 @@ struct StepperKeys: View {
     }
 }
 
-/// Pressing sinks a key a little; disabled keys fade.
+/// Pressing sinks a key a little; disabled keys fade. Flat look: the key drops 2 pt onto its edge
+/// (60 ms in, 100 ms out, instant with Reduce Motion), and a `latched` key (a toggle that's on) stays
+/// down. Disabled, a flat key loses its edge and top (RaisedKey draws the outline) and its label greys.
 struct PressSink: ButtonStyle {
+    var latched = false
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.look) private var look
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .offset(y: configuration.isPressed ? 1 : 0)
-            .brightness(configuration.isPressed ? -0.06 : 0)
-            .opacity(enabled ? 1 : 0.45)
+        let down = configuration.isPressed
+        if look.flat {
+            configuration.label
+                .environment(\.keyPressed, down)
+                .foregroundStyle(enabled ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.textTertiary))
+                .offset(y: down || latched ? 2 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: down ? 0.06 : 0.1), value: down)
+        } else {
+            configuration.label
+                .environment(\.keyPressed, down)
+                .offset(y: down ? 1 : 0)
+                .brightness(down ? -0.06 : 0)
+                .opacity(enabled ? 1 : 0.45)
+        }
+    }
+}
+
+/// Developer settings, in debug builds only: the look experiment's switch (2026-11-05). Sits at the foot
+/// of the connection menu on the iPad and the ⋯ menu on the phone, the app's only settings menus.
+struct DeveloperMenu: View {
+    @AppStorage(Look.styleKey) private var style = LookStyle.flat
+    @AppStorage(Look.strengthKey) private var strength = ElevationStrength.medium
+
+    var body: some View {
+        #if DEBUG
+        Menu("Developer") {
+            Picker("Look", selection: $style) {
+                Text("Flat").tag(LookStyle.flat)
+                Text("Physical").tag(LookStyle.physical)
+            }
+            if style == .flat {
+                Picker("Elevation", selection: $strength) {
+                    ForEach(ElevationStrength.allCases) { Text($0.rawValue.capitalized).tag($0) }
+                }
+            }
+        }
+        #endif
     }
 }
