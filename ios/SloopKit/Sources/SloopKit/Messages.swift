@@ -85,9 +85,13 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case smpEnd(slot: Int, header: [UInt8])    // the 480-byte header: the device checks the data CRC, then writes it
     case smpErase(slot: Int)                   // the whole slot (~1 s)
     case smpInfo
+    /// Another dialect's request: its command and arguments; a reply answers it when its body starts with
+    /// the first `match` arguments.
+    case raw(cmd: UInt8, args: [UInt8], match: Int, name: String)
 
     public var cmd: UInt8 {
         switch self {
+        case .raw(let c, _, _, _): c
         case .info: Cmd.info
         case .track, .selectTrack: Cmd.track
         case .names: Cmd.names
@@ -153,6 +157,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .smpWrite(let k, let off, let d): [UInt8(k), UInt8(off & 0x7F), UInt8(off >> 7 & 0x7F), UInt8(off >> 14 & 0x7F)] + Pack7.encode(d)
         case .smpEnd(let k, let h): [UInt8(k)] + Pack7.encode(h)
         case .smpInfo: []
+        case .raw(_, let a, _, _): a
         }
     }
 
@@ -189,6 +194,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .smpBegin(let k), .smpEnd(let k, _), .smpErase(let k): body.first == UInt8(k)
         case .smpWrite(let k, let off, _): body.count >= 5 && body[0] == UInt8(k) && Int(body[1]) | Int(body[2]) << 7 | Int(body[3]) << 14 == off
         case .smpInfo: true
+        case .raw(_, let a, let n, _): body.count >= n && Array(body.prefix(n)) == Array(a.prefix(n))
         }
     }
 
@@ -229,6 +235,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .smpEnd: "SMP_END"
         case .smpErase: "SMP_ERASE"
         case .smpInfo: "SMP_INFO"
+        case .raw(_, _, _, let name): name
         }
     }
 }
@@ -321,6 +328,9 @@ public struct SynthStep: Equatable, Sendable {
     public var velocity: Int
     public var levels: [Int]
     public var ratchets: [Int]
+    /// The bytes after the velocity as another dialect sent them (Skiff: hits, chance, ratchet, FLAM,
+    /// COND, NUDGE, ties), kept so a write can give them back; empty on SLOOP.
+    public var extra: [UInt8] = []
 
     public static let empty = SynthStep(notes: [], time: .rest, accent: false, slide: false, velocity: 100)
 

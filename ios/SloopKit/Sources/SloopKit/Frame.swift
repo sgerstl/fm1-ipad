@@ -30,18 +30,26 @@ public struct NoteEvent: Equatable, Sendable {
     public init(on: Bool, channel: UInt8, note: UInt8) { self.on = on; self.channel = channel; self.note = note }
 }
 
+/// MIDI clock from the device: Start, a tick (24 a beat), Continue, Stop.
+public enum ClockEvent: Equatable, Sendable {
+    case start, tick, resume, stop
+}
+
 /// Collects MIDI bytes into whole SysEx frames. Real-time bytes (F8 and up) may land inside a frame
-/// and are skipped; a new F0 drops an unfinished frame. Outside a frame it reads note on / off
-/// (running status included) into `notes`, which the caller drains; other messages are skipped.
+/// and don't break it; clock ones go to `clock`. A new F0 drops an unfinished frame. Outside a frame it
+/// reads note on / off (running status included) into `notes`, which the caller drains; other messages
+/// are skipped.
 public struct SysExAssembler {
     private var partial: [UInt8] = []
     private var inFrame = false
     private var status: UInt8 = 0
     private var data: [UInt8] = []
     public private(set) var notes: [NoteEvent] = []
+    public private(set) var clock: [ClockEvent] = []
     public init() {}
 
     public mutating func drainNotes() -> [NoteEvent] { defer { notes = [] }; return notes }
+    public mutating func drainClock() -> [ClockEvent] { defer { clock = [] }; return clock }
 
     private mutating func channelByte(_ b: UInt8) {
         if b & 0x80 != 0 {
@@ -62,7 +70,16 @@ public struct SysExAssembler {
     public mutating func feed(_ bytes: some Sequence<UInt8>) -> [[UInt8]] {
         var out: [[UInt8]] = []
         for b in bytes {
-            if b >= 0xF8 { continue }
+            if b >= 0xF8 {
+                switch b {
+                case 0xF8: clock.append(.tick)
+                case 0xFA: clock.append(.start)
+                case 0xFB: clock.append(.resume)
+                case 0xFC: clock.append(.stop)
+                default: break
+                }
+                continue
+            }
             if b == 0xF0 { partial = [b]; inFrame = true; status = 0; continue }
             guard inFrame else { channelByte(b); continue }
             if b == 0xF7 { partial.append(b); out.append(partial); partial = []; inFrame = false }

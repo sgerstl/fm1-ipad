@@ -6,7 +6,13 @@ public protocol SysExTransport: AnyObject, Sendable {
     var frames: AsyncStream<[UInt8]> { get }
     /// Notes the device sends (its keys, with KEY OUT on). The fake sends none.
     var notes: AsyncStream<NoteEvent> { get }
+    /// MIDI clock the device sends (Skiff's CLOCK OUT); none from SLOOP or the fake.
+    var clock: AsyncStream<ClockEvent> { get }
     func send(_ frame: [UInt8])
+}
+
+public extension SysExTransport {
+    var clock: AsyncStream<ClockEvent> { AsyncStream { $0.finish() } }
 }
 
 public enum ClientError: Error, Equatable {

@@ -33,7 +33,9 @@ struct PhoneAppView: View {
                     case .sequencer: PhoneSequence(session: session, ui: ui)
                     case .sound: PhoneShape(session: session, ui: ui)
                     case .library: PhoneBrowse(session: session, ui: ui)
-                    case .song: SongPage(session: session, ui: ui, compact: true)
+                    case .song:
+                        if session.capabilities.contains(.sloopSong) { SongPage(session: session, ui: ui, compact: true) }
+                        else { NotOnThisFirmware.arrange(session) }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

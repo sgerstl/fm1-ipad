@@ -8,15 +8,67 @@ import Foundation
 /// A firmware Jib knows how to talk to, found from INFO.
 public enum FirmwareDialect: Equatable, Sendable {
     case sloop
+    /// Skiff 2.2 (github.com/illuminus5/skiff): Felucca's command numbers, six tracks, INFO's tags.
+    case skiff
 
-    /// The dialect INFO reports, or nil for firmware Jib doesn't know (it refuses to connect).
-    public static func detect(_ info: DeviceInfo) -> FirmwareDialect? {
+    /// The dialect INFO reports, or nil for firmware Jib doesn't know (it refuses to connect). `body` is
+    /// INFO's whole reply, for the tags Skiff ends it with.
+    public static func detect(_ info: DeviceInfo, body: [UInt8] = []) -> FirmwareDialect? {
         if info.version == DeviceInfo.expectedVersion, info.protocolVersion == DeviceInfo.expectedProtocol { return .sloop }
+        if info.version == SkiffInfo.expectedVersion, let s = SkiffInfo(body), s.isSupported { return .skiff }
         return nil
     }
 
     /// Every firmware and version Jib speaks, for the "other firmware" message.
-    public static let known = "FELUCCA SLOOP 2.8.4 (protocol 12)"
+    public static let known = "FELUCCA SLOOP 2.8.4 (protocol 12) or Skiff 2.2 (FELUCCA v2.2)"
+}
+
+/// The parameter ids the session itself reads and follows (the Sound tab reads every one by DESC). Most
+/// are Felucca's and the same on both; the chord keys moved, and SLOOP's drum and MIDI globals are SLOOP's.
+public struct ParamIDs: Equatable, Sendable {
+    public var level = Param.level, root = Param.root, scale = Param.scale, quant = Param.quant
+    public var transpose = Param.transpose, length = Param.length, division = Param.division
+    public var pan = Param.pan, mute = Param.mute, chord = Param.chord, arpMode = Param.arpMode
+    /// Play direction and the track's swing (the counted playhead needs them); nil where unused.
+    public var direction: Int?, swing: Int?
+    /// The INSERT's type and ENV SYNC, which change how other knobs read on SLOOP's screen.
+    public var insertType: Int? = Param.insertType, envSync: Int? = Param.envSync
+    public var bpm = Global.bpm, globalSwing = Global.swing
+    public var drumLevel: Int? = Global.drumLevel, otherChannels: Int? = Global.otherChannels, drumMap: Int? = Global.drumMap
+
+    public init() {}
+    public static let sloop = ParamIDs()
+
+    /// The track parameters read for every track.
+    public var trackReads: [Int] {
+        [level, root, scale, quant, transpose, length, division, pan, mute, chord, arpMode] + [direction, swing].compactMap { $0 }
+    }
+    public var globalReads: [Int] { [bpm, globalSwing] + [drumLevel, otherChannels, drumMap].compactMap { $0 } }
+}
+
+/// The transport, polled on firmware without LIVE (Skiff's TRANSPORT, its keep-alive too).
+public struct TransportState: Equatable, Sendable {
+    public var playing: Bool
+    public var countingIn: Bool
+    public var armedTracks: Int
+    public var selected: Int
+    public init(playing: Bool, countingIn: Bool = false, armedTracks: Int = 0, selected: Int) {
+        self.playing = playing; self.countingIn = countingIn; self.armedTracks = armedTracks; self.selected = selected
+    }
+}
+
+/// A page of four knobs for the Sound tab, as the firmware lays its own pages out. `family` is the FM-1
+/// button (FX, SEL, ENV, LFO, EDIT, GLO, ARP, SEQ); scope 0 a track parameter (whole id), 1 a global.
+public struct PageSpec: Equatable, Sendable {
+    public var title: String
+    public var family: String
+    public var scope: Int
+    public var ids: [Int?]
+    /// 1 / 2: the engine's EDIT pages, titled by NAMES.
+    public var engineEdit = 0
+    public init(title: String, family: String, scope: Int, ids: [Int?], engineEdit: Int = 0) {
+        self.title = title; self.family = family; self.scope = scope; self.ids = ids; self.engineEdit = engineEdit
+    }
 }
 
 /// The device's size: tracks, steps, and which tracks play what.
@@ -75,6 +127,12 @@ public protocol FirmwareDriver: AnyObject, Sendable {
     var capabilities: FirmwareCapabilities { get }
     /// Pushes from the device, already in the session's terms.
     var pushes: AsyncStream<Push> { get }
+    var params: ParamIDs { get }
+    /// The Sound tab's pages, when the firmware's differ from the app's own (SLOOP's); nil: the app's.
+    var pageLayout: [PageSpec]? { get }
+
+    /// Whatever the driver reads once before the session does (Skiff: every DESC, to find its ids).
+    func prepare() async throws
 
     func close() async
     /// A plain MIDI message (a note from the iPad's keyboard), outside the request queue.
@@ -107,6 +165,8 @@ public protocol FirmwareDriver: AnyObject, Sendable {
     func userLoad(slot: Int) async throws -> Int
     /// PLAY or STOP; the state after it, where the firmware reports one.
     func transport(play: Bool) async throws -> LiveState?
+    /// The transport, on firmware that has no LIVE (nil: LIVE covers it).
+    func transportState() async throws -> TransportState?
 }
 
 /// Connects to whatever is on the transport: reads INFO and hands back the matching driver, or the
@@ -122,9 +182,14 @@ public enum FirmwareDetector {
         await c.start()
         do {
             try await Task.sleep(for: .milliseconds(200))      // let notes queued in the USB buffer drain
-            let i = try await c.info()
-            switch FirmwareDialect.detect(i) {
+            let body = try await c.send(.info)
+            let i = try DeviceInfo(body)
+            switch FirmwareDialect.detect(i, body: body) {
             case .sloop: return .driver(SloopDriver(client: c, info: i))
+            case .skiff:
+                let d = try SkiffDriver(client: c, body: body)
+                try await d.prepare()
+                return .driver(d)
             case nil:
                 await c.close()
                 return .unknown(i)

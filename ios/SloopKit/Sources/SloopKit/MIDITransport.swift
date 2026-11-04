@@ -7,6 +7,8 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
     private let sink: AsyncStream<[UInt8]>.Continuation
     public let notes: AsyncStream<NoteEvent>
     private let noteSink: AsyncStream<NoteEvent>.Continuation
+    public let clock: AsyncStream<ClockEvent>
+    private let clockSink: AsyncStream<ClockEvent>.Continuation
     private var client = MIDIClientRef()
     private var inPort = MIDIPortRef()
     private var outPort = MIDIPortRef()
@@ -35,6 +37,7 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
         guard let dev = Self.findDevice() else { return nil }
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self, bufferingPolicy: .unbounded)
         (notes, noteSink) = AsyncStream.makeStream(of: NoteEvent.self, bufferingPolicy: .bufferingNewest(128))
+        (clock, clockSink) = AsyncStream.makeStream(of: ClockEvent.self, bufferingPolicy: .bufferingNewest(512))
         source = dev.source; destination = dev.destination; name = dev.name
 
         let status = MIDIClientCreateWithBlock("FM1 iPad" as CFString, &client) { [weak self] note in
@@ -61,9 +64,11 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
             out += assembler.feed(UnsafeRawBufferPointer(start: raw, count: len))
         }
         let notes = assembler.drainNotes()
+        let ticks = assembler.drainClock()
         lock.unlock()
         for f in out { sink.yield(f) }
         for n in notes { noteSink.yield(n) }
+        for c in ticks { clockSink.yield(c) }
     }
 
     public func send(_ frame: [UInt8]) {
@@ -86,5 +91,6 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
         finished = true
         sink.finish()
         noteSink.finish()
+        clockSink.finish()
     }
 }
