@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The iPhone layout (landscape, 2026-11-04): one 44 pt top bar, then one job at a time. Designed in the
 /// mockups (vault: Projects/Dev/fm1-ipad/iphone-adaptation.md) and built screen by screen: Sequence
-/// first. The jobs not built yet say so plainly instead of shrinking the iPad's canvas onto the phone.
+/// first, then Shape, Browse and Arrange. Never the iPad's canvas shrunk onto the phone.
 struct PhoneAppView: View {
     let session: SloopSession
     let ui: EditorUI
@@ -33,7 +33,7 @@ struct PhoneAppView: View {
                     case .sequencer: PhoneSequence(session: session, ui: ui)
                     case .sound: PhoneShape(session: session, ui: ui)
                     case .library: PhoneBrowse(session: session, ui: ui)
-                    default: notYet(ui.page)
+                    case .song: SongPage(session: session, ui: ui, compact: true)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -96,15 +96,6 @@ struct PhoneAppView: View {
         .foregroundStyle(Theme.text)
         .font(.system(size: 15))
         .monospacedDigit()
-    }
-
-    private func notYet(_ p: Page) -> some View {
-        VStack(spacing: 8) {
-            Text(p.rawValue).font(.system(size: 22, weight: .semibold))
-            Text("\(p.rawValue) isn't built for the iPhone yet. It works on the iPad.")
-                .font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

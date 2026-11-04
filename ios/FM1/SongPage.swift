@@ -245,6 +245,9 @@ struct SectionsPanel: View {
 struct SongPage: View {
     let session: SloopSession
     let ui: EditorUI
+    /// The phone's Arrange (2026-11-04): shorter blocks, the mode under the song, the page scrolls,
+    /// and no flick-to-delete (too easy to set off on a phone; Delete is in the block's menu).
+    var compact = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A step in the order, with an identity that survives moves (two blocks can hold the same step).
@@ -275,7 +278,8 @@ struct SongPage: View {
         var x: [CGFloat], y: [CGFloat], w: [CGFloat]
         var add: CGPoint?
         var height: CGFloat
-        func mid(_ i: Int) -> CGPoint { CGPoint(x: x[i] + w[i] / 2, y: y[i] + SongPage.blockHeight / 2) }
+        var blockHeight = SongPage.blockHeight
+        func mid(_ i: Int) -> CGPoint { CGPoint(x: x[i] + w[i] / 2, y: y[i] + blockHeight / 2) }
     }
 
     @State private var slots: [Slot] = []
@@ -288,6 +292,7 @@ struct SongPage: View {
     /// Held while a menu is open or an edge is dragged, so changing one block's bars doesn't rescale the row under the finger.
     @State private var frozenUnit: CGFloat?
     @State private var rowWidth: CGFloat = 900
+    @State private var pageWidth: CGFloat = 700        // compact: the scrolling page's width
     /// When the bar playing began, as the iPad saw it: the pills fill from it at the song's tempo.
     @State private var barStart = Date()
 
@@ -298,6 +303,11 @@ struct SongPage: View {
     static let rowsSpace = "songRows"
     /// Points per bar: the song fills the row's width when it fits on one, never under 30 (then the blocks wrap).
     static let minUnit: CGFloat = 30
+    private var blockHeight: CGFloat { compact ? 96 : Self.blockHeight }
+    private var addWidth: CGFloat { compact ? 44 : Self.addWidth }
+    private var minBlock: CGFloat { compact ? 72 : Self.minBlock }
+    private var minUnit: CGFloat { compact ? 16 : Self.minUnit }
+    private var barsWidth: CGFloat { compact ? 420 : BarsControl.width }
 
     private var steps: [SongOrder.Step] { slots.map(\.step) }
     private var loop: Bool { loopDraft ?? session.songOrder?.loop ?? false }
@@ -306,10 +316,26 @@ struct SongPage: View {
     private var motion: Animation? { reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionsPanel(session: session, ui: ui)
-            orderPanel
-            Spacer(minLength: 0)
+        Group {
+            if compact {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionsPanel(session: session, ui: ui)
+                        orderPanel.zIndex(1)                    // a block's bars popup reaches over the mode below
+                        SongModePanel(session: session)
+                    }
+                    .frame(width: max(0, pageWidth))           // the screen's width: the song's rows wrap to it
+                }
+                .scrollIndicators(.hidden)
+                .frame(minWidth: 0, maxWidth: .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionsPanel(session: session, ui: ui)
+                    orderPanel
+                    Spacer(minLength: 0)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear(perform: sync)
@@ -362,7 +388,9 @@ struct SongPage: View {
                     .background(Capsule().fill(.white.opacity(0.08)))
             }
             arrangement(width: rowWidth)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // minWidth 0: without it the frame is never narrower than the rows it holds, so the rows
+                // could only grow (the phone stayed at the first guess, 900 pt, 2026-11-04)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
         }
         .padding(16)
@@ -400,19 +428,19 @@ struct SongPage: View {
     private func unit(for width: CGFloat) -> CGFloat {
         if let f = frozenUnit { return f }
         let bars = steps.reduce(0) { $0 + $1.bars }
-        let fixed = Self.inset * 2 + Self.addWidth + Self.gap * CGFloat(slots.count)
-        return max(Self.minUnit, (width - fixed) / CGFloat(max(bars, 1)))
+        let fixed = Self.inset * 2 + addWidth + Self.gap * CGFloat(slots.count)
+        return max(minUnit, (width - fixed) / CGFloat(max(bars, 1)))
     }
 
     private func widths(unit u: CGFloat, width: CGFloat) -> [CGFloat] {
-        slots.map { min(width - Self.inset * 2, max(Self.minBlock, CGFloat($0.step.bars) * u)) }
+        slots.map { min(width - Self.inset * 2, max(minBlock, CGFloat($0.step.bars) * u)) }
     }
 
     /// Left to right, a new row when the next block wouldn't fit.
     private func flow(_ ws: [CGFloat], width: CGFloat, add: Bool) -> Layout {
         var x: [CGFloat] = [], y: [CGFloat] = []
         var cx = Self.inset, cy: CGFloat = 0
-        let pitch = Self.blockHeight + Self.rowGap
+        let pitch = blockHeight + Self.rowGap
         for w in ws {
             if cx > Self.inset, cx + w > width - Self.inset { cx = Self.inset; cy += pitch }
             x.append(cx); y.append(cy)
@@ -420,10 +448,10 @@ struct SongPage: View {
         }
         var addAt: CGPoint?
         if add {
-            if cx > Self.inset, cx + Self.addWidth > width - Self.inset { cx = Self.inset; cy += pitch }
+            if cx > Self.inset, cx + addWidth > width - Self.inset { cx = Self.inset; cy += pitch }
             addAt = CGPoint(x: cx, y: cy)
         }
-        return Layout(x: x, y: y, w: ws, add: addAt, height: cy + Self.blockHeight)
+        return Layout(x: x, y: y, w: ws, add: addAt, height: cy + blockHeight, blockHeight: blockHeight)
     }
 
     private func layout(unit u: CGFloat, width: CGFloat) -> Layout {
@@ -443,7 +471,7 @@ struct SongPage: View {
                     setMenu(slots.last?.id)
                 } label: {
                     Image(systemName: "plus").font(.system(size: 18, weight: .semibold))
-                        .frame(width: Self.addWidth, height: Self.blockHeight).raisedKey(12)
+                        .frame(width: addWidth, height: blockHeight).raisedKey(12)
                 }
                 .buttonStyle(PressSink())
                 .disabled(!editable)
@@ -459,8 +487,8 @@ struct SongPage: View {
                 BarsControl(bars: slots[i].step.bars, enabled: editable) { b in
                     if let k = slots.firstIndex(where: { $0.id == id }) { change(refit: false) { $0[k].step.bars = b } }
                 }
-                .frame(width: BarsControl.width)
-                .offset(x: anchor(i, lay: lay, width: width, popup: BarsControl.width), y: lay.y[i] + 8 + Self.blockHeight + 10)
+                .frame(width: barsWidth)
+                .offset(x: anchor(i, lay: lay, width: width, popup: barsWidth), y: lay.y[i] + 8 + blockHeight + 10)
                 .zIndex(10)
                 .transition(.opacity)
             }
@@ -476,7 +504,7 @@ struct SongPage: View {
         let w = lay.w[i]
         // a lifted block sits under the finger; the rest sit in their places
         let at: CGPoint = lifted
-            ? CGPoint(x: p!.startMid.x + p!.dx - w / 2, y: p!.startMid.y + p!.dy - Self.blockHeight / 2)
+            ? CGPoint(x: p!.startMid.x + p!.dx - w / 2, y: p!.startMid.y + p!.dy - blockHeight / 2)
             : CGPoint(x: lay.x[i], y: lay.y[i] + (p?.mode == .swipe ? min(0, p!.dy) : 0))
         slotFace(i, slot, width: w, lifted: lifted)
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.rowsSpace))
@@ -539,7 +567,7 @@ struct SongPage: View {
         }
         .foregroundStyle(Theme.onColour)
         .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 10)
-        .frame(width: w, height: Self.blockHeight, alignment: .topLeading)
+        .frame(width: w, height: blockHeight, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 12)
             .fill(LinearGradient(colors: [Theme.trackTop[step.section], Theme.track[step.section]], startPoint: .top, endPoint: .bottom)))
         // the edge you drag for length
@@ -585,7 +613,7 @@ struct SongPage: View {
         switch p.mode {
         case .undecided where hypot(p.dx, p.dy) > 10:
             // a quick upward flick takes the block out; any other quick move does nothing
-            p.mode = slots.count > 1 && p.dy < 0 && abs(p.dy) > abs(p.dx) ? .swipe : .ignored
+            p.mode = !compact && slots.count > 1 && p.dy < 0 && abs(p.dy) > abs(p.dx) ? .swipe : .ignored
         case .lifted:
             reorder(slot.id, finger: CGPoint(x: p.startMid.x + p.dx, y: p.startMid.y + p.dy), ws: lay.w, width: rowWidth)
         case .resize:
@@ -663,7 +691,8 @@ struct SongPage: View {
                 .background(Capsule().fill(Theme.raisedBottom))
                 .transition(.opacity)
             } else {
-                Text(editable ? "Tap a block to change it. Press and drag to move it, flick it up to delete it, drag its right edge for length."
+                Text(editable ? (compact ? "Tap a block to change it. Press and drag to move it, drag its right edge for length."
+                                         : "Tap a block to change it. Press and drag to move it, flick it up to delete it, drag its right edge for length.")
                               : "Stop the song to change its order, as on the FM-1.")
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     .padding(.leading, Self.inset)
