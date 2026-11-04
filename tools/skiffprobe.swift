@@ -1,5 +1,5 @@
 // skiffprobe: talk to Skiff's editor protocol (Felucca's numbering, F0 7D 46 4C cmd ... F7), on an FM-1 or skiff-sim.
-// usage: skiffprobe info | desc | clock <secs> | seed
+// usage: skiffprobe info | desc | clock <secs> | seed | playhead [secs] [scenario...]
 // Finds the port by name (skiff-sim's first, then "Felucca"), so other MIDI devices can stay plugged in.
 import CoreMIDI
 import Foundation
@@ -18,8 +18,13 @@ var waitingFor: UInt8 = 0xFF
 let pushes: Set<UInt8> = [23, 24, 26, 32]
 var onPush: (([UInt8]) -> Void)? = nil
 var onOther: ((UInt8, UInt8, UInt8) -> Void)? = nil    // status, d1, d2 (realtime: status only)
+var onTruth: (([UInt8]) -> Void)? = nil                 // skiff-sim --truth (test-only): each track's playing step
+var pktTime: UInt64 = 0                                 // the packet being read: its mach time (the sender's stamp)
 
 func frame(_ bytes: [UInt8]) {
+    if bytes.count >= 5, bytes[1] == 0x7D, bytes[2] == 0x53, bytes[3] == 0x4D {
+        onTruth?(Array(bytes[4..<(bytes.count - 1)])); return
+    }
     guard bytes.count >= 5, bytes[1] == 0x7D, bytes[2] == 0x46, bytes[3] == 0x4C else {
         print("RX other sysex", hex(bytes)); return
     }
@@ -33,6 +38,7 @@ var running: [UInt8] = []
 MIDIInputPortCreateWithBlock(client, "in" as CFString, &inp) { list, _ in
     for packet in list.unsafeSequence() {
         let len = Int(packet.pointee.length)
+        pktTime = packet.pointee.timeStamp != 0 ? packet.pointee.timeStamp : mach_absolute_time()
         let raw = UnsafeRawPointer(packet) + MemoryLayout<MIDIPacket>.offset(of: \MIDIPacket.data)!
         for b in UnsafeRawBufferPointer(start: raw, count: len) {
             if b >= 0xF8 { onOther?(b, 0, 0); continue }
@@ -229,6 +235,246 @@ case "seed":
     }
     print("T1: \(ok) of 16 steps written (C4 on 1, 5, 9, 13)")
 
+case "playhead":
+    // Can a playhead counted from MIDI clock follow Skiff's sequencer? Each scenario sets BPM and each track's LENGTH,
+    // DIV, DIR and SWING (TRACK_PARAM 31), reads them back, writes a distinct note on every step (36 + step, TRACK_STEP
+    // 30, so each note-on names its step), PLAYs, counts clock ticks from Start and predicts each track's step. Every
+    // note-on is checked against the prediction, and so is skiff-sim --truth's report of the sequencer's own step
+    // (a test-only SysEx F0 7D 53 4D s0..s5 F7; an FM-1 sends none). Two predictions:
+    //   naive: step n = floor(ticks / T), T = DIV's ticks (1/16: 6), position n mod LEN (RVRS, PING folded)
+    //   model: the steps walked as seq.c walks them, each lasting T, swung T * (1 +- SWING / 250) by its position's
+    //          parity, LEN / DIV changes taken at the step they land in
+    let secs = args.count > 2 ? Double(args[2]) ?? 8 : 8
+    let only = Set(args.dropFirst(3))
+    var tb = mach_timebase_info_data_t(); mach_timebase_info(&tb)
+    func secsOf(_ t: UInt64) -> Double { Double(t) * Double(tb.numer) / Double(tb.denom) / 1e9 }
+    let divTicks = [24.0, 12, 6, 3, 8, 4, 48, 96, 192, 384]     // DIV in clock ticks (voice.c DIV_48 / 2)
+    let divNames = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"]
+    let dirNames = ["FWD", "RVRS", "PING", "RAND"]
+    func tp(_ t: Int, _ id: Int, _ v: Int? = nil) -> Int? {     // TRACK_PARAM: bit 6 of the track byte is id's bit 7
+        let a: [UInt8] = [UInt8(t | (id >= 128 ? 0x40 : 0)), UInt8(id & 127)] + (v.map(v14) ?? [])
+        guard let b = request(31, a) else { return nil }
+        var r = Reader(b: b); _ = r.u8(); _ = r.u8(); return r.v14()
+    }
+    func getG(_ id: Int) -> Int? {
+        guard let b = request(2, [1, UInt8(id)]) else { return nil }
+        var r = Reader(b: b); _ = r.u8(); _ = r.u8(); return r.v14()
+    }
+    func setG(_ id: Int, _ v: Int) { _ = request(3, [1, UInt8(id)] + v14(v)) }
+    func naivePos(_ n: Int, _ len: Int, _ dir: Int) -> Int {
+        switch dir {
+        case 1: return len - 1 - n % len
+        case 2: if len < 2 { return 0 }; let c = n % (2 * len - 2); return c < len ? c : 2 * len - 2 - c
+        case 3: return -1
+        default: return n % len
+        }
+    }
+    struct Trk { var len = 16, div = 2, dir = 0, swing = 0 }
+    // halfway through the run: a TRACK_PARAM write (id 29 LENGTH, 30 DIV), or (id -1) LIST PLAY of entry `value`, the
+    // second of two patterns set up before PLAY (LIST2 NEW, COPY+, that copy's LENGTH 10 and DIR RVRS), LAUNCH BAR,
+    // or (id -2) global BPM to `value`. On its own clock Skiff keeps a track's samples into its step (seq_pos) as they
+    // are when BPM changes (midi_clock_pulse rescales them for an external clock only), so the step playing ends
+    // early on a faster tempo, late on a slower one: e ticks into a step of T, it lasts e + T - e * new / old ticks,
+    // (from the step's start: less than e when that has passed), and every track's grid stays shifted from the
+    // clock's by e * (1 - new / old) after it
+    struct Change { var track: Int, id: Int, value: Int }
+    // the sequencer runs ahead of its MIDI OUT by the audio block being rendered (skiff-sim: ~6 ms, measured from
+    // --truth); a write lands in the sequencer's time, so the model moves it on by that much
+    let seqLead = 0.006
+    struct Scenario { var name: String, bpm: Int, gswing = 0, tracks: [Trk], nudge: [Int: Int] = [:], change: Change? = nil }
+    let mixA: [Trk] = [Trk(len: 16, div: 2, dir: 0), Trk(len: 12, div: 1, dir: 1), Trk(len: 7, div: 4, dir: 2),
+                       Trk(len: 5, div: 5, dir: 0), Trk(len: 16, div: 2, dir: 2), Trk(len: 3, div: 3, dir: 1)]
+    let mixB: [Trk] = [Trk(len: 12, div: 4, dir: 1), Trk(len: 7, div: 2, dir: 2), Trk(len: 16, div: 1, dir: 0),
+                       Trk(len: 1, div: 2, dir: 2), Trk(len: 2, div: 2, dir: 2), Trk(len: 64, div: 3, dir: 0)]
+    var swung = mixA; swung[0].swing = 50; swung[1].swing = 25; swung[2].swing = 30
+    var rand = mixA; rand[0].dir = 3
+    var scenarios: [Scenario] = [
+        Scenario(name: "a90", bpm: 90, tracks: mixA), Scenario(name: "a150", bpm: 150, tracks: mixA),
+        Scenario(name: "b90", bpm: 90, tracks: mixB), Scenario(name: "b137", bpm: 137, tracks: mixB),
+        Scenario(name: "swing", bpm: 120, gswing: 20, tracks: swung),
+        Scenario(name: "nudge", bpm: 120, tracks: mixA, nudge: [1: 16, 2: -16, 3: 31, 5: -32, 9: -1]),
+        Scenario(name: "rand", bpm: 120, tracks: rand),
+        Scenario(name: "len", bpm: 120, tracks: mixA, change: Change(track: 0, id: 29, value: 12)),
+        Scenario(name: "div", bpm: 120, tracks: mixA, change: Change(track: 0, id: 30, value: 1)),
+        Scenario(name: "launch", bpm: 120, tracks: mixA, change: Change(track: 0, id: -1, value: 1)),
+        Scenario(name: "tempo", bpm: 90, tracks: mixA, change: Change(track: 0, id: -2, value: 150)),
+        Scenario(name: "slower", bpm: 150, tracks: mixA, change: Change(track: 0, id: -2, value: 90)),
+    ]
+    if !only.isEmpty { scenarios = scenarios.filter { only.contains($0.name) } }
+
+    // the tracks play their steps as notes: DRUM / DRUM-X tracks (hits, lane notes) become ANALOG (G 20 ENGINE)
+    if let b = request(27) {
+        var r = Reader(b: b); let sel = r.u8(), n = r.u8()
+        var drums: [Int] = []
+        for k in 0..<n { let eng = r.u8(); _ = r.u8(); _ = r.v14(); _ = r.u8(); _ = r.u8(); if eng == 10 || eng == 14 { drums.append(k) } }
+        for k in drums { _ = request(27, [UInt8(k)]); setG(20, 0) }
+        if !drums.isEmpty { _ = request(27, [UInt8(max(0, sel))]); print("T\(drums.map { String($0 + 1) }.joined(separator: ", T")): DRUM -> ANALOG") }
+    }
+
+    struct Ev { var k: Int; var f: Double; var ch: Int; var note: Int }
+    let el = NSLock()
+    var notes: [Ev] = [], truths: [(f: Double, s: [UInt8])] = [], count = -1, lastTick: UInt64 = 0, tickDur = 0.02
+    var starts = 0, firstTick: UInt64 = 0
+    onOther = { st, d1, d2 in
+        el.lock(); defer { el.unlock() }
+        switch st {
+        case 0xFA: count = 0; starts += 1
+        case 0xF8: if count >= 0 { count += 1; lastTick = pktTime; if count == 1 { firstTick = pktTime } }
+        default:
+            guard st & 0xF0 == 0x90, d2 > 0, count >= 0 else { return }
+            let frac = count == 0 ? -0.01 : pktTime > lastTick ? min(0.999, secsOf(pktTime - lastTick) / tickDur) : 0
+            notes.append(Ev(k: count - 1, f: Double(max(0, count - 1)) + frac, ch: Int(st & 15), note: Int(d1)))
+        }
+    }
+    onTruth = { s in
+        el.lock(); defer { el.unlock() }
+        guard count > 0 else { return }
+        let frac = pktTime > lastTick ? min(0.999, secsOf(pktTime - lastTick) / tickDur) : 0
+        truths.append((Double(count - 1) + frac, s))
+    }
+
+    for sc in scenarios {
+        _ = transport(2); Thread.sleep(forTimeInterval: 0.2)
+        setG(0, sc.bpm); setG(1, sc.gswing)
+        let bpm = getG(0) ?? sc.bpm, gsw = getG(1) ?? sc.gswing
+        var cfg: [Trk] = []
+        for (t, c) in sc.tracks.enumerated() {
+            _ = tp(t, 29, c.len); _ = tp(t, 30, c.div); _ = tp(t, 91, c.dir); _ = tp(t, 31, c.swing)
+            cfg.append(Trk(len: tp(t, 29) ?? -1, div: tp(t, 30) ?? -1, dir: tp(t, 91) ?? -1, swing: tp(t, 31) ?? -1))
+        }
+        // every step a note of its own (36 + step), full length so the old bytes go: hits 0, chance 100, ratchet 1,
+        // FLAM 0, COND 0, NUDGE + 32
+        var written = 0
+        for t in 0..<cfg.count {
+            for i in 0..<64 {
+                let nudge = t == 0 ? sc.nudge[i] ?? 0 : 0
+                if request(30, [UInt8(t), UInt8(i), 1, UInt8(36 + i), 0, 0, 0, 0, 0, 100, 0, 0, 0, 100, 1, 0, 0, UInt8(32 + nudge)]) != nil { written += 1 }
+            }
+        }
+        var launchTo: (len: Int, dir: Int)? = nil
+        if let ch = sc.change, ch.id == -1 {
+            // T1 on a new pattern (entry 0) holding the steps; COPY+ to entry 1; entry 1 at once (stopped) to give it
+            // LENGTH 10 and DIR RVRS; back to entry 0, whose LENGTH and DIR should be as before
+            func list(_ a: [UInt8]) -> Int { request(82, a).map { $0.count > 1 ? Int($0[1]) : -1 } ?? -2 }
+            var rcs = [list([7, 0, 0])]
+            for i in 0..<64 { _ = request(30, [0, UInt8(i), 1, UInt8(36 + i), 0, 0, 0, 0, 0, 100, 0, 0, 0, 100, 1, 0, 0, 32]) }
+            _ = tp(0, 29, cfg[0].len); _ = tp(0, 91, cfg[0].dir)
+            rcs.append(list([8, 0, 0])); rcs.append(list([3, 0, 1]))
+            _ = tp(0, 29, 10); _ = tp(0, 91, 1)
+            rcs.append(list([3, 0, 0]))
+            launchTo = (10, 1)
+            _ = request(80, [5, 1])                                 // PERFORM LAUNCH BAR
+            print("\n   launch setup: LIST2 rc \(rcs) (NEW, COPY+, PLAY 1, PLAY 0); T1 back on entry 0: LENGTH \(tp(0, 29) ?? -1), DIR \(tp(0, 91) ?? -1)")
+        }
+        el.lock(); notes = []; truths = []; count = -1; starts = 0; tickDur = 60.0 / (Double(bpm) * 24); el.unlock()
+        _ = transport(1)
+        var changeTick: Double? = nil
+        if let ch = sc.change {
+            Thread.sleep(forTimeInterval: secs / 2 + 0.07)         // (off the bar line)
+            el.lock(); let k = Double(count - 1) + min(0.999, secsOf(mach_absolute_time() - lastTick) / tickDur); el.unlock()
+            if ch.id == -1 { _ = request(82, [3, UInt8(ch.track), UInt8(ch.value)]) }
+            else if ch.id == -2 { setG(0, ch.value); el.lock(); tickDur = 60.0 / (Double(ch.value) * 24); el.unlock() }
+            else { _ = tp(ch.track, ch.id, ch.value) }
+            changeTick = k
+            Thread.sleep(forTimeInterval: secs / 2)
+        } else {
+            Thread.sleep(forTimeInterval: secs)
+        }
+        _ = transport(2); Thread.sleep(forTimeInterval: 0.3)
+        el.lock(); let ns = notes, ts = truths, total = count, st = starts, t0 = firstTick, t1 = lastTick; el.unlock()
+        let measured = total > 1 ? Double(total - 1) / 24 / secsOf(t1 - t0) * 60 : 0
+        print("\n== \(sc.name): BPM \(bpm), SWING+ \(gsw)\(sc.nudge.isEmpty ? "" : ", T1 NUDGE \(sc.nudge.sorted { $0.key < $1.key }.map { "s\($0.key + 1) \($0.value)" }.joined(separator: " "))")\(sc.change.map { ($0.id == -2 ? ", BPM -> \($0.value)" : ", T\($0.track + 1) \($0.id < 0 ? "LIST PLAY entry" : "P\($0.id) ->") \($0.value + ($0.id < 0 ? 1 : 0))") + " at tick \(String(format: "%.1f", changeTick ?? -1))" } ?? "")")
+        print("   Start \(st), \(total) ticks (\(String(format: "%.2f", measured)) BPM), \(ns.count) note-ons, \(ts.count) truth reports, \(written) steps written")
+
+        for (t, c) in cfg.enumerated() {
+            // model: walk the steps as seq.c does (seq_tick / seq_next), in ticks
+            var len = c.len, T = divTicks[max(0, c.div) % 10], idx = len - 1, cnt = 0, down = false, dir = c.dir
+            var startsAt: [Double] = [], idxs: [Int] = [], at = 0.0
+            var pendingChange = sc.change?.track == t || sc.change?.id == -2 ? sc.change : nil   // (BPM: every track)
+            while at <= Double(total) + 400 {
+                if let ch = pendingChange, let kc0 = changeTick {
+                    let kc = kc0 + seqLead / tickDur                    // (in the sequencer's time)
+                    if ch.id == -1, let to = launchTo, at >= ceil(kc / 96) * 96 {   // BAR: the first step on the next
+                        len = to.len; dir = to.dir; cnt = 0; idx = len - 1           // bar from Start, a new pass
+                        pendingChange = nil
+                    } else if ch.id == -2, at > kc, let s = startsAt.last {
+                        // (past already: the next step plays now, its time kept from there: seq_tick carries seq_pos over)
+                        at = max(s, kc + T - (kc - s) * Double(ch.value) / Double(bpm))
+                        pendingChange = nil
+                    } else if ch.id >= 0, at > kc {                    // a change lands at the next boundary..
+                        if ch.id == 29 { len = ch.value } else if ch.id == 30 { T = divTicks[ch.value] }
+                        if ch.id == 30, let s = startsAt.last { at = max(kc, s + T) }   // .. DIV stretches or cuts the step
+                        pendingChange = nil
+                    }
+                }
+                let ln = max(1, len)
+                if dir == 3 { idx = -1 }
+                else if cnt == 0 && dir != 0 { down = false; idx = dir == 1 ? ln - 1 : 0 }
+                else {
+                    let i = idx < ln ? idx : ln - 1
+                    var n: Int
+                    switch dir {
+                    case 1: n = i > 0 ? i - 1 : ln - 1
+                    case 2: n = ln < 2 ? 0 : down ? (i > 0 ? i - 1 : 1) : (i + 1 < ln ? i + 1 : ln - 2)
+                            down = n < i
+                    default: n = (idx + 1) % ln
+                    }
+                    idx = n
+                }
+                if dir == 0 ? idx == 0 : (cnt == 0 || cnt >= ln) { cnt = 0 }
+                cnt += 1
+                startsAt.append(at); idxs.append(idx)
+                let sw = Double(min(100, max(0, c.swing + gsw)))
+                at += T * (1 + (idx >= 0 && idx & 1 == 1 ? -sw : sw) / 250)
+            }
+            func model(_ f: Double) -> (n: Int, idx: Int, start: Double) {
+                var lo = 0, hi = startsAt.count - 1
+                while lo < hi { let m = (lo + hi + 1) / 2; if startsAt[m] <= f { lo = m } else { hi = m - 1 } }
+                return (lo, idxs[lo], startsAt[lo])
+            }
+            let T0 = divTicks[max(0, c.div) % 10]
+            func naive(_ f: Double) -> Int {
+                let n = Int(floor(f / T0))
+                if let ch = sc.change, ch.track == t, ch.id == 29, let kc = changeTick, f > kc { return naivePos(n, ch.value, c.dir) }
+                if let ch = sc.change, ch.track == t, ch.id == -1, let to = launchTo, let kc = changeTick, f > kc { return naivePos(n, to.len, to.dir) }
+                return naivePos(n, c.len, c.dir)
+            }
+            // the notes: 0.5 tick of tolerance (a note can arrive just before its tick)
+            var nn = 0, okM = 0, okN = 0, worst = 0.0, worstN = 0.0, misses: [String] = []
+            for e in ns where e.ch == t {
+                nn += 1
+                let m = model(e.f + 0.5), got = e.note - 36
+                if got == m.idx { okM += 1; worst = max(worst, abs(e.f - m.start)) }
+                else if misses.count < 3 { misses.append("tick \(e.k): step \(got + 1), model \(m.idx + 1)") }
+                if got == naive(e.f + 0.5) { okN += 1; worstN = max(worstN, abs(e.f - floor((e.f + 0.5) / T0) * T0)) }
+            }
+            // the sequencer's own step at each report, at the clock position it came with; where it differs, how far
+            // ahead (in ticks) the model has the step it reports: the sequencer runs ahead of its MIDI OUT by the audio
+            // block it renders before that block plays (mo.tick)
+            var tn = 0, tM = 0, tM1 = 0, tN = 0, lead = 0.0, over = 0, tX = 0
+            for (f, s) in ts where t < s.count {
+                tn += 1
+                let got = Int(s[t])
+                if got == model(f).idx { tM += 1 }
+                else if let d = stride(from: 0.01, through: 1.0, by: 0.01).first(where: { model(f + $0).idx == got }) { tM1 += 1; lead = max(lead, d); if d > 0.5 { over += 1 } }
+                else { tX += 1 }
+                if got == naive(f) { tN += 1 }
+            }
+            if t == 0, ProcessInfo.processInfo.environment["PLAYHEAD_DEBUG"] != nil, let kc = changeTick {   // around the change
+                for e in ns where e.ch == 0 && abs(e.f - kc) < 40 { print(String(format: "      note  f %7.2f step %d", e.f, e.note - 35)) }
+                for (f, s) in ts where abs(f - kc) < 40 { print(String(format: "      truth f %7.2f step %d", f, Int(s[0]) + 1)) }
+            }
+            func pct(_ a: Int, _ b: Int) -> String { b == 0 ? "  -  " : String(format: "%5.1f%%", 100.0 * Double(a) / Double(b)) }
+            let swing = min(100, c.swing + gsw)
+            print(String(format: "   T%d L%-2d %-4@ %-4@ sw%-3d notes %4d: model %@ naive %@, drift %.2f / %.2f tick; truth %4d: model %@ (+%d <= %.2f tick / %.1f ms ahead, %d over 0.5; %d off) naive %@",
+                         t + 1, c.len, divNames[max(0, c.div) % 10] as NSString, dirNames[max(0, c.dir) % 4] as NSString, swing,
+                         nn, pct(okM, nn), pct(okN, nn), worst, worstN, tn, pct(tM, tn), tM1, lead, lead * 60000 / (Double(bpm) * 24), over, tX, pct(tN, tn)))
+            if !misses.isEmpty && okM < nn { print("        misses: \(misses.joined(separator: "; "))") }
+        }
+    }
+    _ = transport(2)
+    setG(1, 0)
+
 default:
-    print("usage: skiffprobe info | desc | clock <secs> | seed")
+    print("usage: skiffprobe info | desc | clock <secs> | seed | playhead [secs] [scenario...]")
 }

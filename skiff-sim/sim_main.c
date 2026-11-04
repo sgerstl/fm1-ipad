@@ -6,7 +6,8 @@
  * what the firmware sends (editor replies, clock, notes) from the source endpoint. The NOR flash is kept in a file
  * between runs, as the unit keeps its flash.
  *
- *   skiff-sim [--name NAME] [--flash FILE]       then type: help */
+ *   skiff-sim [--name NAME] [--flash FILE] [--truth]       then type: help
+ * (--truth, test-only: each track's step as a SysEx of the sim's own, for skiffprobe playhead) */
 #include <CoreMIDI/CoreMIDI.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
@@ -30,6 +31,8 @@ const char *sim_version(void);
 uint32_t sim_out_drops(void);
 int sim_screen_ppm(const char *path);
 int sim_press(const char *name, uint32_t down);
+uint32_t sim_ntrk(void);                                /* TEST-ONLY (sim_core.c) */
+uint32_t sim_track_step(uint32_t i);
 
 static MIDIEndpointRef src;
 static atomic_uint msgs_in, msgs_out, sysex_in, sysex_out;
@@ -146,6 +149,30 @@ static void run_cmd(const char *c)
 }
 
 /* ------------------------------------------------- the device thread --- */
+/* TEST-ONLY, --truth: while playing, each time a track's step changes, F0 7D 53 4D s0..s5 F7 (each track's seq_idx),
+ * sent after the millisecond's clock and notes. Not the unit's: it is skiffprobe playhead's ground truth */
+static int truth;
+static void truth_send(void)
+{
+    static uint8_t last[16] = {0xFF};
+    static uint32_t was_playing;
+    uint8_t m[32] = {0xF0, 0x7D, 0x53, 0x4D};
+    uint32_t i, n = sim_ntrk(), changed = 0;
+    if (!sim_playing()) {
+        was_playing = 0;
+        return;
+    }
+    for (i = 0; i < n && i < 16u; i++) {
+        m[4 + i] = (uint8_t)(sim_track_step(i) & 127u);
+        changed |= m[4 + i] != last[i] || !was_playing;
+        last[i] = m[4 + i];
+    }
+    was_playing = 1;
+    m[4 + i] = 0xF7;
+    if (changed)
+        midi_out(m, 5 + i);
+}
+
 static void *device(void *arg)
 {
     mach_timebase_info_data_t tb;
@@ -169,6 +196,8 @@ static void *device(void *arg)
             }
             atomic_store_explicit(&in_r, r, memory_order_release);
             sim_step_ms();
+            if (truth)
+                truth_send();
             if (press_up_at && (int32_t)(sim_now_ms() - press_up_at) >= 0) {
                 sim_press(press_name, 0);
                 press_up_at = 0;
@@ -207,8 +236,10 @@ int main(int argc, char **argv)
             name = argv[++i];
         else if (!strcmp(argv[i], "--flash") && i + 1 < argc)
             flash_path = argv[++i];
+        else if (!strcmp(argv[i], "--truth"))
+            truth = 1;
         else {
-            fprintf(stderr, "usage: skiff-sim [--name NAME] [--flash FILE]\n");
+            fprintf(stderr, "usage: skiff-sim [--name NAME] [--flash FILE] [--truth]\n");
             return 2;
         }
     }

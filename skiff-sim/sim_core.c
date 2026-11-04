@@ -167,3 +167,8 @@ int sim_press(const char *name, uint32_t down)
         }
     return -1;
 }
+
+/* TEST-ONLY (not the unit's): each track's playing step (seq_idx, 0..LEN-1), as ground truth for skiffprobe's
+ * playhead check. Read-only; skiff-sim --truth sends them as a SysEx of its own (sim_main.c) */
+uint32_t sim_ntrk(void) { return NTRK; }
+uint32_t sim_track_step(uint32_t i) { return i < NTRK ? trk[i].seq_idx : 0u; }

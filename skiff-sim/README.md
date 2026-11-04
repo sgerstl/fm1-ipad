@@ -19,10 +19,12 @@ The first build generates Skiff's headers (`build/gen` in the Skiff checkout) wi
 ## Run
 
 ```sh
-skiff-sim/build/skiff-sim [--flash FILE] [--name NAME]
+skiff-sim/build/skiff-sim [--flash FILE] [--name NAME] [--truth]
 ```
 
 The flash (projects, settings, user sounds, samples) is kept in `skiff-sim-flash.bin` in the current folder, loaded at start and saved on `quit` or ^C. Delete it for a new unit.
+
+`--truth` (test-only, not the unit's): while playing, every time a track's step changes, the sim sends a SysEx of its own, `F0 7D 53 4D s0..s5 F7`, each track's playing step (`seq_idx`), after that millisecond's clock and notes. It's the ground truth for `skiffprobe playhead`. It reads the sequencer, changes nothing, and touches none of Skiff's sources (`sim_track_step` in `sim_core.c`, `truth_send` in `sim_main.c`). The sequencer runs about 6 ms (one audio block) ahead of its MIDI OUT, so a report can arrive just before the tick its step starts on.
 
 Console commands: `status`, `screen FILE.ppm` (the 240 × 240 screen; `sips -s format png` converts it), `press PLAY` (any printed button: FX SCL ENV LFO EDIT GLO HOME SAVE ARP SEQ PLAY REC OCT- OCT+), `trace` (print each editor reply), `save`, `quit`.
 
