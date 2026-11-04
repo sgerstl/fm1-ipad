@@ -58,7 +58,7 @@ struct AppView: View {
         .padding(24)
         .overlay(alignment: .bottom) { keyboard }
         .overlay(alignment: .bottom) { undoToast }
-        .overlay { trackMenuLayer }
+        .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }
         .overlay { GrownKnobLayer(session: session, ui: ui) }
         .coordinateSpace(name: Self.space)
@@ -255,79 +255,6 @@ extension AppView {
         .disabled(!enabled)
     }
 
-    @ViewBuilder var trackMenuLayer: some View {
-        ZStack(alignment: .topLeading) {
-            if let m = ui.trackMenu {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture { ui.trackMenu = nil }
-                    .accessibilityHidden(true)
-                let empty = (0..<64).allSatisfy { !session.tracks[m.track].isOn($0) }
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        TrackChip(track: m.track, size: 24)
-                        Text("Track \(m.track + 1)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    }
-                    // the sound, from here: the Presets panel slides out over the page
-                    Button {
-                        session.select(track: m.track)
-                        ui.timelineOpen = false            // the open timeline would run under the panel
-                        ui.presetsPanel = true
-                        ui.trackMenu = nil
-                    } label: {
-                        Label(m.track == 3 ? "Kits…" : "Presets…", systemImage: "square.grid.2x2")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
-                            .raisedKey()
-                    }
-                    .buttonStyle(PressSink())
-                    .accessibilityHint("Pick this track's sound without leaving the page")
-                    if m.track < 3 {
-                        // the grid turns over to the sampler; Use on track puts the take on this track
-                        Button {
-                            session.select(track: m.track)
-                            ui.presetsPanel = false
-                            ui.timelineOpen = false
-                            ui.page = .sequencer
-                            ui.sampler = SamplerRequest(track: m.track)
-                            ui.trackMenu = nil
-                        } label: {
-                            Label("Record sample…", systemImage: "mic")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Theme.text)
-                                .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
-                                .raisedKey()
-                        }
-                        .buttonStyle(PressSink())
-                        .accessibilityHint("Records the iPad's microphone into a sample slot for this track")
-                    }
-                    Button {
-                        ui.lastClear = session.clearAll(track: m.track)
-                        ui.trackMenu = nil
-                    } label: {
-                        Label("Clear all steps", systemImage: "trash")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(empty ? Theme.textTertiary : Color(hex: 0xFF6B6B))
-                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
-                            .raisedKey()
-                    }
-                    .buttonStyle(PressSink())
-                    .disabled(empty)
-                    .accessibilityHint(empty ? "The track has no steps" : "Clears all 64 steps; Undo appears for a few seconds")
-                }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
-                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.45), radius: 18, y: 10))
-                // beside the finger (to its right, centred on it), kept on screen
-                .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 260), y: min(max(m.at.y - 50, 12), Theme.canvas.height - 180))
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
-                .accessibilityAddTraits(.isModal)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackMenu)
-    }
 
     /// After Clear all: what happened and a way back, for 8 seconds.
     @ViewBuilder var undoToast: some View {
@@ -511,5 +438,88 @@ struct ComingLater: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .panel()
+    }
+}
+
+/// A track's menu, beside the finger (long-press a track): its sound, a sample, clearing its steps.
+/// Shared by the iPad's track box and the phone's track chips; kept inside `canvasSize`.
+struct TrackMenuLayer: View {
+    let session: SloopSession
+    let ui: EditorUI
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.canvasSize) private var canvas
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if let m = ui.trackMenu {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture { ui.trackMenu = nil }
+                    .accessibilityHidden(true)
+                let empty = (0..<64).allSatisfy { !session.tracks[m.track].isOn($0) }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        TrackChip(track: m.track, size: 24)
+                        Text("Track \(m.track + 1)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    }
+                    // the sound, from here: the Presets panel slides out over the page
+                    Button {
+                        session.select(track: m.track)
+                        ui.timelineOpen = false            // the open timeline would run under the panel
+                        ui.presetsPanel = true
+                        ui.trackMenu = nil
+                    } label: {
+                        Label(m.track == 3 ? "Kits…" : "Presets…", systemImage: "square.grid.2x2")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
+                            .raisedKey()
+                    }
+                    .buttonStyle(PressSink())
+                    .accessibilityHint("Pick this track's sound without leaving the page")
+                    if m.track < 3 {
+                        // the grid turns over to the sampler; Use on track puts the take on this track
+                        Button {
+                            session.select(track: m.track)
+                            ui.presetsPanel = false
+                            ui.timelineOpen = false
+                            ui.page = .sequencer
+                            ui.sampler = SamplerRequest(track: m.track)
+                            ui.trackMenu = nil
+                        } label: {
+                            Label("Record sample…", systemImage: "mic")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Theme.text)
+                                .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
+                                .raisedKey()
+                        }
+                        .buttonStyle(PressSink())
+                        .accessibilityHint("Records the \(UIDevice.current.model)'s microphone into a sample slot for this track")
+                    }
+                    Button {
+                        ui.lastClear = session.clearAll(track: m.track)
+                        ui.trackMenu = nil
+                    } label: {
+                        Label("Clear all steps", systemImage: "trash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(empty ? Theme.textTertiary : Color(hex: 0xFF6B6B))
+                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
+                            .raisedKey()
+                    }
+                    .buttonStyle(PressSink())
+                    .disabled(empty)
+                    .accessibilityHint(empty ? "The track has no steps" : "Clears all 64 steps; Undo appears for a few seconds")
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.45), radius: 18, y: 10))
+                // beside the finger (to its right, centred on it), kept on screen
+                .offset(x: min(max(m.at.x + 28, 12), canvas.width - 260), y: min(max(m.at.y - 50, 12), canvas.height - 180))
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                .accessibilityAddTraits(.isModal)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackMenu)
     }
 }

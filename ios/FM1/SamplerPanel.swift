@@ -64,7 +64,7 @@ struct SamplerPanel: View {
             TrackChip(track: t)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Record a sample").font(.system(size: 17, weight: .semibold))
-                Text("Track \(t + 1) · iPad microphone").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text("Track \(t + 1) · \(UIDevice.current.model) microphone").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)

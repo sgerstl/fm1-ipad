@@ -12,6 +12,7 @@ struct PhoneAppView: View {
     @Environment(ProjectStore.self) private var projects
     @Environment(\.scenePhase) private var scenePhase
     @State private var size = CGSize(width: 852, height: 393)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
     private var audioThrough: Bool {
@@ -31,6 +32,7 @@ struct PhoneAppView: View {
                     switch ui.page {
                     case .sequencer: PhoneSequence(session: session, ui: ui)
                     case .sound: PhoneShape(session: session, ui: ui)
+                    case .library: PhoneBrowse(session: session, ui: ui)
                     default: notYet(ui.page)
                     }
                 }
@@ -50,6 +52,33 @@ struct PhoneAppView: View {
         // a held knob's full-size ring, over everything and kept on the screen, as on the iPad
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .environment(\.canvasSize, size)
+        // the presets popover (a track's menu › Presets…), over the page with a dimmed tap-to-close beside it
+        .overlay {
+            ZStack(alignment: .trailing) {
+                if ui.presetsPanel {
+                    Color.black.opacity(0.35).ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { ui.presetsPanel = false }
+                        .accessibilityLabel("Close the presets")
+                        .accessibilityAddTraits(.isButton)
+                        .transition(.opacity)
+                    PhonePresetsPopover(session: session, ui: ui)
+                        .padding(.top, 52)
+                        .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                }
+            }
+            .animation(reduceMotion ? nil : ui.presetsPanel ? .spring(response: 0.42, dampingFraction: 0.9) : .easeInOut(duration: 0.32), value: ui.presetsPanel)
+        }
+        // the sampler (a track's menu › Record sample…, or an empty sample slot), full screen
+        .overlay {
+            if let r = ui.sampler {
+                SamplerPanel(session: session, ui: ui, request: r)
+                    .background(Theme.page)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+            }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: ui.sampler)
+        .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { GrownKnobLayer(session: session, ui: ui) }
         .coordinateSpace(name: AppView.space)
         // the same upkeep as the iPad's AppView: projects, the screen staying on, audio, Now Playing
@@ -91,6 +120,7 @@ struct PhoneTopBar: View {
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
     private var recording: Bool { session.recording || session.song.songRecording }
+    @State private var chipFrames: [Int: CGRect] = [:]
 
     var body: some View {
         HStack(spacing: 8) {
@@ -121,8 +151,18 @@ struct PhoneTopBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
+        // held: the track's menu (its sound, a sample, clearing), beside the chip
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            let f = chipFrames[t] ?? .zero
+            ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: f.midX, y: f.maxY + 50))
+        })
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(AppView.space)) } action: { chipFrames[t] = $0 }
         .accessibilityLabel("Track \(t + 1)" + (t == 3 ? ", drums" : ""))
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityAction(named: "Track menu") {
+            let f = chipFrames[t] ?? .zero
+            ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: f.midX, y: f.maxY + 50))
+        }
     }
 
     private var tabs: some View {
