@@ -1,14 +1,15 @@
 # Testing Jib
 
-Jib is an iPad app that works alongside an M-VAVE FM-1 running SLOOP. The FM-1 still makes the sound and stores everything. The iPad shows all four tracks at once, edits them, and arranges sections into songs. It talks to the FM-1 over USB MIDI using SLOOP's editor protocol.
+Jib is an iPad and iPhone app that works alongside an M-VAVE FM-1 running SLOOP. The FM-1 still makes the sound and stores everything. The iPad shows all four tracks at once, edits them, and arranges sections into songs; an iPhone does the same jobs one screen at a time. It talks to the FM-1 over USB MIDI using SLOOP's editor protocol.
 
-This guide gets it running on your FM-1 and iPad. Allow about 30 minutes.
+This guide gets it running on your FM-1 and your iPad or iPhone. Allow about 30 minutes.
 
 ## What you need
 
-- An FM-1 and a USB-C cable to the iPad (or to the Mac, see step 3)
+- An FM-1 and a USB-C cable to the iPad or iPhone (or to the Mac, see step 3)
 - A Mac with Xcode 16 or later, and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - An iPad on iPadOS 18 or later. The layout is drawn for a 13-inch iPad in landscape and scaled to fit smaller ones
+- Or an iPhone on iOS 18 or later, used in landscape. An iPhone 15 or later plugs straight into the FM-1 over USB-C; an older one needs Apple's Lightning to USB camera adapter
 - Chrome, for SLOOP's installer and backup (Web MIDI)
 - A free Apple developer account is enough to sign the app
 
@@ -53,15 +54,15 @@ xcodegen generate
 open FM1.xcodeproj
 ```
 
-Pick your iPad as the destination and run. On the first launch, allow the microphone. iOS counts the FM-1's USB audio as a microphone, and the sampler records from the iPad's own mic.
+Pick your iPad or iPhone as the destination and run. On the first launch, allow the microphone. iOS counts the FM-1's USB audio as a microphone, and the sampler records from the device's own mic.
 
 You can also run it on the Mac: pick **My Mac (Designed for iPad)** and plug the FM-1 into the Mac.
 
-**Without the FM-1:** add `-demo` as a launch argument (Product › Scheme › Edit Scheme › Arguments), or pick "Demo FM-1" from the connection menu at the top left. The demo edits a step every 6 seconds so there's something moving.
+**Without the FM-1:** add `-demo` as a launch argument (Product › Scheme › Edit Scheme › Arguments), or pick "Demo FM-1" from the connection menu at the top left (on an iPhone, the ⋯ menu at the top right). The demo edits a step every 6 seconds so there's something moving.
 
 **Close SLOOP's web editor while the app runs.** Both use the FM-1's one MIDI port, and the FM-1 handles one request at a time.
 
-**Tests:** `cd ios/SloopKit && swift test` runs 63 tests against a pretend FM-1 in about 25 seconds.
+**Tests:** `cd ios/SloopKit && swift test` runs 66 tests against a pretend FM-1 in about 25 seconds.
 
 ## 4. What to try
 
@@ -77,15 +78,25 @@ Plug the FM-1 into the iPad with headphones in the FM-1. A lit dot at the top le
 Also worth trying:
 
 - **Screen link:** press buttons on the FM-1 and the tabs follow. Change tabs on the iPad and the FM-1 follows
-- **Sampler:** from Browse, or a track on the SAMPLE engine, record a take with the iPad's mic, trim it, upload it to a USR slot, then put it on a track
+- **Sampler:** from Browse, or a track on the SAMPLE engine, record a take with the device's mic, trim it, upload it to a sample slot (SMPL1–4), then put it on a track
 - **iPad audio:** the FM-1's sound can play through the iPad (its speaker or Bluetooth), with the FM-1's own speaker muted
 - **Projects:** the folder icon saves the FM-1's loop, sections and song order on the iPad, and exports a project as a SLOOP song file. They show in Files under On My iPad › Jib
+
+### On an iPhone
+
+The same four jobs, one at a time, in landscape. These work differently from the iPad.
+
+- **Tracks:** the chips at the top left select a track; hold one for its menu (Presets…, Record sample…, Clear all steps)
+- **Sequence:** a whole bar across the screen. **Step** opens the selected step's panel over the grid; **Velocity** shows the velocity lane
+- **Shape:** the active page sits in the middle and is the one the FM-1 shows. Swipe in the gaps between knobs, or across a page's title, to move to the next one
+- **Arrange:** the page scrolls. Tap a block for its menu; delete is in the menu (no flick-to-delete on the phone)
 
 ## 5. Known gaps
 
 - Accessibility (VoiceOver, keyboard, largest text, Reduce Motion) hasn't been checked yet
 - No UI tests. The gestures are checked by hand on my FM-1, and the full hardware pass (`qa/TEST-PLAN.md`) was on 2026-11-02
 - The sampler is the newest part. It's been tried on hardware once
+- The iPhone layout has only run in the simulator. You're the first to try it on a real iPhone, so touch size and feel are the things to report. Also rough: Arrange needs a scroll to reach the song, the step panel runs under the home bar, and SEL's key map isn't on the phone yet
 - Under heavy CPU load, `aLoopSavedToASectionComesBack` occasionally fails. It's a timing problem in the test, not something you'll see in the app
 
 ## 6. Going back

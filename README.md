@@ -1,6 +1,6 @@
 # Jib (fm1-ipad)
 
-An iPad app for the M-VAVE FM-1 running [SLOOP](https://github.com/isod89/sloop-fm1). The two work as one instrument. The FM-1 makes the sound, stores the patterns and plays them. The iPad is a bigger window onto it: it shows all four tracks, edits them, shapes sounds, records samples, and arranges sections into songs.
+An iPad and iPhone app for the M-VAVE FM-1 running [SLOOP](https://github.com/isod89/sloop-fm1). The two work as one instrument. The FM-1 makes the sound, stores the patterns and plays them. The iPad is a bigger window onto it: it shows all four tracks, edits them, shapes sounds, records samples, and arranges sections into songs. On an iPhone (landscape) the same jobs come one at a time.
 
 **To try it, start with [TESTING.md](TESTING.md).**
 
@@ -8,7 +8,7 @@ An iPad app for the M-VAVE FM-1 running [SLOOP](https://github.com/isod89/sloop-
 
 | Path | What |
 |---|---|
-| `ios/` | The iPad app (SwiftUI, CoreMIDI) and `SloopKit`, the Swift package that speaks to the FM-1. See `ios/README.md` |
+| `ios/` | The app for iPad and iPhone (SwiftUI, CoreMIDI) and `SloopKit`, the Swift package that speaks to the FM-1. See `ios/README.md` |
 | `sloop/` | SLOOP 2.8.4 with the screen-link patch: the patch, the built firmware package, and how to build it |
 | `vendor/sloop-2.8.4/` | Stock SLOOP 2.8.4, pinned: firmware, web editor, and the editor protocol the app is written from |
 | `protocol/` | Which of SLOOP's editor commands the app uses |
