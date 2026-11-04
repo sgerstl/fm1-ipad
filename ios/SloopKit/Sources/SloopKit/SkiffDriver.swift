@@ -94,7 +94,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         skiff = s
         info = s.deviceInfo
         shape = DeviceShape(trackCount: s.trackCount, stepCount: s.stepCount, drumTrack: nil,
-                            lightTracks: s.lightTracks, lightEngines: s.lightEngines)
+                            lightTracks: s.lightTracks, lightEngines: s.lightEngines, trackColours: DeviceShape.skiffColours)
         (pushes, pushSink) = AsyncStream.makeStream(of: Push.self, bufferingPolicy: .bufferingNewest(256))
         let source = client.pushes, sink = pushSink
         pushTask = Task {

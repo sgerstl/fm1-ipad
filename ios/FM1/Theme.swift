@@ -18,12 +18,9 @@ enum Theme {
     static let textTertiary = Color(hex: 0x71717A)
     static let onColour = Color(hex: 0x101012)
 
-    // PLACEHOLDER for Skiff's T5 and T6 (2026-11-05): they repeat T1 and T2 until Scott picks their colours.
-    // SLOOP's four are from its firmware (gfx.c TE_COL); Skiff's palette colours all six differently.
-    static let track = [Color(hex: 0x287CFF), Color(hex: 0x1ECC70), Color(hex: 0xFFC618), Color(hex: 0xFF621A),
-                        Color(hex: 0x287CFF), Color(hex: 0x1ECC70)]
-    static let trackTop = [Color(hex: 0x4A93FF), Color(hex: 0x4ADB8C), Color(hex: 0xFFD54D), Color(hex: 0xFF8247),
-                           Color(hex: 0x4A93FF), Color(hex: 0x4ADB8C)]
+    // the connected firmware's track colours, from its driver (TrackColours)
+    static var track: [Color] { TrackColours.base }
+    static var trackTop: [Color] { TrackColours.top }
     // recording: the one red in the top bar (the REC key, the transport's well, its REC readout)
     static let rec = Color(hex: 0xFF2C34)
     static let recWell = Color(hex: 0x3A1214)

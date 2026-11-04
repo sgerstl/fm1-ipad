@@ -80,11 +80,21 @@ public struct DeviceShape: Equatable, Sendable {
     /// Tracks that can't play some engines (a bit per track), and those engines (a bit per engine).
     public var lightTracks: Int
     public var lightEngines: Int
+    /// Each track's colour (RGB), from the firmware's own palette; at least `trackCount` of them.
+    public var trackColours: [UInt32]
 
-    public init(trackCount: Int, stepCount: Int, drumTrack: Int?, lightTracks: Int = 0, lightEngines: Int = 0) {
+    public init(trackCount: Int, stepCount: Int, drumTrack: Int?, lightTracks: Int = 0, lightEngines: Int = 0,
+                trackColours: [UInt32] = DeviceShape.sloopColours) {
         self.trackCount = trackCount; self.stepCount = stepCount; self.drumTrack = drumTrack
         self.lightTracks = lightTracks; self.lightEngines = lightEngines
+        self.trackColours = trackColours
     }
+
+    /// SLOOP 2.8.4's track colours (its editor CSS and firmware gfx.c TE_COL).
+    public static let sloopColours: [UInt32] = [0x287CFF, 0x1ECC70, 0xFFC618, 0xFF621A]
+    /// Skiff's SKIFF theme (build/gen ui_palettes.h, as picked for Jib in the Arrange spec, 2026-11-05):
+    /// vermilion, teal, amber, violet, pink, lime.
+    public static let skiffColours: [UInt32] = [0xFF5A36, 0x22C3B4, 0xFFBF00, 0x9580FF, 0xFF6FAE, 0xA3E635]
 
     /// SLOOP 2.8.4: four tracks of 64 steps, the fourth the drum track. Also what the app shows before
     /// anything is connected.

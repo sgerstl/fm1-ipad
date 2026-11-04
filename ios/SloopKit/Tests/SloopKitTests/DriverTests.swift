@@ -20,7 +20,7 @@ import Testing
         let outcome = try await FirmwareDetector.connect(FakeSloop(autoEdits: false))
         guard case .driver(let d) = outcome else { Issue.record("no driver"); return }
         #expect(d.dialect == .sloop)
-        #expect(d.shape == .sloop)
+        #expect(d.shape == .sloop && d.shape.trackColours.count >= d.shape.trackCount)
         #expect(d.capabilities.contains(.livePlayhead) && d.capabilities.contains(.sloopSong))
         let list = try await d.tracks()
         #expect(list.tracks.count == 4)

@@ -34,6 +34,7 @@ import Testing
         #expect(s.tracks.count == 6 && s.tracks.allSatisfy { $0.loaded && !$0.isDrums && $0.steps.count == 64 })
         #expect(s.tracks.map(\.engineName) == ["ANALOG", "FM6", "LOFI", "DRUM", "SAMPLE", "DRUM"])
         #expect(s.ids.chord == 81 && s.ids.direction == 91)
+        #expect(s.shape.trackColours == DeviceShape.skiffColours && s.shape.trackColours.count >= s.trackCount)
         #expect(s.ids.drumLevel == nil && s.ids.otherChannels == nil)
         #expect(!s.capabilities.contains(.livePlayhead) && !s.capabilities.contains(.sloopSong) && !s.capabilities.contains(.screenLink))
         let pages = try #require(s.pageLayout)
