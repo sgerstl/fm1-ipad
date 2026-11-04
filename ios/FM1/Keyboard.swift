@@ -8,7 +8,7 @@ import SwiftUI
 /// notes its keys send), and dimmer while the selected track plays its note. The FM-1 lights its own
 /// keys for the iPad's notes by itself (drums always; synths with MENU > LIGHTS > NOTES on).
 struct KeyboardDrawer: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     /// White keys from F3: F G A B C D E, twice, then F G.
@@ -17,7 +17,7 @@ struct KeyboardDrawer: View {
     static let blackAfter = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14]
 
     var body: some View {
-        let drums = session.selectedTrack == 3
+        let drums = session.selectedIsDrums
         VStack(spacing: 12) {
             header(drums)
             keys(drums)

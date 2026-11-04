@@ -2,7 +2,7 @@ import SloopKit
 import SwiftUI
 
 struct TopBar: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(AudioThrough.self) private var through
@@ -206,7 +206,7 @@ struct TopBar: View {
     /// or the Sound tab's button), when linked and following.
     /// A tab picked here moves the FM-1 to the screen that tab shows (with the screen link). Shared with
     /// the phone's top bar.
-    static func driveDevice(session: SloopSession, ui: EditorUI, to p: Page) {
+    static func driveDevice(session: DeviceSession, ui: EditorUI, to p: Page) {
         guard session.screenLinked, ui.followDevice else { return }
         if let s = session.deviceScreen, SoundPage.tab(for: s) == p { return }    // already there
         switch p {

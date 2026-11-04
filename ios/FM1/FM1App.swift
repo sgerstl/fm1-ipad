@@ -16,14 +16,14 @@ struct FM1App: App {
 /// Owns the session. Switching between the FM-1 and the demo makes a new one.
 struct RootView: View {
     @State private var useDemo = ProcessInfo.processInfo.arguments.contains("-demo")
-    @State private var session: SloopSession
+    @State private var session: DeviceSession
     @State private var ui = EditorUI()
     @State private var through = AudioThrough()
     @State private var projects = ProjectStore()
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
-        _session = State(initialValue: SloopSession(demo: demo))
+        _session = State(initialValue: DeviceSession(demo: demo))
     }
 
     @Environment(\.horizontalSizeClass) private var widthClass
@@ -57,7 +57,7 @@ struct RootView: View {
         .background(Theme.page)
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         .task(id: useDemo) {
-            if session.isDemo != useDemo { session = SloopSession(demo: useDemo) }
+            if session.isDemo != useDemo { session = DeviceSession(demo: useDemo) }
             projects.attach(session)
             await session.run()
         }
@@ -84,7 +84,7 @@ final class EditorUI {
         guard let i = a.firstIndex(of: "-page"), i + 1 < a.count else { return .sequencer }
         return ["sound": .sound, "song": .song, "library": .library][a[i + 1]] ?? .sequencer
     }()
-    var selectedStep = [0, 0, 0, 0]
+    var selectedStep = Array(repeating: 0, count: 8)      // per track: room for every firmware's tracks
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
@@ -102,7 +102,7 @@ final class EditorUI {
     var viewJump: ViewJump?
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
-    var lastClear: SloopSession.ClearedTrack?   // offered for undo for a few seconds
+    var lastClear: DeviceSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs.
     var presetsPanel = false

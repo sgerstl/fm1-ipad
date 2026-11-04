@@ -9,7 +9,7 @@ import UIKit
 
 /// Left column, under the track box: loop or song mode.
 struct SongModePanel: View {
-    let session: SloopSession
+    let session: DeviceSession
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -41,7 +41,7 @@ struct SectionMenu: Equatable {
 
 /// Above the song: the four sections as keys in a row, and SONG REC, which records what they play.
 struct SectionsPanel: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     /// Where the finger is on a key: a held stored section opens its menu there.
     @State private var pressAt = CGPoint.zero
@@ -142,7 +142,7 @@ struct SectionsPanel: View {
             }
         } label: {
             VStack(spacing: 2) {
-                Text(SloopSession.sectionName(k)).font(.system(size: 30, weight: .semibold))
+                Text(DeviceSession.sectionName(k)).font(.system(size: 30, weight: .semibold))
                 Text(state.label).font(.system(size: 12, weight: .semibold))
                     .lineLimit(1).minimumScaleFactor(0.85)
             }
@@ -161,7 +161,7 @@ struct SectionsPanel: View {
             held = k
             if stored { ui.sectionMenu = SectionMenu(section: k, at: pressAt) } else { session.storeLoop(in: k) }
         })
-        .accessibilityLabel("Section \(SloopSession.sectionName(k))")
+        .accessibilityLabel("Section \(DeviceSession.sectionName(k))")
         .accessibilityValue(state == .nextBar ? "starts on the next bar" : state.label)
         .accessibilityHint(stored ? (session.playing ? "Plays from the next bar" : "Loads it as the loop") : "Empty: hold to store the loop here")
         .accessibilityAction(named: stored ? "Replace or clear" : "Store the loop here") {
@@ -243,7 +243,7 @@ struct SectionsPanel: View {
 /// wrap onto more rows at the panel's edge. One view tree, one animation: the menu, the bars and the
 /// blocks always move together.
 struct SongPage: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     /// The phone's Arrange (2026-11-04): shorter blocks, the mode under the song, the page scrolls,
     /// and no flick-to-delete (too easy to set off on a phone; Delete is in the block's menu).
@@ -534,7 +534,7 @@ struct SongPage: View {
         func body(content: Content) -> some View {
             let open = page.menu == slot.id
             let st = slot.step
-            let label = "Step \(i + 1), section \(SloopSession.sectionName(st.section)), \(st.bars) bar\(st.bars == 1 ? "" : "s")"
+            let label = "Step \(i + 1), section \(DeviceSession.sectionName(st.section)), \(st.bars) bar\(st.bars == 1 ? "" : "s")"
             return content
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(label)
@@ -551,7 +551,7 @@ struct SongPage: View {
         let s = session.song
         let live = s.songPlaying && s.songStep == n
         return VStack(alignment: .leading, spacing: 2) {
-            Text(SloopSession.sectionName(step.section)).font(.system(size: 22, weight: .semibold))
+            Text(DeviceSession.sectionName(step.section)).font(.system(size: 22, weight: .semibold))
             Text(live ? "bar \(s.songBar + 1) of \(step.bars)" : "\(step.bars) bar\(step.bars == 1 ? "" : "s")")
                 .font(.system(size: 12, weight: .semibold)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.75)
@@ -724,7 +724,7 @@ struct SongPage: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(Theme.raisedBottom)
             .shadow(color: .black.opacity(0.5), radius: 10, y: 4))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Menu for step \(i + 1), section \(SloopSession.sectionName(slot.step.section))")
+        .accessibilityLabel("Menu for step \(i + 1), section \(DeviceSession.sectionName(slot.step.section))")
     }
 
     private func menuKey(_ icon: String, _ label: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
@@ -745,7 +745,7 @@ struct SongPage: View {
         return Button {
             change { $0[i].step.section = k }
         } label: {
-            Text(SloopSession.sectionName(k)).font(.system(size: 17, weight: .semibold))
+            Text(DeviceSession.sectionName(k)).font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(stored ? Theme.onColour : Theme.textTertiary)
                 .frame(width: 48, height: 44)
                 .background {
@@ -759,7 +759,7 @@ struct SongPage: View {
         }
         .buttonStyle(PressSink())
         .disabled(!editable)
-        .accessibilityLabel("Section \(SloopSession.sectionName(k))")
+        .accessibilityLabel("Section \(DeviceSession.sectionName(k))")
         .accessibilityValue(stored ? "" : "empty")
         .accessibilityAddTraits(current ? .isSelected : [])
     }
@@ -791,7 +791,7 @@ struct SongPage: View {
     private func delete(_ i: Int) {
         // SLOOP's order needs one step: the last block stays
         guard slots.indices.contains(i), slots.count > 1 else { return }
-        let text = "Deleted a block of \(SloopSession.sectionName(slots[i].step.section))"
+        let text = "Deleted a block of \(DeviceSession.sectionName(slots[i].step.section))"
         setMenu(nil)
         change(undoing: text) { $0.remove(at: i) }
     }

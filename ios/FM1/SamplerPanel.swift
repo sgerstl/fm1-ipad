@@ -14,7 +14,7 @@ struct SamplerRequest: Equatable {
 /// length, rate, peak). "Use on track" uploads it and sets the track to Sample › USRn (2026-11-03,
 /// direction A with C's screen).
 struct SamplerPanel: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     let request: SamplerRequest
     @Environment(AudioThrough.self) private var through
@@ -354,10 +354,10 @@ struct SamplerPanel: View {
 
     private static func describe(_ e: Error) -> String {
         switch e {
-        case SloopSession.SampleError.notConnected: "THE FM-1 ISN'T CONNECTED"
-        case SloopSession.SampleError.tooLong: "TOO LONG FOR A SLOT: TRIM IT"
-        case SloopSession.SampleError.empty: "NOTHING TO SEND: RECORD A TAKE"
-        case SloopSession.SampleError.refused(let stage, let rc): "THE FM-1 REFUSED IT (\(stage.uppercased()) \(rc))"
+        case DeviceSession.SampleError.notConnected: "THE FM-1 ISN'T CONNECTED"
+        case DeviceSession.SampleError.tooLong: "TOO LONG FOR A SLOT: TRIM IT"
+        case DeviceSession.SampleError.empty: "NOTHING TO SEND: RECORD A TAKE"
+        case DeviceSession.SampleError.refused(let stage, let rc): "THE FM-1 REFUSED IT (\(stage.uppercased()) \(rc))"
         default: "THE FM-1 DIDN'T ANSWER: TRY AGAIN"
         }
     }

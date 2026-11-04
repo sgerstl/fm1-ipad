@@ -6,7 +6,7 @@ import SwiftUI
 /// box stays in view beside it to show and switch the track. Done, or a tap on the page, closes it. Another way in to the
 /// same choice as the Library tab: SLOOP keeps the pattern, the mix and the key when a preset loads.
 struct PresetsPanel: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     static let width: CGFloat = 780
@@ -16,7 +16,7 @@ struct PresetsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
                 TrackChip(track: t, size: 28)
-                Text(t == 3 ? "Kits" : "Presets for track \(t + 1)").font(.system(size: 22, weight: .semibold))
+                Text(session.isDrums(t) ? "Kits" : "Presets for track \(t + 1)").font(.system(size: 22, weight: .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Button { ui.presetsPanel = false } label: {
@@ -26,7 +26,7 @@ struct PresetsPanel: View {
                 .accessibilityHint("Closes the presets")
             }
             HStack(alignment: .top, spacing: 16) {
-                if t < 3 { LibraryEngines(session: session, ui: ui).frame(width: 260) }
+                if !session.isDrums(t) { LibraryEngines(session: session, ui: ui).frame(width: 260) }
                 LibraryPage(session: session, ui: ui, columns: 2)
             }
         }
@@ -36,6 +36,6 @@ struct PresetsPanel: View {
         .background(RoundedRectangle(cornerRadius: 20).fill(Theme.well)
             .shadow(color: .black.opacity(0.5), radius: 14, x: -6))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(t == 3 ? "Kits for the drum track" : "Presets for track \(t + 1)")
+        .accessibilityLabel(session.isDrums(t) ? "Kits for the drum track" : "Presets for track \(t + 1)")
     }
 }

@@ -5,12 +5,12 @@ import SwiftUI
 /// the right, as the iPad's Browse tab (the same two views, fewer columns). A tap loads a preset onto
 /// the selected track at once; its pattern, mix and key stay.
 struct PhoneBrowse: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            if session.selectedTrack < 3 { LibraryEngines(session: session, ui: ui).frame(width: 210) }
+            if !session.selectedIsDrums { LibraryEngines(session: session, ui: ui).frame(width: 210) }
             LibraryPage(session: session, ui: ui, columns: 3)
         }
     }
@@ -20,7 +20,7 @@ struct PhoneBrowse: View {
 /// over the page, engines on the left and the presets as one list on the right (Scott's call on the
 /// mockups, 2026-11-04). Done, or a tap on the page beside it, closes it.
 struct PhonePresetsPopover: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     var body: some View {
@@ -28,7 +28,7 @@ struct PhonePresetsPopover: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 TrackChip(track: t, size: 28)
-                Text(t == 3 ? "Kits" : "Track \(t + 1) sound").font(.system(size: 17, weight: .semibold))
+                Text(session.isDrums(t) ? "Kits" : "Track \(t + 1) sound").font(.system(size: 17, weight: .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Button { ui.presetsPanel = false } label: {
@@ -40,7 +40,7 @@ struct PhonePresetsPopover: View {
                 .accessibilityHint("Closes the presets")
             }
             HStack(alignment: .top, spacing: 8) {
-                if t < 3 { LibraryEngines(session: session, ui: ui).frame(width: 180) }
+                if !session.isDrums(t) { LibraryEngines(session: session, ui: ui).frame(width: 180) }
                 LibraryPage(session: session, ui: ui, columns: 1)
             }
         }
@@ -50,6 +50,6 @@ struct PhonePresetsPopover: View {
         .background(RoundedRectangle(cornerRadius: 18).fill(Theme.well)
             .shadow(color: .black.opacity(0.55), radius: 14, x: -6))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(t == 3 ? "Kits for the drum track" : "Sound for track \(t + 1)")
+        .accessibilityLabel(session.isDrums(t) ? "Kits for the drum track" : "Sound for track \(t + 1)")
     }
 }

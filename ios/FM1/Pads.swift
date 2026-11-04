@@ -19,7 +19,7 @@ struct PadSurface: View {
 }
 
 struct FunctionPads: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @State private var heldSave = false
 

@@ -5,7 +5,7 @@ import SwiftUI
 /// of scrolling them on the FM-1. Tapping a preset loads it at once, as scrolling does on the device;
 /// SLOOP keeps the pattern, the mix and the key. The keyboard drawer stays available to audition.
 struct LibraryPage: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     var columns = 4                 // 2 in the Presets panel on the Sequencer
     @State private var clearing: Int?
@@ -15,7 +15,7 @@ struct LibraryPage: View {
         presetGrid
         .task(id: session.selectedTrack) {
             session.refreshLibrary()
-            if session.selectedTrack < 3 { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
+            if !session.selectedIsDrums { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
         }
     }
 
@@ -35,7 +35,7 @@ struct LibraryPage: View {
             .accessibilityAddTraits(.isHeader)
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 8) {
-                    if t == 3 {
+                    if session.isDrums(t) {
                         // ids unique across the three lists, or the grid reuses another list's keys
                         ForEach(Array(session.kitNames.enumerated()), id: \.offset) { k, name in
                             presetKey(name, detail: nil, current: track.preset == k) { session.loadKit(k) }
@@ -59,11 +59,11 @@ struct LibraryPage: View {
                     }
                 }
                 .padding(4)
-                if t < 3, case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
+                if !session.isDrums(t), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
             }
             .scrollIndicators(.hidden)
-            if t == 3 && session.kitNames.isEmpty { emptyNote("Reading the kits from the FM-1…") }
-            if t < 3 && ui.librarySection == .user && session.userPresets.isEmpty {
+            if session.isDrums(t) && session.kitNames.isEmpty { emptyNote("Reading the kits from the FM-1…") }
+            if !session.isDrums(t) && ui.librarySection == .user && session.userPresets.isEmpty {
                 emptyNote("No user presets yet. Save one on the FM-1: SAVE, then the USER page.")
             }
         }
@@ -73,7 +73,7 @@ struct LibraryPage: View {
     }
 
     private var gridTitle: String {
-        if session.selectedTrack == 3 { return "Drum kits" }
+        if session.selectedIsDrums { return "Drum kits" }
         switch ui.librarySection {
         case .engine(let e): return engineName(e)
         case .user: return "User presets"
@@ -82,11 +82,11 @@ struct LibraryPage: View {
 
     private var gridDetail: String {
         let t = session.selectedTrack
-        let n = t == 3 ? session.kitNames.count : {
+        let n = session.isDrums(t) ? session.kitNames.count : {
             if case .engine(let e) = ui.librarySection { return session.namesCache[e]?.count ?? 0 }
             return session.userPresets.count
         }()
-        let what = t == 3 ? "kits" : ui.librarySection == .user ? "saved" : "presets"
+        let what = session.isDrums(t) ? "kits" : ui.librarySection == .user ? "saved" : "presets"
         return columns < 4 ? "\(n) \(what)" : "\(n) \(what) · Tap one to load it onto track \(t + 1); its pattern, mix and key stay."
     }
 
@@ -172,7 +172,7 @@ struct LibraryPage: View {
 
 /// The engines (and user presets) for the library, in the left column under the track strip.
 struct LibraryEngines: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     var body: some View { engineList }

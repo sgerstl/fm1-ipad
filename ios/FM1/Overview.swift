@@ -9,7 +9,7 @@ import SwiftUI
 /// track on the FM-1. On Sequence the selected track's row carries the view box, the bar the grid shows:
 /// touch or drag a row's timeline to show that bar (2026-11-02).
 struct Overview: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     var expanded = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -19,7 +19,8 @@ struct Overview: View {
     static let boxWidth: CGFloat = 320                   // the chips-and-names box = the left column
     static let fullWidth: CGFloat = Theme.canvas.width - 48
     static let gap: CGFloat = 2
-    /// The timeline starts at the box's edge: 64 cells fill what is left of the row.
+    /// The timeline starts at the box's edge: 64 cells fill what is left of the row (SLOOP and Skiff both
+    /// have 64 steps; a firmware with another count would need its own cell width).
     static let timelineWidth: CGFloat = fullWidth - boxWidth - 4 - 8
     static let cell = CGSize(width: (timelineWidth - 6 - 63 * gap) / 64, height: 20)
     static var rowWidth: CGFloat { fullWidth - 8 }
@@ -37,7 +38,7 @@ struct Overview: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            ForEach(0..<4, id: \.self) { t in row(t) }
+            ForEach(session.trackIndices, id: \.self) { t in row(t) }
         }
         .frame(width: visible - 8, alignment: .leading)
         .clipped()
@@ -148,8 +149,8 @@ struct Overview: View {
                 Text("muted").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
             // CHORD and ARP, by SLOOP's names, on every page; a tag opens its Sound page
-            if t < 3, track.chord > 0 { modeTag(Music.chordNames[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
-            if t < 3, track.arpMode > 0 { modeTag("ARP " + (Music.arpModes[safe: track.arpMode] ?? ""), track: t, family: .arp) }
+            if !session.isDrums(t), track.chord > 0 { modeTag(Music.chordNames[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
+            if !session.isDrums(t), track.arpMode > 0 { modeTag("ARP " + (Music.arpModes[safe: track.arpMode] ?? ""), track: t, family: .arp) }
             Spacer(minLength: 0)
         }
         .padding(.trailing, 14)                     // clear of the timeline's pull
@@ -243,7 +244,7 @@ struct Overview: View {
 
     private func draw(_ ctx: GraphicsContext, _ track: TrackState) {
         let w = Self.cell.width, h = Self.cell.height
-        for i in 0..<64 {
+        for i in track.steps.indices {
             let r = CGRect(x: CGFloat(i) * (w + Self.gap), y: 0, width: w, height: h)
             let p = Path(roundedRect: r, cornerRadius: 3)
             if i >= track.length {
@@ -274,7 +275,7 @@ private struct ViewBox: View {
 
 /// The playhead in one overview row; it redraws on its own so the rows don't.
 private struct OverviewPlayhead: View {
-    let session: SloopSession
+    let session: DeviceSession
     let track: Int
     var running = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

@@ -6,7 +6,7 @@ import SwiftUI
 /// live here: the knobs that act on the whole track are in `TrackPanel` below it (2026-11-02: inside this
 /// box they read as the step's).
 struct SelectedStepPanel: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     var body: some View {
@@ -19,9 +19,9 @@ struct SelectedStepPanel: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            if t == 3 {
-                drumDetails(session.tracks[3].drumSteps[i], part: 0)
-                drumDetails(session.tracks[3].drumSteps[i], part: 1)
+            if session.isDrums(t) {
+                drumDetails(session.tracks[t].drumSteps[i], part: 0)
+                drumDetails(session.tracks[t].drumSteps[i], part: 1)
             } else {
                 synthDetails(session.tracks[t].steps[i], track: t, part: 0)
                 synthDetails(session.tracks[t].steps[i], track: t, part: 1)
@@ -106,7 +106,7 @@ struct SelectedStepPanel: View {
 
     @ViewBuilder private func drumDetails(_ s: DrumStep, part: Int) -> some View {
         let lane = ui.selectedLane
-        let i = ui.selectedStep[3]
+        let i = ui.selectedStep[session.drumTrack ?? 0]
         let has = s.has(lane)
         if part == 0 {
         VStack(alignment: .leading, spacing: 16) {
@@ -160,7 +160,7 @@ struct SelectedStepPanel: View {
 /// The knobs that act on the whole track (and swing, on all four), as on the FM-1's home screen. Its own
 /// panel under the step, headed with the track, so they don't read as the step's.
 struct TrackPanel: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     var body: some View {
@@ -170,7 +170,7 @@ struct TrackPanel: View {
                 TrackChip(track: t, muted: session.tracks[t].mute)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Whole track").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    Text(t == 3 ? "Drums" : session.tracks[t].displayName)
+                    Text(session.isDrums(t) ? "Drums" : session.tracks[t].displayName)
                         .font(.system(size: 15, weight: .semibold)).lineLimit(1)
                 }
             }

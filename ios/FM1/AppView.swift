@@ -3,7 +3,7 @@ import SwiftUI
 
 struct AppView: View {
     static let space = "canvas"
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
@@ -89,7 +89,7 @@ extension AppView {
                     HStack(alignment: .top, spacing: 16) {
                         leftColumn {
                             FunctionPads(session: session, ui: ui)
-                            if session.selectedTrack < 3 { LibraryEngines(session: session, ui: ui) }
+                            if !session.selectedIsDrums { LibraryEngines(session: session, ui: ui) }
                         }
                         LibraryPage(session: session, ui: ui)
                     }
@@ -173,7 +173,7 @@ extension AppView {
                     .contentShape(Rectangle())
                     .onTapGesture { ui.sectionMenu = nil }
                     .accessibilityHidden(true)
-                let name = SloopSession.sectionName(m.section)
+                let name = DeviceSession.sectionName(m.section)
                 let inSong = session.songOrder?.steps.contains { $0.section == m.section } ?? false
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
@@ -189,7 +189,7 @@ extension AppView {
                             .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                             .frame(width: 240, alignment: .leading).fixedSize(horizontal: false, vertical: true)
                         if let e = (0..<4).first(where: { !session.song.stored($0) }) {
-                            menuItem("Save them to \(SloopSession.sectionName(e)) first", icon: "square.and.arrow.down") {
+                            menuItem("Save them to \(DeviceSession.sectionName(e)) first", icon: "square.and.arrow.down") {
                                 session.storeLoop(in: e)
                                 session.playSection(m.section)
                                 ui.sectionMenu = nil
@@ -318,7 +318,7 @@ extension EnvironmentValues {
 }
 
 struct SequencerPage: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var back: SamplerRequest?        // on the card's back, kept while it turns back
@@ -342,7 +342,7 @@ struct SequencerPage: View {
                 // first, facing away, then the card turns (inserted already turned, it just appeared)
                 ZStack {
                     Group {
-                        if t == 3 {
+                        if session.isDrums(t) {
                             DrumGrid(session: session, ui: ui)
                         } else {
                             PianoRoll(session: session, ui: ui, track: t)
@@ -444,7 +444,7 @@ struct ComingLater: View {
 /// A track's menu, beside the finger (long-press a track): its sound, a sample, clearing its steps.
 /// Shared by the iPad's track box and the phone's track chips; kept inside `canvasSize`.
 struct TrackMenuLayer: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.canvasSize) private var canvas
@@ -456,7 +456,7 @@ struct TrackMenuLayer: View {
                     .contentShape(Rectangle())
                     .onTapGesture { ui.trackMenu = nil }
                     .accessibilityHidden(true)
-                let empty = (0..<64).allSatisfy { !session.tracks[m.track].isOn($0) }
+                let empty = session.stepIndices.allSatisfy { !session.tracks[m.track].isOn($0) }
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         TrackChip(track: m.track, size: 24)
@@ -469,7 +469,7 @@ struct TrackMenuLayer: View {
                         ui.presetsPanel = true
                         ui.trackMenu = nil
                     } label: {
-                        Label(m.track == 3 ? "Kits…" : "Presets…", systemImage: "square.grid.2x2")
+                        Label(session.isDrums(m.track) ? "Kits…" : "Presets…", systemImage: "square.grid.2x2")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Theme.text)
                             .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
@@ -477,7 +477,7 @@ struct TrackMenuLayer: View {
                     }
                     .buttonStyle(PressSink())
                     .accessibilityHint("Pick this track's sound without leaving the page")
-                    if m.track < 3 {
+                    if !session.isDrums(m.track) {
                         // the grid turns over to the sampler; Use on track puts the take on this track
                         Button {
                             session.select(track: m.track)
@@ -508,7 +508,7 @@ struct TrackMenuLayer: View {
                     }
                     .buttonStyle(PressSink())
                     .disabled(empty)
-                    .accessibilityHint(empty ? "The track has no steps" : "Clears all 64 steps; Undo appears for a few seconds")
+                    .accessibilityHint(empty ? "The track has no steps" : "Clears all \(session.stepCount) steps; Undo appears for a few seconds")
                 }
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)

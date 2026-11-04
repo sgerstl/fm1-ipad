@@ -64,7 +64,7 @@ final class ProjectStore {
     var message: String?
 
     static let keptSafetyCopies = 5
-    @ObservationIgnored private var session: SloopSession?
+    @ObservationIgnored private var session: DeviceSession?
     @ObservationIgnored private var verifyTask: Task<Void, Never>?
     @ObservationIgnored private var verifyWhenStopped = false
     @ObservationIgnored private let folder: URL
@@ -97,7 +97,7 @@ final class ProjectStore {
     // MARK: The session
 
     /// A new session (the FM-1, or the demo): nothing is known of what it holds until it connects.
-    func attach(_ s: SloopSession) {
+    func attach(_ s: DeviceSession) {
         session = s
         currentKey = s.isDemo ? "currentProject.demo" : "currentProject"
         currentID = UserDefaults.standard.string(forKey: currentKey).flatMap(UUID.init)
@@ -223,7 +223,7 @@ final class ProjectStore {
             baseline = fp
             edited = false
             message = nil
-        } catch SloopSession.ProjectError.playing {
+        } catch DeviceSession.ProjectError.playing {
             message = "The FM-1 is still playing. Stop it and try again."
         } catch {
             message = "Couldn't open it: \(Self.describe(error)). The FM-1 may hold part of it."
@@ -305,11 +305,11 @@ final class ProjectStore {
 
     private static func describe(_ e: Error) -> String {
         switch e {
-        case SloopSession.ProjectError.notConnected: "the FM-1 isn't connected"
-        case SloopSession.ProjectError.playing: "the FM-1 is playing"
-        case SloopSession.ProjectError.unreadable(let why): why
-        case SloopSession.ProjectError.refused(let object, let rc):
-            "the FM-1 didn't take \(object == 0 ? "the loop" : object == 1 ? "the song order" : "section \(SloopSession.sectionName(object - 2))") (code \(rc))"
+        case DeviceSession.ProjectError.notConnected: "the FM-1 isn't connected"
+        case DeviceSession.ProjectError.playing: "the FM-1 is playing"
+        case DeviceSession.ProjectError.unreadable(let why): why
+        case DeviceSession.ProjectError.refused(let object, let rc):
+            "the FM-1 didn't take \(object == 0 ? "the loop" : object == 1 ? "the song order" : "section \(DeviceSession.sectionName(object - 2))") (code \(rc))"
         default: "the FM-1 didn't answer"
         }
     }

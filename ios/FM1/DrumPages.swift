@@ -6,7 +6,7 @@ import SwiftUI
 /// that says why and where the drum version lives (SLOOP README: TUNE and DECAY per sound on the
 /// DRUMS screen's SOUND page; movement from the FX pages the drums do have).
 struct DrumNoPages: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     let family: SoundFamily
 
@@ -41,7 +41,7 @@ struct DrumNoPages: View {
     private var reason: some View {
         let m = message
         return HStack(alignment: .center, spacing: 16) {
-            TrackChip(track: 3, size: 28)
+            TrackChip(track: session.drumTrack ?? 0, size: 28)
             VStack(alignment: .leading, spacing: 4) {
                 Text(m.title).font(.system(size: 17, weight: .semibold))
                 Text(m.detail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)

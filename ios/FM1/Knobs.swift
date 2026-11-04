@@ -22,7 +22,7 @@ struct KnobSpec {
     }
 
     @MainActor
-    static func all(_ session: SloopSession) -> [KnobSpec] {
+    static func all(_ session: DeviceSession) -> [KnobSpec] {
         let k = session.selectedTrack
         let t = session.tracks[k]
         let pct = t.level * 100 / 127
@@ -35,7 +35,7 @@ struct KnobSpec {
                 if t.mute { session.set(track: k, param: Param.mute, to: 0) }
                 session.set(track: k, param: Param.level, to: v)
             },
-            KnobSpec(id: "home2", colour: Theme.knob[2], label: "STEPS", value: t.length, range: 1...64, stepperStep: 1,
+            KnobSpec(id: "home2", colour: Theme.knob[2], label: "STEPS", value: t.length, range: 1...session.stepCount, stepperStep: 1,
                      shown: "\(t.length)", spoken: "\(t.length) steps", bipolar: false) { session.set(track: k, param: Param.length, to: $0) },
             KnobSpec(id: "home3", colour: Theme.knob[3], label: "PAN", value: t.pan, range: -64...63, stepperStep: 4,
                      shown: "\(t.pan)", spoken: t.pan == 0 ? "centre" : t.pan < 0 ? "\(-t.pan) left" : "\(t.pan) right",
@@ -52,7 +52,7 @@ struct KnobGrab: Equatable {
 }
 
 struct KnobRow: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     var body: some View {
@@ -195,7 +195,7 @@ func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: 
 /// The grown ring of a held knob, drawn over the whole page: trace it to turn. The value sits in the
 /// middle; a handle on the ring marks the setting, where the needle would point.
 struct GrownKnobLayer: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

@@ -5,7 +5,7 @@ import SwiftUI
 /// mockups (vault: Projects/Dev/fm1-ipad/iphone-adaptation.md) and built screen by screen: Sequence
 /// first, then Shape, Browse and Arrange. Never the iPad's canvas shrunk onto the phone.
 struct PhoneAppView: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(AudioThrough.self) private var through
@@ -104,7 +104,7 @@ struct PhoneAppView: View {
 /// One 44 pt row: the four tracks, the four jobs, then REC, play / stop and the position. iPad audio
 /// and the demo go into the ⋯ menu.
 struct PhoneTopBar: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(AudioThrough.self) private var through
@@ -115,7 +115,7 @@ struct PhoneTopBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) { ForEach(0..<4, id: \.self) { chip($0) } }
+            HStack(spacing: 4) { ForEach(session.trackIndices, id: \.self) { chip($0) } }
                 .disabled(!isConnected)
                 .opacity(isConnected ? 1 : 0.45)
             if isConnected { tabs } else { Spacer() }
@@ -148,7 +148,7 @@ struct PhoneTopBar: View {
             ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: f.midX, y: f.maxY + 50))
         })
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(AppView.space)) } action: { chipFrames[t] = $0 }
-        .accessibilityLabel("Track \(t + 1)" + (t == 3 ? ", drums" : ""))
+        .accessibilityLabel("Track \(t + 1)" + (session.isDrums(t) ? ", drums" : ""))
         .accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityAction(named: "Track menu") {
             let f = chipFrames[t] ?? .zero
@@ -240,7 +240,7 @@ struct PhoneTopBar: View {
 /// The selected track's grid across the screen, a whole bar wide; the selected step's panel slides in
 /// over the grid's right side (from the Step key), as in the mockups.
 struct PhoneSequence: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @State private var stepPanel = false
     @State private var velocity = false
@@ -252,7 +252,7 @@ struct PhoneSequence: View {
     var body: some View {
         let t = session.selectedTrack
         // the step fits the screen: a whole bar across, never wider than the iPad's 55 pt
-        let label: CGFloat = t == 3 ? 64 : 44
+        let label: CGFloat = session.isDrums(t) ? 64 : 44
         let step = max(24, min(55, ((width - label - 2) / 16).rounded(.down)))
         let metrics = GridMetrics(stepWidth: step, rowHeight: 46, labelWidth: label)
         // the width and the grid's height are measured, then handed to the grid
@@ -261,7 +261,7 @@ struct PhoneSequence: View {
                 .frame(height: 28)
             Group {
                 if width > 100, gridArea.height > 100 {
-                    if t == 3 {
+                    if session.isDrums(t) {
                         PhoneDrumGrid(session: session, ui: ui, height: gridArea.height)
                     } else {
                         PhonePianoRoll(session: session, ui: ui, track: t, velocity: velocity, height: gridArea.height)
@@ -289,7 +289,7 @@ struct PhoneSequence: View {
         let track = session.tracks[t]
         let i = ui.selectedStep[t]
         let scale = track.scale == 0 ? "chromatic" : "\(Music.noteNames[track.root % 12]) \(Music.scales[min(track.scale, 15)].spoken)"
-        let detail = t == 3 ? "Drums · length \(track.length)" : "Track \(t + 1) · \(scale) · length \(track.length)"
+        let detail = session.isDrums(t) ? "Drums · length \(track.length)" : "Track \(t + 1) · \(scale) · length \(track.length)"
         return HStack(spacing: 8) {
             Text(detail).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             Spacer(minLength: 8)
@@ -302,7 +302,7 @@ struct PhoneSequence: View {
             .buttonStyle(PressSink())
             .accessibilityLabel("Step \(i + 1) panel")
             .accessibilityAddTraits(stepPanel ? .isSelected : [])
-            if t < 3 {
+            if !session.isDrums(t) {
                 Button { velocity.toggle() } label: {
                     HStack(spacing: 6) {
                         LED(on: velocity)
@@ -345,7 +345,7 @@ struct PhoneSequence: View {
 /// header and step numbers (the ruler above says where you are); the velocity lane on a toggle.
 struct PhonePianoRoll: View {
     @Environment(\.grid) private var grid
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     let track: Int
     let velocity: Bool
@@ -372,7 +372,7 @@ struct PhonePianoRoll: View {
                     .frame(width: grid.labelWidth, height: h, alignment: .top)
                     .clipped()
                     ZStack(alignment: .topLeading) {
-                        TwoFingerScrollView(contentSize: CGSize(width: 64 * grid.stepWidth, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
+                        TwoFingerScrollView(contentSize: CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
                                             offset: $offset, request: request,
                                             rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth) {
                             PianoRollContent(grid: inner, session: session, ui: ui, track: track, rows: rows)
@@ -408,7 +408,7 @@ struct PhonePianoRoll: View {
 /// Scott 2026-11-04). Lane names play the sound and pick the lane, as on the iPad.
 struct PhoneDrumGrid: View {
     @Environment(\.grid) private var grid
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     let height: CGFloat
     @State private var offset = CGPoint.zero
@@ -431,7 +431,7 @@ struct PhoneDrumGrid: View {
                     TwoFingerScrollView(contentSize: grid.drumContentSize, offset: $offset, request: request, snapX: grid.barWidth) {
                         DrumGridContent(grid: grid, session: session, ui: ui)
                     }
-                    EditorPlayhead(session: session, track: 3, offsetX: offset.x, height: h)
+                    EditorPlayhead(session: session, track: session.drumTrack ?? 0, offsetX: offset.x, height: h)
                 }
                 .frame(width: grid.barWidth, height: h)
                 .clipShape(RoundedRectangle(cornerRadius: 8))

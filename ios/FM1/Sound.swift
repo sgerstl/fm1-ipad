@@ -60,7 +60,7 @@ struct SoundPage: Identifiable {
     ]
 
     @MainActor
-    static func shown(_ session: SloopSession, _ family: SoundFamily) -> [SoundPage] {
+    static func shown(_ session: DeviceSession, _ family: SoundFamily) -> [SoundPage] {
         let t = session.tracks[session.selectedTrack]
         return all.filter { p in
             p.family == family && (!t.isDrums || p.drums) && (!p.analogOnly || (!t.isDrums && t.engine == 0))
@@ -71,9 +71,9 @@ struct SoundPage: Identifiable {
 
     /// The pages a button opens on the FM-1 for the selected track: its own, or on the drum track for a
     /// button without drum pages, the synth pages the FM-1 shows as "DRUM TRACK" (params.c page_for_drum).
-    @MainActor static func reached(_ session: SloopSession, _ family: SoundFamily) -> [SoundPage] {
+    @MainActor static func reached(_ session: DeviceSession, _ family: SoundFamily) -> [SoundPage] {
         let own = shown(session, family)
-        guard own.isEmpty, session.selectedTrack == 3 else { return own }
+        guard own.isEmpty, session.selectedIsDrums else { return own }
         return all.filter { $0.family == family && !$0.analogOnly && !$0.drums }
     }
 
@@ -101,7 +101,7 @@ struct SoundPage: Identifiable {
     }
 
     @MainActor
-    func title(_ session: SloopSession) -> String {
+    func title(_ session: DeviceSession) -> String {
         guard engineEdit > 0 else { return title }
         let e = session.tracks[session.selectedTrack].engine
         let t = session.editPageTitles[e] ?? []
@@ -143,7 +143,7 @@ func formatValue(_ d: ParamDesc?, _ v: Int) -> (shown: String, spoken: String) {
 extension KnobSpec {
     /// Any parameter of the selected track (scope 0) or a global (scope 1), as a knob.
     @MainActor
-    static func param(_ session: SloopSession, scope: Int, id: Int, slot: Int) -> KnobSpec {
+    static func param(_ session: DeviceSession, scope: Int, id: Int, slot: Int) -> KnobSpec {
         let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
         let values = scope == 0 ? session.params : session.globals
         let v = id < values.count ? values[id] : 0
@@ -159,7 +159,7 @@ extension KnobSpec {
 }
 
 struct SoundTab: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @State private var marked: String?          // the knob last turned on the FM-1, marked for a moment
     @State private var followed: UIState?       // the FM-1's screen as last followed
@@ -171,10 +171,10 @@ struct SoundTab: View {
             // the button is chosen on the pads in the left column, as on the FM-1
             ScrollView {
                 VStack(spacing: 0) {
-                    if session.selectedTrack == 3, pages.isEmpty {
+                    if session.selectedIsDrums, pages.isEmpty {
                         DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
                     }
-                    if ui.soundFamily == .sel, session.selectedTrack < 3 { KeyMapStrip(session: session) }
+                    if ui.soundFamily == .sel, !session.selectedIsDrums { KeyMapStrip(session: session) }
                     // a plain grid (seven pages at most): a lazy one kept stale positions when the strip
                     // above it changed height, and drew a panel over the strip
                     Grid(horizontalSpacing: 16, verticalSpacing: 16) {
@@ -334,12 +334,12 @@ struct SoundTab: View {
 /// key plays a chord of the scale: tap one to light its notes across the keys; the black keys are
 /// labelled with how they change it (SLOOP's CHORD+), as the FM-1's SEL layer lights them.
 struct KeyMapStrip: View {
-    let session: SloopSession
+    let session: DeviceSession
     @State private var picked: Int?            // chord mode: the white key whose chord is shown
 
     var body: some View {
         let t = session.tracks[session.selectedTrack]
-        let chordMode = t.chord != 0 && session.selectedTrack < 3
+        let chordMode = t.chord != 0 && !session.selectedIsDrums
         let key = picked ?? KeyboardDrawer.whiteOffsets.first { session.pitch(ofKey: $0) != nil } ?? 0
         let chord = chordMode ? session.pitch(ofKey: key).map { Music.chordNotes(on: $0, root: t.root, scale: t.scale, type: t.chord) } ?? [] : []
         VStack(alignment: .leading, spacing: 10) {
@@ -417,7 +417,7 @@ struct KeyMapStrip: View {
 /// Under the track box on the Sound tab: the knob last turned on the FM-1, large. The FM-1's screen
 /// says this too, in 240 pixels; here it's readable at arm's length.
 struct FollowCard: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
 
     var body: some View {

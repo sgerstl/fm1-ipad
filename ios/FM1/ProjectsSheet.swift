@@ -4,7 +4,7 @@ import SwiftUI
 /// The projects on the iPad: open one onto the FM-1, start fresh, save, rename, duplicate, delete.
 struct ProjectsSheet: View {
     let store: ProjectStore
-    let session: SloopSession
+    let session: DeviceSession
     @Environment(\.dismiss) private var dismiss
     @State private var opening: Opening?
     @State private var naming: NamePrompt?
@@ -187,7 +187,7 @@ struct ProjectsSheet: View {
     }
 
     private func accessibilityLabel(_ p: ProjectFile, onFM1: Bool) -> String {
-        let filled = p.data.sectionsFilled.enumerated().filter(\.element).map { SloopSession.sectionName($0.offset) }
+        let filled = p.data.sectionsFilled.enumerated().filter(\.element).map { DeviceSession.sectionName($0.offset) }
         let sections = filled.isEmpty ? "no sections" : "sections \(filled.joined(separator: ", "))"
         return [p.name, onFM1 ? (store.edited ? "on the FM-1, edited" : "on the FM-1") : nil, detail(p), sections]
             .compactMap { $0 }.joined(separator: ", ")
@@ -236,7 +236,7 @@ struct SectionMarks: View {
         HStack(spacing: 4) {
             ForEach(0..<4, id: \.self) { k in
                 let on = k < filled.count && filled[k]
-                Text(SloopSession.sectionName(k))
+                Text(DeviceSession.sectionName(k))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(on ? Theme.onColour : Theme.textSecondary)    // 4.5:1 and up on the sheet
                     .frame(width: 22, height: 22)

@@ -7,7 +7,7 @@ import SwiftUI
 /// there's no tap-to-activate as on the iPad, where every page is in view at once. The neighbours peek in
 /// at both sides, a little smaller; a tap on one brings it to the centre.
 struct PhoneShape: View {
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     @State private var centred: String?
     @State private var followed: UIState?       // the FM-1's screen as last followed

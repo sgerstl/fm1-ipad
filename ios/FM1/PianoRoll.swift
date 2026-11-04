@@ -5,7 +5,7 @@ import SwiftUI
 /// settles on a bar), or move the view box on the track's timeline row.
 struct PianoRoll: View {
     @Environment(\.grid) private var grid
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     let track: Int
     @State private var offset = CGPoint.zero
@@ -20,7 +20,7 @@ struct PianoRoll: View {
     var body: some View {
         let t = session.tracks[track]
         let rows = Self.rows(t, keeping: ui.keptRows[track] ?? [])
-        let contentSize = CGSize(width: 64 * grid.stepWidth, height: max(Self.gridHeight, CGFloat(rows.count) * grid.rowHeight))
+        let contentSize = CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(Self.gridHeight, CGFloat(rows.count) * grid.rowHeight))
         let first = Int((offset.x / grid.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / grid.rowHeight).rounded())
         let hidden = (above: topRow, below: max(0, rows.count - topRow - 11))
@@ -29,9 +29,9 @@ struct PianoRoll: View {
 
         VStack(spacing: 8) {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
-                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(64, first + 15)) of 64\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
-            StepNumbers(offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
+            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
@@ -154,12 +154,13 @@ struct EditorHeader: View {
 /// row's name auditions it without writing one.
 struct StepNumbers: View {
     @Environment(\.grid) private var grid
+    var steps = 64
     let offsetX: CGFloat
     let selected: Int
     let select: (Int) -> Void
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(0..<64, id: \.self) { i in
+            ForEach(0..<steps, id: \.self) { i in
                 // every step numbered now a bar fills the grid; beats a step heavier
                 Text("\(i + 1)")
                     .font(.system(size: 11, weight: i == selected || i % 4 == 0 ? .semibold : .regular))
@@ -179,7 +180,7 @@ struct StepNumbers: View {
 /// The current step, sliding smoothly between polls (stepping with Reduce Motion).
 struct EditorPlayhead: View {
     @Environment(\.grid) private var grid
-    let session: SloopSession
+    let session: DeviceSession
     let track: Int
     let offsetX: CGFloat
     let height: CGFloat
@@ -207,7 +208,7 @@ struct EditorPlayhead: View {
 struct PianoRollContent: View {
     /// Passed in, not read from the environment: it lives in a UIHostingController, which doesn't inherit it.
     var grid = GridMetrics.pad
-    let session: SloopSession
+    let session: DeviceSession
     let ui: EditorUI
     let track: Int
     let rows: [Int]
@@ -221,7 +222,7 @@ struct PianoRollContent: View {
         let selected = ui.selectedStep[track]
         let height = max(grid.gridHeight, CGFloat(rows.count) * grid.rowHeight)
         ZStack(alignment: .topLeading) {
-            WideCanvas(width: 64 * grid.stepWidth, height: height, barWidth: grid.barWidth) { ctx, size in draw(ctx, size, t, selected) }
+            WideCanvas(width: CGFloat(session.stepCount) * grid.stepWidth, height: height, barWidth: grid.barWidth) { ctx, size in draw(ctx, size, t, selected) }
                 .contentShape(Rectangle())
                 // one finger edits: drag a note's grip (its right end) to set its length; slide along a row
                 // to paint, adding from an empty cell, erasing from a note; a tap turns a note on or off
@@ -234,7 +235,7 @@ struct PianoRollContent: View {
                 .accessibilityHidden(true)
             // VoiceOver: each step is a button, read in step order.
             HStack(spacing: 0) {
-                ForEach(0..<64, id: \.self) { i in
+                ForEach(session.stepIndices, id: \.self) { i in
                     Color.clear
                         .frame(width: grid.stepWidth, height: height)
                         .accessibilityElement()
@@ -310,7 +311,7 @@ struct PianoRollContent: View {
     private func noteEnd(_ start: Int) -> CGFloat {
         let steps = session.tracks[track].steps
         var len = 1
-        while start + len < 64, steps[start + len].time == .tie { len += 1 }
+        while start + len < steps.count, steps[start + len].time == .tie { len += 1 }
         return CGFloat(start + len) * grid.stepWidth - 2
     }
 
@@ -336,17 +337,17 @@ struct PianoRollContent: View {
         for r in 1..<max(rows.count, 12) {
             ctx.fill(Path(CGRect(x: 0, y: CGFloat(r) * h, width: size.width, height: 1)), with: .color(.black.opacity(0.45)))
         }
-        for bar in stride(from: 16, to: 64, by: 16) {
+        for bar in stride(from: 16, to: t.steps.count, by: 16) {
             ctx.fill(Path(CGRect(x: CGFloat(bar) * w, y: 0, width: 2, height: size.height)), with: .color(Color(hex: 0x34343C)))
         }
         // notes, held through the TIE steps after them
         let rowOf = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1, $0) })
         var i = 0
-        while i < 64 {
+        while i < t.steps.count {
             let s = t.steps[i]
             guard s.time == .note, !s.notes.isEmpty else { i += 1; continue }
             var len = 1
-            while i + len < 64, t.steps[i + len].time == .tie { len += 1 }
+            while i + len < t.steps.count, t.steps[i + len].time == .tie { len += 1 }
             for (k, n) in s.notes.enumerated() {
                 guard let r = rowOf[n] else { continue }
                 let rect = CGRect(x: CGFloat(i) * w + 2, y: CGFloat(r) * h + 4, width: CGFloat(len) * w - 4, height: h - 8)
@@ -361,8 +362,8 @@ struct PianoRollContent: View {
             i += len
         }
         // past the track's length: dimmed
-        if t.length < 64 {
-            ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(64 - t.length) * w, height: size.height)),
+        if t.length < t.steps.count {
+            ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(t.steps.count - t.length) * w, height: size.height)),
                      with: .color(.black.opacity(0.4)))
         }
         // the selected step, when it has no note to ring: a hollow column
@@ -394,8 +395,8 @@ struct VelocityLane: View {
     let track: TrackState
     let selected: Int
     var body: some View {
-        WideCanvas(width: 64 * grid.stepWidth, height: PianoRoll.velocityHeight, barWidth: grid.barWidth) { ctx, size in
-            for i in 0..<64 where track.steps[i].isOn {
+        WideCanvas(width: CGFloat(track.steps.count) * grid.stepWidth, height: PianoRoll.velocityHeight, barWidth: grid.barWidth) { ctx, size in
+            for i in track.steps.indices where track.steps[i].isOn {
                 let v = CGFloat(track.steps[i].velocity) / 127
                 let h = (size.height - 12) * v
                 let r = CGRect(x: CGFloat(i) * grid.stepWidth + (grid.stepWidth - 12) / 2, y: size.height - 6 - h, width: 12, height: h)

@@ -346,9 +346,9 @@ struct AudioThroughKey: View {
 final class NowPlaying {
     static let shared = NowPlaying()
     private var targets: [(MPRemoteCommand, Any)] = []
-    private weak var session: SloopSession?
+    private weak var session: DeviceSession?
 
-    func update(active: Bool, session: SloopSession) {
+    func update(active: Bool, session: DeviceSession) {
         let center = MPRemoteCommandCenter.shared()
         guard active else {
             for (c, t) in targets { c.removeTarget(t) }
@@ -358,7 +358,7 @@ final class NowPlaying {
         }
         self.session = session
         if targets.isEmpty {
-            func on(_ c: MPRemoteCommand, _ act: @escaping @MainActor (SloopSession) -> Void) {
+            func on(_ c: MPRemoteCommand, _ act: @escaping @MainActor (DeviceSession) -> Void) {
                 c.isEnabled = true
                 let t = c.addTarget { [weak self] _ in
                     MainActor.assumeIsolated {
