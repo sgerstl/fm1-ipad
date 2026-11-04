@@ -1,7 +1,7 @@
 import Foundation
 
 // User sample slots (USR1..USR4): SLOOP's slot builder (tools/sampleio.py) ported byte for byte, and
-// SMP_INFO's reply. The upload itself is SloopSession.uploadSample (Session.swift).
+// SMP_INFO's reply. The upload itself is DeviceSession.uploadSample (Session.swift).
 
 /// A user sample slot as the device builds and plays it: mono, 22050 Hz, 4-bit IMA ADPCM, a 480-byte
 /// header at 0 and the data at 512 (EDITOR_PROTOCOL.md, "User sample slot").
@@ -90,9 +90,9 @@ public enum UserSample {
     /// One zone covering the whole keyboard (lo 0, hi 127), one-shot (looped 0), root MIDI note.
     /// sampleio.user_slot(name, [(samples, root, None, None)]).
     public static func slot(name: String, samples: [Int16], root: Int = 60) throws -> (header: [UInt8], data: [UInt8]) {
-        guard !samples.isEmpty else { throw SloopSession.SampleError.empty }
+        guard !samples.isEmpty else { throw DeviceSession.SampleError.empty }
         let data = imaEncode(samples)
-        guard data.count <= maxData else { throw SloopSession.SampleError.tooLong }
+        guard data.count <= maxData else { throw DeviceSession.SampleError.tooLong }
         var h = [UInt8]()
         func u32(_ v: UInt32) { h += (0..<4).map { UInt8(truncatingIfNeeded: v >> (8 * UInt32($0))) } }
         func u16(_ v: UInt16) { h += [UInt8(truncatingIfNeeded: v), UInt8(truncatingIfNeeded: v >> 8)] }

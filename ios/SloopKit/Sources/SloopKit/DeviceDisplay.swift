@@ -88,7 +88,7 @@ public enum DeviceDisplay {
     }
 }
 
-extension SloopSession {
+extension DeviceSession {
     /// The selected track's param `id` as the FM-1's screen names it (DeviceDisplay.trackDesc).
     public func trackDesc(_ id: Int) -> ParamDesc? { DeviceDisplay.trackDesc(trackDescs[id], id: id, params: params) }
 }

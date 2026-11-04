@@ -4,13 +4,14 @@ import Observation
 /// What the app knows about one track. The FM-1 is the authority; this is a mirror.
 public struct TrackState: Equatable, Sendable {
     public var index: Int
-    public var isDrums: Bool { index == 3 }
+    /// The drum track (SLOOP's track 4): 16 lanes and kits instead of notes and presets.
+    public var isDrums: Bool
     public var engine = 0
     public var engineName = ""
     public var preset = 0
     public var presetName = ""
-    public var steps = Array(repeating: SynthStep.empty, count: 64)
-    public var drumSteps = Array(repeating: DrumStep.empty, count: 64)
+    public var steps: [SynthStep]
+    public var drumSteps: [DrumStep]
     public var level = 100          // P_LEVEL; the drum track's is G_DRLVL
     public var root = 0
     public var scale = 0
@@ -24,7 +25,12 @@ public struct TrackState: Equatable, Sendable {
     public var mute = false
     public var loaded = false
 
-    public init(index: Int) { self.index = index }
+    public init(index: Int, shape: DeviceShape = .sloop) {
+        self.index = index
+        isDrums = shape.isDrums(index)
+        steps = Array(repeating: .empty, count: shape.stepCount)
+        drumSteps = isDrums ? Array(repeating: .empty, count: shape.stepCount) : []
+    }
 
     public func isOn(_ i: Int) -> Bool {
         isDrums ? drumSteps[i].isOn : steps[i].isOn || steps[i].time == .tie
@@ -47,13 +53,18 @@ public enum ConnectionStatus: Equatable, Sendable {
     case lost(String)
 }
 
-/// Follows a SLOOP device: reads all four tracks, keeps them in sync from pushes and a slow
-/// background re-sync, and polls LIVE for the playhead.
+/// Follows the device through its firmware's driver: reads every track, keeps them in sync from pushes
+/// and a slow background re-sync, and polls LIVE for the playhead where the firmware has it.
 @MainActor @Observable
-public final class SloopSession {
+public final class DeviceSession {
     public private(set) var status: ConnectionStatus = .searching
     public private(set) var info: DeviceInfo?
-    public private(set) var tracks = (0..<4).map(TrackState.init)
+    /// The connected firmware (nil until one connects).
+    public private(set) var dialect: FirmwareDialect?
+    /// Tracks, steps and the drum track. SLOOP's until a device says otherwise.
+    public private(set) var shape = DeviceShape.sloop
+    public private(set) var capabilities: FirmwareCapabilities = []
+    public private(set) var tracks = (0..<DeviceShape.sloop.trackCount).map { TrackState(index: $0) }
     public private(set) var selectedTrack = 0
     public private(set) var playing = false {
         // stopped (from the FM-1 or the iPad): the song order the iPad kept for now goes to the FM-1
@@ -90,7 +101,7 @@ public final class SloopSession {
     public private(set) var swing = 0
     public private(set) var otherChannelsPlaySelected = true
     public private(set) var drumMapGM = true
-    public private(set) var positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: 4)
+    public private(set) var positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: DeviceShape.sloop.trackCount)
     public private(set) var isDemo = false
     /// Counted on every poll, and no view reads it: kept out of observation so a poll doesn't count
     /// as a change.
@@ -120,10 +131,12 @@ public final class SloopSession {
     @ObservationIgnored private var backupHeld = false
     @ObservationIgnored private var backupWaiting: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var loopFingerprint: (raw: UInt32, music: UInt32)?
-    @ObservationIgnored private var stepStart = Array(repeating: Date.distantPast, count: 4)
+    @ObservationIgnored private var stepStart = Array(repeating: Date.distantPast, count: DeviceShape.sloop.trackCount)
     @ObservationIgnored private var lastPoll = Date.distantPast
 
-    private var client: SloopClient?
+    private var driver: FirmwareDriver?
+    /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
+    private var sloop: SloopClient? { (driver as? SloopDriver)?.client }
     private var tasks: [Task<Void, Never>] = []
     /// Factory preset names per engine (NAMES), all read at connect: the library's lists.
     public private(set) var namesCache: [Int: [String]] = [:]
@@ -149,10 +162,10 @@ public final class SloopSession {
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
 
-    private var pendingSteps: Set<Int> = []        // track * 64 + index
+    private var pendingSteps: Set<Int> = []        // stepKey(track, index)
     /// Steps and parameters the iPad wrote lately. SLOOP doesn't push about the editor's own writes,
     /// and a read already queued before a write would bring back the old value, so reads leave these
-    /// alone for a moment. Keys: "s<track*64+index>", "p<track>.<id>", "g<id>".
+    /// alone for a moment. Keys: "s<stepKey>", "p<track>.<id>", "g<id>".
     private var recentWrites: [String: Date] = [:]
     private var stepWrites: [Int: SynthStep] = [:]
     @ObservationIgnored private var reloadingAll = false
@@ -167,6 +180,18 @@ public final class SloopSession {
         return Date().timeIntervalSince(d) < 1.5
     }
     private let makeTransport: () -> SysExTransport?
+
+    // The device's shape, for the views.
+    public var trackCount: Int { shape.trackCount }
+    public var stepCount: Int { shape.stepCount }
+    public var trackIndices: Range<Int> { 0..<shape.trackCount }
+    public var stepIndices: Range<Int> { 0..<shape.stepCount }
+    /// The drum track's index, when the firmware has one.
+    public var drumTrack: Int? { shape.drumTrack }
+    public func isDrums(_ t: Int) -> Bool { shape.isDrums(t) }
+    public var selectedIsDrums: Bool { shape.isDrums(selectedTrack) }
+    /// A step's key in the session's bookkeeping (one number per track and step).
+    private func stepKey(_ t: Int, _ i: Int) -> Int { t * 256 + i }
 
     /// About 20 a second once a reply's 2 ms is added. SLOOP pushes only while its USB send ring is
     /// at most half full (editor.c ed_room), so polling harder can hold the pushes back.
@@ -207,60 +232,79 @@ public final class SloopSession {
     }
 
     private func connect(_ transport: SysExTransport) async {
-        let c = SloopClient(transport: transport)
-        client = c
         settingsCache = nil; songOrder = nil; usbAudioFull = nil     // never write a settings object read from another FM-1
         sampleSlots = []
         liveSeen = false
-        await c.start()
         if case .wrongFirmware = status {} else { status = .connecting }
+        let c: FirmwareDriver
         do {
-            try await Task.sleep(for: .milliseconds(200))      // let notes queued in the USB buffer drain
-            let i = try await c.info()
-            guard i.isSupported else {
+            switch try await FirmwareDetector.connect(transport) {
+            case .unknown(let i):
                 status = .wrongFirmware(found: i.version, protocolVersion: i.protocolVersion)
-                await c.close()
                 return
+            case .driver(let d): c = d
             }
+        } catch {
+            status = .lost("Lost the FM-1 while reading it")
+            return
+        }
+        driver = c
+        do {
+            let i = c.info
             info = i
+            dialect = c.dialect
+            capabilities = c.capabilities
+            adopt(c.shape)
             deviceNotes = []          // whatever the USB buffer held from before isn't live
             try await readEverything()
             // fm1-ipad firmware answers UI; stock SLOOP doesn't (a short timeout, then the link stays off)
-            if let s = try? await c.uiState() { deviceScreen = s; screenLinked = true } else { screenLinked = false }
-            _ = try await c.watch(screenLinked ? 7 : 3)
+            if let s = sloop, let ui = try? await s.uiState() { deviceScreen = ui; screenLinked = true } else { screenLinked = false }
+            if screenLinked { capabilities.insert(.screenLink) }
+            try await c.watch(screenLink: screenLinked)
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
             stats = Stats()
         } catch {
             status = .lost("Lost the FM-1 while reading it")
             await c.close()
+            driver = nil
             return
         }
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.pushLoop(c) }
             group.addTask { await self.pingLoop(c) }
-            group.addTask { await self.liveLoop(c) }
+            if let s = self.sloop, self.capabilities.contains(.livePlayhead) { group.addTask { await self.liveLoop(s) } }
             group.addTask { await self.resyncLoop(c) }
             group.addTask { await self.noteLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             await group.next()           // any loop ending means the device went away
             group.cancelAll()
         }
         await c.close()
-        client = nil
+        driver = nil
         if !Task.isCancelled { status = .lost("FM-1 disconnected") }
+    }
+
+    /// Takes the connected device's size: the tracks are rebuilt only when it differs from what the app has.
+    private func adopt(_ s: DeviceShape) {
+        guard s != shape else { return }
+        shape = s
+        tracks = (0..<s.trackCount).map { TrackState(index: $0, shape: s) }
+        positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: s.trackCount)
+        stepStart = Array(repeating: Date.distantPast, count: s.trackCount)
+        if selectedTrack >= s.trackCount { selectedTrack = 0 }
     }
 
     // MARK: Reading
 
     private func readEverything() async throws {
         try await readTrackList()
-        for t in 0..<4 { try await readParams(t) }
+        for t in trackIndices { try await readParams(t) }
         try await readGlobals()
-        for t in 0..<4 { try await readSteps(t) }
+        for t in trackIndices { try await readSteps(t) }
         try await readLibrary()
         try await readSoundParams(descs: true)
-        try? await readSongOrder()
-        await refreshSampleSlots()
+        if capabilities.contains(.sloopSong) { try? await readSongOrder() }
+        if capabilities.contains(.samples) { await refreshSampleSlots() }
     }
 
     // MARK: The song
@@ -278,7 +322,7 @@ public final class SloopSession {
     }
 
     public func readSongOrder() async throws {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         let s = try await backupTurn { try await c.settingsObject() }
         settingsCache = s
         songOrder = SongOrder(settings: s)
@@ -300,7 +344,7 @@ public final class SloopSession {
     }
 
     private func readProjectNow() async throws -> ProjectData {
-        guard let c = client else { throw ProjectError.notConnected }
+        guard let c = sloop else { throw ProjectError.notConnected }
         var attempt = 0
         while true {
             do {
@@ -330,7 +374,7 @@ public final class SloopSession {
     }
 
     private func deviceFingerprintNow() async throws -> String {
-        guard let c = client else { throw ProjectError.notConnected }
+        guard let c = sloop else { throw ProjectError.notConnected }
         let list = try await c.objectList()
         var music: UInt32
         if let l = list[0], let known = loopFingerprint, known.raw == l.crc {
@@ -350,7 +394,7 @@ public final class SloopSession {
     /// Puts a project on the FM-1: the loop (loaded at once), sections A–D, then the song order spliced
     /// into the settings as they are now. SLOOP takes all of it only stopped. `progress` goes 0…1.
     public func writeProject(_ p: ProjectData, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {
-        guard client != nil else { throw ProjectError.notConnected }
+        guard driver != nil else { throw ProjectError.notConnected }
         guard !playing, !song.songPlaying else { throw ProjectError.playing }
         guard p.loop != nil else { throw ProjectError.unreadable("not a SLOOP 2.8 project") }
         projectBusy = true
@@ -384,7 +428,7 @@ public final class SloopSession {
     /// The order matters: the song order and the sections first, the loop last, since only the loop
     /// queues a stop on the FM-1 (and with it, a moment of "stop first" for whatever comes next).
     private func writeProjectNow(_ p: ProjectData, progress: @escaping @MainActor (Double) -> Void) async throws {
-        guard let c = client else { throw ProjectError.notConnected }
+        guard let c = sloop else { throw ProjectError.notConnected }
         guard let loop = p.loop?.sealed else { throw ProjectError.unreadable("not a SLOOP 2.8 project") }
         func check(_ id: Int, _ rc: Int) throws {
             if rc == 3 { throw ProjectError.playing }
@@ -413,9 +457,9 @@ public final class SloopSession {
     private func rereadAfterProject() async {
         // SLOOP pushes nothing for the editor's own restore: read everything the app shows again
         try? await readTrackList()
-        for t in 0..<4 { try? await readParams(t) }
+        for t in trackIndices { try? await readParams(t) }
         try? await readGlobals()
-        for t in 0..<4 { _ = try? await readSteps(t, deviceWins: true) }
+        for t in trackIndices { _ = try? await readSteps(t, deviceWins: true) }
         try? await readSoundParams(descs: false)
         try? await readSongOrder()
         tracksEdited = false
@@ -429,7 +473,7 @@ public final class SloopSession {
     /// Unplugged while quiet, the FM-1 stays quiet until its MASTER knob turns (SLOOP gives the knob back then).
     public func muteSpeaker(_ mute: Bool) {
         speakerMuted = mute
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         if mute, usbAudioFull != true {
             wantUSBFull = true
             drainSettings()
@@ -442,7 +486,7 @@ public final class SloopSession {
 
     /// Plays a section from the next bar (playing) or loads it as the loop (stopped), as SAVE + key 1–4.
     public func playSection(_ k: Int) {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         if song.songPlaying { songMessage = "The song is playing: stop it to pick a section"; return }
         if !song.stored(k) { songMessage = "Section \(Self.sectionName(k)) is empty: store a loop in it first"; return }
         songMessage = nil
@@ -460,7 +504,7 @@ public final class SloopSession {
     /// Empties section k (the editor's restore of no bytes, project.c project_restore). SLOOP does it only
     /// stopped, and keeps no copy.
     public func clearSection(_ k: Int) {
-        guard let c = client, (0..<4).contains(k) else { return }
+        guard let c = sloop, (0..<4).contains(k) else { return }
         guard !playing else { songMessage = "Stop the FM-1 to clear a section"; return }
         songMessage = nil
         Task {
@@ -475,7 +519,7 @@ public final class SloopSession {
     }
 
     public func storeLoop(in k: Int) {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         let twice = song.stored(k)
         song.sectionsStored |= 1 << k
         tracksEdited = false
@@ -490,7 +534,7 @@ public final class SloopSession {
 
     /// Loop mode / song mode (SAVE + key 13): in song mode PLAY plays the song order.
     public func toggleSongMode() {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         if song.songRecording { songMessage = "SONG REC is on"; return }
         song.songMode.toggle()
         Task { _ = try? await c.layerTap(layer: saveLayer, key: 12) }
@@ -498,7 +542,7 @@ public final class SloopSession {
 
     /// SONG REC (SAVE + key 14): from the next bar, every section played (and how long) becomes the song.
     public func toggleSongRec() {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         if !song.songRecording && song.songPlaying { songMessage = "Stop the song first"; return }
         songMessage = nil
         let ending = song.songRecording
@@ -513,7 +557,7 @@ public final class SloopSession {
 
     /// A chain: the sections in turn, each for its pattern length, round and round. Only while playing.
     public func playChain(_ sections: [Int]) {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         guard playing else { songMessage = "Press play first: a chain starts on the next bar"; return }
         guard sections.allSatisfy(song.stored) else { songMessage = "A chain can only use stored sections"; return }
         songMessage = nil
@@ -522,7 +566,7 @@ public final class SloopSession {
     }
 
     public func stopChain() {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         chainAsked = []
         Task { _ = try? await c.chain([]) }
     }
@@ -531,7 +575,7 @@ public final class SloopSession {
     /// Each write re-reads the settings object first and changes only the order's bytes, so settings
     /// changed on the FM-1 since connect are kept; one write runs at a time and the latest order wins.
     public func setSongOrder(_ order: SongOrder) {
-        guard client != nil, songOrder != nil else { return }     // never over an order the app couldn't read
+        guard driver != nil, songOrder != nil else { return }     // never over an order the app couldn't read
         if song.songPlaying || song.songRecording { songMessage = "Stop the song to change its order"; return }
         if orderWriteBefore == nil { orderWriteBefore = songOrder }
         songOrder = order
@@ -544,7 +588,7 @@ public final class SloopSession {
     /// The one writer of the settings object: the song order and USB AUDIO = FULL go through here, one
     /// write at a time, each on a fresh read so settings changed on the FM-1 since are kept.
     private func drainSettings() {
-        guard let c = client, !orderWriting, !projectBusy else { return }
+        guard let c = sloop, !orderWriting, !projectBusy else { return }
         orderWriting = true
         Task {
             while self.pendingOrder != nil || self.wantUSBFull {
@@ -588,13 +632,13 @@ public final class SloopSession {
     public static func sectionName(_ k: Int) -> String { ["A", "B", "C", "D"][k & 3] }
 
     private func readSoundParams(descs all: Bool) async throws {
-        guard let c = client, let i = info else { return }
+        guard let c = driver, let i = info else { return }
         if all {
             for id in 0..<i.paramCount where id < i.firstEngineParam { trackDescs[id] = try await c.desc(scope: 0, id: id) }
             for id in 0..<i.globalCount { globalDescs[id] = try await c.desc(scope: 1, id: id) }
         }
         for id in min(i.firstEngineParam, i.paramCount)..<i.paramCount { trackDescs[id] = try await c.desc(scope: 0, id: id) }
-        let d = try await c.dump(paramCount: i.paramCount, globalCount: i.globalCount)
+        let d = try await c.dump()
         let t = selectedTrack
         for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
         if params.count != i.paramCount { params = Array(repeating: 0, count: i.paramCount) }
@@ -604,45 +648,45 @@ public final class SloopSession {
     }
 
     private func readLibrary() async throws {
-        guard let c = client, let i = info else { return }
+        guard let c = driver, let i = info else { return }
         for e in 0..<i.engines.count { _ = try await presetNames(e) }
-        userPresets = try await c.userPresets()
-        if selectedTrack == 3 { try await readKits() }
+        if capabilities.contains(.userPresets) { userPresets = try await c.userPresets() }
+        if selectedIsDrums { try await readKits() }
     }
 
     private func readKits() async throws {
-        guard let c = client, let i = info, selectedTrack == 3 else { return }
+        guard let c = driver, let i = info, let dt = drumTrack, selectedTrack == dt else { return }
         let d = try await c.desc(scope: 0, id: i.firstEngineParam)       // the drum track selected: the enum KIT
         if d.format == 8, !d.names.isEmpty {
             kitNames = d.names
-            if tracks[3].preset < d.names.count { tracks[3].presetName = d.names[tracks[3].preset] }
+            if tracks[dt].preset < d.names.count { tracks[dt].presetName = d.names[tracks[dt].preset] }
         }
     }
 
     /// The library page asks for this: user presets may have changed on the device, and the kit names
     /// can only be read while the drum track is selected.
     public func refreshLibrary() {
-        guard let c = client else { return }
+        guard let c = driver else { return }
         Task {
-            if let u = try? await c.userPresets() { self.userPresets = u }
-            if self.selectedTrack == 3, self.kitNames.isEmpty { try? await self.readKits() }
+            if self.capabilities.contains(.userPresets), let u = try? await c.userPresets() { self.userPresets = u }
+            if self.selectedIsDrums, self.kitNames.isEmpty { try? await self.readKits() }
         }
     }
 
     private func readTrackList() async throws {
-        guard let c = client, let i = info else { return }
+        guard let c = driver, let i = info else { return }
         let list = try await c.tracks()
-        if (0..<4).contains(list.selected) { selectedTrack = list.selected }
-        for (k, s) in list.tracks.enumerated() where k < 4 {
+        if trackIndices.contains(list.selected) { selectedTrack = list.selected }
+        for (k, s) in list.tracks.enumerated() where k < trackCount {
             tracks[k].engine = s.engine
             if s.engine < i.engines.count { tracks[k].preset = s.preset }
             tracks[k].mute = s.mute
-            if k < 3 { tracks[k].level = s.level }
+            if !isDrums(k) { tracks[k].level = s.level }
             if s.engine < i.engines.count {
                 tracks[k].engineName = i.engines[s.engine]
                 let names = try await presetNames(s.engine)
                 var name = s.preset < names.count ? names[s.preset] : "Preset \(s.preset + 1)"
-                if k < 3, i.engines[s.engine] == "SAMPLE" {
+                if !isDrums(k), capabilities.contains(.samples), i.engines[s.engine] == "SAMPLE" {
                     // SET on a user slot (USR1..USR4) names the sound better than the preset it started from
                     let set = i.firstEngineParam
                     if recentlyWritten("p\(k).\(set)") { name = tracks[k].presetName }
@@ -664,7 +708,7 @@ public final class SloopSession {
 
     private func presetNames(_ engine: Int) async throws -> [String] {
         if let n = namesCache[engine] { return n }
-        guard let c = client else { return [] }
+        guard let c = driver else { return [] }
         let r = try await c.names(engine: engine)
         namesCache[engine] = r.names
         editPageTitles[engine] = r.pageTitles
@@ -675,9 +719,9 @@ public final class SloopSession {
     public private(set) var editPageTitles: [Int: [String]] = [:]
 
     private func readParams(_ t: Int) async throws {
-        guard let c = client else { return }
+        guard let c = driver else { return }
         var ids = Param.all
-        if t == 3, let i = info { ids.append(i.firstEngineParam) }      // the drum track's kit
+        if isDrums(t), let i = info { ids.append(i.firstEngineParam) }      // the drum track's kit
         for id in ids {
             let v = try await c.trackParam(track: t, id: id)
             if !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
@@ -685,27 +729,27 @@ public final class SloopSession {
     }
 
     private func readGlobals() async throws {
-        guard let c = client else { return }
+        guard let c = driver else { return }
         for id in Global.all {
             let v = try await c.global(id: id)
             if !recentlyWritten("g\(id)") { applyGlobal(id: id, value: v) }
         }
     }
 
-    /// Reads a track's 64 steps; returns how many differed from what the app had.
+    /// Reads all of a track's steps; returns how many differed from what the app had.
     @discardableResult
     /// `deviceWins`: after a section loaded over the tracks, the device's steps replace even ones the
     /// iPad just wrote.
     private func readSteps(_ t: Int, deviceWins: Bool = false) async throws -> Int {
-        guard let c = client, (0..<4).contains(t) else { return 0 }
+        guard let c = driver, trackIndices.contains(t) else { return 0 }
         var fixes = 0
-        for i in 0..<64 {
-            if t == 3 {
+        for i in stepIndices {
+            if isDrums(t) {
                 let s = try await c.drumStep(index: i)
-                if tracks[3].drumSteps[i] != s, deviceWins || !recentlyWritten("s\(3 * 64 + i)") { tracks[3].drumSteps[i] = s; fixes += 1 }
+                if tracks[t].drumSteps[i] != s, deviceWins || !recentlyWritten("s\(stepKey(t, i))") { tracks[t].drumSteps[i] = s; fixes += 1 }
             } else {
                 let s = try await c.synthStep(track: t, index: i)
-                if tracks[t].steps[i] != s, deviceWins || !recentlyWritten("s\(t * 64 + i)") { tracks[t].steps[i] = s; fixes += 1 }
+                if tracks[t].steps[i] != s, deviceWins || !recentlyWritten("s\(stepKey(t, i))") { tracks[t].steps[i] = s; fixes += 1 }
             }
         }
         if !tracks[t].loaded { tracks[t].loaded = true }
@@ -713,15 +757,15 @@ public final class SloopSession {
     }
 
     private func readStep(_ t: Int, _ i: Int) async {
-        guard let c = client else { return }
-        let key = t * 64 + i
+        guard let c = driver else { return }
+        let key = stepKey(t, i)
         guard !pendingSteps.contains(key) else { return }
         pendingSteps.insert(key)
         defer { pendingSteps.remove(key) }
         do {
-            if t == 3 {
+            if isDrums(t) {
                 let s = try await c.drumStep(index: i)
-                if !recentlyWritten("s\(key)"), tracks[3].drumSteps[i] != s { tracks[3].drumSteps[i] = s }
+                if !recentlyWritten("s\(key)"), tracks[t].drumSteps[i] != s { tracks[t].drumSteps[i] = s }
             } else {
                 let s = try await c.synthStep(track: t, index: i)
                 if !recentlyWritten("s\(key)"), tracks[t].steps[i] != s { tracks[t].steps[i] = s }
@@ -732,22 +776,22 @@ public final class SloopSession {
     // MARK: Applying values
 
     private func apply(track t: Int, id: Int, value v: Int) {
-        guard t < 4 else { return }
+        guard trackIndices.contains(t) else { return }
         if t == selectedTrack, id < params.count { params[id] = v }
-        if t == 3, id == info?.firstEngineParam {               // the drum track's kit
-            tracks[3].preset = v
-            if kitNames.indices.contains(v) { tracks[3].presetName = kitNames[v] }
+        if isDrums(t), id == info?.firstEngineParam {               // the drum track's kit
+            tracks[t].preset = v
+            if kitNames.indices.contains(v) { tracks[t].presetName = kitNames[v] }
             return
         }
         switch id {
-        case Param.level: if t < 3 { tracks[t].level = v }
+        case Param.level: if !isDrums(t) { tracks[t].level = v }
         case Param.root: tracks[t].root = max(0, min(11, v))
         case Param.scale: tracks[t].scale = max(0, min(Music.scales.count - 1, v))
         case Param.quant: tracks[t].quant = v
         case Param.transpose: tracks[t].transpose = v
         case Param.chord: tracks[t].chord = max(0, v)
         case Param.arpMode: tracks[t].arpMode = max(0, v)
-        case Param.length: tracks[t].length = max(1, min(64, v))
+        case Param.length: tracks[t].length = max(1, min(stepCount, v))
         case Param.division: tracks[t].division = max(0, min(Music.divisionBeats.count - 1, v))
         case Param.pan: tracks[t].pan = v
         case Param.mute: tracks[t].mute = v != 0
@@ -760,7 +804,7 @@ public final class SloopSession {
         switch id {
         case Global.bpm: bpm = v
         case Global.swing: swing = v
-        case Global.drumLevel: tracks[3].level = v
+        case Global.drumLevel: if let dt = drumTrack { tracks[dt].level = v }
         case Global.otherChannels: otherChannelsPlaySelected = v == 0
         case Global.drumMap: drumMapGM = v == 0
         default: break
@@ -769,20 +813,20 @@ public final class SloopSession {
 
     // MARK: Loops
 
-    private func pushLoop(_ c: SloopClient) async {
+    private func pushLoop(_ c: FirmwareDriver) async {
         for await p in c.pushes {
             stats.pushes += 1
             if case .ui = p {} else { onEdit?() }
             switch p {
             case .stepChanged(let i, let t):
                 stats.stepPushes += 1
-                guard (0..<4).contains(t), (0..<64).contains(i) else { break }
+                guard trackIndices.contains(t), stepIndices.contains(i) else { break }
                 Task { await self.readStep(t, i) }
             case .reload(_, _, let t):
-                guard (0..<4).contains(t) else { break }
+                guard trackIndices.contains(t) else { break }
                 selectedTrack = t
                 Task {
-                    if t == 3, self.kitNames.isEmpty { try? await self.readKits() }
+                    if self.isDrums(t), self.kitNames.isEmpty { try? await self.readKits() }
                     try? await self.readSoundParams(descs: false)
                     try? await self.readTrackList()
                     try? await self.readParams(t)
@@ -800,14 +844,14 @@ public final class SloopSession {
         }
     }
 
-    private func pingLoop(_ c: SloopClient) async {
+    private func pingLoop(_ c: FirmwareDriver) async {
         var n = 0
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             n += 1
             do {
                 try await c.ping()
-                if n % 10 == 0 { _ = try await c.watch(screenLinked ? 7 : 3) }   // watching ends on a USB reset: renew it
+                if n % 10 == 0 { try await c.watch(screenLink: screenLinked) }   // watching ends on a USB reset: renew it
             } catch ClientError.closed { return } catch { stats.timeouts += 1 }
         }
     }
@@ -832,7 +876,7 @@ public final class SloopSession {
         }
     }
 
-    private func resyncLoop(_ c: SloopClient) async {
+    private func resyncLoop(_ c: FirmwareDriver) async {
         var pass = 0
         while !Task.isCancelled {
             try? await Task.sleep(for: resyncInterval)
@@ -840,7 +884,8 @@ public final class SloopSession {
                 let sel = selectedTrack
                 stats.resyncFixes += try await readSteps(sel)
                 if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
-                    let other = (sel + 1 + (pass / 3) % 3) % 4
+                    let n = trackCount
+                    let other = (sel + 1 + (pass / 3) % max(1, n - 1)) % n
                     if other == 0 { try await readTrackList(); try await readGlobals() }
                     try await readParams(sel)
                     try await readParams(other)
@@ -858,7 +903,7 @@ public final class SloopSession {
         Task {
             repeat {
                 reloadAgain = false
-                for t in 0..<4 {
+                for t in self.trackIndices {
                     try? await self.readParams(t)
                     _ = try? await self.readSteps(t, deviceWins: true)
                 }
@@ -873,7 +918,7 @@ public final class SloopSession {
         // the same value, and any element of `tracks`) makes every view that reads it draw again; the
         // drum grid redrew its whole canvas on every poll (2026-11-02, battery)
         let wasPlaying = playing
-        if l.selected != selectedTrack, l.selected < 4 { selectedTrack = l.selected }
+        if l.selected != selectedTrack, trackIndices.contains(l.selected) { selectedTrack = l.selected }
         if playing != l.playing { playing = l.playing }
         let rec = l.recTracks != 0 || l.recArmed
         if recording != rec { recording = rec }
@@ -890,17 +935,17 @@ public final class SloopSession {
             Task { try? await self.readSongOrder() }
         }
         // a section loaded over the tracks, or the song stopped and SLOOP put the loop back: SLOOP only
-        // pushes RELOAD for the selected track, so re-read all four (arranger_scene.c)
+        // pushes RELOAD for the selected track, so re-read them all (arranger_scene.c)
         let songStopped = before.songPlaying && !l.song.songPlaying
         if before.sectionPlaying != l.song.sectionPlaying || songStopped { reloadAllTracks() }
         if before.sectionPlaying != l.song.sectionPlaying, !l.song.songPlaying { tracksEdited = false }
         if bpm != l.bpm { bpm = l.bpm }
         // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
-        for k in 0..<4 where !recentlyWritten("p\(k).\(Param.mute)") {
+        for k in trackIndices where !recentlyWritten("p\(k).\(Param.mute)") {
             let m = l.mutes >> k & 1 == 1
             if tracks[k].mute != m { tracks[k].mute = m }
         }
-        for k in 0..<min(4, l.tracks.count) {
+        for k in 0..<min(trackCount, l.tracks.count) {
             let new = l.tracks[k], old = positions[k]
             if new.step != old.step || !wasPlaying {
                 let dur = stepDuration(k)
@@ -915,7 +960,7 @@ public final class SloopSession {
                 }
             }
             if positions[k] != new { positions[k] = new }
-            let len = max(1, min(64, new.length))
+            let len = max(1, min(stepCount, new.length))
             if tracks[k].length != len { tracks[k].length = len }
         }
         lastPoll = now
@@ -943,10 +988,10 @@ public final class SloopSession {
     public func select(track t: Int) {
         guard t != selectedTrack else { return }
         selectedTrack = t
-        guard let c = client else { return }
+        guard let c = driver else { return }
         Task {
             _ = try? await c.selectTrack(t)
-            if t == 3, self.kitNames.isEmpty { try? await self.readKits() }
+            if self.isDrums(t), self.kitNames.isEmpty { try? await self.readKits() }
             try? await self.readSoundParams(descs: false)
         }
     }
@@ -973,7 +1018,7 @@ public final class SloopSession {
 
     /// The key id a note from the device lights: the note itself, or on the drum track its lane.
     public func keyID(forDeviceNote n: Int) -> Int {
-        guard selectedTrack == 3 else { return n }
+        guard selectedIsDrums else { return n }
         if drumMapGM { return Music.laneNotes.firstIndex(of: n) ?? Music.laneNotes.enumerated().min { abs($0.element - n) < abs($1.element - n) }!.offset }
         return ((n - 36) % 16 + 16) % 16
     }
@@ -988,7 +1033,7 @@ public final class SloopSession {
     /// A note from the FM-1 that no key plays at the iPad's octave, but one does at another: the FM-1's
     /// OCT buttons moved, so follow them (nearest octave first).
     private func followOctave(_ n: Int) {
-        guard selectedTrack < 3 else { return }
+        guard !selectedIsDrums else { return }
         func fits(_ o: Int) -> Bool { (0..<27).contains { pitch(ofKey: $0, octave: o) == n } }
         guard !fits(keyboardOctave) else { return }
         for d in [1, -1, 2, -2, 3, -3] where fits(keyboardOctave + d) && abs(keyboardOctave + d) <= 3 {
@@ -1000,29 +1045,29 @@ public final class SloopSession {
     /// A key down. `key` is the FM-1 key index on a synth track (0...26), the lane (0...15) on drums.
     public func keyDown(_ key: Int, velocity: Int = 100) {
         let note: Int
-        if selectedTrack == 3 { note = drumMapGM ? Music.laneNotes[key % 16] : 36 + key % 16 }
+        if selectedIsDrums { note = drumMapGM ? Music.laneNotes[key % 16] : 36 + key % 16 }
         else if let p = pitch(ofKey: key) { note = p } else { return }
         held[key] = note
-        client?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
+        driver?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
     }
 
     /// A piano-roll row: that exact note, held while touched (drum lanes go through keyDown).
     public func noteDown(_ note: Int) {
         held[1000 + note] = note
-        client?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), 100])
+        driver?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), 100])
     }
     public func noteUp(_ note: Int) { keyUp(1000 + note) }
 
     public func keyUp(_ key: Int) {
         guard let note = held.removeValue(forKey: key) else { return }
-        client?.sendMIDI([0x80 | Self.keyboardChannel, UInt8(note & 0x7F), 0])
+        driver?.sendMIDI([0x80 | Self.keyboardChannel, UInt8(note & 0x7F), 0])
     }
 
     /// The notes (or drum lanes) the selected track plays at the playhead, to light the keys.
     public var sounding: Set<Int> {
         guard playing else { return [] }
-        let t = selectedTrack, i = positions[t].step % 64
-        if t == 3 { return Set(tracks[3].drumSteps[i].lanes) }
+        let t = selectedTrack, i = positions[t].step % stepCount
+        if isDrums(t) { return Set(tracks[t].drumSteps[i].lanes) }
         // a held note sounds through its TIE steps
         var k = i
         while k > 0, tracks[t].steps[k].time == .tie { k -= 1 }
@@ -1034,19 +1079,19 @@ public final class SloopSession {
     // the device stored, and it wins.
 
     public func write(track t: Int, index i: Int, _ step: SynthStep) {
-        guard t < 3 else { return }
+        guard trackIndices.contains(t), !isDrums(t) else { return }
         var st = step
         if st.time != .note { st.notes = []; st.levels = []; st.ratchets = [] }
         tracks[t].steps[i] = st
         tracksEdited = true
         onEdit?()
-        let key = t * 64 + i
+        let key = stepKey(t, i)
         recentWrites["s\(key)"] = Date()
         // latest value wins, one write in flight per step: a dial turned fast sends what it passes
         // through without queueing, and a reply only lands if nothing newer is waiting (else an older
         // velocity would snap the dial back mid-turn)
         stepWrites[key] = st
-        guard let c = client, !stepSending.contains(key) else { return }
+        guard let c = driver, !stepSending.contains(key) else { return }
         stepSending.insert(key)
         Task {
             while let next = self.stepWrites.removeValue(forKey: key) {
@@ -1061,21 +1106,22 @@ public final class SloopSession {
     }
 
     public func write(drumIndex i: Int, _ step: DrumStep) {
-        tracks[3].drumSteps[i] = step
+        guard let dt = drumTrack else { return }
+        tracks[dt].drumSteps[i] = step
         tracksEdited = true
         onEdit?()
-        recentWrites["s\(3 * 64 + i)"] = Date()
+        recentWrites["s\(stepKey(dt, i))"] = Date()
         // as synth steps: latest value wins, one write in flight, a reply lands only if nothing newer waits
         drumWrites[i] = step
-        guard let c = client, !drumSending.contains(i) else { return }
+        guard let c = driver, !drumSending.contains(i) else { return }
         drumSending.insert(i)
         Task {
             while let next = self.drumWrites.removeValue(forKey: i) {
                 do {
                     let stored = try await c.setDrumStep(index: i, next)
-                    if self.drumWrites[i] == nil { self.tracks[3].drumSteps[i] = stored }
+                    if self.drumWrites[i] == nil { self.tracks[dt].drumSteps[i] = stored }
                 } catch { self.stats.timeouts += 1 }
-                self.recentWrites["s\(3 * 64 + i)"] = Date()
+                self.recentWrites["s\(self.stepKey(dt, i))"] = Date()
             }
             self.drumSending.remove(i)
         }
@@ -1085,12 +1131,13 @@ public final class SloopSession {
     /// whole step, every note of a chord), or go back to empty when it gets shorter. Stops before the
     /// next step with notes of its own, so a drag never overwrites them.
     public func setLength(track t: Int, start: Int, steps want: Int) {
-        guard t < 3, tracks[t].steps[start].time == .note else { return }
+        guard trackIndices.contains(t), !isDrums(t), tracks[t].steps[start].time == .note else { return }
+        let n = stepCount
         var limit = 1
-        while start + limit < 64, tracks[t].steps[start + limit].time != .note { limit += 1 }
+        while start + limit < n, tracks[t].steps[start + limit].time != .note { limit += 1 }
         let len = max(1, min(want, limit))
         var cur = 1
-        while start + cur < 64, tracks[t].steps[start + cur].time == .tie { cur += 1 }
+        while start + cur < n, tracks[t].steps[start + cur].time == .tie { cur += 1 }
         guard len != cur else { return }
         let tie = SynthStep(notes: [], time: .tie, accent: false, slide: false, velocity: tracks[t].steps[start].velocity)
         if len > cur {
@@ -1119,14 +1166,15 @@ public final class SloopSession {
     }
 
     public func toggle(drumIndex i: Int, lane: Int) {
-        let d = tracks[3].drumSteps[i]
+        guard let dt = drumTrack else { return }
+        let d = tracks[dt].drumSteps[i]
         write(drumIndex: i, d.setting(lane, on: !d.has(lane)))
     }
 
     /// A track parameter from a knob: shown at once, sent latest-value-wins so a drag never queues up.
     public func set(track t: Int, param id: Int, to v: Int) {
         apply(track: t, id: id, value: v)
-        if t == 3 && id == Param.level { sendParam("g\(Global.drumLevel)", v) { c, v in try await c.setGlobal(id: Global.drumLevel, value: v) } ; return }
+        if isDrums(t) && id == Param.level { sendParam("g\(Global.drumLevel)", v) { c, v in try await c.setGlobal(id: Global.drumLevel, value: v) } ; return }
         sendParam("p\(t).\(id)", v) { c, v in try await c.setTrackParam(track: t, id: id, value: v) }
     }
 
@@ -1135,11 +1183,11 @@ public final class SloopSession {
         sendParam("g\(id)", v) { c, v in try await c.setGlobal(id: id, value: v) }
     }
 
-    private func sendParam(_ key: String, _ v: Int, _ op: @escaping (SloopClient, Int) async throws -> Int) {
+    private func sendParam(_ key: String, _ v: Int, _ op: @escaping (FirmwareDriver, Int) async throws -> Int) {
         recentWrites[key] = Date()
         onEdit?()
         paramWrites[key] = v
-        guard let c = client, !paramSending.contains(key) else { return }
+        guard let c = driver, !paramSending.contains(key) else { return }
         paramSending.insert(key)
         Task {
             while let next = self.paramWrites.removeValue(forKey: key) {
@@ -1156,22 +1204,22 @@ public final class SloopSession {
     /// keeps the pattern, mix and key; it pushes RELOAD, which re-reads the track.
     public func loadPreset(engine e: Int, index i: Int) {
         let t = selectedTrack
-        guard t < 3, let info else { return }
+        guard !isDrums(t), let info else { return }
         tracks[t].engine = e; tracks[t].preset = i
         tracks[t].engineName = info.engines[e]
         tracks[t].presetName = i < (namesCache[e]?.count ?? 0) ? namesCache[e]![i] : "Preset \(i + 1)"
         onEdit?()
-        guard let c = client else { return }
+        guard let c = driver else { return }
         Task { _ = try? await c.preset(engine: e, index: i) }
     }
 
     public func loadUserPreset(_ p: UserPreset) {
         let t = selectedTrack
-        guard t < 3, let info else { return }
+        guard !isDrums(t), let info else { return }
         if p.engine < info.engines.count { tracks[t].engine = p.engine; tracks[t].engineName = info.engines[p.engine] }
         tracks[t].presetName = p.name
         onEdit?()
-        guard let c = client else { return }
+        guard let c = driver else { return }
         Task { _ = try? await c.userLoad(slot: p.slot) }
     }
 
@@ -1182,12 +1230,12 @@ public final class SloopSession {
         let drumSteps: [DrumStep]
     }
 
-    /// Empties all 64 steps of a track (only the ones not already empty are written).
+    /// Empties all of a track's steps (only the ones not already empty are written).
     @discardableResult
     public func clearAll(track t: Int) -> ClearedTrack {
         let before = ClearedTrack(track: t, steps: tracks[t].steps, drumSteps: tracks[t].drumSteps)
-        for i in 0..<64 {
-            if t == 3 { if tracks[3].drumSteps[i] != .empty { write(drumIndex: i, .empty) } }
+        for i in stepIndices {
+            if isDrums(t) { if tracks[t].drumSteps[i] != .empty { write(drumIndex: i, .empty) } }
             else if tracks[t].steps[i] != .empty { write(track: t, index: i, .empty) }
         }
         return before
@@ -1195,9 +1243,9 @@ public final class SloopSession {
 
     /// Writes back whatever a clear took away (steps edited since are left as they are now).
     public func undo(_ c: ClearedTrack) {
-        for i in 0..<64 {
-            if c.track == 3 {
-                if tracks[3].drumSteps[i] == .empty, c.drumSteps[i] != .empty { write(drumIndex: i, c.drumSteps[i]) }
+        for i in stepIndices {
+            if isDrums(c.track) {
+                if tracks[c.track].drumSteps[i] == .empty, c.drumSteps[i] != .empty { write(drumIndex: i, c.drumSteps[i]) }
             } else if tracks[c.track].steps[i] == .empty, c.steps[i] != .empty {
                 write(track: c.track, index: i, c.steps[i])
             }
@@ -1206,7 +1254,7 @@ public final class SloopSession {
 
     /// Opens a page on the FM-1 (fm1-ipad firmware): its screen switches as if its button had been pressed.
     public func showOnDevice(page: Int) {
-        guard screenLinked, let c = client else { return }
+        guard screenLinked, let c = sloop else { return }
         deviceScreen = UIState(home: false, page: page)
         Task { if let s = try? await c.uiGoto(page: page) { self.deviceScreen = s } }
     }
@@ -1216,18 +1264,18 @@ public final class SloopSession {
     }
 
     public func loadKit(_ k: Int) {
-        guard let i = info else { return }
-        set(track: 3, param: i.firstEngineParam, to: k)
+        guard let i = info, let dt = drumTrack else { return }
+        set(track: dt, param: i.firstEngineParam, to: k)
     }
 
     public func toggleRec() {
-        guard let c = client else { return }
+        guard let c = sloop else { return }
         Task { if let l = try? await c.rec() { self.applyLive(l) } }
     }
 
     public func setPlaying(_ on: Bool) {
         playing = on
-        guard let c = client else { return }
+        guard let c = driver else { return }
         Task { if let l = try? await c.transport(play: on) { self.applyLive(l) } }
     }
 }
@@ -1238,7 +1286,7 @@ extension ConnectionStatus {
 
 // MARK: - User samples (EDITOR_PROTOCOL.md cmds 11–15)
 
-extension SloopSession {
+extension DeviceSession {
     public enum SampleError: Error, Equatable {
         case notConnected
         case tooLong                        // more than UserSample.maxSamples (a slot holds about 7.4 s)
@@ -1252,7 +1300,7 @@ extension SloopSession {
 
     /// Reads the slots again (SMP_INFO). A failed read leaves what was there.
     public func refreshSampleSlots() async {
-        guard let c = client, let s = try? await c.sampleSlots() else { return }
+        guard let c = sloop, let s = try? await c.sampleSlots() else { return }
         if s != sampleSlots { sampleSlots = s }
     }
 
@@ -1264,7 +1312,7 @@ extension SloopSession {
     public func uploadSample(slot: Int, name: String, samples: [Int16], root: Int = 60,
                              progress: @escaping @MainActor (Double) -> Void) async throws {
         let (header, data) = try UserSample.slot(name: name, samples: samples, root: root)
-        guard let c = client else { throw SampleError.notConnected }
+        guard let c = sloop else { throw SampleError.notConnected }
         let slots = sampleSlots.isEmpty ? 4 : sampleSlots.count
         guard (0..<slots).contains(slot) else { throw SampleError.refused(stage: "begin", rc: 1) }
         do {
@@ -1295,7 +1343,7 @@ extension SloopSession {
 
     /// Empties a slot (SMP_ERASE, about a second of flash erasing).
     public func eraseSample(slot: Int) async throws {
-        guard let c = client else { throw SampleError.notConnected }
+        guard let c = sloop else { throw SampleError.notConnected }
         let rc: Int
         do { rc = try await backupTurn { try await c.sampleErase(slot: slot) } }
         catch ClientError.closed { throw SampleError.notConnected }
@@ -1309,7 +1357,7 @@ extension SloopSession {
     /// PRESET loads onto the selected track, so the track is selected first; SAMPLE's preset 0 switches the
     /// engine (keeping the pattern, mix and key), then SET and LOOP are written. A project edit (onEdit).
     public func useSample(slot: Int, onTrack t: Int) async {
-        guard (0..<3).contains(t), (0..<4).contains(slot), let c = client, let info,
+        guard trackIndices.contains(t), !isDrums(t), (0..<4).contains(slot), let c = sloop, let info,
               let e = info.engines.firstIndex(of: "SAMPLE") else { return }
         let set = info.firstEngineParam, loop = info.firstEngineParam + 3
         if selectedTrack != t {
@@ -1329,3 +1377,6 @@ extension SloopSession {
         recentWrites["p\(t).\(set)"] = Date(); recentWrites["p\(t).\(loop)"] = Date()
     }
 }
+
+/// The session's name from before the firmware seam (SLOOP only).
+public typealias SloopSession = DeviceSession
