@@ -109,12 +109,10 @@ struct LibraryPage: View {
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .background {
-                if current { RoundedRectangle(cornerRadius: 10).fill(Theme.pressed).recessed(10) } else { Color.clear.raisedKey(10) }
-            }
+            .latchedKey(current, 10)
             .contentShape(Rectangle())
         }
-        .buttonStyle(PressSink())
+        .buttonStyle(PressSink(latched: current))
         .accessibilityLabel(name.capitalized + (detail.map { ", \($0)" } ?? ""))
         .accessibilityAddTraits(current ? .isSelected : [])
         .accessibilityHint(current ? "" : "Loads onto track \(session.selectedTrack + 1)")
@@ -214,7 +212,7 @@ struct LibraryEngines: View {
             .foregroundStyle(browsing ? Theme.text : Theme.textSecondary)
             .padding(.horizontal, 12)
             .frame(height: 44)
-            .background { if browsing { Color.clear.raisedKey(10) } }
+            .background { if browsing { Color.clear.selectedKey(10) } }
             .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())

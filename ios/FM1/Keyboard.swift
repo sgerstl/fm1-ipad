@@ -116,6 +116,7 @@ private struct MembraneKey: View {
     let down: () -> Void
     let up: () -> Void
     @State private var pressed = false
+    @Environment(\.look) private var look
 
     var body: some View {
         let glow = pressed || held ? 1.0 : lit ? 0.5 : 0
@@ -123,6 +124,12 @@ private struct MembraneKey: View {
             // rubber: matte, domed, no shine. Edges darkened from inside, one broad faint highlight,
             // a soft shadow onto the sheet. Pressed, it flattens.
             // (gradients, no blur: 27 blurred keys made the drawer slide and redraw slowly)
+            // Flat look: a pill-shaped chiclet on its 2 pt edge; pressed, it drops onto it.
+            if look.flat {
+                Capsule().fill(pressed ? Theme.controlPressed : Theme.control)
+                    .offset(y: pressed ? 2 : 0)
+                    .background(Capsule().fill(Theme.chicletEdge).offset(y: 2))
+            } else {
             Capsule()
                 .fill(Color(hex: 0x232427))
                 .overlay(
@@ -135,6 +142,7 @@ private struct MembraneKey: View {
                 )
                 // its shadow on the sheet: a darker pill lower down
                 .background(Capsule().fill(.black.opacity(pressed ? 0.3 : 0.5)).offset(y: pressed ? 1 : 4))
+            }
             VStack(spacing: 6) {
                 // the slit: a groove, with white light behind it
                 Capsule()
@@ -142,7 +150,7 @@ private struct MembraneKey: View {
                     .overlay(Capsule().fill(Theme.text.opacity(glow)))
                     .overlay(Capsule().stroke(.white.opacity(0.05), lineWidth: 0.5).offset(y: 0.5))
                     .frame(width: 4, height: 38)
-                    .shadow(color: Theme.text.opacity(glow * 0.9), radius: glow > 0 ? 6 : 0)   // the glow only while lit
+                    .shadow(color: Theme.text.opacity(look.flat ? 0 : glow * 0.9), radius: glow > 0 && !look.flat ? 6 : 0)   // the glow only while lit (none when flat)
                 if !name.isEmpty {
                     Text(name).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.7)
                 }
@@ -150,7 +158,7 @@ private struct MembraneKey: View {
             .offset(y: name.isEmpty ? 0 : 6)
         }
         .opacity(silent ? 0.35 : 1)
-        .scaleEffect(pressed ? 0.97 : 1)
+        .scaleEffect(pressed && !look.flat ? 0.97 : 1)
         .contentShape(Capsule())
         .gesture(
             DragGesture(minimumDistance: 0)

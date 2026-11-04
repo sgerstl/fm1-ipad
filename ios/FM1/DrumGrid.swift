@@ -5,6 +5,7 @@ import SwiftUI
 /// bar), or move the view box on the timeline.
 struct DrumGrid: View {
     @Environment(\.grid) private var grid
+    @Environment(\.look) private var look
     let session: DeviceSession
     let ui: EditorUI
     /// The drum track (SLOOP's track 4): this grid is shown only on firmware that has one.
@@ -42,7 +43,7 @@ struct DrumGrid: View {
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: grid.drumContentSize, offset: $offset, request: request, snapX: grid.barWidth) {
-                        DrumGridContent(grid: grid, session: session, ui: ui)
+                        DrumGridContent(grid: grid, look: look, session: session, ui: ui)
                     }
                     EditorPlayhead(session: session, track: dt, offsetX: offset.x, height: Self.gridHeight)
                 }
@@ -70,6 +71,7 @@ struct DrumGrid: View {
 struct DrumGridContent: View {
     /// Passed in, not read from the environment: it lives in a UIHostingController, which doesn't inherit it.
     var grid = GridMetrics.pad
+    var look = Look()
     let session: DeviceSession
     let ui: EditorUI
     /// The drum track (SLOOP's track 4): this grid is shown only on firmware that has one.
@@ -158,7 +160,7 @@ struct DrumGridContent: View {
                     let level = s.level(l)                       // 0 normal, 1 ghost, 2 soft, 3 hard
                     let ratchet = s.ratchet(l) + 1
                     drawPad(ctx, rect, track: dt, dim: level == 1 || level == 2 || i >= t.length,
-                            selected: i == selected && l == lane)
+                            selected: i == selected && l == lane, flat: look.flat)
                     // a second channel besides brightness: hard hits get a bright cap, ratchets split the pad
                     if level == 3 {
                         ctx.fill(Path(roundedRect: CGRect(x: rect.minX + 6, y: rect.minY + 4, width: rect.width - 12, height: 3), cornerRadius: 1.5),
@@ -182,7 +184,7 @@ struct DrumGridContent: View {
             }
         }
         // the lip first, the well over it: the 1 pt of lip left showing below each well is its highlight
-        ctx.fill(lips, with: .color(.white.opacity(0.05)))
+        if !look.flat { ctx.fill(lips, with: .color(.white.opacity(0.05))) }
         ctx.fill(wells, with: .color(Color(hex: 0x0B0B0D)))
         if t.length < t.drumSteps.count {
             ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(t.drumSteps.count - t.length) * w, height: size.height)),

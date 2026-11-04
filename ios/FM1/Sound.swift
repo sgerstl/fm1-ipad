@@ -252,7 +252,7 @@ struct SoundTab: View {
                 .frame(height: 3)
                 .padding(.horizontal, 14)
                 .offset(y: 1)                    // on the panel's top edge
-                .shadow(color: Theme.text.opacity(0.7), radius: 6)
+                .glow(Theme.text.opacity(0.7), radius: 6)
                 .opacity(onDevice ? 1 : 0)
                 .animation(.easeOut(duration: 0.15), value: onDevice)   // the light fades; nothing else animates
                 .accessibilityHidden(true)

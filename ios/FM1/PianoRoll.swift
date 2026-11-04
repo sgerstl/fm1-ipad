@@ -5,6 +5,7 @@ import SwiftUI
 /// settles on a bar), or move the view box on the track's timeline row.
 struct PianoRoll: View {
     @Environment(\.grid) private var grid
+    @Environment(\.look) private var look
     let session: DeviceSession
     let ui: EditorUI
     let track: Int
@@ -50,7 +51,7 @@ struct PianoRoll: View {
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request,
                                         rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth) {
-                        PianoRollContent(grid: grid, session: session, ui: ui, track: track, rows: rows)
+                        PianoRollContent(grid: grid, look: look, session: session, ui: ui, track: track, rows: rows)
                     }
                     EditorPlayhead(session: session, track: track, offsetX: offset.x, height: Self.gridHeight)
                 }
@@ -180,6 +181,7 @@ struct StepNumbers: View {
 /// The current step, sliding smoothly between polls (stepping with Reduce Motion).
 struct EditorPlayhead: View {
     @Environment(\.grid) private var grid
+    @Environment(\.look) private var look
     let session: DeviceSession
     let track: Int
     let offsetX: CGFloat
@@ -193,7 +195,7 @@ struct EditorPlayhead: View {
             let x = CGFloat(pos) * grid.stepWidth - offsetX
             ZStack(alignment: .top) {
                 LinearGradient(colors: [Theme.text.opacity(0.10), Theme.text.opacity(0.04)], startPoint: .top, endPoint: .bottom)
-                Rectangle().fill(Theme.text).frame(height: 3).shadow(color: Theme.text.opacity(0.7), radius: 4)
+                Rectangle().fill(Theme.text).frame(height: 3).shadow(color: Theme.text.opacity(look.flat ? 0 : 0.7), radius: look.flat ? 0 : 4)
             }
             .frame(width: grid.stepWidth, height: height)
             .offset(x: x)
@@ -208,6 +210,7 @@ struct EditorPlayhead: View {
 struct PianoRollContent: View {
     /// Passed in, not read from the environment: it lives in a UIHostingController, which doesn't inherit it.
     var grid = GridMetrics.pad
+    var look = Look()
     let session: DeviceSession
     let ui: EditorUI
     let track: Int
@@ -352,7 +355,7 @@ struct PianoRollContent: View {
                 guard let r = rowOf[n] else { continue }
                 let rect = CGRect(x: CGFloat(i) * w + 2, y: CGFloat(r) * h + 4, width: CGFloat(len) * w - 4, height: h - 8)
                 let soft = k < s.levels.count && (s.levels[k] == 1 || s.levels[k] == 2)
-                drawPad(ctx, rect, track: track, dim: soft || i >= t.length, selected: i == selected)
+                drawPad(ctx, rect, track: track, dim: soft || i >= t.length, selected: i == selected, flat: look.flat)
                 // a grip at the note's end (two lines): it can be dragged longer or shorter
                 for dx in [CGFloat(11), 6] {
                     ctx.fill(Path(roundedRect: CGRect(x: rect.maxX - dx, y: rect.minY + 8, width: 2, height: rect.height - 16), cornerRadius: 1),
@@ -375,8 +378,20 @@ struct PianoRollContent: View {
 }
 
 /// A lit pad: the track's colour with a top highlight and a contact shadow; ringed when selected.
-func drawPad(_ ctx: GraphicsContext, _ rect: CGRect, track: Int, dim: Bool = false, selected: Bool = false) {
+/// Flat look: one flat colour, no highlight or shadow (content stays flat); the selected one is ringed
+/// and lifted (elevation 2's shadow, on that one pad only).
+func drawPad(_ ctx: GraphicsContext, _ rect: CGRect, track: Int, dim: Bool = false, selected: Bool = false, flat: Bool = false) {
     let p = Path(roundedRect: rect, cornerRadius: 6)
+    if flat {
+        var c = ctx
+        if selected { c.addFilter(.shadow(color: .black.opacity(0.45), radius: 6, y: 4)) }
+        c.opacity = dim ? 0.5 : 1
+        c.fill(p, with: .color(Theme.track[track]))
+        if selected {
+            ctx.stroke(Path(roundedRect: rect.insetBy(dx: -4, dy: -4), cornerRadius: 9), with: .color(Theme.text), lineWidth: 2)
+        }
+        return
+    }
     var shadowed = ctx
     shadowed.addFilter(.shadow(color: .black.opacity(0.55), radius: 1.5, y: 2))
     shadowed.opacity = dim ? 0.5 : 1

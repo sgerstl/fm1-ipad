@@ -190,7 +190,7 @@ struct TopBar: View {
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
                         .padding(.horizontal, 18)
                         .frame(height: 44)
-                        .background { if current { Color.clear.raisedKey() } }
+                        .background { if current { Color.clear.selectedKey() } }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

@@ -86,6 +86,7 @@ struct KnobControl: View {
     @GestureState private var holding = false   // resets even when the system cancels the touch
     @State private var touchStart = Date()
     @Environment(\.canvasSize) private var canvas
+    @Environment(\.look) private var look
 
     static let ringRadius: CGFloat = 80
     static let discRadius: CGFloat = 102      // the lifted disc around the ring
@@ -138,7 +139,7 @@ struct KnobControl: View {
                                 format: { _ in spec.shown }) { spec.set($0) }
                 }
                 .padding(16)
-                .presentationBackground(Theme.panelTop)
+                .presentationBackground(look.flat ? look.surface(.held) : Theme.panelTop)
                 .presentationCompactAdaptation(.popover)
             }
             .accessibilityElement(children: .ignore)
@@ -155,11 +156,12 @@ struct KnobControl: View {
 struct KnobDial: View {
     let spec: KnobSpec
     var size: CGFloat = 40
+    @Environment(\.look) private var look
 
     var body: some View {
         VStack(spacing: 3) {
             let k = size / 40
-            Canvas { ctx, sz in drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 17 * k, line: 4 * k, cap: 11 * k) }
+            Canvas { ctx, sz in drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 17 * k, line: 4 * k, cap: 11 * k, flat: look.flat) }
                 .frame(width: size, height: size)
             Text(spec.label).font(.system(size: size > 40 ? 12 : 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             Text(spec.shown).font(.system(size: size > 40 ? 15 : 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
@@ -169,7 +171,7 @@ struct KnobDial: View {
 }
 
 func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: Color, bipolar: Bool,
-              radius: CGFloat, line: CGFloat, cap: CGFloat) {
+              radius: CGFloat, line: CGFloat, cap: CGFloat, flat: Bool = false) {
     let c = CGPoint(x: size.width / 2, y: size.height / 2)
     let f = min(max(fraction, 0), 1)
     func arc(_ a: Double, _ b: Double) -> Path {
@@ -182,14 +184,20 @@ func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: 
     if abs(a - from) > 0.5 { ctx.stroke(arc(min(from, a), max(from, a)), with: .color(colour), style: style) }
     guard cap > 0 else { return }
     let capRect = CGRect(x: c.x - cap, y: c.y - cap, width: cap * 2, height: cap * 2)
+    let rad = a * .pi / 180
+    let needle = Path { p in p.move(to: c); p.addLine(to: CGPoint(x: c.x + cap * 0.82 * sin(rad), y: c.y - cap * 0.82 * cos(rad))) }
+    if flat {
+        // a flat cap on the ring: one tone, no shine, no contact shadow
+        ctx.fill(Path(ellipseIn: capRect), with: .color(Theme.tones[2]))
+        ctx.stroke(needle, with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        return
+    }
     ctx.fill(Path(ellipseIn: capRect.offsetBy(dx: 0, dy: 1)), with: .color(.black.opacity(0.5)))
     ctx.fill(Path(ellipseIn: capRect), with: .radialGradient(Gradient(colors: [Color(hex: 0x5A5A63), Color(hex: 0x1F1F24)]),
                                                             center: CGPoint(x: capRect.minX + cap * 0.8, y: capRect.minY + cap * 0.6),
                                                             startRadius: 0, endRadius: cap * 1.5))
     ctx.stroke(Path(ellipseIn: capRect.insetBy(dx: 0.5, dy: 0.5)), with: .color(.white.opacity(0.12)), lineWidth: 1)
-    let rad = a * .pi / 180
-    ctx.stroke(Path { p in p.move(to: c); p.addLine(to: CGPoint(x: c.x + cap * 0.82 * sin(rad), y: c.y - cap * 0.82 * cos(rad))) },
-               with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+    ctx.stroke(needle, with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
 }
 
 /// The grown ring of a held knob, drawn over the whole page: trace it to turn. The value sits in the
@@ -198,6 +206,7 @@ struct GrownKnobLayer: View {
     let session: DeviceSession
     let ui: EditorUI
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.look) private var look
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -206,12 +215,17 @@ struct GrownKnobLayer: View {
                 let r: CGFloat = 80
                 ZStack {
                     // a lifted disc: it is being held, so it is raised off the panel
-                    Circle()
-                        .fill(LinearGradient(colors: [Theme.panelTop, Theme.panelBottom], startPoint: .top, endPoint: .bottom))
-                        .overlay(Circle().inset(by: 0.5).stroke(.white.opacity(0.06), lineWidth: 1))
-                        .frame(width: r * 2 + 44, height: r * 2 + 44)
-                        .shadow(color: .black.opacity(0.55), radius: 2, y: 2)
-                        .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
+                    // flat: elevation 3, as anything held at the finger
+                    LookChoice {
+                        Circle()
+                            .fill(LinearGradient(colors: [Theme.panelTop, Theme.panelBottom], startPoint: .top, endPoint: .bottom))
+                            .overlay(Circle().inset(by: 0.5).stroke(.white.opacity(0.06), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.55), radius: 2, y: 2)
+                            .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
+                    } flat: {
+                        Circle().fill(look.surface(.held)).elevationShadow(.held, look)
+                    }
+                    .frame(width: r * 2 + 44, height: r * 2 + 44)
                     Canvas { ctx, sz in
                         drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: r, line: 12, cap: 0)
                         let a = (-135 + 270 * min(max(spec.fraction, 0), 1)) * .pi / 180

@@ -82,10 +82,13 @@ struct IconKey: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(!enabled ? Theme.textTertiary : on ? Theme.text : Theme.textSecondary)
                 .frame(width: 44, height: 44)
-                .background { if on { Color.clear.raisedKey() } }
+                .background {
+                    // flat: on is a latched chiclet, down on its edge
+                    if on { LookChoice { Color.clear.raisedKey() } flat: { Color.clear.latchedKey(true) } }
+                }
                 .contentShape(Rectangle())
         }
-        .buttonStyle(PressSink())
+        .buttonStyle(PressSink(latched: on))
         .disabled(!enabled)
         .accessibilityLabel(label)
         .accessibilityValue(on ? "on" : "off")

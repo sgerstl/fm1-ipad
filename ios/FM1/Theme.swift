@@ -110,6 +110,15 @@ extension EnvironmentValues {
     @Entry var keyPressed = false
 }
 
+struct Glow: ViewModifier {
+    var colour: Color
+    var radius: CGFloat
+    @Environment(\.look) private var look
+    func body(content: Content) -> some View {
+        content.shadow(color: look.flat ? .clear : colour, radius: look.flat ? 0 : radius)
+    }
+}
+
 /// One view on the physical look, another on the flat one.
 struct LookChoice<Physical: View, Flat: View>: View {
     @ViewBuilder var physical: Physical
@@ -249,8 +258,7 @@ struct RaisedKey: ViewModifier {
             if look.flat {
                 Chiclet(radius: radius, primary: primary, down: pressed, edge: !pressed, enabled: enabled)
             } else if primary {
-                RoundedRectangle(cornerRadius: radius).fill(Theme.text)
-                    .background(RoundedRectangle(cornerRadius: radius).fill(.black.opacity(0.6)).offset(y: 1))
+                RoundedRectangle(cornerRadius: radius).fill(enabled ? Theme.text : Theme.pressed)
             } else {
                 RoundedRectangle(cornerRadius: radius)
                     .fill(LinearGradient(colors: [Theme.raisedTop, Theme.raisedBottom], startPoint: .top, endPoint: .bottom))
@@ -361,6 +369,8 @@ extension View {
     func elevated(_ level: Elevation, radius: CGFloat = 14, ring: Bool? = nil) -> some View {
         modifier(Elevated(level: level, radius: radius, ring: ring))
     }
+    /// A light's glow: the physical look only (flat lights are lit, not glowing).
+    func glow(_ colour: Color, radius: CGFloat) -> some View { modifier(Glow(colour: colour, radius: radius)) }
     /// A level's soft shadow, scaled by the elevation strength. Only for the few elevated things.
     func elevationShadow(_ level: Elevation, _ look: Look) -> some View {
         let s = look.shadow(level)

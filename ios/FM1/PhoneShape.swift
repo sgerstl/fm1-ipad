@@ -56,10 +56,10 @@ struct PhoneShape: View {
                     }
                     .foregroundStyle(on ? Theme.text : Theme.textSecondary)
                     .frame(maxWidth: .infinity).frame(height: 44)
-                    .background { if on { Color.clear.recessed(9) } else { Color.clear.raisedKey() } }
+                    .latchedKey(on, sunkFill: nil)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(PressSink())
+                .buttonStyle(PressSink(latched: on))
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
@@ -137,7 +137,7 @@ struct PhoneShape: View {
         .overlay(alignment: .top) {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
                 .frame(height: 3).padding(.horizontal, 14).offset(y: 1)
-                .shadow(color: Theme.text.opacity(0.7), radius: 6)
+                .glow(Theme.text.opacity(0.7), radius: 6)
                 .opacity(lit ? 1 : 0)
                 .animation(.easeOut(duration: 0.15), value: lit)
                 .accessibilityHidden(true)

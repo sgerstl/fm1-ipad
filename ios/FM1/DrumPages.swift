@@ -96,7 +96,7 @@ struct DrumNoPages: View {
         .opacity(onDevice ? 0.85 : 0.6)
         .overlay(alignment: .top) {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.text).frame(height: 3).padding(.horizontal, 14).offset(y: 1)
-                .shadow(color: Theme.text.opacity(0.7), radius: 6)
+                .glow(Theme.text.opacity(0.7), radius: 6)
                 .opacity(onDevice ? 1 : 0)
         }
     }

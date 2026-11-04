@@ -230,8 +230,7 @@ extension AppView {
                     }
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
-                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.45), radius: 18, y: 10))
+                .elevated(.held)
                 // beside the finger (to its right, centred on it), kept on screen
                 .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 290), y: min(max(m.at.y - 60, 12), Theme.canvas.height - 300))
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
@@ -272,8 +271,14 @@ extension AppView {
                     .buttonStyle(PressSink())
                 }
                 .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
-                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.4), radius: 16, y: 8))
+                .background {
+                    LookChoice {
+                        RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
+                            .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.4), radius: 16, y: 8)
+                    } flat: {
+                        Color.clear.elevated(.panel)
+                    }
+                }
                 .padding(.bottom, 132)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .task(id: c) {
@@ -511,8 +516,7 @@ struct TrackMenuLayer: View {
                     .accessibilityHint(empty ? "The track has no steps" : "Clears all \(session.stepCount) steps; Undo appears for a few seconds")
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
-                    .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.45), radius: 18, y: 10))
+                .elevated(.held)
                 // beside the finger (to its right, centred on it), kept on screen
                 .offset(x: min(max(m.at.x + 28, 12), canvas.width - 260), y: min(max(m.at.y - 50, 12), canvas.height - 180))
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))

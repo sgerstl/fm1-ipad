@@ -49,6 +49,7 @@ struct SectionsPanel: View {
     /// The key just held: its release isn't a tap (a tap loads the section, over the tracks being saved).
     @State private var held: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.look) private var look
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -173,7 +174,7 @@ struct SectionsPanel: View {
     private func keyFace(_ state: KeyState, colour: Color, k: Int) -> some View {
         if state.inTracks {
             RoundedRectangle(cornerRadius: 12)
-                .fill(LinearGradient(colors: [Theme.trackTop[k], colour], startPoint: .top, endPoint: .bottom))
+                .fill(LinearGradient(colors: [look.flat ? colour : Theme.trackTop[k], colour], startPoint: .top, endPoint: .bottom))
                 .overlay(alignment: .bottom) {
                     if state.sounding || (state == .edited && session.playing) {
                         // the bar passing, as the song blocks' pills
@@ -249,6 +250,7 @@ struct SongPage: View {
     /// and no flick-to-delete (too easy to set off on a phone; Delete is in the block's menu).
     var compact = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.look) private var look
 
     /// A step in the order, with an identity that survives moves (two blocks can hold the same step).
     struct Slot: Identifiable, Equatable {
@@ -520,10 +522,12 @@ struct SongPage: View {
     /// The block itself, with its lift.
     private func slotFace(_ i: Int, _ slot: Slot, width w: CGFloat, lifted: Bool) -> some View {
         block(i, slot.step, width: w, open: menu == slot.id)
-        // the lift itself springs even while the block follows the finger
+        // the lift itself springs even while the block follows the finger (flat: elevation 3's scale and shadow)
         .animation(motion) {
-            $0.scaleEffect(lifted ? 1.04 : 1)
-                .shadow(color: .black.opacity(lifted ? 0.55 : 0), radius: lifted ? 12 : 0, y: lifted ? 6 : 0)
+            $0.scaleEffect(lifted ? (look.flat ? (reduceMotion ? 1 : 1.03) : 1.04) : 1)
+                .shadow(color: .black.opacity(lifted ? (look.flat ? look.shadow(.held).opacity : 0.55) : 0),
+                        radius: lifted ? (look.flat ? look.shadow(.held).radius : 12) : 0,
+                        y: lifted ? (look.flat ? look.shadow(.held).y : 6) : 0)
         }
         .contentShape(Rectangle())
     }
@@ -569,7 +573,7 @@ struct SongPage: View {
         .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 10)
         .frame(width: w, height: blockHeight, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 12)
-            .fill(LinearGradient(colors: [Theme.trackTop[step.section], Theme.track[step.section]], startPoint: .top, endPoint: .bottom)))
+            .fill(Theme.pad(step.section, flat: look.flat)))
         // the edge you drag for length
         .overlay(alignment: .trailing) {
             Capsule().fill(Theme.onColour.opacity(0.35)).frame(width: 4, height: 28).padding(.trailing, 4)
@@ -721,8 +725,13 @@ struct SongPage: View {
         }
         .padding(6)
         .fixedSize()
-        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.raisedBottom)
-            .shadow(color: .black.opacity(0.5), radius: 10, y: 4))
+        .background {
+            LookChoice {
+                RoundedRectangle(cornerRadius: 14).fill(Theme.raisedBottom).shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+            } flat: {
+                Color.clear.elevated(.held)
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Menu for step \(i + 1), section \(DeviceSession.sectionName(slot.step.section))")
     }
@@ -750,7 +759,7 @@ struct SongPage: View {
                 .frame(width: 48, height: 44)
                 .background {
                     if stored {
-                        RoundedRectangle(cornerRadius: 9).fill(LinearGradient(colors: [Theme.trackTop[k], Theme.track[k]], startPoint: .top, endPoint: .bottom))
+                        RoundedRectangle(cornerRadius: 9).fill(Theme.pad(k, flat: look.flat))
                     } else {
                         RoundedRectangle(cornerRadius: 9).fill(Theme.well).recessed(9)
                     }
@@ -911,8 +920,13 @@ struct BarsControl: View {
                 .accessibilityHidden(true)
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.raisedBottom)
-            .shadow(color: .black.opacity(0.5), radius: 10, y: 4))
+        .background {
+            LookChoice {
+                RoundedRectangle(cornerRadius: 14).fill(Theme.raisedBottom).shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+            } flat: {
+                Color.clear.elevated(.held)
+            }
+        }
     }
 
     private func pos(_ b: Int, _ w: CGFloat) -> CGFloat { 12 + log2(CGFloat(max(1, b))) / 6 * (w - 24) }
