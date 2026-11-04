@@ -95,11 +95,16 @@ extension AppView {
                     }
                 case .song:
                     HStack(alignment: .top, spacing: 16) {
-                        leftColumn {
-                            FunctionPads(session: session, ui: ui)
-                            SongModePanel(session: session)
+                        if session.capabilities.contains(.sloopSong) {
+                            leftColumn {
+                                FunctionPads(session: session, ui: ui)
+                                SongModePanel(session: session)
+                            }
+                            SongPage(session: session, ui: ui)
+                        } else {
+                            leftColumn { FunctionPads(session: session, ui: ui) }
+                            NotOnThisFirmware.arrange(session)
                         }
-                        SongPage(session: session, ui: ui)
                     }
                 case .sound:
                     HStack(alignment: .top, spacing: 16) {
@@ -368,6 +373,38 @@ struct SequencerPage: View {
     }
 }
 
+/// A tab whose feature the connected firmware doesn't have in Jib yet: what's missing, and what to do
+/// meanwhile. Drawn as the connection states are.
+struct NotOnThisFirmware: View {
+    let title: String
+    let detail: String
+
+    /// Arrange is SLOOP's sections and song order; Skiff's song (lists, the pattern pool, scenes) is
+    /// another model, its Arrange still being designed (vault skiff-plan.md, phase 4).
+    @MainActor static func arrange(_ session: DeviceSession) -> NotOnThisFirmware {
+        NotOnThisFirmware(title: "Arrange isn't on Skiff yet",
+                          detail: "Skiff keeps a song as each track's list of patterns, with scenes, not SLOOP's four sections. "
+                              + "Jib's Arrange for that is still being designed. Until then, arrange on the FM-1 itself.")
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Text(title).font(.system(size: 28, weight: .semibold))
+            Text(detail)
+                .font(.system(size: 17))
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 560)
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .panel()
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// Every state that isn't "connected": what happened, and what to do.
 struct ConnectionState: View {
     let status: ConnectionStatus
@@ -409,12 +446,12 @@ struct ConnectionState: View {
     private var detail: String {
         switch status {
         case .searching:
-            "Connect it with a USB-C cable. It has to be running SLOOP 2.8.4."
+            "Connect it with a USB-C cable. It has to be running SLOOP 2.8.4 or Skiff 2.2."
         case .connecting:
-            "Reading all four tracks. This takes about a second."
+            "Reading every track. This takes about a second."
         case .connected: ""
         case .wrongFirmware(let found, let proto):
-            "It reports “\(found)”, editor protocol \(proto). This app only works with FELUCCA SLOOP 2.8.4, protocol 12. Install SLOOP 2.8.4 from the firmware hub, then plug the FM-1 in again."
+            "It reports “\(found)”, editor protocol \(proto). Jib works with \(FirmwareDialect.known). Install one of those, then plug the FM-1 in again."
         case .lost(let why):
             "\(why). Plug it back in and the app picks up where it was."
         }
@@ -477,7 +514,7 @@ struct TrackMenuLayer: View {
                     }
                     .buttonStyle(PressSink())
                     .accessibilityHint("Pick this track's sound without leaving the page")
-                    if !session.isDrums(m.track) {
+                    if !session.isDrums(m.track), session.capabilities.contains(.samples) {
                         // the grid turns over to the sampler; Use on track puts the take on this track
                         Button {
                             session.select(track: m.track)

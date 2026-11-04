@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SloopKit
 
-/// Skiff 2.2 offline: FakeSkiff answers with what skiff-sim answered (Fixtures/skiff-2.2.json).
+/// Skiff 2.2 offline: FakeSkiff answers with what skiff-sim answered (Resources/skiff-2.2.json).
 @Suite(.serialized) @MainActor struct SkiffTests {
     private func connected() async throws -> (DeviceSession, FakeSkiff, Task<Void, Never>) {
         let fake = FakeSkiff(try SkiffFixture.load())

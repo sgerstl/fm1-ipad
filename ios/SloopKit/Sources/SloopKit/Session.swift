@@ -215,7 +215,9 @@ public final class DeviceSession {
         isDemo = demo
         // -demo-still: the demo FM-1 makes no edits of its own (screen recordings, screenshots)
         let still = ProcessInfo.processInfo.arguments.contains("-demo-still")
-        makeTransport = demo ? { FakeSloop(autoEdits: !still) } : { MIDITransport() }
+        // -demo-skiff: a pretend Skiff 2.2 answering as skiff-sim did (FakeSkiff), instead of SLOOP
+        let skiff = ProcessInfo.processInfo.arguments.contains("-demo-skiff")
+        makeTransport = !demo ? { MIDITransport() } : skiff ? { FakeSkiff(demo: true) } : { FakeSloop(autoEdits: !still) }
     }
 
     public init(transport: @escaping () -> SysExTransport?) {

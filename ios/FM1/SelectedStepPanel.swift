@@ -178,7 +178,7 @@ struct TrackPanel: View {
             .accessibilityLabel("Whole track: track \(t + 1), \(session.tracks[t].displayName)")
             .accessibilityAddTraits(.isHeader)
             KnobRow(session: session, ui: ui)
-            Text("Swing sets all four tracks.")
+            Text("Swing sets all \(["one", "two", "three", "four", "five", "six", "seven", "eight"][safe: session.trackCount - 1] ?? "the") tracks.")
                 .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
         }
         .padding(16)

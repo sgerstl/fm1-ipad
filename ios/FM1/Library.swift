@@ -59,7 +59,7 @@ struct LibraryPage: View {
                     }
                 }
                 .padding(4)
-                if !session.isDrums(t), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
+                if !session.isDrums(t), session.capabilities.contains(.samples), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
             }
             .scrollIndicators(.hidden)
             if session.isDrums(t) && session.kitNames.isEmpty { emptyNote("Reading the kits from the FM-1…") }

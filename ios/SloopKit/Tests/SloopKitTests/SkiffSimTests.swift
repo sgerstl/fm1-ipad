@@ -5,7 +5,7 @@ import Testing
 /// Against skiff-sim (Skiff 2.2's own firmware on the Mac, `skiff-sim/`), over CoreMIDI. Skipped unless
 /// SKIFF_SIM=1, so `swift test` stays offline. Run the sim first: `skiff-sim/build/skiff-sim`.
 ///   SKIFF_SIM=1 swift test --filter SkiffSimTests
-/// SKIFF_RECORD=1 also writes Fixtures/skiff-2.2.json (what FakeSkiff answers with) from the sim.
+/// SKIFF_RECORD=1 also writes Sources/SloopKit/Resources/skiff-2.2.json (what FakeSkiff answers with) from the sim.
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["SKIFF_SIM"] == "1"))
 @MainActor struct SkiffSimTests {
     private func driver() async throws -> SkiffDriver {
@@ -102,7 +102,8 @@ import Testing
         f.dump = try await raw(4, [], 0)
         f.userList = try await raw(16, [0, 16], 1)
         f.transport = try await raw(76, [], 0)
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/skiff-2.2.json")
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Sources/SloopKit/Resources/skiff-2.2.json").standardized
         let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
         try enc.encode(f).write(to: url)
     }

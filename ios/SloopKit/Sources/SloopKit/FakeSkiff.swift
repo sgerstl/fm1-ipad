@@ -1,9 +1,7 @@
 import Foundation
-import Testing
-@testable import SloopKit
 
 /// What skiff-sim answered, recorded by SkiffSimTests (SKIFF_RECORD=1): reply bodies by request.
-struct SkiffFixture: Codable {
+public struct SkiffFixture: Codable, Sendable {
     var info: [UInt8] = []
     var desc: [String: [UInt8]] = [:]        // "scope.id" (track ids whole, as asked for)
     var names: [String: [UInt8]] = [:]       // engine
@@ -14,8 +12,8 @@ struct SkiffFixture: Codable {
     var userList: [UInt8] = []
     var transport: [UInt8] = []
 
-    static func load() throws -> SkiffFixture {
-        let url = try #require(Bundle.module.url(forResource: "skiff-2.2", withExtension: "json", subdirectory: "Fixtures"))
+    public static func load() throws -> SkiffFixture {
+        guard let url = Bundle.module.url(forResource: "skiff-2.2", withExtension: "json") else { throw CocoaError(.fileNoSuchFile) }
         return try JSONDecoder().decode(SkiffFixture.self, from: Data(contentsOf: url))
     }
 }
@@ -23,12 +21,14 @@ struct SkiffFixture: Codable {
 /// A pretend Skiff 2.2, built on what the sim answered: the recorded INFO, DESC and NAMES as they are, and
 /// steps, parameters, the selection and the transport kept as state from the recorded starting point. Like
 /// the device, it holds one request at a time: a frame that arrives before the last is answered is dropped.
-final class FakeSkiff: SysExTransport, @unchecked Sendable {
-    let frames: AsyncStream<[UInt8]>
+/// While playing it sends MIDI clock at its BPM, as Skiff's CLOCK OUT does (`-demo-skiff` in the app).
+public final class FakeSkiff: SysExTransport, @unchecked Sendable {
+    public let frames: AsyncStream<[UInt8]>
     private let sink: AsyncStream<[UInt8]>.Continuation
-    let notes: AsyncStream<NoteEvent>
-    let clock: AsyncStream<ClockEvent>
+    public let notes: AsyncStream<NoteEvent>
+    public let clock: AsyncStream<ClockEvent>
     let clockSink: AsyncStream<ClockEvent>.Continuation
+    private var clockTimer: DispatchSourceTimer?
     private let lock = NSLock()
     private let fx: SkiffFixture
     private let pCount: Int, gCount: Int
@@ -45,7 +45,14 @@ final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var requests: [UInt8] = []               // commands received, in order
     var replyDelay: TimeInterval = 0.002
 
-    init(_ fx: SkiffFixture) {
+    /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
+    public convenience init?(demo: Bool) {
+        guard let fx = try? SkiffFixture.load() else { return nil }
+        self.init(fx)
+        if demo { seedDemo() }
+    }
+
+    public init(_ fx: SkiffFixture) {
         self.fx = fx
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self)
         (notes, _) = AsyncStream.makeStream(of: NoteEvent.self)
@@ -70,7 +77,41 @@ final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// Pushes (CHANGED, STEP_CHANGED, ...) as the device sends them while watched.
     func push(_ cmd: UInt8, _ body: [UInt8]) { if watching { sink.yield(Frame.encode(cmd, body)) } }
 
-    func send(_ frame: [UInt8]) {
+    deinit { clockTimer?.cancel() }
+
+    /// A few notes on each track and PLAY, so the demo has something to show (the recorded unit is blank).
+    private func seedDemo() {
+        let roots = [48, 60, 55, 36, 64, 38]
+        for t in steps.indices {
+            for i in stride(from: 0, to: 16, by: t % 2 == 0 ? 2 : 4) {
+                var s = steps[t][i]
+                let n = UInt8(roots[t] + (i / 2) % 5 * 2)
+                s.replaceSubrange(0..<8, with: [1, n, 0, 0, 0, 0, 0, 100])
+                steps[t][i] = s
+            }
+        }
+        setPlaying(true)
+    }
+
+    /// PLAY / STOP: Start and 24 pulses a beat at the BPM while playing, Stop after.
+    private func setPlaying(_ on: Bool) {
+        guard on != playing || (on && clockTimer == nil) else { return }
+        playing = on
+        clockTimer?.cancel(); clockTimer = nil
+        if on {
+            clockSink.yield(.start)
+            let t = DispatchSource.makeTimerSource(queue: .global())
+            let interval = 60.0 / Double(max(40, globals.first ?? 120)) / 24
+            t.schedule(deadline: .now() + interval, repeating: interval)
+            t.setEventHandler { [weak self] in self?.clockSink.yield(.tick) }
+            t.resume()
+            clockTimer = t
+        } else {
+            clockSink.yield(.stop)
+        }
+    }
+
+    public func send(_ frame: [UInt8]) {
         guard let (cmd, a) = Frame.decode(frame) else { return }     // plain MIDI: no reply
         lock.lock()
         if busy { dropped += 1; lock.unlock(); return }               // one incoming frame at a time
@@ -134,7 +175,7 @@ final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case (8, 2):
             engines[selected] = (Int(a[0]), Int(a[1])); return [a[0], a[1]]
         case (76, 0), (76, 1):
-            if a.first == 1 { playing = true } else if a.first == 2 { playing = false }
+            if a.first == 1 { setPlaying(true) } else if a.first == 2 { setPlaying(false) }
             return [0, playing ? 1 : 0, 0, 0, 0, UInt8(selected)]
         default: return nil                                  // as the device: no reply
         }

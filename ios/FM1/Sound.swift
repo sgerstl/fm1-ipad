@@ -59,10 +59,21 @@ struct SoundPage: Identifiable {
         SoundPage(fw: 35, title: "PATTERN", family: .seq, scope: 0, ids: [29, 30, 31, 32], drums: true),
     ]
 
+    /// The connected firmware's pages: its own layout where it gives one (Skiff, from DESC), else SLOOP's.
+    @MainActor
+    static func pages(_ session: DeviceSession) -> [SoundPage] {
+        guard let layout = session.pageLayout else { return all }
+        return layout.enumerated().map { k, p in
+            // fw past SLOOP's table: these pages are never the screen link's
+            SoundPage(fw: 100 + k, title: p.title, family: SoundFamily(rawValue: p.family) ?? .edit, scope: p.scope,
+                      ids: p.ids, engineEdit: p.engineEdit)
+        }
+    }
+
     @MainActor
     static func shown(_ session: DeviceSession, _ family: SoundFamily) -> [SoundPage] {
         let t = session.tracks[session.selectedTrack]
-        return all.filter { p in
+        return pages(session).filter { p in
             p.family == family && (!t.isDrums || p.drums) && (!p.analogOnly || (!t.isDrums && t.engine == 0))
         }
     }
@@ -74,7 +85,7 @@ struct SoundPage: Identifiable {
     @MainActor static func reached(_ session: DeviceSession, _ family: SoundFamily) -> [SoundPage] {
         let own = shown(session, family)
         guard own.isEmpty, session.selectedIsDrums else { return own }
-        return all.filter { $0.family == family && !$0.analogOnly && !$0.drums }
+        return pages(session).filter { $0.family == family && !$0.analogOnly && !$0.drums }
     }
 
     /// SLOOP's pages the app shows outside the Sound tab (params.c PAGES): TRACKS is HOME in SLOOP's
@@ -96,8 +107,9 @@ struct SoundPage: Identifiable {
     }
 
     /// The page a parameter is on, the first one when it appears on several (as MIDI's channels do).
-    static func page(scope: Int, id: Int) -> SoundPage? {
-        all.first { $0.scope == scope && $0.ids.contains(id) && !$0.analogOnly }
+    @MainActor
+    static func page(_ session: DeviceSession, scope: Int, id: Int) -> SoundPage? {
+        pages(session).first { $0.scope == scope && $0.ids.contains(id) && !$0.analogOnly }
     }
 
     @MainActor
@@ -315,7 +327,7 @@ struct SoundTab: View {
 
     /// A knob turned on the FM-1: show its button's pages and mark it for a few seconds.
     private func follow() {
-        guard let t = session.lastTouched, let page = SoundPage.page(scope: t.scope, id: t.id) else { return }
+        guard let t = session.lastTouched, let page = SoundPage.page(session, scope: t.scope, id: t.id) else { return }
         // with the screen link the FM-1's page decides the button; a knob turn only marks its knob
         if !session.screenLinked, SoundPage.shown(session, page.family).contains(where: { $0.id == page.id }) {
             ui.soundFamily = page.family
@@ -424,7 +436,7 @@ struct FollowCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Last turned on the FM-1").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 .accessibilityAddTraits(.isHeader)
-            if let t = session.lastTouched, let page = SoundPage.page(scope: t.scope, id: t.id) {
+            if let t = session.lastTouched, let page = SoundPage.page(session, scope: t.scope, id: t.id) {
                 let slot = page.ids.firstIndex(of: t.id) ?? 0
                 let spec = KnobSpec.param(session, scope: t.scope, id: t.id, slot: slot)
                 HStack(spacing: 16) {

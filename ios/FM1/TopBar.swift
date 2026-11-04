@@ -15,7 +15,8 @@ struct TopBar: View {
         ZStack {
             HStack(spacing: 0) {
                 connection
-                project
+                // projects are SLOOP's backup objects: firmware without them (Skiff) shows none
+                if session.dialect == nil || session.capabilities.contains(.projects) { project }
                 Spacer(minLength: 12)
                 transport
             }
