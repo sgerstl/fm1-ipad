@@ -4,25 +4,25 @@ import SwiftUI
 /// The selected synth track as a piano roll folded to its scale: one bar in view, two fingers pan (it
 /// settles on a bar), or move the view box on the track's timeline row.
 struct PianoRoll: View {
+    @Environment(\.grid) private var grid
     let session: SloopSession
     let ui: EditorUI
     let track: Int
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<PianoRollContent>.ScrollRequest?
 
-    static let gridSize = CGSize(width: 16 * Theme.stepWidth, height: 534)    // one bar; 11 note rows and a bit
+    static let gridHeight: CGFloat = 534        // 11 note rows and a bit; one bar wide (grid.barWidth)
     /// Both editors are this tall, so switching to the drum track moves nothing below them.
     static let panelHeight: CGFloat = 684
     static let velocityHeight: CGFloat = 50
-    static let barWidth: CGFloat = 16 * Theme.stepWidth
     static func rows(_ n: Int) -> String { n == 1 ? "1 row" : "\(n) rows" }
 
     var body: some View {
         let t = session.tracks[track]
         let rows = Self.rows(t, keeping: ui.keptRows[track] ?? [])
-        let contentSize = CGSize(width: 64 * Theme.stepWidth, height: max(Self.gridSize.height, CGFloat(rows.count) * Theme.rowHeight))
-        let first = Int((offset.x / Theme.stepWidth).rounded()) + 1
-        let topRow = Int((offset.y / Theme.rowHeight).rounded())
+        let contentSize = CGSize(width: 64 * grid.stepWidth, height: max(Self.gridHeight, CGFloat(rows.count) * grid.rowHeight))
+        let first = Int((offset.x / grid.stepWidth).rounded()) + 1
+        let topRow = Int((offset.y / grid.rowHeight).rounded())
         let hidden = (above: topRow, below: max(0, rows.count - topRow - 11))
         let rowsNote = hidden.below > 0 ? " · \(Self.rows(hidden.below)) below" : hidden.above > 0 ? " · \(Self.rows(hidden.above)) above" : ""
         let scaleName = t.scale == 0 ? "chromatic, folded to the notes used" : "\(Music.noteNames[t.root % 12]) \(Music.scales[min(t.scale, 15)].spoken)"
@@ -44,17 +44,17 @@ struct PianoRoll: View {
                     }
                 }
                 .offset(y: -offset.y)
-                .frame(width: 80, height: Self.gridSize.height, alignment: .top)
+                .frame(width: 80, height: Self.gridHeight, alignment: .top)
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request,
-                                        rowKeys: rows, rowHeight: Theme.rowHeight, snapX: PianoRoll.barWidth) {
-                        PianoRollContent(session: session, ui: ui, track: track, rows: rows)
+                                        rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth) {
+                        PianoRollContent(grid: grid, session: session, ui: ui, track: track, rows: rows)
                     }
-                    EditorPlayhead(session: session, track: track, offsetX: offset.x, height: Self.gridSize.height)
+                    EditorPlayhead(session: session, track: track, offsetX: offset.x, height: Self.gridHeight)
                 }
-                .frame(width: Self.gridSize.width, height: Self.gridSize.height)
+                .frame(width: grid.barWidth, height: Self.gridHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .recessed()
                 .accessibilityElement(children: .contain)
@@ -66,7 +66,7 @@ struct PianoRoll: View {
                     .padding(.trailing, 8).frame(width: 80, alignment: .trailing)
                 VelocityLane(track: t, selected: ui.selectedStep[track])
                     .offset(x: -offset.x)
-                    .frame(width: Self.gridSize.width, height: Self.velocityHeight, alignment: .leading)
+                    .frame(width: grid.barWidth, height: Self.velocityHeight, alignment: .leading)
                     .clipped()
                     .recessed()
                     .accessibilityHidden(true)
@@ -75,7 +75,7 @@ struct PianoRoll: View {
         .padding(12)
         .frame(height: PianoRoll.panelHeight)
         .panel()
-        .followsView(ui: ui, offset: offset) { request = .init(x: $0, id: $1) }
+        .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
         .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
         .onChange(of: track) { _, _ in ui.keptRows = [:] }
     }
@@ -96,6 +96,7 @@ struct PianoRoll: View {
 /// A row label you can play: touch a note name (or a drum lane) to hear it, held while touched. A drum
 /// lane's name also picks the lane the step panel edits (`select`), without touching the grid.
 struct AuditionLabel: View {
+    @Environment(\.grid) private var grid
     let text: String
     let spoken: String
     var bold = false
@@ -109,7 +110,7 @@ struct AuditionLabel: View {
             .font(.system(size: 13, weight: bold ? .semibold : .regular))
             .foregroundStyle(pressed || bold ? Theme.text : Theme.textSecondary)
             .padding(.trailing, 8)
-            .frame(width: 80, height: Theme.rowHeight, alignment: .trailing)
+            .frame(width: 80, height: grid.rowHeight, alignment: .trailing)
             .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(pressed ? 0.08 : 0)).padding(.vertical, 4))
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
@@ -152,6 +153,7 @@ struct EditorHeader: View {
 /// The step numbers over a grid. Tapping one selects its step without touching its notes, as tapping a
 /// row's name auditions it without writing one.
 struct StepNumbers: View {
+    @Environment(\.grid) private var grid
     let offsetX: CGFloat
     let selected: Int
     let select: (Int) -> Void
@@ -162,13 +164,13 @@ struct StepNumbers: View {
                 Text("\(i + 1)")
                     .font(.system(size: 11, weight: i == selected || i % 4 == 0 ? .semibold : .regular))
                     .foregroundStyle(i == selected ? Theme.text : Theme.textSecondary)
-                    .frame(width: Theme.stepWidth, height: 20)       // centred over its column
+                    .frame(width: grid.stepWidth, height: 20)       // centred over its column
                     .contentShape(Rectangle())
                     .onTapGesture { select(i) }
             }
         }
         .offset(x: -offsetX)
-        .frame(width: PianoRoll.gridSize.width, height: 20, alignment: .leading)
+        .frame(width: grid.barWidth, height: 20, alignment: .leading)
         .clipped()
         .accessibilityHidden(true)
     }
@@ -176,6 +178,7 @@ struct StepNumbers: View {
 
 /// The current step, sliding smoothly between polls (stepping with Reduce Motion).
 struct EditorPlayhead: View {
+    @Environment(\.grid) private var grid
     let session: SloopSession
     let track: Int
     let offsetX: CGFloat
@@ -186,12 +189,12 @@ struct EditorPlayhead: View {
     var body: some View {
         TimelineView(.animation(paused: !session.playing || !visible)) { tl in
             let pos = session.playhead(track: track, at: tl.date, interpolate: !reduceMotion)
-            let x = CGFloat(pos) * Theme.stepWidth - offsetX
+            let x = CGFloat(pos) * grid.stepWidth - offsetX
             ZStack(alignment: .top) {
                 LinearGradient(colors: [Theme.text.opacity(0.10), Theme.text.opacity(0.04)], startPoint: .top, endPoint: .bottom)
                 Rectangle().fill(Theme.text).frame(height: 3).shadow(color: Theme.text.opacity(0.7), radius: 4)
             }
-            .frame(width: Theme.stepWidth, height: height)
+            .frame(width: grid.stepWidth, height: height)
             .offset(x: x)
             .opacity(session.playing ? 1 : 0)
         }
@@ -202,6 +205,8 @@ struct EditorPlayhead: View {
 
 /// The scrolling content: grid, notes as lit pads, the selected ring. One finger selects a step.
 struct PianoRollContent: View {
+    /// Passed in, not read from the environment: it lives in a UIHostingController, which doesn't inherit it.
+    var grid = GridMetrics.pad
     let session: SloopSession
     let ui: EditorUI
     let track: Int
@@ -214,16 +219,16 @@ struct PianoRollContent: View {
     var body: some View {
         let t = session.tracks[track]
         let selected = ui.selectedStep[track]
-        let height = max(PianoRoll.gridSize.height, CGFloat(rows.count) * Theme.rowHeight)
+        let height = max(PianoRoll.gridHeight, CGFloat(rows.count) * grid.rowHeight)
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in draw(ctx, size, t, selected) }
-                .frame(width: 64 * Theme.stepWidth, height: height)
+                .frame(width: 64 * grid.stepWidth, height: height)
                 .contentShape(Rectangle())
                 // one finger edits: drag a note's grip (its right end) to set its length; slide along a row
                 // to paint, adding from an empty cell, erasing from a note; a tap turns a note on or off
                 .gesture(lengthGesture.exclusively(before: SpatialTapGesture().onEnded { e in
-                    let i = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
-                    let r = Int(e.location.y / Theme.rowHeight)
+                    let i = max(0, min(63, Int(e.location.x / grid.stepWidth)))
+                    let r = Int(e.location.y / grid.rowHeight)
                     ui.selectedStep[track] = i
                     if r >= 0, r < rows.count { session.toggle(track: track, index: i, note: rows[r]) }
                 }))
@@ -232,7 +237,7 @@ struct PianoRollContent: View {
             HStack(spacing: 0) {
                 ForEach(0..<64, id: \.self) { i in
                     Color.clear
-                        .frame(width: Theme.stepWidth, height: height)
+                        .frame(width: grid.stepWidth, height: height)
                         .accessibilityElement()
                         .accessibilityLabel(StepLabels.synth(track: track, index: i, t))
                         .accessibilityAddTraits(i == selected ? [.isButton, .isSelected] : .isButton)
@@ -262,12 +267,12 @@ struct PianoRollContent: View {
                 if slide == nil { slide = slideKind(at: e.startLocation) }
                 switch slide {
                 case .length(let start):
-                    let end = max(start, min(63, Int(e.location.x / Theme.stepWidth)))
+                    let end = max(start, min(63, Int(e.location.x / grid.stepWidth)))
                     session.setLength(track: track, start: start, steps: end - start + 1)
                     ui.selectedStep[track] = start
                 case .paint(let note, let on):
-                    let a = max(0, min(63, Int(e.startLocation.x / Theme.stepWidth)))
-                    let b = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
+                    let a = max(0, min(63, Int(e.startLocation.x / grid.stepWidth)))
+                    let b = max(0, min(63, Int(e.location.x / grid.stepWidth)))
                     for i in min(a, b)...max(a, b) where !painted.contains(i) {
                         painted.insert(i)
                         let st = session.tracks[track].steps[i]
@@ -291,7 +296,7 @@ struct PianoRollContent: View {
     static let gripInside: CGFloat = 24, gripOutside: CGFloat = 16
 
     private func slideKind(at p: CGPoint) -> Slide? {
-        let r = Int(p.y / Theme.rowHeight)
+        let r = Int(p.y / grid.rowHeight)
         guard r >= 0, r < rows.count else { return nil }
         if let start = noteStart(at: p) {
             return p.x >= noteEnd(start) - Self.gripInside ? .length(start: start) : .paint(note: rows[r], on: false)
@@ -307,22 +312,22 @@ struct PianoRollContent: View {
         let steps = session.tracks[track].steps
         var len = 1
         while start + len < 64, steps[start + len].time == .tie { len += 1 }
-        return CGFloat(start + len) * Theme.stepWidth - 2
+        return CGFloat(start + len) * grid.stepWidth - 2
     }
 
     /// The NOTE step a touch is on: that step, or the one a held (TIE) step belongs to, if the touched
     /// row is one of its notes.
     private func noteStart(at p: CGPoint) -> Int? {
         let steps = session.tracks[track].steps
-        var i = max(0, min(63, Int(p.x / Theme.stepWidth)))
-        let r = Int(p.y / Theme.rowHeight)
+        var i = max(0, min(63, Int(p.x / grid.stepWidth)))
+        let r = Int(p.y / grid.rowHeight)
         guard r >= 0, r < rows.count else { return nil }
         while i > 0, steps[i].time == .tie { i -= 1 }
         return steps[i].time == .note && steps[i].notes.contains(rows[r]) ? i : nil
     }
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize, _ t: TrackState, _ selected: Int) {
-        let w = Theme.stepWidth, h = Theme.rowHeight
+        let w = grid.stepWidth, h = grid.rowHeight
         // beats: every other group of four steps a shade lighter; a bar line every 16
         for b in stride(from: 1, to: 16, by: 2) {
             ctx.fill(Path(CGRect(x: CGFloat(b * 4) * w, y: 0, width: 4 * w, height: size.height)), with: .color(.white.opacity(0.025)))
@@ -386,6 +391,7 @@ func drawPad(_ ctx: GraphicsContext, _ rect: CGRect, track: Int, dim: Bool = fal
 }
 
 struct VelocityLane: View {
+    @Environment(\.grid) private var grid
     let track: TrackState
     let selected: Int
     var body: some View {
@@ -393,7 +399,7 @@ struct VelocityLane: View {
             for i in 0..<64 where track.steps[i].isOn {
                 let v = CGFloat(track.steps[i].velocity) / 127
                 let h = (size.height - 12) * v
-                let r = CGRect(x: CGFloat(i) * Theme.stepWidth + (Theme.stepWidth - 12) / 2, y: size.height - 6 - h, width: 12, height: h)
+                let r = CGRect(x: CGFloat(i) * grid.stepWidth + (grid.stepWidth - 12) / 2, y: size.height - 6 - h, width: 12, height: h)
                 var c = ctx
                 c.opacity = i >= track.length ? 0.5 : 1
                 c.fill(Path(roundedRect: r, cornerRadius: 3), with: .color(Theme.track[track.index]))
@@ -402,7 +408,7 @@ struct VelocityLane: View {
                 }
             }
         }
-        .frame(width: 64 * Theme.stepWidth, height: PianoRoll.velocityHeight)
+        .frame(width: 64 * grid.stepWidth, height: PianoRoll.velocityHeight)
     }
 }
 

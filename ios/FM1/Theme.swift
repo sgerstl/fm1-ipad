@@ -26,13 +26,27 @@ enum Theme {
     static let recText = Color(hex: 0xFF8A8D)
     static let knob = [Color(hex: 0x287CFF), Color(hex: 0x1ECC70), Color(hex: 0xFFC618), Color(hex: 0xFF2C34)]
 
-    static let stepWidth: CGFloat = 55          // one bar (16 steps) fills the grid (2026-11-02)
-    static let rowHeight: CGFloat = 46
     static let canvas = CGSize(width: 1376, height: 1032)    // 13-inch iPad Air, landscape
 
     static func pad(_ t: Int) -> LinearGradient {
         LinearGradient(colors: [trackTop[t], track[t]], startPoint: .top, endPoint: .bottom)
     }
+}
+
+/// The grids' sizes, handed down through the environment so one grid view draws at the iPad's size or
+/// the phone's (2026-11-04). The iPad's are the defaults: views outside a phone layout see no change.
+struct GridMetrics: Equatable {
+    var stepWidth: CGFloat = 55                 // one bar (16 steps) fills the grid (2026-11-02)
+    var rowHeight: CGFloat = 46
+    var barWidth: CGFloat { 16 * stepWidth }
+    var drumContentSize: CGSize { CGSize(width: 64 * stepWidth, height: 16 * rowHeight) }
+
+    static let pad = GridMetrics()
+    static let phone = GridMetrics(stepWidth: 42, rowHeight: 46)   // a whole bar across a landscape iPhone
+}
+
+extension EnvironmentValues {
+    @Entry var grid: GridMetrics = .pad
 }
 
 extension Color {

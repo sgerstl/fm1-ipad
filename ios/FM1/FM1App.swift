@@ -26,18 +26,35 @@ struct RootView: View {
         _session = State(initialValue: SloopSession(demo: demo))
     }
 
+    @Environment(\.horizontalSizeClass) private var widthClass
+    @Environment(\.verticalSizeClass) private var heightClass
+
+    /// A phone (landscape is compact height; a Pro Max is regular width there) or a compact window:
+    /// the phone layout. Size classes decide, not the device (2026-11-04).
+    private var compact: Bool { heightClass == .compact || widthClass == .compact }
+
     var body: some View {
-        GeometryReader { geo in
-            let s = min(geo.size.width / Theme.canvas.width, geo.size.height / Theme.canvas.height)
-            AppView(session: session, ui: ui, useDemo: $useDemo)
-                .environment(through)
-                .environment(projects)
-                .frame(width: Theme.canvas.width, height: Theme.canvas.height)
-                .scaleEffect(s)
-                .frame(width: geo.size.width, height: geo.size.height)
+        Group {
+            if compact {
+                PhoneAppView(session: session, ui: ui, useDemo: $useDemo)
+                    .environment(\.grid, .phone)
+                    .environment(through)
+                    .environment(projects)
+            } else {
+                // the iPad: one canvas at the 13-inch iPad Air's size, scaled to fit the screen
+                GeometryReader { geo in
+                    let s = min(geo.size.width / Theme.canvas.width, geo.size.height / Theme.canvas.height)
+                    AppView(session: session, ui: ui, useDemo: $useDemo)
+                        .environment(through)
+                        .environment(projects)
+                        .frame(width: Theme.canvas.width, height: Theme.canvas.height)
+                        .scaleEffect(s)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                }
+                .ignoresSafeArea()
+            }
         }
         .background(Theme.page)
-        .ignoresSafeArea()
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         .task(id: useDemo) {
             if session.isDemo != useDemo { session = SloopSession(demo: useDemo) }
@@ -61,7 +78,12 @@ struct ViewJump: Equatable {
 /// What the iPad alone decides: which step is selected (per track), which drum lane, which page.
 @MainActor @Observable
 final class EditorUI {
-    var page: Page = .sequencer
+    /// -page sound|song|library|sequencer opens on that page (screenshots and layout checks, 2026-11-04)
+    var page: Page = {
+        let a = ProcessInfo.processInfo.arguments
+        guard let i = a.firstIndex(of: "-page"), i + 1 < a.count else { return .sequencer }
+        return ["sound": .sound, "song": .song, "library": .library][a[i + 1]] ?? .sequencer
+    }()
     var selectedStep = [0, 0, 0, 0]
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]

@@ -112,13 +112,13 @@ extension View {
     /// Keeps a grid and the timeline's view box together: the grid reports where it is, and scrolls to a
     /// bar picked on the timeline (`scroll` takes the offset and a request id). A grid that appears picks
     /// up the bar the other grid was on.
-    func followsView(ui: EditorUI, offset: CGPoint, scroll: @escaping (CGFloat, Int) -> Void) -> some View {
+    func followsView(ui: EditorUI, grid: GridMetrics, offset: CGPoint, scroll: @escaping (CGFloat, Int) -> Void) -> some View {
         self
-            .onChange(of: offset.x) { _, x in ui.viewStep = x / Theme.stepWidth }
-            .onChange(of: ui.viewJump) { _, j in if let j { scroll(CGFloat(j.bar) * PianoRoll.barWidth, j.id) } }
+            .onChange(of: offset.x) { _, x in ui.viewStep = x / grid.stepWidth }
+            .onChange(of: ui.viewJump) { _, j in if let j { scroll(CGFloat(j.bar) * grid.barWidth, j.id) } }
             .onAppear {
                 let bar = Int((ui.viewStep / 16).rounded())
-                if abs(offset.x - CGFloat(bar) * PianoRoll.barWidth) > 1 { scroll(CGFloat(bar) * PianoRoll.barWidth, -1 - bar) }
+                if abs(offset.x - CGFloat(bar) * grid.barWidth) > 1 { scroll(CGFloat(bar) * grid.barWidth, -1 - bar) }
             }
     }
 }

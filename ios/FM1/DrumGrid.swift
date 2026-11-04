@@ -4,19 +4,19 @@ import SwiftUI
 /// The drum track: 16 lanes by 64 steps, 12 lanes and one bar in view, two fingers pan (settling on a
 /// bar), or move the view box on the timeline.
 struct DrumGrid: View {
+    @Environment(\.grid) private var grid
     let session: SloopSession
     let ui: EditorUI
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<DrumGridContent>.ScrollRequest?
 
     /// 568 = the piano roll's grid, gap and velocity lane (534 + 8 + 50) less the lane hint and its gap
-    static let gridSize = CGSize(width: PianoRoll.barWidth, height: 568)
-    static let contentSize = CGSize(width: 64 * Theme.stepWidth, height: 16 * Theme.rowHeight)
+    static let gridHeight: CGFloat = 568        // one bar wide (grid.barWidth)
 
     var body: some View {
         let t = session.tracks[3]
-        let first = Int((offset.x / Theme.stepWidth).rounded()) + 1
-        let topLane = Int((offset.y / Theme.rowHeight).rounded())
+        let first = Int((offset.x / grid.stepWidth).rounded()) + 1
+        let topLane = Int((offset.y / grid.rowHeight).rounded())
         let below = max(0, 16 - topLane - 12)      // 12 whole lanes in view
 
         VStack(spacing: 8) {
@@ -35,16 +35,16 @@ struct DrumGrid: View {
                     }
                 }
                 .offset(y: -offset.y)
-                .frame(width: 80, height: Self.gridSize.height, alignment: .top)
+                .frame(width: 80, height: Self.gridHeight, alignment: .top)
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: Self.contentSize, offset: $offset, request: request, snapX: PianoRoll.barWidth) {
-                        DrumGridContent(session: session, ui: ui)
+                    TwoFingerScrollView(contentSize: grid.drumContentSize, offset: $offset, request: request, snapX: grid.barWidth) {
+                        DrumGridContent(grid: grid, session: session, ui: ui)
                     }
-                    EditorPlayhead(session: session, track: 3, offsetX: offset.x, height: Self.gridSize.height)
+                    EditorPlayhead(session: session, track: 3, offsetX: offset.x, height: Self.gridHeight)
                 }
-                .frame(width: Self.gridSize.width, height: Self.gridSize.height)
+                .frame(width: grid.barWidth, height: Self.gridHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .recessed()
                 .accessibilityElement(children: .contain)
@@ -61,11 +61,13 @@ struct DrumGrid: View {
         .padding(12)
         .frame(height: PianoRoll.panelHeight)
         .panel()
-        .followsView(ui: ui, offset: offset) { request = .init(x: $0, id: $1) }
+        .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
     }
 }
 
 struct DrumGridContent: View {
+    /// Passed in, not read from the environment: it lives in a UIHostingController, which doesn't inherit it.
+    var grid = GridMetrics.pad
     let session: SloopSession
     let ui: EditorUI
     @State private var paintOn: Bool?          // a slide: lighting (true) or clearing (false) its lane
@@ -76,12 +78,12 @@ struct DrumGridContent: View {
         let selected = ui.selectedStep[3]
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in draw(ctx, size, t, selected, ui.selectedLane) }
-                .frame(width: DrumGrid.contentSize.width, height: DrumGrid.contentSize.height)
+                .frame(width: grid.drumContentSize.width, height: grid.drumContentSize.height)
                 .contentShape(Rectangle())
                 .gesture(paint.exclusively(before: SpatialTapGesture().onEnded { e in
                     // a tap turns that hit on or off, and selects it
-                    let i = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
-                    let l = max(0, min(15, Int(e.location.y / Theme.rowHeight)))
+                    let i = max(0, min(63, Int(e.location.x / grid.stepWidth)))
+                    let l = max(0, min(15, Int(e.location.y / grid.rowHeight)))
                     ui.selectedStep[3] = i
                     ui.selectedLane = l
                     session.toggle(drumIndex: i, lane: l)
@@ -90,7 +92,7 @@ struct DrumGridContent: View {
             HStack(spacing: 0) {
                 ForEach(0..<64, id: \.self) { i in
                     Color.clear
-                        .frame(width: Theme.stepWidth, height: DrumGrid.contentSize.height)
+                        .frame(width: grid.stepWidth, height: grid.drumContentSize.height)
                         .accessibilityElement()
                         .accessibilityLabel(StepLabels.drums(index: i, t))
                         .accessibilityAddTraits(i == selected ? [.isButton, .isSelected] : .isButton)
@@ -114,9 +116,9 @@ struct DrumGridContent: View {
     private var paint: some Gesture {
         DragGesture(minimumDistance: 6)
             .onChanged { e in
-                let l = max(0, min(15, Int(e.startLocation.y / Theme.rowHeight)))
-                let a = max(0, min(63, Int(e.startLocation.x / Theme.stepWidth)))
-                let b = max(0, min(63, Int(e.location.x / Theme.stepWidth)))
+                let l = max(0, min(15, Int(e.startLocation.y / grid.rowHeight)))
+                let a = max(0, min(63, Int(e.startLocation.x / grid.stepWidth)))
+                let b = max(0, min(63, Int(e.location.x / grid.stepWidth)))
                 if paintOn == nil { paintOn = !session.tracks[3].drumSteps[a].has(l) }
                 guard let on = paintOn else { return }
                 for i in min(a, b)...max(a, b) where !painted.contains(i) {
@@ -130,7 +132,7 @@ struct DrumGridContent: View {
     }
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize, _ t: TrackState, _ selected: Int, _ lane: Int) {
-        let w = Theme.stepWidth, h = Theme.rowHeight
+        let w = grid.stepWidth, h = grid.rowHeight
         for b in stride(from: 1, to: 16, by: 2) {
             ctx.fill(Path(CGRect(x: CGFloat(b * 4) * w, y: 0, width: 4 * w, height: size.height)), with: .color(.white.opacity(0.025)))
         }
