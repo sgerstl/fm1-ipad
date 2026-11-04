@@ -182,7 +182,7 @@ struct TopBar: View {
                 let current = ui.page == p
                 Button {
                     ui.page = p
-                    driveDevice(to: p)
+                    Self.driveDevice(session: session, ui: ui, to: p)
                 } label: {
                     Text(p.rawValue)
                         .fontWeight(current ? .semibold : .regular)
@@ -204,7 +204,9 @@ struct TopBar: View {
 
     /// A tab tapped on the iPad: the FM-1's screen goes to the same place (HOME, the preset browser,
     /// or the Sound tab's button), when linked and following.
-    private func driveDevice(to p: Page) {
+    /// A tab picked here moves the FM-1 to the screen that tab shows (with the screen link). Shared with
+    /// the phone's top bar.
+    static func driveDevice(session: SloopSession, ui: EditorUI, to p: Page) {
         guard session.screenLinked, ui.followDevice else { return }
         if let s = session.deviceScreen, SoundPage.tab(for: s) == p { return }    // already there
         switch p {

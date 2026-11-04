@@ -38,15 +38,47 @@ enum Theme {
 struct GridMetrics: Equatable {
     var stepWidth: CGFloat = 55                 // one bar (16 steps) fills the grid (2026-11-02)
     var rowHeight: CGFloat = 46
+    var labelWidth: CGFloat = 80                // the note names or drum lanes left of the grid
+    var gridHeight: CGFloat = 534               // the piano roll's visible height (its content is never shorter)
     var barWidth: CGFloat { 16 * stepWidth }
     var drumContentSize: CGSize { CGSize(width: 64 * stepWidth, height: 16 * rowHeight) }
 
     static let pad = GridMetrics()
-    static let phone = GridMetrics(stepWidth: 42, rowHeight: 46)   // a whole bar across a landscape iPhone
+    static let phone = GridMetrics(stepWidth: 42, rowHeight: 46, labelWidth: 44)   // a whole bar across a landscape iPhone; PhoneSequence fits the step to the screen
 }
 
 extension EnvironmentValues {
     @Entry var grid: GridMetrics = .pad
+}
+
+/// A canvas as wide as the whole pattern (64 steps): one piece when it fits a GPU texture, else one
+/// piece per bar. On a 3x iPhone at 43 pt a step the pattern is 8,256 px wide, past the 8,192 px limit,
+/// and the whole canvas came out blank (2026-11-04). The iPad (7,040 px) keeps its single canvas.
+struct WideCanvas: View {
+    let width: CGFloat
+    let height: CGFloat
+    let barWidth: CGFloat
+    let draw: (GraphicsContext, CGSize) -> Void
+    @Environment(\.displayScale) private var scale
+
+    var body: some View {
+        if width * scale <= 8000 || barWidth <= 0 {
+            Canvas { ctx, size in draw(ctx, size) }
+                .frame(width: width, height: height)
+        } else {
+            HStack(spacing: 0) {
+                ForEach(0..<Int((width / barWidth).rounded(.up)), id: \.self) { b in
+                    Canvas { ctx, size in
+                        var c = ctx
+                        c.translateBy(x: -CGFloat(b) * barWidth, y: 0)
+                        draw(c, CGSize(width: width, height: size.height))
+                    }
+                    .frame(width: barWidth, height: height)
+                }
+            }
+            .frame(width: width, height: height)
+        }
+    }
 }
 
 extension Color {

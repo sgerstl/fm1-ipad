@@ -40,6 +40,8 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         let host = UIHostingController(rootView: content())
         host.view.backgroundColor = .clear
         host.sizingOptions = []
+        // the grid is content, not a screen: no safe-area insets (a landscape iPhone has them on both sides)
+        host.safeAreaRegions = []
         host.view.frame = CGRect(origin: .zero, size: contentSize)
         sv.addSubview(host.view)
         sv.contentSize = contentSize
@@ -49,6 +51,8 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
 
     func updateUIView(_ sv: UIScrollView, context: Context) {
         let c = context.coordinator
+        // the hosted grid joins the view-controller tree once it's on screen: outside it, on a landscape
+        // iPhone, it laid out and drew but never showed (2026-11-04)
         c.host?.rootView = content()
         var y = sv.contentOffset.y, shifted = false
         if let keys = rowKeys, let old = c.lastRowKeys, keys != old, rowHeight > 0 {

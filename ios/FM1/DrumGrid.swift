@@ -77,8 +77,9 @@ struct DrumGridContent: View {
         let t = session.tracks[3]
         let selected = ui.selectedStep[3]
         ZStack(alignment: .topLeading) {
-            Canvas { ctx, size in draw(ctx, size, t, selected, ui.selectedLane) }
-                .frame(width: grid.drumContentSize.width, height: grid.drumContentSize.height)
+            WideCanvas(width: grid.drumContentSize.width, height: grid.drumContentSize.height, barWidth: grid.barWidth) { ctx, size in
+                draw(ctx, size, t, selected, ui.selectedLane)
+            }
                 .contentShape(Rectangle())
                 .gesture(paint.exclusively(before: SpatialTapGesture().onEnded { e in
                     // a tap turns that hit on or off, and selects it

@@ -110,7 +110,7 @@ struct AuditionLabel: View {
             .font(.system(size: 13, weight: bold ? .semibold : .regular))
             .foregroundStyle(pressed || bold ? Theme.text : Theme.textSecondary)
             .padding(.trailing, 8)
-            .frame(width: 80, height: grid.rowHeight, alignment: .trailing)
+            .frame(width: grid.labelWidth, height: grid.rowHeight, alignment: .trailing)
             .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(pressed ? 0.08 : 0)).padding(.vertical, 4))
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
@@ -219,10 +219,9 @@ struct PianoRollContent: View {
     var body: some View {
         let t = session.tracks[track]
         let selected = ui.selectedStep[track]
-        let height = max(PianoRoll.gridHeight, CGFloat(rows.count) * grid.rowHeight)
+        let height = max(grid.gridHeight, CGFloat(rows.count) * grid.rowHeight)
         ZStack(alignment: .topLeading) {
-            Canvas { ctx, size in draw(ctx, size, t, selected) }
-                .frame(width: 64 * grid.stepWidth, height: height)
+            WideCanvas(width: 64 * grid.stepWidth, height: height, barWidth: grid.barWidth) { ctx, size in draw(ctx, size, t, selected) }
                 .contentShape(Rectangle())
                 // one finger edits: drag a note's grip (its right end) to set its length; slide along a row
                 // to paint, adding from an empty cell, erasing from a note; a tap turns a note on or off
@@ -395,7 +394,7 @@ struct VelocityLane: View {
     let track: TrackState
     let selected: Int
     var body: some View {
-        Canvas { ctx, size in
+        WideCanvas(width: 64 * grid.stepWidth, height: PianoRoll.velocityHeight, barWidth: grid.barWidth) { ctx, size in
             for i in 0..<64 where track.steps[i].isOn {
                 let v = CGFloat(track.steps[i].velocity) / 127
                 let h = (size.height - 12) * v
@@ -408,7 +407,6 @@ struct VelocityLane: View {
                 }
             }
         }
-        .frame(width: 64 * grid.stepWidth, height: PianoRoll.velocityHeight)
     }
 }
 
