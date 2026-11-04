@@ -11,6 +11,7 @@ struct PhoneAppView: View {
     @Environment(AudioThrough.self) private var through
     @Environment(ProjectStore.self) private var projects
     @Environment(\.scenePhase) private var scenePhase
+    @State private var size = CGSize(width: 852, height: 393)
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
     private var audioThrough: Bool {
@@ -29,6 +30,7 @@ struct PhoneAppView: View {
                 Group {
                     switch ui.page {
                     case .sequencer: PhoneSequence(session: session, ui: ui)
+                    case .sound: PhoneShape(session: session, ui: ui)
                     default: notYet(ui.page)
                     }
                 }
@@ -45,6 +47,11 @@ struct PhoneAppView: View {
         }
         .padding(.horizontal, 8)
         .padding(.top, 6)
+        // a held knob's full-size ring, over everything and kept on the screen, as on the iPad
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
+        .environment(\.canvasSize, size)
+        .overlay { GrownKnobLayer(session: session, ui: ui) }
+        .coordinateSpace(name: AppView.space)
         // the same upkeep as the iPad's AppView: projects, the screen staying on, audio, Now Playing
         .onChange(of: isConnected, initial: true) { _, on in if on { projects.connected() } }
         .onChange(of: session.playing) { _, on in projects.playingChanged(on) }

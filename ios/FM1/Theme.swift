@@ -49,6 +49,8 @@ struct GridMetrics: Equatable {
 
 extension EnvironmentValues {
     @Entry var grid: GridMetrics = .pad
+    /// The space a held knob's ring is kept inside: the iPad's canvas, or the phone's screen (2026-11-04).
+    @Entry var canvasSize: CGSize = Theme.canvas
 }
 
 /// A canvas as wide as the whole pattern (64 steps): one piece when it fits a GPU texture, else one

@@ -85,6 +85,7 @@ struct KnobControl: View {
     @State private var showKeys = false
     @GestureState private var holding = false   // resets even when the system cancels the touch
     @State private var touchStart = Date()
+    @Environment(\.canvasSize) private var canvas
 
     static let ringRadius: CGFloat = 80
     static let discRadius: CGFloat = 102      // the lifted disc around the ring
@@ -96,8 +97,8 @@ struct KnobControl: View {
             .onChanged { drag in
                 if ui.knobGrab?.id != spec.id {
                     let edge = Self.discRadius + 4
-                    let c = CGPoint(x: min(max(drag.startLocation.x, edge), Theme.canvas.width - edge),
-                                    y: min(max(drag.startLocation.y, edge), Theme.canvas.height - edge))
+                    let c = CGPoint(x: min(max(drag.startLocation.x, edge), canvas.width - edge),
+                                    y: min(max(drag.startLocation.y, edge), canvas.height - edge))
                     ui.knobGrab = KnobGrab(id: spec.id, center: c)
                     ui.grabbedSpec = make
                     startValue = spec.value; turned = 0; lastAngle = nil; touchStart = drag.time
