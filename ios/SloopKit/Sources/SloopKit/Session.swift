@@ -1053,8 +1053,17 @@ public final class DeviceSession {
         motion[t] = m
         guard let r = try? await k.setMotion(track: t, step: step, id: id, value: value, lock: lock) else { await readMotion(track: t); return nil }
         motion[t] = r.motion
+        // refused: said on the lanes, never a point that silently vanishes
+        motionRefusal = r.rc == .done ? nil : MotionRefusal(track: t, id: id, rc: r.rc, at: .now)
         return r.rc
     }
+
+    /// The last MOTION write Skiff refused (not a parameter it records, the 64 used, a song playing), for the lanes.
+    public private(set) var motionRefusal: MotionRefusal?
+    public struct MotionRefusal: Equatable, Sendable {
+        public let track: Int, id: Int, rc: MotionRC, at: Date
+    }
+    public func dismissMotionRefusal() { motionRefusal = nil }
 
     /// The record of `id` on `step` gone (MOTION op 4).
     public func deleteMotion(track t: Int, step: Int, id: Int) async {

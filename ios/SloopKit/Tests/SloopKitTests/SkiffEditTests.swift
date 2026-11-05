@@ -85,4 +85,24 @@ import Testing
         #expect(!fake.requests[before...].contains(91))
         run.cancel()
     }
+
+    /// Skiff's motion_param: the lanes Lupe offers are the ones the FM-1 records.
+    @Test func whatSkiffRecordsAsMotion() {
+        let yes = [0, 4, 9, 16, 32, 33, 36, 38, 39, 44, 61, 80, 83, 90, 101, 127, 134, 138, 145]
+        let no = [17, 24, 25, 31, 37, 40, 43, 45, 51, 60, 81, 82, 91, 92, 117, 119, 126, 135, 137, 146]
+        #expect(yes.allSatisfy(SkiffMotion.recordable) && !no.contains(where: SkiffMotion.recordable))
+    }
+
+    /// A change Skiff refuses (not a parameter it records) isn't kept and is said, not dropped silently; one it
+    /// takes clears what was said.
+    @Test func aRefusedMotionChangeIsSaid() async throws {
+        let (s, fake, run) = try await connect()
+        try await waitFor(5) { fake.watching }
+        let rc = await s.setMotion(track: 0, step: 3, id: 17, value: 1, lock: false)       // ARP MODE
+        #expect(rc == .invalid && s.motionRefusal?.id == 17 && s.motion[0]?.record(17, at: 3) == nil)
+        #expect(!fake.motion[0].contains { $0.id == 17 })
+        let ok = await s.setMotion(track: 0, step: 3, id: 34, value: 50, lock: false)       // CHORUS
+        #expect(ok == .done && s.motionRefusal == nil && fake.motion[0].contains { $0.step == 3 && $0.id == 34 && $0.value == 50 })
+        run.cancel()
+    }
 }

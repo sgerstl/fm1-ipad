@@ -469,6 +469,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             // a recorded change (3) or a lock (5): a new record, or the one on that step and id becomes this
             let t = Int(a[0]), step = Int(a[2] & 63), id = Int(a[3]) | Int(a[2] >> 6 & 1) << 7
             let v = (Int(a[4]) | Int(a[5]) << 7) - 8192
+            guard SkiffMotion.recordable(id) else { return motionReply(t, rc: 1, kinds: a[1] == 5) }   // as motion_param
             let total = motion.reduce(0) { $0 + $1.count }
             if let k = motion[t].firstIndex(where: { $0.step == step && $0.id == id }) {
                 motion[t][k] = (step, id, v, a[1] == 5)

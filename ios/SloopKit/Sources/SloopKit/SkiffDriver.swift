@@ -122,7 +122,19 @@ public struct TrackMotion: Equatable, Sendable {
 }
 
 /// MOTION's codes (motion.c motion_put): 0 done, 1 invalid (not a motion parameter, out of range), 2 all 64 used.
-public enum MotionRC: Int, Sendable { case done = 0, invalid = 1, full = 2 }
+public enum MotionRC: Int, Sendable { case done = 0, invalid = 1, full = 2, songPlaying = 3 }
+
+/// Which parameters Skiff records as motion (motion.c motion_param, Skiff 2.2's ids from core.h): LEVEL, ENV and its
+/// routes, the LFO and its routes (0–16), GATE (32), the FX sends (33–36), GLIDE, PAN, DETUNE, the FM operators
+/// (61–80), and from the DRUM lanes (83) up all but DIR, the duck's source, LFO SYNC TRIG POLARITY, ENV SYNC and the
+/// chord follow. Any other id is refused (rc 1): never offered as a lane.
+public enum SkiffMotion {
+    public static func recordable(_ id: Int) -> Bool {
+        guard (0..<146).contains(id) else { return false }
+        if id <= 16 || id == 32 || (33...36).contains(id) || [38, 39, 44].contains(id) || (61...80).contains(id) { return true }
+        return id >= 83 && id != 91 && id != 92 && !(117...119).contains(id) && id != 126 && !(135...137).contains(id)
+    }
+}
 
 /// MENU settings the editor protocol can set (editor_menu.c ED_MENU's ids, append-only).
 public enum SkiffMenu {

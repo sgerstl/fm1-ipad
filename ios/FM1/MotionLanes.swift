@@ -27,14 +27,30 @@ struct MotionLanes: View {
     /// The parameters with a lane: those with records, then any added with + Lane.
     static func laneIDs(_ session: DeviceSession, _ ui: EditorUI, track: Int) -> [Int] {
         var ids = session.motion[track]?.ids ?? []
-        for id in ui.addedLanes[track] ?? [] where !ids.contains(id) { ids.append(id) }
+        for id in ui.addedLanes[track] ?? [] where !ids.contains(id) && recordable(session, id) { ids.append(id) }
         return ids
+    }
+
+    /// A parameter the firmware records as motion: on Skiff only motion_param's (SkiffMotion), else any.
+    static func recordable(_ session: DeviceSession, _ id: Int) -> Bool { session.dialect != .skiff || SkiffMotion.recordable(id) }
+
+    /// Skiff refused a write on this track in the last few seconds: what to say on the lanes.
+    static func refusal(_ session: DeviceSession, track: Int) -> String? {
+        guard let r = session.motionRefusal, r.track == track, Date.now.timeIntervalSince(r.at) < 6 else { return nil }
+        let label = session.trackDesc(r.id)?.label ?? "This parameter"
+        switch r.rc {
+        case .invalid: return "The FM-1 refused that change: \(label) can't be recorded as motion, or the value is out of its range."
+        case .full: return "All 64 motion records are used. Clear a lane or a lock to make room."
+        case .songPlaying: return "Stop the song to edit motion."
+        case .done: return nil
+        }
     }
 
     /// How tall the motion area is: the header, then the lanes (or the empty or full note).
     static func height(_ session: DeviceSession, _ ui: EditorUI, track: Int) -> CGFloat {
         let n = laneIDs(session, ui, track: track).count
-        let note: CGFloat = session.motionUsed >= DeviceSession.motionMax || session.song.songPlaying ? 52 : 0
+        let note: CGFloat = (session.motionUsed >= DeviceSession.motionMax || session.song.songPlaying ? 52 : 0)
+            + (refusal(session, track: track) != nil ? 52 : 0)
         return headerHeight + 8 + note + (n == 0 ? 64 : CGFloat(min(n, visibleLanes)) * (laneHeight + 4))
     }
 
@@ -44,6 +60,27 @@ struct MotionLanes: View {
         let playing = session.song.songPlaying
         VStack(alignment: .leading, spacing: 8) {
             header(used: used)
+            if let said = Self.refusal(session, track: track) {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle").accessibilityHidden(true)
+                    Text(said).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button { session.dismissMotionRefusal() } label: {
+                        Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss")
+                }
+                .padding(.leading, 12).frame(minHeight: 44)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
+                .task(id: session.motionRefusal?.at) {
+                    try? await Task.sleep(for: .seconds(6))
+                    if Self.refusal(session, track: track) == nil || session.motionRefusal.map({ Date.now.timeIntervalSince($0.at) >= 6 }) == true {
+                        session.dismissMotionRefusal()
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
             if playing {
                 // Jib's rule: an entry that starts loads its pattern with its own motion (bank.c), so an edit made
                 // while the song plays wouldn't last; the lanes wait for STOP
@@ -144,12 +181,17 @@ struct MotionLanes: View {
     /// + Lane: the track's parameters on its Shape pages, by page.
     private func openAddLane() {
         let have = Set(Self.laneIDs(session, ui, track: track))
-        let pages = SoundPage.pages(session).filter { $0.scope == 0 && $0.engineEdit == 0 }
+        // the track's pages, its engine's EDIT 1 and 2 included; on Skiff only what it records (a lane of anything else
+        // took no points: the FM-1 refused every one, 2026-11-05)
+        let pages = SoundPage.shown(session, .edit).filter { $0.engineEdit != 0 }
+            + SoundPage.pages(session).filter { $0.scope == 0 && $0.engineEdit == 0 }
         ui.menu = JibMenu(title: "Add a lane", groups: {
             [pages.compactMap { p in
-                let ids = p.ids.compactMap { $0 }.filter { !have.contains($0) }
+                var seen = Set<Int>()
+                let ids = (p.ids.compactMap { $0 } + p.picks.flatMap { $0.compactMap { $0 } })
+                    .filter { !have.contains($0) && Self.recordable(session, $0) && seen.insert($0).inserted }
                 guard !ids.isEmpty else { return nil }
-                return MenuItem(title: p.title, children: {
+                return MenuItem(title: p.title(session), children: {
                     [ids.map { id in
                         MenuItem(title: session.trackDesc(id)?.label ?? "\(id)") { ui.addedLanes[track, default: []].append(id) }
                     }]

@@ -33,6 +33,18 @@ import Testing
         await d.close()
     }
 
+    /// The firmware's motion_param against Lupe's port (SkiffMotion): a set on each id is taken exactly when Lupe
+    /// offers it as a lane, refused (rc 1) otherwise; each one taken is deleted again.
+    @Test func motionIsRecordedExactlyWhereLupeOffersIt() async throws {
+        let d = try await driver()
+        for id in [0, 9, 16, 17, 24, 31, 32, 34, 37, 39, 44, 51, 60, 61, 81, 83, 91, 92, 101, 117, 126, 127, 135, 138, 145] {
+            let desc = try await d.desc(scope: 0, id: id)
+            let r = try await d.setMotion(track: 0, step: 63, id: id, value: desc.defaultValue, lock: false)
+            #expect((r.rc == .done) == SkiffMotion.recordable(id), "id \(id): rc \(r.rc)")
+            if r.rc == .done { _ = try await d.deleteMotion(track: 0, step: 63, id: id) }
+        }
+    }
+
     @Test func stepsRoundTripKeepingSkiffsBytes() async throws {
         let d = try await driver()
         let before = try await d.synthStep(track: 5, index: 63)
