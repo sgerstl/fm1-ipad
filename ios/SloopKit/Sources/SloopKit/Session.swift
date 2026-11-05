@@ -142,6 +142,12 @@ public final class DeviceSession {
     @ObservationIgnored private var lastPoll = Date.distantPast
     /// The playhead counted from MIDI clock, on firmware without LIVE (Skiff).
     @ObservationIgnored private var counted = CountedPlayhead(tracks: DeviceShape.sloop.trackCount)
+    /// Skiff's song (lists and pool), on Skiff 2.0 and later; kept, offline, after the device goes away.
+    public private(set) var skiffSong: SkiffSongStore?
+    /// The Skiff driver, for the sim tests' own requests (TRANSPORT, cleanup).
+    var skiffSongDriverForTests: SkiffDriver? { driver as? SkiffDriver }
+    /// MIDI clock pulses since Start (Skiff), for the song's playhead.
+    public var clockTicks: Int { counted.running ? counted.ticks : -1 }
 
     private var driver: FirmwareDriver?
     /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
@@ -274,6 +280,17 @@ public final class DeviceSession {
             if let s = sloop, let ui = try? await s.uiState() { deviceScreen = ui; screenLinked = true } else { screenLinked = false }
             if screenLinked { capabilities.insert(.screenLink) }
             try await c.watch(screenLink: screenLinked)
+            if let s = c as? SkiffDriver, s.skiff.hasSongLists {
+                if let store = skiffSong { store.attach(s) } else {
+                    skiffSong = SkiffSongStore(driver: s, trackTiming: { [weak self] t in
+                        guard let self, t < self.tracks.count else { return (16, 2) }
+                        return (self.tracks[t].length, self.tracks[t].division)
+                    }, isPlaying: { [weak self] in self?.playing ?? false })
+                }
+                await skiffSong?.refresh(pool: true)
+            } else {
+                skiffSong = nil
+            }
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
             stats = Stats()
         } catch {
@@ -300,6 +317,7 @@ public final class DeviceSession {
         }
         await c.close()
         driver = nil
+        skiffSong?.detach()
         if !Task.isCancelled { status = .lost("FM-1 disconnected") }
     }
 

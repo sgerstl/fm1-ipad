@@ -56,6 +56,9 @@ public struct SkiffInfo: Equatable, Sendable {
     /// A step's ties byte (57 bit 6) and FLAM / COND / NUDGE (43): how long a step is on the wire.
     public var hasTies: Bool { (tags[0x57]?.first ?? 0) & 0x40 != 0 }
     public var hasFlam: Bool { tags[0x43] != nil }
+    /// Skiff 2.0's song (`58 01` bit 0): LIST2, NEW, COPY+, CHAIN, SONG ONCE; bit 1 the entries' sounds.
+    public var hasSongLists: Bool { (tags[0x58]?.first ?? 0) & 1 != 0 }
+    public var hasEntrySounds: Bool { (tags[0x58]?.first ?? 0) & 2 != 0 }
 
     public var deviceInfo: DeviceInfo {
         DeviceInfo(version: version, engines: engines, paramCount: paramCount, globalCount: globalCount, stepCount: stepCount,
@@ -69,6 +72,7 @@ enum SkiffCmd {
     static let userList: UInt8 = 16, userLoad: UInt8 = 20, watch: UInt8 = 22, ping: UInt8 = 25
     static let track: UInt8 = 27, trackStep: UInt8 = 30, trackParam: UInt8 = 31
     static let transport: UInt8 = 76
+    static let pool: UInt8 = 78, list2: UInt8 = 82
 }
 
 public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
@@ -284,6 +288,40 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
 
     /// REC, as the FM-1's button (TRANSPORT op 4). Sent once: it toggles.
     public func rec() async throws { _ = try await request(SkiffCmd.transport, [4], match: 0, "TRANSPORT REC", retries: 0) }
+
+    // MARK: The song: lists and the pattern pool (SkiffSong.swift)
+
+    /// The lists, as they are (LIST2 with no arguments).
+    public func songLists() async throws -> SkiffSong {
+        let b = try await request(SkiffCmd.list2, [], match: 0, "LIST2", timeout: .milliseconds(400))
+        guard b.count >= 3 else { throw DecodeError.short(cmd: SkiffCmd.list2) }
+        return try SkiffSong(b[2...], tracks: shape.trackCount, sounds: skiff.hasEntrySounds)
+    }
+
+    /// One change, then the lists after it. Sent once: a change that timed out is never resent (a COPY sent
+    /// twice copies twice); read the lists again instead.
+    public func list(_ op: ListOp) async throws -> (rc: SongRC, song: SkiffSong) {
+        let a = op.bytes
+        let b = try await request(SkiffCmd.list2, a, match: 1, "LIST2 op \(a[0])", timeout: .milliseconds(1500), retries: 0)
+        guard b.count >= 3 else { throw DecodeError.short(cmd: SkiffCmd.list2) }
+        return (SongRC(rawValue: Int(b[1])) ?? .failed, try SkiffSong(b[2...], tracks: shape.trackCount, sounds: skiff.hasEntrySounds))
+    }
+
+    /// The pool: every pattern's LEN and uses.
+    public func pool() async throws -> PatternPool {
+        let b = try await request(SkiffCmd.pool, [], match: 0, "POOL", timeout: .milliseconds(400))
+        guard b.count >= 2 else { throw DecodeError.short(cmd: SkiffCmd.pool) }
+        return try PatternPool(b[2...])
+    }
+
+    /// CLEAR UNUSED (POOL op 3): every pattern nothing uses, stopped only. Can't be undone.
+    public func clearUnusedPatterns() async throws -> (rc: SongRC, pool: PatternPool) {
+        let b = try await request(SkiffCmd.pool, [3], match: 1, "POOL CLEAR UNUSED", timeout: .milliseconds(3000), retries: 0)
+        guard b.count >= 2 else { throw DecodeError.short(cmd: SkiffCmd.pool) }
+        // POOL's codes: 0 done, 1 nothing to clear, 2 in use, 3 playing, 4 failed
+        let rc: SongRC = switch b[1] { case 0: .done; case 1: .empty; case 3: .playing; default: .failed }
+        return (rc, try PatternPool(b[2...]))
+    }
 }
 
 /// The Sound tab's pages on Skiff: Skiff's own page layout (firmware params.c PAGES, 2.2), each knob found
