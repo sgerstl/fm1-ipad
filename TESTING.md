@@ -1,6 +1,6 @@
-# Testing Jib
+# Testing Lupe
 
-Jib is an iPad and iPhone app that works alongside an M-VAVE FM-1 running SLOOP. The FM-1 still makes the sound and stores everything. The iPad shows all four tracks at once, edits them, and arranges sections into songs; an iPhone does the same jobs one screen at a time. It talks to the FM-1 over USB MIDI using SLOOP's editor protocol.
+Lupe is an iPad and iPhone app that works alongside an M-VAVE FM-1 running SLOOP. The FM-1 still makes the sound and stores everything. The iPad shows all four tracks at once, edits them, and arranges sections into songs; an iPhone does the same jobs one screen at a time. It talks to the FM-1 over USB MIDI using SLOOP's editor protocol.
 
 This guide gets it running on your FM-1 and your iPad or iPhone. Allow about 30 minutes.
 
@@ -39,14 +39,14 @@ Then in Chrome open `http://localhost:8766/webapp/installer/` and follow it. SLO
 
 If anything goes wrong, hold **OCT−** while powering on for USB rescue mode.
 
-### Or install it from Jib (new, not yet tried on a real FM-1)
+### Or install it from Lupe (new, not yet tried on a real FM-1)
 
-Jib now carries the two firmwares it speaks, each with Jib's screen link (Skiff 2.2 and SLOOP 2.8.4), plus M-VAVE's stock V15, and can install any of them over the same USB cable. `FIRMWARE.md` lists the exact files and their SHA-256. **Until Scott has run it on his FM-1, use the Chrome installer above.** This is how it works once it's cleared:
+Lupe now carries the two firmwares it speaks, each with Lupe's screen link (Skiff 2.2 and SLOOP 2.8.4), plus M-VAVE's stock V15, and can install any of them over the same USB cable. `FIRMWARE.md` lists the exact files and their SHA-256. **Until Scott has run it on his FM-1, use the Chrome installer above.** This is how it works once it's cleared:
 
-- **On connect.** If the FM-1 runs something Jib doesn't speak (M-VAVE's firmware, another SLOOP or Skiff version), Jib says so and offers the install. If an earlier install was cut off and the FM-1 waits in update mode (USB name "Felucca Update", UPDATE MODE on its screen), Jib offers to finish it. If a restore of stock V15 was cut off (M-VAVE's update mode, `ota-FM-1_015`), Jib offers to finish that, with V15 only. Any other update mode is left to its own updater.
-- **On purpose.** Debug builds: tap the connection dot (the ⋯ menu on an iPhone), then Developer › Install firmware…, and pick Skiff or SLOOP, or **Restore stock V15** under Back to stock. V15 goes on only if the FM-1 shipped with V15: a unit that ever ran V16 is refused before anything is written. Jib can't talk to stock firmware, so after a restore it offers Skiff or SLOOP the next time you plug in. A new FM-1 on stock V16 gets Skiff 2.2 only: SLOOP 2.8.4 can't install on the newer flash chip such units most likely have (fixed in SLOOP 2.8.5, not carried yet), and V15 can't go on a V16 unit. There's no "install through stock": switching directly is what the sources support (`FIRMWARE.md`, "Going through stock V15").
-- **Before writing.** When the FM-1 is connected, Jib backs up every object the running firmware lists (projects, the music now, settings, presets, samples) to Files › On My iPad › Jib › Backups, in the firmware's own backup format, so its web editor can restore it. An install writes only the firmware and keeps the store, but SLOOP doesn't read Skiff's projects, so the backup is how you get them back.
-- **While it writes**, about a minute: keep Jib open and the FM-1 plugged straight in. The screen stays on and a full-screen view shows the progress. Jib won't start below 30% battery unless the iPad or iPhone is charging, because it powers the FM-1.
+- **On connect.** If the FM-1 runs something Lupe doesn't speak (M-VAVE's firmware, another SLOOP or Skiff version), Lupe says so and offers the install. If an earlier install was cut off and the FM-1 waits in update mode (USB name "Felucca Update", UPDATE MODE on its screen), Lupe offers to finish it. If a restore of stock V15 was cut off (M-VAVE's update mode, `ota-FM-1_015`), Lupe offers to finish that, with V15 only. Any other update mode is left to its own updater.
+- **On purpose.** Debug builds: tap the connection dot (the ⋯ menu on an iPhone), then Developer › Install firmware…, and pick Skiff or SLOOP, or **Restore stock V15** under Back to stock. V15 goes on only if the FM-1 shipped with V15: a unit that ever ran V16 is refused before anything is written. Lupe can't talk to stock firmware, so after a restore it offers Skiff or SLOOP the next time you plug in. A new FM-1 on stock V16 gets Skiff 2.2 only: SLOOP 2.8.4 can't install on the newer flash chip such units most likely have (fixed in SLOOP 2.8.5, not carried yet), and V15 can't go on a V16 unit. There's no "install through stock": switching directly is what the sources support (`FIRMWARE.md`, "Going through stock V15").
+- **Before writing.** When the FM-1 is connected, Lupe backs up every object the running firmware lists (projects, the music now, settings, presets, samples) to Files › On My iPad › Lupe › Backups, in the firmware's own backup format, so its web editor can restore it. An install writes only the firmware and keeps the store, but SLOOP doesn't read Skiff's projects, so the backup is how you get them back.
+- **While it writes**, about a minute: keep Lupe open and the FM-1 plugged straight in. The screen stays on and a full-screen view shows the progress. Lupe won't start below 30% battery unless the iPad or iPhone is charging, because it powers the FM-1.
 - **If it's cut off.** Nothing is lost: the FM-1 waits in update mode at every power-on until a write finishes. Plug it straight in (no hub) and tap Run the install again; it finishes the write. Skiff's README, "If the FM-1 does not start", covers the computer-side ways back.
 
 To see the screens without an FM-1: launch with `-demo -demo-firmware picker` (or `loader`, `stock`, `foreign`, `installing`, `done`, `failed`, and for stock V15 `picker-stock`, `stock-loader`, `restoring`, `restored`, `v16`, and a new unit on V16 `v16-new`, `v16-picker`). That uses a pretend FM-1 and never touches MIDI. Screenshots: `qa/firmware-install-2026-11-05/`.
@@ -92,7 +92,7 @@ Also worth trying:
 - **Screen link:** press buttons on the FM-1 and the tabs follow. Change tabs on the iPad and the FM-1 follows
 - **Sampler:** from Browse, or a track on the SAMPLE engine, record a take with the device's mic, trim it, upload it to a sample slot (SMPL1–4), then put it on a track
 - **iPad audio:** the FM-1's sound can play through the iPad (its speaker or Bluetooth), with the FM-1's own speaker muted
-- **Projects:** the folder icon saves the FM-1's loop, sections and song order on the iPad, and exports a project as a SLOOP song file. They show in Files under On My iPad › Jib
+- **Projects:** the folder icon saves the FM-1's loop, sections and song order on the iPad, and exports a project as a SLOOP song file. They show in Files under On My iPad › Lupe
 
 ### On an iPhone
 
@@ -105,9 +105,9 @@ The same four jobs, one at a time, in landscape. These work differently from the
 
 ### On Skiff 2.2
 
-**The screen link.** Jib carries Skiff 2.2 with a small patch that links the two screens, as SLOOP's does. Press a button on the FM-1 and Jib opens that page, and pick a tab in Jib and the FM-1 goes there too, with "Follow the FM-1's screen" on in the connection menu. An FM-1 on plain Skiff 2.2 gets an offer to update; everything else works the same without it.
+**The screen link.** Lupe carries Skiff 2.2 with a small patch that links the two screens, as SLOOP's does. Press a button on the FM-1 and Lupe opens that page, and pick a tab in Lupe and the FM-1 goes there too, with "Follow the FM-1's screen" on in the connection menu. An FM-1 on plain Skiff 2.2 gets an offer to update; everything else works the same without it.
 
-Jib also runs on [Skiff](https://github.com/illuminus5/skiff) 2.2, a Felucca-based firmware with six tracks and a song made of each track's list of patterns. Install it with Skiff's own installer, which backs up first. Jib checks on connect that the FM-1 reports `FELUCCA v2.2`.
+Lupe also runs on [Skiff](https://github.com/illuminus5/skiff) 2.2, a Felucca-based firmware with six tracks and a song made of each track's list of patterns. Install it with Skiff's own installer, which backs up first. Lupe checks on connect that the FM-1 reports `FELUCCA v2.2`.
 
 - **Sequence:** six tracks in the track box. A track on DRUM or DRUM-X shows the drum grid, with Skiff's 8 lanes
 - **Arrange (iPad only):** a lane per track, a block per list entry, as long as it plays, in the track's colour. Tap a block for its details, drag its right edge to set how many times it plays, or hold it: let go for its menu, or drag to move it along its track. Dropped past the end, it gets a rest before it so it plays where you let go. Delete entry is in the panel under the lanes, and Undo is in the row above them. Drag a pattern from the list on the right onto a lane, or drag along the bar numbers to pick bars across every track (Duplicate after, Clear). The squares under each track's name show how many of its 16 entries it uses. While the FM-1 plays, changes that would cut in say "Stop to rearrange" with a Stop button
@@ -123,7 +123,7 @@ Buttons are flat keys that stand on a thin edge and drop onto it when pressed; a
 - No UI tests. The gestures are checked by hand on my FM-1, and the full hardware pass (`qa/TEST-PLAN.md`) was on 2026-11-02
 - The sampler is the newest part. It's been tried on hardware once
 - The iPhone layout has only run in the simulator. You're the first to try it on a real iPhone, so touch size and feel are the things to report. Also rough: Arrange needs a scroll to reach the song, the step panel runs under the home bar, and SEL's key map isn't on the phone yet
-- Installing firmware from Jib is tested only against a pretend FM-1 (`FakeFM1`, which plays both update steps as Skiff's firmware does) and in the simulator. The first real install needs Scott with the device
+- Installing firmware from Lupe is tested only against a pretend FM-1 (`FakeFM1`, which plays both update steps as Skiff's firmware does) and in the simulator. The first real install needs Scott with the device
 - Under heavy CPU load, `aLoopSavedToASectionComesBack` occasionally fails. It's a timing problem in the test, not something you'll see in the app
 
 ## 6. Going back

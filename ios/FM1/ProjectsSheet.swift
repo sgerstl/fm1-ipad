@@ -61,7 +61,7 @@ struct ProjectsSheet: View {
                         }
                         ForEach(store.safetyCopies) { row($0) }
                     } footer: {
-                        Text("Jib takes one before it opens something over unsaved work, and keeps the last \(ProjectStore.keptSafetyCopies). Rename one to keep it as a project.")
+                        Text("Lupe takes one before it opens something over unsaved work, and keeps the last \(ProjectStore.keptSafetyCopies). Rename one to keep it as a project.")
                     }
                 }
             }
@@ -218,7 +218,7 @@ struct ProjectsSheet: View {
     private func openMessage(_ o: Opening) -> String {
         let replaces = "Opening \(o.name) replaces what's on the FM-1."
         let stops = session.playing || session.song.songPlaying ? " It stops first." : ""
-        let copy = store.needsSaving ? " Without saving, Jib still keeps a safety copy." : ""
+        let copy = store.needsSaving ? " Without saving, Lupe still keeps a safety copy." : ""
         return replaces + stops + copy
     }
 }

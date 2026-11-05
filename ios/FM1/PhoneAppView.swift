@@ -262,7 +262,7 @@ struct PhoneTopBar: View {
     /// The ⋯ menu, Jib's own (2026-11-05): the phone's audio, the source, Developer.
     private var more: some View {
         Button {
-            ui.menu = JibMenu(title: "Jib", groups: {
+            ui.menu = JibMenu(title: "Lupe", groups: {
                 var g: [[MenuItem]] = []
                 var audio = [MenuItem(title: "Play through the iPhone", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
                 if through.enabled { audio.append(.note(through.summary)) }

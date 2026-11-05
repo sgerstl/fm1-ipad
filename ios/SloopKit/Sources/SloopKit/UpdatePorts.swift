@@ -50,7 +50,7 @@ public final class CoreMIDIUpdatePorts: UpdatePorts, @unchecked Sendable {
     private var client = MIDIClientRef()
 
     public init() {
-        MIDIClientCreateWithBlock("Jib firmware" as CFString, &client, nil)
+        MIDIClientCreateWithBlock("Lupe firmware" as CFString, &client, nil)
     }
 
     deinit { MIDIClientDispose(client) }

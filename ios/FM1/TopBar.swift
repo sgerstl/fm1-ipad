@@ -78,7 +78,7 @@ struct TopBar: View {
         if through.state == .noInput {
             audio.append(.note(session.canQuietSpeaker ? "Plug in the FM-1 (USB AUDIO on)" : "No sound from the FM-1 over USB: plug it in, or unplug it and plug it in again"))
         }
-        if through.state == .denied { audio.append(.note("Turn on Microphone for Jib in Settings")) }
+        if through.state == .denied { audio.append(.note("Turn on Microphone for Lupe in Settings")) }
         g.append(audio)
         if isConnected {
             // diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?

@@ -37,7 +37,8 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UIRequiresFullScreen: YES
-        # projects live in Documents/Projects: shown in Files under On My iPad › Jib
+        # projects live in Documents/Projects: shown in Files under On My iPad › Lupe (the Files folder takes the
+        # app's display name; the bundle id and the FM1 target stay as they are)
         INFOPLIST_KEY_UIFileSharingEnabled: YES
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
         # the launch screen: Lupe's icon at home-screen size on #0A0A0B (merged into the generated Info.plist)

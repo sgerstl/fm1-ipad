@@ -1,4 +1,4 @@
-# Jib (fm1-ipad)
+# Lupe (fm1-ipad)
 
 An iPad and iPhone app for the M-VAVE FM-1 running [SLOOP](https://github.com/isod89/sloop-fm1). The two work as one instrument. The FM-1 makes the sound, stores the patterns and plays them. The iPad is a bigger window onto it: it shows all four tracks, edits them, shapes sounds, records samples, and arranges sections into songs. On an iPhone (landscape) the same jobs come one at a time.
 

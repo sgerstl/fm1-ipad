@@ -337,7 +337,7 @@ public final class FirmwareInstaller: @unchecked Sendable {
     }
 
     static let otherStockMessage = "Nothing was written. This FM-1 started out on a different official version (V16, probably), so V15 can't go on it. Its way back is that version, with M-VAVE's own updater."
-    static let v16SloopMessage = "This FM-1 runs M-VAVE's V16, so it's most likely a newer unit with the UC25HQ80 flash chip, which SLOOP 2.8.4's update loader doesn't know: it would stop before writing anything. Install Skiff 2.2, which knows both chips. (SLOOP 2.8.5 knows it too; Jib doesn't carry it yet.)"
+    static let v16SloopMessage = "This FM-1 runs M-VAVE's V16, so it's most likely a newer unit with the UC25HQ80 flash chip, which SLOOP 2.8.4's update loader doesn't know: it would stop before writing anything. Install Skiff 2.2, which knows both chips. (SLOOP 2.8.5 knows it too; Lupe doesn't carry it yet.)"
     static func loaderRefusedMessage(_ pkg: FirmwarePackage, running: String) -> String {
         let sloop = pkg.product == BundledFirmware.sloop.product
         return "Nothing was written. \(sloop ? "SLOOP 2.8.4's" : "The") update loader turned this FM-1 down after 3 reads and it restarted on its own firmware (\(running))."

@@ -414,7 +414,7 @@ struct NotOnThisFirmware: View {
     @MainActor static func arrange(_ session: DeviceSession) -> NotOnThisFirmware {
         NotOnThisFirmware(title: "Arrange isn't on Skiff yet",
                           detail: "Skiff keeps a song as each track's list of patterns, with scenes, not SLOOP's four sections. "
-                              + "Jib's Arrange for that is still being designed. Until then, arrange on the FM-1 itself.")
+                              + "Lupe's Arrange for that is still being designed. Until then, arrange on the FM-1 itself.")
     }
 
     var body: some View {
@@ -481,7 +481,7 @@ struct ConnectionState: View {
             "Reading every track. This takes about a second."
         case .connected: ""
         case .wrongFirmware(let found, let proto):
-            "It reports “\(found)”, editor protocol \(proto). Jib works with \(FirmwareDialect.known). Install one of those, then plug the FM-1 in again."
+            "It reports “\(found)”, editor protocol \(proto). Lupe works with \(FirmwareDialect.known). Install one of those, then plug the FM-1 in again."
         case .lost(let why):
             "\(why). Plug it back in and the app picks up where it was."
         }

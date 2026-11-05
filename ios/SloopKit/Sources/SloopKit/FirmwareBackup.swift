@@ -51,7 +51,7 @@ public enum BackupError: Error, Equatable, CustomStringConvertible {
         case .refused(let rc): rc == 3 ? "Stop the FM-1 playing, then try again." : "The FM-1 refused the backup (rc \(rc))."
         case .changed: "The FM-1 changed during the backup. Stop it playing and try again."
         case .unreadable(let why): "The backup couldn't be read: \(why)."
-        case .notSupported: "This firmware has no backup Jib can read."
+        case .notSupported: "This firmware has no backup Lupe can read."
         }
     }
 }

@@ -151,7 +151,7 @@ final class FirmwareCentre {
         let level = d.batteryLevel, state = d.batteryState
         guard level >= 0, state == .unplugged, level < 0.3 else { return nil }
         let device = d.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
-        return "Charge the \(device) first: it's at \(Int(level * 100))%. The \(device) powers the FM-1 while it writes, so Jib installs below 30% only while charging."
+        return "Charge the \(device) first: it's at \(Int(level * 100))%. The \(device) powers the FM-1 while it writes, so Lupe installs below 30% only while charging."
     }
 
     func start(_ firmware: BundledFirmware, session: DeviceSession) {
@@ -320,7 +320,7 @@ struct FirmwareOfferCard: View {
         switch offer {
         case .loader(let id) where id == FirmwareInstaller.officialLoader:
             FirmwareCard(title: "Finish restoring stock V15") {
-                Text("The FM-1 is waiting in M-VAVE’s update mode (\(id)): a restore was cut off. Nothing is lost. Jib can finish it now with stock V15, the only firmware that update mode takes from Jib.")
+                Text("The FM-1 is waiting in M-VAVE’s update mode (\(id)): a restore was cut off. Nothing is lost. Lupe can finish it now with stock V15, the only firmware that update mode takes from Lupe.")
                     .bodyText()
                 Text("If you were installing something else with M-VAVE’s own updater, finish it there instead.")
                     .bodyText()
@@ -331,7 +331,7 @@ struct FirmwareOfferCard: View {
             }
         case .loader(let id):
             FirmwareCard(title: "Finish the firmware install") {
-                Text("The FM-1 is waiting in update mode (\(id)): an install was cut off. Nothing is lost. Jib can finish it now with \(centre.target.title).")
+                Text("The FM-1 is waiting in update mode (\(id)): an install was cut off. Nothing is lost. Lupe can finish it now with \(centre.target.title).")
                     .bodyText()
                 KeepPluggedNote()
             } actions: {
@@ -341,26 +341,26 @@ struct FirmwareOfferCard: View {
             }
         case .foreignLoader(let id):
             FirmwareCard(title: "The FM-1 is in another update mode") {
-                Text("It reports \(id), another firmware’s update mode. Jib only finishes installs of Skiff, SLOOP and stock V15. Finish this one with the updater that started it, then plug the FM-1 in again.")
+                Text("It reports \(id), another firmware’s update mode. Lupe only finishes installs of Skiff, SLOOP and stock V15. Finish this one with the updater that started it, then plug the FM-1 in again.")
                     .bodyText()
             } actions: {
                 CardKey(title: "OK", primary: true) { centre.dismissedOffer = offer }
             }
         case .update(let found):
             FirmwareCard(title: "An update for \(found)") {
-                Text("Jib carries \(found) with the screen link: press a button on the FM-1 and Jib shows that page, pick a tab in Jib and the FM-1 goes there too. Everything else stays as it is, your projects included, and they're backed up first. Installing takes about a minute.")
+                Text("Lupe carries \(found) with the screen link: press a button on the FM-1 and Lupe shows that page, pick a tab in Lupe and the FM-1 goes there too. Everything else stays as it is, your projects included, and they're backed up first. Installing takes about a minute.")
                     .bodyText()
             } actions: {
                 CardKey(title: "Not now") { centre.dismissedOffer = offer }
                 CardKey(title: "Install the update", primary: true) { centre.target = .skiff; centre.showPicker = true }
             }
         case .unsupported(let found):
-            FirmwareCard(title: "Jib needs other firmware") {
+            FirmwareCard(title: "Lupe needs other firmware") {
                 if centre.seesNewStock {
-                    Text("This FM-1 runs \(Self.name(found)). Jib works with Skiff 2.2 or SLOOP 2.8.4, and on this FM-1 it can install Skiff 2.2. SLOOP 2.8.4 can’t install on the flash chip that FM-1s with V16 most likely have. Installing takes about a minute.")
+                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and on this FM-1 it can install Skiff 2.2. SLOOP 2.8.4 can’t install on the flash chip that FM-1s with V16 most likely have. Installing takes about a minute.")
                         .bodyText()
                 } else {
-                    Text("This FM-1 runs \(Self.name(found)). Jib works with Skiff 2.2 or SLOOP 2.8.4, and carries both. Installing takes about a minute; your projects are backed up first when the firmware allows it.")
+                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and carries both. Installing takes about a minute; your projects are backed up first when the firmware allows it.")
                         .bodyText()
                 }
             } actions: {
@@ -449,9 +449,9 @@ struct FirmwarePicker: View {
             ? " Stock V15 can’t read Skiff’s or SLOOP’s projects, and installing over it later can write over some of them: the backup is how they come back."
             : ""
         if case .connected = session.status {
-            return "Jib backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Jib › Backups), then writes. Keep the FM-1 plugged in for about a minute." + stock
+            return "Lupe backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Lupe › Backups), then writes. Keep the FM-1 plugged in for about a minute." + stock
         }
-        return "There’s no backup this time: the FM-1 isn’t connected to Jib. Keep it plugged in for about a minute." + stock
+        return "There’s no backup this time: the FM-1 isn’t connected to Lupe. Keep it plugged in for about a minute." + stock
     }
 }
 
@@ -489,7 +489,7 @@ struct FirmwareInstallCover: View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(centre.doing).font(.system(size: 28, weight: .semibold)).accessibilityAddTraits(.isHeader)
-                Text("Keep Jib open and the FM-1 plugged in.").font(.system(size: 20, weight: .semibold))
+                Text("Keep Lupe open and the FM-1 plugged in.").font(.system(size: 20, weight: .semibold))
             }
             VStack(alignment: .leading, spacing: 8) {
                 ProgressTrack(value: overall)
@@ -508,7 +508,7 @@ struct FirmwareInstallCover: View {
                 }
             }
             if case .installing(.dropped) = centre.phase {
-                Label { Text("The FM-1 dropped off USB. It waits in update mode: plug it straight back in and Jib carries on by itself.").bodyText(primary: true) }
+                Label { Text("The FM-1 dropped off USB. It waits in update mode: plug it straight back in and Lupe carries on by itself.").bodyText(primary: true) }
                     icon: { Image(systemName: "cable.connector.slash") }
             }
             Text("Don’t unplug it or lock the screen. If it’s cut off anyway, nothing is lost: the FM-1 waits in update mode and running the install again finishes it.")
@@ -581,10 +581,10 @@ struct FirmwareInstallCover: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("The FM-1 restarted and reports \(id), as it should.").bodyText(primary: true)
                 if centre.target.isStock {
-                    Text("Jib can’t connect to the stock firmware. When you want Jib back, plug the FM-1 in and choose Skiff or SLOOP.").bodyText(primary: true)
+                    Text("Lupe can’t connect to the stock firmware. When you want Lupe back, plug the FM-1 in and choose Skiff or SLOOP.").bodyText(primary: true)
                 }
                 if let backup {
-                    Text("The backup is in Files: On My \(deviceWord) › Jib › Backups › \(backup)." + (centre.target.isStock ? " Restore it with that firmware’s editor once it’s back on." : "")).bodyText()
+                    Text("The backup is in Files: On My \(deviceWord) › Lupe › Backups › \(backup)." + (centre.target.isStock ? " Restore it with that firmware’s editor once it’s back on." : "")).bodyText()
                 }
             }
             HStack { Spacer(); CardKey(title: "Done", primary: true) { centre.close() } }
@@ -610,7 +610,7 @@ struct FirmwareInstallCover: View {
                 } else {
                     Text("Nothing was written: the FM-1 still runs its firmware. Check the cable and try again.").bodyText()
                 }
-                if let backup { Text("The backup taken first is in Files: Jib › Backups › \(backup).").bodyText() }
+                if let backup { Text("The backup taken first is in Files: Lupe › Backups › \(backup).").bodyText() }
             }
             HStack(spacing: 8) {
                 Spacer()
@@ -669,7 +669,7 @@ private struct NumberedLine: View {
 /// "Keep it plugged in", for the offers.
 private struct KeepPluggedNote: View {
     var body: some View {
-        Text("Keep the FM-1 plugged in and Jib open while it writes, about a minute.")
+        Text("Keep the FM-1 plugged in and Lupe open while it writes, about a minute.")
             .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
     }
 }

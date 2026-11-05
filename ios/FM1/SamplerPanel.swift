@@ -174,7 +174,7 @@ struct SamplerPanel: View {
 
     private var emptyText: String {
         switch rec.state {
-        case .denied: "Jib can't use the microphone. Turn it on in Settings › Jib."
+        case .denied: "Lupe can't use the microphone. Turn it on in Settings › Lupe."
         case .failed(let why): why
         default: String(format: "Tap the red key and play. Up to %.0f seconds.", rec.maxSeconds)
         }

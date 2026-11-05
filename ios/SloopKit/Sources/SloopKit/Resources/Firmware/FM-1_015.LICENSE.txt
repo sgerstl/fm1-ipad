@@ -6,7 +6,7 @@ Source: https://github.com/m-vave/fm1_open, sdk/firmware/FM-1_015.fwsc at commit
 SHA-256: db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a
 
 M-VAVE distributes this recovery image under the Apache License, Version 2.0 (THIRD_PARTY.md in that
-repository, "Boot/update resources and recovery firmware"). Jib carries it unchanged. The licence follows.
+repository, "Boot/update resources and recovery firmware"). Lupe carries it unchanged. The licence follows.
 
 --------------------------------------------------------------------------------
 

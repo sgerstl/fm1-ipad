@@ -23,9 +23,9 @@ public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
     }
     public var detail: String {
         switch self {
-        case .skiff: "Six tracks, songs and Arrange, with Jib's screen link. Skiff v2.2 plus a 73-line patch."
-        case .sloop: "Three tracks and drums, with Jib's screen link. SLOOP 2.8.4 plus a 47-line patch."
-        case .stock: "M-VAVE's own firmware, as the FM-1 shipped. Jib can't read or show it."
+        case .skiff: "Six tracks, songs and Arrange, with Lupe's screen link. Skiff v2.2 plus a 73-line patch."
+        case .sloop: "Three tracks and drums, with Lupe's screen link. SLOOP 2.8.4 plus a 47-line patch."
+        case .stock: "M-VAVE's own firmware, as the FM-1 shipped. Lupe can't read or show it."
         }
     }
     /// The package's identity, as the device reports it once installed (and the loader's, with "ota-").
@@ -53,8 +53,8 @@ public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
     /// Where its source is offered (GPL-3.0), or where the file comes from (V15: Apache-2.0, no source).
     public var source: String {
         switch self {
-        case .skiff: "github.com/illuminus5/skiff, tag v2.2, plus skiff/0001-screen-link.patch in Jib's repository"
-        case .sloop: "github.com/isod89/sloop-fm1, tag v2.8.4, plus sloop/0001-screen-link.patch in Jib's repository"
+        case .skiff: "github.com/illuminus5/skiff, tag v2.2, plus skiff/0001-screen-link.patch in Lupe's repository"
+        case .sloop: "github.com/isod89/sloop-fm1, tag v2.8.4, plus sloop/0001-screen-link.patch in Lupe's repository"
         case .stock: "github.com/m-vave/fm1_open, sdk/firmware/FM-1_015.fwsc (Apache-2.0)"
         }
     }
@@ -88,7 +88,7 @@ public enum PackageError: Error, Equatable, CustomStringConvertible {
     public var description: String {
         switch self {
         case .missing(let n): "The firmware file \(n) is missing from the app."
-        case .hashMismatch: "The firmware file isn't the one Jib was tested with (its SHA-256 differs). Nothing was sent."
+        case .hashMismatch: "The firmware file isn't the one Lupe was tested with (its SHA-256 differs). Nothing was sent."
         case .wrongIdentity(let e, let f): "The firmware file says it is \(f), not \(e). Nothing was sent."
         case .notFM1(let p): "This isn't an FM-1 firmware package (identity “\(p)”)."
         case .noLoader: "This package has no Felucca update loader. Nothing was sent."
