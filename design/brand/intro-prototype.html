@@ -1,0 +1,242 @@
+<title>Lupe Intro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* A single dark world: the scope's glass. The stage is an iPad in landscape; controls sit quietly below it. */
+:root {
+  color-scheme: dark;
+  --glass: #0A0A0B;       /* the screen, same as the icon's background */
+  --room: #050506;        /* around the device */
+  --bezel: #17181A;
+  --phosphor: #33FF66;    /* P1 green */
+  --phosphor-dim: #1F7A3A;
+  --ink: #E6EFE8;         /* text, faintly green-white */
+  --muted: #8FA396;
+  --ui: system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --mark: "Josefin Sans", system-ui, sans-serif;
+}
+html, body { height: 100%; }
+body {
+  background: var(--room); color: var(--ink); font-family: var(--ui);
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  padding-block: 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+.device {
+  width: min(100%, 960px); aspect-ratio: 4 / 3; max-width: 100%;
+  background: var(--bezel); border-radius: 28px; padding: 14px; box-sizing: border-box;
+  box-shadow: 0 30px 80px rgba(0,0,0,.6);
+}
+canvas { display: block; width: 100%; height: 100%; border-radius: 16px; background: var(--glass); cursor: pointer; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; max-width: 960px; }
+button {
+  font: 600 14px/1 var(--ui); color: var(--glass); background: var(--ink);
+  border: 0; border-radius: 8px; height: 40px; padding: 0 16px; cursor: pointer;
+  box-shadow: 0 2px 0 #6E7F73;
+}
+button.secondary { background: #1C1F1D; color: var(--ink); box-shadow: 0 2px 0 #000; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 3px; }
+label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.note { max-width: 62ch; color: var(--muted); font-size: 13px; line-height: 1.5; text-align: center; margin: 0; }
+.time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 6ch; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300&display=swap">
+
+<div class="device"><canvas id="stage" aria-label="Lupe's intro: the icon zooms up, the scope switches on and traces its figure, then the name appears. Tap to skip."></canvas></div>
+<div class="controls">
+  <button id="full">Replay</button>
+  <label><input type="checkbox" id="reduce"> Reduce Motion</label>
+  <span class="time" id="time" aria-live="off">0.00 s</span>
+</div>
+<p class="note">One version on every launch: one pass, then the CRT switch-off into the app, about 3.4 s. Tap the screen to skip to the app. With Reduce Motion the finished logo fades in. The name's typeface is a placeholder until the wordmark is picked.</p>
+
+<script>
+(() => {
+  const cv = document.getElementById('stage'), ctx = cv.getContext('2d');
+  const trail = document.createElement('canvas'), tc = trail.getContext('2d');   // the phosphor layer
+  const TAU = Math.PI * 2, BEAM_AT = 0.31;
+  const C_OLD = [14,107,30], C_FRESH = [200,255,176];
+  let W, H, S, ox, oy, raf, t0, plan, lastU;
+
+  const PLANS = {
+    full:  { zoom: 0.42, flash: 0.22, loops: 1, trace: 1.06, settle: 0.4, nameAt: 0.35, name: 0.52, hold: 0.4, squash: 0.12, pinch: 0.1, blip: 0.18 }   // the name starts 35% into the settle   // one pass, at the slower speed (25% slower than the first prototype)
+  };
+
+  function size() {
+    const r = cv.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = trail.width = Math.round(r.width * d); cv.height = trail.height = Math.round(r.height * d);
+    W = cv.width; H = cv.height;
+    S = Math.min(W, H) * 0.525;               // 25% smaller than before                 // the scope square
+    ox = (W - S) / 2; oy = (H - S * 1.32) / 2;   // the scope and the name centred as one group
+  }
+  // the figure, in the icon's 100-unit square: x = sin(3t + 0.9 sin 2t), y = sin 2t
+  function fig(u) {
+    const t = (u + BEAM_AT) * TAU;
+    return [50 + Math.sin(3*t + 0.9*Math.sin(2*t)) * 28, 50 + Math.sin(2*t) * 28];
+  }
+  const X = v => ox + v / 100 * S, Y = v => oy + v / 100 * S;
+  const ease = x => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+
+  function graticule(c, a) {
+    c.save(); c.strokeStyle = `rgba(85,255,136,${0.10*a})`; c.lineWidth = Math.max(1, S/400);
+    for (let v = 14; v <= 86; v += 12) {
+      c.beginPath(); c.moveTo(X(v), Y(14)); c.lineTo(X(v), Y(86)); c.stroke();
+      c.beginPath(); c.moveTo(X(14), Y(v)); c.lineTo(X(86), Y(v)); c.stroke();
+    }
+    c.strokeStyle = `rgba(85,255,136,${0.16*a})`;
+    for (let k = 0; k <= 30; k++) {
+      const v = 14 + 2.4*k;
+      c.beginPath(); c.moveTo(X(v), Y(48.8)); c.lineTo(X(v), Y(51.2)); c.stroke();
+      c.beginPath(); c.moveTo(X(48.8), Y(v)); c.lineTo(X(51.2), Y(v)); c.stroke();
+    }
+    c.restore();
+  }
+  function floor(c, a) {                       // the faint full figure still lit
+    c.save(); c.strokeStyle = `rgba(51,255,102,${0.2*a})`; c.lineWidth = S*0.022;
+    c.lineJoin = 'round'; c.beginPath();
+    for (let i = 0; i <= 600; i++) { const [x,y] = fig(i/600); i ? c.lineTo(X(x),Y(y)) : c.moveTo(X(x),Y(y)); }
+    c.stroke(); c.restore();
+  }
+  function stroke(u0, u1) {                    // new phosphor from u0 to u1 (loops of the figure)
+    const steps = Math.max(2, Math.ceil((u1 - u0) * 900));
+    tc.save(); tc.lineCap = 'round'; tc.lineJoin = 'round';
+    tc.shadowColor = 'rgba(51,255,102,0.9)'; tc.shadowBlur = S * 0.03;
+    tc.strokeStyle = `rgb(${C_FRESH})`; tc.lineWidth = S * 0.028;
+    tc.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const [x,y] = fig(u0 + (u1-u0)*i/steps);
+      i ? tc.lineTo(X(x),Y(y)) : tc.moveTo(X(x),Y(y));
+    }
+    tc.stroke(); tc.restore();
+  }
+  function decay(k) {                          // phosphor cools: fade toward deep green, then dark
+    tc.save(); tc.globalCompositeOperation = 'source-atop';
+    tc.fillStyle = `rgba(${C_OLD},${0.10*k})`; tc.fillRect(0,0,W,H);
+    tc.globalCompositeOperation = 'destination-out';
+    tc.fillStyle = `rgba(0,0,0,${0.055*k})`; tc.fillRect(0,0,W,H);
+    tc.restore();
+  }
+  function beam(u, a) {
+    const [x,y] = fig(u), px = X(x), py = Y(y), r = S * 0.11;
+    const g = ctx.createRadialGradient(px,py,0, px,py,r);
+    g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(0.18, `rgba(255,255,255,${0.95*a})`);
+    g.addColorStop(0.38, `rgba(85,255,136,${0.85*a})`); g.addColorStop(1, 'rgba(85,255,136,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px,py,r,0,TAU); ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.beginPath(); ctx.arc(px,py,S*0.024,0,TAU); ctx.fill();
+  }
+  function name(a) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#F4F4F6';          // the app's own white: the name bridges the scope and the app
+    ctx.shadowColor = 'rgba(255,255,255,0.45)'; ctx.shadowBlur = S * 0.03;
+    ctx.font = `300 ${Math.round(S*0.16)}px ${getComputedStyle(document.documentElement).getPropertyValue('--mark')}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.letterSpacing = `${S*0.02}px`;
+    ctx.fillText('lupe', W/2, oy + S * 1.3);
+    ctx.restore();
+  }
+
+  function frame(now) {
+    const t = (now - t0) / 1000, p = plan; let k = t;
+    document.getElementById('time').textContent = t.toFixed(2) + ' s';
+    ctx.fillStyle = '#0A0A0B'; ctx.fillRect(0,0,W,H);
+
+    const tz = p.zoom, tf = tz + p.flash, tt = tf + p.trace, ts = tt + p.settle, na = (tt + p.settle * p.nameAt) * 0.8,   /* the name 20% sooner: about 1.47 s in, as the trace finishes */ tn = Math.max(ts, na + p.name), th = tn + p.hold, to1 = th + p.squash, to2 = to1 + p.pinch, end = to2 + p.blip;
+    if (t < tz) {                               // 1. the icon grows to full size, the scope off
+      const e = ease(t / tz), icon = Math.min(W,H) * 0.16, side = icon + (Math.max(W,H) * 1.05 - icon) * e;
+      ctx.save(); ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+      const rr = side * 0.225 * (1 - e);
+      ctx.fillStyle = '#0A0A0B'; ctx.beginPath(); ctx.roundRect((W-side)/2, (H-side)/2, side, side, rr); ctx.fill();
+      ctx.globalAlpha = e; graticule(ctx, 0.6); ctx.restore();
+    } else if (t < tf) {                        // 2. power on: a line blooms open, one flash
+      graticule(ctx, 1);
+      const e = (t - tz) / p.flash, h = S * Math.pow(e, 2.2), a = 1 - e * 0.85;
+      ctx.save(); ctx.shadowColor = 'rgba(200,255,176,1)'; ctx.shadowBlur = S * 0.08;
+      ctx.fillStyle = `rgba(220,255,210,${a})`;
+      ctx.fillRect(ox - S*0.15*(1-e), oy + S/2 - Math.max(2, h/2), S*(1 + 0.3*(1-e)), Math.max(2, h));
+      ctx.restore();
+      ctx.fillStyle = `rgba(51,255,102,${0.10*(1-e)})`; ctx.fillRect(0,0,W,H);
+    } else {
+      graticule(ctx, 1);
+      const traceT = Math.min(1, (t - tf) / p.trace);
+      const settle = t < tt ? 0 : Math.min(1, (t - tt) / p.settle);
+      const u = p.loops * (traceT < 1 ? traceT : 1) + (settle ? 0.02 * ease(settle) : 0);   // eases to its rest
+      if (lastU == null) lastU = 0;
+      if (settle < 1) decay(t < tt ? 1 : 1 - ease(settle));   // the phosphor stops cooling once it settles: the last frame is the icon
+      if (u > lastU) stroke(lastU, u);
+      lastU = u;
+      floor(ctx, Math.min(1, (t - tf) / 0.4));
+      ctx.drawImage(trail, 0, 0);
+      beam(u, 1);
+      if (t >= na) name(ease((t - na) / p.name));
+      if (t >= th) { off(t - th); }
+    }
+    if (t < end) raf = requestAnimationFrame(frame); else app(1);
+  }
+  // the app behind: a sketch of Lupe's Sequence page, so the hand-over can be judged
+  function app(a) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = '#0D0D0F'; ctx.fillRect(0,0,W,H);
+    const u = W / 100, TR = ['#FF5A36','#22C3B4','#FFBF00','#9580FF','#FF6FAE','#A3E635'];
+    ctx.fillStyle = '#34343B'; ctx.beginPath(); ctx.roundRect(24*u, 2*u, 9*u, 4*u, u); ctx.fill();
+    ctx.fillStyle = '#EDEDF0'; ctx.font = `600 ${1.5*u}px system-ui`; ctx.textBaseline = 'middle';
+    ctx.fillText('Sequence', 25*u, 4*u); ctx.fillStyle = '#A1A1AA';
+    ['Shape','Arrange','Browse'].forEach((n,i) => ctx.fillText(n, (36 + i*8)*u, 4*u));
+    ctx.fillStyle = '#1A1A1E'; ctx.beginPath(); ctx.roundRect(2*u, 8*u, 96*u, 20*u, u); ctx.fill();
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 16; c++) {
+      ctx.fillStyle = (r*7 + c*3) % 5 < 2 ? TR[r] : '#2A2A30';
+      ctx.fillRect((16 + c*5)*u, (9.5 + r*3)*u, 4.4*u, 2*u);
+    }
+    ctx.fillStyle = '#1A1A1E';
+    ctx.beginPath(); ctx.roundRect(2*u, 30*u, 26*u, H - 32*u, u); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(30*u, 30*u, 68*u, H - 32*u, u); ctx.fill();
+    ctx.restore();
+  }
+  // 6. the switch-off: the picture squashes to a line, the line pinches to a dot, the dot blips out over the app
+  let snap = null;
+  function off(dt) {
+    const p = plan;
+    if (!snap) { snap = document.createElement('canvas'); snap.width = W; snap.height = H; snap.getContext('2d').drawImage(cv, 0, 0); }
+    const cy = oy + S * 0.66, cx = W / 2;
+    ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+    if (dt < p.squash) {
+      const e = ease(dt / p.squash), sy = Math.max(0.004, 1 - e);
+      ctx.save(); ctx.translate(0, cy); ctx.scale(1, sy); ctx.translate(0, -cy); ctx.drawImage(snap, 0, 0); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(200,255,190,${0.5*e})`;
+      ctx.fillRect(0, cy - H*sy/2, W, H*sy); ctx.restore();
+    } else if (dt < p.squash + p.pinch) {
+      const e = ease((dt - p.squash) / p.pinch), w = W * 0.9 * (1 - e) + S * 0.03;
+      ctx.save(); ctx.shadowColor = 'rgba(200,255,190,1)'; ctx.shadowBlur = S * 0.06;
+      ctx.fillStyle = '#F2FFF0'; ctx.fillRect(cx - w/2, cy - S*0.006, w, S*0.012); ctx.restore();
+    } else {
+      const e = Math.min(1, (dt - p.squash - p.pinch) / p.blip);
+      app(ease(e));
+      const r = S * (0.03 + 0.05 * Math.sin(Math.min(1, e * 1.6) * Math.PI)) , a = 1 - e;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 3);
+      g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(0.3, `rgba(200,255,190,${0.8*a})`); g.addColorStop(1, 'rgba(85,255,136,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r * 3, 0, TAU); ctx.fill();
+    }
+  }
+  function rest() {                             // the finished logo: also the Reduce Motion frame
+    ctx.fillStyle = '#0A0A0B'; ctx.fillRect(0,0,W,H);
+    graticule(ctx, 1); floor(ctx, 1); ctx.drawImage(trail, 0, 0); beam(plan ? plan.loops + 0.02 : 0, 1); name(1);
+  }
+  function settled() {                          // draw the rest pose's trail without animating
+    tc.clearRect(0,0,W,H);
+    for (let i = 0; i < 60; i++) { stroke(i/60, (i+1)/60); decay(1); }
+  }
+  function play(which) {
+    cancelAnimationFrame(raf); size(); tc.clearRect(0,0,W,H); lastU = null; snap = null; plan = PLANS[which];
+    if (document.getElementById('reduce').checked || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      settled(); let a = 0; const fade = () => { a = Math.min(1, a + 0.06); ctx.globalAlpha = a; rest(); ctx.globalAlpha = 1; if (a < 1) raf = requestAnimationFrame(fade); };
+      fade(); setTimeout(() => { let b = 0; const x = () => { b = Math.min(1, b + 0.05); rest(); app(b); if (b < 1) raf = requestAnimationFrame(x); }; x(); }, 1600); return;
+    }
+    t0 = performance.now(); raf = requestAnimationFrame(frame);
+  }
+  cv.addEventListener('click', () => { cancelAnimationFrame(raf); app(1); });
+  document.getElementById('full').addEventListener('click', () => play('full'));
+  document.getElementById('reduce').addEventListener('change', () => play('full'));
+  window.addEventListener('resize', () => { size(); plan ? (settled(), rest()) : 0; });
+  size(); plan = PLANS.full; settled(); rest();   // complete at rest: the finished logo first
+  setTimeout(() => play('full'), 400);
+})();
+</script>
