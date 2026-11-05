@@ -30,3 +30,22 @@ A tap on such a lane sent MOTION op 3, which the FM-1 answers with **rc 1** (inv
 
 - On the FM-1 itself.
 - Drag and hold on the new lane, beyond the existing CHORUS lane. They're the same gesture code, which wasn't touched (Scott wants to talk through lane editing next).
+
+## The Motion chip (Scott's polish, same build)
+
+- **The banner row is gone.** It held the 64-slot counter, the key and + Lane, and sat under the grid.
+- **A "Motion 7/64 ▾" chip** now sits in the pattern header, after the entry, on note tracks. It turns amber (a new `Theme.caution` token, with a warning icon, so the state isn't colour alone) when fewer than 8 of the shared 64 are free.
+- **Its menu:**
+  - Show or Hide the lanes;
+  - + Lane (only what Skiff records);
+  - Clear T*n*'s motion;
+  - What uses the 64 (jumps to a track);
+  - the key: a line is a recorded change held until the next one, a diamond is a lock on that step only.
+- One deviation: Scott said "tapping it toggles the lanes and opens a menu". Doing both on one tap fought each other in a quick try, so Show/Hide is the menu's first item.
+- **Lanes only when there's motion:** a pattern with none (and none added) shows no lanes, and the grid takes the space. Lanes are 28 pt, up to 4 before they scroll, with their names in the note-name column (`chip-with-and-without.jpg`: T1 with CHORUS and REVERB, T3 with none).
+- The notes for "song playing: Stop" and a refusal sit above the lanes as before.
+- **Lane editing gestures are unchanged**, waiting on Scott's talk.
+
+**For the polish pass:**
+- At 28 pt a lane is shorter than the 44 pt target. It's full width, and a point's grab zone is ±22 pt.
+- Drum tracks have no chip and no lanes, as before.

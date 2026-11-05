@@ -16,13 +16,10 @@ struct MotionLanes: View {
     let offsetX: CGFloat
     let width: CGFloat
     @Environment(\.grid) private var grid
-    @State private var frame: CGRect = .zero          // global, for the menus' anchors
-    private var menuAt: CGPoint { CGPoint(x: frame.maxX - 260, y: frame.minY + Self.headerHeight) }
 
-    static let laneHeight: CGFloat = 52
-    static let headerHeight: CGFloat = 36
+    static let laneHeight: CGFloat = 28
     /// Lanes shown at once; more scroll.
-    static let visibleLanes = 3
+    static let visibleLanes = 4
 
     /// The parameters with a lane: those with records, then any added with + Lane.
     static func laneIDs(_ session: DeviceSession, _ ui: EditorUI, track: Int) -> [Int] {
@@ -46,43 +43,21 @@ struct MotionLanes: View {
         }
     }
 
-    /// How tall the motion area is: the header, then the lanes (or the empty or full note).
+    /// How tall the motion area is: its notes (song playing, a refusal), then the lanes; 0 with neither.
     static func height(_ session: DeviceSession, _ ui: EditorUI, track: Int) -> CGFloat {
-        let n = laneIDs(session, ui, track: track).count
-        let note: CGFloat = (session.motionUsed >= DeviceSession.motionMax || session.song.songPlaying ? 52 : 0)
-            + (refusal(session, track: track) != nil ? 52 : 0)
-        return headerHeight + 8 + note + (n == 0 ? 64 : CGFloat(min(n, visibleLanes)) * (laneHeight + 4))
+        let n = shownIDs(session, ui, track: track).count
+        var h: CGFloat = n == 0 ? 0 : CGFloat(min(n, visibleLanes)) * (laneHeight + 4)
+        if n > 0, session.song.songPlaying { h += 48 }
+        if refusal(session, track: track) != nil { h += 48 }
+        return h
     }
 
     var body: some View {
-        let ids = Self.laneIDs(session, ui, track: track)
-        let used = session.motionUsed, full = used >= DeviceSession.motionMax
+        let ids = Self.shownIDs(session, ui, track: track)
         let playing = session.song.songPlaying
-        VStack(alignment: .leading, spacing: 8) {
-            header(used: used)
-            if let said = Self.refusal(session, track: track) {
-                HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle").accessibilityHidden(true)
-                    Text(said).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Button { session.dismissMotionRefusal() } label: {
-                        Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss")
-                }
-                .padding(.leading, 12).frame(minHeight: 44)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
-                .task(id: session.motionRefusal?.at) {
-                    try? await Task.sleep(for: .seconds(6))
-                    if Self.refusal(session, track: track) == nil || session.motionRefusal.map({ Date.now.timeIntervalSince($0.at) >= 6 }) == true {
-                        session.dismissMotionRefusal()
-                    }
-                }
-                .accessibilityElement(children: .combine)
-            }
-            if playing {
-                // Jib's rule: an entry that starts loads its pattern with its own motion (bank.c), so an edit made
+        VStack(alignment: .leading, spacing: 4) {
+            if playing, !ids.isEmpty {
+                // Lupe's rule: an entry that starts loads its pattern with its own motion (bank.c), so an edit made
                 // while the song plays wouldn't last; the lanes wait for STOP
                 HStack(spacing: 10) {
                     Image(systemName: "lock").accessibilityHidden(true)
@@ -95,33 +70,30 @@ struct MotionLanes: View {
                     .buttonStyle(PressSink())
                 }
                 .padding(.horizontal, 12).frame(minHeight: 44)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
-                .padding(.leading, 88)
-            } else if full {
-                HStack(spacing: 10) {
-                    Text("Full: 64 of 64.").font(.system(size: 13, weight: .semibold))
-                    Text("All tracks share 64; new moves aren't recorded until some are deleted.").font(.system(size: 13))
-                        .foregroundStyle(Theme.text).lineLimit(2)
-                    Spacer(minLength: 0)
-                    Button { ui.menu = JibMenu(title: "Motion records", groups: { usage }, at: menuAt) } label: {
-                        Text("Show what uses them").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 12).frame(minHeight: 36).raisedKey()
-                    }
-                    .buttonStyle(PressSink())
-                }
-                .padding(.horizontal, 12).frame(minHeight: 44)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Theme.well))
                 .padding(.leading, 88)
             }
-            if ids.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No motion on T\(track + 1) yet").font(.system(size: 15, weight: .semibold))
-                    Text("Arm REC and play to record knob moves, or lock a step's knobs from the step panel.")
-                        .font(.system(size: 13)).foregroundStyle(Theme.text.opacity(0.85))
+            if let said = Self.refusal(session, track: track) {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle").accessibilityHidden(true)
+                    Text(said).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button { session.dismissMotionRefusal() } label: {
+                        Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss")
                 }
-                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.well))
+                .padding(.leading, 12).frame(minHeight: 44)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
                 .padding(.leading, 88)
-            } else {
+                .task(id: session.motionRefusal?.at) {
+                    try? await Task.sleep(for: .seconds(6))
+                    if session.motionRefusal.map({ Date.now.timeIntervalSince($0.at) >= 6 }) == true { session.dismissMotionRefusal() }
+                }
+                .accessibilityElement(children: .combine)
+            }
+            if !ids.isEmpty {
                 ScrollView {
                     VStack(spacing: 4) {
                         ForEach(ids, id: \.self) { id in lane(id, readOnly: playing) }
@@ -131,45 +103,15 @@ struct MotionLanes: View {
                 .frame(height: CGFloat(min(ids.count, Self.visibleLanes)) * (Self.laneHeight + 4))
             }
         }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
     }
 
-    // MARK: The header: the shared 64, the legend, + Lane
-
-    private func header(used: Int) -> some View {
-        let colour = Theme.track[track]
-        return HStack(spacing: 12) {
-            Text("Motion").font(.system(size: 15, weight: .semibold))
-            HStack(spacing: 2) {
-                ForEach(0..<32, id: \.self) { k in
-                    RoundedRectangle(cornerRadius: 1).fill(k < (used + 1) / 2 ? colour : Theme.stepEmpty).frame(width: 4, height: 12)
-                }
-            }
-            .accessibilityElement()
-            .accessibilityLabel("\(used) of 64 motion records used, shared by all tracks")
-            Text("\(used) of 64 records · shared by all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                .accessibilityHidden(true)
-            Spacer(minLength: 0)
-            HStack(spacing: 6) {
-                RoundedRectangle(cornerRadius: 2).fill(colour).frame(width: 10, height: 3)
-                Text("recorded, holds").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                Diamond(colour: colour).frame(width: 10, height: 10).padding(.leading, 6)
-                Text("lock, this step only").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-            }
-            .accessibilityElement(children: .combine)
-            Button { openAddLane() } label: {
-                Text("+ Lane").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 12).frame(minHeight: 36).raisedKey()
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .disabled(session.song.songPlaying)
-            .accessibilityHint("Adds a lane for another of the track's parameters")
-        }
-        .padding(.leading, 88)
-        .frame(height: Self.headerHeight)
+    /// The lanes drawn: none while hidden from the chip, or when the track has no motion and none was added.
+    static func shownIDs(_ session: DeviceSession, _ ui: EditorUI, track: Int) -> [Int] {
+        ui.motionHidden ? [] : laneIDs(session, ui, track: track)
     }
 
-    private var usage: [[MenuItem]] {
+    /// Which tracks use the shared 64, to jump to one.
+    static func usage(_ session: DeviceSession) -> [[MenuItem]] {
         [session.trackIndices.compactMap { t in
             let n = session.motion[t]?.events.count ?? 0
             return n == 0 ? nil : MenuItem(title: "T\(t + 1) · \(session.tracks[t].displayName): \(n)", chip: ("\(t + 1)", Theme.track[t])) {
@@ -178,26 +120,26 @@ struct MotionLanes: View {
         }]
     }
 
-    /// + Lane: the track's parameters on its Shape pages, by page.
-    private func openAddLane() {
-        let have = Set(Self.laneIDs(session, ui, track: track))
-        // the track's pages, its engine's EDIT 1 and 2 included; on Skiff only what it records (a lane of anything else
-        // took no points: the FM-1 refused every one, 2026-11-05)
+    /// + Lane's choices: the track's pages, its engine's EDIT 1 and 2 included; on Skiff only what it records (a lane
+    /// of anything else took no points: the FM-1 refused every one, 2026-11-05).
+    static func addLaneGroups(_ session: DeviceSession, _ ui: EditorUI, track: Int) -> [[MenuItem]] {
+        let have = Set(laneIDs(session, ui, track: track))
         let pages = SoundPage.shown(session, .edit).filter { $0.engineEdit != 0 }
             + SoundPage.pages(session).filter { $0.scope == 0 && $0.engineEdit == 0 }
-        ui.menu = JibMenu(title: "Add a lane", groups: {
-            [pages.compactMap { p in
-                var seen = Set<Int>()
-                let ids = (p.ids.compactMap { $0 } + p.picks.flatMap { $0.compactMap { $0 } })
-                    .filter { !have.contains($0) && Self.recordable(session, $0) && seen.insert($0).inserted }
-                guard !ids.isEmpty else { return nil }
-                return MenuItem(title: p.title(session), children: {
-                    [ids.map { id in
-                        MenuItem(title: session.trackDesc(id)?.label ?? "\(id)") { ui.addedLanes[track, default: []].append(id) }
-                    }]
-                })
-            }]
-        }, at: menuAt)
+        return [pages.compactMap { p in
+            var seen = Set<Int>()
+            let ids = (p.ids.compactMap { $0 } + p.picks.flatMap { $0.compactMap { $0 } })
+                .filter { !have.contains($0) && recordable(session, $0) && seen.insert($0).inserted }
+            guard !ids.isEmpty else { return nil }
+            return MenuItem(title: p.title(session), children: {
+                [ids.map { id in
+                    MenuItem(title: session.trackDesc(id)?.label ?? "\(id)") {
+                        ui.addedLanes[track, default: []].append(id)
+                        ui.motionHidden = false
+                    }
+                }]
+            })
+        }]
     }
 
     // MARK: One lane
@@ -408,5 +350,51 @@ struct MotionLane: View {
                 ui.addedLanes[track]?.removeAll { $0 == id }
              }]]
         }, at: CGPoint(x: frame.minX + p.x, y: frame.minY + p.y))
+    }
+}
+
+
+/// The pattern header's motion chip: the shared 64 as "Motion 9/64", amber when fewer than 8 are free. It opens a
+/// menu: the lanes shown or hidden, + Lane, clearing the track's motion, what uses the 64, and the key.
+struct MotionChip: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    let track: Int
+    @State private var frame: CGRect = .zero
+
+    var body: some View {
+        let used = session.motionUsed, free = DeviceSession.motionMax - used
+        let low = free < 8
+        Button { open() } label: {
+            HStack(spacing: 4) {
+                if low { Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)) }
+                Text("Motion").font(.system(size: 13)).foregroundStyle(low ? Theme.caution : Theme.textSecondary)
+                Text("\(used)/\(DeviceSession.motionMax)").font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(low ? Theme.caution : Theme.text)
+            .padding(.horizontal, 10).frame(height: 36).raisedKey()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .accessibilityLabel("Motion, \(used) of 64 records used by all tracks" + (low ? ", \(free) free" : ""))
+        .accessibilityHint("Shows or hides the lanes, adds a lane, clears the track's motion")
+    }
+
+    private func open() {
+        let lanes = MotionLanes.laneIDs(session, ui, track: track)
+        let n = session.motion[track]?.events.count ?? 0
+        let stopped = !session.song.songPlaying
+        ui.menu = JibMenu(title: "Motion · T\(track + 1)", groups: {
+            [[MenuItem(title: ui.motionHidden ? "Show the lanes" : "Hide the lanes", enabled: !lanes.isEmpty) { ui.motionHidden.toggle() },
+              MenuItem(title: "+ Lane", enabled: stopped, children: { MotionLanes.addLaneGroups(session, ui, track: track) }),
+              MenuItem(title: "Clear T\(track + 1)'s motion", enabled: n > 0 && stopped) {
+                  session.clearMotion(track: track)
+                  ui.addedLanes[track] = nil
+              }],
+             [MenuItem(title: "What uses the 64", enabled: session.motionUsed > 0, children: { MotionLanes.usage(session) })],
+             [.note("Line: a recorded change, held until the next one."), .note("Diamond: a lock, this step only.")]]
+        }, at: CGPoint(x: frame.minX, y: frame.maxY))
     }
 }

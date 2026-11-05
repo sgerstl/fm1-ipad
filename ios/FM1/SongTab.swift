@@ -164,6 +164,7 @@ struct PatternPane: View {
             .accessibilityLabel("Pattern \(pattern.map(Entries.number) ?? "none")")
             .accessibilityHint("Pick another pattern for this entry, or a new empty one")
             if let entry { Text("entry \(Entries.letter(entry))").font(.system(size: 13)).foregroundStyle(Theme.textSecondary) }
+            if !session.isKit(t) { MotionChip(session: session, ui: ui, track: t) }
             if !shared.isEmpty, let entry {
                 Text("also on entr\(shared.count == 1 ? "y" : "ies") \(shared.map(Entries.letter).joined(separator: ", "))")
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)

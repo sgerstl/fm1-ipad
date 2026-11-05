@@ -29,7 +29,8 @@ struct PianoRoll: View {
         // Skiff: the motion lanes under the velocity, the grid shorter by their height
         let motion = session.dialect == .skiff
         let base = Self.gridHeight - (Self.panelHeight - editorHeight) + (inSongTab ? 40 : 0)
-        let gridHeight = max(120, motion ? base - MotionLanes.height(session, ui, track: track) - 8 : base)
+        let motionHeight = motion ? MotionLanes.height(session, ui, track: track) : 0
+        let gridHeight = max(120, motionHeight > 0 ? base - motionHeight - 8 : base)
         let contentSize = CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(gridHeight, CGFloat(rows.count) * grid.rowHeight))
         let first = Int((offset.x / grid.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / grid.rowHeight).rounded())
@@ -84,7 +85,7 @@ struct PianoRoll: View {
                     .recessed()
                     .accessibilityHidden(true)
             }
-            if motion {
+            if motionHeight > 0 {
                 MotionLanes(session: session, ui: ui, track: track, offsetX: offset.x, width: grid.barWidth)
             }
             Spacer(minLength: 0)

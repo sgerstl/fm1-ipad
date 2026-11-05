@@ -40,6 +40,8 @@ enum Theme {
     static let rec = Color(hex: 0xFF2C34)
     static let recWell = Color(hex: 0x3A1214)
     static let recText = Color(hex: 0xFF8A8D)
+    /// Running low (the motion records nearly used): amber, never the accent or REC's red.
+    static let caution = Color(hex: 0xFFB54A)
     static let knob = [Color(hex: 0x287CFF), Color(hex: 0x1ECC70), Color(hex: 0xFFC618), Color(hex: 0xFF2C34)]
 
     static let canvas = CGSize(width: 1376, height: 1032)    // 13-inch iPad Air, landscape

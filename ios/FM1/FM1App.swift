@@ -175,6 +175,8 @@ final class EditorUI {
     var trackControlsAnchor: CGRect = .zero
     /// Motion lanes added with + Lane, per track (parameters with no records yet).
     var addedLanes: [Int: [Int]] = [:]
+    /// The motion lanes hidden from the pattern header's chip (they show whenever there's motion otherwise).
+    var motionHidden = false
     var projectsOpen = false
     /// A place the FM-1 sent Jib to, lit for a moment (the whole-track controls for PATTERN, and so on).
     var flash: Flash?
