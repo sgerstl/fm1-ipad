@@ -10,7 +10,9 @@ import SwiftUI
     let session: DeviceSession
     let store: SkiffSongStore
 
-    private func entries(_ t: Int) -> [SongEntry]? { store.song?.tracks[safe: t]?.entries }
+    /// The track's entries, dangling CHAIN flags off (anything moved in after one would join it).
+    private func entries(_ t: Int) -> [SongEntry]? { store.song?.tracks[safe: t].map { SongSections.unchainDangling($0.entries) } }
+    private func span(_ t: Int) -> ClosedRange<Int>? { store.song?.tracks[safe: t]?.span }
 
     private func full(_ t: Int, adding n: Int = 1) -> Bool {
         guard let l = store.song?.tracks[safe: t] else { return true }
@@ -40,7 +42,7 @@ import SwiftUI
 
     /// The block goes on into the next one as one pattern (REPS 0, CHAIN).
     func chainIntoNext(_ t: Int, _ b: SongBlock) {
-        guard var es = entries(t), b.entries.upperBound < 15, !es[b.entries.upperBound + 1].isEmpty else {
+        guard var es = entries(t), b.kind != .gap, b.entries.upperBound < 15, !es[b.entries.upperBound + 1].isEmpty else {
             store.refuse(track: t, entry: b.entries.lowerBound, "Nothing after it to chain into")
             return
         }
@@ -51,15 +53,17 @@ import SwiftUI
     /// A chain back into its parts, each played once.
     func split(_ t: Int, _ b: SongBlock) {
         guard var es = entries(t) else { return }
-        for i in b.entries where es[i].chained { es[i].chained = false; es[i].reps = 1 }
+        for i in b.entries { es[i].chained = false; es[i].reps = 1 }
         Task { await store.rewrite(track: t, to: es, focus: b.entries.lowerBound) }
     }
 
     /// The block's entries out of the list; the ones after it move up.
     func delete(_ t: Int, _ b: SongBlock) {
-        guard var es = entries(t) else { return }
+        guard var es = entries(t), let sp = span(t) else { return }
         es.removeSubrange(b.entries)
         es += Array(repeating: .empty, count: 16 - es.count)
+        // a rest left at the start or end would be passed over: it stays a rest
+        es = SongSections.restsAtEdges(es, range: sp.lowerBound..<(sp.upperBound + 1 - b.entries.count))
         Task { await store.rewrite(track: t, to: es, focus: b.entries.lowerBound) }
     }
 
@@ -163,7 +167,7 @@ struct EntryInspector: View {
         .accessibilityLabel("Selected entry")
     }
 
-    private var canChain: Bool { block.entries.upperBound < 15 && !list.entries[block.entries.upperBound + 1].isEmpty }
+    private var canChain: Bool { block.kind != .gap && block.entries.upperBound < 15 && !list.entries[block.entries.upperBound + 1].isEmpty }
 
     private var uniqueTitle: String {
         guard let p = poolIndex, let n = edits.copyNumber(after: p) else { return "Make unique" }
@@ -404,6 +408,8 @@ struct PatternBin: View {
         .contentShape(Rectangle())
         // onDrag (not draggable): its closure runs as the drag starts, so the lanes know what's coming
         .onDrag {
+            // only a kept pattern can go into an entry (SET refuses an empty one)
+            guard !free else { return NSItemProvider() }
             dragPattern = p + 1
             return NSItemProvider(object: "pattern \(p + 1)" as NSString)
         } preview: {

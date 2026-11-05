@@ -276,3 +276,91 @@ extension SongSectionTests {
         #expect(s.index == 1 && s.split == nil && s.result?.prefix(3).map(\.pattern) == [1, 9, 2])
     }
 }
+
+/// The review's findings (2026-11-05), each pinned.
+extension SkiffSongTests {
+    @Test func oneChangeAtATime() async throws {
+        let (_, _, s, run) = try await store()
+        var a = try #require(s.song).tracks[0].entries; a[0].reps = 3
+        var b = try #require(s.song).tracks[1].entries; b[1].reps = 3
+        async let x = s.rewrite(track: 0, to: a)
+        async let y = s.rewrite(track: 1, to: b)
+        let (ok1, ok2) = await (x, y)
+        #expect(ok1 != ok2)                                       // one went in, the other was refused
+        #expect(s.refusal?.text.contains("One change at a time") == true || ok1 && ok2 == false)
+        run.cancel()
+    }
+
+    @Test func aClearThatErasesAPatternAsksFirst() async throws {
+        let (_, fake, s, run) = try await store()
+        // T1's F names 04, and nothing else does: deleting it would erase 04
+        var es = try #require(s.song).tracks[0].entries
+        es[5] = .empty
+        #expect(await s.rewrite(track: 0, to: es) == false)
+        let c = try #require(s.confirmation)
+        #expect(c.title == "Erase pattern 04?" && fake.lists[0][5].p == 4)
+        s.confirmation = nil
+        await c.action()
+        #expect(fake.lists[0][5].p == 0 && fake.poolLen[3] == 0)
+        // deleting a middle entry keeps its pattern (named again elsewhere, or left unused): no question
+        var mid = try #require(s.song).tracks[0].entries
+        mid.remove(at: 1); mid.append(.empty)                     // B (02) also on D
+        #expect(await s.rewrite(track: 0, to: mid) && s.confirmation == nil)
+        run.cancel()
+    }
+
+    @Test func aFreePatternIsRefusedBeforeAnythingIsSent() async throws {
+        let (_, fake, s, run) = try await store()
+        let before = fake.lists[4]
+        var es = try #require(s.song).tracks[4].entries
+        es.insert(SongEntry(pattern: 40, reps: 1), at: 1); es.removeLast()
+        #expect(await s.rewrite(track: 4, to: es) == false)
+        #expect(s.refusal?.text.contains("Pattern 40 is empty") == true && fake.lists[4] == before)
+        run.cancel()
+    }
+
+    @Test func aSectionIsAllOrNothing() async throws {
+        let (_, fake, s, run) = try await store()
+        let before = fake.lists
+        let song = try #require(s.song)
+        var plans = song.tracks.indices.map { t in
+            SongSections.plan(track: t, list: song.tracks[t], blocks: s.blocks(t), from: 4 * 96, to: 12 * 96, op: .duplicateAfter)
+        }
+        plans[3].refusal = "T4 would need 17 entries; it has 16"
+        let refused = await s.apply(section: plans)
+        #expect(refused[3] != nil && fake.lists == before)
+        #expect(s.refusal?.text.hasPrefix("Nothing changed") == true)
+        run.cancel()
+    }
+}
+
+extension SongSectionTests {
+    @Test func aRestLeftAtAnEdgeStaysARest() {
+        // A, a 2-pass rest (empty entry), B: clearing A's bars leaves the rest first, so it becomes a REST
+        var l = list([e(1, 1), .empty, e(2, 1)])
+        l.entries[1].reps = 2
+        let p = SongSections.plan(track: 0, list: l, blocks: blocks(l), from: 0, to: 1 * bar, op: .clear)
+        #expect(p.result?.prefix(3).map(\.pattern) == [65, 2, 0] && p.result?[0].reps == 2)
+        #expect(SongSections.restsAtEdges([.empty, e(2), .empty], range: 0..<3).map(\.pattern) == [65, 2, 65])
+    }
+
+    @Test func aDanglingChainComesOff() {
+        let es = SongSections.unchainDangling([e(1, chain: true), .empty, e(2, chain: true), e(3)])
+        #expect(es.map(\.chained) == [false, false, true, false])
+    }
+}
+
+extension SkiffKitTests {
+    @Test func theStepRatchetGoesDownAsWellAsUp() {
+        var s = SynthStep(notes: [36], time: .note, accent: false, slide: false, velocity: 100)
+        s.extra = [0b1000, 0, 0, 100, 2, 0, 0, 32, 0]               // a hat hit and a kick note, ×2
+        let d = s.kitLanes
+        #expect(d.lanes == [0, 3] && d.ratchet(0) == 1 && d.ratchet(3) == 1)
+        let down = s.withHits(d.setting(0, on: true, level: 0, ratchet: 0))
+        #expect(down.extra[4] == 1 && down.notes == [36])            // ×1, and the kick note untouched
+        // a REST's stale hit bytes don't show, and a lane turned on doesn't wake them
+        var r = s; r.time = .rest; r.notes = []
+        #expect(r.kitLanes.isOn == false)
+        #expect(r.withHits(DrumStep.empty.setting(1, on: true)).hits.lanes == [1])
+    }
+}

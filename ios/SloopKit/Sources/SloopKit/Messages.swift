@@ -400,10 +400,11 @@ extension SynthStep {
         return d
     }
 
-    /// What a kit track's grid shows: the hits, and the lanes the step's notes strike (a NOTE step only).
+    /// What a kit track's grid shows: the hits, and the lanes the step's notes strike. A NOTE step only:
+    /// a TIE or a REST plays no hits, whatever bytes it keeps.
     public var kitLanes: DrumStep {
+        guard time == .note else { return .empty }
         var d = hits
-        guard time == .note else { return d }
         let rat = extra.count >= 5 ? max(0, min(3, Int(extra[4]) - 1)) : 0
         for n in notes { let l = Self.lane(ofNote: n); if !d.has(l) { d = d.setting(l, on: true, level: 0, ratchet: rat) } }
         return d
@@ -414,15 +415,19 @@ extension SynthStep {
     /// (a TIE or REST plays none); one with neither goes back to a rest. A lane's ratchet is the step's.
     public func withHits(_ d: DrumStep) -> SynthStep {
         var s = self
-        let was = kitLanes, old = hits
-        var hit = 0, acc = 0, rat = 0
+        // a TIE's or REST's hit bytes don't play: they're dropped, not woken
+        let was = kitLanes, old = time == .note ? hits : .empty
+        let stepRat = extra.count >= 5 ? max(0, min(3, Int(extra[4]) - 1)) : 0
+        // the ratchet is the step's on Skiff: a lane given another one sets it for the whole step
+        let rat = d.lanes.map { d.ratchet($0) }.first { $0 != stepRat } ?? stepRat
+        var hit = 0, acc = 0
         for l in 0..<8 {
-            let changed = was.has(l) != d.has(l) || (d.has(l) && (was.level(l) != d.level(l) || was.ratchet(l) != d.ratchet(l)))
+            // a lane changes when it goes on or off or its accent does (a ratchet isn't a lane's)
+            let changed = was.has(l) != d.has(l) || (d.has(l) && was.level(l) != d.level(l))
             let on = changed ? d.has(l) : old.has(l)
             let lvl = changed ? d.level(l) : old.level(l)
             if changed { s.notes.removeAll { Self.lane(ofNote: $0) == l } }
             if on { hit |= 1 << l; if lvl == 3 { acc |= 1 << l } }
-            if d.has(l) { rat = max(rat, d.ratchet(l)) }
         }
         var x = extra
         if x.count < 3 { x = [0, 0, 0] }

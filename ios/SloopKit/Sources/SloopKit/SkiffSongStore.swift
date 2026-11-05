@@ -110,58 +110,135 @@ public final class SkiffSongStore {
     }
 
     // MARK: Changes
+    //
+    // One change at a time: a second one while the first is still going in is refused (two rewrites
+    // interleaved op by op would leave a list nobody asked for). Everything a change needs is checked
+    // before the first request goes out, and a CLEAR that would erase a pattern asks first.
 
-    /// Whether a change to these entries can be sent now; the reason when it can't.
+    /// A question before a change that can't be undone (a pattern Skiff would erase).
+    public struct Confirmation: Identifiable {
+        public let id = UUID()
+        public var title: String
+        public var message: String
+        public var confirmLabel: String
+        public var action: @MainActor () async -> Void
+    }
+    public var confirmation: Confirmation?
+
+    /// Why a change to a track's list can't be sent now, before anything is sent (nil: it can).
     public func blocked(track t: Int, to entries: [SongEntry]) -> String? {
         guard let l = song?.tracks[safe: t] else { return "No song yet" }
-        if offline { return "The FM-1 is disconnected" }
-        return ListRewrite.plan(track: t, from: l, to: entries, playing: isPlaying(), sounds: sounds).needsStop
+        if offline { return "The FM-1 is disconnected: editing is off until it's back" }
+        let plan = ListRewrite.plan(track: t, from: l, to: entries, playing: isPlaying(), sounds: sounds)
+        if let why = plan.needsStop { return why }
+        // a playing track on a rest or an empty entry reports no entry: a pattern put there would launch
+        if isPlaying(), l.entryOn == nil, plan.ops.contains(where: {
+            if case .set(_, let e, _) = $0 { return l.entries[e].isEmpty || l.entries[e].isRest } else { return false }
+        }) { return "Stop to rearrange: T\(t + 1) is on a rest, and Skiff would launch what goes there" }
+        // SET takes only a kept pattern (or a REST)
+        for op in plan.ops {
+            if case .set(_, _, let p) = op, p != SongEntry.rest, let pat = pool?.patterns[safe: p - 1], pat.isFree {
+                return "Pattern \(String(format: "%02d", p)) is empty. Make one with New empty pattern instead"
+            }
+        }
+        return nil
+    }
+
+    /// The patterns (0...63) a change would erase: named by an entry it clears, named nowhere after it, and
+    /// used by nothing else (POOL counts the lists' entries and the saved projects).
+    public func erased(_ changes: [Int: [SongEntry]]) -> [Int] {
+        guard let song, let pool else { return [] }
+        let now = song.tracks.flatMap(\.entries).compactMap(\.poolIndex)
+        let after = song.tracks.indices.flatMap { changes[$0] ?? song.tracks[$0].entries }.compactMap(\.poolIndex)
+        return Set(now).filter { p in
+            !after.contains(p) && pool.patterns[p].uses <= now.filter { $0 == p }.count
+        }.sorted()
+    }
+
+    private func numbers(_ ps: [Int]) -> String { ps.map { String(format: "%02d", $0 + 1) }.joined(separator: ", ") }
+
+    private func busyRefusal(_ t: Int?) -> Bool {
+        if busy { refusal = Refusal(track: t, entry: nil, text: "One change at a time: the last one is still going in"); return true }
+        return false
     }
 
     /// Rewrites a track's list to `entries`: drawn at once, then sent op by op, then read back. On a refusal
     /// the lists go back as Skiff has them, with the reason.
     @discardableResult
-    public func rewrite(track t: Int, to entries: [SongEntry], focus: Int? = nil) async -> Bool {
-        guard let d = driver, let before = song, let l = before.tracks[safe: t] else {
+    public func rewrite(track t: Int, to entries: [SongEntry], focus: Int? = nil, confirmed: Bool = false) async -> Bool {
+        guard !busyRefusal(t) else { return false }
+        guard driver != nil, let before = song, song?.tracks[safe: t] != nil else {
             refusal = Refusal(track: t, entry: focus, text: offline ? "The FM-1 is disconnected: editing is off until it's back" : "No song yet")
             return false
         }
-        let plan = ListRewrite.plan(track: t, from: l, to: entries, playing: isPlaying(), sounds: sounds)
-        if let why = plan.needsStop {
-            refusal = Refusal(track: t, entry: focus, text: why, needsStop: true)
+        if let why = blocked(track: t, to: entries) {
+            refusal = Refusal(track: t, entry: focus, text: why, needsStop: why.hasPrefix("Stop"))
             return false
         }
+        let gone = erased([t: entries])
+        if !gone.isEmpty && !confirmed {
+            confirmation = Confirmation(
+                title: "Erase pattern\(gone.count == 1 ? "" : "s") \(numbers(gone))?",
+                message: "Nothing else uses \(gone.count == 1 ? "it" : "them"), so Skiff erases \(gone.count == 1 ? "it" : "them") with the entry. This can't be undone.",
+                confirmLabel: "Erase \(numbers(gone))") { [weak self] in
+                    await self?.rewrite(track: t, to: entries, focus: focus, confirmed: true)
+                }
+            return false
+        }
+        busy = true
+        defer { busy = false }
+        refusal = nil
+        let ok = await perform(t, entries, focus: focus)
+        if ok { record(before) }
+        return ok
+    }
+
+    /// The ops, one at a time; on a refusal partway, the track's list is put back as it was, as far as
+    /// Skiff takes it.
+    private func perform(_ t: Int, _ entries: [SongEntry], focus: Int?) async -> Bool {
+        guard let d = driver, let before = song, let l = before.tracks[safe: t] else { return false }
+        let plan = ListRewrite.plan(track: t, from: l, to: entries, playing: isPlaying(), sounds: sounds)
         if plan.ops.isEmpty { return true }
         var s = before
         s.tracks[t].entries = entries
         song = s
-        refusal = nil
-        busy = true
-        defer { busy = false }
+        var sent = 0
         for op in plan.ops {
             do {
                 let r = try await d.list(op)
                 if !r.rc.isDone {
-                    song = r.song
                     refusal = Refusal(track: t, entry: op.entry ?? focus, text: r.rc.reason, needsStop: r.rc == .playing)
+                    if sent > 0, let now = r.song.tracks[safe: t] { await restore(d, t, from: now, to: l.entries) }
                     await settle(d)
                     return false
                 }
+                sent += 1
             } catch {
                 refusal = Refusal(track: t, entry: focus, text: "The FM-1 didn't answer; the song is as it says now")
                 await settle(d)
                 return false
             }
         }
-        undoStack.append(before)
-        if undoStack.count > 32 { undoStack.removeFirst() }
         await settle(d)
         return true
     }
 
-    /// One op that the rewrite can't express (NEW, COPY, COPY+): sent, then read back.
+    private func restore(_ d: SkiffDriver, _ t: Int, from now: SongList, to old: [SongEntry]) async {
+        for op in ListRewrite.plan(track: t, from: now, to: old, playing: isPlaying(), sounds: sounds).ops {
+            if case .clear = op { continue }            // never erase on the way back
+            _ = try? await d.list(op)
+        }
+    }
+
+    private func record(_ before: SkiffSong) {
+        undoStack.append(before)
+        if undoStack.count > 32 { undoStack.removeFirst() }
+    }
+
+    /// One op that the rewrite can't express (NEW, COPY, COPY+, PLAY, SONG): sent, then read back.
     @discardableResult
     public func send(_ op: ListOp) async -> Bool {
+        guard !busyRefusal(op.track) else { return false }
         guard let d = driver, let before = song else {
             refusal = Refusal(track: op.track, entry: op.entry, text: "The FM-1 is disconnected: editing is off until it's back")
             return false
@@ -176,7 +253,7 @@ public final class SkiffSongStore {
                 return false
             }
             refusal = nil
-            undoStack.append(before)
+            switch op { case .play, .song: break; default: record(before) }     // undo is for the lists
             pool = try? await d.pool()
             return true
         } catch {
@@ -186,39 +263,62 @@ public final class SkiffSongStore {
         }
     }
 
-    /// A section's op on every track that takes part, as one change: one undo puts all of them back.
-    /// Returns why a track's part didn't take, by track.
-    public func apply(section plans: [SectionTrack]) async -> [Int: String] {
+    /// A section's op on every track that takes part, as one change: all of it or none (every track is
+    /// checked first), one undo puts all of it back. Returns why it didn't go, by track.
+    @discardableResult
+    public func apply(section plans: [SectionTrack], confirmed: Bool = false) async -> [Int: String] {
+        guard !busyRefusal(nil) else { return [-1: "busy"] }
         guard let before = song else { return [:] }
-        let n = undoStack.count
         var refused: [Int: String] = [:]
-        var any = false
+        var changes: [Int: [SongEntry]] = [:]
         for p in plans {
             if let why = p.refusal { refused[p.track] = why; continue }
             guard let es = p.result else { continue }
-            if await rewrite(track: p.track, to: es) { any = true } else { refused[p.track] = refusal?.text ?? "Not done" }
+            if let why = blocked(track: p.track, to: es) { refused[p.track] = why } else { changes[p.track] = es }
         }
-        undoStack.removeLast(max(0, undoStack.count - n))
-        if any { undoStack.append(before) }
-        if !refused.isEmpty, let first = refused.sorted(by: { $0.key < $1.key }).first {
-            refusal = Refusal(track: first.key, entry: nil, text: "T\(first.key + 1): \(first.value)",
-                              needsStop: refusal?.needsStop ?? false)
+        if let first = refused.sorted(by: { $0.key < $1.key }).first {
+            refusal = Refusal(track: first.key, entry: nil, text: "Nothing changed. T\(first.key + 1): \(first.value)",
+                              needsStop: first.value.hasPrefix("Stop"))
+            return refused
         }
+        let gone = erased(changes)
+        if !gone.isEmpty && !confirmed {
+            confirmation = Confirmation(
+                title: "Erase pattern\(gone.count == 1 ? "" : "s") \(numbers(gone))?",
+                message: "Nothing else uses \(gone.count == 1 ? "it" : "them"), so Skiff erases \(gone.count == 1 ? "it" : "them") with the bars. This can't be undone.",
+                confirmLabel: "Erase \(numbers(gone))") { [weak self] in _ = await self?.apply(section: plans, confirmed: true) }
+            return [-1: "asked"]
+        }
+        busy = true
+        defer { busy = false }
+        refusal = nil
+        var any = false
+        for (t, es) in changes.sorted(by: { $0.key < $1.key }) {
+            if await perform(t, es, focus: nil) { any = true } else { refused[t] = refusal?.text ?? "Not done"; break }
+        }
+        if any { record(before) }
         return refused
     }
 
-    /// Back to the lists before the last change (Jib's undo; Skiff's own covers the device's edits).
+    /// Back to the lists before the last change (Jib's undo; Skiff's own covers the device's edits). A
+    /// pattern a change erased can't come back.
     public func undo() async {
-        guard let last = undoStack.popLast(), let now = song else { return }
-        for t in last.tracks.indices where t < now.tracks.count && last.tracks[t].entries != now.tracks[t].entries {
-            let n = undoStack.count
-            await rewrite(track: t, to: last.tracks[t].entries)
-            if undoStack.count > n { undoStack.removeLast() }       // an undo isn't itself undone
+        guard !busyRefusal(nil), let last = undoStack.last, let now = song else { return }
+        let tracks = last.tracks.indices.filter { $0 < now.tracks.count && last.tracks[$0].entries != now.tracks[$0].entries }
+        for t in tracks {
+            if let why = blocked(track: t, to: last.tracks[t].entries) {
+                refusal = Refusal(track: t, entry: nil, text: "Can't undo yet. T\(t + 1): \(why)", needsStop: why.hasPrefix("Stop"))
+                return
+            }
         }
+        busy = true
+        defer { busy = false }
+        undoStack.removeLast()
+        for t in tracks { _ = await perform(t, last.tracks[t].entries, focus: nil) }
     }
 
     public func clearUnused() async -> SongRC {
-        guard let d = driver else { return .failed }
+        guard !busyRefusal(nil), let d = driver else { return .failed }
         busy = true
         defer { busy = false }
         guard let r = try? await d.clearUnusedPatterns() else { return .failed }

@@ -34,6 +34,28 @@ public struct SectionTrack: Equatable, Sendable {
 }
 
 public enum SongSections {
+    /// An entry on CHAIN with nothing after it chains nothing on Skiff, but anything moved in after it
+    /// would join: such a flag comes off before a list is changed.
+    public static func unchainDangling(_ es: [SongEntry]) -> [SongEntry] {
+        var out = es
+        for i in out.indices where out[i].chained && (i == out.count - 1 || out[i + 1].isEmpty) { out[i].chained = false }
+        return out
+    }
+
+    /// Empty entries that were rests inside the list and now stand at its start or end would be passed over
+    /// there (the list runs from its first pattern or REST to its last), shifting or shortening the track:
+    /// they become REST entries of the same length. `range`: the entries that were the list.
+    public static func restsAtEdges(_ es: [SongEntry], range: Range<Int>) -> [SongEntry] {
+        var out = es
+        let r = range.clamped(to: out.indices)
+        guard let first = r.first(where: { !out[$0].isEmpty }), let last = r.last(where: { !out[$0].isEmpty }) else { return out }
+        // inside the range everything sat between patterns before, so an empty outside first...last was a rest
+        for i in r where (i < first || i > last) && out[i].isEmpty {
+            out[i] = SongEntry(pattern: SongEntry.rest, reps: out[i].reps)
+        }
+        return out
+    }
+
     /// A bar count as the device's quarters read: 9, 4¾, 13½.
     public static func bars(_ b: Double) -> String {
         let whole = Int(b.rounded(.down)), q = Int(((b - Double(whole)) * 4).rounded())
@@ -54,6 +76,7 @@ public enum SongSections {
         for b in blocks {
             var parts = Array(list.entries[b.entries])
             parts[parts.count - 1].reps = 1
+            if !b.isChain { parts[0].chained = false }
             for r in 0..<b.reps {
                 let s = b.start + Double(r) * b.pass
                 out.append(Unit(entries: parts, origin: b.entries.lowerBound, start: s, end: s + b.pass))
@@ -113,6 +136,8 @@ public enum SongSections {
             after = Array(us[..<a]) + Array(us[b...])
         }
         var es = entries(after)
+        // a rest that ends up first or last would be passed over: it becomes a REST
+        es = restsAtEdges(es, range: 0..<es.count)
         // entries before the list's first pattern (passed over) keep their places in front
         es = Array(repeating: .empty, count: span.lowerBound) + es
         if es.count > 16 {

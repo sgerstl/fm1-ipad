@@ -58,6 +58,16 @@ struct SkiffArrangePage: View {
         }
         .overlay(alignment: .top) { if store.offline { OfflineBar(session: session) } }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
+        // a change that would erase a pattern asks first (CLEAR erases one nothing else uses)
+        .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
+            get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
+                            presenting: store.confirmation) { c in
+            Button(c.confirmLabel, role: .destructive) {
+                store.confirmation = nil
+                Task { await c.action() }
+            }
+            Button("Cancel", role: .cancel) { store.confirmation = nil }
+        } message: { c in Text(c.message) }
     }
 
     // MARK: Tool row: the song's length, the warning when lanes end apart, zoom
@@ -472,9 +482,10 @@ struct Lane: View {
     private func grip(_ b: SongBlock, list: SongList) -> some View {
         let pass = max(1, x(b.pass))
         return Capsule().fill(Theme.text.opacity(0.35)).frame(width: 4, height: 28)
-            .frame(width: 44, height: SkiffArrangePage.laneHeight - 12)
+            // 36 pt wide, 8 pt of it past the edge: no more than the gap and a sliver of the next block
+            .frame(width: 36, height: SkiffArrangePage.laneHeight - 12)
             .contentShape(Rectangle())
-            .offset(x: 20)
+            .offset(x: 8)
             // from touch-down: a drag that waits for movement loses to the lanes' scroll view
             // measured globally: the grip moves with the edge it drags
             .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
@@ -483,7 +494,13 @@ struct Lane: View {
                     let n = max(1, min(16, stretchStart + Int((v.translation.width / pass).rounded())))
                     stretch = (b.entries.upperBound, n)
                 }
-                .onEnded { _ in
+                .onEnded { v in
+                    // a tap on the grip (no drag) is a tap on its block
+                    if abs(v.translation.width) < 4 && abs(v.translation.height) < 4 {
+                        stretch = nil
+                        selection = EntryRef(track: track, entry: b.entries.lowerBound)
+                        return
+                    }
                     guard let s = stretch else { return }
                     stretch = nil
                     if s.reps != stretchStart, let blk = store.blocks(track).first(where: { $0.entries.contains(s.entry) }) {
@@ -505,7 +522,7 @@ struct Lane: View {
             Button("Split the chain", systemImage: "scissors") { edits.split(track, b) }
         } else {
             Button("Chain into next", systemImage: "link") { edits.chainIntoNext(track, b) }
-                .disabled(b.entries.upperBound >= 15 || list.entries[b.entries.upperBound + 1].isEmpty)
+                .disabled(b.kind == .gap || b.entries.upperBound >= 15 || list.entries[b.entries.upperBound + 1].isEmpty)
         }
         if b.kind == .pattern, store.sounds {
             Menu("Set sound…", systemImage: "waveform") { SoundItems(session: session, store: store, track: track, block: b) }
@@ -574,8 +591,13 @@ struct LaneDrop: DropDelegate {
     let blocks: [SongBlock]
 
     private func spot(_ info: DropInfo) -> DropSpot? {
-        guard let p = lane.dragPattern, let list = lane.store.song?.tracks[safe: lane.track] else { return nil }
-        let ticks = Double(info.location.x / max(1, lane.barWidth)) * SongPlacement.ticksPerBar
+        guard let p = lane.dragPattern else { return nil }
+        return spot(at: info.location, pattern: p)
+    }
+
+    private func spot(at location: CGPoint, pattern p: Int) -> DropSpot? {
+        guard let list = lane.store.song?.tracks[safe: lane.track] else { return nil }
+        let ticks = Double(location.x / max(1, lane.barWidth)) * SongPlacement.ticksPerBar
         // the nearest pass edge, inside a repeating entry too (it splits)
         let ins = SongSections.insert(SongEntry(pattern: p, reps: 1), list: list, blocks: blocks, at: ticks)
         let pass = lane.store.passTicks(p - 1, track: lane.track)
@@ -606,13 +628,22 @@ struct LaneDrop: DropDelegate {
     func dropExited(info: DropInfo) { if lane.dropAt?.track == lane.track { lane.dropAt = nil } }
     func performDrop(info: DropInfo) -> Bool {
         defer { lane.dropAt = nil; lane.dragPattern = nil }
-        guard let s = spot(info) else { return false }
-        guard let es = s.result else {
-            lane.store.refuse(track: lane.track, entry: nil, "T\(lane.track + 1) has all 16 entries. Play one entry more times, or chain two, to free a slot")
-            return false
+        // the pattern from the dragged item itself ("pattern 12"), not the bin's note of it, which a drag
+        // that ended elsewhere could leave behind
+        guard let provider = info.itemProviders(for: [.plainText]).first else { return false }
+        let at = info.location, lane = lane
+        _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
+            guard let text = obj as? NSString, text.hasPrefix("pattern "), let p = Int(text.substring(from: 8)) else { return }
+            Task { @MainActor in
+                guard let s = LaneDrop(lane: lane, blocks: blocks).spot(at: at, pattern: p) else { return }
+                guard let es = s.result else {
+                    lane.store.refuse(track: lane.track, entry: nil, "T\(lane.track + 1) has all 16 entries. Play one entry more times, or chain two, to free a slot")
+                    return
+                }
+                lane.selection = EntryRef(track: lane.track, entry: s.index)
+                await lane.store.rewrite(track: lane.track, to: es, focus: s.index)
+            }
         }
-        lane.selection = EntryRef(track: lane.track, entry: s.index)
-        Task { await lane.store.rewrite(track: lane.track, to: es, focus: s.index) }
         return true
     }
 }
