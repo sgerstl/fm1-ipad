@@ -496,3 +496,25 @@ extension SkiffSongTests {
         run.cancel()
     }
 }
+
+extension SkiffOnTheDeviceTests {
+    @Test func recStopsRecordingWhateverTrackIsSelected() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        session.toggleRec()                                          // T1 armed, playing
+        try await waitFor(5) { session.recording && fake.armed == 1 }
+        session.select(track: 1)
+        try await waitFor(5) { fake.selected == 1 }
+        session.toggleRec()                                          // stop, with T2 selected
+        try await waitFor(5) { !session.recording }
+        #expect(fake.armed == 0 && fake.playing)                     // nothing armed, still playing
+        session.toggleRec()                                          // and REC on T2 arms T2 alone
+        try await waitFor(5) { session.recording }
+        #expect(fake.armed == 0b10)
+        run.cancel()
+    }
+}

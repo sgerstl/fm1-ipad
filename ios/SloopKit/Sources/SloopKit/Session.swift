@@ -1459,9 +1459,22 @@ public final class DeviceSession {
     }
 
     public func toggleRec() {
-        if let s = driver as? SkiffDriver { Task { try? await s.rec() }; return }
+        if let s = driver as? SkiffDriver { Task { await skiffRec(s) }; return }
         guard let c = sloop else { return }
         Task { if let l = try? await c.rec() { self.applyLive(l) } }
+    }
+
+    /// Jib's REC is on while any track is armed, as Skiff's LED is, and pressing it then stops recording. Skiff's
+    /// own REC toggles the selected track only (ui_input.c rec_tap): with another track armed, it arms this one
+    /// too, so recording went on (Scott, the FM-1, 2026-11-05). Then REC goes twice: the second press, on an armed
+    /// track, disarms them all. The extra arming leaves Skiff's undo as it was (rec_pass_undo takes the undo it
+    /// pushed back off when the track is disarmed unchanged), and the transport keeps playing.
+    private func skiffRec(_ s: SkiffDriver) async {
+        guard let before = try? await s.transportState() else { try? await s.rec(); return }
+        let otherArmed = before.armedTracks != 0 && before.armedTracks & (1 << before.selected) == 0
+        try? await s.rec()
+        if otherArmed { try? await s.rec() }
+        if let after = try? await s.transportState() { applyTransport(after) }
     }
 
     public func setPlaying(_ on: Bool) {

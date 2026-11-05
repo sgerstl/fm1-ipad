@@ -207,3 +207,31 @@ extension SkiffSongSimTests {
         #expect(try await d.menuValue(id: SkiffMenu.usbLevel) == before)
     }
 }
+
+extension SkiffSongSimTests {
+    /// "I can't stop recording while it's still playing" (Scott, the FM-1, 2026-11-05): Skiff's REC toggles the
+    /// selected track (ui_input.c rec_tap). Armed on T1, then T2 selected, REC arms T2 too instead of stopping.
+    @Test func recOnAnotherTrackArmsItInsteadOfStopping() async throws {
+        let d = try await driver()
+        _ = try await d.transport(play: false)
+        _ = try await d.selectTrack(0)
+        try await d.rec()                                           // T1 armed; stopped, so it starts playing
+        try await Task.sleep(for: .milliseconds(300))
+        var s = try #require(try await d.transportState())
+        print("REC on T1:", s)
+        #expect(s.armedTracks == 1 && s.playing)
+        _ = try await d.selectTrack(1)
+        try await d.rec()                                           // "stop recording", with T2 selected
+        try await Task.sleep(for: .milliseconds(100))
+        s = try #require(try await d.transportState())
+        print("REC on T2:", s)
+        #expect(s.armedTracks == 0b11)                              // still recording, on two tracks now
+        try await d.rec()                                           // T2 armed now: REC disarms them all
+        try await Task.sleep(for: .milliseconds(100))
+        s = try #require(try await d.transportState())
+        print("REC again:", s)
+        #expect(s.armedTracks == 0 && s.playing)                    // stopped recording, still playing
+        _ = try await d.transport(play: false)
+        _ = try await d.selectTrack(0)
+    }
+}

@@ -51,6 +51,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var songMode = 0
     /// MENU > USB LEVEL (0 MASTER, 1 FIXED): the one MENU setting the fake offers (MENU_DESC index 0, id 10).
     var usbLevel = 0
+    /// Armed tracks, a bit each (song.rec), as TRANSPORT op 4 toggles them: ui_input.c rec_tap.
+    var armed = 0
     var poolLen = Array(repeating: 0, count: 64)
 
     /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
@@ -307,7 +309,14 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             return poolReply(3, any ? 0 : 1)
         case (76, 0), (76, 1):
             if a.first == 1 { setPlaying(true) } else if a.first == 2 { setPlaying(false) }
-            return [0, playing ? 1 : 0, 0, 0, 0, UInt8(selected)]
+            if a.first == 4 {
+                // rec_tap: the selected track armed disarms them all; otherwise it's armed too (and a stopped
+                // transport starts)
+                let bit = 1 << selected
+                armed = armed & bit != 0 ? 0 : armed | bit
+                if armed & bit != 0, !playing { setPlaying(true) }
+            }
+            return [0, playing ? 1 : 0, 0, 0, UInt8(armed & 127), UInt8(selected)]
         default: return nil                                  // as the device: no reply
         }
     }
