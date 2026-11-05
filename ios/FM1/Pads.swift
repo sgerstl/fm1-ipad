@@ -175,13 +175,11 @@ struct FunctionPads: View {
             let again = ui.page == .sound && ui.soundFamily == f
             ui.page = .sound
             ui.soundFamily = f
-            guard session.screenLinked, ui.followDevice, !pages.isEmpty else { return }
-            // pressed again: the next page of the button, round and round, as the FM-1 does
-            var next = pages[0]
-            if again, let s = session.deviceScreen, let k = pages.firstIndex(where: { $0.fw == s.page }) {
-                next = pages[(k + 1) % pages.count]
-            }
-            session.showOnDevice(page: next.fw)
+            // pressed again: the next page of the button, round and round, as the FM-1 does; its card comes forward
+            if again { SoundPanelControl.step(f, session: session, ui: ui); return }
+            guard let first = pages.first else { return }
+            ui.focus(first)
+            if session.screenLinked, ui.followDevice { session.showOnDevice(page: first.fw) }
         }
     }
 }

@@ -42,10 +42,10 @@ struct PageGraph: View {
 
     static func has(_ p: SoundPage) -> Bool {
         ["ENV", "ENV 2", "LFO", "LFO 2", "LFO DEST", "MOD", "FX", "DRIVE", "INSERT", "INSERT 2", "SLICER", "DUCK",
-         "DELAY", "REVERB", "CHORUS", "GLOBAL", "VOICE", "ARP", "ARP 2"].contains(p.title)
+         "DELAY", "REVERB", "CHORUS", "GLOBAL", "VOICE", "ARP", "ARP 2", "SCALE", "CHORD", "FOLLOW"].contains(p.title)
     }
     /// Drawn in the panel under the cards on Skiff, shorter than the graphs drawn from the panel's top.
-    static let short: Set<String> = ["FX", "SLICER", "DUCK"]
+    static let short: Set<String> = ["FX", "SLICER", "DUCK", "SCALE"]
 
     var body: some View {
         let _ = BodyCounter.tick("PageGraph")
@@ -75,6 +75,16 @@ struct PageGraph: View {
                 .graphLabel("Ducking over a bar", valueName(0))
             case "GLOBAL": Canvas { ctx, sz in GlobalDrawing(swing: values[1]).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Swing over a bar", "SWING \(50 + values[1] * 50 / 250) to \(50 - values[1] * 50 / 250)")
+            case "SCALE": Canvas { ctx, sz in ScaleDrawing(root: values[0], scale: values[1]).draw(ctx, Space(size: sz, gh: 96), colour) }
+                .graphLabel("The scale on the 12 keys", "\(SkiffChord.noteNames[((values[0] % 12) + 12) % 12]) scale")
+            case "CHORD":
+                let d = chordDrawing
+                Canvas { ctx, sz in d.draw(ctx, Space(size: sz, gh: 120), colour) }
+                    .graphLabel("The chord a key plays", d.spoken)
+            case "FOLLOW":
+                let d = followDrawing
+                Canvas { ctx, sz in d.draw(ctx, Space(size: sz, gh: 120), colour) }
+                    .graphLabel("The chord it follows", d.spoken)
             case "ARP", "ARP 2": Canvas { ctx, sz in ArpDrawing(v: arpValues).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("The arpeggio over 16 steps", "\(Music.arpModes[safe: arpValues[0]] ?? "OFF"), an example on C E G")
             case "MOD": ModGraph(session: session, page: page, route: $modRoute, colour: colour)
@@ -83,6 +93,39 @@ struct PageGraph: View {
         }
         .frame(height: Self.short.contains(page.title) ? 88 : page.title == "MOD" ? 168 : 128)   // MOD: eleven routes' text
         .recessed(8)
+    }
+
+    /// A parameter of the selected track by its page and knob (the SEL pages' graphs read each other's).
+    private func value(_ title: String, _ k: Int) -> Int? {
+        (SoundPage.pages(session).first { $0.title == title }?.ids[safe: k] ?? nil).map { session.cell($0).value }
+    }
+    private static let kitEngines: Set<Int> = [10, 13, 14]           // DRUM, SLICE, DRUM-X: their keys aren't chords
+
+    /// CHORD: the chord on the track's ROOT from C4, as Skiff shows it before a chord is played (the last one played
+    /// isn't sent to an editor); OFF and a kit say so instead.
+    private var chordDrawing: ChordDrawing {
+        let t = session.tracks[session.selectedTrack]
+        let mode = values[0], voicing = values[safe: 1] ?? 0
+        if mode == 0 { return ChordDrawing(note: ("CHORD KEYS OFF", "K1 DIA3: IN-KEY CHORDS")) }
+        if Self.kitEngines.contains(t.engine) { return ChordDrawing(note: ("NO CHORDS ON KITS", nil)) }
+        let root = value("SCALE", 0) ?? 0, scale = value("SCALE", 1) ?? 0
+        let oneVoice = (value("VOICE", 0) ?? 0) != 0 && (value("ARP", 0) ?? 0) == 0
+        guard let c = SkiffChord.make(note: 60 + root, mode: mode, voicing: voicing, root: root, scale: scale, oneVoice: oneVoice) else {
+            return ChordDrawing(note: ("CHORD KEYS OFF", nil))
+        }
+        return ChordDrawing(name: SkiffChord.name(root: c.root, mask: c.mask), caption: oneVoice ? "ROOT ONLY" : "ON ROOT",
+                            notes: c.notes, accent: c.root % 12, keysColour: nil)
+    }
+
+    /// FOLLOW: the track it follows and how. The chord that track plays live isn't sent to an editor, so Lupe draws
+    /// what it can say: OFF, a kit, or the track and the mode, with the live chord left to the FM-1's screen.
+    private var followDrawing: ChordDrawing {
+        let me = session.selectedTrack, l = values[0] - 1
+        guard l >= 0, l < session.trackCount, l != me else { return ChordDrawing(note: ("FOLLOW OFF", "K1 A TRACK TO FOLLOW")) }
+        if Self.kitEngines.contains(session.tracks[l].engine) { return ChordDrawing(note: ("T\(l + 1) PLAYS A KIT", "NO CHORDS TO FOLLOW")) }
+        let modes = ["KEY", "SCALE", "FIT"], notes = ["ROOT", "LOW", "HIGH", "LAST"]
+        let mode = modes[safe: values[safe: 1] ?? 0] ?? "KEY", by = (values[safe: 1] ?? 0) == 2 ? "ROOT" : notes[safe: values[safe: 2] ?? 0] ?? "ROOT"
+        return ChordDrawing(note: ("FOLLOWS T\(l + 1) · \(mode) BY ITS \(by)", "ITS LIVE CHORD SHOWS ON THE FM-1"), noteColour: Theme.track[l])
     }
 
     /// ARP's MODE RATE OCTAVE GATE and ARP 2's SWING CHANCE HOLD ORDER, for either card's graph (they draw the same).
@@ -654,6 +697,66 @@ private struct SlicerDrawing {
                 ctx.fill(Path(roundedRect: s.r(x, 77, 9, 3), cornerRadius: 1), with: .color(Theme.tones[2]))
                 if open > 3 { ctx.fill(Path(roundedRect: s.r(x, 80 - open, 9, open), cornerRadius: 2), with: .color(Theme.tones[2])) }
             }
+        }
+    }
+}
+
+// MARK: SCALE, CHORD, FOLLOW (ui_graph.c graph_scale, graph_chord, graph_follow)
+
+private let blackKeys: [Bool] = [false, true, false, true, false, false, true, false, true, false, true, false]
+
+/// SCALE: the 12 keys as rounded bars, black keys high and white low: in the scale the track's colour, the root
+/// white (Skiff's accent), out of it the raised grey.
+private struct ScaleDrawing {
+    let root: Int
+    let scale: Int
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        let mask = SkiffChord.scaleMask(scale)
+        for i in 0..<12 {
+            let deg = ((i - root) % 12 + 12) % 12
+            let col: Color = (mask >> deg) & 1 != 0 ? (deg == 0 ? Theme.text : c) : Theme.tones[2]
+            ctx.fill(Path(roundedRect: s.r(Double(13 + i * 18 + 3), blackKeys[i] ? 6 : 38, 10, 52), cornerRadius: 3), with: .color(col))
+        }
+    }
+}
+
+/// CHORD and FOLLOW: a chord's name over the keys from the C below its lowest note (two octaves, three for a wide
+/// one), its notes in the track's colour and its root white; or, where there's no chord to draw, two lines that say
+/// why (Skiff's panel_note).
+private struct ChordDrawing {
+    var name = "", caption = ""
+    var notes: [Int] = []
+    var accent = 0
+    var keysColour: Color?
+    var note: (String, String?)?
+    var noteColour: Color?
+
+    init(name: String, caption: String, notes: [Int], accent: Int, keysColour: Color?) {
+        self.name = name; self.caption = caption; self.notes = notes; self.accent = accent; self.keysColour = keysColour
+    }
+    init(note: (String, String?), noteColour: Color? = nil) { self.note = note; self.noteColour = noteColour }
+
+    var spoken: String {
+        if let note { return [note.0, note.1].compactMap { $0 }.joined(separator: ", ").lowercased() }
+        return "\(name), \(notes.map { Music.spokenNoteName($0) }.joined(separator: ", "))"
+    }
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        if let note {
+            s.text(ctx, note.0, 120, 56, noteColour ?? Theme.text, size: 13, weight: .semibold, anchor: .bottom)
+            if let b = note.1 { s.text(ctx, b, 120, 76, midColour, anchor: .bottom) }
+            return
+        }
+        guard let first = notes.first, let last = notes.last else { return }
+        s.text(ctx, name, 14, 26, Theme.text, size: 17, weight: .semibold)
+        s.text(ctx, caption, 226, 26, midColour, anchor: .bottomTrailing)
+        let lo = first - first % 12, cnt = last - lo < 24 ? 24 : 36, w = 216 / cnt
+        for i in 0..<cnt {
+            let n = lo + i, on = notes.contains(n)
+            let col: Color = !on ? Theme.tones[2] : n % 12 == accent ? Theme.text : (keysColour ?? c)
+            ctx.fill(Path(roundedRect: s.r(Double(13 + i * w), blackKeys[n % 12] ? 36 : 62, Double(w - 2), 48), cornerRadius: w > 6 ? 3 : 2),
+                     with: .color(col))
         }
     }
 }

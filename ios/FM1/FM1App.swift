@@ -177,6 +177,9 @@ final class EditorUI {
     var addedLanes: [Int: [Int]] = [:]
     /// The motion lanes hidden from the pattern header's chip (they show whenever there's motion otherwise).
     var motionHidden = false
+    /// The page last brought forward (FocusedPage).
+    var focusedPage: FocusedPage?
+    func focus(_ p: SoundPage) { focusedPage = FocusedPage(id: p.id, n: (focusedPage?.n ?? 0) + 1) }
     /// The Song tab's sound panel (a button's Shape cards from the right); nil: closed. -sound-panel LFO opens it.
     var soundPanel: SoundPanelState? = {
         let a = ProcessInfo.processInfo.arguments
@@ -189,6 +192,13 @@ final class EditorUI {
 }
 
 enum FlashTarget: Equatable { case stepPanel, trackPanel, grid, patternBin }
+/// The page a button's press (here or on the FM-1) last brought forward: its card scrolls to the top of the panel or
+/// the Shape tab and is lit. `n` makes a press of the same page again count.
+struct FocusedPage: Equatable {
+    var id: String
+    var n: Int
+}
+
 struct Flash: Equatable {
     var target: FlashTarget
     var id: Int

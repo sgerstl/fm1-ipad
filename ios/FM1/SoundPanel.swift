@@ -4,8 +4,9 @@ import SwiftUI
 // The sound panel (Scott, 2026-11-05; canvas boards 21 and 22, design/boards/panel.py): on the Song tab, ENV, LFO,
 // FX, SEL, EDIT and ARP (the rail down the right edge, or the FM-1's own buttons) bring in the selected track's
 // sound from the right, at level 3 over the song and the pattern: the sound and its Sounds browser on top, that
-// button's Shape cards below (ShapeSection, the Shape tab's own). Another button switches it; the same one again,
-// HOME, ✕ or a tap outside closes it, and Pin keeps it open. Built to drop into the Mixer tab later as it is.
+// button's Shape cards below (ShapeSection, the Shape tab's own). Another button switches it; the same one again
+// steps its pages, as on the FM-1 (the page's card scrolls to the top and lights); HOME, ✕, Escape or a tap outside
+// closes it, and Pin keeps it open. Built to drop into the Mixer tab later as it is.
 
 /// What the panel shows: a button's pages, and whether it stays open on a tap outside.
 struct SoundPanelState: Equatable {
@@ -16,17 +17,32 @@ struct SoundPanelState: Equatable {
 enum SoundPanelControl {
     static let families: [SoundFamily] = [.env, .lfo, .fx, .sel, .edit, .arp]
 
-    /// A button pressed (on the rail, or on the FM-1 while the Song tab is up): its pages, or closed if they were up.
-    /// `fromDevice`: the FM-1 is already on that page; a press on the FM-1 never closes (it steps the button's pages).
+    /// A button pressed (on the rail, the pads, or on the FM-1 while the Song or Mixer tab is up): its pages; pressed
+    /// again, its next page (Scott, 2026-11-05: the same key steps and reveals, as the FM-1's does; it no longer
+    /// closes). `fromDevice`: the FM-1 has already moved; AppView focused that page.
     @MainActor static func press(_ f: SoundFamily, session: DeviceSession, ui: EditorUI, fromDevice: Bool = false) {
         if ui.soundPanel?.family == f {
-            if !fromDevice { ui.soundPanel = nil }
+            if !fromDevice { step(f, session: session, ui: ui) }
             return
         }
         ui.soundPanel = SoundPanelState(family: f, pinned: ui.soundPanel?.pinned ?? false)
         ui.soundFamily = f
-        guard !fromDevice, session.screenLinked, ui.followDevice, let first = SoundPage.reached(session, f).first else { return }
-        session.showOnDevice(page: first.fw)
+        guard !fromDevice, let first = SoundPage.reached(session, f).first else { return }
+        ui.focus(first)
+        if session.screenLinked, ui.followDevice { session.showOnDevice(page: first.fw) }
+    }
+
+    /// The button's next page, round and round: from the FM-1's page when linked, else from the one focused here. It
+    /// goes to the FM-1 too; its card comes forward at once.
+    @MainActor static func step(_ f: SoundFamily, session: DeviceSession, ui: EditorUI) {
+        let pages = SoundPage.reached(session, f)
+        guard !pages.isEmpty else { return }
+        let linked = session.screenLinked && ui.followDevice
+        let at = linked ? session.deviceScreen.flatMap { s in pages.firstIndex { $0.fw == s.page } }
+                        : ui.focusedPage.flatMap { fp in pages.firstIndex { $0.id == fp.id } }
+        let next = pages[at.map { ($0 + 1) % pages.count } ?? 0]
+        ui.focus(next)
+        if linked { session.showOnDevice(page: next.fw) }
     }
 
     /// The FM-1's screen moved while the Song tab is up: ENV LFO FX SEL EDIT ARP bring in the panel (the tab stays);
@@ -88,6 +104,12 @@ struct SoundPanel: View {
     @State private var marks = ShapeMarks()
     @Environment(\.look) private var look
     static let width: CGFloat = 430
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private func reveal(_ f: FocusedPage?, _ proxy: ScrollViewProxy, animated: Bool) {
+        guard let f, let card = SoundPage.cardID(of: f.id, session), card.hasPrefix(state.family.rawValue + ".") else { return }
+        withAnimation(animated && !reduceMotion ? .easeOut(duration: 0.2) : nil) { proxy.scrollTo(card, anchor: .top) }
+    }
 
     var body: some View {
         let t = session.selectedTrack, track = session.tracks[t]
@@ -135,6 +157,7 @@ struct SoundPanel: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(RoundedRectangle(cornerRadius: 10).fill(Theme.well))
+            ScrollViewReader { proxy in
             ScrollView {
                 if pages.isEmpty {
                     Text("T\(t + 1)'s engine has no \(state.family.rawValue) pages.")
@@ -146,6 +169,10 @@ struct SoundPanel: View {
                 }
             }
             .scrollIndicators(.hidden)
+            // the focused page's card to the top (as far as the scroll goes for the last ones)
+            .onChange(of: ui.focusedPage) { _, f in reveal(f, proxy, animated: true) }
+            .onAppear { reveal(ui.focusedPage, proxy, animated: false) }
+            }
         }
         .padding(16)
         .frame(width: Self.width)

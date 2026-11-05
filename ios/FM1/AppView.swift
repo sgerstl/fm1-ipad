@@ -35,6 +35,8 @@ struct AppView: View {
                     .onChange(of: session.deviceScreen) { _, s in
                         // Skiff: every button lands somewhere (SkiffButtonMap), GLO in the mixer panel
                         if session.dialect == .skiff {
+                            // the FM-1's page is the one brought forward (its card scrolls up and lights)
+                            if let s, !s.home, s.layer == 0, let p = SoundPage.page(session, fw: s.page), ui.focusedPage?.id != p.id { ui.focus(p) }
                             if let s, !SoundPanelControl.follow(s, session: session, ui: ui) { SkiffNavigator.follow(s, session: session, ui: ui) }
                             return
                         }

@@ -116,6 +116,13 @@ struct SoundPage: Identifiable {
 
     static func page(fw: Int) -> SoundPage? { all.first { $0.fw == fw } }
 
+    /// The card a page is on: its own, or the card of the page it's merged into (LFO 2 on LFO's).
+    @MainActor static func cardID(of id: String, _ session: DeviceSession) -> String? {
+        guard let p = pages(session).first(where: { $0.id == id }) else { return nil }
+        if let host = SoundTab.merged.first(where: { $0.value.contains(p.title) })?.key { return "\(p.family.rawValue).\(host)" }
+        return p.id
+    }
+
     /// The page the FM-1's screen is on, in the connected firmware's terms. Skiff's engine pages (16–27:
     /// OPERATOR, LANES, SOUND…) are Lupe's own where it lays them out; any other stands for the EDIT button.
     @MainActor static func page(_ session: DeviceSession, fw: Int) -> SoundPage? {
@@ -338,6 +345,7 @@ struct ShapeScroll: View {
     let session: DeviceSession
     let ui: EditorUI
     let marks: ShapeMarks
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let _ = BodyCounter.tick("ShapeScroll")
@@ -357,7 +365,15 @@ struct ShapeScroll: View {
             }
             .scrollIndicators(.hidden)
             .onChange(of: ui.soundFamily) { _, f in
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(f, anchor: .top) }
+                // the focused page's card when it's this button's (a press steps them), else the section
+                let card = ui.focusedPage.flatMap { SoundPage.cardID(of: $0.id, session) }.flatMap { $0.hasPrefix(f.rawValue + ".") ? $0 : nil }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                    if let card { proxy.scrollTo(card, anchor: .top) } else { proxy.scrollTo(f, anchor: .top) }
+                }
+            }
+            .onChange(of: ui.focusedPage) { _, f in
+                guard let f, let card = SoundPage.cardID(of: f.id, session) else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(card, anchor: .top) }
             }
             .onAppear { proxy.scrollTo(ui.soundFamily, anchor: .top) }
         }
@@ -424,6 +440,7 @@ struct SoundCard: View, Equatable {
     let rows: [SoundPage]
     let pages: [SoundPage]
     let marks: ShapeMarks
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The same pages with the same state objects: nothing to redraw from the parent (what the card shows it
     /// observes itself), so a rebuilt scroll doesn't rebuild every card.
@@ -436,6 +453,7 @@ struct SoundCard: View, Equatable {
         let _ = BodyCounter.tick("card")
         let first = rows[0]
         let onDeviceRow = rows.firstIndex { onDevice($0) }
+        let focused = ui.focusedPage.map { f in rows.contains { $0.id == f.id } } ?? false
         let activeRow = rows.firstIndex { isActive($0) }
         let marked = marks.key
         let lit = rows.contains { p in marked != nil && (p.ids + p.routes.joined()).contains { id in id.map { "s\(p.scope).\($0)" } == marked } }
@@ -502,6 +520,9 @@ struct SoundCard: View, Equatable {
         }
         .padding(16)
         .panel()
+        // brought forward by a button's press: lifted a little (and lit, below, when nothing's linked to light it)
+        .shadow(color: .black.opacity(focused ? 0.45 : 0), radius: 12, y: 6)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focused)
         // the page on the FM-1's screen: a lit edge along the top, the playhead's light
         .overlay(alignment: .top) {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
@@ -509,8 +530,8 @@ struct SoundCard: View, Equatable {
                 .padding(.horizontal, 14)
                 .offset(y: 1)                    // on the panel's top edge
                 .glow(Theme.text.opacity(0.7), radius: 6)
-                .opacity(onDeviceRow != nil ? 1 : 0)
-                .animation(.easeOut(duration: 0.15), value: onDeviceRow != nil)   // the light fades; nothing else animates
+                .opacity(onDeviceRow != nil || (!session.screenLinked && focused) ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: onDeviceRow != nil || focused)   // the light fades
                 .accessibilityHidden(true)
         }
         .accessibilityValue(onDeviceRow != nil ? "on the FM-1" : "")
