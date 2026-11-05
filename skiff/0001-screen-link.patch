@@ -1,0 +1,377 @@
+From 2ebba0fd43900db095b86e123bcc45c82fb65f80 Mon Sep 17 00:00:00 2001
+From: Scott Gerstl <scottgerstl@gmail.com>
+Date: Thu, 5 Nov 2026 15:16:22 +0100
+Subject: [PATCH] Screen link: SCREEN (90), SCREEN_GOTO (91), WATCH bit 2, INFO
+ 56 01 1
+
+An editor can follow the FM-1's screen and open its pages, as the same patch
+does on SLOOP 2.8.4 (same numbers, the same first four bytes): home, page,
+layer, menu, then the selected track and flags (HOME's scope, a locked layer,
+SHIFT's map). Pushed on every change while WATCH has bit 2; SCREEN_GOTO opens
+a page as its family's button would, or HOME (127). Opt-in: an editor that
+never sends bit 2, 90 or 91 sees no difference. +456 B flash, +16 B RAM.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ firmware/src/editor.c  |  79 +++++++++++++++++++++++++++---
+ tests/editor_test.c    | 108 ++++++++++++++++++++++++++++++++++++++++-
+ web/EDITOR_PROTOCOL.md |  45 ++++++++++++++++-
+ 3 files changed, 222 insertions(+), 10 deletions(-)
+
+diff --git a/firmware/src/editor.c b/firmware/src/editor.c
+index bb494a9..b004f9d 100644
+--- a/firmware/src/editor.c
++++ b/firmware/src/editor.c
+@@ -62,6 +62,32 @@ static void ed_send(void)
+ }
+ static int32_t ed_rv(const uint8_t *p) { return (int32_t)(p[0] | p[1] << 7) - 8192; }
+ 
++/* (screen link, fm1-ipad; not in Skiff 2.2) the screen, so an editor can follow the FM-1 and open its pages
++ * (EDITOR_PROTOCOL.md "Screen link", INFO 56 01 1). The numbers and the first four bytes are those of the SLOOP patch's:
++ *   90 SCREEN       -> home 0/1, page (PAGES), layer (LAYER_*, 0 none), menu (0 off, 1 list, 2 about), the selected
++ *                      track, flags (bit 0 HOME's scope, bit 1 the layer locked open, bit 2 the SHIFT map); also pushed
++ *                      when one of them changes, while WATCH was sent with bit 2 (4)
++ *   91 SCREEN_GOTO  page (127 HOME) -> opens it as its button would, then the state, as SCREEN (as it was: a page the
++ *                      selected track's engine does not show, a dialog open)
++ * An editor that never sends bit 2, 90 or 91 sees no difference */
++enum { ED_SCREEN = 90, ED_SCREEN_GOTO };
++#define ED_SCR_N 6u
++static uint8_t ed_scr_on, ed_scr_last[ED_SCR_N];
++static void ed_scr_now(uint8_t *s)
++{
++    s[0] = ui.home;
++    s[1] = ui.page;
++    s[2] = ui.layer;
++    s[3] = ui.menu;
++    s[4] = song.sel;
++    s[5] = (uint8_t)((ui.home_scope != 0u) | (ui.lock != 0u) << 1 | (ui.shift != 0u) << 2);
++}
++static void ed_scr_reply(void)                           /* (what the editor is told: no push of it) */
++{
++    ed_scr_now(ed_scr_last);
++    ed_bs(ed_scr_last, ED_SCR_N);
++}
++
+ /* ---- user sample slots (eng_sample.c): flash SMP_USER_BASE + k * SMP_USER_SIZE ----
+  * BEGIN erases the header sector (the slot is invalid from then on), WRITE fills the data
+  * (offset >= 512, erasing each further sector when the write reaches its start), END sends
+@@ -235,6 +261,18 @@ static void ed_sync(void)                                /* main loop */
+         ed_w.on = 0;                                     /* no host, USB reset, or 3 s without a request */
+         return;
+     }
++    if (ed_scr_on) {                                     /* (screen link) the screen changed */
++        uint8_t s[ED_SCR_N];
++        ed_scr_now(s);
++        if (memcmp(s, ed_scr_last, ED_SCR_N)) {
++            if (!ed_room())
++                return;
++            ed_begin(ED_SCREEN);
++            ed_scr_reply();
++            ed_send();
++            n++;
++        }
++    }
+     if (sync_reload || ed_eng(TSEL) != ed_w.eng || TSEL->preset != ed_w.preset || song.sel != ed_w.sel) {
+         if (!ed_room())
+             return;
+@@ -411,7 +449,7 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
+ {
+     switch (cmd) {
+     case ED_INFO: case ED_DUMP: case ED_SMP_INFO: case ED_PING:
+-    case ED_UI_STATE: case ED_UI_PALETTES:
++    case ED_UI_STATE: case ED_UI_PALETTES: case ED_SCREEN:
+         return !n;
+     case ED_GET: case ED_DESC: case ED_PRESET: case ED_PROJECT: case ED_UP_LIST:
+     case ED_TRACK_PARAM:
+@@ -420,6 +458,7 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
+         return n == 4u;
+     case ED_STEP_GET: case ED_NAMES: case ED_SMP_BEGIN: case ED_SMP_ERASE:
+     case ED_UP_GET: case ED_UP_LOAD: case ED_UP_ERASE: case ED_WATCH: case ED_TRACK_DUMP: case ED_MENU_DESC:
++    case ED_SCREEN_GOTO:
+         return n == 1u;
+     case ED_MENU_SET:
+         return n == 3u;
+@@ -516,6 +555,26 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+     if (ed_project_handle(cmd, a, na)) { ed_send(); return; }
+     if (ed_song_handle(cmd, a, na)) { ed_send(); return; }
+     switch (cmd) {
++    case ED_SCREEN:                                        /* (screen link) the state */
++        break;
++    case ED_SCREEN_GOTO:                                   /* (screen link) a page, as its button (or HOME) opens it */
++        if (ui.confirm || (a[0] != 127u && (a[0] >= NPAGES || !page_visible(a[0]))))
++            break;                                         /* (refused: the state as it is) */
++        if (ui.menu) {                                     /* (as ui_menu.c menu_close) */
++            ui.menu = 0;
++            settings_save();
++        }
++        ui.lock = 0;                                       /* (a locked layer closes, as at another page button: the
++                                                            * next pass lets its button go, ui_layer.c layer_gesture) */
++        if (a[0] == 127u) {
++            go_home();
++        } else {
++            ui.page = a[0];
++            ui.fam_last[page_group(a[0])] = a[0];
++            ui.home = 0;
++            page_entered();
++        }
++        break;
+     case ED_MOTION: {
+         track_t *t = &trk[a[0]]; uint32_t rc = 0;
+         if (na > 1u && a[1] == 7u) {
+@@ -555,9 +614,11 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+             0x49, 1, P_COUNT & 127u, P_COUNT >> 7, P_E0 & 127u, P_E0 >> 7,   /* (Skiff 1.3) wide ids: P_COUNT and
+                                          * P_E0 in two bytes; a track id from 128 on as scope 2 (ED_TID), a motion
+                                          * record's from 128 on with bit 6 of its step byte */
+-            0x58, 1, ED_SONG2};                         /* (2.0) the song's LIST2, NEW, COPY+, CHAIN, ONCE, the pool's
+-                                                         * EMPTY, CLEAR UNUSED (editor_song.c; last: an editor before
+-                                                         * reads up to 49 01 only) */
++            0x58, 1, ED_SONG2,                          /* (2.0) the song's LIST2, NEW, COPY+, CHAIN, ONCE, the pool's
++                                                         * EMPTY, CLEAR UNUSED (editor_song.c; an editor before reads up
++                                                         * to 49 01 only) */
++            0x56, 1, 1};                                /* (screen link) SCREEN, SCREEN_GOTO, WATCH bit 2; last: Skiff's
++                                                         * own editor reads up to 58 01 only */
+         ed_str("FELUCCA " FELUCCA_VERSION, 24);
+         ed_b(NENGINES);
+         ed_b(P_COUNT > 127u ? 127u : P_COUNT);            /* ((1.3) more: INFO 49 01) */
+@@ -847,19 +908,23 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+         ed_b(a[0] >= UP_SLOTS ? 1u : ed_flash_stop() || up_put(a[0], 0) ? 2u : 0u);
+         break;
+     case ED_WATCH: {                                       /* on -> on */
+-        uint32_t keep, v4was = ed_w.v4;
++        uint32_t keep, v4was = ed_w.v4, scr;
+         if (na < 1u)
+             return;
+         keep = ed_w.on && ed_w.resets == usb.resets && (a[0] & 1u);   /* already watching: the changes not yet */
+         ed_w.on = a[0] & 1u;                                          /* pushed stay pending (INFO 53 01 bit 0) */
+         ed_w.v4 = (uint8_t)(ed_w.on && (a[0] & 2u));     /* v4: also TRACK_CHANGED; the reply says it is known */
++        scr = ed_w.on && (a[0] & 4u);                    /* (screen link) also SCREEN: newly asked, the state at once */
++        if (scr && !(keep && ed_scr_on))
++            ed_scr_last[0] = 0xFFu;
++        ed_scr_on = (uint8_t)scr;
+         ed_w.resets = usb.resets;
+         if (ed_w.on && !keep)
+             ed_shadow();
+         else if (keep && ed_w.v4 && !v4was)
+             for (i = 0; i < ED_NT; i++)                    /* TRACK_CHANGED newly asked for: from the mix as it is */
+                 ed_w.tv[i] = trk[i / 3u].p[ED_TIDS[i % 3u]];
+-        ed_b(ed_w.on | ed_w.v4 << 1);
++        ed_b(ed_w.on | ed_w.v4 << 1 | ed_scr_on << 2);
+         break;
+     }
+     case ED_PING:
+@@ -973,6 +1038,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+     default:
+         return;
+     }
++    if (cmd == ED_SCREEN || cmd == ED_SCREEN_GOTO)
++        ed_scr_reply();
+     ed_send();
+ }
+ 
+diff --git a/tests/editor_test.c b/tests/editor_test.c
+index 7db19af..4479950 100644
+--- a/tests/editor_test.c
++++ b/tests/editor_test.c
+@@ -73,6 +73,16 @@ static int st_erase(uint32_t off) { (void)off; return -1; }
+ #include "../firmware/src/storage.c"
+ static uint32_t host_rec_taps;                      /* (ui_input.c's REC, not built here; ui_test has it) */
+ static int rec_tap(void) { host_rec_taps++; song.rec ^= (uint8_t)(1u << song.sel); return 1; }
++/* (screen link: ui.c page_visible; ui_input.c's SHEETS, not built here, by their pages and engines only) */
++static const sheet_t host_sheets[] = {{GR_DXSND, ENGI_DRUMX}, {GR_FMOP, ENGI_FM6}, {GR_FMALL, ENGI_FM6}};
++static const sheet_t *sheet_of(uint32_t g)
++{
++    uint32_t i;
++    for (i = 0; i < 3u; i++)
++        if (host_sheets[i].graph == g)
++            return &host_sheets[i];
++    return 0;
++}
+ #include "../firmware/src/editor.c"
+ 
+ static int check(const char *what, int ok)
+@@ -190,7 +200,10 @@ static int preferences(void)
+     uint8_t a[4] = {0, 3, 0, 0};                          /* (THEME: 3, CRYPT) */
+     reset();
+     uint32_t n = request(ED_INFO, a, 0);
+-    bad += check("INFO (2.0) the song's tag last: 58 01 01 (LIST2, NEW, COPY+, CHAIN, ONCE, EMPTY, CLEAR UNUSED)",
++    bad += check("INFO (screen link) its tag last: 56 01 01 (SCREEN, SCREEN_GOTO, WATCH bit 2)",
++        host_wire[n - 4] == 0x56 && host_wire[n - 3] == 1 && host_wire[n - 2] == 1);
++    n -= 3u;                                              /* (the tags before it, as they were) */
++    bad += check("INFO (2.0) the song's tag next: 58 01 01 (LIST2, NEW, COPY+, CHAIN, ONCE, EMPTY, CLEAR UNUSED)",
+         host_wire[n - 4] == 0x58 && host_wire[n - 3] == 1 && host_wire[n - 2] == ED_SONG2);
+     n -= 3u;                                              /* (the tags before it, as they were) */
+     bad += check("INFO (1.3) wide ids next: 49 01, P_COUNT and P_E0 in two 7-bit bytes each; the plain bytes at most 127",
+@@ -1650,11 +1663,102 @@ static int custom_colors(void)
+     return bad;
+ }
+ 
++/* (screen link) SCREEN (90), SCREEN_GOTO (91), WATCH bit 2: the state asked and pushed, pages opened as their
++ * buttons open them; an editor that never asks sees nothing new */
++static uint32_t page_named(const char *t)
++{
++    uint32_t i;
++    for (i = 0; i < NPAGES && strcmp(PAGES[i].title, t); i++)
++        ;
++    return i;
++}
++static int screen_is(const uint8_t *x, uint32_t home, uint32_t page, uint32_t layer, uint32_t menu, uint32_t sel,
++                     uint32_t flags)
++{
++    return x[0] == home && x[1] == page && x[2] == layer && x[3] == menu && x[4] == sel && x[5] == flags && x[6] == 0xF7;
++}
++static int screen_link(void)
++{
++    int bad = 0;
++    uint8_t a[2] = {3, 0};
++    const uint8_t *x = 0;
++    uint32_t mixer = page_named("MIXER"), lanes = page_named("LANES"), fx = page_named("FX");
++    reset();
++    usb.resets = 0;
++    ui.page = (uint8_t)fx;
++    bad += check("SCREEN: home, page, layer, menu, track, flags",
++        request(ED_SCREEN, a, 0) == 12u && host_wire[4] == ED_SCREEN && screen_is(host_wire + 5, 0, fx, 0, 0, 0, 0));
++    request(ED_WATCH, a, 1);
++    bad += check("WATCH 3: the reply without bit 2", host_wire[5] == 3 && !ed_scr_on);
++    ui.page = (uint8_t)mixer; ui.layer = LAYER_FX; ui.menu = 1;
++    bad += check("WATCH 3: no SCREEN push when the screen changes", !wire_frames(ED_SCREEN, 0) && !sync_pass());
++    ui.layer = 0; ui.menu = 0;
++    a[0] = 7; request(ED_WATCH, a, 1);
++    bad += check("WATCH 7: bit 2 in the reply", host_wire[5] == 7 && ed_scr_on);
++    sync_pass();
++    bad += check("WATCH 7: the state pushed at once, then nothing",
++        wire_frames(ED_SCREEN, &x) == 1u && screen_is(x, 0, mixer, 0, 0, 0, 0) && !sync_pass());
++    ui.layer = LAYER_SEQ;
++    sync_pass();
++    bad += check("a layer held: pushed", wire_frames(ED_SCREEN, &x) == 1u && screen_is(x, 0, mixer, LAYER_SEQ, 0, 0, 0));
++    ui.lock = LAYER_SEQ; ui.layer = LAYER_SEQ;
++    sync_pass();
++    bad += check("the layer locked open: flags bit 1", wire_frames(ED_SCREEN, &x) == 1u && screen_is(x, 0, mixer, LAYER_SEQ, 0, 0, 2));
++    ui.lock = ui.layer = 0; ui.home = 1; ui.home_scope = 1;
++    sync_pass();
++    bad += check("HOME with its scope: home 1, flags bit 0", wire_frames(ED_SCREEN, &x) == 1u && screen_is(x, 1, mixer, 0, 0, 0, 1));
++    ui.home_scope = 0; ui.shift = 1;
++    sync_pass();
++    bad += check("SHIFT's map: flags bit 2", wire_frames(ED_SCREEN, &x) == 1u && screen_is(x, 1, mixer, 0, 0, 0, 4));
++    ui.shift = 0; ui.menu = 2;
++    sync_pass();
++    bad += check("MENU's ABOUT: menu 2", wire_frames(ED_SCREEN, &x) == 1u && screen_is(x, 1, mixer, 0, 2, 0, 0));
++    ui.menu = 0;
++    sync_pass();
++    a[0] = 2; request(ED_TRACK, a, 1);
++    sync_pass();
++    bad += check("another track selected (TRACK): pushed with it", wire_frames(ED_SCREEN, &x) == 1u && screen_is(x, 1, mixer, 0, 0, 2, 0));
++    a[0] = 7; request(ED_WATCH, a, 1);
++    bad += check("WATCH 7 while watching: no push again", !sync_pass());
++    a[0] = (uint8_t)fx; request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO FX: opened, the reply its state, no push of it",
++        host_wire[4] == ED_SCREEN_GOTO && screen_is(host_wire + 5, 0, fx, 0, 0, 2, 0) && !ui.home && ui.fam_last[FAM_FX] == fx &&
++        !wire_frames(ED_SCREEN, 0) && !sync_pass());
++    a[0] = (uint8_t)mixer; request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO MIXER: GLO's family remembers it", screen_is(host_wire + 5, 0, mixer, 0, 0, 2, 0) &&
++        ui.fam_last[FAM_GLO] == mixer);
++    a[0] = 127; request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO 127: HOME", screen_is(host_wire + 5, 1, mixer, 0, 0, 2, 0) && ui.home);
++    a[0] = (uint8_t)lanes; request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO LANES on ANALOG: refused, the state as it is", screen_is(host_wire + 5, 1, mixer, 0, 0, 2, 0));
++    a[0] = NPAGES; request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO past the pages: refused, the state as it is", screen_is(host_wire + 5, 1, mixer, 0, 0, 2, 0));
++    ui.confirm = CF_CLEAR_SEQ;
++    a[0] = (uint8_t)fx; request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO under a dialog: refused", screen_is(host_wire + 5, 1, mixer, 0, 0, 2, 0) && ui.confirm);
++    ui.confirm = 0; ui.menu = 1;
++    request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO from the MENU: closed, the page opened", screen_is(host_wire + 5, 0, fx, 0, 0, 2, 0) && !ui.menu);
++    ui.lock = ui.ly = LAYER_GLO;
++    a[0] = 127; request(ED_SCREEN_GOTO, a, 1);
++    bad += check("SCREEN_GOTO over a locked layer: the lock goes", !ui.lock && ui.home);
++    ui.ly = 0;
++    a[0] = 1; request(ED_WATCH, a, 1);
++    sync_pass();
++    ui.page = (uint8_t)mixer; ui.home = 0;
++    sync_pass();
++    bad += check("WATCH 1: no more SCREEN pushes", !wire_frames(ED_SCREEN, 0));
++    ui.page = (uint8_t)fx;
++    a[0] = 0; request(ED_SCREEN_GOTO, a, 0);
++    bad += check("SCREEN_GOTO without its page: no reply", !host_wire_n);
++    return bad;
++}
++
+ int main(void)
+ {
+     int bad = preferences() + motion_locks() + wide_ids() + framing() + uart_recovery() + steps() + samples() + smp_mix() + song_protocol() + malformed_saves() +
+               fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol() + drum_kit_retired() +
+-              light_tracks() + preset_more() + transport_names() + song_cmds() + song2_cmds() + custom_colors();
++              light_tracks() + preset_more() + transport_names() + song_cmds() + song2_cmds() + custom_colors() + screen_link();
+     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");
+     return bad != 0;
+ }
+diff --git a/web/EDITOR_PROTOCOL.md b/web/EDITOR_PROTOCOL.md
+index bbb9991..40a5541 100644
+--- a/web/EDITOR_PROTOCOL.md
++++ b/web/EDITOR_PROTOCOL.md
+@@ -198,7 +198,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device
+ 
+ | cmd | Request args | Reply args |
+ | --- | --- | --- |
+-| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, (#21) bit 5 SMP_MIX, (2.0) bit 6 a step's ties, below) and (Skiff 1.3) `49 01 c0 c1 e0 e1` (wide ids: P_COUNT and P_E0, above) and (2.0) `58 01 caps` (bit 0: LIST2, NEW, COPY+, CHAIN, SONG ONCE, the pool's EMPTY and CLEAR UNUSED; (#30) bit 1: the entries' sounds, LIST2's op 9 and its reply's sound bytes; "Pool, lists, PERFORM" below) ; older firmware ends earlier |
++| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, (#21) bit 5 SMP_MIX, (2.0) bit 6 a step's ties, below) and (Skiff 1.3) `49 01 c0 c1 e0 e1` (wide ids: P_COUNT and P_E0, above) and (2.0) `58 01 caps` (bit 0: LIST2, NEW, COPY+, CHAIN, SONG ONCE, the pool's EMPTY and CLEAR UNUSED; (#30) bit 1: the entries' sounds, LIST2's op 9 and its reply's sound bytes; "Pool, lists, PERFORM" below) and (screen link, not in Skiff 2.2) `56 01 1` (SCREEN, SCREEN_GOTO, WATCH bit 2; "Screen link" below) ; older firmware ends earlier |
+ | 2 GET | scope, id | scope, id, v14 |
+ | 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine: its defaults, then its first preset (as on the device) |
+ | 4 DUMP | — | engine, preset, then P_COUNT × v14 (the selected track), then G_COUNT × v14 (globals) |
+@@ -219,7 +219,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device
+ | 19 UP_STORE | slot, name | slot, rc. Stores the current sound: engine, parameters, the first 16 sequencer steps as the pattern (TIE steps → flag 4) |
+ | 20 UP_LOAD | slot | slot, rc (0 ok, 1 empty/invalid). Applies its sound (not its pattern; the steps stay) |
+ | 21 UP_ERASE | slot | slot, rc |
+-| 22 WATCH | on (0/1; v4: 3 = also `TRACK_CHANGED`) | on (0/1; v4 firmware: 3 when 3 was asked for). While on, the device pushes cmds 23, 24, 26 (and 32 with bit 1) |
++| 22 WATCH | on (0/1; v4: 3 = also `TRACK_CHANGED`; screen link: bit 2 = also `SCREEN`) | on (0/1; v4 firmware: 3 when 3 was asked for; screen link: bit 2 set when asked for). While on, the device pushes cmds 23, 24, 26 (and 32 with bit 1, 90 with bit 2) |
+ | 23 CHANGED (push) | — | scope, id, v14 |
+ | 24 RELOAD (push) | — | engine, preset, then (v3) the selected track |
+ | 25 PING | — | 0 |
+@@ -1133,3 +1133,44 @@ device gone at ~0.3 s, the MIDI port gone at ~0.57 s and back at ~1.15 s; ON ->
+ at ~0.6 s while the MIDI port was not seen to disappear at all (so do not wait for a disconnect event: after
+ a real change, wait ~1.5 s and open again). What the editor sends in that window is lost, `WATCH` ends with the
+ bus reset (send `INFO` and `WATCH` again after reconnecting), and a backup in progress answers rc 5 (stale).
++
++## Screen link (90, 91; the fm1-ipad patch, not in Skiff 2.2)
++
++An editor that follows the FM-1's screen (Jib, the iPad app) and opens its pages. It is a patch on Skiff 2.2
++(`skiff/0001-screen-link.patch` in the fm1-ipad repository); stock Skiff answers neither command and has no
++`56 01` tag. The numbers and the first four bytes of the state are those of the same patch on SLOOP 2.8.4 (its
++`UI`, `UI_GOTO`), with Skiff's own page and layer numbers. INFO advertises `56 01 1` after `58 01` (last: Skiff's own
++editor reads up to `58 01` only; bit 0: SCREEN, SCREEN_GOTO, WATCH bit 2).
++
++| cmd | Request args | Reply args |
++| --- | --- | --- |
++| 90 SCREEN | none | home (0/1), page (index into `PAGES`, `params.c`), layer (0 none, 1 FX, 2 GLO, 3 SCL, 4 EDIT, 5 SEQ, 6 REC, 7 PERF: `LAYER_*`, `ui.c`), menu (0 off, 1 the list, 2 ABOUT), the selected track (0..NTRK−1), flags (bit 0 HOME shows the scope, bit 1 the layer is locked open, bit 2 HOME is held: SHIFT's map) |
++| 91 SCREEN_GOTO | page (0..NPAGES−1), or 127 (HOME) | as SCREEN, after the change |
++
++- **Pushes.** While `WATCH` was sent with bit 2 (`WATCH 7`, or 5), the device pushes `SCREEN` whenever one of its
++  six bytes changes: a page or family button, SELECT walking the family, a layer button held (its map open) and let
++  go, a layer locked, HOME held (SHIFT, then the MENU), the MENU closed, another track selected (the device's or the
++  editor's `TRACK`), a page closing itself. `WATCH` with bit 2 newly asked for pushes the state at once; `WATCH 7`
++  while already watching with it does not push again. The state the editor was told (a `SCREEN` or `SCREEN_GOTO`
++  reply) is not pushed back. Like every push it goes out only into a half-empty send queue, and watching ends 3 s
++  after the last request (send `PING` about every 1 s).
++- **Page numbers** are this firmware's `PAGES` order, which can change between releases: ENV 0, ENV 2 1, LFO 2, LFO 2 3,
++  MOD 4, FX 5, DRIVE 6, INSERT 7, INSERT 2 8, SLICER 9, DUCK 10, SCALE 11, CHORD 12, FOLLOW 13, EDIT 1 14, EDIT 2 15,
++  OPERATOR 16, ALL OPS 17, LANES 18, SOUND 19, LANE MIX 20, SLICES 21, SAMPLES 22, OP1 ENV..OP4 ENV 23..26, OP LEVEL 27,
++  VOICE 28, VOICE 2 29, MIXER 30, DELAY 31, REVERB 32, CHORUS 33, GLOBAL 34, PRESETS 35, USER 36, PATTERNS 37,
++  PROJECT 38, ARP 39, ARP 2 40, NOTES 41, FEEL 42, PATTERN 43, AUTOMATION 44, SONG 45. The buttons' families: FX
++  5..10, SCL 11..13, ENV 0..1, LFO 2..4, EDIT 14..29 (the ones the track's engine shows), GLO 30..34, SAVE 35..38, ARP
++  39..40, SEQ 41..45. `page` keeps its value while `home` is 1 (the page HOME was opened from).
++- **SCREEN_GOTO** opens the page as its family's button would land on it: the MENU closes (its settings kept, as
++  when it closes on the device), a locked layer closes (as another page button closes it), the family remembers the
++  page, and the page starts as when it is entered on the device (NOTES' and FEEL's sequencer mode, AUTOMATION's +
++  ADD LOCK). 127 goes HOME, as a HOME tap. Refused, with the state as it is: a page past `NPAGES`, a page the selected
++  track's engine does not show (LANES off DRUM, OPERATOR off FM6, ...), a dialog open (`OVERWRITE?`, `CLEAR?`). A
++  layer button held on the device stays held.
++- An editor that never sends bit 2, 90 or 91 sees no difference: no new pushes, the replies to `WATCH` as before
++  (bits 0 and 1).
++
++Example (bytes in hex): `F0 7D 46 4C 16 07 F7` (`WATCH 7`) answers `F0 7D 46 4C 16 07 F7`, then pushes
++`F0 7D 46 4C 5A 00 05 00 00 00 00 F7` (the FX page, track 1). FX held: `.. 5A 00 05 01 00 00 00 F7`, let go: `.. 5A 00
++05 00 00 00 00 F7`. `F0 7D 46 4C 5B 1F F7` (`SCREEN_GOTO` DELAY) answers `F0 7D 46 4C 5B 00 1F 00 00 00 00 F7`;
++`F0 7D 46 4C 5B 12 F7` (LANES) on an ANALOG track answers the state unchanged.
+-- 
+2.54.0 (Apple Git-157)
+
