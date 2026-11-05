@@ -186,6 +186,27 @@ public final class SkiffSongStore {
         }
     }
 
+    /// A section's op on every track that takes part, as one change: one undo puts all of them back.
+    /// Returns why a track's part didn't take, by track.
+    public func apply(section plans: [SectionTrack]) async -> [Int: String] {
+        guard let before = song else { return [:] }
+        let n = undoStack.count
+        var refused: [Int: String] = [:]
+        var any = false
+        for p in plans {
+            if let why = p.refusal { refused[p.track] = why; continue }
+            guard let es = p.result else { continue }
+            if await rewrite(track: p.track, to: es) { any = true } else { refused[p.track] = refusal?.text ?? "Not done" }
+        }
+        undoStack.removeLast(max(0, undoStack.count - n))
+        if any { undoStack.append(before) }
+        if !refused.isEmpty, let first = refused.sorted(by: { $0.key < $1.key }).first {
+            refusal = Refusal(track: first.key, entry: nil, text: "T\(first.key + 1): \(first.value)",
+                              needsStop: refusal?.needsStop ?? false)
+        }
+        return refused
+    }
+
     /// Back to the lists before the last change (Jib's undo; Skiff's own covers the device's edits).
     public func undo() async {
         guard let last = undoStack.popLast(), let now = song else { return }

@@ -85,7 +85,6 @@ import Testing
         var once = false
         let session = DeviceSession(transport: { if once { return nil }; once = true; return MIDITransport() })
         let run = Task { await session.run() }
-        defer { run.cancel() }
         try await waitFor(20) { if case .connected = session.status { true } else { false } }
         let s = try #require(session.skiffSong)
         try await waitFor(5) { s.song != nil }
@@ -94,7 +93,7 @@ import Testing
             let drawn = t6()
             await s.refresh(pool: true)
             print(what, t6().prefix(6).map { $0.isEmpty ? "--" : "\($0.pattern)×\($0.chained ? "ch" : String($0.reps))" })
-            #expect(t6() == drawn, "\(what): read back as drawn")
+            #expect(SongList(entries: t6()).playing == SongList(entries: drawn).playing, "\(what): read back as drawn")
         }
         // NEW twice (two new empty patterns), then the rewrites
         #expect(await s.send(.new(track: 5, entry: 0)))
@@ -133,6 +132,7 @@ import Testing
         try await clearT6(d)
         await s.refresh(pool: true)
         #expect(s.song!.tracks[5].used == 0)
+        run.cancel(); _ = await run.value                 // the port free for the next test
     }
 
     /// A lane on a kit track: written as the step's hit bytes, read back from the sim.
@@ -151,6 +151,45 @@ import Testing
         _ = try await d.setSynthStep(track: t, index: 62, before)
         #expect(try await d.synthStep(track: t, index: 62).hits == before.hits)
         await d.close()
+    }
+
+    /// A section on the sim: T6's bars duplicated after themselves, an entry split, read back as planned.
+    @Test func sectionRoundTrips() async throws {
+        let d0 = try await driver()
+        try await clearT6(d0)
+        await d0.close()
+        // a fresh transport each try: right after the driver above lets go, the first connect can miss
+        let session = DeviceSession(transport: { MIDITransport() })
+        let run = Task { await session.run() }
+        try await waitFor(20) { if case .connected = session.status { true } else { false } }
+        let s = try #require(session.skiffSong)
+        try await waitFor(5) { s.song != nil }
+        #expect(await s.send(.new(track: 5, entry: 0)))
+        #expect(await s.send(.new(track: 5, entry: 1)))
+        let pa = s.song!.tracks[5].entries[0].pattern, pb = s.song!.tracks[5].entries[1].pattern
+        var es = Array(repeating: SongEntry.empty, count: 16)
+        es[0] = SongEntry(pattern: pa, reps: 4); es[1] = SongEntry(pattern: pb, reps: 2)
+        #expect(await s.rewrite(track: 5, to: es))
+        await s.refresh(pool: true)
+        #expect(s.song!.tracks[5].playing == SongList(entries: es).playing, "T6 set up as A ×4, B ×2")
+        // A's 3rd pass to B's 1st: splits both
+        let blocks = s.blocks(5)
+        let from = blocks[0].start + 2 * blocks[0].pass, to = blocks[1].start + blocks[1].pass
+        let plan = SongSections.plan(track: 5, list: s.song!.tracks[5], blocks: blocks, from: from, to: to, op: .duplicateAfter)
+        print("section on T6: splits \(plan.splits)")
+        #expect(plan.splits == ["Splits A at its 3rd pass", "Splits B at its 2nd pass"])
+        let planned = try #require(plan.result)
+        let refused = await s.apply(section: [plan])
+        #expect(refused.isEmpty)
+        await s.refresh(pool: true)
+        #expect(s.song!.tracks[5].playing == SongList(entries: planned).playing)
+        print("T6 after:", s.song!.tracks[5].entries.prefix(6).map { $0.isEmpty ? "--" : "\($0.pattern)×\($0.reps)" })
+        await s.undo()
+        await s.refresh()
+        #expect(s.song!.tracks[5].entries.prefix(3).map(\.reps) == [4, 2, 1] || s.song!.tracks[5].entries[2].isEmpty)
+        let d = try #require(session.skiffSongDriverForTests)
+        try await clearT6(d)
+        run.cancel(); _ = await run.value
     }
 }
 

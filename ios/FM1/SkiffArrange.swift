@@ -16,6 +16,9 @@ struct SkiffArrangePage: View {
     /// A pattern being dragged from the bin (set when the drag starts), and where it would go.
     @State private var dragPattern: Int?
     @State private var dropAt: DropSpot?
+    /// A bar range across the lanes (board 3): its first bar and the bar after its last, 0-based.
+    @State private var section: SectionRange?
+    @State private var leftOut: Set<Int> = []
     @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -35,7 +38,12 @@ struct SkiffArrangePage: View {
                 } else {
                     lanesArea
                 }
-                if let d = dropAt {
+                if let s = section {
+                    SectionBar(range: s, songBars: max(songBars, 1), plans: sectionPlans(.duplicateAfter),
+                               leftOut: $leftOut, busy: store.busy || store.offline,
+                               set: { section = $0 }, apply: { applySection($0) }, cancel: { section = nil; leftOut = [] })
+                    if let r = store.refusal, r.entry == nil { RefusalLine(refusal: r, session: session, store: store) }
+                } else if let d = dropAt {
                     Text(d.text).font(.system(size: 13)).padding(.horizontal, 12).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
                         .padding(.leading, Self.headerWidth)
@@ -116,15 +124,20 @@ struct SkiffArrangePage: View {
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: Self.laneGap) {
                     Color.clear.frame(height: 24)
-                    ForEach(0..<session.trackCount, id: \.self) { t in LaneHeader(session: session, store: store, track: t) }
+                    let plans = section.map { _ in sectionPlans(.duplicateAfter) } ?? []
+                    ForEach(0..<session.trackCount, id: \.self) { t in
+                        LaneHeader(session: session, store: store, track: t, note: section.flatMap { s in note(t, plans, s) })
+                    }
                 }
                 .frame(width: Self.headerWidth)
                 ScrollView(.horizontal) {
                     VStack(alignment: .leading, spacing: Self.laneGap) {
-                        Ruler(bars: Int(contentWidth / barWidth), barWidth: barWidth)
+                        Ruler(bars: Int(contentWidth / barWidth), barWidth: barWidth, section: $section,
+                              selectBlock: { selection = nil })
                         ForEach(0..<session.trackCount, id: \.self) { t in
                             Lane(session: session, store: store, track: t, barWidth: barWidth, width: contentWidth,
-                                 selection: $selection, dragPattern: $dragPattern, dropAt: $dropAt, ui: ui)
+                                 selection: $selection, dragPattern: $dragPattern, dropAt: $dropAt, ui: ui,
+                                 bracket: bracket(t))
                         }
                     }
                     .overlay(alignment: .topLeading) {
@@ -159,10 +172,43 @@ struct SkiffArrangePage: View {
         .accessibilityHidden(true)
     }
 
+    // MARK: Sections
+
+    private func sectionPlans(_ op: SectionOp) -> [SectionTrack] {
+        guard let s = section, let song = store.song else { return [] }
+        return song.tracks.indices.map { t in
+            SongSections.plan(track: t, list: song.tracks[t], blocks: store.blocks(t),
+                              from: Double(s.from) * SongPlacement.ticksPerBar, to: Double(s.to) * SongPlacement.ticksPerBar, op: op)
+        }
+    }
+
+    private func bracket(_ t: Int) -> ClosedRange<Double>? {
+        guard section != nil, !leftOut.contains(t), let p = sectionPlans(.duplicateAfter)[safe: t],
+              let f = p.from, let to = p.to else { return nil }
+        return f...to
+    }
+
+    private func note(_ t: Int, _ plans: [SectionTrack], _ s: SectionRange) -> String? {
+        guard let p = plans[safe: t] else { return nil }
+        if leftOut.contains(t) { return "Left out" }
+        if p.from == nil { return "Nothing in these bars" }
+        if let r = p.refusal { return r }
+        return ([p.cost(rangeBars: Double(s.to - s.from))].compactMap { $0 } + p.splits).first
+    }
+
+    private func applySection(_ op: SectionOp) {
+        let plans = sectionPlans(op).filter { !leftOut.contains($0.track) && $0.from != nil }
+        Task {
+            let refused = await store.apply(section: plans)
+            if refused.isEmpty { section = nil; leftOut = [] }
+        }
+    }
+
     // MARK: Keyboard
 
     private func key(_ k: KeyEquivalent) -> Bool {
         let edits = ArrangeEdits(session: session, store: store)
+        if k == .escape, section != nil { section = nil; leftOut = []; return true }
         guard let sel = selection else {
             let t = session.selectedTrack
             if let b = store.blocks(t).first { selection = EntryRef(track: t, entry: b.entries.lowerBound) }
@@ -196,7 +242,7 @@ struct SkiffArrangePage: View {
                     ui.page = .sequencer
                 }
             }
-        case .escape: selection = nil
+        case .escape: selection = nil; section = nil
         default: return false
         }
         return true
@@ -257,6 +303,8 @@ struct LaneHeader: View {
     let session: DeviceSession
     let store: SkiffSongStore
     let track: Int
+    /// While a section is picked: what it does to this track (a split, the cost of snapping, left out).
+    var note: String?
 
     var body: some View {
         let tr = session.tracks[track]
@@ -274,9 +322,13 @@ struct LaneHeader: View {
                 Text(Entries.trackName(track, session: session)).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                 Text(tr.engineName + (tr.length != 16 ? " · \(tr.length) steps" : ""))
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
-                Text("\(used) of 16 entries").font(.system(size: 12))
-                    .foregroundStyle(used >= 16 ? Theme.text : Theme.textSecondary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                if let note {
+                    Text(note).font(.system(size: 11)).foregroundStyle(Theme.text).lineLimit(2).minimumScaleFactor(0.8)
+                } else {
+                    Text("\(used) of 16 entries").font(.system(size: 12))
+                        .foregroundStyle(used >= 16 ? Theme.text : Theme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
             }
             .padding(.top, 8)
             .accessibilityElement(children: .combine)
@@ -289,15 +341,33 @@ struct LaneHeader: View {
 struct Ruler: View {
     let bars: Int
     let barWidth: CGFloat
+    @Binding var section: SectionRange?
+    var selectBlock: () -> Void = {}
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 6).fill(Theme.panel)
+            if let s = section {
+                RoundedRectangle(cornerRadius: 6).fill(Theme.text.opacity(0.16))
+                    .frame(width: CGFloat(s.to - s.from) * barWidth, height: 24)
+                    .offset(x: CGFloat(s.from) * barWidth)
+            }
             ForEach(Array(stride(from: 0, to: bars, by: 4)), id: \.self) { b in
                 Text("\(b + 1)").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     .offset(x: CGFloat(b) * barWidth + 6, y: 4)
             }
         }
         .frame(height: 24)
+        .contentShape(Rectangle())
+        // drag along it for a bar range across every lane (a tap clears it); two steppers in the bar set it too
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { v in
+                let a = Int(max(0, min(v.startLocation.x, v.location.x)) / barWidth)
+                let b = Int((max(v.startLocation.x, v.location.x) / barWidth).rounded(.up))
+                if abs(v.translation.width) < 4 { return }
+                selectBlock()
+                section = SectionRange(from: max(0, min(a, bars - 1)), to: max(a + 1, min(b, bars)))
+            }
+            .onEnded { v in if abs(v.translation.width) < 4 { section = nil } })
         .accessibilityHidden(true)
     }
 }
@@ -312,6 +382,8 @@ struct Lane: View {
     @Binding var dragPattern: Int?
     @Binding var dropAt: DropSpot?
     let ui: EditorUI
+    /// A section's range on this track, snapped to its passes (ticks).
+    var bracket: ClosedRange<Double>? = nil
     /// A right edge being dragged: the block's last entry and the REPS it would get.
     @State private var stretch: (entry: Int, reps: Int)?
     @State private var stretchStart: Int = 1
@@ -362,6 +434,12 @@ struct Lane: View {
                     .accessibilityAction(named: "Play once less") { edits.setReps(track, b, b.reps - 1) }
                     .accessibilityAction(named: "Duplicate after") { edits.duplicateAfter(track, b) }
                     .accessibilityAction(named: "Delete entry") { edits.delete(track, b) }
+            }
+            if let r = bracket {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2)
+                    .frame(width: max(4, x(r.upperBound) - x(r.lowerBound)), height: SkiffArrangePage.laneHeight)
+                    .offset(x: x(r.lowerBound))
+                    .allowsHitTesting(false)
             }
             if let spot {
                 // where the dragged pattern goes: a line, and its ghost lifted under the finger
@@ -684,5 +762,72 @@ struct SongPlayhead: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// A bar range across the lanes: its first bar and the bar after its last, 0-based.
+struct SectionRange: Equatable {
+    var from: Int
+    var to: Int
+}
+
+/// The section's bar (board 3): the range, two steppers to set it without a drag, Duplicate after (the
+/// view's one primary) and Clear, and for each track whose passes can't meet the range, snap or leave out.
+struct SectionBar: View {
+    let range: SectionRange
+    let songBars: Int
+    let plans: [SectionTrack]
+    @Binding var leftOut: Set<Int>
+    let busy: Bool
+    let set: (SectionRange) -> Void
+    let apply: (SectionOp) -> Void
+    let cancel: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                Text("Bars \(range.from + 1)–\(range.to)").font(.system(size: 15, weight: .semibold)).fixedSize()
+                Text("from").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                StepperKeys(label: "First bar", value: range.from + 1, range: 1...max(1, range.to), step: 1) {
+                    set(SectionRange(from: $0 - 1, to: range.to))
+                }
+                Text("to").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                StepperKeys(label: "Last bar", value: range.to, range: (range.from + 1)...max(range.from + 1, songBars + 16), step: 1) {
+                    set(SectionRange(from: range.from, to: $0))
+                }
+                key("Duplicate after", primary: true) { apply(.duplicateAfter) }
+                key("Clear") { apply(.clear) }
+                ForEach(plans.filter { !$0.exact && $0.from != nil }, id: \.track) { p in
+                    HStack(spacing: 6) {
+                        Text("T\(p.track + 1):").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        SegmentedKeys(label: "Track \(p.track + 1) in this section", options: ["Snap to its passes", "Leave it out"],
+                                      selected: leftOut.contains(p.track) ? 1 : 0) { k in
+                            if k == 1 { leftOut.insert(p.track) } else { leftOut.remove(p.track) }
+                        }
+                    }
+                }
+                Button(action: cancel) {
+                    Text("Cancel").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                        .padding(.horizontal, 12).frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 4)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Bars \(range.from + 1) to \(range.to) on every track")
+    }
+
+    private func key(_ title: String, primary: Bool = false, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 15, weight: primary ? .semibold : .regular))
+                .foregroundStyle(primary ? Theme.onColour : Theme.text)
+                .padding(.horizontal, 14).frame(minHeight: 44)
+                .raisedKey(9, primary: primary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .disabled(busy)
     }
 }

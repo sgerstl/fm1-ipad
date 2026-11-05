@@ -197,3 +197,69 @@ extension SkiffKitTests {
         #expect(u.notes.isEmpty && u.hits.lanes == [0, 1] && u.hits.level(0) == 3 && u.time == .note)
     }
 }
+
+/// Sections (board 3): a bar range across the lanes, each track snapped to its own passes.
+@Suite struct SongSectionTests {
+    private func list(_ es: [SongEntry]) -> SongList { SongList(entries: es + Array(repeating: .empty, count: 16 - es.count)) }
+    private func e(_ p: Int, _ reps: Int = 1, chain: Bool = false) -> SongEntry { SongEntry(pattern: p, reps: reps, chained: chain) }
+    private func blocks(_ l: SongList, len: [Int: Int] = [:], trackLength: Int = 16) -> [SongBlock] {
+        SongPlacement.blocks(l, length: { len[$0] ?? 16 }, division: { _ in nil }, trackLength: trackLength, trackDivision: 2)
+    }
+    private let bar = SongPlacement.ticksPerBar
+
+    @Test func duplicatingBars5to12AddsLinkedCopies() {
+        let l = list([e(1, 4), e(2, 8), e(3, 1)])
+        let p = SongSections.plan(track: 0, list: l, blocks: blocks(l), from: 4 * bar, to: 12 * bar, op: .duplicateAfter)
+        #expect(p.exact && p.splits.isEmpty)
+        #expect(p.result?.prefix(5).map(\.pattern) == [1, 2, 2, 3, 0])
+        #expect(p.result?.prefix(4).map(\.reps) == [4, 8, 8, 1])
+    }
+
+    @Test func aPassBoundaryInsideAnEntrySplitsIt() {
+        // T3 on 64 steps: 08 ×2 is bars 1–8, so bars 5–12 start at its 2nd pass
+        let l = list([e(8, 2), e(9, 1), e(8, 2), e(65, 1)])
+        let p = SongSections.plan(track: 2, list: l, blocks: blocks(l, len: [7: 64, 8: 64]), from: 4 * bar, to: 12 * bar, op: .duplicateAfter)
+        #expect(p.exact && p.splits == ["Splits A at its 2nd pass"])
+        #expect(p.result?.prefix(7).map(\.pattern) == [8, 8, 9, 8, 9, 8, 65])
+        #expect(p.result?.prefix(7).map(\.reps) == [1, 1, 1, 1, 1, 2, 1])
+    }
+
+    @Test func passesThatCantMeetTheRangeSayWhatSnappingCosts() {
+        // 12 steps: ¾-bar passes after a 3-bar REST
+        let l = list([e(65, 4), e(10, 16)])
+        let p = SongSections.plan(track: 3, list: l, blocks: blocks(l, len: [9: 12], trackLength: 12), from: 4 * bar, to: 12 * bar, op: .clear)
+        #expect(!p.exact && p.from == 3.75 * bar && p.to == 12 * bar)
+        #expect(p.cost(rangeBars: 8) == "Bars 4¾–12: 8¼ bars, ¼ more")
+        #expect(p.result?.prefix(3).map(\.pattern) == [65, 10, 0] && p.result?[1].reps == 5)
+    }
+
+    @Test func clearingRemovesTheBarsAndAChainStaysWhole() {
+        // B–C chained ×2 (bars 5–8), then D: clearing bars 5–8 leaves A, D
+        let l = list([e(1, 4), e(2, 1, chain: true), e(3, 2), e(4, 1)])
+        let p = SongSections.plan(track: 1, list: l, blocks: blocks(l), from: 4 * bar, to: 8 * bar, op: .clear)
+        #expect(p.result?.prefix(3).map(\.pattern) == [1, 4, 0])
+        // duplicating one time through the chain copies both parts, chained
+        let d = SongSections.plan(track: 1, list: l, blocks: blocks(l), from: 4 * bar, to: 6 * bar, op: .duplicateAfter)
+        #expect(d.result?.prefix(7).map(\.pattern) == [1, 2, 3, 2, 3, 2, 3])
+        #expect(d.result?.prefix(7).map(\.chained) == [false, true, false, true, false, true, false])
+        #expect(d.splits == ["Splits B at its 2nd pass"])
+    }
+
+    @Test func noRoomIsRefused() {
+        let l = list((0..<15).map { _ in e(1, 1) } + [e(2, 1)])
+        let p = SongSections.plan(track: 0, list: l, blocks: blocks(l), from: 0, to: 4 * bar, op: .duplicateAfter)
+        #expect(p.result == nil && p.refusal?.contains("16") == true)
+    }
+}
+
+extension SkiffSongTests {
+    @Test func emptyEntriesRepsMatterOnlyInsideTheList() {
+        var old = list([e(1), .empty, e(2)])
+        old.entries[1].reps = 3; old.entries[9].reps = 7                 // a rest of 3 inside; leftover REPS outside
+        var new = old.entries
+        new[9].reps = 1
+        #expect(ListRewrite.plan(track: 0, from: old, to: new, playing: false, sounds: false).ops.isEmpty)
+        new[1].reps = 2
+        #expect(ListRewrite.plan(track: 0, from: old, to: new, playing: false, sounds: false).ops == [.reps(track: 0, entry: 1, reps: 2)])
+    }
+}

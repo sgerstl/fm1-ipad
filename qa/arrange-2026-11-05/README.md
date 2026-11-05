@@ -24,3 +24,10 @@ Each lane in its track's colour, three ways compared. **Scott picked solid (2026
 | ![](09-colour-solid.jpg) | ![](09-colour-tint.jpg) | ![](09-colour-grey.jpg) |
 
 On solid, all block text is the dark onColour (6:1 or better on each of Skiff's six), the selection ring sits outside the block on the lane (a light ring on amber or lime would be under 3:1), and linked copies' dashes are dark.
+
+## Sections (board 3)
+
+| | |
+|---|---|
+| ![](10-section-bars-5-13.jpg) | **10** Bars 5–13 dragged on the ruler: each lane bracketed at its own pass edges, its header saying what that costs (T2 a bar short, T3 a bar short, T4 on ¾-bar passes, T5 and T6 split), the bar with from / to steppers, Duplicate after, Clear, and Snap / Leave out for the tracks that don't line up. |
+| ![](11-section-duplicated.jpg) | **11** After Duplicate after, while playing: every lane's bars copied after themselves as linked copies, entries split where needed, T5's sound carried. |

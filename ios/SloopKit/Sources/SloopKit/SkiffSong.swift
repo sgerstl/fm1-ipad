@@ -58,6 +58,12 @@ public struct SongList: Equatable, Sendable {
         guard let a = entries.firstIndex(where: { !$0.isEmpty }), let b = entries.lastIndex(where: { !$0.isEmpty }) else { return nil }
         return a...b
     }
+    /// The list as it plays: empty entries outside it carry no REPS that matters, so they compare as empty.
+    public var playing: [SongEntry] {
+        guard let s = span else { return Array(repeating: .empty, count: entries.count) }
+        return entries.indices.map { s.contains($0) ? entries[$0] : .empty }
+    }
+
     /// The other entries naming this entry's pattern.
     public func sharing(_ i: Int) -> [Int] {
         guard let p = entries[i].poolIndex else { return [] }
@@ -264,11 +270,19 @@ public struct ListRewrite: Equatable, Sendable {
         var ops: [ListOp] = []
         var clears: [ListOp] = []
         var stop: String?
+        let span = SongList(entries: new).span
         for i in stride(from: 15, through: 0, by: -1) {
             let a = old.entries[i], b = new[i]
             if a == b { continue }
+            // an empty entry keeps a REPS of its own: inside the list it's a rest that long, outside it nothing
+            let inside = span?.contains(i) ?? false
+            if a.isEmpty && b.isEmpty {
+                if inside && a.reps != b.reps { ops.append(.reps(track: t, entry: i, reps: b.reps)) }
+                continue
+            }
             if b.isEmpty {
                 clears.append(.clear(track: t, entry: i))
+                if inside { clears.append(.reps(track: t, entry: i, reps: b.reps)) }
                 if playing && !a.isRest { stop = "Stop to rearrange: Skiff clears an entry only while stopped" }
                 continue
             }
