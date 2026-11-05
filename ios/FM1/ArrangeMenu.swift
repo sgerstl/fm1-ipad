@@ -79,8 +79,8 @@ struct MenuPanel: View {
         }
         .padding(.vertical, 4)
         .frame(width: 300)
-        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)))
-        .elevationShadow(.held, look)
+        // the one level-3 shadow, the panel's: on its shape, not the stack (which would shade every row and key)
+        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
         .focusable()
         .onKeyPress(.downArrow) { focus = next(from: focus, by: 1, flat); return .handled }
         .onKeyPress(.upArrow) { focus = next(from: focus, by: -1, flat); return .handled }

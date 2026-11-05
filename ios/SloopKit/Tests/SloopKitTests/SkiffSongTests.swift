@@ -592,3 +592,32 @@ extension SkiffOnTheDeviceTests {
         run.cancel()
     }
 }
+
+extension SkiffOnTheDeviceTests {
+    /// A song entry with its own sound loads it as the entry starts: a burst of CHANGED (or a RELOAD). That isn't a
+    /// knob turned on the FM-1, so Shape mustn't follow it to a page (it jumped to EDIT bar by bar).
+    @Test func aSoundLoadingIsNotAKnobTurn() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        try await waitFor(5) { fake.watching }
+        func changed(_ id: Int, _ v: Int) { fake.push(23, [0, UInt8(id)] + Frame.v14(v)) }
+        // an entry's sound: many parameters at once
+        for (k, id) in [1, 2, 3, 4, 9, 10, 63, 64].enumerated() { changed(id, 20 + k) }
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(session.lastTouched == nil)
+        // a RELOAD (another engine or preset), then a value
+        fake.push(24, [1, 3, 0])
+        changed(63, 50)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(session.lastTouched == nil)
+        // later, one knob turned on the FM-1: followed
+        try await Task.sleep(for: .milliseconds(400))
+        changed(34, 70); changed(34, 72)
+        try await waitFor(5) { session.lastTouched?.id == 34 }
+        run.cancel()
+    }
+}

@@ -190,6 +190,10 @@ public final class DeviceSession {
     public private(set) var deviceScreen: UIState?
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
+    /// Device changes in the last 250 ms, and when a sound last loaded: a burst of several parameters at once (a
+    /// sound loading: a preset, or a Skiff song entry's own sound as the entry starts) or a RELOAD isn't a knob.
+    @ObservationIgnored private var recentChanges: [(key: Int, at: Date)] = []
+    @ObservationIgnored private var soundLoadedAt = Date.distantPast
 
     private var pendingSteps: Set<Int> = []        // stepKey(track, index)
     /// Steps and parameters the iPad wrote lately. SLOOP doesn't push about the editor's own writes,
@@ -924,6 +928,7 @@ public final class DeviceSession {
                 guard trackIndices.contains(t), stepIndices.contains(i) else { break }
                 Task { await self.readStep(t, i) }
             case .reload(_, _, let t):
+                soundLoadedAt = Date()
                 guard trackIndices.contains(t) else { break }
                 selectedTrack = t
                 Task {
@@ -935,7 +940,7 @@ public final class DeviceSession {
                 }
             case .changed(let scope, let id, let v):
                 if scope == 0 { apply(track: selectedTrack, id: id, value: v) } else { applyGlobal(id: id, value: v) }
-                lastTouched = (scope, id, Date())
+                deviceTouched(scope: scope, id: id)
             case .trackChanged(let t, let id, let v):
                 apply(track: t, id: id, value: v)
             case .ui(let s):
@@ -943,6 +948,22 @@ public final class DeviceSession {
                 if s != deviceScreen { deviceScreen = s }
                 adoptTrack(from: s)
             }
+        }
+    }
+
+    /// A parameter changed on the device. It's a knob turned there (Shape follows it to its page) unless it's
+    /// part of a sound loading: three or more parameters within 250 ms, or within 600 ms of a RELOAD. On Skiff a
+    /// song entry with its own sound loads it each time the entry starts, bar by bar: Shape jumped to EDIT with
+    /// every one (Scott, 2026-11-05). Decided 150 ms on, once a burst would have shown.
+    private func deviceTouched(scope: Int, id: Int) {
+        let now = Date()
+        recentChanges.removeAll { now.timeIntervalSince($0.at) > 0.25 }
+        recentChanges.append((scope * 1000 + id, now))
+        if Set(recentChanges.map(\.key)).count >= 3 { soundLoadedAt = now }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard Date().timeIntervalSince(self.soundLoadedAt) > 0.6 else { return }
+            self.lastTouched = (scope, id, now)
         }
     }
 

@@ -101,8 +101,8 @@ struct TempoPanel: View {
         }
         .padding(16)
         .frame(width: 300)
-        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)))
-        .elevationShadow(.held, look)
+        // the one level-3 shadow, the panel's: on its shape, not the stack (which would shade every row and key)
+        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
         .task { await session.refreshTempo() }
         .onKeyPress(.upArrow) { session.setBPM(session.bpm + 1); return .handled }
         .onKeyPress(.downArrow) { session.setBPM(session.bpm - 1); return .handled }

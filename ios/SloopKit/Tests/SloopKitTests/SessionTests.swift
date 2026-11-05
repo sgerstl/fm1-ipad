@@ -132,7 +132,8 @@ import Testing
 
         fake.turnKnob(scope: 0, id: 34, to: 99)                       // CHO on the device
         try await waitFor { session.params[34] == 99 }
-        #expect(session.lastTouched?.scope == 0 && session.lastTouched?.id == 34)
+        try await waitFor { session.lastTouched?.id == 34 }           // (decided 150 ms on: not a sound loading)
+        #expect(session.lastTouched?.scope == 0)
         session.set(track: 0, param: 35, to: 80)                      // DLY from the iPad
         try await waitFor { fake.params[0][35] == 80 }
         #expect(session.params[35] == 80)

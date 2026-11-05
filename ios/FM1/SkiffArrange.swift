@@ -625,9 +625,8 @@ struct Lane: View {
                 Text(Entries.number(spot.pattern)).font(.system(size: 15, weight: .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .frame(width: max(44, x(spot.ticks) - 4), height: SkiffArrangePage.laneHeight - 12, alignment: .topLeading)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[track]))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[track]).elevationShadow(.held, Look()))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.text, lineWidth: 2))
-                    .elevationShadow(.held, Look())
                     .opacity(0.9)
                     .offset(x: x(spot.at) + 2, y: 0)
                     .allowsHitTesting(false)
@@ -1134,11 +1133,16 @@ struct BlockView: View {
         let dim = strong
         VStack(alignment: .leading, spacing: 2) {
             if wide {
-                Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(dim)
+                HStack(spacing: 4) {
+                    Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(dim)
+                    // an entry with its own sound: Skiff loads it as the entry starts (and the corner is cut)
+                    if sound != nil { Image(systemName: "waveform").font(.system(size: 10, weight: .semibold)).foregroundStyle(dim) }
+                }
                 Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(strong)
                 Text(sub).font(.system(size: 12)).foregroundStyle(dim)
             } else {
                 Text(isRest ? "–" : label).font(.system(size: 13, weight: .semibold)).foregroundStyle(strong)
+                if sound != nil { Image(systemName: "waveform").font(.system(size: 10, weight: .semibold)).foregroundStyle(strong) }
             }
         }
         .lineLimit(1)

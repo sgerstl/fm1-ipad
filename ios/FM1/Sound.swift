@@ -213,6 +213,33 @@ extension KnobSpec {
     }
 }
 
+/// Skiff: the selected track is playing a song entry's own sound (LIST op 9; set with Arrange's Set sound, or
+/// SOUND on the FM-1's song page). Skiff loads that sound as the entry starts (launch.c esnd_put), over the
+/// track's: an edit here changes what plays now, and goes when the entry starts again (an entry's sound is
+/// changed only by setting another one). Said so, so where an edit goes is never a guess.
+struct EntrySoundNote: View {
+    let session: DeviceSession
+
+    var body: some View {
+        let t = session.selectedTrack
+        if session.playing, let list = session.skiffSong?.song?.tracks[safe: t], let e = list.entryOn,
+           let snd = list.entries[safe: e]?.sound {
+            let name = Entries.soundName(snd, session: session)
+            Label {
+                Text("T\(t + 1) is playing entry \(Entries.letter(e))'s own sound, \(name). Changes here last until entry \(Entries.letter(e)) starts again; to keep them, save a user preset and set it on entry \(Entries.letter(e)) in Arrange.")
+                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "waveform")
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
 struct SoundTab: View {
     let session: DeviceSession
     let ui: EditorUI
@@ -223,6 +250,7 @@ struct SoundTab: View {
     var body: some View {
         let pages = SoundPage.shown(session, ui.soundFamily)
         VStack(alignment: .leading, spacing: 16) {
+            EntrySoundNote(session: session)
             // the button is chosen on the pads in the left column, as on the FM-1
             ScrollView {
                 VStack(spacing: 0) {

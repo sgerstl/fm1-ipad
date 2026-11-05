@@ -18,6 +18,7 @@ struct PhoneShape: View {
         let pages = SoundPage.shown(session, ui.soundFamily)
         VStack(spacing: 8) {
             strip
+            EntrySoundNote(session: session)
             if pages.isEmpty {
                 DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
                     .frame(maxHeight: .infinity, alignment: .top)
