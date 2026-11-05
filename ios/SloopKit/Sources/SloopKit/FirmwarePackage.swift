@@ -8,26 +8,57 @@ import Foundation
 public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
     case skiff = "skiff-2.2"
     case sloop = "sloop-2.8.4-screen-link"
+    /// M-VAVE's own V15, unmodified: the way back to stock. Installed by M-VAVE's update loader, which it carries.
+    case stock = "FM-1_015"
 
     public var id: String { rawValue }
     /// What the app shows.
-    public var title: String { self == .skiff ? "Skiff 2.2" : "SLOOP 2.8.4" }
+    public var title: String {
+        switch self {
+        case .skiff: "Skiff 2.2"
+        case .sloop: "SLOOP 2.8.4"
+        case .stock: "Stock V15"
+        }
+    }
     public var detail: String {
-        self == .skiff ? "Six tracks, songs and Arrange. Built from Skiff v2.2."
-                       : "Three tracks and drums, with Jib's screen link. SLOOP 2.8.4 plus a 47-line patch."
+        switch self {
+        case .skiff: "Six tracks, songs and Arrange. Built from Skiff v2.2."
+        case .sloop: "Three tracks and drums, with Jib's screen link. SLOOP 2.8.4 plus a 47-line patch."
+        case .stock: "M-VAVE's own firmware, as the FM-1 shipped. Jib can't read or show it."
+        }
     }
     /// The package's identity, as the device reports it once installed (and the loader's, with "ota-").
-    public var product: String { self == .skiff ? "FM-1_722" : "FM-1_900" }
+    public var product: String {
+        switch self {
+        case .skiff: "FM-1_722"
+        case .sloop: "FM-1_900"
+        case .stock: "FM-1_015"
+        }
+    }
     public var sha256: String {
-        self == .skiff ? "d0013c4f1a60bc2116178c72c60eacd3d8464cbfa40dbbb7f48ba790912d8603"
-                       : "97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110"
+        switch self {
+        case .skiff: "d0013c4f1a60bc2116178c72c60eacd3d8464cbfa40dbbb7f48ba790912d8603"
+        case .sloop: "97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110"
+        case .stock: "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a"
+        }
     }
-    public var size: Int { self == .skiff ? 610_429 : 610_052 }
-    /// Where its source is offered (GPL-3.0).
+    public var size: Int {
+        switch self {
+        case .skiff: 610_429
+        case .sloop: 610_052
+        case .stock: 699_956
+        }
+    }
+    /// Where its source is offered (GPL-3.0), or where the file comes from (V15: Apache-2.0, no source).
     public var source: String {
-        self == .skiff ? "github.com/illuminus5/skiff, tag v2.2"
-                       : "github.com/isod89/sloop-fm1, tag v2.8.4, plus sloop/0001-screen-link.patch in Jib's repository"
+        switch self {
+        case .skiff: "github.com/illuminus5/skiff, tag v2.2"
+        case .sloop: "github.com/isod89/sloop-fm1, tag v2.8.4, plus sloop/0001-screen-link.patch in Jib's repository"
+        case .stock: "github.com/m-vave/fm1_open, sdk/firmware/FM-1_015.fwsc (Apache-2.0)"
+        }
     }
+    /// M-VAVE's own package: no Felucca loader, its own instead.
+    public var isStock: Bool { self == .stock }
 
     /// The firmware a running FM-1 or its update loader reports, when it's one of these.
     public static func matching(identity text: String) -> BundledFirmware? {
@@ -50,6 +81,7 @@ public enum PackageError: Error, Equatable, CustomStringConvertible {
     case wrongIdentity(expected: String, found: String)
     case notFM1(String)
     case noLoader
+    case notOfficialLoader
     case damaged(String)
 
     public var description: String {
@@ -59,6 +91,7 @@ public enum PackageError: Error, Equatable, CustomStringConvertible {
         case .wrongIdentity(let e, let f): "The firmware file says it is \(f), not \(e). Nothing was sent."
         case .notFM1(let p): "This isn't an FM-1 firmware package (identity “\(p)”)."
         case .noLoader: "This package has no Felucca update loader. Nothing was sent."
+        case .notOfficialLoader: "The stock firmware file doesn't carry M-VAVE's update loader. Nothing was sent."
         case .damaged(let why): "The firmware file is damaged (\(why)). Nothing was sent."
         }
     }
@@ -71,25 +104,38 @@ public struct FirmwarePackage: Sendable {
     public let image: [UInt8]
     /// flash.bin in the image (offset, size): the write's progress.
     public let flashSpan: (off: Int, size: Int)?
+    /// M-VAVE's own package (the pinned V15): its update loader writes the whole flash.bin, the 16 KiB head too, so
+    /// the running firmware stages it only when that head equals the unit's (Skiff's and SLOOP's ota.c).
+    public let isOfficial: Bool
 
     static let blocks = 20, blk = 0x30, keep = 0x2F, maxBlocks = 64
     static let loaderMark = Array("FELUCCA-LOADER-1".utf8)
+    /// M-VAVE's update loader (usb_hid_ota.bin), as ota.c knows it: header CRC, body CRC, length.
+    static let officialLoader = (hcrc: 0xEBAA, dcrc: 0x5881, len: 0x4DE1)
 
     /// A package checked as SLOOP's installer checks it: an FM-1 identity, Felucca's update loader, an intact header,
-    /// file list and files. With `pinned`, the bytes must also be exactly that file.
+    /// file list and files. With `pinned`, the bytes must also be exactly that file. The pinned stock V15 has
+    /// M-VAVE's loader instead, and its packer stores other CRCs in the extra entries: only flash.bin and the loader
+    /// are checked there (Skiff's files_ok).
     public init(data: [UInt8], pinned: BundledFirmware? = nil) throws {
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         if let p = pinned, digest != p.sha256 { throw PackageError.hashMismatch(expected: p.sha256, found: digest) }
         let product = try Self.productOf(data)
         guard product.range(of: #"^FM-1_\d+$"#, options: .regularExpression) != nil else { throw PackageError.notFM1(product) }
         if let p = pinned, product != p.product { throw PackageError.wrongIdentity(expected: p.product, found: product) }
-        guard Self.contains(data, Self.loaderMark) else { throw PackageError.noLoader }
-        let image = Self.logicalImage(data)
-        if let bad = Self.damage(image) { throw PackageError.damaged(bad) }
+        let official = pinned?.isStock == true
+        let image = Self.logicalImage(data, official: official)
+        if official {
+            guard Self.hasOfficialLoader(image) else { throw PackageError.notOfficialLoader }
+        } else {
+            guard Self.contains(data, Self.loaderMark) else { throw PackageError.noLoader }
+        }
+        if let bad = Self.damage(image, official: official) { throw PackageError.damaged(bad) }
         self.product = product
         self.sha256 = digest
         self.image = image
         self.flashSpan = Self.flashSpan(image)
+        self.isOfficial = official
     }
 
     // MARK: The format
@@ -144,18 +190,19 @@ public struct FirmwarePackage: Sendable {
 
     /// The image the device addresses: the package without the marker bytes (20 blocks, or the detected count
     /// when the files' CRCs agree).
-    public static func logicalImage(_ raw: [UInt8]) -> [UInt8] {
+    public static func logicalImage(_ raw: [UInt8], official: Bool = false) -> [UInt8] {
         let n = blockCount(raw)
         if n != blocks {
             let img = deinterleave(raw, n)
-            if damage(img) == nil || damage(deinterleave(raw, blocks)) != nil { return img }
+            if damage(img, official: official) == nil || damage(deinterleave(raw, blocks), official: official) != nil { return img }
         }
         return deinterleave(raw, blocks)
     }
 
     /// What is wrong with the image (header, file list, each file's CRC), or nil. The device checks only the loader
-    /// before it rewrites the firmware, so a damaged file is caught here (SLOOP's package_damage).
-    public static func damage(_ image: [UInt8]) -> String? {
+    /// before it rewrites the firmware, so a damaged file is caught here (SLOOP's package_damage). `official`: only
+    /// flash.bin (type 0) and the loader (100) have a CRC to check, the other entries their bounds.
+    public static func damage(_ image: [UInt8], official: Bool = false) -> String? {
         guard image.count >= 0x40 else { return "too short" }
         let hdr = jlEnc(image[0..<0x40])
         guard crc16(hdr[2..<0x40]) == u16(hdr, 0) else { return "header CRC" }
@@ -168,6 +215,7 @@ public struct FirmwarePackage: Sendable {
             let off = u32(e, 8), size = u32(e, 12)
             let name = String(decoding: e[0x40..<0x50].prefix { $0 != 0 }, as: UTF8.self)
             guard off + size <= image.count else { return "\(name): cut short" }
+            if official, ![0, 100].contains(u16(e, 0)) { continue }
             guard Int(crc16(image[off..<(off + size)])) == u16(e, 4) else { return "\(name): CRC" }
         }
         return nil
@@ -183,6 +231,20 @@ public struct FirmwarePackage: Sendable {
             if u16(e, 0) == 0, size > 0, off + size <= image.count { return (off, size) }
         }
         return nil
+    }
+
+    /// The image's loader (entry type 100) is M-VAVE's.
+    static func hasOfficialLoader(_ image: [UInt8]) -> Bool {
+        guard image.count >= 0x40 else { return false }
+        let count = u16(jlEnc(image[0..<0x40]), 8)
+        for i in 0..<min(count, 8) where 0x90 + i * 0x50 <= image.count {
+            let e = jlEnc(image[(0x40 + i * 0x50)..<(0x90 + i * 0x50)])
+            let off = u32(e, 8)
+            guard u16(e, 0) == 100, off + 32 <= image.count else { continue }
+            let h = Array(image[off..<(off + 32)])
+            return u16(h, 0) == officialLoader.hcrc && u16(h, 2) == officialLoader.dcrc && u32(h, 8) == officialLoader.len
+        }
+        return false
     }
 
     static func contains(_ hay: [UInt8], _ needle: [UInt8]) -> Bool {
