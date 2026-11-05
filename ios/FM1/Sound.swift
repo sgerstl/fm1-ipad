@@ -449,6 +449,14 @@ struct SoundCard: View, Equatable {
                            activate: { touch(first) })
             } else if ["LANES", "LANE MIX"].contains(first.title), !first.picks.isEmpty {
                 LaneColumns(session: session, ui: ui, page: first, lane: pick(first), marked: marks.key, activate: { touch(first) })
+            } else if session.dialect == .skiff, first.title == "SOUND" {
+                DXSoundPage(session: session, ui: ui, page: first, lane: pick(first), activate: { touch(first) })
+            } else if session.dialect == .skiff, first.title == "SAMPLES" {
+                SampleMixPage(session: session, ui: ui, page: first, sample: pick(first), activate: { touch(first) })
+            } else if session.dialect == .skiff, first.title == "OPERATOR" {
+                FM6OperatorPage(session: session, ui: ui, page: first, op0: pick(first), activate: { touch(first) })
+            } else if session.dialect == .skiff, first.title == "ALL OPS" {
+                FM6AllOpsPage(session: session, ui: ui, page: first, op0: marks.pick("op"), activate: { touch(first) })
             } else {
                 ForEach(rows.indices, id: \.self) { r in
                     let p = rows[r]
@@ -475,6 +483,7 @@ struct SoundCard: View, Equatable {
                     .environment(\.knobsRecording, session.recordingKnobs && p.scope == 0)
                 }
             }
+            if session.dialect == .skiff, first.title == "SLICES" { SlicesNote(session: session, page: first) }
             graph(for: first, rows: rows)
         }
         .padding(16)

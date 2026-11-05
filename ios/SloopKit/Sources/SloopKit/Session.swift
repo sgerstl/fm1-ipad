@@ -165,6 +165,8 @@ public final class DeviceSession {
     @ObservationIgnored public private(set) var lfoClock = LFOClock()
     /// Skiff's song (lists and pool), on Skiff 2.0 and later; kept, offline, after the device goes away.
     public private(set) var skiffSong: SkiffSongStore?
+    /// Skiff's EDIT engine pages' data: FM6 patches, the DRUM-X kit, the user sets' mixes.
+    public private(set) var skiffEdit: SkiffEditStore?
     /// The Skiff driver, for the sim tests' own requests (TRANSPORT, cleanup).
     var skiffSongDriverForTests: SkiffDriver? { driver as? SkiffDriver }
     /// MIDI clock pulses since Start (Skiff), for the song's playhead.
@@ -350,6 +352,19 @@ public final class DeviceSession {
             if screenLinked { capabilities.insert(.screenLink) }
             screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
             try await c.watch(screenLink: screenLinked)
+            if let s = c as? SkiffDriver {
+                if let store = skiffEdit { store.attach(s) } else {
+                    let store = SkiffEditStore(driver: s)
+                    // a patch written: Skiff sets the track's PATCH (the eighth engine parameter) to OWN or F n
+                    store.patchWritten = { [weak self] t in
+                        guard let self, let e0 = self.info?.firstEngineParam else { return }
+                        await self.rereadParam(track: t, id: e0 + 7)
+                    }
+                    skiffEdit = store
+                }
+            } else {
+                skiffEdit = nil
+            }
             if let s = c as? SkiffDriver, s.skiff.hasSongLists {
                 if let store = skiffSong { store.attach(s) } else {
                     skiffSong = SkiffSongStore(driver: s, trackTiming: { [weak self] t in
@@ -876,6 +891,12 @@ public final class DeviceSession {
     @discardableResult
     /// `deviceWins`: after a section loaded over the tracks, the device's steps replace even ones the
     /// iPad just wrote.
+    /// Reads one of a track's parameters again (Skiff: one the FM-1 changes without a push, as FM6's PATCH after a write).
+    public func rereadParam(track t: Int, id: Int) async {
+        guard let c = driver, let v = try? await c.trackParam(track: t, id: id) else { return }
+        apply(track: t, id: id, value: v)
+    }
+
     /// Reads a track's steps again now (Skiff's Song tab: the track moved on to another entry, so its pattern changed).
     public func rereadSteps(track t: Int) async {
         guard trackIndices.contains(t) else { return }

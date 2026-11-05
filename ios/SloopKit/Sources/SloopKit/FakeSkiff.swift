@@ -58,6 +58,29 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var motion: [[(step: Int, id: Int, value: Int, lock: Bool)]] = Array(repeating: [], count: 8)
     /// Lupe's screen link patch (skiff/README.md): INFO's `56 01 02`, SCREEN, SCREEN_GOTO, WATCH bit 2.
     var screenLink = false
+    /// The EDIT engine pages' data (SkiffEdit.swift): each track's FM6 patch, the DRUM-X kit (Skiff's DEEP), the user
+    /// sets' mixes (USR1 with four sounds).
+    var fm6 = Array(repeating: FakeSkiff.initPatch, count: 8)
+    var dxKit: [[Int]] = [[0, 0, 1, 1, 0, 6, 60, 84, 2, 10, 10, 80, 92, 4, 30], [0, 1, 0, 0, 0, 36, 20, 60, 90, 60, 40, 28, 70, 100, 70],
+                          [0, 1, 0, 0, 0, 56, 0, 52, 127, 70, 52, 0, 64, 127, 64], [2, 2, 0, 0, 0, 92, 0, 18, 100, 104, 96, 0, 24, 110, 110],
+                          [2, 2, 0, 0, 0, 92, 0, 70, 100, 100, 96, 0, 84, 110, 106], [0, 0, 1, 1, 0, 22, 50, 80, 6, 20, 28, 70, 92, 10, 40],
+                          [3, 2, 1, 0, 0, 58, 8, 16, 10, 40, 62, 16, 22, 20, 50], [2, 1, 0, 0, 0, 64, 0, 80, 0, 36, 70, 0, 92, 10, 48]]
+    var mixZones: [[(Int, Int)]] = [[(36, 47), (48, 59), (60, 71), (72, 96)], [], []]
+    var mixValues: [[Int]] = Array(repeating: Array(repeating: 127, count: 16) + Array(repeating: 0, count: 32), count: 3)
+    /// FM6's init voice: algorithm 1, operator 1 alone at full output, every envelope at its fullest.
+    static let initPatch: FM6Patch = {
+        var p = FM6Patch(bytes: Array(repeating: 0, count: 128))
+        for n in 1...6 {
+            for f: FM6Patch.Op in [.r1, .r2, .r3, .r4, .l1, .l2, .l3] { p.setOp(n, f, 99) }
+            p.setOp(n, .coarse, 1); p.setOp(n, .detune, 7); p.setOp(n, .breakPoint, 39)
+            p.setOp(n, .output, n == 1 ? 99 : n == 2 ? 70 : 0)
+        }
+        for f: FM6Patch.Voice in [.pr1, .pr2, .pr3, .pr4] { p[f] = 99 }
+        for f: FM6Patch.Voice in [.pl1, .pl2, .pl3, .pl4] { p[f] = 50 }
+        p[.transpose] = 24; p[.lfoSpeed] = 35
+        for (k, c) in "INIT VOICE".utf8.enumerated() { p.bytes[118 + k] = c }
+        return p
+    }()
     /// Which build: 2 carries the page's cursor (8-byte SCREEN, SCREEN_GOTO's cursor), 1 the first (6 bytes).
     var screenLinkVersion = 2
     /// The page's cursor, where the page has one (`cursorRange`); reset as a page opens.
@@ -84,6 +107,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             // -demo-track N: track N selected (1…6), -demo-engine E: on engine E (DRUM-X 14, SLICE 13: none in the fixture)
             if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
             if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }
+            if a.contains("-demo-usr") { params[selected][138] = 3 }      // SAMPLE on USR1
             // -demo-mod-walk: MOD opened on the FM-1, then KNOB 1 walks its routes, a route every 1.5 s
             if a.contains("-demo-mod-walk") {
                 DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in
@@ -251,6 +275,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         return b
     }
 
+    private func mixReply(_ s: Int) -> [UInt8] {
+        let z = mixZones[s]
+        return [UInt8(s), z.isEmpty ? 1 : 0, UInt8(z.count)] + z.flatMap { [UInt8($0.0), UInt8($0.1)] } + mixValues[s].map { UInt8($0) }
+    }
+
     private func screenBytes() -> [UInt8] {
         let b: [UInt8] = [screen.home ? 1 : 0, UInt8(screen.page), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
         guard screenLinkVersion >= 2 else { return b }
@@ -361,6 +390,26 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             guard Int(a[0]) == SkiffMenu.usbLevel else { return [1, a[0]] + v14(v) }
             usbLevel = max(0, min(1, v))
             return [0, a[0]] + v14(usbLevel)
+        case (5, 2) where a == [2, 10] && engines[selected].engine == 4:
+            // SAMPLE's SET: the built-in sets, then the user's (eng_sample.c SMP_ALL_NAMES)
+            return [2, 10, 8] + v14(0) + v14(5) + v14(0) + Array("SET".utf8) + [0, 0]
+                + ["PIANO", "STRINGS", "CHOIR", "USR1", "USR2", "USR3"].flatMap { Array($0.utf8) + [0] }
+        case (68, 2) where a[0] == 0 && Int(a[1]) < fm6.count: return [0, a[1], 0] + fm6[Int(a[1])].bytes
+        case (69, 130) where a[0] == 0 && Int(a[1]) < fm6.count:
+            fm6[Int(a[1])] = FM6Patch(bytes: Array(a[2...]))
+            return [0, a[1], 0]
+        case (74, 1) where a[0] < 8: return [a[0]] + dxKit[Int(a[0])].map { UInt8($0) }
+        case (75, 16):
+            // out of range: no reply, as Skiff
+            let hi = [7, 3, 2, 1, 3, 1] + Array(repeating: 127, count: 10)
+            guard zip(a, hi).allSatisfy({ Int($0) <= $1 }) else { return nil }
+            dxKit[Int(a[0])] = a[1...].map(Int.init)
+            return a
+        case (81, 1) where a[0] < 3: return mixReply(Int(a[0]))
+        case (81, 49) where a[0] < 3:
+            let s = Int(a[0])
+            if !mixZones[s].isEmpty { mixValues[s] = a[1...].map(Int.init) }
+            return mixReply(s)
         case (5, 2): return fx.desc["\(a[0] == 1 ? 1 : 0).\(a[0] == 1 ? Int(a[1]) : id(a[0], a[1]))"]
         case (10, 1): return fx.names["\(a[0])"]
         case (27, 0): return trackList()

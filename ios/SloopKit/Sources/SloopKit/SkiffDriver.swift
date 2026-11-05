@@ -167,7 +167,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
 
     // MARK: The wire
 
-    private func request(_ cmd: UInt8, _ args: [UInt8], match: Int, _ name: String,
+    func request(_ cmd: UInt8, _ args: [UInt8], match: Int, _ name: String,
                          timeout: Duration = .milliseconds(300), retries: Int = 1) async throws -> [UInt8] {
         try await client.send(.raw(cmd: cmd, args: args, match: match, name: name), timeout: timeout, retries: retries)
     }
