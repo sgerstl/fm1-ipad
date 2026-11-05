@@ -49,6 +49,8 @@ struct AppView: View {
         // what the FM-1 holds: matched against the saved projects at connect, re-checked at each stop
         .onChange(of: isConnected, initial: true) { _, on in if on { projects.connected() } }
         .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
+        // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
+        .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
         // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
         .onChange(of: isConnected, initial: true) { _, on in
             UIApplication.shared.isIdleTimerDisabled = on
@@ -83,11 +85,14 @@ extension AppView {
             // The Sequencer stays alive underneath and only fades, so coming back to it never rebuilds
             // its scroll views mid-animation; its playheads pause while it's hidden.
             let onSequencer = ui.page == .sequencer
-            SequencerPage(session: session, ui: ui)
-            .opacity(onSequencer ? 1 : 0)
-            .allowsHitTesting(onSequencer)
-            .accessibilityHidden(!onSequencer)
-            .environment(\.pageVisible, onSequencer)
+            // (Skiff has no Sequence page: its Song tab carries the editor)
+            if !ui.songTab {
+                SequencerPage(session: session, ui: ui)
+                .opacity(onSequencer ? 1 : 0)
+                .allowsHitTesting(onSequencer)
+                .accessibilityHidden(!onSequencer)
+                .environment(\.pageVisible, onSequencer)
+            }
             Group {
                 switch ui.page {
                 case .sequencer:
@@ -109,8 +114,8 @@ extension AppView {
                             }
                             SongPage(session: session, ui: ui)
                         } else if let store = session.skiffSong {
-                            // Skiff's song: the whole page, lanes carrying their own track headers (board A)
-                            SkiffArrangePage(session: session, store: store, ui: ui)
+                            // Skiff's Song tab: Arrange's lanes over the pattern editor, a divider between (boards 19, 20)
+                            SkiffSongPage(session: session, store: store, ui: ui)
                         } else {
                             leftColumn { FunctionPads(session: session, ui: ui) }
                             NotOnThisFirmware.arrange(session)

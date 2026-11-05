@@ -433,7 +433,7 @@ struct EmptySong: View {
             .disabled(store.busy || store.offline)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 24 + CGFloat(session.trackCount) * (SkiffArrangePage.laneHeight + SkiffArrangePage.laneGap))
+        .frame(height: 24 + CGFloat(session.trackCount) * (SkiffArrangePage.fullLaneHeight + SkiffArrangePage.laneGap))
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
     }
 }
@@ -451,7 +451,7 @@ struct SkeletonLanes: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                     RoundedRectangle(cornerRadius: 8).fill(Theme.well)
                 }
-                .frame(height: SkiffArrangePage.laneHeight)
+                .frame(height: SkiffArrangePage.fullLaneHeight)
             }
         }
         .accessibilityElement()

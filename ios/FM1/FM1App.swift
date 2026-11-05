@@ -102,7 +102,18 @@ final class EditorUI {
         let a = ProcessInfo.processInfo.arguments
         guard let i = a.firstIndex(of: "-page"), i + 1 < a.count else { return .sequencer }
         return ["sound": .sound, "song": .song, "library": .library][a[i + 1]] ?? .sequencer
-    }()
+    }() {
+        // Skiff: Sequence and Arrange are one Song tab; whatever asks for Sequence (HOME, SEQ, a tab) lands there
+        didSet { if songTab, page == .sequencer { page = .song } }
+    }
+    /// Skiff: the Song tab (Arrange's lanes over the pattern editor) stands for Sequence and Arrange.
+    var songTab = false {
+        didSet { if songTab, page == .sequencer { page = .song } }
+    }
+    /// The Song tab: the entry the editor is pinned to (a block tapped); nil follows what each track plays.
+    var pinnedEntry: EntryRef?
+    /// The Song tab: the pattern pool's drawer is open.
+    var poolOpen = false
     var selectedStep = Array(repeating: 0, count: 8)      // per track: room for every firmware's tracks
     /// The tempo panel, open under this point (global), from the top bar's BPM.
     var tempoAt: CGPoint?

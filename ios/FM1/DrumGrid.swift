@@ -17,6 +17,9 @@ struct DrumGrid: View {
 
     /// 568 = the piano roll's grid, gap and velocity lane (534 + 8 + 50) less the lane hint and its gap
     static let gridHeight: CGFloat = 568        // one bar wide (grid.barWidth)
+    @Environment(\.editorHeight) private var editorHeight
+    @Environment(\.arrangeCompact) private var inSongTab
+    private var gridHeight: CGFloat { max(120, Self.gridHeight - (PianoRoll.panelHeight - editorHeight) + (inSongTab ? 40 : 0)) }
 
     var body: some View {
         let t = session.tracks[dt]
@@ -25,8 +28,10 @@ struct DrumGrid: View {
         let below = max(0, lanes.count - topLane - 12)      // 12 whole lanes in view
 
         VStack(spacing: 8) {
+            if !inSongTab {
             EditorHeader(track: dt, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
                          detail: "\(lanes.count) lanes · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+            }
 
             StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[dt],
                         motion: session.dialect == .skiff ? session.motion[dt]?.steps ?? [] : []) { ui.selectedStep[dt] = $0 }
@@ -41,16 +46,16 @@ struct DrumGrid: View {
                     }
                 }
                 .offset(y: -offset.y)
-                .frame(width: 80, height: Self.gridHeight, alignment: .top)
+                .frame(width: 80, height: gridHeight, alignment: .top)
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(lanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth) {
                         DrumGridContent(grid: grid, look: look, session: session, ui: ui)
                     }
-                    EditorPlayhead(session: session, track: dt, offsetX: offset.x, height: Self.gridHeight)
+                    EditorPlayhead(session: session, track: dt, offsetX: offset.x, height: gridHeight)
                 }
-                .frame(width: grid.barWidth, height: Self.gridHeight)
+                .frame(width: grid.barWidth, height: gridHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .recessed()
                 .accessibilityElement(children: .contain)
@@ -65,7 +70,7 @@ struct DrumGrid: View {
                 .accessibilityHidden(true)
         }
         .padding(12)
-        .frame(height: PianoRoll.panelHeight)
+        .frame(height: editorHeight)
         .panel()
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
     }

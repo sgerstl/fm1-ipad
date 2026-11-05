@@ -872,6 +872,12 @@ public final class DeviceSession {
     @discardableResult
     /// `deviceWins`: after a section loaded over the tracks, the device's steps replace even ones the
     /// iPad just wrote.
+    /// Reads a track's steps again now (Skiff's Song tab: the track moved on to another entry, so its pattern changed).
+    public func rereadSteps(track t: Int) async {
+        guard trackIndices.contains(t) else { return }
+        _ = try? await readSteps(t)
+    }
+
     private func readSteps(_ t: Int, deviceWins: Bool = false) async throws -> Int {
         guard let c = driver, trackIndices.contains(t) else { return 0 }
         var fixes = 0

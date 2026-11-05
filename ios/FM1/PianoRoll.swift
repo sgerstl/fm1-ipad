@@ -15,6 +15,10 @@ struct PianoRoll: View {
     static let gridHeight: CGFloat = 534        // 11 note rows and a bit; one bar wide (grid.barWidth)
     /// Both editors are this tall, so switching to the drum track moves nothing below them.
     static let panelHeight: CGFloat = 684
+    /// The panel's height where it's laid out: 684 on Sequence, what the Song tab's divider leaves below it.
+    @Environment(\.editorHeight) private var editorHeight
+    /// The Song tab: its pattern header names the track, so this one goes (and the grid gets its rows).
+    @Environment(\.arrangeCompact) private var inSongTab
     static let velocityHeight: CGFloat = 50
     static func rows(_ n: Int) -> String { n == 1 ? "1 row" : "\(n) rows" }
 
@@ -23,7 +27,8 @@ struct PianoRoll: View {
         let rows = Self.rows(t, keeping: ui.keptRows[track] ?? [])
         // Skiff: the motion lanes under the velocity, the grid shorter by their height
         let motion = session.dialect == .skiff
-        let gridHeight = motion ? max(200, Self.gridHeight - MotionLanes.height(session, ui, track: track) - 8) : Self.gridHeight
+        let base = Self.gridHeight - (Self.panelHeight - editorHeight) + (inSongTab ? 40 : 0)
+        let gridHeight = max(120, motion ? base - MotionLanes.height(session, ui, track: track) - 8 : base)
         let contentSize = CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(gridHeight, CGFloat(rows.count) * grid.rowHeight))
         let first = Int((offset.x / grid.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / grid.rowHeight).rounded())
@@ -32,8 +37,10 @@ struct PianoRoll: View {
         let scaleName = t.scale == 0 ? "chromatic, folded to the notes used" : "\(Music.noteNames[t.root % 12]) \(Music.scales[min(t.scale, 15)].spoken)"
 
         VStack(spacing: 8) {
+            if !inSongTab {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
                          detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+            }
 
             StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)
@@ -81,7 +88,7 @@ struct PianoRoll: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .frame(height: PianoRoll.panelHeight)
+        .frame(height: editorHeight)
         .panel()
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
         .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
@@ -463,5 +470,14 @@ enum StepLabels {
         parts.append(s.isOn ? "on, " + s.lanes.map { lanes[safe: $0] ?? "lane \($0 + 1)" }.joined(separator: ", ") : "off")
         if i >= t.length { parts.append("past the track's length") }
         return parts.joined(separator: ", ")
+    }
+}
+
+private struct EditorHeightKey: EnvironmentKey { static let defaultValue: CGFloat = PianoRoll.panelHeight }
+extension EnvironmentValues {
+    /// How tall the pattern editor's panels are (the piano roll, the drum grid, the left column).
+    var editorHeight: CGFloat {
+        get { self[EditorHeightKey.self] }
+        set { self[EditorHeightKey.self] = newValue }
     }
 }

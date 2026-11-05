@@ -7,6 +7,8 @@ import SwiftUI
 // playing, what Skiff can't take shows "Stop to rearrange" where it was tried.
 
 struct SkiffArrangePage: View {
+    @Environment(\.arrangeLaneHeight) private var laneHeight
+    @Environment(\.arrangeCompact) private var compact
     let session: DeviceSession
     let store: SkiffSongStore
     let ui: EditorUI
@@ -30,7 +32,7 @@ struct SkiffArrangePage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let headerWidth: CGFloat = 152
-    static let laneHeight: CGFloat = 80
+    static let fullLaneHeight: CGFloat = 80
     static let laneGap: CGFloat = 8
     static let binWidth: CGFloat = 272
 
@@ -57,13 +59,25 @@ struct SkiffArrangePage: View {
                 } else if let r = store.refusal, r.entry == nil || selection == nil {
                     RefusalLine(refusal: r, session: session, store: store)
                 }
-                inspector
+                if !compact { inspector }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: $dragPattern)
-                .frame(width: Self.binWidth)
-                .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
+            // the Song tab: the pool is a drawer at the song's right edge, still where blocks are dragged from
+            if !compact || ui.poolOpen {
+                PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: $dragPattern)
+                    .frame(width: Self.binWidth)
+                    .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
+        // the Song tab: a block selected is the one the editor below shows (pinned); Follow lets it go
+        .onChange(of: selection) { _, r in
+            guard compact, r != ui.pinnedEntry else { return }
+            ui.pinnedEntry = r
+            if let r { pin(r) }
+        }
+        .onChange(of: ui.pinnedEntry) { _, r in if compact, r != selection { selection = r } }
         .overlay(alignment: .top) { if store.offline { OfflineBar(session: session) } }
         .overlay { menuOverlay }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pageFrame = $0 }
@@ -172,9 +186,26 @@ struct SkiffArrangePage: View {
                     .padding(.horizontal, 12).frame(height: 32)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
             }
+            if compact {
+                Button { ui.poolOpen.toggle() } label: {
+                    Label("Patterns", systemImage: "square.grid.2x2").font(.system(size: 15))
+                        .padding(.horizontal, 14).frame(height: 44).raisedKey()
+                }
+                .buttonStyle(PressSink(latched: ui.poolOpen))
+                .accessibilityHint("The pattern pool: drag a pattern into a lane")
+            }
             zoom
         }
         .frame(height: 44)
+    }
+
+    /// The Song tab: the editor follows this entry. Stopped, the track goes to it (LIST op 3) so its pattern is the
+    /// one Skiff edits; playing, that would launch it, so the editor says so and waits for STOP.
+    private func pin(_ r: EntryRef) {
+        session.select(track: r.track)
+        let l = store.song?.tracks[safe: r.track]
+        guard l?.entryOn != r.entry, !session.playing, l?.entries[safe: r.entry]?.isEmpty == false else { return }
+        Task { await store.send(.play(track: r.track, entry: r.entry)) }
     }
 
     /// Lanes that end on different bars loop apart in SONG ON (each track moves on at its own pass ends).
@@ -233,7 +264,7 @@ struct SkiffArrangePage: View {
                     }
                     .overlay(alignment: .topLeading) {
                         SongPlayhead(session: session, store: store, barWidth: barWidth,
-                                     height: 24 + CGFloat(session.trackCount) * (Self.laneHeight + Self.laneGap))
+                                     height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap))
                     }
                     .frame(width: contentWidth, alignment: .leading)
                 }
@@ -242,7 +273,7 @@ struct SkiffArrangePage: View {
             }
             .opacity(store.offline ? 0.5 : 1)
         }
-        .frame(height: 24 + CGFloat(session.trackCount) * (Self.laneHeight + Self.laneGap))
+        .frame(height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap))
         .disabled(store.offline)
         // a keyboard: arrows move between blocks and lanes, + and − set REPS, Delete deletes, Return opens.
         // Shortcuts on hidden buttons: iPadOS sends them without the lanes holding focus.
@@ -405,10 +436,34 @@ struct LaneHeader: View {
     let track: Int
     /// While a section is picked: what it does to this track (a split, the cost of snapping, left out).
     var note: String?
+    @Environment(\.arrangeLaneHeight) private var laneHeight
+    @Environment(\.arrangeCompact) private var compact
 
     var body: some View {
         let tr = session.tracks[track]
         let used = store.song?.tracks[safe: track]?.used ?? 0
+        if compact { compactBody } else { fullBody(tr, used) }
+    }
+
+    /// The Song tab: the chip and the name on one line, as tall as the lane allows.
+    private var compactBody: some View {
+        let selected = session.selectedTrack == track
+        return Button { session.select(track: track) } label: {
+            HStack(spacing: 8) {
+                TrackChip(track: track, selected: selected).frame(width: 28, height: 28)
+                Text(note ?? Entries.trackName(track, session: session)).font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(selected || note != nil ? Theme.text : Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+            }
+            .frame(width: SkiffArrangePage.headerWidth - 8, height: laneHeight, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func fullBody(_ tr: TrackState, _ used: Int) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Button { session.select(track: track) } label: {
                 TrackChip(track: track, selected: session.selectedTrack == track)
@@ -432,7 +487,7 @@ struct LaneHeader: View {
             .accessibilityElement(children: .combine)
         }
         .padding(.trailing, 8)
-        .frame(width: SkiffArrangePage.headerWidth, height: SkiffArrangePage.laneHeight, alignment: .topLeading)
+        .frame(width: SkiffArrangePage.headerWidth, height: laneHeight, alignment: .topLeading)
     }
 }
 
@@ -499,6 +554,8 @@ struct Ruler: View {
 }
 
 struct Lane: View {
+    @Environment(\.arrangeLaneHeight) private var laneHeight
+    @Environment(\.arrangeCompact) private var compact
     let session: DeviceSession
     let store: SkiffSongStore
     let track: Int
@@ -563,7 +620,7 @@ struct Lane: View {
             RoundedRectangle(cornerRadius: 8).fill(Theme.well)
             // after the last block: a tap opens the add menu at the finger (repeat, new, rest, pick)
             Color.clear.contentShape(Rectangle())
-                .frame(width: max(44, width - lastEnd - 4), height: SkiffArrangePage.laneHeight - 12)
+                .frame(width: max(44, width - lastEnd - 4), height: laneHeight - 12)
                 .onTapGesture(coordinateSpace: .global) { at in
                     if !store.offline { openMenu(.add(track), at) }
                 }
@@ -582,7 +639,7 @@ struct Lane: View {
                 ForEach(preview.rests, id: \.key) { r in
                     BlockView(session: session, track: track, block: r.block, list: preview.list, width: max(8, x(r.block.length) - 4),
                               selected: false, linked: false, playing: false)
-                        .frame(width: max(8, x(r.block.length) - 4), height: SkiffArrangePage.laneHeight - 12)
+                        .frame(width: max(8, x(r.block.length) - 4), height: laneHeight - 12)
                         .modifier(Place(x: x(r.block.start) + 2, y: 6))
                         .allowsHitTesting(false)
                         .transition(reduceMotion ? .identity : .accordion)
@@ -592,18 +649,18 @@ struct Lane: View {
                 // how far through its pass the track is, under the block it plays
                 let b = keyed[i].block
                 PassBar(session: session, track: track, width: max(8, x(preview?.places[i]?.length ?? b.length) - 4))
-                    .modifier(Place(x: x(preview?.places[i]?.start ?? b.start) + 2, y: SkiffArrangePage.laneHeight - 5))
+                    .modifier(Place(x: x(preview?.places[i]?.start ?? b.start) + 2, y: laneHeight - 5))
                     .allowsHitTesting(false)
             }
             if let r = bracket {
                 RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2)
-                    .frame(width: max(4, x(r.upperBound) - x(r.lowerBound)), height: SkiffArrangePage.laneHeight)
+                    .frame(width: max(4, x(r.upperBound) - x(r.lowerBound)), height: laneHeight)
                     .offset(x: x(r.lowerBound))
                     .allowsHitTesting(false)
             }
             if let preview, let m = preview.moved, let at = preview.places[m] {
                 // where the moved block lands
-                Rectangle().fill(Theme.text).frame(width: 2, height: SkiffArrangePage.laneHeight + 8)
+                Rectangle().fill(Theme.text).frame(width: 2, height: laneHeight + 8)
                     .modifier(Place(x: x(at.start) - 1, y: -4))
                     .allowsHitTesting(false)
             }
@@ -612,7 +669,7 @@ struct Lane: View {
                 let w = max(8, x(b.length) - 4)
                 BlockView(session: session, track: track, block: b, list: store.song?.tracks[safe: track] ?? list, width: w,
                           selected: false, linked: false, playing: false)
-                    .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
+                    .frame(width: w, height: laneHeight - 12)
                     .scaleEffect(reduceMotion ? 1 : 1.03)
                     .elevationShadow(.held, Look())
                     .offset(x: finger - grab, y: 6)
@@ -621,11 +678,11 @@ struct Lane: View {
             }
             if let spot {
                 // where the dragged pattern goes: a line, and its ghost lifted under the finger
-                Rectangle().fill(Theme.text).frame(width: 2, height: SkiffArrangePage.laneHeight + 8)
+                Rectangle().fill(Theme.text).frame(width: 2, height: laneHeight + 8)
                     .offset(x: x(spot.at) - 1, y: -4)
                 Text(Entries.number(spot.pattern)).font(.system(size: 15, weight: .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 6)
-                    .frame(width: max(44, x(spot.ticks) - 4), height: SkiffArrangePage.laneHeight - 12, alignment: .topLeading)
+                    .frame(width: max(44, x(spot.ticks) - 4), height: laneHeight - 12, alignment: .topLeading)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[track]).elevationShadow(.held, Look()))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.text, lineWidth: 2))
                     .opacity(0.9)
@@ -633,7 +690,7 @@ struct Lane: View {
                     .allowsHitTesting(false)
             }
         }
-        .frame(width: width, height: SkiffArrangePage.laneHeight)
+        .frame(width: width, height: laneHeight)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         // an edge being dragged follows the finger exactly; everything else slides (SLOOP Arrange's motion)
         .transaction { if stretch != nil { $0.animation = nil } }
@@ -708,7 +765,7 @@ struct Lane: View {
             BlockView(session: session, track: track, block: b, list: list, width: w,
                       selected: selected, linked: linked,
                       playing: !isHeld && lifted != ref && session.playing && b.entries.contains(list.entryOn ?? -1))
-                .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
+                .frame(width: w, height: laneHeight - 12)
                 // carried: faint in its own place, or, once it would move, an empty dashed place where it lands
                 // (the block itself is under the finger). The view stays, so the finger's gesture does too
                 .opacity(landing ? 0 : finger != nil && lifted == ref ? 0.35 : 1)
@@ -765,7 +822,7 @@ struct Lane: View {
     private func grip(_ b: SongBlock, ref: EntryRef) -> some View {
         Capsule().fill(Theme.text.opacity(0.35)).frame(width: 4, height: 28)
             // 36 pt wide, 8 pt of it past the edge: no more than the gap and a sliver of the next block
-            .frame(width: 36, height: SkiffArrangePage.laneHeight - 12)
+            .frame(width: 36, height: laneHeight - 12)
             .contentShape(Rectangle())
             .offset(x: 8)
             // from touch-down: a drag that waits for movement loses to the lanes' scroll view
@@ -894,7 +951,7 @@ struct Lane: View {
         Task {
             if !on { guard await store.send(.play(track: track, entry: e)) else { return } }
             session.select(track: track)
-            ui.page = .sequencer
+            if !compact { ui.page = .sequencer }          // the Song tab: the editor is right below
         }
     }
 }
@@ -1106,6 +1163,8 @@ struct BlockView: View {
     let linked: Bool
     let playing: Bool
     @Environment(\.look) private var look
+    @Environment(\.arrangeCompact) private var compact
+    @Environment(\.arrangeLaneHeight) private var laneHeight
 
     private var first: SongEntry { list.entries[block.entries.lowerBound] }
     private var isRest: Bool { block.kind != .pattern }
@@ -1133,7 +1192,11 @@ struct BlockView: View {
         let strong = solid ? Theme.onColour : Theme.textSecondary
         let dim = strong
         VStack(alignment: .leading, spacing: 2) {
-            if wide {
+            if laneHeight < 52 {
+                // a short lane (the Song tab): one line, "B · 05"
+                Text(wide ? "\(Entries.letters(block.entries)) · \(isRest ? "REST" : label)" : (isRest ? "–" : label))
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
+            } else if wide {
                 HStack(spacing: 4) {
                     Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(dim)
                     // an entry with its own sound: Skiff loads it as the entry starts (and the corner is cut)
@@ -1147,8 +1210,8 @@ struct BlockView: View {
             }
         }
         .lineLimit(1)
-        .padding(.horizontal, wide ? 8 : 4).padding(.vertical, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, wide ? 8 : 4).padding(.vertical, laneHeight < 52 ? 0 : 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: laneHeight < 52 ? .leading : .topLeading)
         .background {
             if isRest {
                 shape.stroke(Theme.disabledOutline, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
@@ -1161,9 +1224,13 @@ struct BlockView: View {
             // on a solid colour the ring goes outside, on the lane (light on amber would be under 3:1), and
             // the linked copies' dashes are dark
             if selected { shape.stroke(Theme.text, lineWidth: 2).padding(solid ? -3 : 1) }
+            // the Song tab while playing: the block each track plays outlined inside
+            else if compact, playing { shape.stroke(Theme.text, lineWidth: 2).padding(2) }
             else if linked { shape.stroke(solid ? Theme.onColour : Theme.textSecondary, style: StrokeStyle(lineWidth: 2, dash: [5, 4])).padding(4) }
         }
         .compositingGroup()
+        // the Song tab while playing: what isn't playing dimmed, so each track's playing block stands out
+        .opacity(compact && session.playing && !playing && !selected ? 0.5 : 1)
         .shadow(color: .black.opacity(selected && look.flat ? look.shadow(.selected).opacity : 0),
                 radius: look.shadow(.selected).radius, y: selected ? look.shadow(.selected).y : 0)
         .contentShape(Rectangle())
@@ -1315,5 +1382,23 @@ struct SectionBar: View {
         }
         .buttonStyle(PressSink())
         .disabled(busy)
+    }
+}
+
+// MARK: - The Song tab's compact Arrange (canvas boards 19, 20)
+
+private struct ArrangeLaneHeightKey: EnvironmentKey { static let defaultValue: CGFloat = SkiffArrangePage.fullLaneHeight }
+private struct ArrangeCompactKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// A lane's height: 80 on the Arrange page, less in the Song tab's top half (its divider sets it).
+    var arrangeLaneHeight: CGFloat {
+        get { self[ArrangeLaneHeightKey.self] }
+        set { self[ArrangeLaneHeightKey.self] = newValue }
+    }
+    /// The Song tab's top half: no inspector, the pattern pool a drawer, a block tapped pins the editor below,
+    /// and while playing each track's playing block bright and outlined, the others dimmed.
+    var arrangeCompact: Bool {
+        get { self[ArrangeCompactKey.self] }
+        set { self[ArrangeCompactKey.self] = newValue }
     }
 }

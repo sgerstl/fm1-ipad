@@ -195,13 +195,13 @@ struct TopBar: View {
 
     private var tabs: some View {
         HStack(spacing: 4) {
-            ForEach(Page.allCases) { p in
+            ForEach(ui.songTab ? [.song, .sound, .library] : Page.allCases) { p in
                 let current = ui.page == p
                 Button {
                     ui.page = p
                     Self.driveDevice(session: session, ui: ui, to: p)
                 } label: {
-                    Text(p.rawValue)
+                    Text(ui.songTab && p == .song ? "Song" : p.rawValue)
                         .fontWeight(current ? .semibold : .regular)
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
                         .padding(.horizontal, 18)
