@@ -195,7 +195,7 @@ struct TopBar: View {
 
     private var tabs: some View {
         HStack(spacing: 4) {
-            ForEach(ui.songTab ? [.song, .sound, .library] : Page.allCases) { p in
+            ForEach(ui.songTab ? Page.skiffTabs : Page.sloopTabs) { p in
                 let current = ui.page == p
                 Button {
                     ui.page = p
@@ -232,6 +232,7 @@ struct TopBar: View {
         case .song: session.showOnDevice(page: ScreenMap.of(session).song)
         case .sound:
             if let first = SoundPage.shown(session, ui.soundFamily).first { session.showOnDevice(page: first.fw) }
+        case .mixer: session.showOnDevice(page: ui.mixerSection.page)
         }
     }
 
@@ -260,7 +261,6 @@ struct TopBar: View {
             recKey
             playKey
             readout
-            if session.dialect == .skiff { MixerKey(session: session, ui: ui) }
         }
         .padding(4)
         .background {

@@ -68,7 +68,6 @@ struct AppView: View {
         .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 32) }
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }
-        .overlay { if session.dialect == .skiff, isConnected { MixerPanelLayer(session: session, ui: ui) } }
         .overlay { KnobPanelLayer(ui: ui) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
@@ -128,6 +127,11 @@ extension AppView {
                             // ("Last turned on the FM-1" was here; Scott doesn't need it, 2026-11-05: the space stays empty)
                         }
                         SoundTab(session: session, ui: ui)
+                    }
+                case .mixer:
+                    HStack(alignment: .top, spacing: 16) {
+                        leftColumn { FunctionPads(session: session, ui: ui) }
+                        MixerPage(session: session, ui: ui)
                     }
                 }
             }

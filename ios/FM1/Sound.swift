@@ -137,6 +137,7 @@ struct SoundPage: Identifiable {
         if s.home || [41, 42, 44].contains(s.page) { return .sequencer }
         if [37, 45].contains(s.page) { return .song }
         if [35, 36].contains(s.page) { return .library }
+        if (30...34).contains(s.page) { return .mixer }
         return page(session, fw: s.page) != nil ? .sound : nil
     }
 

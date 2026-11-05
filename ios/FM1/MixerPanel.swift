@@ -1,145 +1,97 @@
 import SloopKit
 import SwiftUI
 
-// Skiff's GLO pages as a mixer panel (Scott, 2026-11-05; vault skiff-arrange-spec.md, "Lupe and the FM-1's buttons"):
-// no fifth tab. A bottom sheet over whatever page is open, about 45 % of the height, from the mixer key beside the
-// tempo or GLO on the FM-1. Tabs: Mixer (the six tracks' strips, Skiff's GR_TRK), Delay, Reverb, Chorus, Global
-// (their columns over Skiff's GR_DELAY, GR_REVERB, GR_CHORUS, GR_GLOBAL). Linked, a tab picked here shows its page
-// on the FM-1, GLO there steps the tabs here, and another button there closes it.
+// Skiff's GLO pages as the Mixer tab (Scott, 2026-11-05: "we might want a mixer tab"; it replaced the bottom panel
+// and the mixer key beside the tempo). Song · Shape · Mixer · Browse. The six tracks' strips (Skiff's MIXER, GR_TRK)
+// given the room, then the shared Delay, Reverb, Chorus and Global as Shape's cards (their columns over GR_DELAY,
+// GR_REVERB, GR_CHORUS, GR_GLOBAL). GLO on the FM-1 (or its pad here) lands here, and again steps the sections;
+// linked, a section touched here shows its page on the FM-1.
 
-/// The mixer key beside the tempo: opens the panel on Mixer, closes it.
-struct MixerKey: View {
+struct MixerPage: View {
     let session: DeviceSession
     let ui: EditorUI
+    @State private var marks = ShapeMarks()
 
     var body: some View {
-        IconKey(label: "Mixer", symbol: "slider.vertical.3", onSymbol: "slider.vertical.3", on: ui.mixerTab != nil) {
-            ui.mixerTab = ui.mixerTab == nil ? .mixer : nil
-        }
-        .accessibilityHint("The six tracks' levels and the shared effects: the FM-1's GLO pages")
-    }
-}
-
-/// The panel, slid up from the foot of the window; keeps the FM-1 on the matching page while linked.
-struct MixerPanelLayer: View {
-    let session: DeviceSession
-    let ui: EditorUI
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        GeometryReader { g in
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                if let tab = ui.mixerTab {
-                    MixerPanel(session: session, ui: ui, tab: tab)
-                        .frame(height: max(380, g.size.height * 0.45))
-                        .transition(reduceMotion ? .opacity : .move(edge: .bottom))
-                }
-            }
-        }
-        .animation(reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.25), value: ui.mixerTab == nil)
-        .onChange(of: ui.mixerTab) { old, new in
-            guard session.screenLinked, ui.followDevice else { return }
-            if let new {
-                if session.deviceScreen?.page != new.page || session.deviceScreen?.home == true { session.showOnDevice(page: new.page) }
-            } else if old != nil, let s = session.deviceScreen, !s.home, (30...34).contains(s.page) {
-                // closed here: the FM-1 goes back to what Jib shows
-                TopBar.driveDevice(session: session, ui: ui, to: ui.page)
-            }
-        }
-    }
-}
-
-struct MixerPanel: View {
-    let session: DeviceSession
-    let ui: EditorUI
-    let tab: SkiffButtonMap.MixerTab
-    @Environment(\.look) private var look
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("GLO").font(.system(size: 13, weight: .semibold)).tracking(0.6).foregroundStyle(Theme.textSecondary)
-                    .accessibilityHidden(true)
-                HStack(spacing: 4) {
-                    ForEach(SkiffButtonMap.MixerTab.allCases) { t in
-                        Button { ui.mixerTab = t } label: {
-                            Text(t.title).font(.system(size: 15, weight: t == tab ? .semibold : .regular))
-                                .foregroundStyle(t == tab ? Theme.text : Theme.textSecondary)
-                                .padding(.horizontal, 14).frame(minHeight: 44)
-                                .background { if t == tab { RoundedRectangle(cornerRadius: 10).fill(Theme.control) } }
-                                .contentShape(Rectangle())
+        let shared = SoundPage.pages(session).filter { $0.family == .glo }
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        header("MIXER", lit: ui.mixerSection == .mixer)
+                        MixerStrips(session: session, ui: ui)
+                            .frame(height: 452)
+                            .padding(16)
+                            .panel()
+                            .overlay(alignment: .top) { DeviceEdge(on: onDevice(30)) }
+                            .contentShape(Rectangle())
+                            .onTapGesture { show(.mixer) }
+                            .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
+                    }
+                    .id(SkiffButtonMap.MixerTab.mixer)
+                    if !shared.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            header("SHARED", lit: ui.mixerSection != .mixer)
+                            Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                                ForEach(Array(stride(from: 0, to: shared.count, by: 2)), id: \.self) { i in
+                                    GridRow(alignment: .top) {
+                                        card(shared[i], shared)
+                                        if i + 1 < shared.count { card(shared[i + 1], shared) }
+                                        else { Color.clear.gridCellUnsizedAxes([.vertical]) }
+                                    }
+                                }
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(t == tab ? .isSelected : [])
                     }
                 }
-                .padding(4)
-                .recessed(12)
-                if onDevice {
-                    Text("On the FM-1").font(.system(size: 12, weight: .semibold))
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Capsule().fill(.white.opacity(0.10)))
-                }
-                Spacer()
-                Button { ui.mixerTab = nil } label: {
-                    Image(systemName: "xmark").font(.system(size: 15, weight: .semibold))
-                        .frame(width: 44, height: 44).raisedKey().contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-                .keyboardShortcut(.cancelAction)
-                .accessibilityLabel("Close the mixer")
+                .padding(.bottom, 8)
             }
-            switch tab {
-            case .mixer: MixerStrips(session: session, ui: ui)
-            default:
-                if let p = SoundPage.pages(session).first(where: { $0.title == tab.pageTitle }) {
-                    MixerPageView(session: session, ui: ui, page: p)
-                } else {
-                    Text("This firmware has no \(tab.pageTitle) page.").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
-                }
+            .scrollIndicators(.hidden)
+            .onChange(of: ui.mixerSection) { _, t in
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(t, anchor: .top) }
             }
-            Spacer(minLength: 0)
+            .onAppear { proxy.scrollTo(ui.mixerSection, anchor: .top) }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity)
-        // level 1: the panel's surface and its one shadow, on its shape
-        .background(UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16).fill(look.surface(.panel))
-            .elevationShadow(.panel, look).ignoresSafeArea(edges: .bottom))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Mixer, \(tab.title)")
-        .accessibilityAction(.escape) { ui.mixerTab = nil }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var onDevice: Bool {
-        session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == tab.page } == true
+    private func card(_ p: SoundPage, _ pages: [SoundPage]) -> some View {
+        SoundCard(session: session, ui: ui, rows: [p], pages: pages, marks: marks).equatable()
+            .id(SkiffButtonMap.MixerTab.allCases.first { $0.pageTitle == p.title })
+    }
+
+    private func header(_ title: String, lit: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.system(size: 13, weight: .semibold)).tracking(0.6)
+                .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
+            Rectangle().fill(Theme.stepEmpty).frame(height: 1)
+        }
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func onDevice(_ page: Int) -> Bool {
+        session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == page } == true
+    }
+
+    private func show(_ t: SkiffButtonMap.MixerTab) {
+        ui.mixerSection = t
+        if session.screenLinked, ui.followDevice, !onDevice(t.page) { session.showOnDevice(page: t.page) }
     }
 }
 
-// MARK: Delay, Reverb, Chorus, Global: the page's columns over its graph
-
-struct MixerPageView: View {
-    let session: DeviceSession
-    let ui: EditorUI
-    let page: SoundPage
+/// The page on the FM-1's screen: a lit edge along a panel's top, as Shape's cards have it.
+struct DeviceEdge: View {
+    let on: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 4) {
-                ForEach(0..<4, id: \.self) { slot in
-                    if let id = page.ids[slot] {
-                        KnobControl(ui: ui, column: (slot + 1, Theme.text, false)) {
-                            KnobSpec.param(session, scope: page.scope, id: id, slot: slot)
-                        }
-                    } else {
-                        EmptyColumn()
-                    }
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            PageGraph(session: session, page: page, hot: nil, modRoute: .constant(0))
-        }
-        .frame(maxWidth: 720, alignment: .leading)
+        RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
+            .frame(height: 3)
+            .padding(.horizontal, 14)
+            .offset(y: 1)
+            .glow(Theme.text.opacity(0.7), radius: 6)
+            .opacity(on ? 1 : 0)
+            .animation(.easeOut(duration: 0.15), value: on)
+            .accessibilityHidden(true)
     }
 }
 
@@ -277,8 +229,7 @@ enum SkiffNavigator {
     /// The FM-1 changed screen: go where its button lands in Jib (linked only; on stock Skiff nothing moves).
     @MainActor static func follow(_ s: UIState, session: DeviceSession, ui: EditorUI) {
         guard ui.followDevice, session.screenLinked, let place = SkiffButtonMap.place(for: s) else { return }
-        if case .mixer(let t) = place { if ui.mixerTab != t { ui.mixerTab = t }; return }
-        ui.mixerTab = nil
+        if case .mixer(let t) = place { if ui.mixerSection != t { ui.mixerSection = t }; go(.mixer, ui); return }
         switch place {
         case .home: go(.sequencer, ui)
         case .shape(let p):

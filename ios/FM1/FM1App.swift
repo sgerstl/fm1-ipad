@@ -86,7 +86,13 @@ private struct SessionRun: Equatable { var demo: Bool, paused: Bool }
 enum Page: String, CaseIterable, Identifiable {
     // labels name what each tab is for (2026-11-02): sequence a pattern, shape its sound, arrange the song, browse sounds
     case sequencer = "Sequence", sound = "Shape", song = "Arrange", library = "Browse"
+    /// Skiff's GLO pages (its Song tab's firmware only): the strips and the shared effects.
+    case mixer = "Mixer"
     var id: String { rawValue }
+    /// The tabs on SLOOP (no Mixer: its GLO pages are Shape's).
+    static let sloopTabs: [Page] = [.sequencer, .sound, .song, .library]
+    /// The tabs on Skiff: Song · Shape · Mixer · Browse.
+    static let skiffTabs: [Page] = [.song, .sound, .mixer, .library]
 }
 
 struct ViewJump: Equatable {
@@ -101,7 +107,7 @@ final class EditorUI {
     var page: Page = {
         let a = ProcessInfo.processInfo.arguments
         guard let i = a.firstIndex(of: "-page"), i + 1 < a.count else { return .sequencer }
-        return ["sound": .sound, "song": .song, "library": .library][a[i + 1]] ?? .sequencer
+        return ["sound": .sound, "song": .song, "library": .library, "mixer": .mixer][a[i + 1]] ?? .sequencer
     }() {
         // Skiff: Sequence and Arrange are one Song tab; whatever asks for Sequence (HOME, SEQ, a tab) lands there
         didSet { if songTab, page == .sequencer { page = .song } }
@@ -156,8 +162,8 @@ final class EditorUI {
     var sampler: SamplerRequest?
     /// The last page change came from the FM-1 (its button pressed), not from a tab or pad here.
     var pageFromDevice = false
-    /// Skiff's GLO pages: the mixer panel, open on this tab over the page (nil: closed).
-    var mixerTab: SkiffButtonMap.MixerTab?
+    /// Skiff's GLO pages: the Mixer tab's section (the strips, Delay, Reverb, Chorus, Global), as GLO steps them.
+    var mixerSection: SkiffButtonMap.MixerTab = .mixer
     /// Motion lanes added with + Lane, per track (parameters with no records yet).
     var addedLanes: [Int: [Int]] = [:]
     var projectsOpen = false
