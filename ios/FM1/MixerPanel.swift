@@ -302,7 +302,8 @@ private struct MixerStrip: View, Equatable {
             .accessibilityHint("Selects the track")
             .accessibilityAddTraits(row.selected ? .isSelected : [])
             Fader(axis: .vertical, spec: levelSpec, tint: row.mute ? Theme.textTertiary : colour, nudge: 2,
-                  detent: MixerStrips.unity, touched: touched)
+                  detent: MixerStrips.unity, touched: touched,
+                  meter: AnyView(LevelLine(meters: session.meters, track: t, muted: row.mute, tint: colour)))
                 .frame(maxHeight: .infinity)
             Fader(axis: .horizontal, spec: panSpec, tint: colour, touched: touched)
             if row.rev != nil { Fader(axis: .horizontal, spec: revSpec, tint: colour, touched: touched) }

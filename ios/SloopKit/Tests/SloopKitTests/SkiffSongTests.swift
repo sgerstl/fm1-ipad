@@ -626,6 +626,33 @@ extension SkiffOnTheDeviceTests {
         run.cancel()
     }
 
+    /// The third build (56 01 03): WATCH asks for METER (bit 3), and its pushes become the tracks' measured levels.
+    @Test func theMeterBuildPushesLevels() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.screenLink = true; fake.screenLinkVersion = 3
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        try await waitFor(10) { s.screenLinked && fake.meterWatched }
+        fake.push(92, [100, 0, 64, 0, 0, 0])
+        try await waitFor(5) { s.meters.measured }
+        #expect(abs(s.meters.level(track: 0) - 100.0 / 127) < 0.1 && s.meters.level(track: 1) == 0)
+        run.cancel()
+    }
+
+    /// Without METER, a track's notes: up to the velocity, held while sounding, then falling as the FM-1's meter.
+    @Test func noteActivityRisesHoldsAndFalls() {
+        let m = TrackMeters()
+        let t0 = Date.now
+        m.note(track: 2, note: 60, on: true, velocity: 127)
+        #expect(m.level(track: 2) > 0.95 && m.sounding(track: 2) && !m.measured)
+        #expect(m.level(track: 2, at: t0.addingTimeInterval(2)) > 0.95)          // held: steady
+        m.note(track: 2, note: 60, on: false, velocity: 0)
+        #expect(m.level(track: 2, at: .now.addingTimeInterval(0.25)) < 0.6)       // falling, about half a second to 0
+        #expect(m.level(track: 2, at: .now.addingTimeInterval(0.6)) == 0)
+    }
+
     /// The first build (56 01 01): linked, but no cursor, and none is sent; Lupe offers it the update.
     @Test func theFirstBuildHasNoCursor() async throws {
         let fake = FakeSkiff(try SkiffFixture.load())

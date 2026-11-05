@@ -167,6 +167,8 @@ public final class DeviceSession {
     public private(set) var skiffSong: SkiffSongStore?
     /// Skiff's EDIT engine pages' data: FM6 patches, the DRUM-X kit, the user sets' mixes.
     public private(set) var skiffEdit: SkiffEditStore?
+    /// Each track's level for the Mixer's lines: Skiff's METER when it sends one, else note activity.
+    public let meters = TrackMeters()
     /// The Skiff driver, for the sim tests' own requests (TRANSPORT, cleanup).
     var skiffSongDriverForTests: SkiffDriver? { driver as? SkiffDriver }
     /// MIDI clock pulses since Start (Skiff), for the song's playhead.
@@ -317,6 +319,7 @@ public final class DeviceSession {
     }
 
     private func connect(_ transport: SysExTransport) async {
+        meters.reset()
         settingsCache = nil; songOrder = nil; usbAudioFull = nil; usbAudioProblem = nil     // never write a settings object read from another FM-1
         sampleSlots = []
         liveSeen = false
@@ -1015,6 +1018,8 @@ public final class DeviceSession {
                 screenLinked = true
                 if s != deviceScreen { deviceScreen = s }
                 adoptTrack(from: s)
+            case .meter(let v):
+                meters.measure(v)
             }
         }
     }
@@ -1372,6 +1377,7 @@ public final class DeviceSession {
             // the selected track's light the keys, and they don't move the keyboard's octave
             let track = Int(e.channel)
             lfoClock.note(track: track, note: n, on: e.on, at: Date())
+            if trackIndices.contains(track) { meters.note(track: track, note: n, on: e.on, velocity: Int(e.velocity)) }
             if track == selectedTrack { if e.on { deviceNotes.insert(n) } else { deviceNotes.remove(n) } }
             if e.on, trackIndices.contains(track), tracks[track].direction == 3 { anchorRandom(track: track, note: n) }
         }

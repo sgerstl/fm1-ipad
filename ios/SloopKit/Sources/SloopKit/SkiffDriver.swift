@@ -65,6 +65,8 @@ public struct SkiffInfo: Equatable, Sendable {
     public var hasScreenLink: Bool { (tags[0x56]?.first ?? 0) >= 1 }
     /// The second build (`56 01 02`): SCREEN carries the page's cursor, and SCREEN_GOTO can set it.
     public var hasScreenCursor: Bool { (tags[0x56]?.first ?? 0) >= 2 }
+    /// The third (`56 01 03`): METER, each track's level as the MIXER draws it, pushed with WATCH bit 3.
+    public var hasMeter: Bool { (tags[0x56]?.first ?? 0) >= 3 }
 
     public var deviceInfo: DeviceInfo {
         DeviceInfo(version: version, engines: engines, paramCount: paramCount, globalCount: globalCount, stepCount: stepCount,
@@ -321,7 +323,8 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     /// WATCH 3: the pushes and TRACK_CHANGED. Skiff has no screen link.
     /// WATCH: steps and parameters (bits 0, 1), and with the screen link patch the screen too (bit 2).
     public func watch(screenLink: Bool) async throws {
-        _ = try await request(SkiffCmd.watch, [screenLink && skiff.hasScreenLink ? 7 : 3], match: 0, "WATCH")
+        let bits = (screenLink && skiff.hasScreenLink ? 7 : 3) | (screenLink && skiff.hasMeter ? 8 : 0)
+        _ = try await request(SkiffCmd.watch, [UInt8(bits)], match: 0, "WATCH")
     }
 
     /// SCREEN (90, the screen link patch): home, page (Skiff's PAGES), layer, menu, the selected track, flags, and

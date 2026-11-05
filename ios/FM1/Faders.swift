@@ -1,3 +1,4 @@
+import SloopKit
 import SwiftUI
 
 /// The Mixer's sticky fader (Scott, 2026-11-05: simpler than the knobs' hold-then-drag). It takes the finger at
@@ -20,6 +21,8 @@ struct Fader: View {
     var detent: Int? = nil
     /// Told on every touch (linked, the strips' page goes to the FM-1).
     var touched: () -> Void = {}
+    /// LEVEL's meter line, drawn just past the cap's right edge, the track's height (the FM-1's MIXER has it there).
+    var meter: AnyView? = nil
     @State private var startValue: Int?
     @State private var moved = false
     @State private var lastTap = Date.distantPast
@@ -65,6 +68,10 @@ struct Fader: View {
                     RoundedRectangle(cornerRadius: 3).fill(Theme.text)
                         .frame(width: Self.cap.width, height: Self.cap.height)
                         .offset(y: -f)
+                    if let meter {
+                        meter.frame(width: 3, height: h).offset(x: Self.cap.width / 2 + 6, y: -Self.cap.height / 2)
+                            .allowsHitTesting(false)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .onAppear { length = max(1, h) }
@@ -167,5 +174,32 @@ struct Fader: View {
         let crossed = mark.map { m in n == m || (a != m && (a < m) != (n < m)) } ?? false
         if atEnd || crossed { tick += 1 }
         spec.set(n)
+    }
+}
+
+
+/// A track's level beside its fader, as the FM-1's MIXER draws it (ui_graph.c draw_tracks): a thin line in the track's
+/// colour rising with the level and falling with the meter's own fall (TrackMeters). Muted, the notes' activity, dimmed:
+/// playing but silent. Drawn at 30 frames a second only while something sounds (TrackMeters.active), so a strip's own
+/// body never redraws for it. Under Reduce Motion: steady while the track sounds, no pulse.
+struct LevelLine: View {
+    let meters: TrackMeters
+    let track: Int
+    let muted: Bool
+    let tint: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !meters.active)) { tl in
+            let live = meters.level(track: track, muted: muted, at: tl.date)
+            let v = reduceMotion ? (meters.sounding(track: track) || live > 0.05 ? 0.75 : 0) : live
+            GeometryReader { g in
+                ZStack(alignment: .bottom) {
+                    Capsule().fill(Theme.stepEmpty)
+                    Capsule().fill(tint.opacity(muted ? 0.35 : 1)).frame(height: g.size.height * CGFloat(v))
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

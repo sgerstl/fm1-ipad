@@ -88,6 +88,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// The pages with a cursor and its top (skiff/README.md): MOD's routes, the lanes, the samples, USER's slots.
     static let cursorRange: [Int: Int] = [4: 10, 16: 5, 18: 7, 19: 7, 20: 7, 22: 15, 36: 31, 37: 63]
     var screenWatched = false
+    /// METER (the screen link's third build, `screenLinkVersion` 3): asked with WATCH bit 3, pushed while playing.
+    var meterWatched = false
+    private var meterLevels = [Double](repeating: 0, count: 8)
+    private var meterTick = 0
     /// home, page, layer, menu, flags (the track is `selected`).
     var screen = (home: true, page: 0, layer: 0, menu: 0, flags: 0)
     /// Pages SCREEN_GOTO refuses as Skiff does for one the track's engine doesn't show (LANES on ANALOG).
@@ -104,6 +108,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let a = ProcessInfo.processInfo.arguments
             screenLink = a.contains("-demo-link")       // the screen link patch, so the button map can be seen
             if a.contains("-demo-link-v1") { screenLinkVersion = 1 }   // the first build: no cursor
+            if a.contains("-demo-meter") { screenLinkVersion = 3 }     // the third: METER
             // -demo-track N: track N selected (1…6), -demo-engine E: on engine E (DRUM-X 14, SLICE 13: none in the fixture)
             if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
             if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }
@@ -309,6 +314,23 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         if on { push(90, b) }
     }
 
+    /// A clock tick while playing: each track's level jumps on a step with a note and falls as the FM-1's meter does
+    /// (127 / 30 a 16 ms frame); pushed every other tick (about 25 a second at 120 BPM), as editor.c ed_met_tick.
+    private func meterStep(_ dt: Double) {
+        lock.lock()
+        meterTick += 1
+        let step = (meterTick / 6) % 16, onStep = meterTick % 6 == 1
+        for t in steps.indices where t < meterLevels.count {
+            let fall = dt / 0.016 / 30
+            meterLevels[t] = max(0, meterLevels[t] - fall)
+            if onStep, steps[t][step].first ?? 0 != 0, params[t][40] == 0 { meterLevels[t] = 0.85 }
+        }
+        let b = meterLevels.prefix(steps.count).map { UInt8(min(127, max(0, Int($0 * 127)))) }
+        let on = meterWatched && meterTick % 2 == 0
+        lock.unlock()
+        if on { push(92, b) }
+    }
+
     deinit { clockTimer?.cancel() }
 
     /// A few notes on each track and PLAY, so the demo has something to show (the recorded unit is blank).
@@ -339,7 +361,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let t = DispatchSource.makeTimerSource(queue: .global())
             let interval = 60.0 / Double(max(40, globals.first ?? 120)) / 24
             t.schedule(deadline: .now() + interval, repeating: interval)
-            t.setEventHandler { [weak self] in self?.clockSink.yield(.tick) }
+            t.setEventHandler { [weak self] in self?.clockSink.yield(.tick); self?.meterStep(interval) }
             t.resume()
             clockTimer = t
         } else {
@@ -451,7 +473,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case (22, 1):
             watching = a[0] != 0
             screenWatched = screenLink && a[0] & 4 != 0
-            return [a[0] & (screenLink ? 7 : 3)]
+            meterWatched = screenLink && screenLinkVersion >= 3 && a[0] & 8 != 0
+            return [a[0] & (screenLink ? (screenLinkVersion >= 3 ? 15 : 7) : 3)]
         case (25, 0): return [0]
         case (16, 2): return a[0] == 0 ? fx.userList : [a[0], 0, fx.userList.count > 2 ? fx.userList[2] : 32]
         case (20, 1): return [a[0], 1]

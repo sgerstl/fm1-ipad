@@ -27,7 +27,11 @@ public struct NoteEvent: Equatable, Sendable {
     public var on: Bool
     public var channel: UInt8
     public var note: UInt8
-    public init(on: Bool, channel: UInt8, note: UInt8) { self.on = on; self.channel = channel; self.note = note }
+    /// The note-on's velocity (0 with a note-off).
+    public var velocity: UInt8
+    public init(on: Bool, channel: UInt8, note: UInt8, velocity: UInt8 = 100) {
+        self.on = on; self.channel = channel; self.note = note; self.velocity = velocity
+    }
 }
 
 /// MIDI clock from the device: Start, a tick (24 a beat), Continue, Stop.
@@ -62,7 +66,8 @@ public struct SysExAssembler {
         guard data.count == need else { return }
         let kind = status & 0xF0
         if kind == 0x90 || kind == 0x80 {
-            notes.append(NoteEvent(on: kind == 0x90 && data[1] > 0, channel: status & 0x0F, note: data[0]))
+            notes.append(NoteEvent(on: kind == 0x90 && data[1] > 0, channel: status & 0x0F, note: data[0],
+                                       velocity: kind == 0x90 ? data[1] : 0))
         }
         data = []
     }

@@ -29,7 +29,9 @@ public enum Cmd {
     public static let uiGoto: UInt8 = 91
 
     /// Frames the device sends on its own; they are never replies.
-    public static let pushes: Set<UInt8> = [changed, reload, stepChanged, trackChanged]
+    /// Skiff's METER (the screen link's `56 01 03`): a push only (Lupe never asks for it).
+    public static let meter: UInt8 = 92
+    public static let pushes: Set<UInt8> = [changed, reload, stepChanged, trackChanged, meter]
 }
 
 /// Track parameter ids (`P_*`, firmware core.h) and global ids (`G_*`) that pass 1 reads.
@@ -637,6 +639,8 @@ public enum Push: Equatable, Sendable {
     case stepChanged(index: Int, track: Int)
     case trackChanged(track: Int, id: Int, value: Int)
     case ui(UIState)
+    /// Skiff's METER (92, the screen link's `56 01 03`): each track's level 0…127, as the MIXER's meter beside its fader.
+    case meter([Int])
 
     public init?(cmd: UInt8, body: [UInt8]) throws {
         var r = ByteReader(body, cmd: cmd)
@@ -646,6 +650,7 @@ public enum Push: Equatable, Sendable {
         case Cmd.stepChanged: self = .stepChanged(index: try r.u8(), track: try r.u8())
         case Cmd.trackChanged: self = .trackChanged(track: try r.u8(), id: try r.u8(), value: try r.v14())
         case Cmd.ui: self = .ui(try UIState(body))
+        case Cmd.meter: self = .meter(body.map(Int.init))
         default: return nil
         }
     }
