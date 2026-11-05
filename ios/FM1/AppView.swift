@@ -359,7 +359,11 @@ struct SequencerPage: View {
             Color.clear.frame(height: Overview.height)
             HStack(alignment: .top, spacing: 16) {
                 VStack(spacing: 16) {
-                    SelectedStepPanel(session: session, ui: ui).flashRing(ui, .stepPanel)
+                    Group {
+                        if session.dialect == .skiff, !session.isKit(t) { SkiffStepInspector(session: session, ui: ui) }
+                        else { SelectedStepPanel(session: session, ui: ui) }
+                    }
+                    .flashRing(ui, .stepPanel)
                     TrackPanel(session: session, ui: ui).flashRing(ui, .trackPanel)
                 }
                 .frame(width: Overview.boxWidth, height: PianoRoll.panelHeight)

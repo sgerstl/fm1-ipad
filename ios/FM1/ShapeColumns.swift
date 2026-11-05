@@ -25,6 +25,7 @@ struct ColumnFace: View {
     /// A value that doesn't turn here (MOD's fixed routes' SOURCE and DEST): dim, no gauge.
     var dim = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.knobsRecording) private var recording
 
     var body: some View {
         let (value, unit) = splitUnit(spec.shown)
@@ -35,10 +36,12 @@ struct ColumnFace: View {
                 Text(spec.label).font(.system(size: 11)).tracking(0.5).foregroundStyle(label).lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
-                Text("\(number)").font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(hot ? Theme.text : Theme.textSecondary)
-                    .frame(width: 18, height: 18)
-                    .background(Circle().fill(hot ? Theme.onColour : Theme.control))
+                if number > 0 {       // 0: not one of the FM-1's four knobs
+                    Text("\(number)").font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(hot ? Theme.text : Theme.textSecondary)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(hot ? Theme.onColour : Theme.control))
+                }
             }
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 RollingText(text: value, size: 22).id(spec.id)
@@ -56,6 +59,9 @@ struct ColumnFace: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 6).fill(hot ? Theme.text : Theme.well))
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        // recorded: a red ring, as the REC banner says (board 16)
+        .overlay { if recording, !dim { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.rec, lineWidth: 2) } }
+        .accessibilityValue(recording && !dim ? "recording" : "")
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: hot)
     }
 
@@ -70,6 +76,15 @@ struct ColumnFace: View {
             }
             .accessibilityHidden(true)
         }
+    }
+}
+
+/// Skiff is recording knob moves into these columns' parameters (REC armed, playing, the selected track's own).
+private struct KnobsRecordingKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var knobsRecording: Bool {
+        get { self[KnobsRecordingKey.self] }
+        set { self[KnobsRecordingKey.self] = newValue }
     }
 }
 

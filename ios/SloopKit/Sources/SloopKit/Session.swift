@@ -980,6 +980,48 @@ public final class DeviceSession {
         if motion[t] != m { motion[t] = m }
     }
 
+    /// A recorded change (or, `lock`, a lock on that step only) of `id` on `step` (MOTION op 3 / 5). Shown at once;
+    /// the device's reply wins. nil: not Skiff, or no answer.
+    @discardableResult
+    public func setMotion(track t: Int, step: Int, id: Int, value: Int, lock: Bool) async -> MotionRC? {
+        guard let k = driver as? SkiffDriver, trackIndices.contains(t) else { return nil }
+        var m = motion[t] ?? TrackMotion()
+        m.events.removeAll { $0.step == step && $0.id == id }
+        m.events.append(.init(step: step, id: id, value: value, lock: lock))
+        m.on = true
+        motion[t] = m
+        guard let r = try? await k.setMotion(track: t, step: step, id: id, value: value, lock: lock) else { await readMotion(track: t); return nil }
+        motion[t] = r.motion
+        return r.rc
+    }
+
+    /// The record of `id` on `step` gone (MOTION op 4).
+    public func deleteMotion(track t: Int, step: Int, id: Int) async {
+        guard let k = driver as? SkiffDriver, trackIndices.contains(t) else { return }
+        motion[t]?.events.removeAll { $0.step == step && $0.id == id }
+        if let m = try? await k.deleteMotion(track: t, step: step, id: id) { motion[t] = m } else { await readMotion(track: t) }
+    }
+
+    /// Every record of `id` on the track gone (one MOTION op 4 each).
+    public func clearMotionLane(track t: Int, id: Int) async {
+        for e in motion[t]?.events.filter({ $0.id == id }) ?? [] { await deleteMotion(track: t, step: e.step, id: id) }
+    }
+
+    /// The locks on `step` gone, its recorded changes kept (MOTION op 6).
+    public func clearLocks(track t: Int, step: Int) async {
+        guard let k = driver as? SkiffDriver, trackIndices.contains(t) else { return }
+        motion[t]?.events.removeAll { $0.step == step && $0.lock }
+        if let m = try? await k.clearLocks(track: t, step: step) { motion[t] = m } else { await readMotion(track: t) }
+    }
+
+    /// Records used across every track: the 64 are shared (motion.c MOTION_MAX).
+    public var motionUsed: Int { motion.values.reduce(0) { $0 + $1.events.count } }
+    public static let motionMax = 64
+
+    /// Skiff: knob turns on the selected track lock to this step (MOTION op 5) instead of changing the sound, as
+    /// holding a step and turning a knob does on the FM-1. nil: knobs change the sound.
+    public var lockStep: Int?
+
     /// Drops a track's recorded motion and its locks (MOTION clear; on the FM-1, SAVE held undoes it).
     public func clearMotion(track t: Int) {
         guard let k = driver as? SkiffDriver else { return }
@@ -1430,6 +1472,11 @@ public final class DeviceSession {
 
     /// A track parameter from a knob: shown at once, sent latest-value-wins so a drag never queues up.
     public func set(track t: Int, param id: Int, to v: Int) {
+        if let s = lockStep, t == selectedTrack, driver is SkiffDriver {
+            // a lock on that step, the sound left as it is (Skiff refuses ids motion can't hold: rc 1)
+            Task { await setMotion(track: t, step: s, id: id, value: v, lock: true) }
+            return
+        }
         if everyTrack[id] != nil { everyTrack[id]?[t] = v }
         apply(track: t, id: id, value: v)
         if isDrums(t), id == ids.level, let dl = ids.drumLevel { sendParam("g\(dl)", v) { c, v in try await c.setGlobal(id: dl, value: v) } ; return }

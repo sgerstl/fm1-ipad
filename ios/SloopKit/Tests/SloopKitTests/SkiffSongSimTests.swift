@@ -371,3 +371,27 @@ extension SkiffScreenLinkSimTests {
         await d.close()
     }
 }
+
+extension SkiffSongSimTests {
+    /// MOTION's editing ops on the real firmware: a change (op 3), a lock (op 5), a lock made to hold, the step's
+    /// locks cleared (op 6), a record deleted (op 4).
+    @Test func motionEditsOnTheRealFirmware() async throws {
+        let d = try await driver()
+        _ = try await d.transport(play: false)
+        _ = try await d.clearMotion(track: 0)
+        var r = try await d.setMotion(track: 0, step: 4, id: 34, value: 90, lock: false)
+        #expect(r.rc == .done && r.motion.record(34, at: 4)?.lock == false && r.motion.record(34, at: 4)?.value == 90)
+        r = try await d.setMotion(track: 0, step: 7, id: 34, value: 20, lock: true)
+        #expect(r.rc == .done && r.motion.record(34, at: 7)?.lock == true)
+        r = try await d.setMotion(track: 0, step: 7, id: 34, value: 20, lock: false)
+        #expect(r.motion.record(34, at: 7)?.lock == false && r.motion.events.count == 2)
+        r = try await d.setMotion(track: 0, step: 9, id: 34, value: 5, lock: true)
+        var m = try await d.clearLocks(track: 0, step: 9)
+        #expect(m.record(34, at: 9) == nil && m.events.count == 2)
+        m = try await d.deleteMotion(track: 0, step: 4, id: 34)
+        #expect(m.events.map(\.step) == [7])
+        r = try await d.setMotion(track: 0, step: 4, id: 200, value: 1, lock: false)             // not a parameter
+        #expect(r.rc == .invalid)
+        _ = try await d.clearMotion(track: 0)
+    }
+}

@@ -205,6 +205,15 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// Pushes (CHANGED, STEP_CHANGED, ...) as the device sends them while watched.
     func push(_ cmd: UInt8, _ body: [UInt8]) { if watching { sink.yield(Frame.encode(cmd, body)) } }
 
+    /// MOTION's reply (editor.c ed_motion_reply): track, rc, on, count, 64, the records, then their kinds when asked.
+    private func motionReply(_ t: Int, rc: UInt8, kinds: Bool) -> [UInt8] {
+        let m = motion[t]
+        var b: [UInt8] = [UInt8(t), rc, m.isEmpty ? 0 : 1, UInt8(m.count), 64]
+        for e in m { b += [UInt8(e.step | (e.id >> 7 & 1) << 6), UInt8(e.id & 127)] + v14(e.value) }
+        if kinds { for e in m { b.append(e.lock ? 1 : 0) } }
+        return b
+    }
+
     private func screenBytes() -> [UInt8] {
         [screen.home ? 1 : 0, UInt8(screen.page), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
     }
@@ -234,7 +243,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         }
         // T1 with recorded motion (CHORUS turned up across its first bar, as skiff-sim recorded it), so Jib's
         // motion marks show in the demo
-        motion[0] = (2...13).map { (step: $0, id: 34, value: $0 * 9, lock: false) }
+        motion[0] = [(2, 34, 40, false), (5, 34, 96, false), (9, 34, 20, false), (12, 34, 70, false), (14, 34, 120, true),
+                     (4, 36, 60, false), (10, 36, 10, false)]
         setPlaying(true)
     }
 
@@ -352,9 +362,28 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             for p in 0..<64 where poolLen[p] > 0 && uses(p) == 0 { poolLen[p] = 0; any = true }
             return poolReply(3, any ? 0 : 1)
         case (64, 2) where a[1] == 7:
-            let t = Int(a[0]), m = motion[t]
-            return [a[0], 0, m.isEmpty ? 0 : 1, UInt8(m.count), 64]
-                + m.flatMap { [UInt8($0.step | ($0.id >> 7 & 1) << 6), UInt8($0.id & 127)] + v14($0.value) } + m.map { $0.lock ? 1 : 0 }
+            return motionReply(Int(a[0]), rc: 0, kinds: true)
+        case (64, 6) where a[1] == 3 || a[1] == 5:
+            // a recorded change (3) or a lock (5): a new record, or the one on that step and id becomes this
+            let t = Int(a[0]), step = Int(a[2] & 63), id = Int(a[3]) | Int(a[2] >> 6 & 1) << 7
+            let v = (Int(a[4]) | Int(a[5]) << 7) - 8192
+            let total = motion.reduce(0) { $0 + $1.count }
+            if let k = motion[t].firstIndex(where: { $0.step == step && $0.id == id }) {
+                motion[t][k] = (step, id, v, a[1] == 5)
+            } else if total >= 64 {
+                return motionReply(t, rc: 2, kinds: a[1] == 5)
+            } else {
+                motion[t].append((step, id, v, a[1] == 5))
+            }
+            return motionReply(t, rc: 0, kinds: a[1] == 5)
+        case (64, 4) where a[1] == 4:
+            let t = Int(a[0]), step = Int(a[2] & 63), id = Int(a[3]) | Int(a[2] >> 6 & 1) << 7
+            motion[t].removeAll { $0.step == step && $0.id == id }
+            return motionReply(t, rc: 0, kinds: false)
+        case (64, 3) where a[1] == 6:
+            let t = Int(a[0]), step = Int(a[2])
+            motion[t].removeAll { $0.lock && (step >= 64 || $0.step == step) }
+            return motionReply(t, rc: 0, kinds: true)
         case (64, 2) where a[1] == 2:
             motion[Int(a[0])] = []
             return [a[0], 0, 0, 0, 64]

@@ -201,7 +201,9 @@ extension KnobSpec {
     static func param(_ session: DeviceSession, scope: Int, id: Int, slot: Int) -> KnobSpec {
         let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
         let values = scope == 0 ? session.params : session.globals
-        let v = id < values.count ? values[id] : 0
+        // locking knob turns to a step (Skiff): the knob shows that step's lock, if it has one
+        let locked = scope == 0 ? session.lockStep.flatMap { s in session.motion[session.selectedTrack]?.events.first { $0.lock && $0.step == s && $0.id == id }?.value } : nil
+        let v = locked ?? (id < values.count ? values[id] : 0)
         let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
         let f = formatValue(d, v)
         let t = session.selectedTrack
@@ -380,6 +382,7 @@ struct SoundTab: View {
                         columns(p)
                     }
                     .fixedSize(horizontal: false, vertical: true)   // the columns' own height: an empty one matches them
+                    .environment(\.knobsRecording, session.recordingKnobs && p.scope == 0)
                 }
             }
             graph(for: first, rows: rows)
@@ -405,7 +408,8 @@ struct SoundTab: View {
         .id(first.id)
     }
 
-    /// A page's four columns, as Skiff's cards; the column of the knob just turned is white.
+    /// A page's four columns, as Skiff's cards; the column of the knob just turned is white; red rings while Skiff
+    /// records the track's knob moves.
     private func columns(_ p: SoundPage) -> some View {
         ForEach(0..<4, id: \.self) { slot in
             if let id = p.ids[slot] {

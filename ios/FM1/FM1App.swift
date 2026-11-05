@@ -133,6 +133,8 @@ final class EditorUI {
     var pageFromDevice = false
     /// Skiff's GLO pages: the mixer panel, open on this tab over the page (nil: closed).
     var mixerTab: SkiffButtonMap.MixerTab?
+    /// Motion lanes added with + Lane, per track (parameters with no records yet).
+    var addedLanes: [Int: [Int]] = [:]
     var projectsOpen = false
     /// A place the FM-1 sent Jib to, lit for a moment (the whole-track controls for PATTERN, and so on).
     var flash: Flash?

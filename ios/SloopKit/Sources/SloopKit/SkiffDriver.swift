@@ -89,6 +89,7 @@ public struct TrackMotion: Equatable, Sendable {
         public var step: Int, id: Int, value: Int
         /// false: recorded motion (automation); true: a step's lock.
         public var lock: Bool
+        public init(step: Int, id: Int, value: Int, lock: Bool) { self.step = step; self.id = id; self.value = value; self.lock = lock }
     }
     public var on: Bool
     public var events: [Event]
@@ -96,7 +97,30 @@ public struct TrackMotion: Equatable, Sendable {
     /// The steps that carry recorded motion.
     public var steps: Set<Int> { Set(events.filter { !$0.lock }.map(\.step)) }
     public var recorded: Int { events.filter { !$0.lock }.count }
+
+    public enum Source: Equatable, Sendable { case lock, recorded, sound }
+    /// What parameter `id` sounds at `step` (motion.c motion_step / motion_unlock): a lock on that step; else the
+    /// latest recorded change at a step up to it in this pass (each pass starts from the sound, motion_restore);
+    /// else the sound's own value, `base`.
+    public func value(of id: Int, at step: Int, base: Int) -> (value: Int, source: Source) {
+        if let l = events.first(where: { $0.lock && $0.id == id && $0.step == step }) { return (l.value, .lock) }
+        if let e = events.filter({ !$0.lock && $0.id == id && $0.step <= step }).max(by: { $0.step < $1.step }) {
+            return (e.value, .recorded)
+        }
+        return (base, .sound)
+    }
+    /// The parameters with a record, in order of their first step.
+    public var ids: [Int] {
+        var seen: [Int] = []
+        for e in events.sorted(by: { $0.step < $1.step }) where !seen.contains(e.id) { seen.append(e.id) }
+        return seen
+    }
+    /// The record of `id` on `step`, of either kind.
+    public func record(_ id: Int, at step: Int) -> Event? { events.first { $0.id == id && $0.step == step } }
 }
+
+/// MOTION's codes (motion.c motion_put): 0 done, 1 invalid (not a motion parameter, out of range), 2 all 64 used.
+public enum MotionRC: Int, Sendable { case done = 0, invalid = 1, full = 2 }
 
 /// MENU settings the editor protocol can set (editor_menu.c ED_MENU's ids, append-only).
 public enum SkiffMenu {
@@ -339,6 +363,34 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     /// A step byte's bit 6 is the id's bit 7.
     public func motion(track t: Int) async throws -> TrackMotion {
         let b = try await request(SkiffCmd.motion, [UInt8(t), 7], match: 1, "MOTION")
+        return try Self.parseMotion(b)
+    }
+
+    /// MOTION op 3 (a recorded change) or 5 (a lock, this step only) on `step` for `id`: a new record, or the one
+    /// there becomes this. The track's records after it, with their kinds.
+    public func setMotion(track t: Int, step: Int, id: Int, value: Int, lock: Bool) async throws -> (rc: MotionRC, motion: TrackMotion) {
+        let b = try await request(SkiffCmd.motion, [UInt8(t), lock ? 5 : 3, UInt8(step & 63 | (id >> 7 & 1) << 6), UInt8(id & 127)] + Frame.v14(value),
+                                  match: 1, "MOTION set", retries: 0)
+        let m = try Self.parseMotion(b)
+        if lock { return (MotionRC(rawValue: Int(b[1])) ?? .invalid, m) }
+        // op 3 replies without the kinds: read them again
+        return (MotionRC(rawValue: Int(b[1])) ?? .invalid, try await motion(track: t))
+    }
+
+    /// MOTION op 4: the record of `id` on `step` gone (either kind).
+    public func deleteMotion(track t: Int, step: Int, id: Int) async throws -> TrackMotion {
+        _ = try await request(SkiffCmd.motion, [UInt8(t), 4, UInt8(step & 63 | (id >> 7 & 1) << 6), UInt8(id & 127)],
+                              match: 1, "MOTION delete", retries: 0)
+        return try await motion(track: t)
+    }
+
+    /// MOTION op 6: the locks on `step` gone (127: on every step); its recorded changes stay.
+    public func clearLocks(track t: Int, step: Int) async throws -> TrackMotion {
+        let b = try await request(SkiffCmd.motion, [UInt8(t), 6, UInt8(step)], match: 1, "MOTION clear locks", retries: 0)
+        return try Self.parseMotion(b)
+    }
+
+    static func parseMotion(_ b: [UInt8]) throws -> TrackMotion {
         guard b.count >= 5 else { throw DecodeError.short(cmd: SkiffCmd.motion) }
         var r = ByteReader(Array(b[2...]), cmd: SkiffCmd.motion)
         let on = try r.u8() != 0, n = try r.u8()
@@ -352,7 +404,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         return TrackMotion(on: on, events: events)
     }
 
-    /// MOTION op 2: the track's motion dropped and off (on the FM-1, SAVE held undoes it). rc 0 ok, 3 a song playing.
+    /// MOTION op 2: the track's motion dropped and off (on the FM-1, SAVE held undoes it). Skiff answers rc 0.
     @discardableResult
     public func clearMotion(track t: Int) async throws -> Int {
         let b = try await request(SkiffCmd.motion, [UInt8(t), 2], match: 1, "MOTION clear", retries: 0)

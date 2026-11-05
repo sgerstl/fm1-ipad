@@ -21,7 +21,10 @@ struct PianoRoll: View {
     var body: some View {
         let t = session.tracks[track]
         let rows = Self.rows(t, keeping: ui.keptRows[track] ?? [])
-        let contentSize = CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(Self.gridHeight, CGFloat(rows.count) * grid.rowHeight))
+        // Skiff: the motion lanes under the velocity, the grid shorter by their height
+        let motion = session.dialect == .skiff
+        let gridHeight = motion ? max(200, Self.gridHeight - MotionLanes.height(session, ui, track: track) - 8) : Self.gridHeight
+        let contentSize = CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(gridHeight, CGFloat(rows.count) * grid.rowHeight))
         let first = Int((offset.x / grid.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / grid.rowHeight).rounded())
         let hidden = (above: topRow, below: max(0, rows.count - topRow - 11))
@@ -32,8 +35,7 @@ struct PianoRoll: View {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
                          detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
-            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track],
-                        motion: session.motion[track]?.steps ?? []) { ui.selectedStep[track] = $0 }
+            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
@@ -46,7 +48,7 @@ struct PianoRoll: View {
                     }
                 }
                 .offset(y: -offset.y)
-                .frame(width: 80, height: Self.gridHeight, alignment: .top)
+                .frame(width: 80, height: gridHeight, alignment: .top)
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
@@ -54,9 +56,9 @@ struct PianoRoll: View {
                                         rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth) {
                         PianoRollContent(grid: grid, look: look, session: session, ui: ui, track: track, rows: rows)
                     }
-                    EditorPlayhead(session: session, track: track, offsetX: offset.x, height: Self.gridHeight)
+                    EditorPlayhead(session: session, track: track, offsetX: offset.x, height: gridHeight)
                 }
-                .frame(width: grid.barWidth, height: Self.gridHeight)
+                .frame(width: grid.barWidth, height: gridHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .recessed()
                 .accessibilityElement(children: .contain)
@@ -73,6 +75,10 @@ struct PianoRoll: View {
                     .recessed()
                     .accessibilityHidden(true)
             }
+            if motion {
+                MotionLanes(session: session, ui: ui, track: track, offsetX: offset.x, width: grid.barWidth)
+            }
+            Spacer(minLength: 0)
         }
         .padding(12)
         .frame(height: PianoRoll.panelHeight)

@@ -66,3 +66,49 @@ extension SkiffScreenLinkTests {
         run.cancel()
     }
 }
+
+/// Motion as Skiff plays it (motion.c), and its editing ops against the fake.
+@Suite struct SkiffMotionTests {
+    @Test func whatAStepSounds() {
+        let m = TrackMotion(on: true, events: [.init(step: 2, id: 34, value: 40, lock: false), .init(step: 5, id: 34, value: 96, lock: false),
+                                               .init(step: 6, id: 34, value: 120, lock: true), .init(step: 3, id: 36, value: 10, lock: true)])
+        #expect(m.value(of: 34, at: 0, base: 64) == (64, .sound))           // each pass starts from the sound
+        #expect(m.value(of: 34, at: 2, base: 64) == (40, .recorded))
+        #expect(m.value(of: 34, at: 4, base: 64) == (40, .recorded))        // holds until the next change
+        #expect(m.value(of: 34, at: 6, base: 64) == (120, .lock))           // a lock wins on its step
+        #expect(m.value(of: 34, at: 7, base: 64) == (96, .recorded))        // … and only there
+        #expect(m.value(of: 36, at: 4, base: 0) == (0, .sound))             // a lock doesn't hold
+        #expect(m.ids == [34, 36])
+    }
+}
+
+extension SkiffScreenLinkTests {
+    @Test func motionEditsOnTheFake() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        try await waitFor(10) { if case .connected = s.status { true } else { false } }
+        #expect(await s.setMotion(track: 1, step: 4, id: 34, value: 90, lock: false) == .done)
+        #expect(await s.setMotion(track: 1, step: 7, id: 34, value: 20, lock: true) == .done)
+        #expect(s.motion[1]?.events.count == 2 && s.motion[1]?.record(34, at: 7)?.lock == true)
+        #expect(await s.setMotion(track: 1, step: 7, id: 34, value: 20, lock: false) == .done)   // the lock made to hold
+        #expect(s.motion[1]?.record(34, at: 7)?.lock == false && s.motion[1]?.events.count == 2)
+        _ = await s.setMotion(track: 1, step: 9, id: 35, value: 5, lock: true)
+        await s.clearLocks(track: 1, step: 9)
+        #expect(s.motion[1]?.record(35, at: 9) == nil)
+        await s.deleteMotion(track: 1, step: 4, id: 34)
+        #expect(s.motion[1]?.events.map(\.step) == [7])
+        await s.clearMotionLane(track: 1, id: 34)
+        #expect(s.motion[1]?.events.isEmpty == true)
+        // a knob turned while locking to a step: a lock there, the sound untouched
+        let before = s.params.count > 34 ? s.params[34] : 0
+        s.lockStep = 3
+        s.set(track: s.selectedTrack, param: 34, to: 77)
+        try await waitFor(5) { s.motion[s.selectedTrack]?.record(34, at: 3)?.lock == true }
+        #expect(s.params.count <= 34 || s.params[34] == before)
+        s.lockStep = nil
+        run.cancel()
+    }
+}

@@ -31,18 +31,18 @@ struct KnobSpec {
         let t = session.tracks[k]
         let pct = t.level * 100 / 127
         return [
-            KnobSpec(id: "home0", colour: Theme.knob[0], label: "SWING", value: session.swing, range: 0...100, stepperStep: 5,
+            KnobSpec(id: "home0", colour: Theme.text, label: "SWING", value: session.swing, range: 0...100, stepperStep: 5,
                      shown: "\(session.swing)", spoken: "\(session.swing)", bipolar: false, defaultValue: 0) { session.set(global: Global.swing, to: $0) },
-            KnobSpec(id: "home1", colour: Theme.knob[1], label: "LEVEL", value: t.mute ? 0 : t.level, range: 0...127, stepperStep: 8,
+            KnobSpec(id: "home1", colour: Theme.text, label: "LEVEL", value: t.mute ? 0 : t.level, range: 0...127, stepperStep: 8,
                      shown: t.mute ? "0" : "\(pct)", spoken: t.mute ? "muted" : "\(pct) percent", bipolar: false,
                      defaultValue: session.trackDesc(Param.level)?.defaultValue) { v in
                 // as on the device, turning LEVEL unmutes the track
                 if t.mute { session.set(track: k, param: Param.mute, to: 0) }
                 session.set(track: k, param: Param.level, to: v)
             },
-            KnobSpec(id: "home2", colour: Theme.knob[2], label: "STEPS", value: t.length, range: 1...session.stepCount, stepperStep: 1,
+            KnobSpec(id: "home2", colour: Theme.text, label: "STEPS", value: t.length, range: 1...session.stepCount, stepperStep: 1,
                      shown: "\(t.length)", spoken: "\(t.length) steps", bipolar: false, defaultValue: 16) { session.set(track: k, param: Param.length, to: $0) },
-            KnobSpec(id: "home3", colour: Theme.knob[3], label: "PAN", value: t.pan, range: -64...63, stepperStep: 4,
+            KnobSpec(id: "home3", colour: Theme.text, label: "PAN", value: t.pan, range: -64...63, stepperStep: 4,
                      shown: "\(t.pan)", spoken: t.pan == 0 ? "centre" : t.pan < 0 ? "\(-t.pan) left" : "\(t.pan) right",
                      bipolar: true, defaultValue: 0) { session.set(track: k, param: Param.pan, to: $0) },
         ]
