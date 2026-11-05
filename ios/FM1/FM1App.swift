@@ -164,6 +164,10 @@ final class EditorUI {
     var pageFromDevice = false
     /// Skiff's GLO pages: the Mixer tab's section (the strips, Delay, Reverb, Chorus, Global), as GLO steps them.
     var mixerSection: SkiffButtonMap.MixerTab = .mixer
+    /// The Song tab's whole-track controls (SWING LEVEL STEPS PAN): open under the selected lane's control, whose
+    /// frame (global) the lane header keeps here.
+    var trackControlsOpen = false
+    var trackControlsAnchor: CGRect = .zero
     /// Motion lanes added with + Lane, per track (parameters with no records yet).
     var addedLanes: [Int: [Int]] = [:]
     var projectsOpen = false

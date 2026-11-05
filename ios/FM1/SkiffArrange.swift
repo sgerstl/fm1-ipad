@@ -247,7 +247,7 @@ struct SkiffArrangePage: View {
                     Color.clear.frame(height: 24)
                     let plans = section.map { _ in sectionPlans(.duplicateAfter) } ?? []
                     ForEach(0..<session.trackCount, id: \.self) { t in
-                        LaneHeader(session: session, store: store, track: t, note: section.flatMap { s in note(t, plans, s) })
+                        LaneHeader(session: session, store: store, track: t, note: section.flatMap { s in note(t, plans, s) }, ui: ui)
                     }
                 }
                 .frame(width: Self.headerWidth)
@@ -436,6 +436,8 @@ struct LaneHeader: View {
     let track: Int
     /// While a section is picked: what it does to this track (a split, the cost of snapping, left out).
     var note: String?
+    /// The Song tab's: the selected lane's header carries the whole-track controls' key.
+    var ui: EditorUI? = nil
     @Environment(\.arrangeLaneHeight) private var laneHeight
     @Environment(\.arrangeCompact) private var compact
 
@@ -448,19 +450,24 @@ struct LaneHeader: View {
     /// The Song tab: the chip and the name on one line, as tall as the lane allows.
     private var compactBody: some View {
         let selected = session.selectedTrack == track
-        return Button { session.select(track: track) } label: {
-            HStack(spacing: 8) {
-                TrackChip(track: track, selected: selected).frame(width: 28, height: 28)
-                Text(note ?? Entries.trackName(track, session: session)).font(.system(size: 13, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected || note != nil ? Theme.text : Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 0)
+        let keyed = selected && ui != nil && note == nil
+        return HStack(spacing: 0) {
+            Button { session.select(track: track) } label: {
+                HStack(spacing: 8) {
+                    TrackChip(track: track, selected: selected).frame(width: 28, height: 28)
+                    Text(note ?? Entries.trackName(track, session: session)).font(.system(size: 13, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected || note != nil ? Theme.text : Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .frame(width: SkiffArrangePage.headerWidth - 8, height: laneHeight, alignment: .leading)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))")
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            if keyed, let ui { TrackControlsKey(ui: ui, height: laneHeight) }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .frame(width: SkiffArrangePage.headerWidth - 8, height: laneHeight, alignment: .leading)
     }
 
     private func fullBody(_ tr: TrackState, _ used: Int) -> some View {

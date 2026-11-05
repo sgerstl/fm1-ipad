@@ -254,6 +254,8 @@ enum SkiffNavigator {
     @MainActor private static func go(_ p: Page, _ ui: EditorUI) { if ui.page != p { ui.pageFromDevice = true; ui.page = p } }
 
     @MainActor static func flash(_ t: FlashTarget, _ ui: EditorUI) {
+        // the Song tab keeps the whole-track controls in a popover: PATTERN opens it
+        if t == .trackPanel, ui.songTab { ui.trackControlsOpen = true; return }
         ui.flash = Flash(target: t, id: (ui.flash?.id ?? 0) + 1)
     }
 }

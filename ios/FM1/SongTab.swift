@@ -119,7 +119,6 @@ struct PatternPane: View {
                         else { SkiffStepInspector(session: session, ui: ui) }
                     }
                     .flashRing(ui, .stepPanel)
-                    TrackPanel(session: session, ui: ui).flashRing(ui, .trackPanel)
                 }
                 .frame(width: Overview.boxWidth, height: editor)
                 ZStack {
