@@ -32,7 +32,7 @@ targets:
         PRODUCT_NAME: FM1
         TARGETED_DEVICE_FAMILY: "1,2"          # iPhone too (2026-11-04), landscape only
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Jib
+        INFOPLIST_KEY_CFBundleDisplayName: Lupe
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
@@ -43,7 +43,7 @@ targets:
         # the launch screen: Lupe's icon at home-screen size on #0A0A0B (merged into the generated Info.plist)
         INFOPLIST_FILE: FM1/LaunchScreen-Info.plist
         INFOPLIST_KEY_UIStatusBarHidden: YES
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Jib plays the FM-1's sound through the iPad. iOS counts the FM-1's USB audio as a microphone."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Lupe plays the FM-1's sound through the iPad. iOS counts the FM-1's USB audio as a microphone."
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
