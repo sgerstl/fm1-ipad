@@ -84,6 +84,7 @@ struct PhoneAppView: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: ui.sampler)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
+        .overlay { TrackPickerLayer(session: session, ui: ui) }
         .overlay { GrownKnobLayer(session: session, ui: ui) }
         .coordinateSpace(name: AppView.space)
         // the same upkeep as the iPad's AppView: projects, the screen staying on, audio, Now Playing
@@ -118,10 +119,16 @@ struct PhoneTopBar: View {
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
     private var recording: Bool { session.recording || session.song.songRecording }
     @State private var chipFrames: [Int: CGRect] = [:]
+    @State private var pressAt = CGPoint(x: 40, y: 30)
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) { ForEach(session.trackIndices, id: \.self) { chip($0) } }
+            // more than four tracks (Skiff's six): one chip, the current track's; a tap opens all of them by
+            // the finger (Scott, 2026-11-05). SLOOP's four stay four chips.
+            HStack(spacing: 4) {
+                if session.trackCount > 4 { chip(session.selectedTrack, picker: true) }
+                else { ForEach(session.trackIndices, id: \.self) { chip($0) } }
+            }
                 .disabled(!isConnected)
                 .opacity(isConnected ? 1 : 0.45)
             if isConnected { tabs } else { Spacer() }
@@ -133,9 +140,11 @@ struct PhoneTopBar: View {
 
     // A track: the selected one lit in its colour (dark number on it, as the iPad's chip), the others
     // raised with a bar of their colour under the number.
-    private func chip(_ t: Int) -> some View {
+    private func chip(_ t: Int, picker: Bool = false) -> some View {
         let on = session.selectedTrack == t
-        return Button { session.select(track: t) } label: {
+        return Button {
+            if picker { ui.trackPicker = ui.trackPicker == nil ? pressAt : nil } else { session.select(track: t) }
+        } label: {
             VStack(spacing: 5) {
                 Text("\(t + 1)").font(.system(size: 15, weight: .semibold))
                 Capsule().fill(on ? Theme.onColour.opacity(0.5) : Theme.track[t]).frame(width: 16, height: 3)
@@ -157,6 +166,8 @@ struct PhoneTopBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
+        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space)).onChanged { pressAt = $0.location })
+        .accessibilityHint(picker ? "Shows all \(session.trackCount) tracks to pick another" : "")
         // held: the track's menu (its sound, a sample, clearing), beside the chip
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
             let f = chipFrames[t] ?? .zero
@@ -458,5 +469,52 @@ struct PhoneDrumGrid: View {
                 .accessibilityLabel("Drum steps")
         }
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
+    }
+}
+
+/// The phone's tracks, by the finger that tapped the one chip: each track a chiclet, the current one lit
+/// in its colour and lifted; a tap picks it, a tap anywhere else closes. Elevation 3, as any popup at the
+/// finger. Kept on the screen.
+struct TrackPickerLayer: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    @Environment(\.canvasSize) private var canvas
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if let at = ui.trackPicker {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture { ui.trackPicker = nil }
+                    .accessibilityHidden(true)
+                let width = CGFloat(session.trackCount) * 48 + 12
+                HStack(spacing: 4) {
+                    ForEach(session.trackIndices, id: \.self) { t in
+                        Button {
+                            session.select(track: t)
+                            ui.trackPicker = nil
+                        } label: {
+                            TrackChip(track: t, size: 32, selected: session.selectedTrack == t)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PressSink())
+                        .accessibilityLabel("Track \(t + 1), \(session.tracks[t].displayName)")
+                        .accessibilityAddTraits(session.selectedTrack == t ? .isSelected : [])
+                    }
+                }
+                .padding(6)
+                .elevated(.held, radius: 12)
+                // beside the finger: just under it, starting at it, inside the screen
+                .offset(x: min(max(at.x - 24, 8), canvas.width - width - 8), y: min(at.y + 28, canvas.height - 64))
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Tracks")
+                .accessibilityAddTraits(.isModal)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackPicker)
     }
 }

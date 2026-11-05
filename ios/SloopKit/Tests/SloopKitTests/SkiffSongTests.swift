@@ -181,3 +181,19 @@ import Testing
         try await waitFor(3) { fake.steps[3][5][8] == 0 }
     }
 }
+
+extension SkiffKitTests {
+    @Test func notesShowOnTheirLanesAndAnEditOwnsTheLane() {
+        // a kick note (36) and a low tom (41, on TOM): the grid shows KICK and TOM
+        var s = SynthStep(notes: [36, 41], time: .note, accent: false, slide: false, velocity: 100)
+        s.extra = [0, 0, 0, 100, 1, 0, 0, 32, 0]
+        #expect(s.kitLanes.lanes == [0, 5] && s.hits.lanes == [])
+        #expect(SynthStep.lane(ofNote: 49) == 7 && SynthStep.lane(ofNote: 100) == SynthStep.lane(ofNote: 40))
+        // turning TOM off takes its note; KICK keeps its note; adding SNARE is a hit
+        let t = s.withHits(s.kitLanes.setting(5, on: false).setting(1, on: true))
+        #expect(t.notes == [36] && t.hits.lanes == [1] && t.kitLanes.lanes == [0, 1])
+        // accenting KICK makes the note its hit
+        let u = t.withHits(t.kitLanes.setting(0, on: true, level: 3))
+        #expect(u.notes.isEmpty && u.hits.lanes == [0, 1] && u.hits.level(0) == 3 && u.time == .note)
+    }
+}

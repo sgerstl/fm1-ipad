@@ -378,8 +378,19 @@ public struct SynthStep: Equatable, Sendable {
 
 // Skiff's lane hits (EDITOR_PROTOCOL.md "v5: the drum grid"): after the velocity, `hit & 127`, `acc & 127`,
 // `(hit >> 7) | (acc >> 7) << 1`, then the chance and the step's ratchet 1...4. As a DrumStep: a lane on,
-// an accented hit at level 3 (hard), the step's ratchet on each lane.
+// an accented hit at level 3 (hard), the step's ratchet on each lane. A kit track's grid also shows each
+// note on the lane it strikes, and editing a lane makes that lane's notes its hit (firmware ui.c grid_own).
 extension SynthStep {
+    /// The lane each GM note 35...81 strikes (firmware eng_drum.c DRUM_GM through DV_TYPE_LANE); others
+    /// fold into their octave of 36...47.
+    static let gmLane: [Int] = [0, 0, 6, 1, 2, 1, 5, 3, 5, 3, 5, 4, 5, 5, 7, 5, 7, 7, 7, 3, 7, 7, 7, 6,
+                                7, 5, 5, 5, 5, 5, 5, 5, 7, 7, 3, 3, 6, 6, 3, 3, 6, 6, 6, 5, 5, 7, 7]
+    public static func lane(ofNote note: Int) -> Int {
+        let n = (35...81).contains(note) ? note : 36 + ((note - 36) % 12 + 12) % 12
+        return gmLane[n - 35]
+    }
+
+    /// The lane hits alone.
     public var hits: DrumStep {
         guard extra.count >= 3 else { return .empty }
         let hit = Int(extra[0]) | (Int(extra[2]) & 1) << 7, acc = Int(extra[1]) | (Int(extra[2]) >> 1 & 1) << 7
@@ -389,15 +400,29 @@ extension SynthStep {
         return d
     }
 
-    /// The step with these lanes as its hits; a step with hits plays them as a NOTE (a TIE or a REST plays
-    /// none), and one with neither hits nor notes goes back to a rest. A lane's ratchet is the step's.
+    /// What a kit track's grid shows: the hits, and the lanes the step's notes strike (a NOTE step only).
+    public var kitLanes: DrumStep {
+        var d = hits
+        guard time == .note else { return d }
+        let rat = extra.count >= 5 ? max(0, min(3, Int(extra[4]) - 1)) : 0
+        for n in notes { let l = Self.lane(ofNote: n); if !d.has(l) { d = d.setting(l, on: true, level: 0, ratchet: rat) } }
+        return d
+    }
+
+    /// The step with these lanes. A lane that changes is the hit's alone from then on (its notes go into
+    /// the hit, as the device does); unchanged lanes keep their notes. A step with hits plays as a NOTE
+    /// (a TIE or REST plays none); one with neither goes back to a rest. A lane's ratchet is the step's.
     public func withHits(_ d: DrumStep) -> SynthStep {
         var s = self
+        let was = kitLanes, old = hits
         var hit = 0, acc = 0, rat = 0
-        for l in 0..<8 where d.has(l) {
-            hit |= 1 << l
-            if d.level(l) == 3 { acc |= 1 << l }
-            rat = max(rat, d.ratchet(l))
+        for l in 0..<8 {
+            let changed = was.has(l) != d.has(l) || (d.has(l) && (was.level(l) != d.level(l) || was.ratchet(l) != d.ratchet(l)))
+            let on = changed ? d.has(l) : old.has(l)
+            let lvl = changed ? d.level(l) : old.level(l)
+            if changed { s.notes.removeAll { Self.lane(ofNote: $0) == l } }
+            if on { hit |= 1 << l; if lvl == 3 { acc |= 1 << l } }
+            if d.has(l) { rat = max(rat, d.ratchet(l)) }
         }
         var x = extra
         if x.count < 3 { x = [0, 0, 0] }
@@ -406,7 +431,8 @@ extension SynthStep {
         s.extra = x
         if hit != 0, s.time != .note { s.time = .note; s.velocity = s.velocity > 0 ? s.velocity : 100 }
         if hit == 0, s.notes.isEmpty, s.time == .note { s.time = .rest }
-        if !s.notes.isEmpty || hit != 0 { s.ratchets = Array(repeating: rat, count: s.notes.count) }
+        s.levels = Array(s.levels.prefix(s.notes.count))
+        s.ratchets = Array(repeating: rat, count: s.notes.count)
         return s
     }
 }

@@ -106,6 +106,7 @@ final class EditorUI {
     /// A bar picked on the timeline: the grid scrolls there.
     var viewJump: ViewJump?
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
+    var trackPicker: CGPoint?                    // the phone's one chip tapped (more than four tracks): the tracks, there
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: DeviceSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = .engine(0)

@@ -40,7 +40,7 @@ public struct TrackState: Equatable, Sendable {
     }
 
     /// Each step's drum lanes: the drum track's own (SLOOP), else the lane hits a Skiff step carries.
-    public var gridSteps: [DrumStep] { isDrums ? drumSteps : steps.map(\.hits) }
+    public var gridSteps: [DrumStep] { isDrums ? drumSteps : steps.map(\.kitLanes) }
 
     public var displayName: String {
         if isDrums { return presetName.isEmpty ? "Drums" : "Drums · \(presetName.capitalized)" }
