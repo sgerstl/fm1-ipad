@@ -65,9 +65,9 @@ let PAGES = ["ENV", "ENV 2", "LFO", "LFO 2", "MOD", "FX", "DRIVE", "INSERT", "IN
              "PATTERN", "AUTOMATION", "SONG"]
 let LAYERS = ["-", "FX", "GLO", "SCL", "EDIT", "SEQ", "REC", "PERF"]
 func show(_ s: [UInt8]) -> String {
-    guard s.count == 6 else { return "bad \(hex(s))" }
+    guard s.count == 8 else { return "bad \(hex(s))" }
     let pg = Int(s[1]) < PAGES.count ? PAGES[Int(s[1])] : "?"
-    return "home \(s[0]) page \(s[1]) \(pg) layer \(LAYERS[min(Int(s[2]), 7)]) menu \(s[3]) track \(s[4]) flags \(s[5])"
+    return "home \(s[0]) page \(s[1]) \(pg) layer \(LAYERS[min(Int(s[2]), 7)]) menu \(s[3]) track \(s[4]) flags \(s[5]) cursor \(s[6] == 127 ? "-" : String(s[6]))/\(s[7] == 127 ? "-" : String(s[7]))"
 }
 var fails = 0
 func check(_ what: String, _ ok: Bool) { print(String(format: "%-66@ %@", what as NSString, ok ? "ok" : "FAIL")); if !ok { fails += 1 } }
@@ -78,7 +78,7 @@ func counts(_ f: [(cmd: UInt8, body: [UInt8])]) -> String {
 // INFO: the tag last
 if let info = ask(1) {
     let t = Array(info.suffix(3))
-    check("INFO ends with 56 01 01 (got \(hex(t)))", t == [0x56, 1, 1])
+    check("INFO ends with 56 01 02 (got \(hex(t)))", t == [0x56, 1, 2])
     print("INFO version:", String(bytes: info.prefix(while: { $0 != 0 }), encoding: .ascii) ?? "?")
 }
 let buttons = ["FX", "SCL", "ENV", "LFO", "EDIT", "GLO", "SAVE", "ARP", "SEQ", "HOME"]
@@ -104,7 +104,7 @@ for b in buttons + ["FX", "FX", "SEQ", "SEQ"] {
 }
 say("press FX"); nap(350); send(25); _ = take()
 say("hold FX 900"); nap(650); send(25); nap(650); send(25); nap(30); f = take().filter { $0.cmd == 90 }
-check("hold FX: the layer pushed open and closed (\(f.count) pushes)", f.contains { $0.body.count == 6 && $0.body[2] == 1 } && f.last?.body[2] == 0)
+check("hold FX: the layer pushed open and closed (\(f.count) pushes)", f.contains { $0.body.count == 8 && $0.body[2] == 1 } && f.last?.body[2] == 0)
 for x in f { print("   ", show(x.body)) }
 say("hold HOME 900"); nap(650); send(25); nap(650); send(25); nap(30); f = take().filter { $0.cmd == 90 }
 check("hold HOME: pushes (\(f.count))", !f.isEmpty)
@@ -118,7 +118,7 @@ func shot(_ name: String) { say("screen \(shots)/\(name).ppm"); nap(300); send(2
 shot("0-before")
 for (i, pg) in [(31, "DELAY"), (43, "PATTERN"), (5, "FX"), (37, "PATTERNS"), (127, "HOME")] {
     let r = ask(91, [UInt8(pg == "HOME" ? 127 : i)])
-    let ok = r?.count == 6 && (pg == "HOME" ? r![0] == 1 : r![0] == 0 && r![1] == UInt8(i))
+    let ok = r?.count == 8 && (pg == "HOME" ? r![0] == 1 : r![0] == 0 && r![1] == UInt8(i))
     check("SCREEN_GOTO \(pg): \(r.map(show) ?? "no reply")", ok)
     nap(150); send(25); nap(30)
     check("   no push echoing it", !take().contains { $0.cmd == 90 })
@@ -127,9 +127,30 @@ for (i, pg) in [(31, "DELAY"), (43, "PATTERN"), (5, "FX"), (37, "PATTERNS"), (12
 let before = ask(90)
 let lanes = ask(91, [18])
 check("SCREEN_GOTO LANES on the track's own engine: \(lanes.map(show) ?? "no reply") (refused unless DRUM)", lanes == before)
-check("SCREEN (90) answers", before?.count == 6)
+check("SCREEN (90) answers", before?.count == 8)
 say("press GLO"); nap(350); send(25); nap(30)
 check("still watching after the GOTOs: a button still pushes", take().contains { $0.cmd == 90 })
+
+// E: the page's cursor (56 01 2): MOD's route turned on the device, then set from here
+_ = ask(91, [4])
+send(25); nap(50)
+for n in [1, 1, -1] {
+    say("turn 3 \(n)"); nap(300); send(25); nap(30)
+    let p = take().filter { $0.cmd == 90 }
+    check("KNOB 1 \(n > 0 ? "+" : "-")1 on MOD: \(p.last.map { show($0.body) } ?? "no push")", p.count == 1 && p[0].body[1] == 4)
+}
+shot("mod-before")
+let r9 = ask(91, [4, 9])
+check("SCREEN_GOTO MOD route 9: \(r9.map(show) ?? "no reply")", r9?.count == 8 && r9![1] == 4 && r9![6] == 9)
+send(25); nap(50)
+check("   no push echoing it", !take().contains { $0.cmd == 90 })
+shot("mod-route9")
+let rfx = ask(91, [5, 2])
+check("SCREEN_GOTO FX with a cursor: refused, still MOD (\(rfx.map(show) ?? "no reply"))", rfx?[1] == 4)
+let rp = ask(91, [37, 40])
+check("SCREEN_GOTO PATTERNS 40: \(rp.map(show) ?? "no reply")", rp?[1] == 37 && rp?[6] == 40)
+shot("patterns-40")
+send(25); nap(50)
 
 // D: WATCH 1: pushes stop
 check("WATCH 1 replies 1", ask(22, [1]) == [1])
