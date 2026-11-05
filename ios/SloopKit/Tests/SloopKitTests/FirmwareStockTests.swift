@@ -164,3 +164,72 @@ import Testing
         #expect(dev.received.allSatisfy { $0.frame == FirmwareInstaller.hsQuery })
     }
 }
+
+/// An FM-1 on M-VAVE's V16, as a new unit comes (2026-10-21 on), most likely with the UC25HQ80 flash. V16 still takes
+/// a custom firmware's loader in step 1 (Skiff #64; SLOOP #239's loader appeared); SLOOP 2.8.4's loader turns the
+/// newer chip down after 3 reads (its ldr_core.c), Skiff 2.2's knows both.
+@Suite(.serialized) struct FirmwareV16Tests {
+    static let skiff = FirmwareInstallTests.skiff
+    static let sloop = FirmwareInstallTests.sloop
+    static let stock = FirmwareStockTests.stock
+    static func installer(_ dev: FakeFM1) -> FirmwareInstaller { FirmwareInstallTests.installer(dev) }
+
+    static func newUnit(running: FirmwarePackage? = nil) -> FakeFM1 {
+        let dev = FakeFM1(running: running, stockIdentity: "FM-1_016", startedOn: 16)
+        dev.newFlashChip = true
+        dev.timeScale = 0.02
+        dev.knows(skiff, sloop, stock)
+        return dev
+    }
+
+    @Test func theRules() {
+        let v16 = DeviceIdentity("FM-1_016")!, v15 = DeviceIdentity("FM-1_015")!, skiffOn = DeviceIdentity("FM-1_722")!
+        #expect(FirmwareInstaller.refusal(for: .skiff, running: v16) == nil)
+        #expect(FirmwareInstaller.refusal(for: .sloop, running: v16)?.code == .flashChip)
+        #expect(FirmwareInstaller.refusal(for: .stock, running: v16)?.code == .otherStock)
+        #expect(FirmwareInstaller.refusal(for: .sloop, running: v15) == nil)
+        #expect(FirmwareInstaller.refusal(for: .stock, running: v15) == nil)
+        #expect(FirmwareInstaller.refusal(for: .sloop, running: skiffOn) == nil)
+        #expect(FirmwareInstaller.refusal(for: .sloop, running: nil) == nil)
+    }
+
+    @Test func stockV16ToSkiff() async throws {
+        let dev = Self.newUnit()
+        #expect(dev.portName == "FM-1")
+        #expect(try await Self.installer(dev).install(Self.skiff) == "FM-1_722")
+        #expect(dev.badAnswers == 0)
+    }
+
+    @Test(arguments: ["sloop", "stock"])
+    func stockV16RefusesUpFront(_ what: String) async throws {
+        let dev = Self.newUnit()
+        do { try await Self.installer(dev).install(what == "sloop" ? Self.sloop : Self.stock); Issue.record("no error") }
+        catch let e as InstallError {
+            #expect(e.code == (what == "sloop" ? .flashChip : .otherStock) && !e.inUpdateMode)
+            if what == "sloop" { #expect(e.message.contains("Install Skiff 2.2")) }
+        }
+        #expect(dev.received.allSatisfy { $0.frame == FirmwareInstaller.hsQuery })
+        #expect(dev.identity == "FM-1_016")
+    }
+
+    /// A new unit that already runs Skiff (so nothing says V16 any more): SLOOP 2.8.4's loader turns it down, the FM-1
+    /// comes back on Skiff, and Jib says so at once instead of waiting for a loader that won't return.
+    @Test func sloopsLoaderTurnsTheNewChipDown() async throws {
+        let dev = Self.newUnit(running: Self.skiff)
+        let start = ContinuousClock.now
+        do { try await Self.installer(dev).install(Self.sloop); Issue.record("no error") } catch let e as InstallError {
+            #expect(e.code == .flashChip && !e.inUpdateMode && e.served <= 3)
+            #expect(e.message.hasPrefix("Nothing was written") && e.message.contains("FM-1_722"))
+        }
+        #expect(ContinuousClock.now - start < .seconds(1))     // waitResume is 1 s in the tests
+        #expect(dev.identity == "FM-1_722" && dev.record == nil && dev.stats.sectorsWritten == 0)
+        // and Skiff still installs over it (here: over itself)
+        #expect(try await Self.installer(dev).install(Self.skiff) == "FM-1_722")
+    }
+
+    @Test func theOldChipStillTakesSloop() async throws {
+        let dev = Self.newUnit(running: Self.skiff)
+        dev.newFlashChip = false
+        #expect(try await Self.installer(dev).install(Self.sloop) == "FM-1_900")
+    }
+}
