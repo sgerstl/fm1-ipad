@@ -171,7 +171,6 @@ struct PressSink: ButtonStyle {
 /// of the connection menu on the iPad and the ⋯ menu on the phone, the app's only settings menus.
 struct DeveloperMenu: View {
     @AppStorage(Look.styleKey) private var style = LookStyle.flat
-    @AppStorage(Look.strengthKey) private var strength = ElevationStrength.medium
     @Environment(FirmwareCentre.self) private var firmware
 
     var body: some View {
@@ -181,11 +180,6 @@ struct DeveloperMenu: View {
             Picker("Look", selection: $style) {
                 Text("Flat").tag(LookStyle.flat)
                 Text("Physical").tag(LookStyle.physical)
-            }
-            if style == .flat {
-                Picker("Elevation", selection: $strength) {
-                    ForEach(ElevationStrength.allCases) { Text($0.rawValue.capitalized).tag($0) }
-                }
             }
         }
         #endif

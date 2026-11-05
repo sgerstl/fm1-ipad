@@ -175,5 +175,38 @@ public enum SongSections {
         guard es.count <= 16 else { return (index, edges[k], split, nil) }
         return (index, edges[k], split, es + Array(repeating: .empty, count: 16 - es.count))
     }
+
+    /// A block moved within its track (Scott, 2026-11-05: hold, then drag). Lists have no gaps, so a move is
+    /// a reorder: the blocks behind it close up, the ones where it lands move over, a chain moves whole.
+    /// `to` is its place among the other blocks (0: first; their count: after the last). Past the end,
+    /// `restPasses` passes of REST hold the gap, so it plays where it was dropped (16 passes an entry).
+    public static func move(list: SongList, blocks: [SongBlock], block b: Int, to k: Int, restPasses: Int = 0) -> SongMove {
+        let lead = list.span?.lowerBound ?? 0
+        let es = unchainDangling(list.entries)
+        var groups = blocks.map { Array(es[$0.entries]) }
+        guard groups.indices.contains(b) else { return SongMove(index: 0, rests: 0, result: nil, unchanged: true) }
+        let moving = groups.remove(at: b)
+        let at = max(0, min(k, groups.count))
+        let rests = at == groups.count ? stride(from: restPasses, to: 0, by: -16).map { SongEntry(pattern: SongEntry.rest, reps: min(16, $0)) } : []
+        let index = lead + groups[..<at].reduce(0) { $0 + $1.count } + rests.count
+        if at == b && rests.isEmpty {
+            return SongMove(index: blocks[b].entries.lowerBound, rests: 0, result: list.entries, unchanged: true)
+        }
+        groups.insert(rests + moving, at: at)
+        // an empty entry that was a rest inside the list and now stands at an edge would be passed over
+        let flat = unchainDangling(restsAtEdges(groups.flatMap { $0 }, range: 0..<groups.reduce(0) { $0 + $1.count }))
+        let out = Array(repeating: SongEntry.empty, count: lead) + flat
+        guard out.count <= 16 else { return SongMove(index: index, rests: rests.count, result: nil, unchanged: false) }
+        return SongMove(index: index, rests: rests.count, result: out + Array(repeating: .empty, count: 16 - out.count), unchanged: false)
+    }
+}
+
+/// What moving a block does: where its first entry lands, the RESTs put in past the end, the list after
+/// (nil: more than 16 entries), and whether anything changes at all.
+public struct SongMove: Equatable, Sendable {
+    public var index: Int
+    public var rests: Int
+    public var result: [SongEntry]?
+    public var unchanged: Bool
 }
 

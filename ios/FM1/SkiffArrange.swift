@@ -16,6 +16,12 @@ struct SkiffArrangePage: View {
     /// A pattern being dragged from the bin (set when the drag starts), and where it would go.
     @State private var dragPattern: Int?
     @State private var dropAt: DropSpot?
+    /// A block held (lifted, the lanes don't scroll), where it would move to, and its menu once let go.
+    @State private var lifted: EntryRef?
+    @State private var moveAt: MoveSpot?
+    @State private var held: HeldBlock?
+    @State private var pageFrame: CGRect = .zero
+    @AccessibilityFocusState private var blockFocus: EntryRef?
     /// A bar range across the lanes (board 3): its first bar and the bar after its last, 0-based.
     @State private var section: SectionRange?
     @State private var leftOut: Set<Int> = []
@@ -43,8 +49,8 @@ struct SkiffArrangePage: View {
                                leftOut: $leftOut, busy: store.busy || store.offline,
                                set: { section = $0 }, apply: { applySection($0) }, cancel: { section = nil; leftOut = [] })
                     if let r = store.refusal, r.entry == nil { RefusalLine(refusal: r, session: session, store: store) }
-                } else if let d = dropAt {
-                    Text(d.text).font(.system(size: 13)).padding(.horizontal, 12).frame(height: 32)
+                } else if let line = dropAt?.text ?? moveAt?.text {
+                    Text(line).font(.system(size: 13)).padding(.horizontal, 12).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
                         .padding(.leading, Self.headerWidth)
                 } else if let r = store.refusal, r.entry == nil || selection == nil {
@@ -57,6 +63,8 @@ struct SkiffArrangePage: View {
                 .frame(width: Self.binWidth)
         }
         .overlay(alignment: .top) { if store.offline { OfflineBar(session: session) } }
+        .overlay { holdMenu }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pageFrame = $0 }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         // a change that would erase a pattern asks first (CLEAR erases one nothing else uses)
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
@@ -68,6 +76,38 @@ struct SkiffArrangePage: View {
             }
             Button("Cancel", role: .cancel) { store.confirmation = nil }
         } message: { c in Text(c.message) }
+    }
+
+    // MARK: The hold menu (canvas board 2): Jib's own, at the finger, rows 52 pt high
+
+    @ViewBuilder private var holdMenu: some View {
+        if let h = held, let list = store.song?.tracks[safe: h.ref.track],
+           let b = store.blocks(h.ref.track).first(where: { $0.entries.contains(h.ref.entry) }) {
+            let close = {
+                held = nil
+                selection = h.ref
+                blockFocus = h.ref                      // focus goes back to the block
+            }
+            GeometryReader { g in
+                ZStack(alignment: .topLeading) {
+                    // a tap anywhere else closes it
+                    Color.clear.contentShape(Rectangle()).onTapGesture { close() }
+                        .accessibilityHidden(true)
+                    HoldMenu(session: session, store: store, ui: ui, track: h.ref.track, block: b, list: list,
+                             selection: $selection, close: close)
+                        .fixedSize()
+                        .alignmentGuide(.leading) { d in
+                            let x = h.at.x - pageFrame.minX - 24
+                            return -min(max(0, x), g.size.width - d.width)
+                        }
+                        .alignmentGuide(.top) { d in
+                            // below the finger, or above it where it wouldn't fit
+                            let y = h.at.y - pageFrame.minY
+                            return -(y + 16 + d.height <= g.size.height ? y + 16 : max(0, y - 16 - d.height))
+                        }
+                }
+            }
+        }
     }
 
     // MARK: Tool row: the song's length, the warning when lanes end apart, zoom
@@ -85,6 +125,16 @@ struct SkiffArrangePage: View {
                 Task { await store.send(.song(SongMode(rawValue: k) ?? .on)) }
             }
             Spacer(minLength: 8)
+            if !store.undoStack.isEmpty {
+                // Jib's own undo: the lists before the last change (a delete, a move, a section)
+                Button { Task { await store.undo() } } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward").font(.system(size: 15))
+                        .padding(.horizontal, 14).frame(height: 44).raisedKey()
+                }
+                .buttonStyle(PressSink())
+                .keyboardShortcut("z", modifiers: .command)
+                .disabled(store.busy || store.offline)
+            }
             if let w = loopApartWarning {
                 Label(w, systemImage: "exclamationmark.triangle")
                     .font(.system(size: 13))
@@ -146,7 +196,8 @@ struct SkiffArrangePage: View {
                               selectBlock: { selection = nil })
                         ForEach(0..<session.trackCount, id: \.self) { t in
                             Lane(session: session, store: store, track: t, barWidth: barWidth, width: contentWidth,
-                                 selection: $selection, dragPattern: $dragPattern, dropAt: $dropAt, ui: ui,
+                                 selection: $selection, dragPattern: $dragPattern, dropAt: $dropAt, lifted: $lifted, moveAt: $moveAt,
+                                 held: $held, focus: $blockFocus, ui: ui,
                                  bracket: bracket(t))
                         }
                     }
@@ -157,6 +208,7 @@ struct SkiffArrangePage: View {
                     .frame(width: contentWidth, alignment: .leading)
                 }
                 .scrollIndicators(.hidden)
+                .scrollDisabled(lifted != nil)
             }
             .opacity(store.offline ? 0.5 : 1)
         }
@@ -176,10 +228,18 @@ struct SkiffArrangePage: View {
                 Button(keys[i].1) { _ = key(keys[i].0) }
                     .keyboardShortcut(keys[i].0, modifiers: [])
             }
+            // ⌥← ⌥→ move the selected block one place, as Move earlier and Move later do
+            Button("Move earlier") { moveSelected(by: -1) }.keyboardShortcut(.leftArrow, modifiers: .option)
+            Button("Move later") { moveSelected(by: 1) }.keyboardShortcut(.rightArrow, modifiers: .option)
         }
         .opacity(0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func moveSelected(by delta: Int) {
+        guard let sel = selection, let b = store.blocks(sel.track).first(where: { $0.entries.contains(sel.entry) }) else { return }
+        if let i = ArrangeEdits(session: session, store: store).move(sel.track, b, by: delta) { selection = EntryRef(track: sel.track, entry: i) }
     }
 
     // MARK: Sections
@@ -335,9 +395,7 @@ struct LaneHeader: View {
                 if let note {
                     Text(note).font(.system(size: 11)).foregroundStyle(Theme.text).lineLimit(2).minimumScaleFactor(0.8)
                 } else {
-                    Text("\(used) of 16 entries").font(.system(size: 12))
-                        .foregroundStyle(used >= 16 ? Theme.text : Theme.textSecondary)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                    EntriesUsed(used: used, colour: Theme.track[track])
                 }
             }
             .padding(.top, 8)
@@ -345,6 +403,34 @@ struct LaneHeader: View {
         }
         .padding(.trailing, 8)
         .frame(width: SkiffArrangePage.headerWidth, height: SkiffArrangePage.laneHeight, alignment: .topLeading)
+    }
+}
+
+/// How many of a track's 16 entries its list takes: a square each, the used ones in the track's colour.
+/// Full and nearly full also say so in words, so the state doesn't rest on colour.
+struct EntriesUsed: View {
+    let used: Int
+    let colour: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Grid(horizontalSpacing: 2, verticalSpacing: 2) {
+                ForEach(0..<2, id: \.self) { row in
+                    GridRow {
+                        ForEach(0..<8, id: \.self) { k in
+                            RoundedRectangle(cornerRadius: 1.5).fill(row * 8 + k < used ? colour : Theme.stepEmpty)
+                                .frame(width: 7, height: 7)
+                        }
+                    }
+                }
+            }
+            if used >= 14 {
+                Text(used >= 16 ? "Full" : "\(16 - used) left").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.text).lineLimit(1).fixedSize()
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("\(used) of 16 entries")
     }
 }
 
@@ -391,12 +477,21 @@ struct Lane: View {
     @Binding var selection: EntryRef?
     @Binding var dragPattern: Int?
     @Binding var dropAt: DropSpot?
+    @Binding var lifted: EntryRef?
+    @Binding var moveAt: MoveSpot?
+    @Binding var held: HeldBlock?
+    var focus: AccessibilityFocusState<EntryRef?>.Binding
     let ui: EditorUI
     /// A section's range on this track, snapped to its passes (ticks).
     var bracket: ClosedRange<Double>? = nil
     /// A right edge being dragged: the block's last entry and the REPS it would get.
     @State private var stretch: (entry: Int, reps: Int)?
     @State private var stretchStart: Int = 1
+    /// A held block being dragged: the finger in the lane, and where on the block it took hold.
+    @State private var finger: CGFloat?
+    @State private var grab: CGFloat = 0
+    @State private var laneFrame: CGRect = .zero
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
     private func x(_ ticks: Double) -> CGFloat { CGFloat(ticks / SongPlacement.ticksPerBar) * barWidth }
@@ -405,6 +500,10 @@ struct Lane: View {
         var list = store.song?.tracks[safe: track] ?? SongList()
         if let s = stretch { list.entries[s.entry].reps = s.reps }
         let blocks = store.blocks(track, list: list)
+        // a block being moved here: the lane drawn as it would be, the block a ghost at its new place
+        let move = moveAt?.track == track ? moveAt : nil
+        if let r = move?.result, move?.unchanged == false { list.entries = r }
+        let shown = move?.result != nil && move?.unchanged == false ? store.blocks(track, list: list) : blocks
         let selectedPattern: Int? = selection.flatMap { s in
             s.track == track ? list.entries[safe: s.entry]?.poolIndex : nil
         }
@@ -416,18 +515,38 @@ struct Lane: View {
             addMenu(list: list)
                 .frame(width: max(44, width - lastEnd - 4), height: SkiffArrangePage.laneHeight - 12)
                 .offset(x: lastEnd + 2, y: 6)
-            ForEach(blocks) { b in
+            ForEach(shown) { b in
                 let bx = x(b.start) + (spot.map { b.start >= $0.at - 0.5 ? x($0.ticks) : 0 } ?? 0)
+                let ref = EntryRef(track: track, entry: b.entries.lowerBound)
                 let w = max(8, x(b.length) - 4)
+                if let move, !move.unchanged, b.entries.lowerBound == move.index {
+                    // where the held block would land: an empty place, the block itself under the finger
+                    RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [5, 4]))
+                        .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
+                        .offset(x: bx + 2, y: 6)
+                        .allowsHitTesting(false)
+                } else {
+                let isHeld = lifted == ref || held?.ref == ref
                 let selected = selection?.track == track && b.entries.contains(selection?.entry ?? -1)
                 let linked = !selected && selectedPattern != nil && b.entries.contains { list.entries[$0].poolIndex == selectedPattern }
+                // a held block holds still: no playing mark while it's lifted or its menu is open
                 BlockView(session: session, track: track, block: b, list: list, width: w,
-                          selected: selected, linked: linked, playing: session.playing && b.entries.contains(list.entryOn ?? -1))
+                          selected: selected, linked: linked, playing: !isHeld && session.playing && b.entries.contains(list.entryOn ?? -1))
                     .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
+                    // carried but not yet anywhere new: its own place shows faint (once it would move, the
+                    // lane is drawn as it would be, and its place is the dashed one)
+                    .opacity(finger != nil && lifted == ref && move?.unchanged != false ? 0.35 : 1)
+                    .scaleEffect(isHeld && finger == nil && !reduceMotion ? 1.03 : 1)
+                    .shadow(color: .black.opacity(isHeld && finger == nil ? Look().shadow(.held).opacity : 0),
+                            radius: Look().shadow(.held).radius, y: isHeld ? Look().shadow(.held).y : 0)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHeld)
                     .onTapGesture(count: 2) { open(b) }
-                    .onTapGesture { selection = EntryRef(track: track, entry: b.entries.lowerBound) }
-                    .contextMenu { holdMenu(b, list: list) }
-                    // the edge grip sits outside the hold menu's view: its press would take the drag
+                    .onTapGesture { selection = ref }
+                    // hold lifts it: let go without moving for the menu, drag to move it along the track
+                    .gesture(holdGesture(b, ref: ref))
+                    .sensoryFeedback(.impact(weight: .medium), trigger: lifted == ref)
+                    .accessibilityFocused(focus, equals: ref)
+                    // the edge grip sits outside the hold gesture's view: its press would take the drag
                     .overlay(alignment: .trailing) { if b.kind != .gap { grip(b, list: list) } }
                     .overlay(alignment: .bottomTrailing) {
                         if stretch?.entry == b.entries.upperBound {
@@ -443,12 +562,32 @@ struct Lane: View {
                     .accessibilityAction(named: "Play once more") { edits.setReps(track, b, b.reps + 1) }
                     .accessibilityAction(named: "Play once less") { edits.setReps(track, b, b.reps - 1) }
                     .accessibilityAction(named: "Duplicate after") { edits.duplicateAfter(track, b) }
+                    .accessibilityAction(named: "Move earlier") { moveBy(b, -1) }
+                    .accessibilityAction(named: "Move later") { moveBy(b, 1) }
                     .accessibilityAction(named: "Delete entry") { edits.delete(track, b) }
+                }
             }
             if let r = bracket {
                 RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2)
                     .frame(width: max(4, x(r.upperBound) - x(r.lowerBound)), height: SkiffArrangePage.laneHeight)
                     .offset(x: x(r.lowerBound))
+                    .allowsHitTesting(false)
+            }
+            if let move, !move.unchanged, let g = shown.first(where: { $0.entries.lowerBound == move.index }) {
+                // where the moved block lands
+                Rectangle().fill(Theme.text).frame(width: 2, height: SkiffArrangePage.laneHeight + 8)
+                    .offset(x: x(g.start) - 1, y: -4)
+                    .allowsHitTesting(false)
+            }
+            if let finger, let r = lifted, let b = blocks.first(where: { $0.entries.lowerBound == r.entry }) {
+                // the held block under the finger (level 3)
+                let w = max(8, x(b.length) - 4)
+                BlockView(session: session, track: track, block: b, list: store.song?.tracks[safe: track] ?? list, width: w,
+                          selected: false, linked: false, playing: false)
+                    .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
+                    .scaleEffect(reduceMotion ? 1 : 1.03)
+                    .elevationShadow(.held, Look())
+                    .offset(x: finger - grab, y: 6)
                     .allowsHitTesting(false)
             }
             if let spot {
@@ -468,6 +607,7 @@ struct Lane: View {
         }
         .frame(width: width, height: SkiffArrangePage.laneHeight)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { laneFrame = $0 }
         .onDrop(of: [.plainText], delegate: LaneDrop(lane: self, blocks: blocks))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))")
@@ -510,24 +650,54 @@ struct Lane: View {
             .accessibilityHidden(true)
     }
 
-    @ViewBuilder private func holdMenu(_ b: SongBlock, list: SongList) -> some View {
-        if b.kind == .pattern { Button("Edit pattern", systemImage: "pencil") { open(b) } }
-        if let p = list.entries[b.entries.lowerBound].poolIndex, !b.isChain {
-            let n = edits.copyNumber(after: p).map { " (becomes \(Entries.number($0)))" } ?? ""
-            Button("Make unique\(n)", systemImage: "square.on.square.dashed") { edits.makeUnique(track, b) }
-                .disabled((store.pool?.free ?? 0) == 0)
+    /// Hold (0.4 s) lifts the block and stops the lanes scrolling; then a drag moves it within the track,
+    /// and letting go without moving opens its menu at the finger.
+    private func holdGesture(_ b: SongBlock, ref: EntryRef) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.4)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .onChanged { v in
+                guard !store.offline, case .second(true, let d) = v else {
+                    if case .first(true) = v, lifted == nil { lifted = ref }
+                    return
+                }
+                lifted = ref
+                guard let d, finger != nil || abs(d.translation.width) > 6 || abs(d.translation.height) > 6 else { return }
+                let at = d.location.x - laneFrame.minX
+                if finger == nil { grab = d.startLocation.x - laneFrame.minX - x(b.start) - 2 }
+                finger = at
+                let m = MoveSpot.make(store: store, track: track, entry: ref.entry, barWidth: barWidth, at: at)
+                if m != moveAt { moveAt = m }
+            }
+            .onEnded { v in
+                let moved = finger != nil
+                defer { lifted = nil; finger = nil }
+                guard case .second(true, let d) = v else { return }
+                if moved {
+                    let m = moveAt
+                    moveAt = nil
+                    if let m { commit(m) }
+                    return
+                }
+                // let go where it was lifted: the menu, at the finger (or under the block's start)
+                selection = ref
+                let fallback = CGPoint(x: laneFrame.minX + x(b.start) + min(40, x(b.length) / 2), y: laneFrame.midY)
+                held = HeldBlock(ref: ref, at: d?.location ?? fallback)
+            }
+    }
+
+    private func commit(_ m: MoveSpot) {
+        guard !m.unchanged else { return }
+        if let why = m.refusal {
+            store.refuse(track: track, entry: m.from, why, needsStop: why.hasPrefix("Stop"))
+            return
         }
-        Button("Duplicate after", systemImage: "plus.square.on.square") { edits.duplicateAfter(track, b) }
-        if b.isChain {
-            Button("Split the chain", systemImage: "scissors") { edits.split(track, b) }
-        } else {
-            Button("Chain into next", systemImage: "link") { edits.chainIntoNext(track, b) }
-                .disabled(b.kind == .gap || b.entries.upperBound >= 15 || list.entries[b.entries.upperBound + 1].isEmpty)
-        }
-        if b.kind == .pattern, store.sounds {
-            Menu("Set sound…", systemImage: "waveform") { SoundItems(session: session, store: store, track: track, block: b) }
-        }
-        Button("Delete entr\(b.isChain ? "ies" : "y")", systemImage: "trash", role: .destructive) { edits.delete(track, b) }
+        guard let es = m.result else { return }
+        selection = EntryRef(track: track, entry: m.index)
+        Task { await store.rewrite(track: track, to: es, focus: m.index) }
+    }
+
+    private func moveBy(_ b: SongBlock, _ delta: Int) {
+        if let i = edits.move(track, b, by: delta) { selection = EntryRef(track: track, entry: i) }
     }
 
     /// After a lane's last block: repeat the last pattern, a new empty one, a rest, or pick one.
@@ -583,6 +753,72 @@ struct DropSpot: Equatable {
     var text: String
     /// The list after the drop (nil: no room).
     var result: [SongEntry]?
+}
+
+/// A block whose menu is open: which, and where the finger let go (global).
+struct HeldBlock: Equatable {
+    var ref: EntryRef
+    var at: CGPoint
+}
+
+/// Where a held block would move to: its block (`from`, its first entry now), its place among the others,
+/// the REST passes that hold a gap past the end, the list after, and what letting go does, said in words.
+struct MoveSpot: Equatable {
+    var track: Int
+    var from: Int
+    var to: Int
+    var restPasses: Int
+    var index: Int
+    var result: [SongEntry]?
+    var unchanged: Bool
+    /// Why it can't go in now (playing, all 16 entries), before anything is sent.
+    var refusal: String?
+    var text: String
+
+    /// The block from entry `e` moved to the finger (`at`, in the lane): before the first other block whose
+    /// middle is past it; past the end, after REST passes that hold the gap.
+    @MainActor static func make(store: SkiffSongStore, track t: Int, entry e: Int, barWidth: CGFloat, at: CGFloat) -> MoveSpot? {
+        guard let list = store.song?.tracks[safe: t] else { return nil }
+        let blocks = store.blocks(t)
+        guard let b = blocks.firstIndex(where: { $0.entries.contains(e) }) else { return nil }
+        let block = blocks[b]
+        // the others, closed up: the place is among them
+        var rest = list.entries
+        rest.removeSubrange(block.entries)
+        rest += Array(repeating: .empty, count: 16 - rest.count)
+        let others = store.blocks(t, list: SongList(entries: rest))
+        let x = Double(at / max(1, barWidth)) * SongPlacement.ticksPerBar
+        let to = others.firstIndex { ($0.start + $0.end) / 2 > x } ?? others.count
+        // past the end: REST passes (of the pattern before them) hold the gap, so it plays where it's let go
+        let end = others.last?.end ?? 0
+        let restPass = others.last?.parts.last ?? block.parts.first ?? SongPlacement.ticksPerBar
+        let passes = to == others.count && x > end ? Int(((x - end) / restPass).rounded(.down)) : 0
+        let m = SongSections.move(list: list, blocks: blocks, block: b, to: to, restPasses: passes)
+        let name = "\(Entries.letters(block.entries)) (\(label(block, list)))"
+        var refusal: String?
+        var text: String
+        if m.unchanged {
+            text = "\(name) stays where it is"
+        } else if let r = m.result {
+            let start = store.blocks(t, list: SongList(entries: r)).first { $0.entries.lowerBound == m.index }?.start ?? 0
+            text = "Move \(name) to bar \(SongSections.bars(start / SongPlacement.ticksPerBar + 1)) on T\(t + 1)"
+            if m.rests > 0 {
+                text += ", after a REST ×\(passes): that takes \(m.rests) more entr\(m.rests == 1 ? "y" : "ies")"
+            }
+            if let why = store.blocked(track: t, to: r) { refusal = why; text = why }
+        } else {
+            refusal = "T\(t + 1) has all 16 entries, so there's no room for the REST that would hold the gap. Play one entry more times, or chain two, to free a slot"
+            text = refusal!
+        }
+        return MoveSpot(track: t, from: block.entries.lowerBound, to: to, restPasses: passes, index: m.index,
+                        result: m.result, unchanged: m.unchanged, refusal: refusal, text: text)
+    }
+
+    static func label(_ b: SongBlock, _ list: SongList) -> String {
+        if b.kind != .pattern { return "REST ×\(b.reps)" }
+        let parts = b.entries.map { list.entries[$0].isRest ? "REST" : Entries.number(list.entries[$0].pattern) }
+        return parts.joined(separator: "→") + " ×\(b.reps)"
+    }
 }
 
 /// The drop: the nearest block edge (entries play back to back, so a new one goes between two).

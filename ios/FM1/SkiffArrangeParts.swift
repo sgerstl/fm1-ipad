@@ -67,6 +67,23 @@ import SwiftUI
         Task { await store.rewrite(track: t, to: es, focus: b.entries.lowerBound) }
     }
 
+    /// The block one place earlier or later among the track's blocks (the hold menu's route, without a drag).
+    /// Returns where its first entry goes, for the selection to follow.
+    @discardableResult
+    func move(_ t: Int, _ b: SongBlock, by delta: Int) -> Int? {
+        guard let l = store.song?.tracks[safe: t] else { return nil }
+        let blocks = store.blocks(t)
+        guard let i = blocks.firstIndex(where: { $0.id == b.id }), blocks.indices.contains(i + delta) else { return nil }
+        let m = SongSections.move(list: l, blocks: blocks, block: i, to: i + delta)
+        guard !m.unchanged, let es = m.result else { return nil }
+        if let why = store.blocked(track: t, to: es) {
+            store.refuse(track: t, entry: b.entries.lowerBound, why, needsStop: why.hasPrefix("Stop"))
+            return nil
+        }
+        Task { await store.rewrite(track: t, to: es, focus: m.index) }
+        return m.index
+    }
+
     /// A new entry at `index`; the ones from there move on.
     func insert(_ t: Int, _ e: SongEntry, at index: Int) {
         guard var es = entries(t), !full(t) else { return }
@@ -103,6 +120,173 @@ import SwiftUI
         guard let pool = store.pool else { return nil }
         let order = Array(p..<64) + Array(0..<p)
         return order.first { pool.patterns[$0].isFree }.map { $0 + 1 }
+    }
+}
+
+// MARK: - Hold menu
+
+/// A block's menu at the finger (canvas board 2): Jib's own, not the system's, so its rows are 52 pt high
+/// with 8 pt between groups and Delete apart at the bottom. A menu as the APG has it: ↑ ↓ move between
+/// items, Return picks, Escape closes; closing gives focus back to the block.
+struct HoldMenu: View {
+    let session: DeviceSession
+    let store: SkiffSongStore
+    let ui: EditorUI
+    let track: Int
+    let block: SongBlock
+    let list: SongList
+    @Binding var selection: EntryRef?
+    let close: () -> Void
+    @FocusState private var focus: Int?
+    @Environment(\.look) private var look
+
+    struct Item {
+        var title: String
+        var icon: String
+        var enabled = true
+        var action: () -> Void
+    }
+
+    private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
+
+    private var groups: [[Item]] {
+        let b = block, t = track
+        let blocks = store.blocks(t)
+        var g: [[Item]] = []
+        if b.kind == .pattern { g.append([Item(title: "Edit pattern", icon: "pencil") { open() }]) }
+        var copy: [Item] = []
+        if let p = list.entries[b.entries.lowerBound].poolIndex, !b.isChain {
+            let free = (store.pool?.free ?? 0) > 0
+            let n = free ? edits.copyNumber(after: p).map { " (becomes \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+            copy.append(Item(title: "Make unique\(n)", icon: "square.on.square.dashed", enabled: free) { edits.makeUnique(t, b) })
+        }
+        copy.append(Item(title: "Duplicate after", icon: "plus.square.on.square") { edits.duplicateAfter(t, b) })
+        g.append(copy)
+        g.append([
+            Item(title: "Move earlier", icon: "arrow.left", enabled: b.id != blocks.first?.id) { move(-1) },
+            Item(title: "Move later", icon: "arrow.right", enabled: b.id != blocks.last?.id) { move(1) },
+        ])
+        if b.isChain {
+            g.append([Item(title: "Split the chain", icon: "scissors") { edits.split(t, b) }])
+        } else {
+            let can = b.kind != .gap && b.entries.upperBound < 15 && !list.entries[b.entries.upperBound + 1].isEmpty
+            g.append([Item(title: "Chain into next", icon: "link", enabled: can) { edits.chainIntoNext(t, b) }])
+        }
+        g.append([Item(title: b.isChain ? "Delete entries" : "Delete entry", icon: "trash") { edits.delete(t, b) }])
+        return g
+    }
+
+    var body: some View {
+        let gs = groups
+        let flat = gs.flatMap { $0 }
+        VStack(alignment: .leading, spacing: 0) {
+            Text("T\(track + 1) · entr\(block.isChain ? "ies" : "y") \(Entries.letters(block.entries))")
+                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 16).frame(height: 36, alignment: .bottomLeading)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(gs.indices, id: \.self) { gi in
+                if gi > 0 {
+                    // 8 pt between groups, and a hairline in it
+                    Rectangle().fill(Theme.disabledOutline.opacity(0.6)).frame(height: 1).padding(.vertical, 4)
+                }
+                // Set sound… sits with the chain item, as a submenu (the system's: a list of every preset)
+                if gi == gs.count - 1, block.kind == .pattern, store.sounds {
+                    soundRow
+                    Rectangle().fill(Theme.disabledOutline.opacity(0.6)).frame(height: 1).padding(.vertical, 4)
+                }
+                ForEach(gs[gi].indices, id: \.self) { k in
+                    let i = gs[..<gi].reduce(0) { $0 + $1.count } + k
+                    row(gs[gi][k], index: i)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .frame(width: 280)
+        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)))
+        .elevationShadow(.held, look)
+        .focusable()
+        .onKeyPress(.downArrow) { focus = next(from: focus, by: 1, flat); return .handled }
+        .onKeyPress(.upArrow) { focus = next(from: focus, by: -1, flat); return .handled }
+        .onKeyPress(.escape) { close(); return .handled }
+        .onAppear { focus = next(from: nil, by: 1, flat) }
+        .background {
+            // Escape from a hardware keyboard even where the rows don't hold focus
+            Button("Close menu", action: close).keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityLabel("Entry \(Entries.letters(block.entries)) menu")
+        .accessibilityAction(.escape) { close() }
+    }
+
+    private func next(from i: Int?, by d: Int, _ items: [Item]) -> Int? {
+        guard !items.isEmpty else { return nil }
+        var k = i ?? (d > 0 ? -1 : items.count)
+        for _ in items.indices {
+            k = (k + d + items.count) % items.count
+            if items[k].enabled { return k }
+        }
+        return nil
+    }
+
+    private func row(_ item: Item, index: Int) -> some View {
+        Button {
+            close()
+            item.action()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: item.icon).font(.system(size: 17)).frame(width: 24)
+                Text(item.title).font(.system(size: 17)).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(item.enabled ? Theme.text : Theme.textTertiary)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background {
+                if focus == index { RoundedRectangle(cornerRadius: 8).fill(look.surface(.selected)).padding(.horizontal, 4) }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!item.enabled || store.busy || store.offline)
+        .focused($focus, equals: index)
+    }
+
+    private var soundRow: some View {
+        Menu {
+            SoundItems(session: session, store: store, track: track, block: block)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform").font(.system(size: 17)).frame(width: 24)
+                Text("Set sound…").font(.system(size: 17))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .disabled(store.busy || store.offline)
+    }
+
+    private func move(_ d: Int) {
+        if let i = edits.move(track, block, by: d) { selection = EntryRef(track: track, entry: i) }
+    }
+
+    /// Sequence on the entry's pattern; stopped, the track goes to the entry (LIST op 3) first.
+    private func open() {
+        let e = block.entries.lowerBound
+        let on = list.entryOn == e
+        if !on && session.playing {
+            store.refuse(track: track, entry: e, "Stop to open this entry's pattern: playing, the FM-1 would launch it", needsStop: true)
+            return
+        }
+        Task {
+            if !on { guard await store.send(.play(track: track, entry: e)) else { return } }
+            session.select(track: track)
+            ui.page = .sequencer
+        }
     }
 }
 
@@ -143,6 +327,14 @@ struct EntryInspector: View {
                     Text("Sound on entry").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Text(first.sound.map { Entries.soundName($0, session: session) } ?? "None: keeps the track's sound")
                 }
+                // out of the list: Undo puts it back; one that would erase a pattern asks first (as Clear does)
+                Button { edits.delete(track, block) } label: {
+                    Label(block.isChain ? "Delete entries" : "Delete entry", systemImage: "trash").font(.system(size: 15))
+                        .padding(.horizontal, 14).frame(minHeight: 44).raisedKey()
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .disabled(store.busy || store.offline)
                 if let r = store.refusal, r.track == track, let e = r.entry, block.entries.contains(e) {
                     RefusalLine(refusal: r, session: session, store: store)
                 }

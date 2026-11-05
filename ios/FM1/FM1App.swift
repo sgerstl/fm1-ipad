@@ -22,7 +22,6 @@ struct RootView: View {
     @State private var projects = ProjectStore()
     @State private var firmware = FirmwareCentre()
     @AppStorage(Look.styleKey) private var lookStyle = LookStyle.flat
-    @AppStorage(Look.strengthKey) private var lookStrength = ElevationStrength.medium
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
@@ -62,7 +61,7 @@ struct RootView: View {
         .background(Theme.page)
         .environment(firmware)
         .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
-        .environment(\.look, Look(style: lookStyle, strength: lookStrength))
+        .environment(\.look, Look(style: lookStyle))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         .task(id: SessionRun(demo: useDemo, paused: firmware.holdsDevice)) {
             if session.isDemo != useDemo { session = DeviceSession(demo: useDemo); TrackColours.session = session }

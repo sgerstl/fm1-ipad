@@ -23,8 +23,7 @@ enum Theme {
     static let chicletEdge = Color(hex: 0x0A0A0C)        // the 2 pt base edge it stands on
     static let primaryEdge = Color(hex: 0x8A8A92)        // the primary chiclet's edge (its top is `text`)
     static let disabledOutline = Color(hex: 0x4A4A52)
-    /// The tone ladder lifted and held things step along: medium lifts to [2] and holds at [3];
-    /// quiet is a tone less, strong a tone more.
+    /// The tone ladder lifted and held things step along: lifted to [2], held at [3].
     static let tones = [0x26262B, 0x2D2D33, 0x34343B, 0x3E3E46, 0x48484F].map { Color(hex: $0) }
     /// Arrange's blocks on Skiff: greys, told apart by the pattern number on them (canvas board A).
     static let blockTones = [0x2E2E35, 0x3A3A42, 0x46464F, 0x52525C].map { Color(hex: $0) }
@@ -53,22 +52,15 @@ enum Theme {
 
 // MARK: - The look: physical or flat (2026-11-05)
 //
-// The flat look is an experiment (vault skiff-arrange-spec.md): monochrome, colour only for the track
-// colours, the knob rings and REC; buttons and keys as chiclets; elevation (a lighter surface, a soft
-// shadow, a ring) as the sign of selection. Settings › Developer, in debug builds, switches between the
-// two and sets how strong the elevation is, so they can be compared on the iPad. When it's settled, the
-// losing path goes.
+// The flat look is an experiment (vault skiff-arrange-spec.md): colour wherever it tells you something
+// (track colours, knob rings, REC, status; revised 2026-11-05, no longer monochrome), buttons and keys as
+// chiclets, elevation (a lighter surface, a soft shadow, a ring) as the sign of selection. Settings ›
+// Developer, in debug builds, switches between the two. Elevation is locked at the medium strength
+// (Scott, 2026-11-05). When the look is settled, the losing path goes.
 
 enum LookStyle: String, CaseIterable, Identifiable {
     case flat, physical
     var id: String { rawValue }
-}
-
-enum ElevationStrength: String, CaseIterable, Identifiable {
-    case quiet, medium, strong
-    var id: String { rawValue }
-    var shadow: Double { switch self { case .quiet: 0.6; case .medium: 1; case .strong: 1.4 } }
-    var toneStep: Int { switch self { case .quiet: -1; case .medium: 0; case .strong: 1 } }
 }
 
 /// How high a thing stands. Level 0 (flat, at rest) has no case: it's every surface without one.
@@ -80,19 +72,17 @@ enum Elevation {
 
 struct Look: Equatable {
     var style: LookStyle = .flat
-    var strength: ElevationStrength = .medium
     var flat: Bool { style == .flat }
 
-    /// The keys @AppStorage keeps them under. As launch arguments they override what's stored
-    /// (`-lookStyle physical -lookElevation strong`), for screenshots.
+    /// The key @AppStorage keeps it under. As a launch argument it overrides what's stored
+    /// (`-lookStyle physical`), for screenshots.
     static let styleKey = "lookStyle"
-    static let strengthKey = "lookElevation"
 
     func surface(_ level: Elevation) -> Color {
         switch level {
         case .panel: Theme.panel
-        case .selected: Theme.tones[2 + strength.toneStep]
-        case .held: Theme.tones[3 + strength.toneStep]
+        case .selected: Theme.tones[2]
+        case .held: Theme.tones[3]
         }
     }
 
@@ -103,7 +93,7 @@ struct Look: Equatable {
         case .selected: (0.45, 6, 4)
         case .held: (0.60, 14, 12)
         }
-        return (min(1, base.0 * strength.shadow), base.1, base.2)
+        return base
     }
 }
 
@@ -374,7 +364,7 @@ extension View {
     }
     /// A light's glow: the physical look only (flat lights are lit, not glowing).
     func glow(_ colour: Color, radius: CGFloat) -> some View { modifier(Glow(colour: colour, radius: radius)) }
-    /// A level's soft shadow, scaled by the elevation strength. Only for the few elevated things.
+    /// A level's soft shadow. Only for the few elevated things.
     func elevationShadow(_ level: Elevation, _ look: Look) -> some View {
         let s = look.shadow(level)
         return shadow(color: .black.opacity(s.opacity), radius: s.radius, y: s.y)

@@ -364,3 +364,95 @@ extension SkiffKitTests {
         #expect(r.withHits(DrumStep.empty.setting(1, on: true)).hits.lanes == [1])
     }
 }
+
+/// Moving a block within its track (Scott, 2026-11-05): a reorder, a REST to hold a gap past the end.
+extension SongSectionTests {
+    @Test func movingEarlierAndLaterIsAReorder() {
+        let l = list([e(1, 4), e(2, 8), e(3, 1), e(4, 2)])
+        let b = blocks(l)
+        // D to the front: everything else moves over
+        let early = SongSections.move(list: l, blocks: b, block: 3, to: 0)
+        #expect(early.index == 0 && !early.unchanged && early.result?.prefix(5).map(\.pattern) == [4, 1, 2, 3, 0])
+        #expect(early.result?.prefix(4).map(\.reps) == [2, 4, 8, 1])
+        // A after C: B and C close up
+        let late = SongSections.move(list: l, blocks: b, block: 0, to: 2)
+        #expect(late.index == 2 && late.result?.prefix(4).map(\.pattern) == [2, 3, 1, 4])
+        // dropped where it was: nothing to send
+        #expect(SongSections.move(list: l, blocks: b, block: 1, to: 1).unchanged)
+    }
+
+    @Test func pastTheEndARestHoldsTheGap() {
+        let l = list([e(1, 4), e(2, 2)])
+        let m = SongSections.move(list: l, blocks: blocks(l), block: 0, to: 1, restPasses: 3)
+        #expect(m.rests == 1 && m.index == 2)
+        #expect(m.result?.prefix(4).map(\.pattern) == [2, 65, 1, 0] && m.result?.prefix(3).map(\.reps) == [2, 3, 4])
+        // more than 16 passes: a second REST
+        let far = SongSections.move(list: l, blocks: blocks(l), block: 0, to: 1, restPasses: 20)
+        #expect(far.rests == 2 && far.result?.prefix(4).map(\.reps) == [2, 16, 4, 4])
+    }
+
+    @Test func aFullTrackCantTakeTheRest() {
+        let l = list((0..<16).map { e($0 + 1, 1) })
+        #expect(SongSections.move(list: l, blocks: blocks(l), block: 0, to: 15, restPasses: 1).result == nil)
+        // a plain reorder needs no extra entry
+        #expect(SongSections.move(list: l, blocks: blocks(l), block: 0, to: 15).result?[15].pattern == 1)
+    }
+
+    @Test func aChainMovesAsOne() {
+        // REST, 05, 06→07 chained ×2, 05: the chain to the front keeps its flag and its REPS
+        let l = list([e(65, 4), e(5, 8), e(6, 1, chain: true), e(7, 2), e(5, 8)])
+        let m = SongSections.move(list: l, blocks: blocks(l), block: 2, to: 0)
+        #expect(m.result?.prefix(6).map(\.pattern) == [6, 7, 65, 5, 5, 0])
+        #expect(m.result?.prefix(5).map(\.chained) == [true, false, false, false, false])
+        #expect(m.result?.prefix(5).map(\.reps) == [1, 2, 4, 8, 8])
+    }
+
+    @Test func anEmptyEntryMovedToTheEndBecomesARest() {
+        // entries before the list's first stay passed over; an empty entry moved to the end becomes a REST
+        var l = list([.empty, e(1, 1), .empty, e(2, 1)])
+        l.entries[2].reps = 2
+        let m = SongSections.move(list: l, blocks: blocks(l), block: 1, to: 2)
+        #expect(m.result?.prefix(5).map(\.pattern) == [0, 1, 2, 65, 0] && m.result?[3].reps == 2)
+    }
+}
+
+extension SkiffSongTests {
+    @Test func movesRoundTripThroughTheFake() async throws {
+        let (_, fake, s, run) = try await store()
+        // T1 (A–F: 01 02 03 02 03 04): F to the front
+        var l = try #require(s.song).tracks[0]
+        var m = SongSections.move(list: l, blocks: s.blocks(0), block: 5, to: 0)
+        #expect(await s.rewrite(track: 0, to: try #require(m.result)) && s.confirmation == nil)
+        #expect(fake.lists[0].prefix(7).map(\.p) == [4, 1, 2, 3, 2, 3, 0])
+        // then the new B (01 ×4) after the last, with 2 passes of REST before it
+        l = try #require(s.song).tracks[0]
+        m = SongSections.move(list: l, blocks: s.blocks(0), block: 1, to: 5, restPasses: 2)
+        #expect(await s.rewrite(track: 0, to: try #require(m.result)))
+        #expect(fake.lists[0].prefix(8).map(\.p) == [4, 2, 3, 2, 3, 65, 1, 0])
+        #expect(try #require(s.song).tracks[0].entries[5].reps == 2)
+        // T2's chain 06→07 to the front moves whole, still chained
+        l = try #require(s.song).tracks[1]
+        m = SongSections.move(list: l, blocks: s.blocks(1), block: 2, to: 0)
+        #expect(await s.rewrite(track: 1, to: try #require(m.result)))
+        let t2 = try #require(s.song).tracks[1]
+        #expect(t2.entries.prefix(5).map(\.pattern) == [6, 7, 65, 5, 5] && t2.entries[0].chained && !t2.entries[1].chained)
+        // undo puts T2 back
+        await s.undo()
+        #expect(try #require(s.song).tracks[1].entries.prefix(5).map(\.pattern) == [65, 5, 6, 7, 5])
+        run.cancel()
+    }
+
+    @Test func aMoveThatWouldCutInWaitsForStop() async throws {
+        let (session, fake, s, run) = try await store()
+        session.setPlaying(true)
+        try await waitFor(5) { session.playing }
+        let before = fake.lists[0]
+        // T1 is on A: moving it changes the pattern on the entry it's playing
+        let l = try #require(s.song).tracks[0]
+        let m = SongSections.move(list: l, blocks: s.blocks(0), block: 0, to: 2)
+        #expect(await s.rewrite(track: 0, to: try #require(m.result)) == false)
+        #expect(s.refusal?.needsStop == true && fake.lists[0] == before)
+        session.setPlaying(false)
+        run.cancel()
+    }
+}
