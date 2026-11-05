@@ -13,6 +13,10 @@ settings:
     DEVELOPMENT_TEAM: K3CNX79952
     CODE_SIGN_STYLE: Automatic
     ALWAYS_SEARCH_USER_PATHS: NO
+  configs:
+    Debug:
+      # the Developer menu (look switch, Install firmware…) is behind #if DEBUG
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
 targets:
   FM1:
     type: application
