@@ -3,70 +3,58 @@ import SwiftUI
 
 // Skiff's GLO pages as the Mixer tab (Scott, 2026-11-05: "we might want a mixer tab"; it replaced the bottom panel
 // and the mixer key beside the tempo). Song · Shape · Mixer · Browse. The six tracks' strips (Skiff's MIXER, GR_TRK)
-// given the room, then the shared Delay, Reverb, Chorus and Global as Shape's cards (their columns over GR_DELAY,
-// GR_REVERB, GR_CHORUS, GR_GLOBAL). GLO on the FM-1 (or its pad here) lands here, and again steps the sections;
-// linked, a section touched here shows its page on the FM-1.
+// fill the top and don't scroll, so their faders take the finger at once; under them the shared Delay, Reverb,
+// Chorus and Global as Shape's cards (their columns over GR_DELAY, GR_REVERB, GR_CHORUS, GR_GLOBAL), side by side
+// in the phone Shape's carousel: a swipe snaps the next card into the middle with a little bounce. GLO on the
+// FM-1 (or its pad here) lands here, and again steps the sections; linked, the card swiped to (or the strips
+// touched) shows its page on the FM-1.
 
 struct MixerPage: View {
     let session: DeviceSession
     let ui: EditorUI
-    @State private var marks = ShapeMarks()
+    @Environment(\.soundPanelRoom) private var panelRoom
 
     var body: some View {
         let shared = SoundPage.pages(session).filter { $0.family == .glo }
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        header("MIXER", lit: ui.mixerSection == .mixer)
-                        MixerStrips(session: session, ui: ui)
-                            .frame(height: 452)
-                            .padding(16)
-                            .panel()
-                            .overlay(alignment: .top) { DeviceEdge(on: onDevice(30)) }
-                            .contentShape(Rectangle())
-                            .onTapGesture { show(.mixer) }
-                            .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
-                    }
-                    .id(SkiffButtonMap.MixerTab.mixer)
-                    if !shared.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            header("SHARED", lit: ui.mixerSection != .mixer)
-                            Grid(horizontalSpacing: 16, verticalSpacing: 16) {
-                                ForEach(Array(stride(from: 0, to: shared.count, by: 2)), id: \.self) { i in
-                                    GridRow(alignment: .top) {
-                                        card(shared[i], shared)
-                                        if i + 1 < shared.count { card(shared[i + 1], shared) }
-                                        else { Color.clear.gridCellUnsizedAxes([.vertical]) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.bottom, 8)
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 10) {
+                MixerHeader(title: "MIXER", lit: ui.mixerSection == .mixer) { sections }
+                MixerStrips(session: session, ui: ui, touched: { show(.mixer) })
+                    .padding(16)
+                    .frame(maxHeight: .infinity)
+                    .panel()
+                    .overlay(alignment: .top) { DeviceEdge(on: onDevice(SkiffButtonMap.MixerTab.mixer.page)) }
+                    .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
             }
-            .scrollIndicators(.hidden)
-            .onChange(of: ui.mixerSection) { _, t in
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(t, anchor: .top) }
+            .padding(.trailing, panelRoom)
+            if !shared.isEmpty {
+                MixerCards(session: session, ui: ui, pages: shared, trailing: panelRoom)
             }
-            .onAppear { proxy.scrollTo(ui.mixerSection, anchor: .top) }
         }
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func card(_ p: SoundPage, _ pages: [SoundPage]) -> some View {
-        SoundCard(session: session, ui: ui, rows: [p], pages: pages, marks: marks).equatable()
-            .id(SkiffButtonMap.MixerTab.allCases.first { $0.pageTitle == p.title })
-    }
-
-    private func header(_ title: String, lit: Bool) -> some View {
-        HStack(spacing: 8) {
-            Text(title).font(.system(size: 13, weight: .semibold)).tracking(0.6)
-                .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
-            Rectangle().fill(Theme.stepEmpty).frame(height: 1)
+    /// GLO's pages in the FM-1's order, numbered as GLO steps them, the current one lit: a tap goes there (the
+    /// strips, or that card into the middle), and it's how VoiceOver moves between them.
+    private var sections: some View {
+        HStack(spacing: 2) {
+            ForEach(SkiffButtonMap.MixerTab.allCases) { t in
+                let on = ui.mixerSection == t
+                Button { show(t) } label: {
+                    HStack(spacing: 6) {
+                        LED(on: on)
+                        Text(t.title).font(.system(size: 13, weight: on ? .semibold : .regular))
+                            .foregroundStyle(on ? Theme.text : Theme.textSecondary)
+                    }
+                    .padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(t.title), GLO page \(t.rawValue + 1) of \(SkiffButtonMap.MixerTab.allCases.count)")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
         }
-        .accessibilityAddTraits(.isHeader)
+        .frame(height: 24)
     }
 
     private func onDevice(_ page: Int) -> Bool {
@@ -74,9 +62,37 @@ struct MixerPage: View {
     }
 
     private func show(_ t: SkiffButtonMap.MixerTab) {
-        ui.mixerSection = t
+        if ui.mixerSection != t { ui.mixerSection = t }
         if session.screenLinked, ui.followDevice, !onDevice(t.page) { session.showOnDevice(page: t.page) }
     }
+}
+
+/// The sound panel's room (ENV LFO FX SEL EDIT ARP bring it in from the right, for the selected track; built for
+/// the Song tab, not yet here): whoever shows the panel over the Mixer tab sets its width, and the strips and the
+/// cards make way. 0 while it's out. Nothing on the tab sits on the right edge or takes a swipe from it.
+extension EnvironmentValues {
+    @Entry var soundPanelRoom: CGFloat = 0
+}
+
+private struct MixerHeader<Trailing: View>: View {
+    let title: String
+    let lit: Bool
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title).font(.system(size: 13, weight: .semibold)).tracking(0.6)
+                .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
+                .accessibilityAddTraits(.isHeader)
+            Rectangle().fill(Theme.stepEmpty).frame(height: 1)
+            trailing
+        }
+        .frame(minHeight: 24)
+    }
+}
+
+extension MixerHeader where Trailing == EmptyView {
+    init(title: String, lit: Bool) { self.init(title: title, lit: lit, trailing: { EmptyView() }) }
 }
 
 /// The page on the FM-1's screen: a lit edge along a panel's top, as Shape's cards have it.
@@ -95,23 +111,135 @@ struct DeviceEdge: View {
     }
 }
 
+// MARK: Shared: the cards, one in the middle (PhoneShape's carousel)
+
+/// DELAY REVERB CHORUS GLOBAL in the FM-1's GLO order, the current one in the middle and its neighbours peeking in,
+/// a little smaller. A swipe snaps the next card in with a little bounce (PhoneShape's values: view-aligned paging,
+/// 0.92 at the sides, a 0.4 s spring at 0.82 damping); a tap on a neighbour brings it to the middle. The card in the
+/// middle is the Mixer's section: linked, the FM-1 shows its page, and GLO on the FM-1 brings the next one in.
+private struct MixerCards: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    let pages: [SoundPage]
+    let trailing: CGFloat
+    @State private var marks = ShapeMarks()
+    @State private var centred: String?
+    @State private var width: CGFloat = 0
+    @State private var placed = false          // the first card placed on opening: not a swipe, so the section stays
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82) }
+
+    var body: some View {
+        let cardWidth = min(640, max(440, ((width - trailing) * 0.6).rounded()))
+        VStack(alignment: .leading, spacing: 10) {
+            MixerHeader(title: "SHARED", lit: ui.mixerSection != .mixer)
+                .padding(.trailing, trailing)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 16) {
+                    ForEach(pages) { p in
+                        card(p)
+                            .frame(width: cardWidth)
+                            .scrollTransition(.interactive, axis: .horizontal) { c, phase in
+                                c.scaleEffect(phase.isIdentity ? 1 : 0.92)
+                            }
+                            .id(p.id)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $centred, anchor: .center)
+            .contentMargins(.horizontal, max(0, (width - trailing - cardWidth) / 2), for: .scrollContent)
+            .scrollIndicators(.hidden)
+            .padding(.trailing, trailing)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .onAppear {
+            placed = true
+            centred = id(for: ui.mixerSection) ?? pages.first?.id
+            marks.activePage = centred
+        }
+        .onChange(of: ui.mixerSection) { _, t in
+            // GLO (here or on the FM-1) stepped to a card: bring it in
+            guard let to = id(for: t), to != centred else { return }
+            withAnimation(spring) { centred = to }
+        }
+        .onChange(of: centred) { _, id in
+            // the card swiped into the middle is the Mixer's section, and the one the FM-1 shows
+            guard let id, let p = pages.first(where: { $0.id == id }), let t = tab(for: p) else { return }
+            marks.activePage = id
+            if placed { placed = false; return }
+            if ui.mixerSection != t { ui.mixerSection = t }
+            guard session.screenLinked, ui.followDevice,
+                  session.deviceScreen.map({ !$0.home && $0.page == t.page }) != true else { return }
+            session.showOnDevice(page: t.page)
+        }
+    }
+
+    private func card(_ p: SoundPage) -> some View {
+        let middle = centred == p.id
+        return SoundCard(session: session, ui: ui, rows: [p], pages: glo, marks: marks).equatable()
+            // a card at the side takes a tap anywhere and comes to the middle; its columns work once it's there
+            .overlay {
+                if !middle {
+                    Color.clear.contentShape(Rectangle())
+                        .onTapGesture { withAnimation(spring) { centred = p.id } }
+                        .accessibilityHidden(true)
+                }
+            }
+    }
+
+    /// GLO's five pages as the FM-1 counts them (MIXER first), so a card's "On the FM-1" reads as its screen does:
+    /// DELAY 2/5 … GLOBAL 5/5.
+    private var glo: [SoundPage] {
+        [SoundPage(fw: SkiffButtonMap.MixerTab.mixer.page, title: "MIXER", family: .glo, scope: 1, ids: [nil, nil, nil, nil])] + pages
+    }
+
+    private func tab(for p: SoundPage) -> SkiffButtonMap.MixerTab? { SkiffButtonMap.MixerTab.allCases.first { $0.pageTitle == p.title } }
+    private func id(for t: SkiffButtonMap.MixerTab) -> String? { pages.first { $0.title == t.pageTitle }?.id }
+}
+
 // MARK: Mixer: six strips (ui_graph.c mix_strip)
 
-/// Skiff's MIXER as six strips side by side: the number and the sound's first word, LEVEL a fader in the track's
-/// colour (its dB under it, OFF at 0), PAN (L, C, R), the REVERB send, MUTE. Every track's REVERB is read when the
-/// tab opens and every few seconds while it's up (the protocol doesn't push another track's parameters).
+/// What one strip shows, read once for all six so each strip redraws only when its own values change (a CHANGED
+/// push for one track, or a fader held at 120 Hz, leaves the other five alone).
+struct MixRow: Equatable {
+    var track: Int
+    var name: String
+    var level: Int
+    var levelDefault: Int?
+    var pan: Int
+    var mute: Bool
+    var selected: Bool
+    var revID: Int?
+    var rev: Int?
+    var revRange: ClosedRange<Int> = 0...127
+    var revDefault: Int?
+    var revShown = ""
+    var revSpoken = ""
+}
+
+/// Skiff's MIXER as six strips side by side. Every track's REVERB is read when the tab opens and every few seconds
+/// while it's up (the protocol doesn't push another track's parameters).
 struct MixerStrips: View {
     let session: DeviceSession
     let ui: EditorUI
+    var touched: () -> Void = {}
 
     private var revID: Int? { SoundPage.pages(session).first { $0.title == "FX" }?.ids[safe: 3] ?? nil }
 
     var body: some View {
+        let _ = BodyCounter.tick("mixer.strips")
+        let id = revID
         HStack(alignment: .top, spacing: 8) {
-            ForEach(Array(session.trackIndices), id: \.self) { t in strip(t) }
+            ForEach(Array(session.trackIndices), id: \.self) { t in
+                MixerStrip(session: session, row: row(t, id), touched: touched).equatable()
+            }
         }
-        .task(id: revID) {
-            guard let id = revID else { return }
+        .task(id: id) {
+            guard let id else { return }
             while !Task.isCancelled {
                 await session.readEveryTrack(id: id)
                 try? await Task.sleep(for: .seconds(3))
@@ -119,49 +247,18 @@ struct MixerStrips: View {
         }
     }
 
-    private func strip(_ t: Int) -> some View {
-        let track = session.tracks[t], colour = Theme.track[t], selected = t == session.selectedTrack
-        // the sound's first word, as Skiff names a strip (ACID, PAD, PULSE)
-        let sound = track.presetName.isEmpty ? track.displayName : track.presetName.capitalized
-        let name = sound.split(separator: " ").first.map(String.init) ?? ""
-        return VStack(spacing: 8) {
-            Button { session.select(track: t) } label: {
-                HStack(spacing: 6) {
-                    Text("\(t + 1)").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.onColour)
-                        .frame(width: 24, height: 24).background(RoundedRectangle(cornerRadius: 6).fill(colour))
-                    Text(name).font(.system(size: 13, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(track.mute ? Theme.textTertiary : Theme.text).lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: 0)
-                }
-                .frame(minHeight: 44).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Track \(t + 1), \(track.displayName)")
-            .accessibilityAddTraits(selected ? .isSelected : [])
-            KnobControl(ui: ui, face: { spec, dragging in
-                AnyView(FaderFace(spec: spec, tint: track.mute ? Theme.textTertiary : colour, hot: dragging))
-            }) { levelSpec(t) }
-            .frame(maxHeight: .infinity)
-            HStack(spacing: 4) {
-                KnobControl(ui: ui, size: 40) { panSpec(t) }
-                if let id = revID { KnobControl(ui: ui, size: 40) { revSpec(t, id) } }
-            }
-            Button { session.set(track: t, param: Param.mute, to: track.mute ? 0 : 1) } label: {
-                Text("MUTE").font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(track.mute ? Theme.onColour : Theme.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(track.mute ? Theme.text : Theme.control))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .accessibilityLabel("Mute track \(t + 1)")
-            .accessibilityAddTraits(.isToggle)
-            .accessibilityValue(track.mute ? "muted" : "playing")
+    private func row(_ t: Int, _ id: Int?) -> MixRow {
+        let tr = session.tracks[t]
+        var r = MixRow(track: t, name: Entries.trackName(t, session: session), level: tr.level,
+                       levelDefault: session.trackDesc(Param.level)?.defaultValue, pan: tr.pan, mute: tr.mute,
+                       selected: t == session.selectedTrack)
+        if let id {
+            let v = t == session.selectedTrack && id < session.params.count ? session.params[id] : session.everyTrack[id]?[t] ?? 0
+            let d = session.trackDesc(id), f = formatValue(d, v)
+            r.revID = id; r.rev = v; r.revRange = (d?.min ?? 0)...(d?.max ?? 127); r.revDefault = d?.defaultValue
+            r.revShown = f.shown; r.revSpoken = f.spoken
         }
-        .padding(8)
-        .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 12).fill(selected ? colour.opacity(0.14) : Theme.well))
-        .accessibilityElement(children: .contain)
+        return r
     }
 
     /// LEVEL as Skiff writes it under the fader: its dB ((v − 112) / 2), OFF at 0.
@@ -172,54 +269,79 @@ struct MixerStrips: View {
     }
     /// PAN as Skiff writes it (pan_txt): C, L100…, R100 at the top.
     static func pan(_ p: Int) -> String { p == 0 ? "C" : p < 0 ? "L\(-p * 100 / 64)" : "R\(p * 100 / 63)" }
-
-    private func levelSpec(_ t: Int) -> KnobSpec {
-        let tr = session.tracks[t]
-        return KnobSpec(id: "mix.level\(t)", colour: Theme.track[t], label: "LEVEL", value: tr.level, range: 0...127, stepperStep: 8,
-                        shown: Self.dB(tr.level), spoken: tr.level == 0 ? "off" : Self.dB(tr.level).replacingOccurrences(of: "dB", with: "decibels"),
-                        bipolar: false, defaultValue: session.trackDesc(Param.level)?.defaultValue) { v in
-            session.set(track: t, param: Param.level, to: v)
-        }
-    }
-    private func panSpec(_ t: Int) -> KnobSpec {
-        let p = session.tracks[t].pan
-        return KnobSpec(id: "mix.pan\(t)", colour: Theme.track[t], label: "PAN", value: p, range: -64...63, stepperStep: 4,
-                        shown: Self.pan(p), spoken: p == 0 ? "centre" : p < 0 ? "\(-p) left" : "\(p) right",
-                        bipolar: true, defaultValue: 0) { session.set(track: t, param: Param.pan, to: $0) }
-    }
-    private func revSpec(_ t: Int, _ id: Int) -> KnobSpec {
-        let v = t == session.selectedTrack && id < session.params.count ? session.params[id] : session.everyTrack[id]?[t] ?? 0
-        let d = session.trackDesc(id), f = formatValue(d, v)
-        return KnobSpec(id: "mix.rev\(t)", colour: Theme.track[t], label: "REV", value: v, range: (d?.min ?? 0)...(d?.max ?? 127),
-                        stepperStep: 8, shown: f.shown, spoken: f.spoken, bipolar: false, defaultValue: d?.defaultValue) {
-            session.set(track: t, param: id, to: $0)
-        }
-    }
+    /// 0 dB on the LEVEL fader.
+    static let unity = 112
 }
 
-/// The fader: the track from the foot, filled to LEVEL in the track's colour, a white cap; the dB under it.
-private struct FaderFace: View {
-    let spec: KnobSpec
-    let tint: Color
-    let hot: Bool
+/// One track's strip: its chip and name (tap to select the track, as the Song tab's lane headers), LEVEL on a
+/// sticky fader in the track's colour, PAN and the REVERB send across, MUTE a toggle chiclet (down is muted).
+private struct MixerStrip: View, Equatable {
+    let session: DeviceSession
+    let row: MixRow
+    let touched: () -> Void
+
+    nonisolated static func == (a: MixerStrip, b: MixerStrip) -> Bool { a.session === b.session && a.row == b.row }
 
     var body: some View {
-        VStack(spacing: 6) {
-            GeometryReader { g in
-                let h = g.size.height, f = CGFloat(min(max(spec.fraction, 0), 1)) * h
-                ZStack(alignment: .bottom) {
-                    Capsule().fill(Theme.stepEmpty).frame(width: 8)
-                    Capsule().fill(tint).frame(width: 8, height: max(0, f))
-                    RoundedRectangle(cornerRadius: 2).fill(hot ? Theme.text : Theme.text.opacity(0.9))
-                        .frame(width: 30, height: 5).offset(y: -max(0, f - 2.5))
+        let _ = BodyCounter.tick("mixer.strip")
+        let t = row.track, colour = Theme.track[t]
+        VStack(spacing: 12) {
+            Button { session.select(track: t) } label: {
+                HStack(spacing: 8) {
+                    TrackChip(track: t, selected: row.selected).frame(width: 28, height: 28)
+                    Text(row.name).font(.system(size: 13, weight: row.selected ? .semibold : .regular))
+                        .foregroundStyle(row.selected ? Theme.text : Theme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .frame(minHeight: 44).contentShape(Rectangle())
             }
-            .frame(minHeight: 60)
-            Text(spec.shown).font(.system(size: 15, weight: .semibold)).monospacedDigit()
-                .foregroundStyle(spec.value == 0 ? Theme.textTertiary : Theme.text)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Track \(t + 1), \(row.name)")
+            .accessibilityHint("Selects the track")
+            .accessibilityAddTraits(row.selected ? .isSelected : [])
+            Fader(axis: .vertical, spec: levelSpec, tint: row.mute ? Theme.textTertiary : colour, nudge: 2,
+                  detent: MixerStrips.unity, touched: touched)
+                .frame(maxHeight: .infinity)
+            Fader(axis: .horizontal, spec: panSpec, tint: colour, touched: touched)
+            if row.rev != nil { Fader(axis: .horizontal, spec: revSpec, tint: colour, touched: touched) }
+            Button { session.set(track: t, param: Param.mute, to: row.mute ? 0 : 1) } label: {
+                HStack(spacing: 6) {
+                    LED(on: row.mute)
+                    Text("MUTE").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(row.mute ? Theme.text : Theme.textSecondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .latchedKey(row.mute, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSink(latched: row.mute))
+            .accessibilityLabel("Mute track \(t + 1)")
+            .accessibilityAddTraits(.isToggle)
+            .accessibilityValue(row.mute ? "muted" : "playing")
         }
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 12).fill(row.selected ? colour.opacity(0.12) : Theme.well))
+        .accessibilityElement(children: .contain)
+    }
+
+    private var levelSpec: KnobSpec {
+        let t = row.track, v = row.level
+        return KnobSpec(id: "mix.level\(t)", colour: Theme.track[t], label: "LEVEL", value: v, range: 0...127, stepperStep: 2,
+                        shown: MixerStrips.dB(v), spoken: v == 0 ? "off" : MixerStrips.dB(v).replacingOccurrences(of: "dB", with: "decibels"),
+                        bipolar: false, defaultValue: row.levelDefault ?? MixerStrips.unity) { session.set(track: t, param: Param.level, to: $0) }
+    }
+    private var panSpec: KnobSpec {
+        let t = row.track, p = row.pan
+        return KnobSpec(id: "mix.pan\(t)", colour: Theme.track[t], label: "PAN", value: p, range: -64...63, stepperStep: 4,
+                        shown: MixerStrips.pan(p), spoken: p == 0 ? "centre" : p < 0 ? "\(-p) left" : "\(p) right",
+                        bipolar: true, defaultValue: 0) { session.set(track: t, param: Param.pan, to: $0) }
+    }
+    private var revSpec: KnobSpec {
+        let t = row.track, id = row.revID ?? 0
+        return KnobSpec(id: "mix.rev\(t)", colour: Theme.track[t], label: "REVERB", value: row.rev ?? 0, range: row.revRange,
+                        stepperStep: 4, shown: row.revShown, spoken: row.revSpoken, bipolar: false, defaultValue: row.revDefault) { session.set(track: t, param: id, to: $0) }
     }
 }
 
