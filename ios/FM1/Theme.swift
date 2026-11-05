@@ -28,7 +28,6 @@ enum Theme {
     static let tones = [0x26262B, 0x2D2D33, 0x34343B, 0x3E3E46, 0x48484F].map { Color(hex: $0) }
     /// Arrange's blocks on Skiff: greys, told apart by the pattern number on them (canvas board A).
     static let blockTones = [0x2E2E35, 0x3A3A42, 0x46464F, 0x52525C].map { Color(hex: $0) }
-    static let blockDim = Color(hex: 0xE4E4E7)            // a block's entry letter and REPS, on its grey
 
     static let text = Color(hex: 0xEDEDF0)
     static let textSecondary = Color(hex: 0xA1A1AA)

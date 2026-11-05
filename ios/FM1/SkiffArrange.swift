@@ -232,7 +232,8 @@ enum Entries {
     static func letter(_ i: Int) -> String { String(UnicodeScalar(UInt8(65 + i))) }
     static func letters(_ r: ClosedRange<Int>) -> String { r.count == 1 ? letter(r.lowerBound) : "\(letter(r.lowerBound))–\(letter(r.upperBound))" }
     static func number(_ p: Int) -> String { String(format: "%02d", p) }
-    /// Blocks are greys, told apart by the number on them: four tones, by pattern number.
+    /// Blocks take their track's colour (Scott, 2026-11-05); a pattern no single track names is one of
+    /// four greys, by its number.
     static func tone(_ p: Int) -> Color { Theme.blockTones[(p - 1) % Theme.blockTones.count] }
 
     @MainActor static func soundName(_ s: EntrySound, session: DeviceSession) -> String {
@@ -369,7 +370,7 @@ struct Lane: View {
                 Text(Entries.number(spot.pattern)).font(.system(size: 15, weight: .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .frame(width: max(44, x(spot.ticks) - 4), height: SkiffArrangePage.laneHeight - 12, alignment: .topLeading)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(ArrangeColour.current.fill(track: track, pattern: spot.pattern)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[track]))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.text, lineWidth: 2))
                     .elevationShadow(.held, Look())
                     .opacity(0.9)
@@ -543,7 +544,6 @@ struct BlockView: View {
     let linked: Bool
     let playing: Bool
     @Environment(\.look) private var look
-    @AppStorage(ArrangeColour.key) private var colour = ArrangeColour.solid
 
     private var first: SongEntry { list.entries[block.entries.lowerBound] }
     private var isRest: Bool { block.kind != .pattern }
@@ -566,10 +566,10 @@ struct BlockView: View {
     var body: some View {
         let shape = BlockShape(cut: sound != nil ? 12 : 0)
         let wide = width >= 56
-        let solid = colour == .solid && !isRest
+        let solid = !isRest
         // on a solid track colour every line is the dark text (6:1 or better on each); weight ranks them
-        let strong = isRest ? Theme.textSecondary : solid ? Theme.onColour : Theme.text
-        let dim = isRest ? Theme.textSecondary : solid ? Theme.onColour : Theme.blockDim
+        let strong = solid ? Theme.onColour : Theme.textSecondary
+        let dim = strong
         VStack(alignment: .leading, spacing: 2) {
             if wide {
                 Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(dim)
@@ -586,7 +586,7 @@ struct BlockView: View {
             if isRest {
                 shape.stroke(Theme.disabledOutline, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
             } else {
-                shape.fill(colour.fill(track: track, pattern: first.pattern))
+                shape.fill(Theme.track[track])
                     .overlay { if block.isChain { ChainDividers(parts: block.parts, reps: block.reps) } }
             }
         }

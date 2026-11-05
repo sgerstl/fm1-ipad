@@ -17,7 +17,7 @@ Not shown: the disconnected state (FakeSkiff can't be unplugged), the drag in pr
 
 ## Colour (Scott: "the arrange page needs color")
 
-Each lane in its track's colour, three ways to compare (Developer › Arrange blocks, or `-arrangeColour solid|tint|grey`). Solid is the default now.
+Each lane in its track's colour, three ways compared. **Scott picked solid (2026-11-05)**; the switch and the other two are gone.
 
 | Track colour (solid) | Tinted | Grey (the spec's) |
 |---|---|---|
