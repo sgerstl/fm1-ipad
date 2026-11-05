@@ -172,6 +172,7 @@ struct PressSink: ButtonStyle {
 struct DeveloperMenu: View {
     @AppStorage(Look.styleKey) private var style = LookStyle.flat
     @AppStorage(Look.strengthKey) private var strength = ElevationStrength.medium
+    @AppStorage(ArrangeColour.key) private var arrange = ArrangeColour.solid
 
     var body: some View {
         #if DEBUG
@@ -184,6 +185,11 @@ struct DeveloperMenu: View {
                 Picker("Elevation", selection: $strength) {
                     ForEach(ElevationStrength.allCases) { Text($0.rawValue.capitalized).tag($0) }
                 }
+            }
+            Picker("Arrange blocks", selection: $arrange) {
+                Text("Track colour").tag(ArrangeColour.solid)
+                Text("Tinted").tag(ArrangeColour.tint)
+                Text("Grey").tag(ArrangeColour.grey)
             }
         }
         #endif

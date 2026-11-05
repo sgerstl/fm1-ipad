@@ -14,3 +14,13 @@ The iPad's Arrange tab on Skiff 2.0+, in the demo (`-demo -demo-skiff -page song
 | ![](08-iphone-not-yet.jpg) | **08** The iPhone: Arrange on Skiff is on the iPad for now (step 6 isn't designed). |
 
 Not shown: the disconnected state (FakeSkiff can't be unplugged), the drag in progress (insertion line, ghost and its sentence: seen in the simulator, not kept), the hold menu, the tap-after-last menu.
+
+## Colour (Scott: "the arrange page needs color")
+
+Each lane in its track's colour, three ways to compare (Developer › Arrange blocks, or `-arrangeColour solid|tint|grey`). Solid is the default now.
+
+| Track colour (solid) | Tinted | Grey (the spec's) |
+|---|---|---|
+| ![](09-colour-solid.jpg) | ![](09-colour-tint.jpg) | ![](09-colour-grey.jpg) |
+
+On solid, all block text is the dark onColour (6:1 or better on each of Skiff's six), the selection ring sits outside the block on the lane (a light ring on amber or lime would be under 3:1), and linked copies' dashes are dark.

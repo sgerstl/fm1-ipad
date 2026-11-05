@@ -381,7 +381,9 @@ struct PatternBin: View {
         return HStack(spacing: 10) {
             Text(Entries.number(p + 1)).font(.system(size: 13, weight: .semibold))
                 .frame(width: 32, height: 28)
-                .background(RoundedRectangle(cornerRadius: 6).fill(free ? Theme.well : Entries.tone(p + 1)))
+                .foregroundStyle(!free && tracks.count == 1 && ArrangeColour.current == .solid ? Theme.onColour : Theme.text)
+                .background(RoundedRectangle(cornerRadius: 6).fill(free ? Theme.well
+                    : tracks.count == 1 ? ArrangeColour.current.fill(track: tracks[0], pattern: p + 1) : Entries.tone(p + 1)))
             VStack(alignment: .leading, spacing: 2) {
                 Text(free ? "Free" : tracks.isEmpty ? "Not in this song"
                      : tracks.count == 1 ? "T\(tracks[0] + 1) \(Entries.trackName(tracks[0], session: session))" : tracks.map { "T\($0 + 1)" }.joined(separator: ", "))
@@ -469,5 +471,23 @@ struct OfflineBar: View {
         .elevated(.panel, radius: 10)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)
+    }
+}
+
+/// How Arrange's blocks are coloured (Scott, 2026-11-05: "the arrange page needs color"): each lane in its
+/// track's colour, solid or as a tint, or the spec's greys. A developer setting while the three are
+/// compared on the iPad.
+enum ArrangeColour: String, CaseIterable, Identifiable {
+    case solid, tint, grey
+    var id: String { rawValue }
+    static let key = "arrangeColour"
+    static var current: ArrangeColour { UserDefaults.standard.string(forKey: key).flatMap(ArrangeColour.init) ?? .solid }
+
+    func fill(track t: Int, pattern p: Int) -> Color {
+        switch self {
+        case .solid: Theme.track[t]
+        case .tint: Theme.track[t].opacity(0.3)
+        case .grey: Entries.tone(p)
+        }
     }
 }

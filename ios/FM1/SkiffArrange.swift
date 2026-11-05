@@ -369,7 +369,7 @@ struct Lane: View {
                 Text(Entries.number(spot.pattern)).font(.system(size: 15, weight: .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .frame(width: max(44, x(spot.ticks) - 4), height: SkiffArrangePage.laneHeight - 12, alignment: .topLeading)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Entries.tone(spot.pattern)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(ArrangeColour.current.fill(track: track, pattern: spot.pattern)))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.text, lineWidth: 2))
                     .elevationShadow(.held, Look())
                     .opacity(0.9)
@@ -543,6 +543,7 @@ struct BlockView: View {
     let linked: Bool
     let playing: Bool
     @Environment(\.look) private var look
+    @AppStorage(ArrangeColour.key) private var colour = ArrangeColour.solid
 
     private var first: SongEntry { list.entries[block.entries.lowerBound] }
     private var isRest: Bool { block.kind != .pattern }
@@ -565,13 +566,17 @@ struct BlockView: View {
     var body: some View {
         let shape = BlockShape(cut: sound != nil ? 12 : 0)
         let wide = width >= 56
+        let solid = colour == .solid && !isRest
+        // on a solid track colour every line is the dark text (6:1 or better on each); weight ranks them
+        let strong = isRest ? Theme.textSecondary : solid ? Theme.onColour : Theme.text
+        let dim = isRest ? Theme.textSecondary : solid ? Theme.onColour : Theme.blockDim
         VStack(alignment: .leading, spacing: 2) {
             if wide {
-                Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(isRest ? Theme.textSecondary : Theme.blockDim)
-                Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(isRest ? Theme.textSecondary : Theme.text)
-                Text(sub).font(.system(size: 12)).foregroundStyle(isRest ? Theme.textSecondary : Theme.blockDim)
+                Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(dim)
+                Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(strong)
+                Text(sub).font(.system(size: 12)).foregroundStyle(dim)
             } else {
-                Text(isRest ? "–" : label).font(.system(size: 13, weight: .semibold)).foregroundStyle(isRest ? Theme.textSecondary : Theme.text)
+                Text(isRest ? "–" : label).font(.system(size: 13, weight: .semibold)).foregroundStyle(strong)
             }
         }
         .lineLimit(1)
@@ -581,17 +586,19 @@ struct BlockView: View {
             if isRest {
                 shape.stroke(Theme.disabledOutline, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
             } else {
-                shape.fill(Entries.tone(first.pattern))
+                shape.fill(colour.fill(track: track, pattern: first.pattern))
                     .overlay { if block.isChain { ChainDividers(parts: block.parts, reps: block.reps) } }
             }
         }
         .overlay {
-            if selected { shape.stroke(Theme.text, lineWidth: 2).padding(1) }
-            else if linked { shape.stroke(Theme.textSecondary, style: StrokeStyle(lineWidth: 2, dash: [5, 4])).padding(4) }
+            // on a solid colour the ring goes outside, on the lane (light on amber would be under 3:1), and
+            // the linked copies' dashes are dark
+            if selected { shape.stroke(Theme.text, lineWidth: 2).padding(solid ? -3 : 1) }
+            else if linked { shape.stroke(solid ? Theme.onColour : Theme.textSecondary, style: StrokeStyle(lineWidth: 2, dash: [5, 4])).padding(4) }
         }
         .overlay(alignment: .bottomLeading) {
             // the entry the track is on, while playing: a bar along the bottom
-            if playing { Capsule().fill(Theme.text).frame(width: min(24, width - 8), height: 3).padding(6) }
+            if playing { Capsule().fill(solid ? Theme.onColour : Theme.text).frame(width: min(24, width - 8), height: 3).padding(6) }
         }
         .compositingGroup()
         .shadow(color: .black.opacity(selected && look.flat ? look.shadow(.selected).opacity : 0),
