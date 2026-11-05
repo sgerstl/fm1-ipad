@@ -137,11 +137,10 @@ extension AppView {
                         SoundTab(session: session, ui: ui)
                     }
                 case .mixer:
-                    HStack(alignment: .top, spacing: 16) {
-                        leftColumn { FunctionPads(session: session, ui: ui) }
-                        SoundPanelHost(session: session, ui: ui, makesRoom: true) {
-                            MixerPage(session: session, ui: ui)
-                        }
+                    // full width (Scott, 2026-11-06): a strip's name selects its track, so no left column; a button's
+                    // panel pushes the strips and the carousel narrower and gives the width back when it closes
+                    SoundPanelHost(session: session, ui: ui, makesRoom: true) {
+                        MixerPage(session: session, ui: ui)
                     }
                 }
             }
@@ -158,7 +157,8 @@ extension AppView {
                     .transition(.opacity)
                     .zIndex(1)
             }
-            if !skiffArrange {
+            // (none over Skiff's Song tab or the Mixer: their own rows select a track)
+            if !skiffArrange, ui.page != .mixer {
                 Overview(session: session, ui: ui, expanded: ui.page == .sequencer || ui.timelineOpen)
                     .zIndex(2)
             }

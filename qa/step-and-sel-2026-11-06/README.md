@@ -34,3 +34,20 @@
 ## Design pre-flight
 
 Ran it. There are no new components: the cards' existing lit edge, plus a shadow for the lift. The graphs use Skiff's layout in the track's colour, with white for Skiff's accent. Motion is 200 ms or none under Reduce Motion. The FOLLOW and CHORD notes are 13/11 pt in the graph wells.
+
+## 3. ARP and ARP 2 as one card
+
+ARP and ARP 2 are now one card, like LFO and INSERT: two rows labelled with their page names over the one arpeggio graph (`arp-merged.jpg`). Tapping a row's label focuses it and, linked, sends the FM-1 to that page. Repeat presses of ARP step between the rows, and the card keeps the highlight.
+
+**Skiff's other pairs on one graph** (params.c PAGES):
+- LFO and LFO 2 (`GR_LFO`) and INSERT and INSERT 2 (`GR_INS`), already merged;
+- ARP and ARP 2 (`GR_ARP` and `GR_ARP2`, both `graph_arp`), now merged.
+
+ENV and ENV 2 are both `GR_ADSR`, but each draws its own envelope, so they stay two cards. OP1–OP4 ENV share `GR_ADSR` too, but Skiff 2.2 never shows them.
+
+## 4. The Mixer full width; the highlight's move
+
+- **No left column on the Mixer, and no track box over it.** A strip's name selects its track. The strips and the shared-card carousel span the window beside the rail.
+- **A button's panel pushes the Mixer:** the strips and the carousel narrow beside it, then get the width back when it closes (`mixer-full-width-and-pushed.jpg`).
+- **The highlight's move:** the lit edge followed the FM-1's page and the lift followed the focused page, each on its own animation, so they could change on different frames and read as a jump. Both now follow one value, the card brought forward (the FM-1's page when linked, the focused page when not), in one 180 ms ease-out crossfade. It runs beside the carousel's 0.4 s spring rather than inside it, and is instant under Reduce Motion. The sound panel's stepping and Shape use the same card, so the same move.
+- Not checked: the crossfade watched frame by frame on a device. The screenshots can't show motion.

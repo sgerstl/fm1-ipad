@@ -286,7 +286,9 @@ struct SoundTab: View {
     /// Skiff: GLO is the mixer panel and SEQ's PATTERN the Sequence page's whole-track controls (the button map).
     static let skiffOrder: [SoundFamily] = [.env, .lfo, .fx, .sel, .edit, .arp]
     /// Pages that drive one thing, shown as rows over its one graph: the first page's title → the others'.
-    static let merged: [String: [String]] = ["LFO": ["LFO 2"], "INSERT": ["INSERT 2"]]
+    /// (Skiff's pairs on one graph: GR_LFO, GR_INS, and GR_ARP / GR_ARP2, both graph_arp. ENV and ENV 2 are both GR_ADSR
+    /// but each draws its own envelope: two cards.)
+    static let merged: [String: [String]] = ["LFO": ["LFO 2"], "INSERT": ["INSERT 2"], "ARP": ["ARP 2"]]
 
     var body: some View {
         let _ = BodyCounter.tick("SoundTab")
@@ -441,6 +443,8 @@ struct SoundCard: View, Equatable {
     let pages: [SoundPage]
     let marks: ShapeMarks
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The highlight moving between cards: Skiff's quick ease-out (about 135–200 ms), beside a carousel's snap.
+    static let focusMove: Animation = .easeOut(duration: 0.18)
 
     /// The same pages with the same state objects: nothing to redraw from the parent (what the card shows it
     /// observes itself), so a rebuilt scroll doesn't rebuild every card.
@@ -454,6 +458,9 @@ struct SoundCard: View, Equatable {
         let first = rows[0]
         let onDeviceRow = rows.firstIndex { onDevice($0) }
         let focused = ui.focusedPage.map { f in rows.contains { $0.id == f.id } } ?? false
+        // the card brought forward: the FM-1's page when linked, else the one focused here; its edge and its lift move
+        // together, one crossfade from the card before (they jumped, 2026-11-06, on two triggers of their own)
+        let forward = session.screenLinked ? onDeviceRow != nil : focused
         let activeRow = rows.firstIndex { isActive($0) }
         let marked = marks.key
         let lit = rows.contains { p in marked != nil && (p.ids + p.routes.joined()).contains { id in id.map { "s\(p.scope).\($0)" } == marked } }
@@ -520,9 +527,9 @@ struct SoundCard: View, Equatable {
         }
         .padding(16)
         .panel()
-        // brought forward by a button's press: lifted a little (and lit, below, when nothing's linked to light it)
-        .shadow(color: .black.opacity(focused ? 0.45 : 0), radius: 12, y: 6)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focused)
+        // brought forward: lifted a little, and lit along the top (below)
+        .shadow(color: .black.opacity(forward ? 0.45 : 0), radius: 12, y: 6)
+        .animation(reduceMotion ? nil : Self.focusMove, value: forward)
         // the page on the FM-1's screen: a lit edge along the top, the playhead's light
         .overlay(alignment: .top) {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
@@ -530,8 +537,8 @@ struct SoundCard: View, Equatable {
                 .padding(.horizontal, 14)
                 .offset(y: 1)                    // on the panel's top edge
                 .glow(Theme.text.opacity(0.7), radius: 6)
-                .opacity(onDeviceRow != nil || (!session.screenLinked && focused) ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: onDeviceRow != nil || focused)   // the light fades
+                .opacity(forward ? 1 : 0)
+                .animation(reduceMotion ? nil : Self.focusMove, value: forward)   // the light crossfades to the next card
                 .accessibilityHidden(true)
         }
         .accessibilityValue(onDeviceRow != nil ? "on the FM-1" : "")
