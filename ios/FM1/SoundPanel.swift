@@ -32,7 +32,7 @@ enum SoundPanelControl {
     /// The FM-1's screen moved while the Song tab is up: ENV LFO FX SEL EDIT ARP bring in the panel (the tab stays);
     /// HOME closes it. true: handled here; false: the button map's (SkiffNavigator) to follow.
     @MainActor static func follow(_ s: UIState, session: DeviceSession, ui: EditorUI) -> Bool {
-        guard ui.followDevice, session.screenLinked, ui.songTab, ui.page == .song else { return false }
+        guard ui.followDevice, session.screenLinked, ui.songTab, ui.page == .song || ui.page == .mixer else { return false }
         if s.home { ui.soundPanel = nil; return false }
         guard s.layer == 0, s.menu == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family) else { return false }
         press(page.family, session: session, ui: ui, fromDevice: true)
@@ -165,6 +165,9 @@ struct SoundPanel: View {
 struct SoundPanelHost<Content: View>: View {
     let session: DeviceSession
     let ui: EditorUI
+    /// The Mixer tab: the page makes way for the panel (its soundPanelRoom hook) instead of being covered, so a tap
+    /// on it is the page's own (a fader) and doesn't close the panel; ✕, the key again, HOME or a tab do.
+    var makesRoom = false
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.grid) private var grid
@@ -176,8 +179,9 @@ struct SoundPanelHost<Content: View>: View {
         return HStack(alignment: .top, spacing: 12) {
             content()
                 .environment(\.grid, narrowed)
+                .environment(\.soundPanelRoom, makesRoom && ui.soundPanel != nil ? SoundPanel.width + 12 : 0)
                 .overlay {
-                    if let s = ui.soundPanel, !s.pinned {
+                    if let s = ui.soundPanel, !s.pinned, !makesRoom {
                         Color.clear.contentShape(Rectangle())
                             .onTapGesture { SoundPanelControl.close(ui, unlessPinned: true) }
                             .accessibilityHidden(true)

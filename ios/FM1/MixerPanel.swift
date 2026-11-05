@@ -46,6 +46,7 @@ struct MixerPage: View {
                         LED(on: on)
                         Text(t.title).font(.system(size: 13, weight: on ? .semibold : .regular))
                             .foregroundStyle(on ? Theme.text : Theme.textSecondary)
+                            .lineLimit(1).fixedSize()           // narrowed by the sound panel: never a letter a line
                     }
                     .padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
                 }
@@ -310,6 +311,7 @@ private struct MixerStrip: View, Equatable {
                     LED(on: row.mute)
                     Text("MUTE").font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(row.mute ? Theme.text : Theme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .latchedKey(row.mute, 8)

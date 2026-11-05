@@ -82,6 +82,7 @@ struct Fader: View {
         VStack(spacing: 4) {
             HStack {
                 Text(spec.label).font(.system(size: 11, weight: .semibold)).tracking(0.4).foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 readout(size: 13)
             }
@@ -115,6 +116,7 @@ struct Fader: View {
     private func readout(size: CGFloat) -> some View {
         let held = startValue != nil
         return Text(spec.shown).font(.system(size: size, weight: .semibold)).monospacedDigit()
+            .lineLimit(1).fixedSize()                   // whole, however narrow the strip: the label gives way
             .foregroundStyle(held ? Theme.onColour : spec.value == spec.range.lowerBound && axis == .vertical ? Theme.textTertiary : Theme.text)
             .padding(.horizontal, held ? 8 : 0).frame(minHeight: size + 9)
             .background(RoundedRectangle(cornerRadius: 6).fill(held ? Theme.text : .clear))

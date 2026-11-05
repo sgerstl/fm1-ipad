@@ -41,3 +41,18 @@ Ran it. The rail keys are 48 × 44 pt, Pin and ✕ are 44 pt, and Sounds is 44 p
 - The panel covers the right side of the pattern grid and the header's "Following the song" key.
 - The narrower step changes the Song tab's grid even while the panel is closed.
 - Sounds isn't inside the panel yet.
+
+## On the Mixer tab (after the Mixer redesign merged)
+
+Merged `refs/heads/claude/mixer-tab-8e519e` (dfccaf1) on Scott's "Yes, merge it", with no conflicts. Its hook is `soundPanelRoom`, the width the strips and cards make way by. The Mixer tab now sits in `SoundPanelHost(makesRoom: true)`:
+- the same rail;
+- the FM-1's ENV to ARP while the Mixer is up;
+- the Mixer's own pads (lit for the open button).
+
+All three bring in the panel for the selected track (a strip's name selects it), and the page makes way rather than being covered. Nothing is covered, so a tap on the Mixer is the Mixer's own (a fader). It doesn't close the panel; ✕, the same key, HOME or another tab do. GLO still lands on the Mixer and steps its sections.
+
+At that width the strips' labels used to wrap a letter at a time: MUTE, the section names, the faders' values. They stay on one line now, and the label gives way first ("REV…"); see `mixer-closed-and-fx.jpg`.
+
+Checked: the full package suite (219 tests); the simulator, Mixer closed and with `-sound-panel FX`. Not checked: GLO's stepping against the linked fake with the panel open; the FM-1's buttons on the Mixer against skiff-sim.
+
+**For the polish pass:** with the panel open, the six strips are about 64 pt wide each. The names show only the chip and the REVERB label shortens to "REV…". An overlay over the cards, instead of making way, is the other choice.

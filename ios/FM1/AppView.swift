@@ -137,7 +137,9 @@ extension AppView {
                 case .mixer:
                     HStack(alignment: .top, spacing: 16) {
                         leftColumn { FunctionPads(session: session, ui: ui) }
-                        MixerPage(session: session, ui: ui)
+                        SoundPanelHost(session: session, ui: ui, makesRoom: true) {
+                            MixerPage(session: session, ui: ui)
+                        }
                     }
                 }
             }

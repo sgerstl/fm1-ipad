@@ -109,6 +109,7 @@ struct FunctionPads: View {
             if session.screenLinked, let s = session.deviceScreen { return !s.home && [ScreenMap.of(session).notes, ScreenMap.of(session).pattern].contains(s.page) && ui.page != .library }
             return ui.page == .sound && ui.soundFamily == .seq
         default:
+            if let f = pad.family, ui.soundPanel?.family == f { return true }     // its pages on the sound panel
             guard ui.page == .sound, let f = pad.family else { return false }
             return ui.soundFamily == f
         }
@@ -163,6 +164,11 @@ struct FunctionPads: View {
             }
         default:
             guard let f = pad.family else { return }
+            // the Mixer tab keeps its place: the button's pages come in on the sound panel, as from its rail
+            if ui.songTab, ui.page == .mixer, SoundPanelControl.families.contains(f) {
+                SoundPanelControl.press(f, session: session, ui: ui)
+                return
+            }
             // on the drum track a button without drum pages still opens its pages on the FM-1 ("DRUM
             // TRACK" there), so both screens show the same button
             let pages = SoundPage.reached(session, f)
