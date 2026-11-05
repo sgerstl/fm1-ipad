@@ -139,12 +139,24 @@ struct SkiffArrangePage: View {
         }
         .frame(height: 24 + CGFloat(session.trackCount) * (Self.laneHeight + Self.laneGap))
         .disabled(store.offline)
-        // a keyboard: arrows move between blocks and lanes, + and − set REPS, Delete deletes, Return opens
-        .focusable()
-        .focusEffectDisabled()          // the selected block's ring is the focus
-        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow, .delete, .deleteForward, .return, .escape, "+", "=", "-"]) { k in
-            key(k.key) ? .handled : .ignored
+        // a keyboard: arrows move between blocks and lanes, + and − set REPS, Delete deletes, Return opens.
+        // Shortcuts on hidden buttons: iPadOS sends them without the lanes holding focus.
+        .background { keyboardShortcuts }
+    }
+
+    private var keyboardShortcuts: some View {
+        let keys: [(KeyEquivalent, String)] = [(.leftArrow, "Previous entry"), (.rightArrow, "Next entry"), (.upArrow, "Track above"),
+                                               (.downArrow, "Track below"), ("=", "Play once more"), ("-", "Play once less"),
+                                               (.delete, "Delete entry"), (.return, "Edit pattern"), (.escape, "Deselect")]
+        return ZStack {
+            ForEach(keys.indices, id: \.self) { i in
+                Button(keys[i].1) { _ = key(keys[i].0) }
+                    .keyboardShortcut(keys[i].0, modifiers: [])
+            }
         }
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     // MARK: Keyboard
