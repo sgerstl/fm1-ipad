@@ -41,15 +41,15 @@ If anything goes wrong, hold **OCT−** while powering on for USB rescue mode.
 
 ### Or install it from Jib (new, not yet tried on a real FM-1)
 
-Jib now carries the two firmwares it speaks, Skiff 2.2 and SLOOP 2.8.4 with the screen link, and can install either over the same USB cable. `FIRMWARE.md` lists the exact files and their SHA-256. **Until Scott has run it on his FM-1, use the Chrome installer above.** This is how it works once it's cleared:
+Jib now carries the two firmwares it speaks, Skiff 2.2 and SLOOP 2.8.4 with the screen link, plus M-VAVE's stock V15, and can install any of them over the same USB cable. `FIRMWARE.md` lists the exact files and their SHA-256. **Until Scott has run it on his FM-1, use the Chrome installer above.** This is how it works once it's cleared:
 
-- **On connect.** If the FM-1 runs something Jib doesn't speak (M-VAVE's firmware, another SLOOP or Skiff version), Jib says so and offers the install. If an earlier install was cut off and the FM-1 waits in update mode (USB name "Felucca Update", UPDATE MODE on its screen), Jib offers to finish it. M-VAVE's own update mode is left to M-VAVE's updater.
-- **On purpose.** Debug builds: tap the connection dot (the ⋯ menu on an iPhone), then Developer › Install firmware…, and pick Skiff or SLOOP.
+- **On connect.** If the FM-1 runs something Jib doesn't speak (M-VAVE's firmware, another SLOOP or Skiff version), Jib says so and offers the install. If an earlier install was cut off and the FM-1 waits in update mode (USB name "Felucca Update", UPDATE MODE on its screen), Jib offers to finish it. If a restore of stock V15 was cut off (M-VAVE's update mode, `ota-FM-1_015`), Jib offers to finish that, with V15 only. Any other update mode is left to its own updater.
+- **On purpose.** Debug builds: tap the connection dot (the ⋯ menu on an iPhone), then Developer › Install firmware…, and pick Skiff or SLOOP, or **Restore stock V15** under Back to stock. V15 goes on only if the FM-1 shipped with V15: a unit that ever ran V16 is refused before anything is written. Jib can't talk to stock firmware, so after a restore it offers Skiff or SLOOP the next time you plug in. There's no "install through stock": switching directly is what the sources support (`FIRMWARE.md`, "Going through stock V15").
 - **Before writing.** When the FM-1 is connected, Jib backs up every object the running firmware lists (projects, the music now, settings, presets, samples) to Files › On My iPad › Jib › Backups, in the firmware's own backup format, so its web editor can restore it. An install writes only the firmware and keeps the store, but SLOOP doesn't read Skiff's projects, so the backup is how you get them back.
 - **While it writes**, about a minute: keep Jib open and the FM-1 plugged straight in. The screen stays on and a full-screen view shows the progress. Jib won't start below 30% battery unless the iPad or iPhone is charging, because it powers the FM-1.
 - **If it's cut off.** Nothing is lost: the FM-1 waits in update mode at every power-on until a write finishes. Plug it straight in (no hub) and tap Run the install again; it finishes the write. Skiff's README, "If the FM-1 does not start", covers the computer-side ways back.
 
-To see the screens without an FM-1: launch with `-demo -demo-firmware picker` (or `loader`, `stock`, `foreign`, `installing`, `done`, `failed`). That uses a pretend FM-1 and never touches MIDI. Screenshots: `qa/firmware-install-2026-11-05/`.
+To see the screens without an FM-1: launch with `-demo -demo-firmware picker` (or `loader`, `stock`, `foreign`, `installing`, `done`, `failed`, and for stock V15 `picker-stock`, `stock-loader`, `restoring`, `restored`, `v16`). That uses a pretend FM-1 and never touches MIDI. Screenshots: `qa/firmware-install-2026-11-05/`.
 
 ## 3. Build and run the app
 

@@ -1,28 +1,33 @@
 # The firmware Jib carries
 
-Jib installs the FM-1 firmware it speaks, so testers don't need a computer. It carries exactly the files that were tested with the app, and refuses any file whose SHA-256 differs (`BundledFirmware` in `ios/SloopKit/Sources/SloopKit/FirmwarePackage.swift`). The files live in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
+Jib installs the FM-1 firmware it speaks, so testers don't need a computer, and puts M-VAVE's stock firmware back. It carries exactly the files that were tested with the app, and refuses any file whose SHA-256 differs (`BundledFirmware` in `ios/SloopKit/Sources/SloopKit/FirmwarePackage.swift`). The files live in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
 
-| | Skiff 2.2 | SLOOP 2.8.4 with the screen link |
-|---|---|---|
-| File | `skiff-2.2.fwsc` | `sloop-2.8.4-screen-link.fwsc` |
-| Size | 610,429 bytes | 610,052 bytes |
-| SHA-256 | `d0013c4f1a60bc2116178c72c60eacd3d8464cbfa40dbbb7f48ba790912d8603` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` |
-| Identity it reports | `FM-1_722` (its update loader: `ota-FM-1_722`) | `FM-1_900` (loader: `ota-FM-1_900`) |
-| INFO version | `FELUCCA v2.2` | `FELUCCA SLOOP 2.8.4`, protocol 12 |
-| Source | [illuminus5/skiff](https://github.com/illuminus5/skiff), tag `v2.2` | [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), tag `v2.8.4`, plus `sloop/0001-screen-link.patch` |
-| Built | 2026-11-05 from `~/code/skiff-src` at `db2ce89` (no firmware or tool changes since `v2.2`), `./build.sh --release 2.2` | 2026-11-01, see `sloop/README.md` |
-| Licence | GPL-3.0 | GPL-3.0 |
+| | Skiff 2.2 | SLOOP 2.8.4 with the screen link | Stock V15 |
+|---|---|---|---|
+| File | `skiff-2.2.fwsc` | `sloop-2.8.4-screen-link.fwsc` | `FM-1_015.fwsc` |
+| Size | 610,429 bytes | 610,052 bytes | 699,956 bytes |
+| SHA-256 | `d0013c4f1a60bc2116178c72c60eacd3d8464cbfa40dbbb7f48ba790912d8603` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
+| Identity it reports | `FM-1_722` (its update loader: `ota-FM-1_722`) | `FM-1_900` (loader: `ota-FM-1_900`) | `FM-1_015` (M-VAVE's loader: `ota-FM-1_015`) |
+| INFO version | `FELUCCA v2.2` | `FELUCCA SLOOP 2.8.4`, protocol 12 | (none: Jib doesn't speak to it) |
+| Update loader in the package | Skiff's (`FELUCCA-LOADER-1`) | SLOOP's (`FELUCCA-LOADER-1`) | M-VAVE's `usb_hid_ota.bin` (header CRC 0xEBAA, body CRC 0x5881, 0x4DE1 bytes) |
+| Source | [illuminus5/skiff](https://github.com/illuminus5/skiff), tag `v2.2` | [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), tag `v2.8.4`, plus `sloop/0001-screen-link.patch` | [m-vave/fm1_open](https://github.com/m-vave/fm1_open) `sdk/firmware/FM-1_015.fwsc`, commit `4c7496d` (added in `3be7fbd`) |
+| Built | 2026-11-05 from `~/code/skiff-src` at `db2ce89` (no firmware or tool changes since `v2.2`), `./build.sh --release 2.2` | 2026-11-01, see `sloop/README.md` | Not built: M-VAVE's binary, unchanged, downloaded 2026-11-05 |
+| Licence | GPL-3.0 | GPL-3.0 | Apache-2.0 (see below) |
 
 Notes:
 
 - The Skiff file was built here, not downloaded. Its hash hasn't been compared with the release on GitHub, and Skiff's build may not be byte-for-byte reproducible (SLOOP's differs by a build stamp). It is the file Jib was tested against.
+- The V15 file's hash is the one Skiff pins for its own "return to official V15" (`STOCK_V15_SHA256` in Skiff's `tools/fm1_install.py` and `web/fm1pkg.js`). That is the same file the FM-1 Firmware Hub serves for "Back to official V15".
 - Stock SLOOP 2.8.4 also reports `FM-1_900`; the app tells the screen-link build apart by asking `UI` (cmd 90) after connecting.
-- Both packages pass Skiff's `files_ok` and SLOOP's `package_damage`, and their flash.bin is 0x93000 bytes, the size both firmwares' update steps require.
+- All three packages' flash.bin is 0x93000 bytes. Skiff's and SLOOP's pass Skiff's `files_ok` and SLOOP's `package_damage`. V15's extra entries (types 50, 52, 161, 251) store CRCs of something else, so for it only flash.bin and the loader are CRC-checked, as Skiff's `files_ok` does. Only the pinned V15 file is ever installed with M-VAVE's loader: any other package without a Felucca loader is refused.
+- M-VAVE's current download is V16 (`FM-1_016`, 718,196 bytes, sha256 `d017fb65…61d5`). Jib doesn't carry it: Scott's FM-1 shipped with V15 and never ran V16, and V16's flash.bin (0xA9000) runs over the custom firmwares' project store.
 - Building Skiff on this Mac needs Python 3.12 with Pillow, fontTools and Homebrew's libraqm: `PYTHON=<a wrapper running uv run --python 3.12 --with pillow --with fonttools python> ./build.sh --release 2.2` (the system Python 3.9 fails in the font tools).
 
 ## Licence and source
 
-Both firmwares are GPL-3.0. Jib is private and goes to Scott and testers only (Xcode, TestFlight). Shipping the binaries inside the app counts as distributing them, so the source is offered: the picker names each source above, and this file links it. Before any public release, the App Store and GPL question in the vault's `firmware-install-from-app.md` still needs an informed read.
+Skiff and SLOOP are GPL-3.0. Jib is private and goes to Scott and testers only (Xcode, TestFlight). Shipping the binaries inside the app counts as distributing them, so the source is offered: the picker names each source above, and this file links it. Before any public release, the App Store and GPL question in the vault's `firmware-install-from-app.md` still needs an informed read.
+
+V15 is **not** GPL, and the fm1_open repository as a whole isn't Apache-2.0 either. Its own code is GPL-3.0 with an SDK linking exception, and its engine is a proprietary binary SDK. `THIRD_PARTY.md` there says the recovery image `sdk/firmware/FM-1_015.fwsc` (with `uboot.boot`, `ota.bin`, `cfg_tool.bin`, `boot-config.bin`) is distributed by M-VAVE under the Apache License 2.0, binary redistribution included. Apache-2.0 asks for the licence text and the notices to travel with the file. `FM-1_015.LICENSE.txt` sits beside it in the bundle, with the copyright line, the source commit and the full licence. The picker says "Apache-2.0, unchanged" and names the source. There is no source code to offer for it.
 
 ## How the install works
 
@@ -32,14 +37,50 @@ A port of Skiff's `tools/fm1_install.py` and `web/fm1ota.js` (`FirmwareInstaller
 2. **Step 2, the update loader** (USB name "Felucca Update") gets UPGRADE, reads the whole flash.bin once and checks its CRC, then writes the app area sector by sector (the app's header erased first and written last), asks 0xF0000000 and restarts.
 3. The new firmware's identity is checked against the package's.
 
-The device asks; Jib only answers. Only MIDI ports whose names an FM-1 uses (SLOOP's filter: `fm-1|felucca|sloop|clipper|ota|composite|sinco|usb-midi`) are opened, and a port gets nothing but the identity question until it answers with an FM-1 identity. Only Skiff's and SLOOP's loaders (`ota-FM-1_7xx`, `ota-FM-1_9xx`) are resumed.
+The device asks; Jib only answers. Only MIDI ports whose names an FM-1 uses (SLOOP's filter: `fm-1|felucca|sloop|clipper|ota|composite|sinco|usb-midi`) are opened, and a port gets nothing but the identity question until it answers with an FM-1 identity. A write is only finished by the loader that belongs to the package: Skiff's or SLOOP's (`ota-FM-1_7xx`, `ota-FM-1_9xx`) for those, M-VAVE's (`ota-FM-1_015`) for V15 and nothing else.
+
+**Stock V15 takes the same two steps**, through M-VAVE's own loader. From the sources:
+
+- Skiff's and SLOOP's step 1 (`firmware/src/ota.c`, `ota_stage`) recognise M-VAVE's loader by its CRCs and length. That loader rewrites the whole flash.bin, the 16 KiB boot head included, so they first read the package's head (32 reads) and compare it with the unit's. If it differs, they stop (`-5`): nothing is staged and nothing written. Otherwise they stage M-VAVE's loader at 0xE0000 and write an update record naming `ota-FM-1_015`, which becomes that loader's identity.
+- M-VAVE's loader reads flash.bin once, from the top down (Skiff's installer tests and its `WriteMeter`), and asks 0xF0000000. A cut leaves the record, so it comes back as `ota-FM-1_015` at power-on, and Jib finishes the write with V15.
+- **A unit that shipped with V16, or ever ran it, has V16's head**, so V15 is refused in step 1 (Skiff issue #64: "failed -5"). Jib names that, and refuses before anything is sent if the FM-1 already runs stock V16 or later. Scott's unit shipped with V15 (M-UPGRADE read "Version:15" on 2026-10-31) and never ran V16.
+- **Not known publicly, and not tested here:**
+  - the USB name M-VAVE's loader shows. The fake calls it "FM-1", and the port filter's generic names are there for it.
+  - whether that loader checks flash.bin's CRC, and when.
+  - whether it also writes V15's type-50 resource entry (0x11E20 bytes, aimed at the stock USR region 0xEA000). If it does, it writes over Skiff's pattern bank sectors and SLOOP's sample slot.
+- One more gap: if M-VAVE's own updater was installing V16 and was cut off, the FM-1 may sit in an M-VAVE update mode that Jib can't tell apart. Jib's offer says to finish that one with M-UPGRADE.
 
 **Cut off?** The update record stays, so the FM-1 comes back as the loader at every power-on until a write finishes, and writing again is safe. Jib waits up to two minutes for the loader to return and resumes, up to five tries; after that, running the install again finishes it.
 
-**What survives an install** (from the sources): the loader writes only the app area 0x4000–0x93000, never the store at 0x97000–0xE0000 where projects, presets and samples live. Switching firmware keeps those bytes but not always their meaning: Skiff converts SLOOP's projects when it loads them, SLOOP doesn't read Skiff's, and the two keep the autosave and the FM6 patches in each other's sectors. So Jib backs up everything the running firmware lists before it writes (`FirmwareBackup.swift`), as `sloop-backup` or `felucca-backup` JSON that the firmware's own web editor restores.
+**What survives an install** (from the sources): Skiff's and SLOOP's loaders write only the app area 0x4000–0x93000, never the store at 0x97000–0xE0000 where projects, presets and samples live. Switching firmware keeps those bytes but not always their meaning. Skiff converts SLOOP's projects when it loads them, and SLOOP doesn't read Skiff's. The two also keep the autosave and the FM6 patches in each other's sectors, and use 0xE7000–0xFBFFF differently (Skiff's pattern bank, SLOOP's 80 KiB sample slot). So Jib backs up everything the running firmware lists before it writes (`FirmwareBackup.swift`), as `sloop-backup` or `felucca-backup` JSON that the firmware's own web editor restores.
+
+## Going through stock V15 between custom firmwares: not offered
+
+Scott had read that every firmware installs cleanly from V15, but that one custom firmware over another can cause trouble, so maybe always go custom → V15 → custom. Checked 2026-11-05 against the Skiff, SLOOP, Felucca and fm1_open sources and issues, and the Firmware Hub. Full notes: `v15-switch-evidence.md` in the session notes folder. Labels: **established** (code or official docs), **emerging** (user reports), **speculative** (inference).
+
+- **A stop at V15 doesn't clean the store.** *Established:* Skiff's and SLOOP's loaders never touch it, and as far as V15's file list shows, none of its entries aims at 0x97000–0xE0000. *Emerging:* after SLOOP → V15 → SLOOP, the old settings and sequences all came back (SLOOP #188), and V15 showed "corrupted UI elements and configs" in between. SLOOP's own guide says the same: V15 reads what SLOOP left, and a factory reset in M-VAVE's firmware clears it.
+- **It costs data both ways.** *Established:* when V15 installs the next firmware, it stages its own loader at 0xE6000 with its record at 0xE7F00 (a V15 dump, Skiff `SMK37.md` and `tools/build.py`). That is Skiff's autosave B and first pattern-bank sector, and SLOOP's FM6 bank and the start of its sample slot (Skiff `storage.c`: "a later Felucca finds no valid copy"). *Speculative:* V15's resource entry for 0xEA000 may land on the same store on the way in.
+- **Direct custom → custom has no refusal and no brick path in the code.** *Established:* neither firmware's step 1 refuses the other's package. Both loaders write the app area only. Each firmware drops records it doesn't recognise by magic, size and checksum. *Emerging:* switching back and forth kept saves (Skiff #96, SLOOP #8). One custom → custom brick was reported (gr!mm → SLOOP, SLOOP #199), cause unknown.
+- **Nobody recommends the detour.** *Established:* the Firmware Hub says to try firmwares freely, with a backup. V15 first is advised only for particular targets, such as M-VAVE's Open V14 from Felucca 1.6.1 (Felucca #296) and Baud Girl's installer (SLOOP #8).
+- **On V16 units the detour is impossible** through Skiff or SLOOP: V15 is refused at the head check (Skiff #64).
+- **Where "it installs cleanly from V15" likely comes from** (*speculative*): installers for stock-based firmwares that accept only V15 as a starting point. Also older Felucca-family builds on the newer flash chip (0xB36014), which refuse every update until reflashed (Skiff #96, #102; Felucca #320; Skiff 2.2 knows both chips).
+
+So Jib doesn't offer "install through stock V15". It switches directly, after a backup on the running firmware, which is how anything the next firmware can't read comes back. "Restore stock V15" is its own picker item.
 
 ## Tested
 
-Offline, `swift test` in `ios/SloopKit` (FirmwareInstallTests, FirmwareBackupTests) against `FakeFM1`, which plays both steps as Skiff's `ota.c` and `ldr_core.c` do: full installs (SLOOP to Skiff, Skiff to SLOOP, stock to Skiff), the cable cut at 12 points of the write and 4 of the check, repeated cuts, a cut left unplugged then finished from the loader, a stalled loader, a loader that never appears, a tampered file, the wrong file, other gear on the MIDI setup, M-VAVE's update mode, a wrong identity after the write, cancel. What the fake doesn't do: the chip-key check and M-VAVE's official loader.
+Offline, `swift test` in `ios/SloopKit` (FirmwareInstallTests, FirmwareStockTests, FirmwareBackupTests) against `FakeFM1`. The fake plays both steps as Skiff's `ota.c` and `ldr_core.c` do, plus ota.c's official branch and M-VAVE's loader as Skiff's tests play it. Covered:
 
-**Not tested: a real FM-1.** The first real install needs Scott with the device.
+- Full installs: SLOOP to Skiff, Skiff to SLOOP, stock to Skiff, Skiff and SLOOP to V15, and V15 → Skiff → V15 → SLOOP.
+- Cable cuts: at 12 points of the custom write and 10 of the V15 write, and at 4 points of each check.
+- Repeated cuts, and a cut left unplugged, then finished from Skiff's or M-VAVE's loader.
+- Stalled loaders, and a loader that never appears.
+- A tampered file and the wrong file. The V15 file unpinned, or offered as another firmware, is refused.
+- Other gear on the MIDI setup.
+- Mismatched update modes: Skiff's update mode refuses V15, and M-VAVE's refuses Skiff.
+- A unit with V16's head refuses V15, and so does a unit running stock V16.
+- A wrong identity after the write, and cancel.
+
+What the fake doesn't do: the chip-key check, and anything M-VAVE's loader may do beyond flash.bin.
+
+**Not tested: a real FM-1.** The first real install, and the first real restore of V15, need Scott with the device.
