@@ -674,11 +674,13 @@ struct KeyMapStrip: View {
         let t = session.tracks[session.selectedTrack]
         let chordMode = t.chord != 0 && !session.selectedIsDrums
         let key = picked ?? KeyboardDrawer.whiteOffsets.first { session.pitch(ofKey: $0) != nil } ?? 0
-        let chord = chordMode ? session.pitch(ofKey: key).map { Music.chordNotes(on: $0, root: t.root, scale: t.scale, type: t.chord) } ?? [] : []
+        // (Skiff's QNT SOLO: a black key plays its note alone, never a chord; seq.c kb_solo)
+        let solo = skiff && t.quant == 5 && !KeyboardDrawer.whiteOffsets.contains(key)
+        let chord = chordMode ? session.pitch(ofKey: key).map { solo ? [$0] : chordNotes(on: $0, t) } ?? [] : []
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("What the FM-1's keys play").font(.system(size: 15, weight: .semibold))
-                Text(chordMode ? "chord mode: each white key plays a \(Music.chordNames[safe: t.chord] ?? "chord"); the black keys change it"
+                Text(chordMode ? chordLine(t)
                      : t.quant == 2 ? "white keys walk the scale" : t.quant == 1 ? "snapped to the scale" : "every key, chromatic")
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Spacer()
@@ -706,7 +708,8 @@ struct KeyMapStrip: View {
                     Text(session.pitch(ofKey: key).map(Music.noteName) ?? "–").font(.system(size: 13, weight: .semibold))
                     Text("plays").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                     Text(chord.map(Music.noteName).joined(separator: " · ")).font(.system(size: 13, weight: .semibold))
-                    Text("Tap a white key to see its chord.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    if let n = skiffChord(t, key: key) { Text(n).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
+                    Text(skiff ? "Tap a key to see its chord." : "Tap a white key to see its chord.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                 }
                 .frame(height: 18)
@@ -728,22 +731,49 @@ struct KeyMapStrip: View {
         let p = session.pitch(ofKey: key)
         let black = !KeyboardDrawer.whiteOffsets.contains(key)
         let lit = chordMode ? p.map { chord.contains($0) } ?? false : p.map { (($0 - t.root) % 12 + 12) % 12 == 0 } ?? false
-        let label = chordMode && black ? (Music.chordModifier(ofKey: key) ?? "") : (p.map(Music.noteName) ?? "")
+        // SLOOP's black keys change the chord (CHORD+); Skiff's play one too, as every key does
+        let modifier = chordMode && black && !skiff
+        let label = modifier ? (Music.chordModifier(ofKey: key) ?? "") : (p.map(Music.noteName) ?? "")
         let cell = Text(label)
-            .font(.system(size: chordMode && black ? 11 : 12, weight: lit ? .semibold : .regular))
-            .foregroundStyle(lit ? Theme.onColour : chordMode && black ? Theme.textSecondary : Theme.text)
+            .font(.system(size: modifier ? 11 : 12, weight: lit ? .semibold : .regular))
+            .foregroundStyle(lit ? Theme.onColour : modifier ? Theme.textSecondary : Theme.text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: 8).fill(lit ? Theme.track[session.selectedTrack] : Color(hex: 0x232427)))
             .overlay { if chordMode && key == picked { RoundedRectangle(cornerRadius: 9).stroke(Theme.text, lineWidth: 2).padding(-2) } }
-            .opacity(p == nil && !(chordMode && black) ? 0.35 : 1)
-        if chordMode && !black && p != nil {
+            .opacity(p == nil && !modifier ? 0.35 : 1)
+        if chordMode && !modifier && p != nil {
             Button { self.picked = key } label: { cell.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(p.map(Music.spokenNoteName) ?? "") chord")
                 .accessibilityAddTraits(key == picked ? .isSelected : [])
         } else {
-            cell.accessibilityLabel(chordMode && black ? "Black key: \(label)" : (p.map(Music.spokenNoteName) ?? "silent"))
+            cell.accessibilityLabel(modifier ? "Black key: \(label)" : (p.map(Music.spokenNoteName) ?? "silent"))
         }
+    }
+
+    // MARK: Chords as the firmware builds them: Skiff's chord.c (SkiffChord) or SLOOP's
+
+    private var skiff: Bool { session.dialect == .skiff }
+    private func value(_ title: String, _ k: Int) -> Int {
+        (SoundPage.pages(session).first { $0.title == title }?.ids[safe: k] ?? nil).map { session.cell($0).value } ?? 0
+    }
+    /// Skiff: one voice (MONO, LEG, UNI with the ARP off) plays the chord's root alone, as chord_make does.
+    private var oneVoice: Bool { value("VOICE", 0) != 0 && value("ARP", 0) == 0 }
+
+    private func chordNotes(on p: Int, _ t: TrackState) -> [Int] {
+        guard skiff else { return Music.chordNotes(on: p, root: t.root, scale: t.scale, type: t.chord) }
+        return SkiffChord.make(note: p, mode: t.chord, voicing: value("CHORD", 1), root: t.root, scale: t.scale, oneVoice: oneVoice)?.notes ?? []
+    }
+    /// The picked key's chord by name, as the FM-1 writes it ("Dm7"); nil on SLOOP.
+    private func skiffChord(_ t: TrackState, key: Int) -> String? {
+        guard skiff, let p = session.pitch(ofKey: key),
+              let c = SkiffChord.make(note: p, mode: t.chord, voicing: value("CHORD", 1), root: t.root, scale: t.scale) else { return nil }
+        return SkiffChord.name(root: c.root, mask: c.mask)
+    }
+    private func chordLine(_ t: TrackState) -> String {
+        guard skiff else { return "chord mode: each white key plays a \(Music.chordNames[safe: t.chord] ?? "chord"); the black keys change it" }
+        let what = "chord keys: every key plays its \(SkiffChord.modeNames[safe: t.chord] ?? "chord") chord, \(SkiffChord.voicingNames[safe: value("CHORD", 1)] ?? "CLOSE")"
+        return oneVoice ? what + " (one voice: the root only)" : what
     }
 }
 

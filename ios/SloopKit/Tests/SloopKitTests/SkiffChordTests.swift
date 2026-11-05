@@ -29,4 +29,15 @@ import Testing
         #expect(SkiffChord.name(root: 69, mask: SkiffChord.make(note: 69, mode: 9, voicing: 0, root: 0, scale: 1)!.mask) == "A5")
         #expect(SkiffChord.make(note: 60, mode: 3, voicing: 0, root: 0, scale: 1, oneVoice: true)!.notes == [60])
     }
+
+    /// Skiff's keys (kb_pitch): chromatic, SNAP down into the scale, WHITE on the white keys from C4, SOLO's black keys.
+    @Test func whatTheKeysPlay() {
+        #expect(SkiffChord.keyPitch(0, root: 0, scale: 1, quant: 0, transpose: 0, octave: 0) == 53)          // F3
+        #expect(SkiffChord.keyPitch(8, root: 0, scale: 1, quant: 1, transpose: 0, octave: 0) == 60)          // C#4 snaps to C4
+        #expect(SkiffChord.keyPitch(7, root: 0, scale: 2, quant: 2, transpose: 0, octave: 0) == 60)          // WHITE: C4 the root
+        #expect(SkiffChord.keyPitch(9, root: 0, scale: 2, quant: 2, transpose: 0, octave: 0) == 62)          // D4: the 2nd
+        #expect(SkiffChord.keyPitch(8, root: 0, scale: 2, quant: 2, transpose: 0, octave: 0) == nil)         // a black key: silent
+        #expect(SkiffChord.keyPitch(8, root: 0, scale: 1, quant: 5, transpose: 0, octave: 0) == 60)          // SOLO: C#4 the root
+        #expect(SkiffChord.keyPitch(7, root: 0, scale: 1, quant: 0, transpose: 2, octave: 1) == 74)          // TRN and OCT
+    }
 }

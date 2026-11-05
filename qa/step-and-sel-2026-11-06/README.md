@@ -51,3 +51,19 @@ ENV and ENV 2 are both `GR_ADSR`, but each draws its own envelope, so they stay 
 - **A button's panel pushes the Mixer:** the strips and the carousel narrow beside it, then get the width back when it closes (`mixer-full-width-and-pushed.jpg`).
 - **The highlight's move:** the lit edge followed the FM-1's page and the lift followed the focused page, each on its own animation, so they could change on different frames and read as a jump. Both now follow one value, the card brought forward (the FM-1's page when linked, the focused page when not), in one 180 ms ease-out crossfade. It runs beside the carousel's 0.4 s spring rather than inside it, and is instant under Reduce Motion. The sound panel's stepping and Shape use the same card, so the same move.
 - Not checked: the crossfade watched frame by frame on a device. The screenshots can't show motion.
+
+## 5. "What the FM-1's keys play" on Skiff's own rules
+
+- **Chord mode** builds each key's chord with `SkiffChord` (chord.c), in the track's voicing:
+  - every key plays a chord, black keys included (SLOOP's black keys were chord modifiers, Skiff's aren't);
+  - QNT SOLO's black keys play their note alone;
+  - a one-voice track says it plays the root only.
+- **The line under the strip** names the picked key's chord as the FM-1 writes it: "F3 plays F3 · A3 · C4 · E4 Fmaj7" (`key-strip-dia7.jpg`, T2 on DIA7).
+- **The keys themselves:** Lupe mapped them SLOOP's way, where chord mode walks the scale on the white keys and silences the black ones. That's why the strip lit the wrong notes. On Skiff, `session.pitch(ofKey:)` is now Skiff's `kb_pitch` (`SkiffChord.keyPitch`):
+  - SNAP, SEQ and SEQ+T round every key down into the scale;
+  - WHITE walks the scale on the white keys from C4 and silences the black keys;
+  - SOLO walks it on the black keys too;
+  - chord keys never change the map.
+  This also corrects the iPad's keyboard on Skiff.
+- **The track list's chord chip** says Skiff's names (DIA3, DIA7, MAJ…). It used to say SLOOP's: "TRIAD" for DIA3.
+- Checked: `SkiffChordTests.whatTheKeysPlay` (chromatic, SNAP, WHITE's root and silent black key, SOLO's black key, TRN and OCT); the full suite (222 tests); the simulator screenshot. The new `-demo-chord N` launch flag sets the selected track's CHORD.

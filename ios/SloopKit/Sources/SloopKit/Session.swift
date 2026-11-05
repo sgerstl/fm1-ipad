@@ -1344,6 +1344,10 @@ public final class DeviceSession {
     /// keyboard would; nil for a silent key (black keys in WHITE mode).
     public func pitch(ofKey k: Int, octave: Int? = nil) -> Int? {
         let t = tracks[selectedTrack]
+        // Skiff maps keys its own way (QNT's five modes; chord keys build on the note, not the map)
+        if dialect == .skiff {
+            return SkiffChord.keyPitch(k, root: t.root, scale: t.scale, quant: t.quant, transpose: t.transpose, octave: octave ?? keyboardOctave)
+        }
         return Music.keyPitch(k, root: t.root, scale: t.scale, quant: t.quant, chord: t.chord,
                               transpose: t.transpose, octave: octave ?? keyboardOctave)
     }

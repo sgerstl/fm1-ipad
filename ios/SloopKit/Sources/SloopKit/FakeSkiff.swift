@@ -108,6 +108,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
             if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }
             if a.contains("-demo-usr") { params[selected][138] = 3 }      // SAMPLE on USR1
+            // -demo-chord N: the selected track's CHORD (81: 1 DIA3 … 9 POW), for the SEL pages' screenshots
+            if let i = a.firstIndex(of: "-demo-chord"), a.indices.contains(i + 1), let c = Int(a[i + 1]) { params[selected][81] = c }
             // -demo-mod-walk: MOD opened on the FM-1, then KNOB 1 walks its routes, a route every 1.5 s
             if a.contains("-demo-mod-walk") {
                 DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in

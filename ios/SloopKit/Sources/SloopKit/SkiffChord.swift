@@ -92,6 +92,40 @@ public enum SkiffChord {
         else { q = "5" }
         return noteNames[((root % 12) + 12) % 12] + q + x
     }
+    /// CHRD and VOIC as the FM-1 names them (params.c N_CHRD, N_VOIC).
+    public static let modeNames = ["OFF", "DIA3", "DIA7", "MAJ", "MIN", "DOM7", "MAJ7", "MIN7", "SUS4", "POW"]
+    public static let voicingNames = ["CLOSE", "OPEN", "INV1", "INV2", "+OCT"]
     /// Skiff's note names (N_NOTE): sharps as "#".
     public static let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+    /// What the FM-1's key k plays on Skiff (seq.c kb_pitch): k = 0 is F3 (53), chromatic to G5. QNT (P_QUANT) 1 SNAP, 3
+    /// SEQ, 4 SEQ+T round every key down into the scale; 2 WHITE walks the scale on the white keys from C4 (the root) and
+    /// silences the black ones; 5 SOLO walks it on the white keys and on the black keys too (five an octave, C#4 the
+    /// root). Then the OCT buttons and TRN. Chord keys don't change it: the chord is built on this note. nil: silent.
+    public static func keyPitch(_ k: Int, root: Int, scale: Int, quant: Int, transpose: Int, octave: Int) -> Int? {
+        let place = [0, 0, 1, 1, 2, 3, 2, 4, 3, 5, 4, 6]
+        let black = [false, true, false, true, false, false, true, false, true, false, true, false]
+        let mask = scaleMask(scale)
+        var n = 53 + k
+        if [1, 3, 4].contains(quant) {
+            n += 12 * octave + transpose
+            var guardN = 12
+            while guardN > 0, (mask >> (((n - root) % 12 + 12) % 12)) & 1 == 0 { n -= 1; guardN -= 1 }
+            return min(max(n, 0), 127)
+        }
+        if quant == 2 || quant == 5 {
+            func degree(_ d: Int) -> Int {
+                let count = (0..<12).filter { (mask >> $0) & 1 != 0 }.count
+                var wo = d / count, r = d % count
+                if r < 0 { r += count; wo -= 1 }
+                var i = 0
+                while i < 12 { if (mask >> i) & 1 != 0 { if r == 0 { break }; r -= 1 }; i += 1 }
+                return 60 + root + 12 * wo + i
+            }
+            if !black[n % 12] { n = degree(place[n % 12] + (n / 12 - 5) * 7) }
+            else if quant == 5 { n = degree(place[n % 12] + (n / 12 - 5) * 5) }
+            else { return nil }
+        }
+        return min(max(n + 12 * octave + transpose, 0), 127)
+    }
 }

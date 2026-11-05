@@ -160,7 +160,7 @@ struct Overview: View {
                 Text("muted").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
             // CHORD and ARP, by SLOOP's names, on every page; a tag opens its Sound page
-            if !session.isDrums(t), track.chord > 0 { modeTag(Music.chordNames[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
+            if !session.isDrums(t), track.chord > 0 { modeTag((session.dialect == .skiff ? SkiffChord.modeNames : Music.chordNames)[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
             if !session.isDrums(t), track.arpMode > 0 { modeTag("ARP " + (Music.arpModes[safe: track.arpMode] ?? ""), track: t, family: .arp) }
             if let mo = session.motion[t], mo.recorded > 0 { motionTag(mo) }
             Spacer(minLength: 0)
