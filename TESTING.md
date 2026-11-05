@@ -105,7 +105,7 @@ The same four jobs, one at a time, in landscape. These work differently from the
 
 ### On Skiff 2.2
 
-**The screen link.** Lupe carries Skiff 2.2 with a small patch that links the two screens, as SLOOP's does. Press a button on the FM-1 and Lupe opens that page, and pick a tab in Lupe and the FM-1 goes there too, with "Follow the FM-1's screen" on in the connection menu. An FM-1 on plain Skiff 2.2 gets an offer to update; everything else works the same without it.
+**The screen link.** Lupe carries Skiff 2.2 with a small patch that links the two screens, as SLOOP's does. Press a button on the FM-1 and Lupe opens that page, and pick a tab in Lupe and the FM-1 goes there too, with "Follow the FM-1's screen" on in the connection menu. On MOD it follows the cursor too: turn KNOB 1 on the FM-1 and Lupe shows the same route, pick a route in Lupe and the FM-1's highlight moves there. An FM-1 on plain Skiff 2.2, or on the link's first build (no cursor), gets an offer to update; everything else works the same without it.
 
 Lupe also runs on [Skiff](https://github.com/illuminus5/skiff) 2.2, a Felucca-based firmware with six tracks and a song made of each track's list of patterns. Install it with Skiff's own installer, which backs up first. Lupe checks on connect that the FM-1 reports `FELUCCA v2.2`.
 

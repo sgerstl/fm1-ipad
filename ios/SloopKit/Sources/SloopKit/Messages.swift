@@ -608,14 +608,24 @@ public struct UIState: Equatable, Sendable {
     /// Skiff's screen link sends two more: the selected track and flags (bit 0 HOME shows the scope, bit 1 the
     /// layer is locked open, bit 2 HOME held). nil from SLOOP, whose UI has the first four only.
     public var track: Int?, flags: Int?
-    public init(home: Bool, page: Int, layer: Int = 0, menu: Int = 0, track: Int? = nil, flags: Int? = nil) {
+    /// The page's cursor and second cursor (Skiff's `56 01 02`: MOD's route, the lane, the sample, …; nil where the
+    /// page has none, 127 on the wire, or from a build that doesn't send them).
+    public var cursor: Int?, cursor2: Int?
+    public init(home: Bool, page: Int, layer: Int = 0, menu: Int = 0, track: Int? = nil, flags: Int? = nil,
+                cursor: Int? = nil, cursor2: Int? = nil) {
         self.home = home; self.page = page; self.layer = layer; self.menu = menu; self.track = track; self.flags = flags
+        self.cursor = cursor; self.cursor2 = cursor2
     }
     public init(_ body: [UInt8]) throws {
         var r = ByteReader(body, cmd: Cmd.ui)
         home = try r.u8() != 0; page = try r.u8(); layer = try r.u8(); menu = try r.u8()
         track = r.remaining >= 2 ? try r.u8() : nil
         flags = track != nil ? try r.u8() : nil
+        // decoded by length: a later build only appends
+        if r.remaining >= 2 {
+            let a = try r.u8(), b = try r.u8()
+            cursor = a == 127 ? nil : a; cursor2 = b == 127 ? nil : b
+        } else { cursor = nil; cursor2 = nil }
     }
 }
 

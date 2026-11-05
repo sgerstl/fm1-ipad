@@ -218,6 +218,9 @@ public final class DeviceSession {
     public private(set) var screenLinked = false
     /// What the FM-1's screen shows, when screenLinked.
     public private(set) var deviceScreen: UIState?
+    /// Skiff's second screen link build (`56 01 02`): the screen carries the page's cursor (MOD's route, …) and
+    /// Lupe can set it. False on the first build (`56 01 01`), which Lupe offers to update.
+    public private(set) var screenCursor = false
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
     /// Device changes in the last 250 ms, and when a sound last loaded: a burst of several parameters at once (a
@@ -340,11 +343,12 @@ public final class DeviceSession {
             deviceNotes = []          // whatever the USB buffer held from before isn't live
             try await readEverything()
             // fm1-ipad firmware answers UI; stock SLOOP doesn't (a short timeout, then the link stays off). Skiff
-            // with the screen link patch says so in INFO (56 01 01): asked only then
+            // with the screen link patch says so in INFO (56 01 01, or 02 with the cursor): asked only then
             if let s = sloop, let ui = try? await s.uiState() { deviceScreen = ui; screenLinked = true }
             else if let k = c as? SkiffDriver, k.skiff.hasScreenLink, let ui = try? await k.screen() { deviceScreen = ui; screenLinked = true }
             else { screenLinked = false; deviceScreen = nil }
             if screenLinked { capabilities.insert(.screenLink) }
+            screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
             try await c.watch(screenLink: screenLinked)
             if let s = c as? SkiffDriver, s.skiff.hasSongLists {
                 if let store = skiffSong { store.attach(s) } else {
@@ -1639,16 +1643,19 @@ public final class DeviceSession {
 
     /// Opens a page on the FM-1 (fm1-ipad firmware): its screen switches as if its button had been pressed.
     /// On Skiff with the screen link, SCREEN_GOTO: 127 is HOME, and a refused page answers the screen as it was,
-    /// which is put back here (a refusal, not a timeout).
-    public func showOnDevice(page: Int) {
-        // (pages Jib lays out that the firmware has no page for are numbered from 100: never sent)
+    /// which is put back here (a refusal, not a timeout). `cursor` moves the page's cursor too (MOD's route, …)
+    /// where the link carries it (`screenCursor`); elsewhere it's left out.
+    public func showOnDevice(page: Int, cursor: Int? = nil) {
+        // (pages Lupe lays out that the firmware has no page for are numbered from 100: never sent)
         guard screenLinked, page < 100 || page == 127 else { return }
         if let k = driver as? SkiffDriver {
-            let before = deviceScreen
+            let before = deviceScreen, cursor = screenCursor && page != 127 ? cursor : nil
             deviceScreen = page == 127 ? UIState(home: true, page: before?.page ?? 0, track: before?.track, flags: before?.flags)
-                                       : UIState(home: false, page: page, track: before?.track, flags: 0)
+                                       : UIState(home: false, page: page, track: before?.track, flags: 0,
+                                                 cursor: cursor ?? (before?.page == page ? before?.cursor : nil),
+                                                 cursor2: before?.page == page ? before?.cursor2 : nil)
             Task {
-                if let s = try? await k.screenGoto(page) { self.deviceScreen = s; self.adoptTrack(from: s) }
+                if let s = try? await k.screenGoto(page, cursor: cursor) { self.deviceScreen = s; self.adoptTrack(from: s) }
                 else { self.deviceScreen = before }
             }
             return

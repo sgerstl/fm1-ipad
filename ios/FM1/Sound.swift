@@ -271,7 +271,7 @@ struct SoundTab: View {
         .onChange(of: session.deviceScreen) { _, s in followScreen(s) }
         .onAppear {
             // opened by the FM-1: start on its button; opened here (a tab, a pad): keep the choice made
-            if ui.pageFromDevice { followScreen(session.deviceScreen) } else { followed = session.deviceScreen }
+            if ui.pageFromDevice { followScreen(session.deviceScreen) } else { followed = session.deviceScreen; adoptCursor(session.deviceScreen) }
             ui.pageFromDevice = false
         }
     }
@@ -279,6 +279,7 @@ struct SoundTab: View {
     /// The FM-1 changed page (a button pressed on it): show that button's pages here. Holding SEL
     /// (its key layer) brings up SEL.
     private func followScreen(_ s: UIState?) {
+        adoptCursor(s)
         // only a real change on the FM-1 moves the page here: the same screen reported again must not
         // undo a button chosen on the iPad (on the drum track SEL, ENV, LFO, EDIT, ARP can't move the
         // FM-1, which stays on its page)
@@ -289,6 +290,11 @@ struct SoundTab: View {
         guard !s.home, let page = SoundPage.page(session, fw: s.page),
               SoundPage.reached(session, page.family).contains(where: { $0.fw == page.fw }) else { return }
         ui.soundFamily = page.family
+    }
+
+    /// MOD's route: the FM-1's cursor, when the link carries it (KNOB 1 turned there).
+    private func adoptCursor(_ s: UIState?) {
+        if let s, !s.home, let c = s.cursor, SoundPage.page(session, fw: s.page)?.title == "MOD" { marks.adoptRoute(c) }
     }
 
     /// A knob turned on the FM-1: show its button's pages and mark it for a few seconds.
@@ -416,7 +422,7 @@ struct SoundCard: View, Equatable {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             if first.title == "MOD", !first.routes.isEmpty {
-                ModColumns(session: session, ui: ui, page: first, route: Binding(get: { marks.modRoute }, set: { marks.modRoute = $0 }), marked: marks.key,
+                ModColumns(session: session, ui: ui, page: first, route: modRoute(first), marked: marks.key,
                            activate: { touch(first) })
             } else {
                 ForEach(rows.indices, id: \.self) { r in
@@ -504,7 +510,17 @@ struct SoundCard: View, Equatable {
         // the knob being turned, here or on the FM-1 (marked), lights its point
         let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == g.id } }
             ?? marks.key.flatMap { m in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == m } }
-        if PageGraph.has(p) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: Binding(get: { marks.modRoute }, set: { marks.modRoute = $0 })) }
+        if PageGraph.has(p) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: modRoute(p)) }
+    }
+
+    /// MOD's route: picked here, the FM-1's cursor goes there too (and MOD opens on it), where the link carries
+    /// the cursor; the FM-1's own turns come in through SoundTab.followScreen.
+    private func modRoute(_ p: SoundPage) -> Binding<Int> {
+        Binding(get: { marks.modRoute }, set: { v in
+            guard v != marks.modRoute else { return }
+            marks.pickRoute(v)
+            if session.screenCursor { session.showOnDevice(page: p.fw, cursor: v) }
+        })
     }
 
 }
@@ -515,8 +531,18 @@ struct SoundCard: View, Equatable {
     private(set) var key: String?
     /// Not linked: the page last tapped here (linked, the FM-1's page is the active one).
     var activePage: String?
-    /// MOD's KNOB 1: the route shown, 0…10 (Skiff's mod_ui_route).
-    var modRoute = 0
+    /// MOD's KNOB 1: the route shown, 0…10 (Skiff's mod_ui_route; the FM-1's own with the screen link's cursor).
+    private(set) var modRoute = 0
+    /// When a route was last picked here: the FM-1's answers to the picks before it (one SCREEN_GOTO each, a
+    /// drag sends several) don't pull the knob back while it's still moving.
+    @ObservationIgnored private var routePicked = Date.distantPast
+
+    func pickRoute(_ r: Int) { modRoute = r; routePicked = .now }
+    /// The FM-1's cursor on MOD: taken unless a route was picked here in the last half second.
+    func adoptRoute(_ r: Int) {
+        guard Date.now.timeIntervalSince(routePicked) > 0.5, r != modRoute, (0...10).contains(r) else { return }
+        modRoute = r
+    }
     @ObservationIgnored private var gen = 0
 
     func mark(_ k: String) {

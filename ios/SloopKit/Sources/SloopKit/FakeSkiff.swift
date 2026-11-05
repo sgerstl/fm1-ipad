@@ -56,8 +56,14 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// Each track's motion: (step, id, value, lock). An edit is recorded while its track is armed, playing and
     /// selected, as Skiff does (at step 0 here: the fake has no playhead).
     var motion: [[(step: Int, id: Int, value: Int, lock: Bool)]] = Array(repeating: [], count: 8)
-    /// Jib's screen link patch (skiff/README.md): INFO's `56 01 01`, SCREEN, SCREEN_GOTO, WATCH bit 2.
+    /// Lupe's screen link patch (skiff/README.md): INFO's `56 01 02`, SCREEN, SCREEN_GOTO, WATCH bit 2.
     var screenLink = false
+    /// Which build: 2 carries the page's cursor (8-byte SCREEN, SCREEN_GOTO's cursor), 1 the first (6 bytes).
+    var screenLinkVersion = 2
+    /// The page's cursor, where the page has one (`cursorRange`); reset as a page opens.
+    var cursor = 0
+    /// The pages with a cursor and its top (skiff/README.md): MOD's routes, the lanes, the samples, USER's slots.
+    static let cursorRange: [Int: Int] = [4: 10, 18: 7, 20: 7, 22: 15, 36: 31, 37: 63]
     var screenWatched = false
     /// home, page, layer, menu, flags (the track is `selected`).
     var screen = (home: true, page: 0, layer: 0, menu: 0, flags: 0)
@@ -74,6 +80,16 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             // -demo-song empty | full: the Arrange states (no song; T5's 16 entries and the pool full)
             let a = ProcessInfo.processInfo.arguments
             screenLink = a.contains("-demo-link")       // the screen link patch, so the button map can be seen
+            if a.contains("-demo-link-v1") { screenLinkVersion = 1 }   // the first build: no cursor
+            // -demo-mod-walk: MOD opened on the FM-1, then KNOB 1 walks its routes, a route every 1.5 s
+            if a.contains("-demo-mod-walk") {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in
+                    self?.pressOnDevice(page: 4)
+                    for k in 1...10 {
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5 * Double(k)) { self?.turnCursorOnDevice(to: k) }
+                    }
+                }
+            }
             // -demo-turn ID: an encoder turned on the FM-1, one CHANGED every 40 ms for track parameter ID (profiling)
             if let i = a.firstIndex(of: "-demo-turn"), a.indices.contains(i + 1), let id = Int(a[i + 1]) { startTurning(id) }
             let which = a.firstIndex(of: "-demo-song").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
@@ -233,14 +249,27 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     }
 
     private func screenBytes() -> [UInt8] {
-        [screen.home ? 1 : 0, UInt8(screen.page), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
+        let b: [UInt8] = [screen.home ? 1 : 0, UInt8(screen.page), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
+        guard screenLinkVersion >= 2 else { return b }
+        let c: UInt8 = !screen.home && Self.cursorRange[screen.page] != nil ? UInt8(cursor) : 127
+        return b + [c, 127]
     }
 
     /// A button pressed on the FM-1: its screen changes and, watched with bit 2, it says so (cmd 90).
     func pressOnDevice(page: Int?, track: Int? = nil) {
         lock.lock()
-        if let page { screen = (false, page, 0, 0, 0) } else { screen.home = true }
+        if let page { if page != screen.page || screen.home { cursor = 0 }; screen = (false, page, 0, 0, 0) } else { screen.home = true }
         if let track { selected = track }
+        let b = screenBytes(), on = screenWatched
+        lock.unlock()
+        if on { push(90, b) }
+    }
+
+    /// KNOB 1 turned on the FM-1 on a page with a cursor: it moves (clamped) and, watched, it says so.
+    func turnCursorOnDevice(to c: Int) {
+        lock.lock()
+        guard !screen.home, let top = Self.cursorRange[screen.page] else { lock.unlock(); return }
+        cursor = max(0, min(top, c))
         let b = screenBytes(), on = screenWatched
         lock.unlock()
         if on { push(90, b) }
@@ -310,13 +339,16 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     // Called with the lock held.
     private func answer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
         switch (cmd, a.count) {
-        case (1, 0): return screenLink ? fx.info + [0x56, 1, 1] : fx.info
+        case (1, 0): return screenLink ? fx.info + [0x56, 1, UInt8(screenLinkVersion)] : fx.info
         case (90, 0) where screenLink: return screenBytes()
-        case (91, 1) where screenLink:
-            // always answered: a refused page answers the screen unchanged
+        case (91, 1) where screenLink, (91, 2) where screenLink && screenLinkVersion >= 2:
+            // always answered: a refused page (or a cursor for a page or HOME with none) answers the screen unchanged
             let p = Int(a[0])
-            if p == 127 { screen.home = true; screen.layer = 0; screen.menu = 0 }
-            else if p < 46, !refusedPages.contains(p) { screen = (false, p, 0, 0, 0) }
+            if a.count == 2 {
+                guard p != 127, let top = Self.cursorRange[p], p < 46, !refusedPages.contains(p) else { return screenBytes() }
+                screen = (false, p, 0, 0, 0); cursor = min(top, Int(a[1]))
+            } else if p == 127 { screen.home = true; screen.layer = 0; screen.menu = 0 }
+            else if p < 46, !refusedPages.contains(p) { if p != screen.page || screen.home { cursor = 0 }; screen = (false, p, 0, 0, 0) }
             return screenBytes()
         case (72, 1):
             // MENU_DESC: index → index, id, kind, value, min, max, … (the rest isn't read); past the list: id 127

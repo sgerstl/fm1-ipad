@@ -60,9 +60,11 @@ public struct SkiffInfo: Equatable, Sendable {
     /// Skiff 2.0's song (`58 01` bit 0): LIST2, NEW, COPY+, CHAIN, SONG ONCE; bit 1 the entries' sounds.
     public var hasSongLists: Bool { (tags[0x58]?.first ?? 0) & 1 != 0 }
     public var hasEntrySounds: Bool { (tags[0x58]?.first ?? 0) & 2 != 0 }
-    /// Jib's screen link patch on Skiff 2.2 (`56 01 01`, after `58 01`; fm1-ipad skiff/README.md): SCREEN (90),
-    /// SCREEN_GOTO (91), WATCH bit 2. The version string stays FELUCCA v2.2: the tag is what tells it apart.
-    public var hasScreenLink: Bool { (tags[0x56]?.first ?? 0) & 1 != 0 }
+    /// Lupe's screen link patch on Skiff 2.2 (`56 01 02`, after `58 01`; `56 01 01` the first build, no cursor;
+    /// fm1-ipad skiff/README.md): SCREEN (90), SCREEN_GOTO (91), WATCH bit 2. The version string stays FELUCCA v2.2: the tag is what tells it apart.
+    public var hasScreenLink: Bool { (tags[0x56]?.first ?? 0) >= 1 }
+    /// The second build (`56 01 02`): SCREEN carries the page's cursor, and SCREEN_GOTO can set it.
+    public var hasScreenCursor: Bool { (tags[0x56]?.first ?? 0) >= 2 }
 
     public var deviceInfo: DeviceInfo {
         DeviceInfo(version: version, engines: engines, paramCount: paramCount, globalCount: globalCount, stepCount: stepCount,
@@ -310,15 +312,19 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         _ = try await request(SkiffCmd.watch, [screenLink && skiff.hasScreenLink ? 7 : 3], match: 0, "WATCH")
     }
 
-    /// SCREEN (90, the screen link patch): home, page (Skiff's PAGES), layer, menu, the selected track, flags.
+    /// SCREEN (90, the screen link patch): home, page (Skiff's PAGES), layer, menu, the selected track, flags, and
+    /// on `56 01 02` the page's two cursors.
     public func screen() async throws -> UIState {
         try UIState(await request(SkiffCmd.screen, [], match: 0, "SCREEN"))
     }
 
-    /// SCREEN_GOTO (91): a page of Skiff's PAGES, or 127 for HOME. Always answered: a page refused (past the
-    /// table, one the track's engine doesn't show, a dialog open) answers the state unchanged.
-    public func screenGoto(_ page: Int) async throws -> UIState {
-        try UIState(await request(SkiffCmd.screenGoto, [UInt8(page & 127)], match: 0, "SCREEN_GOTO", retries: 0))
+    /// SCREEN_GOTO (91): a page of Skiff's PAGES, or 127 for HOME, and on `56 01 02` the page's cursor (clamped
+    /// to its range). Always answered: a request refused (past the table, a page the track's engine doesn't show,
+    /// a dialog open, a cursor for a page with none) answers the state unchanged.
+    public func screenGoto(_ page: Int, cursor: Int? = nil) async throws -> UIState {
+        var a = [UInt8(page & 127)]
+        if let cursor, skiff.hasScreenCursor { a.append(UInt8(max(0, min(126, cursor)))) }
+        return try UIState(await request(SkiffCmd.screenGoto, a, match: 0, "SCREEN_GOTO", retries: 0))
     }
     /// TRANSPORT is Skiff's keep-alive (EDITOR_PROTOCOL.md: "instead of PING").
     public func ping() async throws { _ = try await transportState() }

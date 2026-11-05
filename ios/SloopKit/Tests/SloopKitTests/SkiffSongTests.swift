@@ -547,7 +547,7 @@ extension SkiffOnTheDeviceTests {
     }
 }
 
-/// Jib's screen link patch on Skiff 2.2 (skiff/README.md), through FakeSkiff.
+/// Lupe's screen link patch on Skiff 2.2 (skiff/README.md), through FakeSkiff.
 @Suite(.serialized) @MainActor struct SkiffScreenLinkTests {
     private func connect(link: Bool) async throws -> (DeviceSession, FakeSkiff, Task<Void, Never>) {
         let fake = FakeSkiff(try SkiffFixture.load())
@@ -589,6 +589,57 @@ extension SkiffOnTheDeviceTests {
         #expect(fake.screen.page == 43)
         s.showOnDevice(page: 127)                                        // HOME
         try await waitFor(5) { fake.screen.home && s.deviceScreen?.home == true }
+        run.cancel()
+    }
+
+    /// SCREEN by its length: SLOOP's 4, the first build's 6, the cursor build's 8 (127: the page has none).
+    @Test func theScreenDecodedByLength() throws {
+        let four = try UIState([0, 3, 0, 0])
+        #expect(four.track == nil && four.cursor == nil)
+        let six = try UIState([0, 4, 0, 0, 2, 0])
+        #expect(six.track == 2 && six.flags == 0 && six.cursor == nil && six.cursor2 == nil)
+        let eight = try UIState([0, 4, 0, 0, 2, 0, 9, 127])
+        #expect(eight.cursor == 9 && eight.cursor2 == nil)
+        let none = try UIState([0, 31, 0, 0, 0, 0, 127, 127])
+        #expect(none.cursor == nil)
+    }
+
+    /// The cursor build (56 01 02): KNOB 1 turned on MOD comes in as the route; a route picked here moves the
+    /// FM-1's (and opens MOD); a cursor for a page with none is refused, the screen unchanged.
+    @Test func theCursorBothWays() async throws {
+        let (s, fake, run) = try await connect(link: true)
+        try await waitFor(5) { s.screenLinked && fake.screenWatched }
+        #expect(s.screenCursor)
+        fake.pressOnDevice(page: 4)                                      // MOD
+        try await waitFor(5) { s.deviceScreen?.page == 4 && s.deviceScreen?.cursor == 0 }
+        fake.turnCursorOnDevice(to: 9)
+        try await waitFor(5) { s.deviceScreen?.cursor == 9 }
+        fake.pressOnDevice(page: 31)                                     // DELAY: no cursor
+        try await waitFor(5) { s.deviceScreen?.page == 31 && s.deviceScreen?.cursor == nil }
+        s.showOnDevice(page: 4, cursor: 6)
+        try await waitFor(5) { fake.screen.page == 4 && fake.cursor == 6 && s.deviceScreen?.cursor == 6 }
+        s.showOnDevice(page: 4, cursor: 40)                              // clamped to route 11
+        try await waitFor(5) { fake.cursor == 10 && s.deviceScreen?.cursor == 10 }
+        s.showOnDevice(page: 31, cursor: 2)                              // DELAY has none: refused
+        try await waitFor(5) { s.deviceScreen?.page == 4 && s.deviceScreen?.cursor == 10 }
+        #expect(fake.screen.page == 4)
+        run.cancel()
+    }
+
+    /// The first build (56 01 01): linked, but no cursor, and none is sent; Lupe offers it the update.
+    @Test func theFirstBuildHasNoCursor() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.screenLink = true; fake.screenLinkVersion = 1
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        try await waitFor(10) { if case .connected = s.status { true } else { false } }
+        try await waitFor(5) { s.screenLinked && fake.screenWatched }
+        #expect(!s.screenCursor)
+        s.showOnDevice(page: 4, cursor: 6)                               // the cursor left out: MOD opens
+        try await waitFor(5) { fake.screen.page == 4 && s.deviceScreen?.page == 4 }
+        #expect(fake.cursor == 0 && s.deviceScreen?.cursor == nil)
         run.cancel()
     }
 }

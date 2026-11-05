@@ -3,8 +3,8 @@ import SwiftUI
 
 /// Skiff's MOD page columns (ui_draw.c, GR_MOD): ROUTE picks one of eleven, then that route's SOURCE, DEST and
 /// AMOUNT. Routes 1–7 are the fixed LFO → PITCH CUT SHAPE AMP and ENV → PITCH CUT SHAPE, whose AMOUNT alone turns
-/// (their SOURCE and DEST dim); routes 8–11 are the matrix's slots. The route is Jib's own, as mod_ui_route is the
-/// FM-1's: the protocol doesn't report which one the FM-1 shows.
+/// (their SOURCE and DEST dim); routes 8–11 are the matrix's slots. With the screen link's cursor (`56 01 02`) the
+/// route is the FM-1's mod_ui_route, both ways (ShapeMarks.modRoute); without it, Lupe's own.
 struct ModColumns: View {
     let session: DeviceSession
     let ui: EditorUI
