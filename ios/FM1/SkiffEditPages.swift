@@ -22,6 +22,12 @@ enum SkiffEdit {
         }
     }
 
+    /// A screen change that may have changed what this page shows: the FM-1 on the page (a knob turned there moves
+    /// its cursor or window) or just off it (its edits are done). Any other push (a step picked on NOTES) isn't.
+    static func concerns(_ p: SoundPage, _ a: UIState?, _ b: UIState?) -> Bool {
+        [a, b].contains { s in s.map { !$0.home && $0.page == p.fw } == true }
+    }
+
     /// The user set a SAMPLE track plays (0…2 for USR1…USR3), found by the names of SAMPLE's SET (P_E0, the
     /// first engine parameter): nil on a built-in set or another engine.
     @MainActor static func userSlot(_ session: DeviceSession) -> Int? {
@@ -240,7 +246,7 @@ struct DXSoundPage: View {
                 .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
         }
         .task(id: l) { await session.skiffEdit?.readKit(lane: l) }
-        .onChange(of: session.deviceScreen) { _, _ in Task { await session.skiffEdit?.readKit(lane: l) } }
+        .onChange(of: session.deviceScreen) { a, b in if SkiffEdit.concerns(page, a, b) { Task { await session.skiffEdit?.readKit(lane: l) } } }
     }
 
     private var litWindow: Int? {
@@ -312,7 +318,7 @@ struct SampleMixPage: View {
             }
         }
         .task(id: slot) { if let slot { await session.skiffEdit?.readMix(slot: slot) } }
-        .onChange(of: session.deviceScreen) { _, _ in Task { if let slot { await session.skiffEdit?.readMix(slot: slot) } } }
+        .onChange(of: session.deviceScreen) { a, b in if SkiffEdit.concerns(page, a, b), let slot { Task { await session.skiffEdit?.readMix(slot: slot) } } }
     }
 
     private func knob(_ slot: Int, _ z: Int, _ path: WritableKeyPath<SampleMix, [Int]>, _ label: String, _ k: Int) -> () -> KnobSpec {

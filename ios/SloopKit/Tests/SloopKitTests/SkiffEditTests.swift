@@ -56,4 +56,33 @@ import Testing
         #expect(store.mixes[1]?.rc == 1 && store.mixes[1]?.zones.isEmpty == true)
         run.cancel()
     }
+
+    /// A stream of reads (screen pushes while a knob turns on the FM-1) is one read out and one after it, never a queue.
+    @Test func readsDontQueueUp() async throws {
+        let (s, fake, run) = try await connect()
+        let store = try #require(s.skiffEdit)
+        let before = fake.requests.filter { $0 == 68 }.count
+        await withTaskGroup(of: Void.self) { g in for _ in 0..<20 { g.addTask { await store.readPatch(track: 1) } } }
+        #expect(fake.requests.filter { $0 == 68 }.count - before <= 2)
+        run.cancel()
+    }
+
+    /// SEQ on the FM-1 (NOTES, then PATTERN): Lupe follows and sends nothing back, no SCREEN_GOTO echo.
+    @Test func seqOnTheDeviceIsNotEchoed() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.screenLink = true
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        try await waitFor(10) { s.screenLinked && fake.screenWatched }
+        let before = fake.requests.count
+        fake.pressOnDevice(page: 41)
+        try await waitFor(5) { s.deviceScreen?.page == 41 }
+        fake.pressOnDevice(page: 43)
+        try await waitFor(5) { s.deviceScreen?.page == 43 }
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(!fake.requests[before...].contains(91))
+        run.cancel()
+    }
 }

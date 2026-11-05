@@ -187,6 +187,10 @@ public final class SkiffEditStore {
     @ObservationIgnored private var sending: Set<String> = []
     @ObservationIgnored private var pending: [String: () async -> Void] = [:]
     @ObservationIgnored private var lastEdit: [String: Date] = [:]
+    /// Reads out, and those asked again meanwhile: one read per thing at a time, one more after it at most, so a
+    /// stream of screen pushes (a knob turned on the FM-1) never queues a read per push.
+    @ObservationIgnored private var reading: Set<String> = []
+    @ObservationIgnored private var readAgain: Set<String> = []
     /// After a patch is written: the track's PATCH parameter may have moved (OWN, or F n).
     @ObservationIgnored var patchWritten: (Int) async -> Void = { _ in }
 
@@ -197,16 +201,29 @@ public final class SkiffEditStore {
     private func fresh(_ key: String) -> Bool { Date.now.timeIntervalSince(lastEdit[key] ?? .distantPast) < 1 || sending.contains(key) }
 
     public func readPatch(track t: Int) async {
-        guard let d = driver, let p = try? await d.fm6Patch(track: t), !fresh("p\(t)") else { return }
-        if patches[t] != p { patches[t] = p }
+        await once("p\(t)") { [self] in
+            guard let d = driver, let p = try? await d.fm6Patch(track: t), !fresh("p\(t)") else { return }
+            if patches[t] != p { patches[t] = p }
+        }
     }
     public func readKit(lane l: Int) async {
-        guard let d = driver, let k = try? await d.kitLane(l), !fresh("k\(l)") else { return }
-        if kit[l] != k { kit[l] = k }
+        await once("k\(l)") { [self] in
+            guard let d = driver, let k = try? await d.kitLane(l), !fresh("k\(l)") else { return }
+            if kit[l] != k { kit[l] = k }
+        }
     }
     public func readMix(slot s: Int) async {
-        guard let d = driver, let m = try? await d.sampleMix(slot: s), !fresh("m\(s)") else { return }
-        if mixes[s] != m { mixes[s] = m }
+        await once("m\(s)") { [self] in
+            guard let d = driver, let m = try? await d.sampleMix(slot: s), !fresh("m\(s)") else { return }
+            if mixes[s] != m { mixes[s] = m }
+        }
+    }
+
+    private func once(_ key: String, _ read: () async -> Void) async {
+        guard !reading.contains(key) else { readAgain.insert(key); return }
+        reading.insert(key)
+        repeat { readAgain.remove(key); await read() } while readAgain.contains(key)
+        reading.remove(key)
     }
 
     public func editPatch(track t: Int, _ change: (inout FM6Patch) -> Void) {

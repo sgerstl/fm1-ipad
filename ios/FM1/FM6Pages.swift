@@ -118,7 +118,7 @@ struct FM6OperatorPage: View {
             }
         }
         .task(id: t) { await session.skiffEdit?.readPatch(track: t) }
-        .onChange(of: session.deviceScreen) { _, _ in Task { await session.skiffEdit?.readPatch(track: t) } }
+        .onChange(of: session.deviceScreen) { a, b in if SkiffEdit.concerns(page, a, b) { Task { await session.skiffEdit?.readPatch(track: t) } } }
     }
 
     private var lit: Int? {
@@ -170,7 +170,7 @@ struct FM6AllOpsPage: View {
             }
         }
         .task(id: t) { await session.skiffEdit?.readPatch(track: t) }
-        .onChange(of: session.deviceScreen) { _, _ in Task { await session.skiffEdit?.readPatch(track: t) } }
+        .onChange(of: session.deviceScreen) { a, b in if SkiffEdit.concerns(page, a, b) { Task { await session.skiffEdit?.readPatch(track: t) } } }
     }
 
     private var lit: Int? {
