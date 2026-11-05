@@ -8,19 +8,22 @@ import Testing
     static let skiff = try! BundledFirmware.skiff.load()
     static let sloop = try! BundledFirmware.sloop.load()
 
-    /// fm1_install.py's test delays, about.
-    static func installer(_ dev: FakeFM1) -> FirmwareInstaller {
+    /// fm1_install.py's test delays, about. `patient`: for a test that counts drops, idle limits no busy moment
+    /// reaches. With 400 ms, a pause in the test process (other work on the Mac) read as the loader gone: a second
+    /// drop on top of the planned cut (2 runs in 8, 2026-11-05).
+    static func installer(_ dev: FakeFM1, patient: Bool = false) -> FirmwareInstaller {
         var d = FirmwareInstaller.Delays()
         d.start = .milliseconds(5); d.reply = .zero; d.loader = .milliseconds(10); d.reboot = .milliseconds(10)
         d.retry = .milliseconds(20); d.poll = .milliseconds(20); d.handshake = .milliseconds(100)
-        d.idleCheck = .milliseconds(400); d.idleWrite = .milliseconds(400)
+        d.idleCheck = .milliseconds(patient ? 3000 : 400); d.idleWrite = .milliseconds(patient ? 3000 : 400)
         d.waitLoader = .seconds(2); d.waitReboot = .seconds(2); d.waitResume = .seconds(1)
         return FirmwareInstaller(ports: dev, delays: d)
     }
 
-    static func device(running: FirmwarePackage?) -> FakeFM1 {
+    /// `patient`: the device's read timeout 1 s instead of 100 ms, so a pause can't use up its three tries.
+    static func device(running: FirmwarePackage?, patient: Bool = false) -> FakeFM1 {
         let dev = FakeFM1(running: running)
-        dev.timeScale = 0.02                  // its 5 s read timeout: 100 ms
+        dev.timeScale = patient ? 0.2 : 0.02  // its 5 s read timeout: 1 s, or 100 ms
         dev.knows(skiff, sloop)
         return dev
     }
@@ -140,10 +143,10 @@ import Testing
     /// writes again, and finishes.
     @Test(arguments: [1, 7, 64, 300, 900, 1175, 1176, 1180, 1500, 2000, 2290, 2316])
     func cutDuringTheWriteResumes(after reads: Int) async throws {
-        let dev = Self.device(running: Self.sloop)
+        let dev = Self.device(running: Self.sloop, patient: true)
         dev.faults = [.unplug(stage: 2, after: reads, replugAfter: .milliseconds(50))]
         let steps = Steps()
-        #expect(try await Self.installer(dev).install(Self.skiff, step: steps.add) == "FM-1_722")
+        #expect(try await Self.installer(dev, patient: true).install(Self.skiff, step: steps.add) == "FM-1_722")
         #expect(steps.count { $0 == .dropped } == 1)
         #expect(steps.list.contains(.resume(2)))
         #expect(dev.badAnswers == 0 && dev.record == nil)
@@ -284,3 +287,4 @@ import Testing
         }
     }
 }
+

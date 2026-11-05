@@ -11,9 +11,9 @@ import Testing
     static let stock = try! BundledFirmware.stock.load()
     typealias Steps = FirmwareInstallTests.Steps
 
-    static func device(running: FirmwarePackage?, startedOn: Int = 15) -> FakeFM1 {
+    static func device(running: FirmwarePackage?, startedOn: Int = 15, patient: Bool = false) -> FakeFM1 {
         let dev = FakeFM1(running: running, startedOn: startedOn)
-        dev.timeScale = 0.02
+        dev.timeScale = patient ? 0.2 : 0.02          // as FirmwareInstallTests.device
         dev.knows(skiff, sloop, stock)
         return dev
     }
@@ -83,10 +83,10 @@ import Testing
 
     @Test(arguments: [1, 2, 3, 100, 600, 1000, 1150, 1170, 1177, 1178])
     func cutDuringTheStockWriteResumes(after reads: Int) async throws {
-        let dev = Self.device(running: Self.skiff)
+        let dev = Self.device(running: Self.skiff, patient: true)
         dev.faults = [.unplug(stage: 2, after: reads, replugAfter: .milliseconds(50))]
         let steps = Steps()
-        #expect(try await Self.installer(dev).install(Self.stock, step: steps.add) == "FM-1_015")
+        #expect(try await FirmwareInstallTests.installer(dev, patient: true).install(Self.stock, step: steps.add) == "FM-1_015")
         #expect(steps.count { $0 == .dropped } == 1 && steps.list.contains(.resume(2)))
         #expect(dev.badAnswers == 0 && dev.record == nil)
     }
