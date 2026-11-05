@@ -21,6 +21,7 @@ enum SoundPanelControl {
     /// again, its next page (Scott, 2026-11-05: the same key steps and reveals, as the FM-1's does; it no longer
     /// closes). `fromDevice`: the FM-1 has already moved; AppView focused that page.
     @MainActor static func press(_ f: SoundFamily, session: DeviceSession, ui: EditorUI, fromDevice: Bool = false) {
+        guard !SoundPage.shown(session, f).isEmpty else { return }        // a disabled button: nothing, no empty panel
         if ui.soundPanel?.family == f {
             if !fromDevice { step(f, session: session, ui: ui) }
             return
@@ -48,11 +49,22 @@ enum SoundPanelControl {
     /// The FM-1's screen moved while the Song tab is up: ENV LFO FX SEL EDIT ARP bring in the panel (the tab stays);
     /// HOME closes it. true: handled here; false: the button map's (SkiffNavigator) to follow.
     @MainActor static func follow(_ s: UIState, session: DeviceSession, ui: EditorUI) -> Bool {
+        // a button the track's engine has no pages for, pressed on the FM-1: nothing in Lupe, on any tab (the FM-1
+        // shows what it shows)
+        if ui.songTab, !s.home, s.layer == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family),
+           SoundPage.shown(session, page.family).isEmpty { return true }
         guard ui.followDevice, session.screenLinked, ui.songTab, ui.page == .song || ui.page == .mixer else { return false }
         if s.home { ui.soundPanel = nil; return false }
         guard s.layer == 0, s.menu == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family) else { return false }
         press(page.family, session: session, ui: ui, fromDevice: true)
         return true
+    }
+
+    /// Why a button is disabled, for VoiceOver: "No ENV pages on DRUM".
+    @MainActor static func noPages(_ f: SoundFamily?, _ session: DeviceSession) -> String {
+        guard let f else { return "" }
+        let t = session.tracks[session.selectedTrack]
+        return "No \(f.rawValue) pages on \(t.engineName.isEmpty ? "this engine" : t.engineName)"
     }
 
     /// Closed (✕, HOME, a tap outside unless pinned, another tab).
@@ -77,12 +89,17 @@ struct SoundRail: View {
                     Text(f.rawValue).font(.system(size: 12, weight: .semibold)).tracking(0.5)
                         .foregroundStyle(on ? Theme.text : none ? Theme.textTertiary : Theme.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: 48)
-                        .background { if on { Color.clear.selectedKey(8) } else { Color.clear.raisedKey(8) } }
+                        .background {
+                            // disabled: no raised edge, dimmed
+                            if on { Color.clear.selectedKey(8) } else if none { RoundedRectangle(cornerRadius: 8).fill(Theme.control.opacity(0.5)) }
+                            else { Color.clear.raisedKey(8) }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink())
+                .disabled(none)
                 .accessibilityLabel("\(f.rawValue) pages")
-                .accessibilityValue(on ? "open" : none ? "none for this track" : "")
+                .accessibilityValue(on ? "open" : none ? SoundPanelControl.noPages(f, session) : "")
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
             Spacer(minLength: 0)
@@ -222,6 +239,10 @@ struct SoundPanelHost<Content: View>: View {
                     }
                 }
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.soundPanel?.family)
+                // another track whose engine has none of the open button's pages: closed, never an empty panel
+                .onChange(of: session.selectedTrack) { _, _ in
+                    if let f = ui.soundPanel?.family, SoundPage.shown(session, f).isEmpty { ui.soundPanel = nil }
+                }
             SoundRail(session: session, ui: ui)
         }
     }

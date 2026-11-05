@@ -48,7 +48,7 @@ struct KnobPanelLayer: View {
 struct KnobPanel: View {
     let make: () -> KnobSpec
     let close: () -> Void
-    @AppStorage(KnobTapStyle.key) private var style = KnobTapStyle.arc
+    private let style = KnobTapStyle.arc           // (the Developer switch to the slider is gone, 2026-11-06)
     @State private var typed = ""
     @State private var typedProblem: String?
     @State private var tick = 0

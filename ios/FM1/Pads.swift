@@ -78,7 +78,7 @@ struct FunctionPads: View {
                 .foregroundStyle(on ? Theme.text : usable && hasPages(pad) ? Theme.textSecondary : Theme.textTertiary)
                 .shadow(color: on && !look.flat ? Theme.text.opacity(0.8) : .clear, radius: 5)   // flat: lit, no glow
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background { PadSurface(pressed: on) }
+                .background { if usable { PadSurface(pressed: on) } else { RoundedRectangle(cornerRadius: 9).fill(Theme.control.opacity(0.5)) } }
                 .overlay(alignment: .topTrailing) {
                     if pad == .rec { LED(on: session.recording, colour: Theme.knob[3]).padding(6) }
                 }
@@ -94,7 +94,7 @@ struct FunctionPads: View {
         .disabled(!usable)
         .accessibilityLabel(pad == .play && session.playing ? "Stop" : pad.rawValue.capitalized)
         .accessibilityAddTraits(on ? .isSelected : [])
-        .accessibilityValue(pad == .rec && session.recording ? "recording" : "")
+        .accessibilityValue(pad == .rec && session.recording ? "recording" : usable ? "" : SoundPanelControl.noPages(pad.family, session))
     }
 
     /// Lit: the button whose screen is up, on the FM-1 when linked, else in the app.
@@ -117,7 +117,9 @@ struct FunctionPads: View {
 
     /// Every pad presses. On the drum track SEL, ENV, LFO, EDIT and ARP have no pages: they open an
     /// explanation instead (DrumNoPages) and keep a dim label as a hint.
-    private func isUsable(_ pad: Pad) -> Bool { true }
+    /// On Skiff a button with no pages for the selected track's engine (DRUM and DRUM-X: SEL, ENV; FM6: ENV; …) is
+    /// disabled, as on the rail: pressed it does nothing (Scott, 2026-11-06). SLOOP's drum track keeps its explanation.
+    private func isUsable(_ pad: Pad) -> Bool { !(ui.songTab && !hasPages(pad)) }
     private func hasPages(_ pad: Pad) -> Bool {
         guard let f = pad.family else { return true }
         return !SoundPage.shown(session, f).isEmpty

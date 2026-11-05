@@ -138,6 +138,9 @@ struct KnobControl: View {
             }
             .onTapGesture(coordinateSpace: .global) { at in
                 _ = activate?()
+                // a column (Shape, the sound panel, the Mixer's cards): the tap only focuses it, its page the active
+                // one (Scott, 2026-11-06); a slide turns it. A dial (the track popover) opens the big control.
+                guard column == nil else { return }
                 ui.knobPanelSpec = make
                 ui.knobPanelAt = at
             }
