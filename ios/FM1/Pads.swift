@@ -104,6 +104,7 @@ struct FunctionPads: View {
         case .rec: return session.recording
         case .home: return ui.page == .sequencer
         case .save: return ui.page == .library || ui.page == .song
+        case .glo where session.dialect == .skiff: return ui.mixerTab != nil
         case .seq:
             if session.screenLinked, let s = session.deviceScreen { return !s.home && [ScreenMap.of(session).notes, ScreenMap.of(session).pattern].contains(s.page) && ui.page != .library }
             return ui.page == .sound && ui.soundFamily == .seq
@@ -128,6 +129,8 @@ struct FunctionPads: View {
 
     private func press(_ pad: Pad) {
         if pad == .save, heldSave { heldSave = false; return }    // the release after a hold isn't a press
+        // any other button closes the mixer panel, as on the FM-1 (PLAY and REC leave it)
+        if session.dialect == .skiff, ![.glo, .play, .rec].contains(pad) { ui.mixerTab = nil }
         switch pad {
         case .play: session.setPlaying(!session.playing)
         case .rec: session.toggleRec()
@@ -140,6 +143,16 @@ struct FunctionPads: View {
                 ui.page = .library
                 if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).presets) }
             }
+        case .glo where session.dialect == .skiff:
+            // the mixer panel; pressed again, its next tab, as GLO steps the FM-1's pages (MIXER … GLOBAL)
+            ui.mixerTab = ui.mixerTab.map { SkiffButtonMap.MixerTab(rawValue: ($0.rawValue + 1) % 5)! } ?? .mixer
+        case .seq where session.dialect == .skiff:
+            // NOTES (Sequence, the step panel); pressed again, PATTERN (the whole-track controls)
+            ui.mixerTab = nil
+            let again = ui.page == .sequencer && session.deviceScreen?.page == 41
+            ui.page = .sequencer
+            SkiffNavigator.flash(again ? .trackPanel : .stepPanel, ui)
+            if session.screenLinked, ui.followDevice { session.showOnDevice(page: again ? 43 : 41) }
         case .seq:
             // as on the FM-1: SEQ opens the notes (the sequencer), again for PATTERN
             if ui.page == .sequencer {

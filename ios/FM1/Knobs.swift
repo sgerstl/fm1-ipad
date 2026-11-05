@@ -98,6 +98,8 @@ struct KnobControl: View {
     var activate: (() -> Bool)? = nil
     /// Shape's face (Skiff's column): its number, the track's colour, and whether it's the knob just turned.
     var column: (number: Int, tint: Color, hot: Bool)? = nil
+    /// Another face altogether (the mixer's fader), given the knob and whether it's being dragged.
+    var face: ((KnobSpec, Bool) -> AnyView)? = nil
     /// Builds the knob's description each time, so it shows live values.
     let make: () -> KnobSpec
     @State private var startValue = 0
@@ -136,7 +138,9 @@ struct KnobControl: View {
             }
 
         Group {
-            if let c = column {
+            if let face {
+                face(spec, dragging)
+            } else if let c = column {
                 ColumnFace(spec: spec, number: c.number, tint: c.tint, hot: c.hot || dragging)
             } else {
                 KnobDial(spec: spec, size: size)

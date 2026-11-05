@@ -33,6 +33,8 @@ struct AppView: View {
                 pages.animation(pageAnimation, value: ui.page)
                     // a button pressed on the FM-1 brings up the tab that shows its screen
                     .onChange(of: session.deviceScreen) { _, s in
+                        // Skiff: every button lands somewhere (SkiffButtonMap), GLO in the mixer panel
+                        if session.dialect == .skiff { if let s { SkiffNavigator.follow(s, session: session, ui: ui) }; return }
                         guard ui.followDevice, let s, let tab = SoundPage.tab(for: s, session), tab != ui.page else { return }
                         ui.pageFromDevice = true
                         ui.page = tab
@@ -64,6 +66,7 @@ struct AppView: View {
         .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 32) }
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }
+        .overlay { if session.dialect == .skiff, isConnected { MixerPanelLayer(session: session, ui: ui) } }
         .overlay { KnobPanelLayer(ui: ui) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
@@ -356,8 +359,8 @@ struct SequencerPage: View {
             Color.clear.frame(height: Overview.height)
             HStack(alignment: .top, spacing: 16) {
                 VStack(spacing: 16) {
-                    SelectedStepPanel(session: session, ui: ui)
-                    TrackPanel(session: session, ui: ui)
+                    SelectedStepPanel(session: session, ui: ui).flashRing(ui, .stepPanel)
+                    TrackPanel(session: session, ui: ui).flashRing(ui, .trackPanel)
                 }
                 .frame(width: Overview.boxWidth, height: PianoRoll.panelHeight)
                 // a track's Record sample turns the grid over: the sampler is on its back. The back goes in
@@ -370,6 +373,7 @@ struct SequencerPage: View {
                             PianoRoll(session: session, ui: ui, track: t)
                         }
                     }
+                    .flashRing(ui, .grid)
                     .modifier(FlipFace(angle: turned ? (reduceMotion ? 90 : 180) : 0))
                     if let r = back {
                         SamplerPanel(session: session, ui: ui, request: r)

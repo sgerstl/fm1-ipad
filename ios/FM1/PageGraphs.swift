@@ -42,7 +42,7 @@ struct PageGraph: View {
 
     static func has(_ p: SoundPage) -> Bool {
         ["ENV", "ENV 2", "LFO", "LFO 2", "LFO DEST", "MOD", "FX", "DRIVE", "INSERT", "INSERT 2", "SLICER", "DUCK",
-         "DELAY", "REVERB", "CHORUS", "VOICE"].contains(p.title)
+         "DELAY", "REVERB", "CHORUS", "GLOBAL", "VOICE"].contains(p.title)
     }
     /// Drawn in the panel under the cards on Skiff, shorter than the graphs drawn from the panel's top.
     static let short: Set<String> = ["FX", "SLICER", "DUCK"]
@@ -72,6 +72,8 @@ struct PageGraph: View {
                 .graphLabel("Slicer pattern", "\(valueName(0)), pattern \(values[1])")
             case "DUCK": Canvas { ctx, sz in duck.draw(ctx, Space(size: sz, gh: 96), colour) }
                 .graphLabel("Ducking over a bar", valueName(0))
+            case "GLOBAL": Canvas { ctx, sz in GlobalDrawing(swing: values[1]).draw(ctx, Space(size: sz), colour) }
+                .graphLabel("Swing over a bar", "SWING \(50 + values[1] * 50 / 250) to \(50 - values[1] * 50 / 250)")
             case "MOD": ModGraph(session: session, page: page, route: $modRoute, colour: colour)
             default: EmptyView()
             }
@@ -726,5 +728,29 @@ struct ModGraph: View {
             s.text(ctx, shown(r[safe: 1] ?? nil), 102, y + 13, col, weight: .semibold)
             s.text(ctx, shown(r[safe: 2] ?? nil), 228, y + 13, col, weight: .semibold, anchor: .bottomTrailing)
         }
+    }
+}
+
+// MARK: GLOBAL (ui_pgraph.c graph_global)
+
+/// A bar's 16 steps (a beat's tallest), the off steps late by SWING+ over a mark where they would be straight,
+/// the beats numbered, the long and short steps' share.
+private struct GlobalDrawing {
+    let swing: Int
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        let push = Double(swing * 13 / 250)
+        for i in 0..<16 {
+            var x = Double(14 + i * 13)
+            let h: Double = i % 4 == 0 ? 74 : i % 2 == 0 ? 52 : 40
+            if i % 2 == 1 {
+                ctx.fill(Path(s.r(x, 125, 7, 3)), with: .color(dimColour))
+                x += push
+            }
+            let col = i % 4 == 0 ? Theme.text : i % 2 == 0 ? c : c.opacity(0.65)
+            ctx.fill(Path(roundedRect: s.r(x, 120 - h, 7, h), cornerRadius: 1.5), with: .color(col))
+        }
+        for i in 0..<4 { s.text(ctx, "\(i + 1)", Double(14 + i * 52), 36, midColour, size: 13, weight: .semibold) }
+        s.text(ctx, "SWING \(50 + swing * 50 / 250):\(50 - swing * 50 / 250)", 228, 16, midColour, anchor: .bottomTrailing)
     }
 }

@@ -131,4 +131,15 @@ final class EditorUI {
     var sampler: SamplerRequest?
     /// The last page change came from the FM-1 (its button pressed), not from a tab or pad here.
     var pageFromDevice = false
+    /// Skiff's GLO pages: the mixer panel, open on this tab over the page (nil: closed).
+    var mixerTab: SkiffButtonMap.MixerTab?
+    var projectsOpen = false
+    /// A place the FM-1 sent Jib to, lit for a moment (the whole-track controls for PATTERN, and so on).
+    var flash: Flash?
+}
+
+enum FlashTarget: Equatable { case stepPanel, trackPanel, grid, patternBin }
+struct Flash: Equatable {
+    var target: FlashTarget
+    var id: Int
 }

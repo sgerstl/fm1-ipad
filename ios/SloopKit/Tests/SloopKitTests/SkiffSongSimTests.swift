@@ -351,3 +351,23 @@ extension SkiffSongSimTests {
         }
     }
 }
+
+extension SkiffScreenLinkSimTests {
+    /// Every page the map uses, on the patched firmware: SCREEN_GOTO there, and the screen says where Jib lands.
+    @Test func theButtonMapOnTheRealFirmware() async throws {
+        let d = try await driver()
+        _ = try await d.selectTrack(0)                                  // T1, ANALOG: no FM6, kit or sample pages
+        for place: SkiffButtonMap.Place in [.shape(page: 0), .shape(page: 4), .shape(page: 7), .shape(page: 11), .shape(page: 28),
+                                            .shape(page: 39), .mixer(.mixer), .mixer(.delay), .mixer(.reverb), .mixer(.chorus),
+                                            .mixer(.global), .browse, .arrange(patterns: true), .projects, .sequence(.notes),
+                                            .sequence(.feel), .sequence(.pattern), .sequence(.automation), .arrange(patterns: false)] {
+            let p = SkiffButtonMap.page(for: place)
+            let s = try await d.screenGoto(p)
+            #expect(!s.home && s.page == p, "SCREEN_GOTO \(p): \(s)")
+            #expect(SkiffButtonMap.place(for: s) == place, "page \(p)")
+        }
+        let h = try await d.screenGoto(127)
+        #expect(SkiffButtonMap.place(for: h) == .home)
+        await d.close()
+    }
+}

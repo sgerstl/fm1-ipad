@@ -253,11 +253,13 @@ struct SoundTab: View {
     /// The FM-1's buttons in the order Skiff's PAGES table lists their pages (params.c): Shape's sections. GLO's
     /// shared effects keep their place after them for now; SEQ's PATTERN pages close the list.
     static let order: [SoundFamily] = [.env, .lfo, .fx, .sel, .edit, .arp, .glo, .seq]
+    /// Skiff: GLO is the mixer panel and SEQ's PATTERN the Sequence page's whole-track controls (the button map).
+    static let skiffOrder: [SoundFamily] = [.env, .lfo, .fx, .sel, .edit, .arp]
     /// Pages that drive one thing, shown as rows over its one graph: the first page's title → the others'.
     static let merged: [String: [String]] = ["LFO": ["LFO 2"], "INSERT": ["INSERT 2"]]
 
     var body: some View {
-        let sections = Self.order.map { ($0, SoundPage.shown(session, $0)) }.filter { !$0.1.isEmpty }
+        let sections = (session.dialect == .skiff ? Self.skiffOrder : Self.order).map { ($0, SoundPage.shown(session, $0)) }.filter { !$0.1.isEmpty }
         VStack(alignment: .leading, spacing: 16) {
             EntrySoundNote(session: session)
             // the button is chosen on the pads in the left column, as on the FM-1: it scrolls to its section

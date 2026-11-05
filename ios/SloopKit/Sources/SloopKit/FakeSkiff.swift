@@ -73,6 +73,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             seedDemo()
             // -demo-song empty | full: the Arrange states (no song; T5's 16 entries and the pool full)
             let a = ProcessInfo.processInfo.arguments
+            screenLink = a.contains("-demo-link")       // the screen link patch, so the button map can be seen
             let which = a.firstIndex(of: "-demo-song").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
             if which != "empty" { seedSong() }
             if which == "full" {

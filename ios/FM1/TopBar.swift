@@ -9,7 +9,7 @@ struct TopBar: View {
     @Environment(ProjectStore.self) private var projects
     @Environment(FirmwareCentre.self) private var firmware
     @State private var connectionFrame: CGRect = .zero
-    @State private var projectsOpen = false
+    private var projectsOpen: Binding<Bool> { Binding(get: { ui.projectsOpen }, set: { ui.projectsOpen = $0 }) }
     @State private var naming: NamePrompt?
     @State private var readoutFrame: CGRect = .zero
 
@@ -105,7 +105,7 @@ struct TopBar: View {
         HStack(spacing: 8) {
             Rectangle().fill(Theme.ledOff).frame(width: 1, height: 24).padding(.horizontal, 12)
                 .accessibilityHidden(true)
-            Button { projectsOpen = true } label: {
+            Button { ui.projectsOpen = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "folder").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
                     Text(projectName)
@@ -147,7 +147,7 @@ struct TopBar: View {
                     .accessibilityLabel(projects.busy?.label ?? "Working")
             }
         }
-        .sheet(isPresented: $projectsOpen) { ProjectsSheet(store: projects, session: session) }
+        .sheet(isPresented: projectsOpen) { ProjectsSheet(store: projects, session: session) }
         .namePrompt($naming, store: projects)
     }
 
@@ -260,6 +260,7 @@ struct TopBar: View {
             recKey
             playKey
             readout
+            if session.dialect == .skiff { MixerKey(session: session, ui: ui) }
         }
         .padding(4)
         .background {

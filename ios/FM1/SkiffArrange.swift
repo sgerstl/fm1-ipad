@@ -62,6 +62,7 @@ struct SkiffArrangePage: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: $dragPattern)
                 .frame(width: Self.binWidth)
+                .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
         }
         .overlay(alignment: .top) { if store.offline { OfflineBar(session: session) } }
         .overlay { menuOverlay }

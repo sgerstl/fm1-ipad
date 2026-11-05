@@ -1417,8 +1417,20 @@ public final class DeviceSession {
         write(drumIndex: i, d.setting(lane, on: !d.has(lane)))
     }
 
+    /// Each track's value of one parameter, for the mixer's strips (REV): read with `readEveryTrack`, kept as set.
+    public private(set) var everyTrack: [Int: [Int: Int]] = [:]    // id → track → value
+
+    /// Reads parameter `id` on every track (TRACK_PARAM), for a view that shows all six at once.
+    public func readEveryTrack(id: Int) async {
+        guard let c = driver else { return }
+        for t in trackIndices where !recentlyWritten("p\(t).\(id)") {
+            if let v = try? await c.trackParam(track: t, id: id), everyTrack[id]?[t] != v { everyTrack[id, default: [:]][t] = v }
+        }
+    }
+
     /// A track parameter from a knob: shown at once, sent latest-value-wins so a drag never queues up.
     public func set(track t: Int, param id: Int, to v: Int) {
+        if everyTrack[id] != nil { everyTrack[id]?[t] = v }
         apply(track: t, id: id, value: v)
         if isDrums(t), id == ids.level, let dl = ids.drumLevel { sendParam("g\(dl)", v) { c, v in try await c.setGlobal(id: dl, value: v) } ; return }
         sendParam("p\(t).\(id)", v) { c, v in try await c.setTrackParam(track: t, id: id, value: v) }
