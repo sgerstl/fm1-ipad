@@ -2,14 +2,15 @@ import SloopKit
 import SwiftUI
 import UIKit
 
-/// Installing the firmware Jib carries (Skiff 2.2, SLOOP 2.8.4 with the screen link) over USB-MIDI, 2026-11-05.
+/// Installing the firmware Jib carries (Skiff 2.2, SLOOP 2.8.4 with the screen link) over USB-MIDI, 2026-11-05, and
+/// putting M-VAVE's stock V15 back (its own update loader writes it).
 /// Offers it when the FM-1 runs something else or waits in an update loader; picks it from the Developer menu.
 /// While it runs the session lets go of the FM-1, the screen stays awake, and a cover keeps the app on this.
 @Observable @MainActor
 final class FirmwareCentre {
     enum Offer: Equatable {
-        case loader(String)                 // a Felucca-family update loader waits: finish the write
-        case foreignLoader(String)          // M-VAVE's (or another firmware's) update mode: not ours to finish
+        case loader(String)                 // a Felucca-family update loader waits, or M-VAVE's: finish the write
+        case foreignLoader(String)          // another firmware's update mode: not ours to finish
         case unsupported(String)            // runs something Jib doesn't speak
     }
 
@@ -18,7 +19,7 @@ final class FirmwareCentre {
         case backingUp(Double)
         case installing(InstallStep)
         case done(String, backup: String?)
-        case failed(message: String, inUpdateMode: Bool, backup: String?)
+        case failed(message: String, inUpdateMode: Bool, backup: String?, refused: Bool = false)
     }
 
     var offer: Offer?
@@ -41,19 +42,23 @@ final class FirmwareCentre {
     private var backupName: String?
 
     init() {
-        // -demo-firmware loader | stock | foreign | picker | installing | failed | done: a fake FM-1 for screenshots
+        // -demo-firmware loader | stock | foreign | picker | installing | failed | done, and for the way back to stock
+        // picker-stock | restoring | restored | stock-loader | v16: a fake FM-1 for screenshots
         let a = ProcessInfo.processInfo.arguments
         demo = a.firstIndex(of: "-demo-firmware").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
         if let demo {
             let sloop = try? BundledFirmware.sloop.load(), skiff = try? BundledFirmware.skiff.load()
+            let stock = try? BundledFirmware.stock.load()
             let fake: FakeFM1
             switch demo {
             case "loader": fake = FakeFM1(inLoaderOf: skiff!, was: sloop)
             case "stock": fake = FakeFM1(running: nil)
-            case "foreign": fake = FakeFM1(running: nil, stockIdentity: "ota-FM-1_015")
+            case "foreign": fake = FakeFM1(running: nil, stockIdentity: "ota-FM-1_301")
+            case "stock-loader": fake = FakeFM1(inLoaderOf: stock!, was: sloop)
+            case "v16": fake = FakeFM1(running: sloop, startedOn: 16)
             default: fake = FakeFM1(running: sloop)
             }
-            fake.knows(skiff!, sloop!)
+            fake.knows(skiff!, sloop!, stock!)
             if demo == "failed" { fake.faults = [.unplug(stage: 2, after: 900, replugAfter: nil)] }
             ports = fake
         } else {
@@ -73,12 +78,13 @@ final class FirmwareCentre {
             try? await Task.sleep(for: .seconds(1))
             switch demo {
             case "picker": showPicker = true
-            case "installing", "failed", "done":
+            case "picker-stock": target = .stock; showPicker = true
+            case "installing", "failed", "done", "restoring", "restored", "v16":
                 for _ in 0..<50 {                            // with the demo FM-1 connected, so it backs up
                     if case .connected = session.status { break }
                     try? await Task.sleep(for: .milliseconds(100))
                 }
-                start(.skiff, session: session)
+                start(["restoring", "restored", "v16"].contains(demo) ? .stock : .skiff, session: session)
             default: await probe()
             }
             return
@@ -100,10 +106,11 @@ final class FirmwareCentre {
         let i = FirmwareInstaller(ports: ports)
         guard let id = await i.probe() else { if case .unsupported = offer {} else { offer = nil }; return }
         if id.isLoader {
-            offer = FirmwareInstaller.isResumable(loader: id) ? .loader(id.text) : .foreignLoader(id.text)
+            let ours = FirmwareInstaller.isResumable(loader: id) || id.text == FirmwareInstaller.officialLoader
+            offer = ours ? .loader(id.text) : .foreignLoader(id.text)
             if let f = BundledFirmware.matching(identity: id.text) { target = f }
-        } else if BundledFirmware.matching(identity: id.text) == nil {
-            offer = .unsupported(id.text)
+        } else if BundledFirmware.matching(identity: id.text).map({ $0.isStock }) ?? true {
+            offer = .unsupported(id.text)               // (stock V15 is one Jib carries, not one it speaks)
         }
     }
 
@@ -175,8 +182,9 @@ final class FirmwareCentre {
         do {
             let id = try await i.install(pkg) { s in Task { @MainActor in self.phase = .installing(s) } }
             phase = .done(id, backup: backupName)
+            if target.isStock { dismissedOffer = .unsupported(id) }     // (it asked for stock: no offer to undo it)
         } catch let e as InstallError {
-            phase = .failed(message: e.message, inUpdateMode: e.inUpdateMode, backup: backupName)
+            phase = .failed(message: e.message, inUpdateMode: e.inUpdateMode, backup: backupName, refused: e.code == .otherStock)
         } catch {
             phase = .failed(message: "\(error)", inUpdateMode: false, backup: backupName)
         }
@@ -184,6 +192,9 @@ final class FirmwareCentre {
     }
 
     func close() { phase = .idle }
+
+    /// "Installing Skiff 2.2", "Restoring stock V15".
+    var doing: String { target.isStock ? "Restoring stock V15" : "Installing \(target.title)" }
 }
 
 // MARK: - The layer over the app
@@ -281,6 +292,17 @@ struct FirmwareOfferCard: View {
 
     var body: some View {
         switch offer {
+        case .loader(let id) where id == FirmwareInstaller.officialLoader:
+            FirmwareCard(title: "Finish restoring stock V15") {
+                Text("The FM-1 is waiting in M-VAVE’s update mode (\(id)): a restore was cut off. Nothing is lost. Jib can finish it now with stock V15, the only firmware that update mode takes from Jib.")
+                    .bodyText()
+                Text("If you were installing something else with M-VAVE’s own updater, finish it there instead.")
+                    .bodyText()
+                KeepPluggedNote()
+            } actions: {
+                CardKey(title: "Not now") { centre.dismissedOffer = offer }
+                CardKey(title: "Finish restoring", primary: true) { centre.start(.stock, session: session) }
+            }
         case .loader(let id):
             FirmwareCard(title: "Finish the firmware install") {
                 Text("The FM-1 is waiting in update mode (\(id)): an install was cut off. Nothing is lost. Jib can finish it now with \(centre.target.title).")
@@ -293,7 +315,7 @@ struct FirmwareOfferCard: View {
             }
         case .foreignLoader(let id):
             FirmwareCard(title: "The FM-1 is in another update mode") {
-                Text("It reports \(id), the update mode of M-VAVE’s firmware or another one. Jib only finishes Skiff’s and SLOOP’s installs. Finish this one with the updater that started it, then plug the FM-1 in again.")
+                Text("It reports \(id), another firmware’s update mode. Jib only finishes installs of Skiff, SLOOP and stock V15. Finish this one with the updater that started it, then plug the FM-1 in again.")
                     .bodyText()
             } actions: {
                 CardKey(title: "OK", primary: true) { centre.dismissedOffer = offer }
@@ -318,32 +340,12 @@ struct FirmwarePicker: View {
     var body: some View {
         FirmwareCard(title: "Install firmware") {
             VStack(spacing: 8) {
-                ForEach(BundledFirmware.allCases) { f in
-                    Button { centre.target = f } label: {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: centre.target == f ? "largecircle.fill.circle" : "circle")
-                                .font(.system(size: 17)).frame(width: 24)
-                                .foregroundStyle(centre.target == f ? Theme.text : Theme.textTertiary)
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 8) {
-                                    Text(f.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.text)
-                                    if running == f {
-                                        Text("On this FM-1").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                                    }
-                                }
-                                Text(f.detail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .latchedKey(centre.target == f, 10)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(centre.target == f ? [.isSelected] : [])
-                }
+                ForEach(BundledFirmware.allCases.filter { !$0.isStock }) { f in row(f) }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Back to stock").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                    .accessibilityAddTraits(.isHeader)
+                row(.stock)
             }
             if let note = centre.pickerNote {
                 Label { Text(note).bodyText(primary: true) } icon: { Image(systemName: "exclamationmark.triangle") }
@@ -351,14 +353,44 @@ struct FirmwarePicker: View {
             } else {
                 Text(backupLine).bodyText()
             }
-            Text("GPL-3.0. Source: \(centre.target.source).").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            Text(centre.target.isStock ? "Apache-2.0, unchanged. From \(centre.target.source.replacingOccurrences(of: " (Apache-2.0)", with: ""))."
+                                       : "GPL-3.0. Source: \(centre.target.source).")
+                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } actions: {
             CardKey(title: "Cancel") { centre.showPicker = false; centre.pickerNote = nil; centre.skipBackup = false }
-            CardKey(title: centre.skipBackup ? "Install without a backup" : "Install \(centre.target.title)", primary: true) {
+            CardKey(title: centre.skipBackup ? (centre.target.isStock ? "Restore without a backup" : "Install without a backup")
+                                             : centre.target.isStock ? "Restore stock V15" : "Install \(centre.target.title)", primary: true) {
                 centre.start(centre.target, session: session)
             }
         }
+    }
+
+    private func row(_ f: BundledFirmware) -> some View {
+        Button { centre.target = f } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: centre.target == f ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 17)).frame(width: 24)
+                    .foregroundStyle(centre.target == f ? Theme.text : Theme.textTertiary)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(f.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.text)
+                        if running == f {
+                            Text("On this FM-1").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                    Text(f.detail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .latchedKey(centre.target == f, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(centre.target == f ? [.isSelected] : [])
     }
 
     private var running: BundledFirmware? {
@@ -367,10 +399,13 @@ struct FirmwarePicker: View {
     }
 
     private var backupLine: String {
+        let stock = centre.target.isStock
+            ? " Stock V15 can’t read Skiff’s or SLOOP’s projects, and installing over it later can write over some of them: the backup is how they come back."
+            : ""
         if case .connected = session.status {
-            return "Jib backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Jib › Backups), then writes. Keep the FM-1 plugged in for about a minute."
+            return "Jib backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Jib › Backups), then writes. Keep the FM-1 plugged in for about a minute." + stock
         }
-        return "There’s no backup this time: the FM-1 isn’t connected to Jib. Keep it plugged in for about a minute."
+        return "There’s no backup this time: the FM-1 isn’t connected to Jib. Keep it plugged in for about a minute." + stock
     }
 }
 
@@ -387,7 +422,7 @@ struct FirmwareInstallCover: View {
                 VStack(alignment: .leading, spacing: 24) {
                     switch centre.phase {
                     case .done(let id, let backup): done(id, backup)
-                    case .failed(let message, let inUpdate, let backup): failed(message, inUpdate, backup)
+                    case .failed(let message, let inUpdate, let backup, let refused): failed(message, inUpdate, backup, refused)
                     default: working
                     }
                 }
@@ -407,7 +442,7 @@ struct FirmwareInstallCover: View {
     private var working: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Installing \(centre.target.title)").font(.system(size: 28, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                Text(centre.doing).font(.system(size: 28, weight: .semibold)).accessibilityAddTraits(.isHeader)
                 Text("Keep Jib open and the FM-1 plugged in.").font(.system(size: 20, weight: .semibold))
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -494,20 +529,25 @@ struct FirmwareInstallCover: View {
 
     private func done(_ id: String, _ backup: String?) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Label { Text("\(centre.target.title) is installed").font(.system(size: 28, weight: .semibold)) }
+            Label { Text(centre.target.isStock ? "Stock V15 is back" : "\(centre.target.title) is installed").font(.system(size: 28, weight: .semibold)) }
                 icon: { Image(systemName: "checkmark.circle").font(.system(size: 28)) }
                 .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: 8) {
                 Text("The FM-1 restarted and reports \(id), as it should.").bodyText(primary: true)
-                if let backup { Text("The backup is in Files: On My \(deviceWord) › Jib › Backups › \(backup).").bodyText() }
+                if centre.target.isStock {
+                    Text("Jib can’t connect to the stock firmware. When you want Jib back, plug the FM-1 in and choose Skiff or SLOOP.").bodyText(primary: true)
+                }
+                if let backup {
+                    Text("The backup is in Files: On My \(deviceWord) › Jib › Backups › \(backup)." + (centre.target.isStock ? " Restore it with that firmware’s editor once it’s back on." : "")).bodyText()
+                }
             }
             HStack { Spacer(); CardKey(title: "Done", primary: true) { centre.close() } }
         }
     }
 
-    private func failed(_ message: String, _ inUpdate: Bool, _ backup: String?) -> some View {
+    private func failed(_ message: String, _ inUpdate: Bool, _ backup: String?, _ refused: Bool) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Label { Text("The install stopped").font(.system(size: 28, weight: .semibold)) }
+            Label { Text(refused ? "Stock V15 can’t go on this FM-1" : centre.target.isStock ? "The restore stopped" : "The install stopped").font(.system(size: 28, weight: .semibold)) }
                 icon: { Image(systemName: "exclamationmark.triangle").font(.system(size: 28)) }
                 .accessibilityAddTraits(.isHeader)
             Text(message).bodyText(primary: true)
@@ -516,7 +556,11 @@ struct FirmwareInstallCover: View {
                     Text("Nothing is lost. The FM-1 waits in update mode (its screen says UPDATE MODE, or stays dark) until a write finishes.").bodyText()
                     NumberedLine(n: 1, text: "Plug the FM-1 straight into the \(deviceWord), without a hub or adapter chain if you can.")
                     NumberedLine(n: 2, text: "Tap Run the install again. It finds the update mode and finishes the write.")
-                    NumberedLine(n: 3, text: "Still stuck? Skiff’s README, “If the FM-1 does not start”, has the ways back, from a computer.")
+                    NumberedLine(n: 3, text: centre.target.isStock
+                                  ? "Still stuck? M-VAVE’s own updater, M-UPGRADE (m-vave.com › Downloads), puts the stock firmware back from a computer."
+                                  : "Still stuck? Skiff’s README, “If the FM-1 does not start”, has the ways back, from a computer.")
+                } else if refused {
+                    Text("The FM-1 still runs its firmware, and Skiff and SLOOP still install as usual.").bodyText()
                 } else {
                     Text("Nothing was written: the FM-1 still runs its firmware. Check the cable and try again.").bodyText()
                 }
@@ -524,8 +568,12 @@ struct FirmwareInstallCover: View {
             }
             HStack(spacing: 8) {
                 Spacer()
-                CardKey(title: "Close") { centre.close() }
-                CardKey(title: "Run the install again", primary: true) { centre.close(); centre.start(centre.target, session: session) }
+                if refused {
+                    CardKey(title: "Close", primary: true) { centre.close() }
+                } else {
+                    CardKey(title: "Close") { centre.close() }
+                    CardKey(title: "Run the install again", primary: true) { centre.close(); centre.start(centre.target, session: session) }
+                }
             }
         }
     }
