@@ -221,11 +221,11 @@ struct TopBar: View {
     /// the phone's top bar.
     static func driveDevice(session: DeviceSession, ui: EditorUI, to p: Page) {
         guard session.screenLinked, ui.followDevice else { return }
-        if let s = session.deviceScreen, SoundPage.tab(for: s) == p { return }    // already there
+        if let s = session.deviceScreen, SoundPage.tab(for: s, session) == p { return }    // already there
         switch p {
-        case .sequencer: session.showOnDevice(page: SoundPage.home)
-        case .library: session.showOnDevice(page: SoundPage.presets)
-        case .song: session.showOnDevice(page: SoundPage.section)
+        case .sequencer: session.showOnDevice(page: ScreenMap.of(session).home)
+        case .library: session.showOnDevice(page: ScreenMap.of(session).presets)
+        case .song: session.showOnDevice(page: ScreenMap.of(session).song)
         case .sound:
             if let first = SoundPage.shown(session, ui.soundFamily).first { session.showOnDevice(page: first.fw) }
         }

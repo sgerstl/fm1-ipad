@@ -53,6 +53,13 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var usbLevel = 0
     /// Armed tracks, a bit each (song.rec), as TRANSPORT op 4 toggles them: ui_input.c rec_tap.
     var armed = 0
+    /// Jib's screen link patch (skiff/README.md): INFO's `56 01 01`, SCREEN, SCREEN_GOTO, WATCH bit 2.
+    var screenLink = false
+    var screenWatched = false
+    /// home, page, layer, menu, flags (the track is `selected`).
+    var screen = (home: true, page: 0, layer: 0, menu: 0, flags: 0)
+    /// Pages SCREEN_GOTO refuses as Skiff does for one the track's engine doesn't show (LANES on ANALOG).
+    var refusedPages: Set<Int> = [18]
     var poolLen = Array(repeating: 0, count: 64)
 
     /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
@@ -194,6 +201,20 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// Pushes (CHANGED, STEP_CHANGED, ...) as the device sends them while watched.
     func push(_ cmd: UInt8, _ body: [UInt8]) { if watching { sink.yield(Frame.encode(cmd, body)) } }
 
+    private func screenBytes() -> [UInt8] {
+        [screen.home ? 1 : 0, UInt8(screen.page), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
+    }
+
+    /// A button pressed on the FM-1: its screen changes and, watched with bit 2, it says so (cmd 90).
+    func pressOnDevice(page: Int?, track: Int? = nil) {
+        lock.lock()
+        if let page { screen = (false, page, 0, 0, 0) } else { screen.home = true }
+        if let track { selected = track }
+        let b = screenBytes(), on = screenWatched
+        lock.unlock()
+        if on { push(90, b) }
+    }
+
     deinit { clockTimer?.cancel() }
 
     /// A few notes on each track and PLAY, so the demo has something to show (the recorded unit is blank).
@@ -254,7 +275,14 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     // Called with the lock held.
     private func answer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
         switch (cmd, a.count) {
-        case (1, 0): return fx.info
+        case (1, 0): return screenLink ? fx.info + [0x56, 1, 1] : fx.info
+        case (90, 0) where screenLink: return screenBytes()
+        case (91, 1) where screenLink:
+            // always answered: a refused page answers the screen unchanged
+            let p = Int(a[0])
+            if p == 127 { screen.home = true; screen.layer = 0; screen.menu = 0 }
+            else if p < 46, !refusedPages.contains(p) { screen = (false, p, 0, 0, 0) }
+            return screenBytes()
         case (72, 1):
             // MENU_DESC: index → index, id, kind, value, min, max, … (the rest isn't read); past the list: id 127
             return a[0] == 0 ? [0, UInt8(SkiffMenu.usbLevel), 0] + v14(usbLevel) + v14(0) + v14(1) : [a[0], 127]
@@ -293,7 +321,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             return [1, a[1]] + v14(globals[Int(a[1])])
         case (4, 0):
             return [UInt8(engines[selected].engine), UInt8(engines[selected].preset)] + params[selected].flatMap(v14) + globals.flatMap(v14)
-        case (22, 1): watching = a[0] != 0; return [a[0] & 3]
+        case (22, 1):
+            watching = a[0] != 0
+            screenWatched = screenLink && a[0] & 4 != 0
+            return [a[0] & (screenLink ? 7 : 3)]
         case (25, 0): return [0]
         case (16, 2): return a[0] == 0 ? fx.userList : [a[0], 0, fx.userList.count > 2 ? fx.userList[2] : 32]
         case (20, 1): return [a[0], 1]

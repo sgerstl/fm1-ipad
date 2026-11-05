@@ -235,3 +235,69 @@ extension SkiffSongSimTests {
         _ = try await d.selectTrack(0)
     }
 }
+
+/// The screen link patch against skiff-sim built from Skiff's `screen-link` branch (SKIFF_SIM=1 SKIFF_LINK=1).
+@Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["SKIFF_LINK"] == "1"))
+@MainActor struct SkiffScreenLinkSimTests {
+    private func driver() async throws -> SkiffDriver {
+        guard let t = MIDITransport() else { throw ClientError.timeout("no Felucca port: is skiff-sim running?") }
+        guard case .driver(let d) = try await FirmwareDetector.connect(t), let s = d as? SkiffDriver else { throw ClientError.timeout("not Skiff") }
+        return s
+    }
+
+    @Test func screenAndGotoOnTheRealFirmware() async throws {
+        let d = try await driver()
+        #expect(d.skiff.hasScreenLink && d.info.version == "FELUCCA v2.2")
+        _ = try await d.selectTrack(0)                                  // T1, ANALOG
+        var s = try await d.screen()
+        print("SCREEN at connect:", s)
+        #expect(s.track == 0 && s.flags != nil)
+        s = try await d.screenGoto(31)                                  // DELAY
+        #expect(!s.home && s.page == 31 && s.layer == 0 && s.menu == 0)
+        s = try await d.screenGoto(18)                                  // LANES: not ANALOG's, refused
+        #expect(s.page == 31)                                           // answered, unchanged
+        s = try await d.screenGoto(43)                                  // PATTERN
+        #expect(s.page == 43)
+        s = try await d.screenGoto(127)                                 // HOME
+        #expect(s.home)
+        await d.close()
+    }
+
+    @Test func theSessionLinksAndDrivesTheScreen() async throws {
+        let session = DeviceSession(transport: { MIDITransport() })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(15) { if case .connected = session.status { true } else { false } }
+        #expect(session.screenLinked && session.capabilities.contains(.screenLink))
+        session.showOnDevice(page: 39)                                  // ARP
+        try await waitFor(5) { session.deviceScreen?.page == 39 && session.deviceScreen?.home == false }
+        session.showOnDevice(page: 127)
+        try await waitFor(5) { session.deviceScreen?.home == true }
+        run.cancel()
+    }
+}
+
+extension SkiffScreenLinkSimTests {
+    /// A button pressed on the (sim's) FM-1 reaches the session as a SCREEN push. SKIFF_CONSOLE: the sim's
+    /// console, a FIFO its stdin reads.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SKIFF_CONSOLE"] != nil))
+    func aButtonOnTheFM1MovesJib() async throws {
+        let console = try #require(ProcessInfo.processInfo.environment["SKIFF_CONSOLE"])
+        let session = DeviceSession(transport: { MIDITransport() })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(15) { if case .connected = session.status { true } else { false } }
+        session.showOnDevice(page: 127)
+        try await waitFor(5) { session.deviceScreen?.home == true }
+        func press(_ b: String) throws {
+            let h = try #require(FileHandle(forWritingAtPath: console))
+            h.write(Data("press \(b)\n".utf8)); try h.close()
+        }
+        try press("GLO")                                                // GLO's first page: MIXER (30)
+        try await waitFor(5) { session.deviceScreen?.home == false && session.deviceScreen?.page == 30 }
+        try press("SEQ")                                                // SEQ: NOTES (41)
+        try await waitFor(5) { session.deviceScreen?.page == 41 }
+        print("pushed:", session.deviceScreen as Any)
+        run.cancel()
+    }
+}

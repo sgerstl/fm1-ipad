@@ -22,7 +22,8 @@ public struct SkiffInfo: Equatable, Sendable {
 
     /// Payload bytes after "tag 01", per EDITOR_PROTOCOL.md's INFO row; an unknown tag ends the reading.
     static let tagLength: [UInt8: Int] = [0x55: 1, 0x4D: 2, 0x42: 1, 0x46: 2, 0x53: 1, 0x50: 1, 0x4E: 1, 0x52: 1, 0x4C: 1,
-                                          0x54: 4, 0x43: 1, 0x4B: 1, 0x57: 1, 0x49: 4, 0x58: 1]
+                                          0x54: 4, 0x43: 1, 0x4B: 1, 0x57: 1, 0x49: 4, 0x58: 1,
+                                          0x56: 1]
 
     public init?(_ body: [UInt8]) {
         var r = ByteReader(body, cmd: Cmd.info)
@@ -59,6 +60,9 @@ public struct SkiffInfo: Equatable, Sendable {
     /// Skiff 2.0's song (`58 01` bit 0): LIST2, NEW, COPY+, CHAIN, SONG ONCE; bit 1 the entries' sounds.
     public var hasSongLists: Bool { (tags[0x58]?.first ?? 0) & 1 != 0 }
     public var hasEntrySounds: Bool { (tags[0x58]?.first ?? 0) & 2 != 0 }
+    /// Jib's screen link patch on Skiff 2.2 (`56 01 01`, after `58 01`; fm1-ipad skiff/README.md): SCREEN (90),
+    /// SCREEN_GOTO (91), WATCH bit 2. The version string stays FELUCCA v2.2: the tag is what tells it apart.
+    public var hasScreenLink: Bool { (tags[0x56]?.first ?? 0) & 1 != 0 }
 
     public var deviceInfo: DeviceInfo {
         DeviceInfo(version: version, engines: engines, paramCount: paramCount, globalCount: globalCount, stepCount: stepCount,
@@ -74,6 +78,7 @@ enum SkiffCmd {
     static let transport: UInt8 = 76
     static let pool: UInt8 = 78, list2: UInt8 = 82
     static let menuDesc: UInt8 = 72, menuSet: UInt8 = 73
+    static let screen: UInt8 = 90, screenGoto: UInt8 = 91
 }
 
 /// MENU settings the editor protocol can set (editor_menu.c ED_MENU's ids, append-only).
@@ -134,7 +139,6 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         switch p {
         case .changed(2, let id, let v): return .changed(scope: 0, id: id + 128, value: v)
         case .trackChanged(let t, let id, let v): return .trackChanged(track: t & 0x3F, id: id | (t >> 6 & 1) << 7, value: v)
-        case .ui: return nil
         default: return p
         }
     }
@@ -260,7 +264,21 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         try ParamDump(await request(SkiffCmd.dump, [], match: 0, "DUMP"), paramCount: info.paramCount, globalCount: info.globalCount)
     }
     /// WATCH 3: the pushes and TRACK_CHANGED. Skiff has no screen link.
-    public func watch(screenLink: Bool) async throws { _ = try await request(SkiffCmd.watch, [3], match: 0, "WATCH") }
+    /// WATCH: steps and parameters (bits 0, 1), and with the screen link patch the screen too (bit 2).
+    public func watch(screenLink: Bool) async throws {
+        _ = try await request(SkiffCmd.watch, [screenLink && skiff.hasScreenLink ? 7 : 3], match: 0, "WATCH")
+    }
+
+    /// SCREEN (90, the screen link patch): home, page (Skiff's PAGES), layer, menu, the selected track, flags.
+    public func screen() async throws -> UIState {
+        try UIState(await request(SkiffCmd.screen, [], match: 0, "SCREEN"))
+    }
+
+    /// SCREEN_GOTO (91): a page of Skiff's PAGES, or 127 for HOME. Always answered: a page refused (past the
+    /// table, one the track's engine doesn't show, a dialog open) answers the state unchanged.
+    public func screenGoto(_ page: Int) async throws -> UIState {
+        try UIState(await request(SkiffCmd.screenGoto, [UInt8(page & 127)], match: 0, "SCREEN_GOTO", retries: 0))
+    }
     /// TRANSPORT is Skiff's keep-alive (EDITOR_PROTOCOL.md: "instead of PING").
     public func ping() async throws { _ = try await transportState() }
     public func preset(engine: Int, index: Int) async throws -> (engine: Int, preset: Int) {

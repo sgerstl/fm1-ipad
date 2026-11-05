@@ -190,8 +190,8 @@ struct PhoneShape: View {
     private func followScreen(_ s: UIState?) {
         guard let s, s.home != followed?.home || s.page != followed?.page || s.layer != followed?.layer else { return }
         followed = s
-        if s.layer == 5 { ui.soundFamily = .sel; return }              // SEL held
-        guard !s.home, let page = SoundPage.page(fw: s.page),
+        if s.layer == ScreenMap.of(session).selLayer { ui.soundFamily = .sel; return }   // the keys' layer held
+        guard !s.home, let page = SoundPage.page(session, fw: s.page),
               SoundPage.reached(session, page.family).contains(where: { $0.fw == page.fw }) else { return }
         if ui.soundFamily != page.family { ui.soundFamily = page.family }
         withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82)) { centred = page.id }

@@ -605,10 +605,17 @@ public struct UserPresetList: Equatable, Sendable {
 /// the layer of a held function button (0 none), and the menu (0 off).
 public struct UIState: Equatable, Sendable {
     public var home: Bool, page: Int, layer: Int, menu: Int
-    public init(home: Bool, page: Int, layer: Int = 0, menu: Int = 0) { self.home = home; self.page = page; self.layer = layer; self.menu = menu }
+    /// Skiff's screen link sends two more: the selected track and flags (bit 0 HOME shows the scope, bit 1 the
+    /// layer is locked open, bit 2 HOME held). nil from SLOOP, whose UI has the first four only.
+    public var track: Int?, flags: Int?
+    public init(home: Bool, page: Int, layer: Int = 0, menu: Int = 0, track: Int? = nil, flags: Int? = nil) {
+        self.home = home; self.page = page; self.layer = layer; self.menu = menu; self.track = track; self.flags = flags
+    }
     public init(_ body: [UInt8]) throws {
         var r = ByteReader(body, cmd: Cmd.ui)
         home = try r.u8() != 0; page = try r.u8(); layer = try r.u8(); menu = try r.u8()
+        track = r.remaining >= 2 ? try r.u8() : nil
+        flags = track != nil ? try r.u8() : nil
     }
 }
 

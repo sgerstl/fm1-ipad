@@ -11,6 +11,15 @@ enum SoundFamily: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Where the screen link points, per firmware: the pages Jib's tabs open on the FM-1, and the layer that
+/// is the keys' (SLOOP: SEL held, LY_SCALE; Skiff: SCL held). SLOOP's PAGES, or Skiff's (127: HOME).
+struct ScreenMap {
+    let home, presets, song, notes, pattern, selLayer: Int
+    static let sloop = ScreenMap(home: 37, presets: 28, song: 30, notes: 34, pattern: 35, selLayer: 5)
+    static let skiff = ScreenMap(home: 127, presets: 35, song: 45, notes: 41, pattern: 43, selLayer: 3)
+    @MainActor static func of(_ s: DeviceSession) -> ScreenMap { s.dialect == .skiff ? .skiff : .sloop }
+}
+
 /// One page of the FM-1 (firmware params.c PAGES): its title, button, and the parameter under each
 /// knob (nil: an empty knob). scope 0 = the track's P_*, 1 = global G_*.
 struct SoundPage: Identifiable {
@@ -63,12 +72,26 @@ struct SoundPage: Identifiable {
     @MainActor
     static func pages(_ session: DeviceSession) -> [SoundPage] {
         guard let layout = session.pageLayout else { return all }
+        var used = Set<Int>()
         return layout.enumerated().map { k, p in
-            // fw past SLOOP's table: these pages are never the screen link's
-            SoundPage(fw: 100 + k, title: p.title, family: SoundFamily(rawValue: p.family) ?? .edit, scope: p.scope,
-                      ids: p.ids, engineEdit: p.engineEdit)
+            // Skiff's own PAGES index where one of its pages is this one (the screen link reports and opens
+            // those); the rest past every table, never the screen link's
+            var fw = 100 + k
+            if session.dialect == .skiff, let d = skiffPages[p.title], !used.contains(d) { fw = d; used.insert(d) }
+            return SoundPage(fw: fw, title: p.title, family: SoundFamily(rawValue: p.family) ?? .edit, scope: p.scope,
+                             ids: p.ids, engineEdit: p.engineEdit)
         }
     }
+
+    /// Skiff 2.2's PAGES (fm1-ipad skiff/README.md) for the pages Jib lays out: title → index. MOD's four
+    /// pages are one there (the first stands for it), PATTERN 2's knob is on PATTERN; Jib's ENV DEST and
+    /// LFO DEST have no page of their own on Skiff. The table belongs with the firmware version.
+    static let skiffPages: [String: Int] = [
+        "ENV": 0, "ENV 2": 1, "LFO": 2, "LFO 2": 3, "MOD 1": 4, "FX": 5, "DRIVE": 6, "INSERT": 7, "INSERT 2": 8,
+        "SLICER": 9, "DUCK": 10, "SCALE": 11, "CHORD": 12, "FOLLOW": 13, "EDIT 1": 14, "EDIT 2": 15,
+        "VOICE": 28, "VOICE 2": 29, "DELAY": 31, "REVERB": 32, "CHORUS": 33, "GLOBAL": 34, "ARP": 39, "ARP 2": 40,
+        "PATTERN": 43,
+    ]
 
     @MainActor
     static func shown(_ session: DeviceSession, _ family: SoundFamily) -> [SoundPage] {
@@ -79,6 +102,13 @@ struct SoundPage: Identifiable {
     }
 
     static func page(fw: Int) -> SoundPage? { all.first { $0.fw == fw } }
+
+    /// The page the FM-1's screen is on, in the connected firmware's terms. Skiff's engine pages (16–27:
+    /// OPERATOR, LANES, SOUND…), which Jib shows as EDIT 1 and 2, stand for the EDIT button.
+    @MainActor static func page(_ session: DeviceSession, fw: Int) -> SoundPage? {
+        if session.dialect == .skiff, (16...27).contains(fw) { return pages(session).first { $0.family == .edit } }
+        return pages(session).first { $0.fw == fw }
+    }
 
     /// The pages a button opens on the FM-1 for the selected track: its own, or on the drum track for a
     /// button without drum pages, the synth pages the FM-1 shows as "DRUM TRACK" (params.c page_for_drum).
@@ -97,6 +127,19 @@ struct SoundPage: Identifiable {
     static let home = 37, presets = 28, section = 30
 
     /// The tab that shows what the FM-1's screen shows, if any.
+    @MainActor static func tab(for s: UIState, _ session: DeviceSession) -> Page? {
+        guard session.dialect == .skiff else { return tab(for: s) }
+        // Skiff (skiff/README.md): HOME and the sequencer's pages, SONG and PATTERNS (the pool), the
+        // presets; its layers: SCL held is the keys' layer, the others' screens are no tab's
+        if s.menu != 0 { return nil }
+        if s.layer == ScreenMap.skiff.selLayer { return .sound }
+        if s.layer != 0 { return nil }
+        if s.home || [41, 42, 44].contains(s.page) { return .sequencer }
+        if [37, 45].contains(s.page) { return .song }
+        if [35, 36].contains(s.page) { return .library }
+        return page(session, fw: s.page) != nil ? .sound : nil
+    }
+
     static func tab(for s: UIState) -> Page? {
         if s.menu != 0 { return nil }
         if s.layer == 5 { return .sound }                              // SEL held: its key layer
@@ -318,9 +361,9 @@ struct SoundTab: View {
         // FM-1, which stays on its page)
         guard let s, s.home != followed?.home || s.page != followed?.page || s.layer != followed?.layer else { return }
         followed = s
-        if s.layer == 5 { ui.soundFamily = .sel; return }              // LY_SCALE: SEL held
+        if s.layer == ScreenMap.of(session).selLayer { ui.soundFamily = .sel; return }   // the keys' layer held
         // (on the drum track the FM-1 opens the synth pages too, showing "DRUM TRACK": follow those as well)
-        guard !s.home, let page = SoundPage.page(fw: s.page),
+        guard !s.home, let page = SoundPage.page(session, fw: s.page),
               SoundPage.reached(session, page.family).contains(where: { $0.fw == page.fw }) else { return }
         ui.soundFamily = page.family
     }

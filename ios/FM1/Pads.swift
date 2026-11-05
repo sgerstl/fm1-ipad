@@ -105,7 +105,7 @@ struct FunctionPads: View {
         case .home: return ui.page == .sequencer
         case .save: return ui.page == .library || ui.page == .song
         case .seq:
-            if session.screenLinked, let s = session.deviceScreen { return !s.home && [34, 35].contains(s.page) && ui.page != .library }
+            if session.screenLinked, let s = session.deviceScreen { return !s.home && [ScreenMap.of(session).notes, ScreenMap.of(session).pattern].contains(s.page) && ui.page != .library }
             return ui.page == .sound && ui.soundFamily == .seq
         default:
             guard ui.page == .sound, let f = pad.family else { return false }
@@ -123,7 +123,7 @@ struct FunctionPads: View {
 
     private func openSong() {
         ui.page = .song
-        if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.section) }
+        if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).song) }
     }
 
     private func press(_ pad: Pad) {
@@ -133,21 +133,21 @@ struct FunctionPads: View {
         case .rec: session.toggleRec()
         case .home:
             ui.page = .sequencer
-            if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.home) }
+            if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).home) }
         case .save:
             // as the FM-1's SAVE: the presets first; pressed again, the song (SLOOP's SECTION page)
             if ui.page == .library { openSong() } else {
                 ui.page = .library
-                if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.presets) }
+                if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).presets) }
             }
         case .seq:
             // as on the FM-1: SEQ opens the notes (the sequencer), again for PATTERN
             if ui.page == .sequencer {
                 ui.page = .sound; ui.soundFamily = .seq
-                if session.screenLinked, ui.followDevice { session.showOnDevice(page: 35) }
+                if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).pattern) }
             } else {
                 ui.page = .sequencer
-                if session.screenLinked, ui.followDevice { session.showOnDevice(page: 34) }
+                if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).notes) }
             }
         default:
             guard let f = pad.family else { return }

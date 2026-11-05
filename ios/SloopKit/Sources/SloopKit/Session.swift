@@ -305,8 +305,11 @@ public final class DeviceSession {
             adopt(c.shape)
             deviceNotes = []          // whatever the USB buffer held from before isn't live
             try await readEverything()
-            // fm1-ipad firmware answers UI; stock SLOOP doesn't (a short timeout, then the link stays off)
-            if let s = sloop, let ui = try? await s.uiState() { deviceScreen = ui; screenLinked = true } else { screenLinked = false }
+            // fm1-ipad firmware answers UI; stock SLOOP doesn't (a short timeout, then the link stays off). Skiff
+            // with the screen link patch says so in INFO (56 01 01): asked only then
+            if let s = sloop, let ui = try? await s.uiState() { deviceScreen = ui; screenLinked = true }
+            else if let k = c as? SkiffDriver, k.skiff.hasScreenLink, let ui = try? await k.screen() { deviceScreen = ui; screenLinked = true }
+            else { screenLinked = false; deviceScreen = nil }
             if screenLinked { capabilities.insert(.screenLink) }
             try await c.watch(screenLink: screenLinked)
             if let s = c as? SkiffDriver, s.skiff.hasSongLists {
@@ -938,6 +941,7 @@ public final class DeviceSession {
             case .ui(let s):
                 screenLinked = true
                 if s != deviceScreen { deviceScreen = s }
+                adoptTrack(from: s)
             }
         }
     }
@@ -1483,10 +1487,36 @@ public final class DeviceSession {
     }
 
     /// Opens a page on the FM-1 (fm1-ipad firmware): its screen switches as if its button had been pressed.
+    /// On Skiff with the screen link, SCREEN_GOTO: 127 is HOME, and a refused page answers the screen as it was,
+    /// which is put back here (a refusal, not a timeout).
     public func showOnDevice(page: Int) {
-        guard screenLinked, let c = sloop else { return }
+        // (pages Jib lays out that the firmware has no page for are numbered from 100: never sent)
+        guard screenLinked, page < 100 || page == 127 else { return }
+        if let k = driver as? SkiffDriver {
+            let before = deviceScreen
+            deviceScreen = page == 127 ? UIState(home: true, page: before?.page ?? 0, track: before?.track, flags: before?.flags)
+                                       : UIState(home: false, page: page, track: before?.track, flags: 0)
+            Task {
+                if let s = try? await k.screenGoto(page) { self.deviceScreen = s; self.adoptTrack(from: s) }
+                else { self.deviceScreen = before }
+            }
+            return
+        }
+        guard let c = sloop else { return }
         deviceScreen = UIState(home: false, page: page)
         Task { if let s = try? await c.uiGoto(page: page) { self.deviceScreen = s } }
+    }
+
+    /// Skiff's screen state carries the selected track, so one push is complete: another one selected on the
+    /// FM-1 is taken here as a RELOAD's would be.
+    private func adoptTrack(from s: UIState) {
+        guard let t = s.track, trackIndices.contains(t), t != selectedTrack, !recentlyWritten("select") else { return }
+        selectedTrack = t
+        Task {
+            if self.isDrums(t), self.kitNames.isEmpty { try? await self.readKits() }
+            try? await self.readSoundParams(descs: false)
+            _ = try? await self.readSteps(t)
+        }
     }
 
     public func toggleMute(track t: Int) {

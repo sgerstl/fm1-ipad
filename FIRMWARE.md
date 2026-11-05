@@ -2,21 +2,21 @@
 
 Jib installs the FM-1 firmware it speaks, so testers don't need a computer, and puts M-VAVE's stock firmware back. It carries exactly the files that were tested with the app, and refuses any file whose SHA-256 differs (`BundledFirmware` in `ios/SloopKit/Sources/SloopKit/FirmwarePackage.swift`). The files live in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
 
-| | Skiff 2.2 | SLOOP 2.8.4 with the screen link | Stock V15 |
+| | Skiff 2.2 with the screen link | SLOOP 2.8.4 with the screen link | Stock V15 |
 |---|---|---|---|
-| File | `skiff-2.2.fwsc` | `sloop-2.8.4-screen-link.fwsc` | `FM-1_015.fwsc` |
+| File | `skiff-2.2-screen-link.fwsc` | `sloop-2.8.4-screen-link.fwsc` | `FM-1_015.fwsc` |
 | Size | 610,429 bytes | 610,052 bytes | 699,956 bytes |
-| SHA-256 | `d0013c4f1a60bc2116178c72c60eacd3d8464cbfa40dbbb7f48ba790912d8603` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
+| SHA-256 | `9d8eb23278335dd28c6557b27d82d1e35fd3968bc861ff13bf71416a2d9acb71` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
 | Identity it reports | `FM-1_722` (its update loader: `ota-FM-1_722`) | `FM-1_900` (loader: `ota-FM-1_900`) | `FM-1_015` (M-VAVE's loader: `ota-FM-1_015`) |
-| INFO version | `FELUCCA v2.2` | `FELUCCA SLOOP 2.8.4`, protocol 12 | (none: Jib doesn't speak to it) |
+| INFO version | `FELUCCA v2.2`, and `56 01 01` at the end of INFO (the screen link) | `FELUCCA SLOOP 2.8.4`, protocol 12 | (none: Jib doesn't speak to it) |
 | Update loader in the package | Skiff's (`FELUCCA-LOADER-1`) | SLOOP's (`FELUCCA-LOADER-1`) | M-VAVE's `usb_hid_ota.bin` (header CRC 0xEBAA, body CRC 0x5881, 0x4DE1 bytes) |
-| Source | [illuminus5/skiff](https://github.com/illuminus5/skiff), tag `v2.2` | [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), tag `v2.8.4`, plus `sloop/0001-screen-link.patch` | [m-vave/fm1_open](https://github.com/m-vave/fm1_open) `sdk/firmware/FM-1_015.fwsc`, commit `4c7496d` (added in `3be7fbd`) |
-| Built | 2026-11-05 from `~/code/skiff-src` at `db2ce89` (no firmware or tool changes since `v2.2`), `./build.sh --release 2.2` | 2026-11-01, see `sloop/README.md` | Not built: M-VAVE's binary, unchanged, downloaded 2026-11-05 |
+| Source | [illuminus5/skiff](https://github.com/illuminus5/skiff), tag `v2.2`, plus `skiff/0001-screen-link.patch` | [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), tag `v2.8.4`, plus `sloop/0001-screen-link.patch` | [m-vave/fm1_open](https://github.com/m-vave/fm1_open) `sdk/firmware/FM-1_015.fwsc`, commit `4c7496d` (added in `3be7fbd`) |
+| Built | 2026-11-05 from `~/code/skiff-src` branch `screen-link` (`2ebba0f` on `v2.2`), see `skiff/README.md` | 2026-11-01, see `sloop/README.md` | Not built: M-VAVE's binary, unchanged, downloaded 2026-11-05 |
 | Licence | GPL-3.0 | GPL-3.0 | Apache-2.0 (see below) |
 
 Notes:
 
-- The Skiff file was built here, not downloaded. Its hash hasn't been compared with the release on GitHub, and Skiff's build may not be byte-for-byte reproducible (SLOOP's differs by a build stamp). It is the file Jib was tested against.
+- The Skiff file was built here from Skiff v2.2 plus Jib's screen link patch (`skiff/README.md`: 73 lines in `editor.c`, SCREEN 90, SCREEN_GOTO 91, WATCH bit 2). Skiff's build isn't byte-for-byte reproducible, so the pin is this file's. Until 2026-11-05 Jib carried stock 2.2 (`d0013c4f…8603`). An FM-1 on stock Skiff 2.2 is offered this one as an update (same identity, `FM-1_722`; Jib tells them apart by INFO's `56 01 01`). **Not installed on a real FM-1 yet.**
 - The V15 file's hash is the one Skiff pins for its own "return to official V15" (`STOCK_V15_SHA256` in Skiff's `tools/fm1_install.py` and `web/fm1pkg.js`). That is the same file the FM-1 Firmware Hub serves for "Back to official V15".
 - Stock SLOOP 2.8.4 also reports `FM-1_900`; the app tells the screen-link build apart by asking `UI` (cmd 90) after connecting.
 - All three packages' flash.bin is 0x93000 bytes. Skiff's and SLOOP's pass Skiff's `files_ok` and SLOOP's `package_damage`. V15's extra entries (types 50, 52, 161, 251) store CRCs of something else, so for it only flash.bin and the loader are CRC-checked, as Skiff's `files_ok` does. Only the pinned V15 file is ever installed with M-VAVE's loader: any other package without a Felucca loader is refused.

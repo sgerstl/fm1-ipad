@@ -12,6 +12,7 @@ final class FirmwareCentre {
         case loader(String)                 // a Felucca-family update loader waits, or M-VAVE's: finish the write
         case foreignLoader(String)          // another firmware's update mode: not ours to finish
         case unsupported(String)            // runs something Jib doesn't speak
+        case update(String)                 // runs stock Skiff 2.2: Jib carries it with the screen link
     }
 
     enum Phase: Equatable {
@@ -101,7 +102,8 @@ final class FirmwareCentre {
                 switch session.status {
                 case .wrongFirmware(let found, _): offer = .unsupported(found)
                 case .searching, .lost: await probe()
-                case .connected: offer = nil
+                // stock Skiff 2.2 (no screen link tag in INFO): the same firmware with the link is an update
+                case .connected: offer = session.dialect == .skiff && !session.screenLinked && !session.isDemo ? .update("Skiff 2.2") : nil
                 case .connecting: break
                 }
             }
@@ -343,6 +345,14 @@ struct FirmwareOfferCard: View {
                     .bodyText()
             } actions: {
                 CardKey(title: "OK", primary: true) { centre.dismissedOffer = offer }
+            }
+        case .update(let found):
+            FirmwareCard(title: "An update for \(found)") {
+                Text("Jib carries \(found) with the screen link: press a button on the FM-1 and Jib shows that page, pick a tab in Jib and the FM-1 goes there too. Everything else stays as it is, your projects included, and they're backed up first. Installing takes about a minute.")
+                    .bodyText()
+            } actions: {
+                CardKey(title: "Not now") { centre.dismissedOffer = offer }
+                CardKey(title: "Install the update", primary: true) { centre.target = .skiff; centre.showPicker = true }
             }
         case .unsupported(let found):
             FirmwareCard(title: "Jib needs other firmware") {

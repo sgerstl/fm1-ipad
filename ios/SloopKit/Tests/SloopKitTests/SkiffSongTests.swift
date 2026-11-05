@@ -546,3 +546,49 @@ extension SkiffOnTheDeviceTests {
         run.cancel()
     }
 }
+
+/// Jib's screen link patch on Skiff 2.2 (skiff/README.md), through FakeSkiff.
+@Suite(.serialized) @MainActor struct SkiffScreenLinkTests {
+    private func connect(link: Bool) async throws -> (DeviceSession, FakeSkiff, Task<Void, Never>) {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.screenLink = link
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        return (session, fake, run)
+    }
+
+    @Test func stockSkiffHasNoLink() async throws {
+        let (s, fake, run) = try await connect(link: false)
+        #expect(!s.screenLinked && s.deviceScreen == nil && !fake.screenWatched)
+        run.cancel()
+    }
+
+    @Test func thePatchIsFoundInINFOAndFollowed() async throws {
+        let (s, fake, run) = try await connect(link: true)
+        try await waitFor(5) { s.screenLinked && fake.screenWatched }
+        #expect(s.capabilities.contains(.screenLink) && s.deviceScreen?.home == true)
+        // a button on the FM-1: DELAY (31)
+        fake.pressOnDevice(page: 31)
+        try await waitFor(5) { s.deviceScreen?.page == 31 && s.deviceScreen?.home == false }
+        // another track selected on the FM-1 comes with the screen
+        fake.pressOnDevice(page: 31, track: 2)
+        try await waitFor(5) { s.selectedTrack == 2 }
+        run.cancel()
+    }
+
+    @Test func goingToAPageAndARefusal() async throws {
+        let (s, fake, run) = try await connect(link: true)
+        try await waitFor(5) { s.screenLinked }
+        s.showOnDevice(page: 43)                                         // PATTERN
+        try await waitFor(5) { fake.screen.page == 43 && s.deviceScreen?.page == 43 }
+        s.showOnDevice(page: 18)                                         // LANES on an ANALOG track: refused
+        try await waitFor(5) { s.deviceScreen?.page == 43 }              // put back from the reply, not a timeout
+        #expect(fake.screen.page == 43)
+        s.showOnDevice(page: 127)                                        // HOME
+        try await waitFor(5) { fake.screen.home && s.deviceScreen?.home == true }
+        run.cancel()
+    }
+}

@@ -44,7 +44,7 @@ struct PhoneAppView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 // a button pressed on the FM-1 brings up the tab that shows its screen, as on the iPad
                 .onChange(of: session.deviceScreen) { _, s in
-                    guard ui.followDevice, let s, let tab = SoundPage.tab(for: s), tab != ui.page else { return }
+                    guard ui.followDevice, let s, let tab = SoundPage.tab(for: s, session), tab != ui.page else { return }
                     ui.pageFromDevice = true
                     ui.page = tab
                 }
