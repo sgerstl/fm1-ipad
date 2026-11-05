@@ -518,3 +518,31 @@ extension SkiffOnTheDeviceTests {
         run.cancel()
     }
 }
+
+extension SkiffOnTheDeviceTests {
+    @Test func theTempoSetsWithinItsRangeAndNotOnAnotherClock() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        try await waitFor(5) { !session.globalDescs.isEmpty }
+        // from DESC: BPM 40–240, and Skiff's clock source is CLOCK (global 2), not its empty SYNC slot
+        #expect(session.bpmRange == 40...240)
+        #expect(session.clockSourceID == 2 && session.externalClock == nil)
+        session.setBPM(150)
+        try await waitFor(5) { fake.globals[0] == 150 }
+        #expect(session.bpm == 150)
+        session.setBPM(999)                                           // clamped
+        try await waitFor(5) { fake.globals[0] == 240 }
+        // following USB clock: the tempo is the other device's
+        fake.globals[2] = 1
+        await session.refreshTempo()
+        #expect(session.externalClock == "USB")
+        session.setBPM(100)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(fake.globals[0] == 240 && session.bpm == 240)
+        run.cancel()
+    }
+}

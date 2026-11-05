@@ -60,6 +60,7 @@ struct RootView: View {
         }
         .background(Theme.page)
         .environment(firmware)
+        .overlay { TempoOverlay(session: session, ui: ui) }
         .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
         .environment(\.look, Look(style: lookStyle))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
@@ -97,6 +98,8 @@ final class EditorUI {
         return ["sound": .sound, "song": .song, "library": .library][a[i + 1]] ?? .sequencer
     }()
     var selectedStep = Array(repeating: 0, count: 8)      // per track: room for every firmware's tracks
+    /// The tempo panel, open under this point (global), from the top bar's BPM.
+    var tempoAt: CGPoint?
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?

@@ -1368,6 +1368,46 @@ public final class DeviceSession {
         sendParam("p\(t).\(id)", v) { c, v in try await c.setTrackParam(track: t, id: id, value: v) }
     }
 
+    // MARK: Tempo
+
+    /// BPM's range, from its DESC (40–240 on SLOOP 2.8.4 and Skiff 2.2).
+    public var bpmRange: ClosedRange<Int> {
+        guard let d = globalDescs[ids.bpm], d.min < d.max else { return 40...240 }
+        return d.min...d.max
+    }
+
+    /// The global saying where the tempo comes from, INT / USB / TRS, found by its DESC: SLOOP calls it SYNC,
+    /// Skiff CLOCK (Skiff's SYNC is an empty slot). nil if this firmware has none.
+    public var clockSourceID: Int? {
+        globalDescs.filter { ["SYNC", "CLOCK"].contains($0.value.label) && $0.value.names.first == "INT" && $0.value.names.contains("USB") }
+            .keys.min()
+    }
+
+    /// Where the FM-1 takes its tempo from when it isn't its own: "USB" or "TRS"; nil on its own clock. Then
+    /// the tempo is the other device's, and setting BPM here would do nothing.
+    public var externalClock: String? {
+        guard let id = clockSourceID, let v = globals[safe: id], v > 0, let names = globalDescs[id]?.names, v < names.count else { return nil }
+        return names[v]
+    }
+
+    /// Sets the tempo, clamped to the range. Not while following another clock. Playing, the counted
+    /// playhead shifts at once, as the FM-1's sequencer does on its own clock (applyGlobal, tempoChanged).
+    public func setBPM(_ v: Int) {
+        guard externalClock == nil else { return }
+        let r = bpmRange
+        let n = min(r.upperBound, max(r.lowerBound, v))
+        if n != bpm { set(global: ids.bpm, to: n) }
+    }
+
+    /// Reads the tempo and the clock source again (the tempo control opening: either may have changed on
+    /// the FM-1 without a push).
+    public func refreshTempo() async {
+        guard let c = driver else { return }
+        for id in [ids.bpm] + [clockSourceID].compactMap({ $0 }) where !recentlyWritten("g\(id)") {
+            if let v = try? await c.global(id: id), !recentlyWritten("g\(id)") { applyGlobal(id: id, value: v) }
+        }
+    }
+
     public func set(global id: Int, to v: Int) {
         applyGlobal(id: id, value: v)
         sendParam("g\(id)", v) { c, v in try await c.setGlobal(id: id, value: v) }

@@ -120,6 +120,7 @@ struct PhoneTopBar: View {
     private var recording: Bool { session.recording || session.song.songRecording }
     @State private var chipFrames: [Int: CGRect] = [:]
     @State private var pressAt = CGPoint(x: 40, y: 30)
+    @State private var readoutFrame: CGRect = .zero
 
     var body: some View {
         HStack(spacing: 8) {
@@ -227,15 +228,24 @@ struct PhoneTopBar: View {
             }
             .buttonStyle(PressSink())
             .accessibilityLabel(session.playing ? "Stop" : "Play")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.playing ? "\(pos.step / 16 + 1).\(pos.step % 16 / 4 + 1).\(pos.step % 4 + 1)" : "–")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(recording ? Theme.recText : Theme.text)
-                Text(recording ? "REC" : "\(session.bpm) BPM").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+            // a tap opens the tempo under it
+            Button { ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY) } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.playing ? "\(pos.step / 16 + 1).\(pos.step % 16 / 4 + 1).\(pos.step % 4 + 1)" : "–")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(recording ? Theme.recText : Theme.text)
+                    Text(recording ? "REC" : "\(session.bpm) BPM").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                }
+                .frame(width: 62, alignment: .leading)
+                .padding(.leading, 6)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-            .frame(width: 62, alignment: .leading)
-            .padding(.leading, 6)
+            .buttonStyle(.plain)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { readoutFrame = $0 }
             .accessibilityElement(children: .combine)
+            .accessibilityHint("Opens the tempo")
+            .accessibilityAddTraits(.isButton)
         }
         .padding(.trailing, 4)
         .frame(height: 44)

@@ -9,6 +9,7 @@ struct TopBar: View {
     @Environment(ProjectStore.self) private var projects
     @State private var projectsOpen = false
     @State private var naming: NamePrompt?
+    @State private var readoutFrame: CGRect = .zero
 
     var body: some View {
         // the tabs sit in the middle of the bar whatever the two sides hold
@@ -295,16 +296,16 @@ struct TopBar: View {
         .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
     }
 
-    /// Position over tempo. In song mode the tempo line says SONG and a tap opens Arrange (PLAY plays
-    /// the song order and loads sections over the tracks, so it shows on every page).
+    /// Position over tempo; a tap opens the tempo. In song mode the tempo line says SONG (PLAY plays the
+    /// song order and loads sections over the tracks, so it shows on every page).
     private var readout: some View {
         let pos = session.positions[session.selectedTrack]
         let song = session.song.songMode
         let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
         let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : song ? "SONG" : nil
+        // a tap opens the tempo under it (2026-11-05; it used to open Arrange in song mode, a tab away)
         return Button {
-            ui.page = .song
-            if session.screenLinked, ui.followDevice { session.showOnDevice(page: SoundPage.section) }
+            ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY)
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 Text(position).font(.system(size: 20, weight: .semibold)).monospacedDigit().lineLimit(1)
@@ -324,12 +325,12 @@ struct TopBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .allowsHitTesting(song)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { readoutFrame = $0 }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
                              session.playing ? "bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "stopped",
                              "\(session.bpm) BPM"].compactMap { $0 }.joined(separator: ", "))
-        .accessibilityHint(song ? "Opens the Arrange tab" : "")
-        .accessibilityAddTraits(song ? .isButton : [])
+        .accessibilityHint("Opens the tempo")
+        .accessibilityAddTraits(.isButton)
     }
 }
