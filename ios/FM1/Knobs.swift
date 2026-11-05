@@ -96,6 +96,8 @@ struct KnobControl: View {
     /// The page around it (Shape), told on any touch: touching a knob makes its page the active one (on the FM-1
     /// too when linked), and the knob works at once (a first tap that only activated looked dead, 2026-11-05).
     var activate: (() -> Bool)? = nil
+    /// Shape's face (Skiff's column): its number, the track's colour, and whether it's the knob just turned.
+    var column: (number: Int, tint: Color, hot: Bool)? = nil
     /// Builds the knob's description each time, so it shows live values.
     let make: () -> KnobSpec
     @State private var startValue = 0
@@ -133,7 +135,13 @@ struct KnobControl: View {
                 if ui.knobGrab?.id == spec.id { ui.knobGrab = nil }
             }
 
-        KnobDial(spec: spec, size: size)
+        Group {
+            if let c = column {
+                ColumnFace(spec: spec, number: c.number, tint: c.tint, hot: c.hot || dragging)
+            } else {
+                KnobDial(spec: spec, size: size)
+            }
+        }
             .contentShape(Rectangle())
             // taps as SwiftUI tells them apart (a drag's end never comes for a plain tap in the page's scroll view):
             // a double-tap puts the default back, one alone opens the big control at the finger

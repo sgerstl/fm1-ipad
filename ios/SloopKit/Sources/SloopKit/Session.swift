@@ -155,6 +155,8 @@ public final class DeviceSession {
     @ObservationIgnored private var lastPoll = Date.distantPast
     /// The playhead counted from MIDI clock, on firmware without LIVE (Skiff).
     @ObservationIgnored private var counted = CountedPlayhead(tracks: DeviceShape.sloop.trackCount)
+    /// The clock and each track's last fresh phrase (NOTES OUT), for the LFO page's live wave. Read at draw time.
+    @ObservationIgnored public private(set) var lfoClock = LFOClock()
     /// Skiff's song (lists and pool), on Skiff 2.0 and later; kept, offline, after the device goes away.
     public private(set) var skiffSong: SkiffSongStore?
     /// The Skiff driver, for the sim tests' own requests (TRANSPORT, cleanup).
@@ -1063,10 +1065,11 @@ public final class DeviceSession {
     private func clockLoop(_ t: SysExTransport) async {
         for await e in t.clock {
             switch e {
-            case .start: counted.start()
-            case .stop: counted.stop()
+            case .start: counted.start(); lfoClock.start(at: Date())
+            case .stop: counted.stop(); lfoClock.stop()
             case .resume: break
             case .tick:
+                lfoClock.tick(at: Date())
                 let settings = tracks.map { CountedPlayhead.Settings(length: $0.length, division: $0.division, direction: $0.direction, swing: $0.swing) }
                 if counted.tick(settings, globalSwing: swing) { applyCounted() }
             }
@@ -1250,6 +1253,7 @@ public final class DeviceSession {
             // Skiff sends every track's notes (NOTES OUT ALL, channels 1..6), the sequencer's included: only
             // the selected track's light the keys, and they don't move the keyboard's octave
             let track = Int(e.channel)
+            lfoClock.note(track: track, note: n, on: e.on, at: Date())
             if track == selectedTrack { if e.on { deviceNotes.insert(n) } else { deviceNotes.remove(n) } }
             if e.on, trackIndices.contains(track), tracks[track].direction == 3 { anchorRandom(track: track, note: n) }
         }

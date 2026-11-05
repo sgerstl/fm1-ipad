@@ -264,7 +264,7 @@ struct SoundTab: View {
                     // above it changed height, and drew a panel over the strip
                     Grid(horizontalSpacing: 16, verticalSpacing: 16) {
                         ForEach(Array(stride(from: 0, to: pages.count, by: 2)), id: \.self) { i in
-                            GridRow {
+                            GridRow(alignment: .top) {
                                 pagePanel(pages[i], of: pages)
                                 if i + 1 < pages.count { pagePanel(pages[i + 1], of: pages) } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
                             }
@@ -311,25 +311,21 @@ struct SoundTab: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            graph(for: p)
-            HStack(spacing: 0) {
+            // the four columns, as Skiff's cards; the column of the knob just turned is white
+            HStack(spacing: 4) {
                 ForEach(0..<4, id: \.self) { slot in
                     if let id = p.ids[slot] {
-                        KnobControl(ui: ui, size: 56, activate: { if !active { activate(p) }; return active }) {
+                        KnobControl(ui: ui, activate: { if !active { activate(p) }; return active },
+                                    column: (slot + 1, Theme.track[session.selectedTrack], marked == "s\(p.scope).\(id)")) {
                             KnobSpec.param(session, scope: p.scope, id: id, slot: slot)
                         }
-                            .padding(6)
-                            .background {
-                                if marked == "s\(p.scope).\(id)" {
-                                    RoundedRectangle(cornerRadius: 12).stroke(Theme.text, lineWidth: 2)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
                     } else {
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1).accessibilityHidden(true)
+                        EmptyColumn()
                     }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)   // the columns' own height: an empty one matches them
+            graph(for: p)
         }
         .padding(16)
         .panel()
@@ -358,24 +354,12 @@ struct SoundTab: View {
         if session.screenLinked { session.showOnDevice(page: p.fw) }
     }
 
-    /// The page's graph, as the FM-1 draws it on that page: ENV's shape, the LFO's wave.
+    /// The page's graph, as Skiff draws it under the cards (PageGraph): ENV's curve, the LFO running, DRIVE…
     @ViewBuilder private func graph(for p: SoundPage) -> some View {
-        let v = session.params
-        let colour = Theme.track[session.selectedTrack]
-        // the knob being turned, here (its ring) or on the FM-1 (marked), lights its part
-        let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s0.\($0)" } == g.id } }
-            ?? marked.flatMap { m in p.ids.firstIndex { $0.map { "s0.\($0)" } == m } }
-        if p.fw == 0, v.count > 4 {
-            EnvelopeGraph(attack: v[1], decay: v[2], sustain: v[3], release: v[4], colour: colour, active: turning)
-                .frame(height: 88)
-                .padding(.horizontal, 4)
-                .recessed(10)
-        } else if p.fw == 2, v.count > 11 {
-            LFOGraph(wave: v[10], phase: v[11], colour: colour)
-                .frame(height: 88)
-                .padding(.horizontal, 4)
-                .recessed(10)
-        }
+        // the knob being turned, here or on the FM-1 (marked), lights its point
+        let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == g.id } }
+            ?? marked.flatMap { m in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == m } }
+        if PageGraph.has(p) { PageGraph(session: session, page: p, hot: turning) }
     }
 
     /// The FM-1 changed page (a button pressed on it): show that button's pages here. Holding SEL
@@ -402,8 +386,9 @@ struct SoundTab: View {
         }
         let key = "s\(t.scope).\(t.id)"
         marked = key
+        // lit as long as Skiff lights the knob just turned (ui.hot_t = 40 frames, about 600 ms)
         Task {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .milliseconds(600))
             if marked == key { marked = nil }
         }
     }
