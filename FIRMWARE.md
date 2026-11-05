@@ -67,6 +67,33 @@ Scott had read that every firmware installs cleanly from V15, but that one custo
 
 So Jib doesn't offer "install through stock V15". It switches directly, after a backup on the running firmware, which is how anything the next firmware can't read comes back. "Restore stock V15" is its own picker item.
 
+## New FM-1s on stock V16 (checked 2026-11-05)
+
+M-VAVE released V16 on 2026-10-21, and new units likely ship with it. Can Jib's first run take one to Skiff or SLOOP? Labels as above.
+
+- **V16 still takes a custom firmware's loader in step 1.**
+  - *Emerging:* an FM-1 that shipped with V16 got Skiff, then went Skiff → V16 → Skiff 2.0.2 "smoothly" (Skiff #64, the maintainer confirming). SLOOP #203 says people install over V16. On a stock V16 unit, SLOOP's loader did appear before failing (SLOOP #239).
+  - *Established:* V16's own package carries the same M-VAVE loader as V15's (same CRCs and length).
+  - *Established:* V16's release note (m-vave.com, FM-1.txt) lists only features: voices, the sequencer, FX, menus. It says nothing about the update path, signing or boot files.
+  - *Not checked:* nothing of V16's update code is public.
+- **What fails on new units is SLOOP 2.8.4's loader, not V16.**
+  - *Established:* SLOOP 2.8.4's loader (`ldr_core.c`, `ldr_flash_known`) accepts only the Puya P25Q80 flash (0x856014). Newer FM-1s have the UC25HQ80 (0xB36014). On those, the loader drops the update record after the header and the app's 32-byte head, three reads in all, before any erase. The FM-1 then restarts on the firmware it had.
+  - *Emerging:* SLOOP #239 is exactly that: stock V16, "the loader was disconnected after 3 requests", then back on V16. SLOOP #228 is the chip itself.
+  - *Established:* SLOOP 2.8.5 (2026-11-04) and Skiff 2.2 know both chips.
+  - *Speculative:* that a V16 unit has the new chip. They arrived about the same time ("sold from late 2026"), but nothing ties the two.
+- **Routes from V16:**
+  - Skiff 2.2 directly. That's what Jib offers.
+  - SLOOP via Skiff: Skiff first, then SLOOP 2.8.5 or later, which Jib doesn't carry yet. Jib's screen-link SLOOP is built on 2.8.4.
+  - Stock V15: none. A V16 unit's head isn't V15's (above).
+  - Its way back to stock is V16, with M-VAVE's M-UPGRADE, or Skiff's own installer since 2.0.2.
+- **What Jib does.** When the update ports say the FM-1 runs stock V16 or later:
+  - the offer says Jib can install Skiff 2.2
+  - the picker shows SLOOP and Stock V15 as unavailable, each with its reason
+  - `FirmwareInstaller.refusal(for:running:)` refuses SLOOP (`.flashChip`) and V15 (`.otherStock`) before anything but the handshake is sent
+
+  The chip can't be read over USB-MIDI, so a new unit already running Skiff isn't caught up front. There, SLOOP's loader turning it down is caught when the FM-1 comes back on its old firmware after at most three reads. Jib says nothing was written and why, instead of waiting two minutes for a loader that won't return.
+- **Follow-up:** rebuild the screen-link SLOOP on 2.8.5 so new units can run SLOOP too. Then the V16 refusal for SLOOP can go.
+
 ## Tested
 
 Offline, `swift test` in `ios/SloopKit` (FirmwareInstallTests, FirmwareStockTests, FirmwareBackupTests) against `FakeFM1`. The fake plays both steps as Skiff's `ota.c` and `ldr_core.c` do, plus ota.c's official branch and M-VAVE's loader as Skiff's tests play it. Covered:
@@ -79,8 +106,9 @@ Offline, `swift test` in `ios/SloopKit` (FirmwareInstallTests, FirmwareStockTest
 - Other gear on the MIDI setup.
 - Mismatched update modes: Skiff's update mode refuses V15, and M-VAVE's refuses Skiff.
 - A unit with V16's head refuses V15, and so does a unit running stock V16.
+- A new unit on stock V16 with the newer chip takes Skiff, and refuses SLOOP and V15 up front. On such a unit running Skiff, SLOOP 2.8.4's loader turns it down after 3 reads, and Jib says so at once.
 - A wrong identity after the write, and cancel.
 
-What the fake doesn't do: the chip-key check, and anything M-VAVE's loader may do beyond flash.bin.
+What the fake doesn't do: the chip-key check (it does play SLOOP 2.8.4's flash-chip refusal), and anything M-VAVE's loader may do beyond flash.bin.
 
 **Not tested: a real FM-1.** The first real install, and the first real restore of V15, need Scott with the device.

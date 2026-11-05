@@ -35,6 +35,8 @@ final class FirmwareCentre {
     private(set) var holdsDevice = false
     /// This install starts with a backup (the session was connected).
     private(set) var backsUp = false
+    /// What the update ports last said the FM-1 runs (stock firmware, or a loader): what can't go on it follows.
+    private(set) var seen: DeviceIdentity?
 
     private let ports: UpdatePorts
     private let demo: String?
@@ -43,7 +45,8 @@ final class FirmwareCentre {
 
     init() {
         // -demo-firmware loader | stock | foreign | picker | installing | failed | done, and for the way back to stock
-        // picker-stock | restoring | restored | stock-loader | v16: a fake FM-1 for screenshots
+        // picker-stock | restoring | restored | stock-loader | v16, and a new unit on stock V16 v16-new | v16-picker:
+        // a fake FM-1 for screenshots
         let a = ProcessInfo.processInfo.arguments
         demo = a.firstIndex(of: "-demo-firmware").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
         if let demo {
@@ -56,6 +59,9 @@ final class FirmwareCentre {
             case "foreign": fake = FakeFM1(running: nil, stockIdentity: "ota-FM-1_301")
             case "stock-loader": fake = FakeFM1(inLoaderOf: stock!, was: sloop)
             case "v16": fake = FakeFM1(running: sloop, startedOn: 16)
+            case "v16-new", "v16-picker":
+                fake = FakeFM1(running: nil, stockIdentity: "FM-1_016", startedOn: 16)
+                fake.newFlashChip = true
             default: fake = FakeFM1(running: sloop)
             }
             fake.knows(skiff!, sloop!, stock!)
@@ -79,6 +85,7 @@ final class FirmwareCentre {
             switch demo {
             case "picker": showPicker = true
             case "picker-stock": target = .stock; showPicker = true
+            case "v16-picker": await probe(); showPicker = true
             case "installing", "failed", "done", "restoring", "restored", "v16":
                 for _ in 0..<50 {                            // with the demo FM-1 connected, so it backs up
                     if case .connected = session.status { break }
@@ -105,6 +112,8 @@ final class FirmwareCentre {
     private func probe() async {
         let i = FirmwareInstaller(ports: ports)
         guard let id = await i.probe() else { if case .unsupported = offer {} else { offer = nil }; return }
+        seen = id
+        if refusal(target) != nil, let ok = BundledFirmware.allCases.first(where: { refusal($0) == nil }) { target = ok }
         if id.isLoader {
             let ours = FirmwareInstaller.isResumable(loader: id) || id.text == FirmwareInstaller.officialLoader
             offer = ours ? .loader(id.text) : .foreignLoader(id.text)
@@ -115,6 +124,21 @@ final class FirmwareCentre {
     }
 
     var visibleOffer: Offer? { offer == dismissedOffer ? nil : offer }
+
+    /// Why `f` can't go on the FM-1 Jib last saw, in a line for the picker, or nil.
+    func refusal(_ f: BundledFirmware) -> String? {
+        switch FirmwareInstaller.refusal(for: f, running: seen)?.code {
+        case .flashChip?: "Not on this FM-1. It runs V16, so it most likely has the newer flash chip, which SLOOP 2.8.4 can’t install on."
+        case .otherStock?: "Not on this FM-1. It started out on a newer official version, so V15 can’t go back on."
+        default: nil
+        }
+    }
+
+    /// The FM-1 Jib last saw runs stock V16 or later.
+    var seesNewStock: Bool {
+        guard let id = seen, !id.isLoader, id.text.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil else { return false }
+        return id.version >= 16
+    }
 
     // MARK: Installing
 
@@ -322,8 +346,13 @@ struct FirmwareOfferCard: View {
             }
         case .unsupported(let found):
             FirmwareCard(title: "Jib needs other firmware") {
-                Text("This FM-1 runs \(Self.name(found)). Jib works with Skiff 2.2 or SLOOP 2.8.4, and carries both. Installing takes about a minute; your projects are backed up first when the firmware allows it.")
-                    .bodyText()
+                if centre.seesNewStock {
+                    Text("This FM-1 runs \(Self.name(found)). Jib works with Skiff 2.2 or SLOOP 2.8.4, and on this FM-1 it can install Skiff 2.2. SLOOP 2.8.4 can’t install on the flash chip that FM-1s with V16 most likely have. Installing takes about a minute.")
+                        .bodyText()
+                } else {
+                    Text("This FM-1 runs \(Self.name(found)). Jib works with Skiff 2.2 or SLOOP 2.8.4, and carries both. Installing takes about a minute; your projects are backed up first when the firmware allows it.")
+                        .bodyText()
+                }
             } actions: {
                 CardKey(title: "Not now") { centre.dismissedOffer = offer }
                 CardKey(title: "Choose firmware…", primary: true) { centre.showPicker = true }
@@ -360,7 +389,8 @@ struct FirmwarePicker: View {
         } actions: {
             CardKey(title: "Cancel") { centre.showPicker = false; centre.pickerNote = nil; centre.skipBackup = false }
             CardKey(title: centre.skipBackup ? (centre.target.isStock ? "Restore without a backup" : "Install without a backup")
-                                             : centre.target.isStock ? "Restore stock V15" : "Install \(centre.target.title)", primary: true) {
+                                             : centre.target.isStock ? "Restore stock V15" : "Install \(centre.target.title)", primary: true,
+                    enabled: centre.refusal(centre.target) == nil) {
                 centre.start(centre.target, session: session)
             }
         }
@@ -381,6 +411,11 @@ struct FirmwarePicker: View {
                     }
                     Text(f.detail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let why = centre.refusal(f) {
+                        Label { Text(why) } icon: { Image(systemName: "nosign") }
+                            .font(.system(size: 13)).foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -390,11 +425,12 @@ struct FirmwarePicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(centre.refusal(f) != nil)
         .accessibilityAddTraits(centre.target == f ? [.isSelected] : [])
     }
 
     private var running: BundledFirmware? {
-        guard case .connected = session.status else { return nil }
+        guard case .connected = session.status, !centre.seesNewStock else { return nil }
         return session.dialect == .skiff ? .skiff : .sloop
     }
 

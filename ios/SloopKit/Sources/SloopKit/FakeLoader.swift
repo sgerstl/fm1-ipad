@@ -57,6 +57,11 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
     /// Packages it recognises: the first 1 KiB of the image (the header it reads first) and the app area.
     private var known: [(header: ArraySlice<UInt8>, app: ArraySlice<UInt8>, product: String)] = []
     public var faults: [Fault] = []
+    /// The newer UC25HQ80 flash (JEDEC 0xB36014, FM-1s sold from late 2026) instead of the Puya P25Q80 (0x856014).
+    public var newFlashChip = false
+    /// The loaders that know only the older chip (by the package identity they came from): SLOOP 2.8.4's. Skiff 2.2's
+    /// knows both (fm1_flash_map.h FL_JEDEC_OK), and so does SLOOP 2.8.5's.
+    public var oldChipOnlyLoaders: Set<String> = ["FM-1_900"]
     /// Other gear on the same MIDI setup: names only. Opening one is recorded in `opened`.
     public var otherPorts: [String] = []
     public private(set) var opened: [String] = []
@@ -395,6 +400,13 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
         defer { endSession() }
         guard let h = await header(gen: g), h.flOff > 0, h.flLen == Self.flashLen else { return }
         guard await read(h.flOff + Self.appLo, 32, gen: g) != nil else { return }      // the app head (chip-key check)
+        // SLOOP 2.8.4's ldr_flash_known: an unknown chip drops the records and restarts the firmware there is
+        if lock.withLock({ newFlashChip && oldChipOnlyLoaders.contains(String(identity.dropFirst(4))) }) {
+            lock.withLock { record = nil; if appIdentity == nil { appIdentity = "FM-1_999" } }
+            endSession()
+            restart()
+            return
+        }
         // 2b. the whole flash.bin, its CRC checked before anything is erased; each app sector's CRC kept
         var crc: UInt16 = 0, sc = [UInt16](repeating: 0, count: Self.sectors), i = 0
         while i < h.flLen {

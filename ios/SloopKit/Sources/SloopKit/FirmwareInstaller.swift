@@ -51,7 +51,7 @@ public protocol UpdatePorts: AnyObject, Sendable {
 
 public struct InstallError: Error, Equatable, CustomStringConvertible, Sendable {
     public enum Code: String, Sendable {
-        case notFound, model, foreignLoader, otherStock, lost, stopped, badRequest, noLoader, noReturn, mismatch, cancelled
+        case notFound, model, foreignLoader, otherStock, flashChip, lost, stopped, badRequest, noLoader, noReturn, mismatch, cancelled
     }
     public let code: Code
     public let message: String
@@ -337,6 +337,23 @@ public final class FirmwareInstaller: @unchecked Sendable {
     }
 
     static let otherStockMessage = "Nothing was written. This FM-1 started out on a different official version (V16, probably), so V15 can't go on it. Its way back is that version, with M-VAVE's own updater."
+    static let v16SloopMessage = "This FM-1 runs M-VAVE's V16, so it's most likely a newer unit with the UC25HQ80 flash chip, which SLOOP 2.8.4's update loader doesn't know: it would stop before writing anything. Install Skiff 2.2, which knows both chips. (SLOOP 2.8.5 knows it too; Jib doesn't carry it yet.)"
+    static func loaderRefusedMessage(_ pkg: FirmwarePackage, running: String) -> String {
+        let sloop = pkg.product == BundledFirmware.sloop.product
+        return "Nothing was written. \(sloop ? "SLOOP 2.8.4's" : "The") update loader turned this FM-1 down after 3 reads and it restarted on its own firmware (\(running))."
+            + (sloop ? " The likely cause is the newer UC25HQ80 flash chip, which that loader doesn't know. Install Skiff 2.2, which knows both chips." : "")
+    }
+
+    /// What can't go on this FM-1, from what it runs, before anything is sent beyond the handshake (nil: go ahead).
+    /// Stock V15 needs a unit that never ran a newer stock version (its 16 KiB head); SLOOP 2.8.4's loader knows only
+    /// the older flash chip, and a unit on stock V16 is most likely a newer one with the UC25HQ80 (SLOOP #239, #228).
+    /// Skiff 2.2 knows both chips and installs over V16 (Skiff #64).
+    public static func refusal(for firmware: BundledFirmware, running id: DeviceIdentity?) -> InstallError? {
+        guard let id, !id.isLoader, id.text.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil else { return nil }
+        if firmware.isStock, id.version > 15 { return InstallError(code: .otherStock, message: otherStockMessage) }
+        if firmware == .sloop, id.version >= 16 { return InstallError(code: .flashChip, message: v16SloopMessage) }
+        return nil
+    }
 
     /// Running firmware → loader → new firmware; or, when the FM-1 is already in the package's update loader, the
     /// write alone. A write cut off is resumed when the loader answers again within `waitResume`.
@@ -355,11 +372,9 @@ public final class FirmwareInstaller: @unchecked Sendable {
             throw InstallError(code: .foreignLoader,
                                message: "The FM-1 is in \(which) update mode (\(dev.id.text)). \(finish)", inUpdateMode: true)
         }
-        // a unit already on a newer stock version has that version's head: V15's loader would write V15's over it
-        if pkg.isOfficial, !dev.id.isLoader, dev.id.text.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil,
-           dev.id.version > 15 {
+        if let f = BundledFirmware.matching(identity: pkg.product), let no = Self.refusal(for: f, running: dev.id) {
             dev.link.close()
-            throw InstallError(code: .otherStock, message: Self.otherStockMessage)
+            throw no
         }
         var ota = dev.id.isLoader ? dev : try await check(dev, pkg, step)
         for attempt in 1...resumeMax {
@@ -368,7 +383,16 @@ public final class FirmwareInstaller: @unchecked Sendable {
                 break
             } catch let e as InstallError where (e.code == .lost || e.code == .stopped) && attempt < resumeMax {
                 step(.dropped)
-                guard let back = try await waitFor({ Self.writes(pkg, loader: $0) }, delays.waitResume) else { throw e }
+                // the loader back (record kept), or the old firmware back: a loader that refused the unit drops the record
+                guard let back = try await waitFor({ Self.writes(pkg, loader: $0) || (!$0.isLoader && Self.sameModel($0.text, pkg.product)) },
+                                                   delays.waitResume) else { throw e }
+                if !back.id.isLoader {
+                    back.link.close()
+                    // (Skiff's and SLOOP's ldr_core.c: the header's two reads and the app's 32-byte head come before any
+                    // erase; SLOOP 2.8.4 refuses an unknown chip right there)
+                    if e.served <= 3 { throw InstallError(code: .flashChip, message: Self.loaderRefusedMessage(pkg, running: back.id.text), served: e.served) }
+                    throw InstallError(code: .stopped, message: "The FM-1 restarted on its own firmware (\(back.id.text)) instead of finishing the write.", served: e.served)
+                }
                 step(.resume(attempt + 1))
                 ota = back
             }
