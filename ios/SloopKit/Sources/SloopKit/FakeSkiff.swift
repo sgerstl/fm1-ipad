@@ -55,7 +55,17 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     public convenience init?(demo: Bool) {
         guard let fx = try? SkiffFixture.load() else { return nil }
         self.init(fx)
-        if demo { seedDemo(); seedSong() }
+        if demo {
+            seedDemo()
+            // -demo-song empty | full: the Arrange states (no song; T5's 16 entries and the pool full)
+            let a = ProcessInfo.processInfo.arguments
+            let which = a.firstIndex(of: "-demo-song").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
+            if which != "empty" { seedSong() }
+            if which == "full" {
+                for i in 0..<16 { lists[4][i] = FakeEntry(p: [65, 12, 13][i % 3], r: 0) }
+                poolLen = Array(repeating: 16, count: 64)
+            }
+        }
     }
 
     public init(_ fx: SkiffFixture) {

@@ -263,6 +263,7 @@ struct LaneHeader: View {
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
                 Text("\(used) of 16 entries").font(.system(size: 12))
                     .foregroundStyle(used >= 16 ? Theme.text : Theme.textSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             .padding(.top, 8)
             .accessibilityElement(children: .combine)
@@ -328,6 +329,10 @@ struct Lane: View {
                 BlockView(session: session, track: track, block: b, list: list, width: w,
                           selected: selected, linked: linked, playing: session.playing && b.entries.contains(list.entryOn ?? -1))
                     .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
+                    .onTapGesture(count: 2) { open(b) }
+                    .onTapGesture { selection = EntryRef(track: track, entry: b.entries.lowerBound) }
+                    .contextMenu { holdMenu(b, list: list) }
+                    // the edge grip sits outside the hold menu's view: its press would take the drag
                     .overlay(alignment: .trailing) { if b.kind != .gap { grip(b, list: list) } }
                     .overlay(alignment: .bottomTrailing) {
                         if stretch?.entry == b.entries.upperBound {
@@ -338,9 +343,6 @@ struct Lane: View {
                         }
                     }
                     .offset(x: bx + 2, y: 6)
-                    .onTapGesture(count: 2) { open(b) }
-                    .onTapGesture { selection = EntryRef(track: track, entry: b.entries.lowerBound) }
-                    .contextMenu { holdMenu(b, list: list) }
                     .accessibilityAction { selection = EntryRef(track: track, entry: b.entries.lowerBound) }
                     .accessibilityAction(named: "Edit pattern") { open(b) }
                     .accessibilityAction(named: "Play once more") { edits.setReps(track, b, b.reps + 1) }
@@ -382,7 +384,9 @@ struct Lane: View {
             .frame(width: 44, height: SkiffArrangePage.laneHeight - 12)
             .contentShape(Rectangle())
             .offset(x: 20)
-            .gesture(DragGesture(minimumDistance: 4)
+            // from touch-down: a drag that waits for movement loses to the lanes' scroll view
+            // measured globally: the grip moves with the edge it drags
+            .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { v in
                     if stretch == nil { stretchStart = list.entries[b.entries.upperBound].reps }
                     let n = max(1, min(16, stretchStart + Int((v.translation.width / pass).rounded())))
@@ -490,7 +494,9 @@ struct LaneDrop: DropDelegate {
         if let f = after.first, let l = after.last {
             let shift = pass / SongPlacement.ticksPerBar
             let by = shift == shift.rounded() ? "\(Int(shift)) bar\(shift == 1 ? "" : "s")" : String(format: "%.2g bars", shift)
-            text += ", \(Entries.letter(f.entries.lowerBound + 1))–\(Entries.letter(l.entries.upperBound + 1)) move \(by) later"
+            let moved = f.entries.lowerBound == l.entries.upperBound ? Entries.letter(f.entries.lowerBound)
+                : "\(Entries.letter(f.entries.lowerBound))–\(Entries.letter(l.entries.upperBound))"
+            text += ", \(moved) move\(f.entries.lowerBound == l.entries.upperBound ? "s" : "") \(by) later"
         }
         if (lane.store.song?.tracks[safe: lane.track]?.span?.upperBound ?? -1) >= 15 {
             text = "T\(lane.track + 1) has all 16 entries, so \(Entries.number(p)) can't go in. Play one entry more times, or chain two, to free a slot"
