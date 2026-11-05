@@ -58,7 +58,7 @@ Pick your iPad or iPhone as the destination and run. On the first launch, allow 
 
 You can also run it on the Mac: pick **My Mac (Designed for iPad)** and plug the FM-1 into the Mac.
 
-**Without the FM-1:** add `-demo` as a launch argument (Product › Scheme › Edit Scheme › Arguments), or pick "Demo FM-1" from the connection menu at the top left (on an iPhone, the ⋯ menu at the top right). The demo edits a step every 6 seconds so there's something moving.
+**Without the FM-1:** add `-demo` as a launch argument (Product › Scheme › Edit Scheme › Arguments), or pick "Demo FM-1" from the connection menu at the top left (on an iPhone, the ⋯ menu at the top right). The demo edits a step every 6 seconds so there's something moving. Add `-demo-skiff` as well for a pretend Skiff 2.2, with six tracks and a song in Arrange.
 
 **Close SLOOP's web editor while the app runs.** Both use the FM-1's one MIDI port, and the FM-1 handles one request at a time.
 
@@ -90,6 +90,18 @@ The same four jobs, one at a time, in landscape. These work differently from the
 - **Sequence:** a whole bar across the screen. **Step** opens the selected step's panel over the grid; **Velocity** shows the velocity lane
 - **Shape:** the active page sits in the middle and is the one the FM-1 shows. Swipe in the gaps between knobs, or across a page's title, to move to the next one
 - **Arrange:** the page scrolls. Tap a block for its menu; delete is in the menu (no flick-to-delete on the phone)
+
+### On Skiff 2.2
+
+Jib also runs on [Skiff](https://github.com/illuminus5/skiff) 2.2, a Felucca-based firmware with six tracks and a song made of each track's list of patterns. Install it with Skiff's own installer, which backs up first. Jib checks on connect that the FM-1 reports `FELUCCA v2.2`.
+
+- **Sequence:** six tracks in the track box. A track on DRUM or DRUM-X shows the drum grid, with Skiff's 8 lanes
+- **Arrange (iPad only):** a lane per track, a block per list entry, as long as it plays, in the track's colour. Tap a block for its details, drag its right edge to set how many times it plays, hold it for its menu, drag a pattern from the list on the right onto a lane, or drag along the bar numbers to pick bars across every track (Duplicate after, Clear). While the FM-1 plays, changes that would cut in say "Stop to rearrange" with a Stop button
+- **Not on Skiff yet:** projects, the sampler and the screen link (SLOOP features), and Arrange on the iPhone
+
+### The look
+
+Buttons are flat keys that stand on a thin edge and drop onto it when pressed; a key that's on stays down. What's selected is lifted, with a white ring. The earlier, more physical look is under the connection menu › Developer in debug builds, if you want to compare.
 
 ## 5. Known gaps
 
