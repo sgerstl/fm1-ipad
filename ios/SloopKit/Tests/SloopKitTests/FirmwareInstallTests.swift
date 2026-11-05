@@ -43,11 +43,12 @@ import Testing
             #expect(p.product == f.product)
             #expect(p.sha256 == f.sha256)
             #expect(p.flashSpan?.size == 0x93000)
+            #expect(p.isOfficial == f.isStock)
             #expect(p.image.count == f.size - 20)
             #expect(BundledFirmware.matching(identity: f.product) == f)
             #expect(BundledFirmware.matching(identity: "ota-" + f.product) == f)
         }
-        #expect(BundledFirmware.matching(identity: "FM-1_015") == nil)
+        #expect(BundledFirmware.matching(identity: "FM-1_016") == nil)
     }
 
     @Test func aChangedByteIsRefused() throws {

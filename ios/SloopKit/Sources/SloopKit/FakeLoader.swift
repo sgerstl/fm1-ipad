@@ -6,7 +6,12 @@
 // (32 bytes), the whole flash.bin once (its CRC checked before anything is erased), then the app area sector by
 // sector from 0x5000 up and 0x4000 last (sectors already equal are skipped, the app's header erased before the first
 // changed one), then 0xF0000000; it restarts into the new firmware. Each device read is tried 3 times, 5 s each.
-// What it doesn't do: the chip-key check (it reads the 32 bytes, no key) and M-VAVE's official loader.
+// M-VAVE's package (stock V15) takes ota.c's other branch in step 1: the official loader is recognised by its CRCs and
+// length, flash.bin's 16 KiB head is read in 32 reads and compared with the unit's (stopping at the first difference),
+// and the record names "ota-FM-1_015". Its step 2 plays M-VAVE's loader as Skiff's tests do: the header, then flash.bin
+// once, downward, each 4 KiB sector written as it completes, the head's sector last, then 0xF0000000.
+// What it doesn't do: the chip-key check (it reads the 32 bytes, no key), and anything M-VAVE's loader does beyond
+// flash.bin (V15's package has a resource entry for 0xEA000; whether that loader writes it isn't public).
 import Foundation
 
 public final class FakeFM1: UpdatePorts, @unchecked Sendable {
@@ -23,6 +28,17 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
     }
 
     static let flashLen = 0x93000, appLo = 0x4000, sectors = (0x93000 - 0x4000) >> 12
+    /// M-VAVE's V16 flash.bin: ota.c lets its size through for the official loader only.
+    static let flashLenV16 = 0xA9000
+    /// The USB name M-VAVE's loader gets here. Not seen on a device: the real one may be named otherwise (the port
+    /// filter's "composite" / "usb-midi" / "sinco" are the stock names SLOOP's installer knows).
+    public static let officialLoaderPort = "FM-1"
+
+    /// V15's 16 KiB head, as an FM-1 that shipped with V15 has it (no firmware but M-VAVE's ever writes it).
+    static let v15Head: [UInt8] = {
+        guard let p = try? BundledFirmware.stock.load(), let s = p.flashSpan else { return [UInt8](repeating: 0x5A, count: 0x4000) }
+        return Array(p.image[s.off..<(s.off + 0x4000)])
+    }()
 
     private let lock = NSLock()
     private var gen = 0
@@ -36,6 +52,8 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
     /// The app area the device holds (flash.bin [0x4000, 0x93000)), and the identity it reports when it runs.
     private var app: [UInt8]
     private var appIdentity: String?
+    /// flash [0, 0x4000): the boot head, from the stock version the unit started on (V16's differs from V15's).
+    private var head: [UInt8]
     /// Packages it recognises: the first 1 KiB of the image (the header it reads first) and the app area.
     private var known: [(header: ArraySlice<UInt8>, app: ArraySlice<UInt8>, product: String)] = []
     public var faults: [Fault] = []
@@ -58,29 +76,34 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
     private var stageReads = 0
     private var stage = 0
 
-    /// An FM-1 running `running` (a package it was installed from), or the stock firmware when nil.
-    public init(running: FirmwarePackage?, stockIdentity: String = "FM-1_015") {
+    /// An FM-1 running `running` (a package it was installed from), or the stock firmware when nil. `startedOn`: the
+    /// stock version it shipped with or was first updated to, whose head it keeps (15, or 16).
+    public init(running: FirmwarePackage?, stockIdentity: String = "FM-1_015", startedOn: Int = 15) {
         if let p = running, let span = p.flashSpan {
             app = Array(p.image[(span.off + Self.appLo)..<(span.off + span.size)])
             identity = p.product
-            portName = "Felucca"
             known.append((p.image[0..<1024], app[...], p.product))
         } else {
             app = (0..<(Self.flashLen - Self.appLo)).map { UInt8(truncatingIfNeeded: $0 &* 31 &+ 7) }
             identity = stockIdentity
-            portName = "FM-1"
             known.append(([], app[...], stockIdentity))
         }
+        portName = Self.port(running: identity)
+        head = Self.v15Head
+        if startedOn != 15 { for i in stride(from: 0x200, to: 0x4000, by: 0x400) { head[i] ^= 0xA5 } }   // another head
         appIdentity = identity
     }
 
-    /// An FM-1 left in `loader`'s update mode by a write that was cut off (its app header gone).
+    /// An FM-1 left in `loader`'s update mode by a write that was cut off (its app header gone). For the stock V15,
+    /// M-VAVE's loader.
     public convenience init(inLoaderOf pkg: FirmwarePackage, was running: FirmwarePackage?) {
         self.init(running: running)
-        record = "ota-" + pkg.product
+        record = pkg.isOfficial ? FirmwareInstaller.officialLoader : "ota-" + pkg.product
         appIdentity = nil
         boot()
     }
+
+    static func port(running identity: String) -> String { identity.hasPrefix("FM-1_0") ? "FM-1" : "Felucca" }
 
     /// Packages whose app area it should recognise once written (the ones the test installs).
     public func knows(_ pkgs: FirmwarePackage...) {
@@ -136,9 +159,9 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
         connected = true
         stage = 0
         if let r = record {
-            identity = r; portName = "Felucca Update"
+            identity = r; portName = r == FirmwareInstaller.officialLoader ? Self.officialLoaderPort : "Felucca Update"
         } else if let a = appIdentity {
-            identity = a; portName = a.hasPrefix("FM-1_0") ? "FM-1" : "Felucca"
+            identity = a; portName = Self.port(running: a)
         } else {
             identity = ""; portName = "WL82 UBOOT1.00"         // no app, no record: the chip's boot mode (never expected)
         }
@@ -183,7 +206,9 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
             stageReads = 0
             session = Task { [weak self] in
                 guard let self else { return }
-                if loader { await self.writeSession(gen: g) } else { await self.checkSession(gen: g) }
+                if !loader { await self.checkSession(gen: g) }
+                else if self.identity == FirmwareInstaller.officialLoader { await self.officialWriteSession(gen: g) }
+                else { await self.writeSession(gen: g) }
             }
             lock.unlock()
             return
@@ -282,15 +307,25 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
         return r
     }
 
-    /// Step 1 (ota.c ota_stage, Felucca's own loader). Returns quietly on any refusal: the firmware carries on.
+    /// Step 1 (ota.c ota_stage, Felucca's own loader or the official one). Returns quietly on any refusal: the
+    /// firmware carries on.
     private func checkSession(gen g: Int) async {
         defer { endSession() }
-        guard let h = await header(gen: g), h.flOff > 0, h.otaOff > 0, h.flLen == Self.flashLen else { return }
+        guard let h = await header(gen: g), h.flOff > 0, h.otaOff > 0, [Self.flashLen, Self.flashLenV16].contains(h.flLen) else { return }
         guard let head = await read(h.otaOff, 512, gen: g) else { return }
         let len = FirmwarePackage.u32(head, 8)
         let own = (0x48..<(0x48 + 48)).contains { FirmwarePackage.contains(Array(head[$0..<($0 + 16)]), FirmwarePackage.loaderMark) }
+        let ol = FirmwarePackage.officialLoader
+        let official = FirmwarePackage.u16(head, 0) == ol.hcrc && FirmwarePackage.u16(head, 2) == ol.dcrc && len == ol.len
         guard FirmwarePackage.crc16(head[2..<32]) == UInt16(FirmwarePackage.u16(head, 0)), FirmwarePackage.u32(head, 4) == 0x20,
-              head[12] == 0x41, h.otaLen == len + 0x20, len <= 0x5000 - 0x200, own else { return }
+              head[12] == 0x41, h.otaLen == len + 0x20, len <= 0x5000 - 0x200, own || official else { return }
+        guard official || h.flLen == Self.flashLen else { return }
+        if official {               // the official loader writes the head: it must equal the unit's
+            for i in stride(from: 0, to: 0x4000, by: 512) {
+                guard let b = await read(h.flOff + i, 512, gen: g) else { return }
+                guard lock.withLock({ b.elementsEqual(self.head[i..<(i + 512)]) }) else { return }
+            }
+        }
         guard let again = await read(h.otaOff, 512, gen: g) else { return }
         let want = UInt16(FirmwarePackage.u16(again, 2))
         var crc: UInt16 = 0, i = 0
@@ -307,7 +342,8 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
                 // the update record, then the restart into the loader (its identity: "ota-" + the package's)
                 let hide = lock.withLock {
                     // (a real loader carries its identity compiled in, FELUCCA_ID: here, that of the package it came from)
-                    record = "ota-" + (known.first { !$0.header.isEmpty && $0.header.elementsEqual(h.raw) }?.product ?? "FM-1_700")
+                    record = official ? FirmwareInstaller.officialLoader
+                        : "ota-" + (known.first { !$0.header.isEmpty && $0.header.elementsEqual(h.raw) }?.product ?? "FM-1_700")
                     return faults.contains(.noLoader)
                 }
                 endSession()
@@ -315,6 +351,43 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
                 return
             }
         }
+    }
+
+    /// Step 2 by M-VAVE's loader (as Skiff's tests play it): the header, flash.bin once from the top down, each 4 KiB
+    /// sector written when its lowest read arrives (the head's last; the app no longer starts once the first changed
+    /// sector is written), then 0xF0000000. (Whether it checks flash.bin's CRC, and when, isn't public: not played.)
+    private func officialWriteSession(gen g: Int) async {
+        defer { endSession() }
+        guard let h = await header(gen: g), h.flOff > 0, h.flLen > Self.appLo, h.flLen <= Self.flashLenV16,
+              h.flLen % 0x1000 == 0 else { return }
+        var flash = [UInt8](repeating: 0xFF, count: h.flLen), i = h.flLen
+        while i > 0 {
+            let n = min(512, i)
+            i -= n
+            guard let b = await read(h.flOff + i, n, gen: g) else { return }
+            flash.replaceSubrange(i..<(i + n), with: b)
+            guard i & 0xFFF == 0 else { continue }
+            let sec = flash[i..<(i + 0x1000)]
+            lock.withLock {
+                if i < Self.appLo {
+                    head.replaceSubrange(i..<(i + 0x1000), with: sec)
+                } else if i < Self.flashLen, !app[(i - Self.appLo)..<(i - Self.appLo + 0x1000)].elementsEqual(sec) {
+                    app.replaceSubrange((i - Self.appLo)..<(i - Self.appLo + 0x1000), with: sec)
+                    appIdentity = nil
+                    stats.sectorsWritten += 1
+                }
+            }
+        }
+        for _ in 0..<4 { if await read(FirmwareInstaller.finishWrite, 8, gen: g) != nil { break } }
+        guard !isLost(gen: g) else { return }      // the power went: the record stays, the loader runs again
+        lock.withLock {
+            stats.write += stageReads
+            record = nil
+            let reported = faults.compactMap { if case .reports(let s) = $0 { s } else { nil } }.first
+            appIdentity = reported ?? known.first { $0.app.elementsEqual(app) }?.product ?? "FM-1_999"
+        }
+        endSession()
+        restart()
     }
 
     /// Step 2 (ldr_core.c ldr_session).
@@ -357,6 +430,7 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
         }
         // 4. the host confirms, the record goes, the new app starts
         for _ in 0..<4 { if await read(FirmwareInstaller.finishWrite, 8, gen: g) != nil { break } }
+        guard !isLost(gen: g) else { return }      // the power went: the record stays, the loader runs again
         lock.withLock {
             stats.write += stageReads
             record = nil

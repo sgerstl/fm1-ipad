@@ -1,11 +1,15 @@
-// Installs a Felucca-family package (Skiff, SLOOP) on an FM-1 over USB-MIDI: a port of Skiff's tools/fm1_install.py
-// and web/fm1ota.js (GPL-3.0, Leo Kuroshita), with SLOOP's narrower port filter and loader rule.
+// Installs a Felucca-family package (Skiff, SLOOP), or M-VAVE's own V15, on an FM-1 over USB-MIDI: a port of Skiff's
+// tools/fm1_install.py and web/fm1ota.js (GPL-3.0, Leo Kuroshita), with SLOOP's narrower port filter and loader rule.
 //
 // Step 1: the running firmware (Skiff, SLOOP, Felucca or M-VAVE's) gets UPGRADE, reads parts of the package
 // with cmd 0x30 requests, stages the package's update loader, asks 0xE0000000 ("success") and restarts into it.
 // Nothing is written to the app before that "success". Step 2: the loader ("ota-FM-1_7xx" / "_9xx", USB name
 // "Felucca Update") gets UPGRADE, reads the whole flash.bin twice (a check pass, then the write), asks 0xF0000000,
 // and restarts into the new firmware, whose identity is checked. The device asks and the host only answers.
+//
+// Stock V15 goes the same two steps with M-VAVE's loader in step 2: Skiff's and SLOOP's step 1 stage it only when
+// the package's 16 KiB head equals the unit's (the official loader rewrites the head), and the record it leaves names
+// "ota-FM-1_015". That loader reads flash.bin once, downward (Skiff's tests; not seen on a device here).
 //
 // A write cut off (cable, power, a stall) leaves the update record in place: the FM-1 comes back as the loader at
 // every power-on until a write finishes, and the loader writes the app's header last, so writing again is safe.
@@ -47,7 +51,7 @@ public protocol UpdatePorts: AnyObject, Sendable {
 
 public struct InstallError: Error, Equatable, CustomStringConvertible, Sendable {
     public enum Code: String, Sendable {
-        case notFound, model, foreignLoader, lost, stopped, badRequest, noLoader, noReturn, mismatch, cancelled
+        case notFound, model, foreignLoader, otherStock, lost, stopped, badRequest, noLoader, noReturn, mismatch, cancelled
     }
     public let code: Code
     public let message: String
@@ -166,6 +170,16 @@ public final class FirmwareInstaller: @unchecked Sendable {
         loader.text.range(of: #"^ota-FM-1_[79]\d\d$"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
+    /// The identity M-VAVE's update loader answers with, from the record Skiff's, SLOOP's and the stock step 1 write.
+    public static let officialLoader = "ota-FM-1_015"
+
+    /// The loader that writes `pkg`: M-VAVE's for the stock V15 (and only that file), a Felucca-family loader for the
+    /// others. A write is only ever finished by the loader that belongs to the package.
+    public static func writes(_ pkg: FirmwarePackage, loader id: DeviceIdentity) -> Bool {
+        guard id.isLoader else { return false }
+        return pkg.isOfficial ? id.text == officialLoader : isResumable(loader: id) && sameModel(id.text, pkg.product)
+    }
+
     public static func mayBeFM1(portName: String) -> Bool {
         portName.range(of: portPattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
@@ -273,13 +287,18 @@ public final class FirmwareInstaller: @unchecked Sendable {
         let s = try await serve(dev.link, image: pkg.image, finish: Self.finishCheck, idle: delays.idleCheck) { k, _, _ in step(.check(k)) }
         dev.link.close()
         guard s.finished else {
+            // (ota.c: the header's 2 reads and the loader's head, then the 32 reads of the 16 KiB head; a head unlike
+            // the unit's stops it there, as Skiff's web/fm1ota.js stockRefusal reads it)
+            if pkg.isOfficial, !s.lost, (4...35).contains(s.served) {
+                throw InstallError(code: .otherStock, message: Self.otherStockMessage, served: s.served)
+            }
             throw InstallError(code: s.lost ? .lost : .stopped,
                                message: s.lost ? "The FM-1 dropped off USB while it checked the firmware file." : "The FM-1 stopped asking for the firmware file partway through the check.",
                                served: s.served)
         }
         step(.loader)
         try await Task.sleep(for: delays.loader)
-        guard let ota = try await waitFor({ $0.isLoader && Self.sameModel($0.text, pkg.product) }, delays.waitLoader) else {
+        guard let ota = try await waitFor({ Self.writes(pkg, loader: $0) }, delays.waitLoader) else {
             throw InstallError(code: .noLoader, message: "The update loader didn't appear.", inUpdateMode: true)
         }
         return ota
@@ -317,20 +336,30 @@ public final class FirmwareInstaller: @unchecked Sendable {
         return back.id.text
     }
 
-    /// Running firmware → loader → new firmware; or, when the FM-1 is already in a Felucca-family update loader,
-    /// the write alone. A write cut off is resumed when the loader answers again within `waitResume`.
+    static let otherStockMessage = "Nothing was written. This FM-1 started out on a different official version (V16, probably), so V15 can't go on it. Its way back is that version, with M-VAVE's own updater."
+
+    /// Running firmware → loader → new firmware; or, when the FM-1 is already in the package's update loader, the
+    /// write alone. A write cut off is resumed when the loader answers again within `waitResume`.
     @discardableResult
     public func install(_ pkg: FirmwarePackage, step: @escaping (InstallStep) -> Void = { _ in }) async throws -> String {
-        cancelLock.lock(); cancelled = false; cancelLock.unlock()
+        cancelLock.withLock { cancelled = false }
         let dev = await find { Self.sameModel($0.text, pkg.product) }
         guard let dev else {
             throw InstallError(code: .notFound, message: "No FM-1 found. Plug it straight into this device with a USB data cable, and close other music apps.")
         }
-        if dev.id.isLoader, !Self.isResumable(loader: dev.id) {
+        if dev.id.isLoader, !Self.writes(pkg, loader: dev.id) {
             dev.link.close()
+            let which = BundledFirmware.matching(identity: dev.id.text).map { "\($0.title)'s" } ?? "another firmware's"
+            let finish = Self.isResumable(loader: dev.id) || dev.id.text == Self.officialLoader
+                ? "Finish that install first, then choose this one." : "Finish that update with its own updater first."
             throw InstallError(code: .foreignLoader,
-                               message: "The FM-1 is in another firmware's update mode (\(dev.id.text)). Finish that update with its own updater first.",
-                               inUpdateMode: true)
+                               message: "The FM-1 is in \(which) update mode (\(dev.id.text)). \(finish)", inUpdateMode: true)
+        }
+        // a unit already on a newer stock version has that version's head: V15's loader would write V15's over it
+        if pkg.isOfficial, !dev.id.isLoader, dev.id.text.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil,
+           dev.id.version > 15 {
+            dev.link.close()
+            throw InstallError(code: .otherStock, message: Self.otherStockMessage)
         }
         var ota = dev.id.isLoader ? dev : try await check(dev, pkg, step)
         for attempt in 1...resumeMax {
@@ -339,7 +368,7 @@ public final class FirmwareInstaller: @unchecked Sendable {
                 break
             } catch let e as InstallError where (e.code == .lost || e.code == .stopped) && attempt < resumeMax {
                 step(.dropped)
-                guard let back = try await waitFor({ $0.isLoader && Self.sameModel($0.text, pkg.product) }, delays.waitResume) else { throw e }
+                guard let back = try await waitFor({ Self.writes(pkg, loader: $0) }, delays.waitResume) else { throw e }
                 step(.resume(attempt + 1))
                 ota = back
             }
