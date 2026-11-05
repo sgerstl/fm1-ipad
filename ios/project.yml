@@ -21,7 +21,9 @@ targets:
   FM1:
     type: application
     platform: iOS
-    sources: [FM1]
+    sources:
+      - path: FM1
+        excludes: [LaunchScreen-Info.plist]     # merged into the Info.plist, not a resource
     dependencies:
       - package: SloopKit
     settings:
@@ -38,7 +40,8 @@ targets:
         # projects live in Documents/Projects: shown in Files under On My iPad › Jib
         INFOPLIST_KEY_UIFileSharingEnabled: YES
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        # the launch screen: Lupe's icon at home-screen size on #0A0A0B (merged into the generated Info.plist)
+        INFOPLIST_FILE: FM1/LaunchScreen-Info.plist
         INFOPLIST_KEY_UIStatusBarHidden: YES
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Jib plays the FM-1's sound through the iPad. iOS counts the FM-1's USB audio as a microphone."
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES

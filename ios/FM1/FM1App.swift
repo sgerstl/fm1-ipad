@@ -37,6 +37,9 @@ struct RootView: View {
     /// the phone layout. Size classes decide, not the device (2026-11-04).
     private var compact: Bool { heightClass == .compact || widthClass == .compact }
 
+    /// -no-intro: straight to the app (layout checks and screenshots).
+    @State private var introOver = ProcessInfo.processInfo.arguments.contains("-no-intro")
+
     var body: some View {
         Group {
             if compact {
@@ -63,6 +66,8 @@ struct RootView: View {
         .overlay { TempoOverlay(session: session, ui: ui) }
         .overlay { JibMenuLayer(menu: $ui.menu) }
         .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
+        // Lupe's intro on every cold launch, over the app, which starts (and connects) underneath it
+        .overlay { if !introOver { LaunchIntro { introOver = true } } }
         .environment(\.look, Look(style: lookStyle))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         .task(id: SessionRun(demo: useDemo, paused: firmware.holdsDevice)) {
