@@ -200,7 +200,7 @@ struct MotionLane: View {
         let d = session.trackDesc(id)
         return (d?.min ?? 0)...max(d?.max ?? 127, (d?.min ?? 0) + 1)
     }
-    private var base: Int { id < session.params.count ? session.params[id] : 0 }
+    private var base: Int { session.cell(id).value }
     private var steps: Int { session.stepCount }
 
     private func y(_ v: Int, _ h: CGFloat) -> CGFloat {

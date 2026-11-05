@@ -48,6 +48,7 @@ struct PageGraph: View {
     static let short: Set<String> = ["FX", "SLICER", "DUCK"]
 
     var body: some View {
+        let _ = BodyCounter.tick("PageGraph")
         let colour = Theme.track[session.selectedTrack]
         Group {
             switch page.title {
@@ -84,7 +85,7 @@ struct PageGraph: View {
 
     /// INSERT's TYPE A B C and INSERT 2's MIX, from the merged card's rows.
     private var insertValues: [Int] {
-        let all = (rows.isEmpty ? [page] : rows).flatMap { p in p.ids.map { id in id.flatMap { $0 < session.params.count ? session.params[$0] : nil } } }
+        let all = (rows.isEmpty ? [page] : rows).flatMap { p in p.ids.map { id in id.map { session.cell($0).value } } }
         let v = all.compactMap { $0 }
         return v.count >= 5 ? Array(v.prefix(5)) : v + Array(repeating: 127, count: max(0, 5 - v.count))
     }
@@ -110,8 +111,9 @@ struct PageGraph: View {
 
     /// The page's four values (0 for an empty slot), the track's or the globals.
     private var values: [Int] {
-        let src = page.scope == 0 ? session.params : session.globals
-        return page.ids.map { id in id.flatMap { $0 < src.count ? src[$0] : nil } ?? 0 }
+        // the track's from their cells: this graph redraws when its own parameters change
+        if page.scope == 0 { return page.ids.map { id in id.map { session.cell($0).value } ?? 0 } }
+        return page.ids.map { id in id.flatMap { $0 < session.globals.count ? session.globals[$0] : nil } ?? 0 }
     }
     private func desc(_ k: Int) -> ParamDesc? {
         guard let id = page.ids[k] else { return nil }
@@ -139,7 +141,7 @@ struct EnvGraph: View {
     let hot: Int?
     @State private var grabbed: Int?
 
-    private var v: [Int] { ids.map { id in id.flatMap { $0 < session.params.count ? session.params[$0] : nil } ?? 0 } }
+    private var v: [Int] { ids.map { id in id.map { session.cell($0).value } ?? 0 } }
 
     /// x1 (peak), the decay's length, x3 (the release's start), top, bottom, sustain 0…1, in Skiff's space.
     private static func geometry(_ v: [Int]) -> (x1: Double, d: Double, x3: Double, r: Double, top: Double, bot: Double, sus: Double) {
@@ -149,9 +151,24 @@ struct EnvGraph: View {
 
     var body: some View {
         GeometryReader { g in
-            Canvas { ctx, sz in draw(ctx, Space(size: sz)) }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onChanged { e in drag(e, g.size) }.onEnded { _ in grabbed = nil })
+            let s = Space(size: g.size), k = Self.geometry(v)
+            let y = { (l: Double) in k.bot - l * (k.bot - k.top) }
+            let handles = [s.p(k.x1, k.top), s.p(k.x1 + k.d, y(k.sus)), s.p(k.x3, y(k.sus))]
+            ZStack(alignment: .topLeading) {
+                // the graph itself takes no touch: a drag on it scrolls the page
+                Canvas { ctx, sz in draw(ctx, Space(size: sz)) }
+                    .allowsHitTesting(false)
+                // each handle a 44 pt target of its own, and only a drag that starts there moves it
+                ForEach(0..<3, id: \.self) { i in
+                    Color.clear.frame(width: 44, height: 44).contentShape(Rectangle())
+                        .position(handles[i])
+                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("env"))
+                            .onChanged { e in grabbed = i; drag(i, e.location, g.size) }
+                            .onEnded { _ in grabbed = nil })
+                        .accessibilityHidden(true)
+                }
+            }
+            .coordinateSpace(name: "env")
         }
         .accessibilityElement()
         .accessibilityLabel("Envelope shape")
@@ -185,20 +202,13 @@ struct EnvGraph: View {
         }
     }
 
-    /// The handle nearest the finger (within 40 pt) follows it: the peak sets ATTACK; the decay's end DECAY and
-    /// SUSTAIN; the release's start RELEASE and SUSTAIN.
-    private func drag(_ e: DragGesture.Value, _ size: CGSize) {
-        let v = self.v, k = Self.geometry(v), s = Space(size: size)
-        func y(_ lvl: Double) -> Double { k.bot - lvl * (k.bot - k.top) }
-        if grabbed == nil {
-            let hs = [s.p(k.x1, k.top), s.p(k.x1 + k.d, y(k.sus)), s.p(k.x3, y(k.sus))]
-            let near = hs.enumerated().min { hypot($0.element.x - e.startLocation.x, $0.element.y - e.startLocation.y) < hypot($1.element.x - e.startLocation.x, $1.element.y - e.startLocation.y) }
-            guard let n = near, hypot(n.element.x - e.startLocation.x, n.element.y - e.startLocation.y) < 40 else { return }
-            grabbed = n.offset
-        }
-        let x = Double(e.location.x / max(1, size.width)) * gw, yy = Double(e.location.y / max(1, size.height)) * gh
+    /// A handle follows the finger: the peak sets ATTACK; the decay's end DECAY and SUSTAIN; the release's start
+    /// RELEASE and SUSTAIN.
+    private func drag(_ handle: Int, _ p: CGPoint, _ size: CGSize) {
+        let k = Self.geometry(v)
+        let x = Double(p.x / max(1, size.width)) * gw, yy = Double(p.y / max(1, size.height)) * gh
         let sus = Int(((k.bot - yy) / (k.bot - k.top) * 127).rounded())
-        switch grabbed {
+        switch handle {
         case 0: set(0, Int(((x - 16) * 127 / 50).rounded()))
         case 1: set(1, Int(((x - k.x1 - 6) * 127 / 50).rounded())); set(2, sus)
         case 2: set(3, Int(((226 - x - 6) * 127 / 60).rounded())); set(2, sus)
@@ -210,7 +220,7 @@ struct EnvGraph: View {
         guard let id = ids[slot] else { return }
         let d = session.trackDesc(id)
         let n = min(max(value, d?.min ?? 0), d?.max ?? 127)
-        if id < session.params.count, session.params[id] != n { session.set(track: session.selectedTrack, param: id, to: n) }
+        if session.cell(id).value != n { session.set(track: session.selectedTrack, param: id, to: n) }
     }
 }
 
@@ -223,6 +233,7 @@ struct EnvGraph: View {
 struct LiveLFOGraph: View {
     let session: DeviceSession
     let colour: Color
+    @State private var visible = true                  // scrolled off: the wave stops drawing
 
     /// When Shape first showed an LFO: the stand-in restart while Jib sees none, shared so every LFO graph shows
     /// the same moment.
@@ -232,7 +243,7 @@ struct LiveLFOGraph: View {
 
     var body: some View {
         let lfo = self.lfo, track = session.selectedTrack, bpm = Double(session.bpm)
-        TimelineView(.animation) { tl in
+        TimelineView(.animation(paused: !visible)) { tl in
             Canvas { ctx, sz in
                 let s = Space(size: sz)
                 let n = session.lfoClock.lfoNow(lfo, track: track, bpm: bpm, opened: opened, at: tl.date)
@@ -247,6 +258,7 @@ struct LiveLFOGraph: View {
                 s.text(ctx, caption(lfo, n.bpm), 228, 16, midColour, anchor: .bottomTrailing)
             }
         }
+        .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
         .accessibilityElement()
         .accessibilityLabel("LFO wave, running")
         .accessibilityValue("\(LFOGraph.names[safe: lfo.wave] ?? "wave"), \(caption(lfo, bpm))")
@@ -265,8 +277,8 @@ extension SkiffLFO {
     @MainActor static func of(_ session: DeviceSession) -> SkiffLFO {
         let pages = SoundPage.pages(session)
         func val(_ title: String, _ k: Int) -> Int {
-            guard let id = pages.first(where: { $0.title == title })?.ids[safe: k] ?? nil, id < session.params.count else { return 0 }
-            return session.params[id]
+            guard let id = pages.first(where: { $0.title == title })?.ids[safe: k] ?? nil else { return 0 }
+            return session.cell(id).value
         }
         return SkiffLFO(rate: val("LFO", 0), wave: val("LFO", 1), phase: val("LFO", 2), fade: val("LFO", 3),
                         sync: val("LFO 2", 0), trig: val("LFO 2", 1), polarity: val("LFO 2", 2))
@@ -282,14 +294,15 @@ struct LFODestGraph: View {
     let page: SoundPage
     let colour: Color
     let hot: Int?
+    @State private var visible = true
 
     var body: some View {
         let lfo = SkiffLFO.of(session), track = session.selectedTrack, bpm = Double(session.bpm)
         let rows: [(String, Int)] = page.ids.map { id in
-            guard let id, id < session.params.count else { return ("", 0) }
-            return (session.trackDesc(id)?.label ?? "", session.params[id])
+            guard let id else { return ("", 0) }
+            return (session.trackDesc(id)?.label ?? "", session.cell(id).value)
         }
-        TimelineView(.animation) { tl in
+        TimelineView(.animation(paused: !visible)) { tl in
             Canvas { ctx, sz in
                 let s = Space(size: sz)
                 let n = session.lfoClock.lfoNow(lfo, track: track, bpm: bpm, opened: LiveLFOGraph.opened, at: tl.date)
@@ -304,6 +317,7 @@ struct LFODestGraph: View {
                 }
             }
         }
+        .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
         .accessibilityElement()
         .accessibilityLabel("LFO destinations, moving with the LFO")
         .accessibilityValue(rows.filter { !$0.0.isEmpty }.map { "\($0.0) \($0.1)" }.joined(separator: ", "))
@@ -671,7 +685,7 @@ struct ModGraph: View {
 
     static let cx: [Double] = [84, 124, 166, 208]
 
-    private func value(_ id: Int?) -> Int { id.flatMap { $0 < session.params.count ? session.params[$0] : nil } ?? 0 }
+    private func value(_ id: Int?) -> Int { id.map { session.cell($0).value } ?? 0 }
     private func shown(_ id: Int?) -> String { formatValue(id.flatMap { session.trackDesc($0) }, value(id)).shown }
 
     var body: some View {

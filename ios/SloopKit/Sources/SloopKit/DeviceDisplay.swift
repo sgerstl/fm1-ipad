@@ -91,7 +91,85 @@ public enum DeviceDisplay {
 extension DeviceSession {
     /// The selected track's param `id` as the FM-1's screen names it (DeviceDisplay.trackDesc).
     public func trackDesc(_ id: Int) -> ParamDesc? {
-        guard dialect != .skiff else { return trackDescs[id] }       // SLOOP's screen rules
+        guard dialect != .skiff else { return skiffTrackDesc(id) }   // Skiff's own rules (SkiffDisplay)
         return DeviceDisplay.trackDesc(trackDescs[id], id: id, params: params)
+    }
+}
+
+// MARK: - Skiff's (params.c track_desc and the engines' desc hooks, Skiff 2.2)
+
+/// What Skiff's screen calls a parameter that DESC names generically: DESC answers with `param_desc_of` (editor.c
+/// ed_tdesc), which skips `track_desc`'s rules. Ported: the INSERT's A B C as its TYPE means them (ins_desc), ATTACK
+/// DECAY RELEASE as note values with ENV SYNC on (ESYNC_DESC), and the engines' mode-dependent EDIT labels and name
+/// lists (analog_desc, phys_desc, lofi_desc, noise_desc). The rest of Skiff's engines have no hook.
+public enum SkiffDisplay {
+    static let analogSyncWave = 5, analogSubWave = 6                        // eng_analog.c AW_SYNC, AW_SUB
+    static let physChords = ["OCT", "5TH", "4TH", "MAJ", "MIN", "SUS", "7TH", "ROOT"]
+    static let lofiWaves = ["SQ50", "SQ25", "SQ12", "SINE", "TRI", "SAW", "SAW2", "BAS1",
+                            "BAS2", "ORGN", "HOLW", "VOXA", "VOXO", "VOXE", "BUZZ", "STAIR"]
+    static let lofiDecays = ["CONST"] + (0...15).map { "D\($0)" } + (1...15).map { "L\($0)" }
+    static let noiseLong = ["L23", "L20", "L17", "L15", "L13", "L11", "L9", "L7"]
+    static let noiseMeta = ["127", "127B", "93", "63", "63B", "31", "15", "7"]
+
+    /// The engine's own label (and format, names, unit) for its EDIT knob k (0…7), given its values E0, E1; nil:
+    /// DESC's is right.
+    static func engineDesc(_ engine: String, k: Int, e0: Int, e1: Int) -> (label: String, format: Int, names: [String], unit: String)? {
+        typealias F = DeviceDisplay.Format
+        switch engine {
+        case "ANALOG":
+            if k == 1, e0 == analogSyncWave { return ("SYNC", F.int, [], "") }
+            if k == 2, e0 == analogSubWave { return ("SUB", F.pct, [], "") }
+        case "PHYS":
+            switch (e0 % 4, k) {                                            // PM_MODAL PM_STRING PM_MEMB PM_SYMP
+            case (2, 1): return ("HARM", F.pct, [], "")
+            case (2, 6): return ("BEND", F.pct, [], "")
+            case (3, 1): return ("CHRD", F.int, physChords, "")
+            case (3, 4): return ("SYMP", F.pct, [], "")
+            case (3, 6): return ("BUZZ", F.pct, [], "")
+            default: break
+            }
+        case "LOFI":
+            if k == 2, e1 == 4 { return ("WAV#", F.int, lofiWaves, "") }    // RW_WRAM
+            if k == 3, e0 == 4 { return ("DCY", F.int, lofiDecays, "") }    // CHIP_STEP
+        case "NOISE":
+            if k == 5, e0 >= 2 { return ("LEN", F.int, e0 == 2 ? noiseLong : noiseMeta, "") }   // NZ_LFSR, NZ_META
+            if k == 7, e0 >= 2 { return ("CLK", F.int, [], "st") }
+        default: break
+        }
+        return nil
+    }
+}
+
+extension DeviceSession {
+    /// Skiff: DESC's descriptor with track_desc's rules. Reads only the values it depends on, each from its own cell,
+    /// so a knob relabels when TYPE, ENV SYNC or its engine's mode changes, and redraws for nothing else.
+    func skiffTrackDesc(_ id: Int) -> ParamDesc? {
+        guard var d = trackDescs[id] else { return nil }
+        let pages = pageLayout ?? []
+        func page(_ t: String) -> [Int?] { pages.first { $0.title == t }?.ids ?? [] }
+        let ins = page("INSERT"), env = page("ENV"), lfo2 = page("LFO 2")
+        if let k = ins.dropFirst().firstIndex(of: id), let typeID = ins.first ?? nil {
+            let type = cell(typeID).value
+            if type > 0, type < DeviceDisplay.insertTypes.count {
+                let x = DeviceDisplay.insertDesc[type < 5 ? 0 : type == 5 ? 1 : 2][k - 1]
+                d.label = x.label; d.format = x.format; d.names = x.names; d.unit = x.unit
+                d.min = 0; d.max = 127
+            }
+        } else if [env[safe: 0] ?? nil, env[safe: 1] ?? nil, env[safe: 3] ?? nil].contains(id),
+                  let sync = lfo2[safe: 3] ?? nil, cell(sync).value != 0 {
+            d.format = DeviceDisplay.Format.int; d.names = DeviceDisplay.envSyncNames; d.unit = ""
+        } else if d.label.hasPrefix("DEST"), let e0 = info?.firstEngineParam,
+                  let first = d.names.firstIndex(of: "E1"), d.names.count >= first + 8 {
+            // the matrix's destinations E1…E8 by the engine's own labels, as mod.c mod_dst_name writes them
+            for k in 0..<8 {
+                if let l = skiffTrackDesc(e0 + k)?.label, !l.isEmpty, !l.hasPrefix("-") { d.names[first + k] = l }
+            }
+        } else if let e0 = info?.firstEngineParam, (e0..<(e0 + 8)).contains(id) {
+            let engine = tracks[safe: selectedTrack]?.engineName.uppercased() ?? ""
+            if let x = SkiffDisplay.engineDesc(engine, k: id - e0, e0: cell(e0).value, e1: cell(e0 + 1).value) {
+                d.label = x.label; d.format = x.format; d.names = x.names; d.unit = x.unit
+            }
+        }
+        return d
     }
 }

@@ -51,6 +51,12 @@ public struct TrackState: Equatable, Sendable {
     }
 }
 
+/// One parameter's value, observed on its own (DeviceSession.cell).
+@Observable @MainActor public final class ParamCell {
+    public internal(set) var value: Int
+    init(_ v: Int) { value = v }
+}
+
 public enum ConnectionStatus: Equatable, Sendable {
     case searching                         // no FM-1 found
     case connecting
@@ -185,7 +191,24 @@ public final class DeviceSession {
 
     // Every parameter, for the Sound tab (step 4).
     /// The selected track's P_* values (DUMP), kept current from CHANGED pushes and the iPad's writes.
-    public private(set) var params: [Int] = []
+    public private(set) var params: [Int] = [] { didSet { syncCells() } }
+
+    /// The selected track's parameters one by one, each observed alone: a view that reads `cell(id).value` redraws
+    /// when that parameter changes, not when any does (reading `params` depends on the whole array: Shape's knobs
+    /// and graphs redrew all together on every push from an encoder, 2026-11-05).
+    @ObservationIgnored private var cells: [Int: ParamCell] = [:]
+    public func cell(_ id: Int) -> ParamCell {
+        if let c = cells[id] { return c }
+        let c = ParamCell(id < _params.count ? _params[id] : 0)     // (the storage: no dependency on the array)
+        cells[id] = c
+        return c
+    }
+    private func syncCells() {
+        for (id, c) in cells {
+            let v = id < _params.count ? _params[id] : 0
+            if c.value != v { c.value = v }
+        }
+    }
     public private(set) var globals: [Int] = []
     /// DESC of every parameter: label, range, format, enum names. The engine's P_E0..P_E7 are re-read
     /// whenever the selected track or its engine changes.
@@ -749,7 +772,7 @@ public final class DeviceSession {
         let t = selectedTrack
         for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") { apply(track: t, id: id, value: v) }
         if params.count != i.paramCount { params = Array(repeating: 0, count: i.paramCount) }
-        for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") { params[id] = v }
+        for (id, v) in d.track.enumerated() where !recentlyWritten("p\(t).\(id)") && params[id] != v { params[id] = v }
         if globals.count != i.globalCount { globals = Array(repeating: 0, count: i.globalCount) }
         for (id, v) in d.globals.enumerated() where !recentlyWritten("g\(id)") { globals[id] = v; applyGlobal(id: id, value: v) }
     }
@@ -781,16 +804,18 @@ public final class DeviceSession {
     }
 
     private func readTrackList() async throws {
+        // each field written only when it changed: every write to `tracks` redraws every view that reads it, and the
+        // resync reads the same values again every few seconds
         guard let c = driver, let i = info else { return }
         let list = try await c.tracks()
-        if trackIndices.contains(list.selected) { selectedTrack = list.selected }
+        if trackIndices.contains(list.selected), selectedTrack != list.selected { selectedTrack = list.selected }
         for (k, s) in list.tracks.enumerated() where k < trackCount {
-            tracks[k].engine = s.engine
-            if s.engine < i.engines.count { tracks[k].preset = s.preset }
-            tracks[k].mute = s.mute
-            if !isDrums(k) { tracks[k].level = s.level }
+            if tracks[k].engine != s.engine { tracks[k].engine = s.engine }
+            if s.engine < i.engines.count { if tracks[k].preset != s.preset { tracks[k].preset = s.preset } }
+            if tracks[k].mute != s.mute { tracks[k].mute = s.mute }
+            if !isDrums(k) { if tracks[k].level != s.level { tracks[k].level = s.level } }
             if s.engine < i.engines.count {
-                tracks[k].engineName = i.engines[s.engine]
+                if tracks[k].engineName != i.engines[s.engine] { tracks[k].engineName = i.engines[s.engine] }
                 let names = try await presetNames(s.engine)
                 var name = s.preset < names.count ? names[s.preset] : "Preset \(s.preset + 1)"
                 if !isDrums(k), capabilities.contains(.samples), i.engines[s.engine] == "SAMPLE" {
@@ -799,15 +824,15 @@ public final class DeviceSession {
                     if recentlyWritten("p\(k).\(set)") { name = tracks[k].presetName }
                     else if let v = try? await c.trackParam(track: k, id: set), let u = Self.sampleSlot(forSet: v) { name = "SMPL\(u + 1)" }
                 }
-                tracks[k].presetName = name
+                if tracks[k].presetName != name { tracks[k].presetName = name }
             } else {
                 // the drum track's kit is its KIT parameter: TRACK's preset there is the last synth preset the
                 // track held (editor.c ed_b(trk.preset)), and naming the kit from it made the name flicker
-                tracks[k].engineName = "Drums"
+                if tracks[k].engineName != "Drums" { tracks[k].engineName = "Drums" }
                 if let kit = try? await c.trackParam(track: k, id: i.firstEngineParam) {
-                    tracks[k].preset = kit
+                    if tracks[k].preset != kit { tracks[k].preset = kit }
                     // (the names come with the drum track selected: readKits; until then, the kit number only)
-                    if kitNames.indices.contains(kit) { tracks[k].presetName = kitNames[kit] }
+                    if kitNames.indices.contains(kit) { if tracks[k].presetName != kitNames[kit] { tracks[k].presetName = kitNames[kit] } }
                 }
             }
         }
@@ -884,7 +909,7 @@ public final class DeviceSession {
 
     private func apply(track t: Int, id: Int, value v: Int) {
         guard trackIndices.contains(t) else { return }
-        if t == selectedTrack, id < params.count { params[id] = v }
+        if t == selectedTrack, id < params.count, params[id] != v { params[id] = v }
         if isDrums(t), id == info?.firstEngineParam {               // the drum track's kit
             tracks[t].preset = v
             if kitNames.indices.contains(v) { tracks[t].presetName = kitNames[v] }

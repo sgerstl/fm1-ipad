@@ -1,0 +1,10 @@
+IOSurfaceClientSetSurfaceNotify failed e00002c7
+BODIES ColumnFace=79 KnobControl=81 PageGraph=10 SoundTab=1 card=36
+BODIES ColumnFace=71 KnobControl=443 PageGraph=59 SoundTab=5 card=81
+BODIES ColumnFace=30 KnobControl=1088 PageGraph=153 SoundTab=15 card=279
+BODIES ColumnFace=37 KnobControl=1121 PageGraph=160 SoundTab=16 card=288
+BODIES ColumnFace=28 KnobControl=975 PageGraph=140 SoundTab=14 card=252
+BODIES ColumnFace=34 KnobControl=1144 PageGraph=168 SoundTab=17 card=297
+BODIES ColumnFace=28 KnobControl=1015 PageGraph=142 SoundTab=14 card=261
+BODIES ColumnFace=34 KnobControl=1182 PageGraph=170 SoundTab=17 card=306
+com.scottgerstl.fm1ipad: 58753

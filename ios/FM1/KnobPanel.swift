@@ -5,6 +5,8 @@ import SwiftUI
 // Two to compare on the iPad, Developer › Knob tap: an arc of about 200 pt, its dot dragged anywhere round it,
 // or a horizontal slider under the value shown large. A parameter of named choices opens a list instead. Both
 // put the default back on a double-tap and from a key, and take a typed number where the value is a plain one.
+// Done keeps the value (tapping outside does too, and Return); Cancel puts back the value it had when it opened
+// (Escape too). Changes go to the FM-1 as they're made, so it previews live either way (Scott, 2026-11-05).
 
 enum KnobTapStyle: String, CaseIterable, Identifiable {
     case arc, slider
@@ -51,6 +53,7 @@ struct KnobPanel: View {
     @State private var typedProblem: String?
     @State private var tick = 0
     @State private var lastTap: Date?
+    @State private var opened: Int?              // the value when it opened, for Cancel
     @Environment(\.look) private var look
 
     var body: some View {
@@ -74,20 +77,42 @@ struct KnobPanel: View {
                     .buttonStyle(PressSink())
                 }
             }
+            HStack(spacing: 8) {
+                Button { cancel(spec) } label: {
+                    Text("Cancel").font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .accessibilityHint("Puts back the value it had before")
+                Button(action: close) {
+                    Text("Done").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
+                        .frame(maxWidth: .infinity, minHeight: 44).raisedKey(primary: true)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .keyboardShortcut(.defaultAction)
+            }
         }
         .padding(16)
         .frame(width: spec.choices == nil ? 280 : 260)
         // the one level-3 shadow, on the panel's shape
         .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
         .sensoryFeedback(.impact(weight: .light), trigger: tick)
-        .onKeyPress(.escape) { close(); return .handled }
+        .onKeyPress(.escape) { cancel(spec); return .handled }
         .background {
-            Button("Close", action: close).keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+            Button("Cancel") { cancel(spec) }.keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
         }
+        .onAppear { if opened == nil { opened = spec.value } }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityLabel(spec.label.capitalized)
-        .accessibilityAction(.escape) { close() }
+        .accessibilityAction(.escape) { cancel(spec) }
+    }
+
+    /// Cancel: the value from before it opened, back on the FM-1 too, and closed.
+    private func cancel(_ spec: KnobSpec) {
+        if let o = opened, o != spec.value { spec.set(o) }
+        close()
     }
 
     // MARK: Arc: the dot dragged anywhere round it, the value in the middle

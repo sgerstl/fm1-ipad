@@ -74,6 +74,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             // -demo-song empty | full: the Arrange states (no song; T5's 16 entries and the pool full)
             let a = ProcessInfo.processInfo.arguments
             screenLink = a.contains("-demo-link")       // the screen link patch, so the button map can be seen
+            // -demo-turn ID: an encoder turned on the FM-1, one CHANGED every 40 ms for track parameter ID (profiling)
+            if let i = a.firstIndex(of: "-demo-turn"), a.indices.contains(i + 1), let id = Int(a[i + 1]) { startTurning(id) }
             let which = a.firstIndex(of: "-demo-song").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
             if which != "empty" { seedSong() }
             if which == "full" {
@@ -204,6 +206,22 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     /// Pushes (CHANGED, STEP_CHANGED, ...) as the device sends them while watched.
     func push(_ cmd: UInt8, _ body: [UInt8]) { if watching { sink.yield(Frame.encode(cmd, body)) } }
+
+    private var turnTimer: DispatchSourceTimer?
+    /// A knob turned slowly back and forth on the FM-1: CHANGED for `id` every 40 ms, a step each, 0…127 and back.
+    func startTurning(_ id: Int) {
+        var v = 0, d = 1
+        let t = DispatchSource.makeTimerSource(queue: .global())
+        t.schedule(deadline: .now() + 3, repeating: .milliseconds(40))
+        t.setEventHandler { [weak self] in
+            guard let self else { return }
+            v += d; if v >= 127 || v <= 0 { d = -d }
+            self.lock.lock(); let sel = self.selected; if id < self.params[sel].count { self.params[sel][id] = v }; self.lock.unlock()
+            self.push(Cmd.changed, [0, UInt8(id)] + self.v14(v))
+        }
+        t.resume()
+        turnTimer = t
+    }
 
     /// MOTION's reply (editor.c ed_motion_reply): track, rc, on, count, 64, the records, then their kinds when asked.
     private func motionReply(_ t: Int, rc: UInt8, kinds: Bool) -> [UInt8] {

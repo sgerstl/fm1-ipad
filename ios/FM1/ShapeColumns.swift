@@ -3,8 +3,9 @@ import SwiftUI
 
 // Shape's columns, as Skiff's own pages draw their four cards (ui_draw.c draw_column): the label with the knob's
 // number, the value large with its unit, a thin gauge in the track's colour. The column of the knob just turned is
-// white (Skiff's hot card, ui.hot_t: about 600 ms). A changed value rolls its digits as Skiff's do (roll_text).
-// Design: canvas boards 17 and 18 (lupe/shape.py), 2026-11-05.
+// marked (Skiff's hot card, ui.hot_t: about 600 ms). A changed value rolls its digits as Skiff's do (roll_text).
+// Design: canvas boards 17 and 18 (lupe/shape.py), 2026-11-05. The column turning was white all over until Scott tried
+// it on the FM-1: now a 3 pt white bar along its top, its own colours kept (2026-11-05).
 
 /// A value split as a column shows it: the figures large, the unit small after them.
 func splitUnit(_ shown: String) -> (value: String, unit: String) {
@@ -28,9 +29,10 @@ struct ColumnFace: View {
     @Environment(\.knobsRecording) private var recording
 
     var body: some View {
+        let _ = BodyCounter.tick("ColumnFace")
         let (value, unit) = splitUnit(spec.shown)
-        let ink = hot ? Theme.onColour : dim ? Theme.textTertiary : Theme.text
-        let label = hot ? Color(hex: 0x3A3A42) : Theme.textSecondary
+        let ink = dim ? Theme.textTertiary : Theme.text
+        let label = Theme.textSecondary
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 Text(spec.label).font(.system(size: 11)).tracking(0.5).foregroundStyle(label).lineLimit(1)
@@ -40,7 +42,7 @@ struct ColumnFace: View {
                     Text("\(number)").font(.system(size: 11, weight: .bold))
                         .foregroundStyle(hot ? Theme.text : Theme.textSecondary)
                         .frame(width: 18, height: 18)
-                        .background(Circle().fill(hot ? Theme.onColour : Theme.control))
+                        .background(Circle().fill(Theme.control))
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 2) {
@@ -50,14 +52,16 @@ struct ColumnFace: View {
             .foregroundStyle(ink)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-            Gauge(fraction: dim ? 0 : spec.fraction, bipolar: spec.bipolar, tint: tint, track: hot ? Color(hex: 0xC9C9CF) : Theme.stepEmpty)
+            Gauge(fraction: dim ? 0 : spec.fraction, bipolar: spec.bipolar, tint: tint, track: Theme.stepEmpty)
                 .frame(height: 3)
                 .padding(.horizontal, -10)
                 .padding(.top, 6)
         }
         .padding(.top, 8).padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hot ? Theme.text : Theme.well))
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.well))
+        // the knob turning (here or on the FM-1, held 600 ms): a white bar along the top, the column as it is
+        .overlay(alignment: .top) { Rectangle().fill(Theme.text).frame(height: 3).opacity(hot ? 1 : 0).accessibilityHidden(true) }
         .clipShape(RoundedRectangle(cornerRadius: 6))
         // recorded: a red ring, as the REC banner says (board 16)
         .overlay { if recording, !dim { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.rec, lineWidth: 2) } }

@@ -112,3 +112,40 @@ extension SkiffScreenLinkTests {
         run.cancel()
     }
 }
+
+/// Skiff's track_desc rules, which DESC doesn't apply: INSERT's A B C by TYPE, ENV SYNC, the engines' hooks.
+extension SkiffScreenLinkTests {
+    @Test func descriptorsFollowTheirState() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        try await waitFor(10) { if case .connected = s.status { true } else { false } }
+        let pages = s.pageLayout ?? []
+        let ins = try #require(pages.first { $0.title == "INSERT" }?.ids)
+        let (type, a, b, c) = (ins[0]!, ins[1]!, ins[2]!, ins[3]!)
+        #expect(s.trackDesc(a)?.label == "A")                                   // TYPE OFF: DESC's own
+        s.set(track: s.selectedTrack, param: type, to: 2)                     // HARD: a drive
+        #expect([s.trackDesc(a)?.label, s.trackDesc(b)?.label, s.trackDesc(c)?.label] == ["DRIVE", "TONE", "LEVEL"])
+        s.set(track: s.selectedTrack, param: type, to: 5)                     // CRUSH
+        #expect(s.trackDesc(a)?.label == "BITS" && s.trackDesc(b)?.unit == "Hz")
+        #expect(DeviceDisplay.value(s.trackDesc(a)!, 127)?.text == "16")
+        s.set(track: s.selectedTrack, param: type, to: 7)                     // FLANG: swept
+        #expect(s.trackDesc(a)?.label == "RATE" && s.trackDesc(b)?.label == "DEPTH")
+        // ENV SYNC: ATTACK as note values
+        let env = try #require(pages.first { $0.title == "ENV" }?.ids), sync = try #require(pages.first { $0.title == "LFO 2" }?.ids[3])
+        s.set(track: s.selectedTrack, param: sync, to: 1)
+        #expect(DeviceDisplay.value(s.trackDesc(env[0]!)!, 127)?.text == "4BAR")
+        run.cancel()
+    }
+
+    @Test func enginesNameTheirModesKnobs() {
+        #expect(SkiffDisplay.engineDesc("ANALOG", k: 1, e0: 5, e1: 0)?.label == "SYNC")
+        #expect(SkiffDisplay.engineDesc("ANALOG", k: 1, e0: 0, e1: 0) == nil)
+        #expect(SkiffDisplay.engineDesc("PHYS", k: 1, e0: 3, e1: 0)?.names.first == "OCT")
+        #expect(SkiffDisplay.engineDesc("LOFI", k: 2, e0: 0, e1: 4)?.label == "WAV#")
+        #expect(SkiffDisplay.engineDesc("NOISE", k: 5, e0: 3, e1: 0)?.names.first == "127")
+        #expect(SkiffDisplay.engineDesc("NOISE", k: 7, e0: 2, e1: 0)?.unit == "st")
+    }
+}

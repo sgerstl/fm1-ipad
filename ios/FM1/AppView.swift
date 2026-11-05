@@ -120,7 +120,7 @@ extension AppView {
                     HStack(alignment: .top, spacing: 16) {
                         leftColumn {
                             FunctionPads(session: session, ui: ui)
-                            FollowCard(session: session, ui: ui)
+                            // ("Last turned on the FM-1" was here; Scott doesn't need it, 2026-11-05: the space stays empty)
                         }
                         SoundTab(session: session, ui: ui)
                     }

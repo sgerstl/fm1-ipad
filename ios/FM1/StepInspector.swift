@@ -208,7 +208,7 @@ struct SkiffStepInspector: View {
                     .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
             }
             ForEach(ids, id: \.self) { id in
-                let base = id < session.params.count ? session.params[id] : 0
+                let base = session.cell(id).value
                 let r = m.value(of: id, at: i, base: base)
                 HStack(spacing: 10) {
                     Group {

@@ -86,10 +86,12 @@ enum KnobFeel {
     }
 }
 
-/// Drag straight on the knob, no hold first: up raises, down lowers, the whole range in about 200 pt; the
-/// further the finger has gone sideways, the finer the turn (the iPad synths' way). A tap opens a big control at
-/// the finger (an arc or a slider, Developer › Knob tap; a list for a parameter of named choices); a double-tap
-/// puts the parameter's default back (from DESC). Light ticks at the ends and a centred knob's middle.
+/// Press and hold (0.3 s, a light tap when it takes), then drag: up raises, down lowers, the whole range in about
+/// 200 pt, finer the further the finger goes sideways; release to finish. While held the page doesn't scroll and a
+/// bubble shows the value; a drag that starts before the hold takes is the page's scroll, so a knob never steals one
+/// (Scott, 2026-11-05: "drag straight on" was terrible). Shape's columns turn on a horizontal drag instead. A tap opens
+/// the big control at the finger (Done keeps, Cancel puts it back); a double-tap puts the default back (DESC). Light
+/// ticks at the ends and a centred knob's middle.
 struct KnobControl: View {
     let ui: EditorUI
     var size: CGFloat = 40
@@ -105,38 +107,19 @@ struct KnobControl: View {
     @State private var startValue = 0
     @State private var turned = 0.0           // in value units since the drag began
     @State private var last: CGPoint?
+    @State private var start: CGPoint = .zero
     @State private var dragging = false
     @State private var tick = 0
-    @GestureState private var holding = false   // resets even when the system cancels the touch
+    @State private var engaged = 0             // the hold took: a light haptic
 
     /// Points of travel for the whole range, straight up.
     static let travel = 200.0
+    /// A column's: across.
+    static let columnTravel = 240.0
 
     var body: some View {
+        let _ = BodyCounter.tick("KnobControl")
         let spec = make()
-        let drag = DragGesture(minimumDistance: 0, coordinateSpace: .global)
-            .updating($holding) { _, state, _ in state = true }
-            .onChanged { v in
-                if !dragging {
-                    guard hypot(v.translation.width, v.translation.height) > 4 else { return }
-                    dragging = true
-                    _ = activate?()
-                    startValue = spec.value; turned = 0; last = v.location
-                    ui.knobGrab = KnobGrab(id: spec.id, center: v.startLocation)
-                }
-                guard let l = last else { return }
-                let span = Double(spec.range.upperBound - spec.range.lowerBound)
-                let fine = 1 / (1 + abs(Double(v.location.x - v.startLocation.x)) / 60)
-                turned += Double(l.y - v.location.y) / Self.travel * span * fine
-                turned = min(max(turned, Double(spec.range.lowerBound - startValue)), Double(spec.range.upperBound - startValue))
-                change(spec, to: startValue + Int(turned.rounded()))
-                last = v.location
-            }
-            .onEnded { _ in
-                dragging = false; last = nil
-                if ui.knobGrab?.id == spec.id { ui.knobGrab = nil }
-            }
-
         Group {
             if let face {
                 face(spec, dragging)
@@ -158,11 +141,59 @@ struct KnobControl: View {
                 ui.knobPanelSpec = make
                 ui.knobPanelAt = at
             }
-            .simultaneousGesture(drag)
-            .onChange(of: holding) { _, h in
-                if !h { dragging = false; last = nil; if ui.knobGrab?.id == spec.id { ui.knobGrab = nil } }
+            // a dial: hold, then drag (UIKit's long press: moving first fails it, and the page scrolls)
+            .modifier(DialHold(on: column == nil, hold: HoldDrag(began: { p in
+                dragging = true
+                engaged += 1
+                _ = activate?()
+                startValue = make().value; turned = 0; last = p; start = p
+                ui.knobGrab = KnobGrab(id: make().id, center: p)
+            }, changed: { p in
+                guard dragging, let l = last else { return }
+                let s = make()
+                let span = Double(s.range.upperBound - s.range.lowerBound)
+                let fine = 1 / (1 + abs(Double(p.x - start.x)) / 60)
+                turned += Double(l.y - p.y) / Self.travel * span * fine
+                turned = min(max(turned, Double(s.range.lowerBound - startValue)), Double(s.range.upperBound - startValue))
+                change(s, to: startValue + Int(turned.rounded()))
+                last = p
+            }, ended: {
+                dragging = false; last = nil
+                if ui.knobGrab?.id == make().id { ui.knobGrab = nil }
+            })))
+            // held: the value in a bubble above the knob
+            .overlay(alignment: .top) {
+                if dragging, column == nil, face == nil {
+                    Text(spec.shown).font(.system(size: 15, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.onColour)
+                        .padding(.horizontal, 10).frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.text))
+                        .fixedSize()
+                        .offset(y: -34)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
             }
+            // a column: a horizontal pan of UIKit's, so the scroll view keeps every vertical drag
+            .modifier(ColumnPan(on: column != nil, pan: HorizontalPan(began: { p in
+                guard column != nil else { return }
+                dragging = true
+                _ = activate?()
+                startValue = make().value; turned = 0; last = p
+                ui.knobGrab = KnobGrab(id: make().id, center: p)
+            }, changed: { p in
+                guard column != nil, dragging, let l = last else { return }
+                let s = make()
+                let span = Double(s.range.upperBound - s.range.lowerBound)
+                turned += Double(p.x - l.x) / Self.columnTravel * span     // right raises, the range in about 240 pt
+                turned = min(max(turned, Double(s.range.lowerBound - startValue)), Double(s.range.upperBound - startValue))
+                change(s, to: startValue + Int(turned.rounded()))
+                last = p
+            }, ended: {
+                dragging = false; last = nil
+                if ui.knobGrab?.id == make().id { ui.knobGrab = nil }
+            })))
             .sensoryFeedback(.impact(weight: .light), trigger: tick)
+            .sensoryFeedback(.impact(weight: .light), trigger: engaged)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spec.label.capitalized)
             .accessibilityValue(spec.spoken)
@@ -227,4 +258,81 @@ func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: 
                                                             startRadius: 0, endRadius: cap * 1.5))
     ctx.stroke(Path(ellipseIn: capRect.insetBy(dx: 0.5, dy: 0.5)), with: .color(.white.opacity(0.12)), lineWidth: 1)
     ctx.stroke(needle, with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+}
+
+/// A pan that begins only when the finger moves more across than up or down (UIKit decides, before the scroll view
+/// does): Shape's columns turn on a horizontal drag, and a vertical one is the page's scroll from the first point.
+struct HorizontalPan: UIGestureRecognizerRepresentable {
+    var began: (CGPoint) -> Void
+    var changed: (CGPoint) -> Void
+    var ended: () -> Void
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard let p = g as? UIPanGestureRecognizer else { return true }
+            let v = p.velocity(in: p.view)
+            return abs(v.x) > abs(v.y)
+        }
+    }
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let g = UIPanGestureRecognizer()
+        g.delegate = context.coordinator
+        g.maximumNumberOfTouches = 1
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
+        let p = context.converter.location(in: .global)
+        switch g.state {
+        case .began: began(p)
+        case .changed: changed(p)
+        case .ended, .cancelled, .failed: ended()
+        default: break
+        }
+    }
+}
+
+/// The horizontal pan on a column only (a dial keeps its own drag, up and down with a sideways fine control).
+private struct ColumnPan: ViewModifier {
+    let on: Bool
+    let pan: HorizontalPan
+    func body(content: Content) -> some View {
+        if on { content.gesture(pan) } else { content }
+    }
+}
+
+/// Press and hold (0.3 s), then drag; moving more than 10 pt before it takes fails it, leaving the touch to the
+/// page's scroll. Points are global.
+struct HoldDrag: UIGestureRecognizerRepresentable {
+    var began: (CGPoint) -> Void
+    var changed: (CGPoint) -> Void
+    var ended: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let g = UILongPressGestureRecognizer()
+        g.minimumPressDuration = 0.3
+        g.allowableMovement = 10
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ g: UILongPressGestureRecognizer, context: Context) {
+        let p = context.converter.location(in: .global)
+        switch g.state {
+        case .began: began(p)
+        case .changed: changed(p)
+        case .ended, .cancelled, .failed: ended()
+        default: break
+        }
+    }
+}
+
+/// The hold on a dial only (a column turns by HorizontalPan).
+private struct DialHold: ViewModifier {
+    let on: Bool
+    let hold: HoldDrag
+    func body(content: Content) -> some View {
+        if on { content.gesture(hold) } else { content }
+    }
 }

@@ -200,10 +200,11 @@ extension KnobSpec {
     @MainActor
     static func param(_ session: DeviceSession, scope: Int, id: Int, slot: Int) -> KnobSpec {
         let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
-        let values = scope == 0 ? session.params : session.globals
+        let values = scope == 0 ? [] : session.globals
         // locking knob turns to a step (Skiff): the knob shows that step's lock, if it has one
         let locked = scope == 0 ? session.lockStep.flatMap { s in session.motion[session.selectedTrack]?.events.first { $0.lock && $0.step == s && $0.id == id }?.value } : nil
-        let v = locked ?? (id < values.count ? values[id] : 0)
+        // the selected track's value from its own cell: this knob redraws when this parameter changes, not any
+        let v = locked ?? (scope == 0 ? session.cell(id).value : id < values.count ? values[id] : 0)
         let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
         let f = formatValue(d, v)
         let t = session.selectedTrack
@@ -247,10 +248,8 @@ struct EntrySoundNote: View {
 struct SoundTab: View {
     let session: DeviceSession
     let ui: EditorUI
-    @State private var marked: String?          // the knob last turned on the FM-1, marked for a moment
+    @State private var marks = ShapeMarks()     // the knob last turned, the page tapped, MOD's route
     @State private var followed: UIState?       // the FM-1's screen as last followed
-    @State private var activePage: String?      // not linked: the page last tapped here (linked, the FM-1's page)
-    @State private var modRoute = 0             // MOD's KNOB 1: the route shown, 0…10 (Skiff's mod_ui_route)
 
     /// The FM-1's buttons in the order Skiff's PAGES table lists their pages (params.c): Shape's sections. GLO's
     /// shared effects keep their place after them for now; SEQ's PATTERN pages close the list.
@@ -261,36 +260,76 @@ struct SoundTab: View {
     static let merged: [String: [String]] = ["LFO": ["LFO 2"], "INSERT": ["INSERT 2"]]
 
     var body: some View {
-        let sections = (session.dialect == .skiff ? Self.skiffOrder : Self.order).map { ($0, SoundPage.shown(session, $0)) }.filter { !$0.1.isEmpty }
+        let _ = BodyCounter.tick("SoundTab")
         VStack(alignment: .leading, spacing: 16) {
             EntrySoundNote(session: session)
-            // the button is chosen on the pads in the left column, as on the FM-1: it scrolls to its section
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        if session.selectedIsDrums, SoundPage.shown(session, ui.soundFamily).isEmpty {
-                            DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
-                        }
-                        ForEach(sections, id: \.0) { family, pages in
-                            section(family, pages)
-                        }
-                    }
-                    .padding(.bottom, 8)
-                }
-                .scrollIndicators(.hidden)
-                .onChange(of: ui.soundFamily) { _, f in
-                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(f, anchor: .top) }
-                }
-                .onAppear { proxy.scrollTo(ui.soundFamily, anchor: .top) }
-            }
+            ShapeScroll(session: session, ui: ui, marks: marks)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)   // the page area fills its column
-        .onChange(of: session.lastTouched?.at) { _, _ in follow() }
+        // an encoder's every push changes lastTouched: watched by a view of its own, so the page doesn't redraw
+        .background { TouchFollower(session: session) { follow() } }
         .onChange(of: session.deviceScreen) { _, s in followScreen(s) }
         .onAppear {
             // opened by the FM-1: start on its button; opened here (a tab, a pad): keep the choice made
             if ui.pageFromDevice { followScreen(session.deviceScreen) } else { followed = session.deviceScreen }
             ui.pageFromDevice = false
+        }
+    }
+
+    /// The FM-1 changed page (a button pressed on it): show that button's pages here. Holding SEL
+    /// (its key layer) brings up SEL.
+    private func followScreen(_ s: UIState?) {
+        // only a real change on the FM-1 moves the page here: the same screen reported again must not
+        // undo a button chosen on the iPad (on the drum track SEL, ENV, LFO, EDIT, ARP can't move the
+        // FM-1, which stays on its page)
+        guard let s, s.home != followed?.home || s.page != followed?.page || s.layer != followed?.layer else { return }
+        followed = s
+        if s.layer == ScreenMap.of(session).selLayer { if ui.soundFamily != .sel { ui.soundFamily = .sel }; return }   // the keys' layer held
+        // (on the drum track the FM-1 opens the synth pages too, showing "DRUM TRACK": follow those as well)
+        guard !s.home, let page = SoundPage.page(session, fw: s.page),
+              SoundPage.reached(session, page.family).contains(where: { $0.fw == page.fw }) else { return }
+        ui.soundFamily = page.family
+    }
+
+    /// A knob turned on the FM-1: show its button's pages and mark it for a few seconds.
+    private func follow() {
+        guard let t = session.lastTouched, let page = SoundPage.page(session, scope: t.scope, id: t.id) else { return }
+        // with the screen link the FM-1's page decides the button; a knob turn only marks its knob
+        if !session.screenLinked, ui.soundFamily != page.family, SoundPage.shown(session, page.family).contains(where: { $0.id == page.id }) {
+            ui.soundFamily = page.family
+        }
+        marks.mark("s\(t.scope).\(t.id)")
+    }
+}
+
+/// Shape's one scroll: the buttons' sections in Skiff's order. A view of its own, so what the page watches (the
+/// FM-1's touches, its screen) doesn't rebuild every card.
+struct ShapeScroll: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    let marks: ShapeMarks
+
+    var body: some View {
+        let _ = BodyCounter.tick("ShapeScroll")
+        let sections = (session.dialect == .skiff ? SoundTab.skiffOrder : SoundTab.order).map { ($0, SoundPage.shown(session, $0)) }.filter { !$0.1.isEmpty }
+        // the button is chosen on the pads in the left column, as on the FM-1: it scrolls to its section
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    if session.selectedIsDrums, SoundPage.shown(session, ui.soundFamily).isEmpty {
+                        DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
+                    }
+                    ForEach(sections, id: \.0) { family, pages in
+                        section(family, pages)
+                    }
+                }
+                .padding(.bottom, 8)
+            }
+            .scrollIndicators(.hidden)
+            .onChange(of: ui.soundFamily) { _, f in
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(f, anchor: .top) }
+            }
+            .onAppear { proxy.scrollTo(ui.soundFamily, anchor: .top) }
         }
     }
 
@@ -300,8 +339,8 @@ struct SoundTab: View {
         // the cards: a page alone, or a page with the ones merged into it
         var cards: [[SoundPage]] = []
         for p in pages {
-            if Self.merged.values.contains(where: { $0.contains(p.title) }),
-               let k = cards.firstIndex(where: { Self.merged[$0[0].title]?.contains(p.title) == true }) {
+            if SoundTab.merged.values.contains(where: { $0.contains(p.title) }),
+               let k = cards.firstIndex(where: { SoundTab.merged[$0[0].title]?.contains(p.title) == true }) {
                 cards[k].append(p)
             } else {
                 cards.append([p])
@@ -321,8 +360,10 @@ struct SoundTab: View {
             Grid(horizontalSpacing: 16, verticalSpacing: 16) {
                 ForEach(Array(stride(from: 0, to: cards.count, by: 2)), id: \.self) { i in
                     GridRow(alignment: .top) {
-                        card(cards[i], of: pages)
-                        if i + 1 < cards.count { card(cards[i + 1], of: pages) } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
+                        SoundCard(session: session, ui: ui, rows: cards[i], pages: pages, marks: marks).equatable()
+                        if i + 1 < cards.count {
+                            SoundCard(session: session, ui: ui, rows: cards[i + 1], pages: pages, marks: marks).equatable()
+                        } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
                     }
                 }
             }
@@ -330,12 +371,30 @@ struct SoundTab: View {
         .id(family)
     }
 
-    // MARK: A card: one page's four columns, or rows of merged pages, over the graph
+}
 
-    private func card(_ rows: [SoundPage], of pages: [SoundPage]) -> some View {
+/// One card of Shape: a page's columns (or merged pages' rows) over its graph. A view of its own, so a change that
+/// concerns one card (a parameter, the knob just turned) redraws that card, not the page.
+struct SoundCard: View, Equatable {
+    let session: DeviceSession
+    let ui: EditorUI
+    let rows: [SoundPage]
+    let pages: [SoundPage]
+    let marks: ShapeMarks
+
+    /// The same pages with the same state objects: nothing to redraw from the parent (what the card shows it
+    /// observes itself), so a rebuilt scroll doesn't rebuild every card.
+    nonisolated static func == (a: SoundCard, b: SoundCard) -> Bool {
+        a.session === b.session && a.ui === b.ui && a.marks === b.marks
+            && a.rows.map(\.id) == b.rows.map(\.id) && a.rows.map(\.ids) == b.rows.map(\.ids) && a.pages.map(\.fw) == b.pages.map(\.fw)
+    }
+
+    var body: some View {
+        let _ = BodyCounter.tick("card")
         let first = rows[0]
         let onDeviceRow = rows.firstIndex { onDevice($0) }
         let activeRow = rows.firstIndex { isActive($0) }
+        let marked = marks.key
         let lit = rows.contains { p in marked != nil && (p.ids + p.routes.joined()).contains { id in id.map { "s\(p.scope).\($0)" } == marked } }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -357,7 +416,7 @@ struct SoundTab: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             if first.title == "MOD", !first.routes.isEmpty {
-                ModColumns(session: session, ui: ui, page: first, route: $modRoute, marked: marked,
+                ModColumns(session: session, ui: ui, page: first, route: Binding(get: { marks.modRoute }, set: { marks.modRoute = $0 }), marked: marks.key,
                            activate: { touch(first) })
             } else {
                 ForEach(rows.indices, id: \.self) { r in
@@ -414,7 +473,7 @@ struct SoundTab: View {
         ForEach(0..<4, id: \.self) { slot in
             if let id = p.ids[slot] {
                 KnobControl(ui: ui, activate: { touch(p) },
-                            column: (slot + 1, Theme.track[session.selectedTrack], marked == "s\(p.scope).\(id)")) {
+                            column: (slot + 1, Theme.track[session.selectedTrack], marks.key == "s\(p.scope).\(id)")) {
                     KnobSpec.param(session, scope: p.scope, id: id, slot: slot)
                 }
             } else {
@@ -427,7 +486,7 @@ struct SoundTab: View {
         session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == p.fw } == true
     }
     /// The page the knobs work on: the FM-1's, or (not linked) the one last tapped here.
-    private func isActive(_ p: SoundPage) -> Bool { session.screenLinked ? onDevice(p) : activePage == p.id }
+    private func isActive(_ p: SoundPage) -> Bool { session.screenLinked ? onDevice(p) : marks.activePage == p.id }
     /// A column touched: its page becomes the active one; true when it already was.
     private func touch(_ p: SoundPage) -> Bool {
         let was = isActive(p)
@@ -436,7 +495,7 @@ struct SoundTab: View {
     }
 
     private func activate(_ p: SoundPage) {
-        activePage = p.id
+        marks.activePage = p.id
         if session.screenLinked { session.showOnDevice(page: p.fw) }
     }
 
@@ -444,39 +503,39 @@ struct SoundTab: View {
     @ViewBuilder private func graph(for p: SoundPage, rows: [SoundPage]) -> some View {
         // the knob being turned, here or on the FM-1 (marked), lights its point
         let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == g.id } }
-            ?? marked.flatMap { m in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == m } }
-        if PageGraph.has(p) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: $modRoute) }
+            ?? marks.key.flatMap { m in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == m } }
+        if PageGraph.has(p) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: Binding(get: { marks.modRoute }, set: { marks.modRoute = $0 })) }
     }
 
-    /// The FM-1 changed page (a button pressed on it): show that button's pages here. Holding SEL
-    /// (its key layer) brings up SEL.
-    private func followScreen(_ s: UIState?) {
-        // only a real change on the FM-1 moves the page here: the same screen reported again must not
-        // undo a button chosen on the iPad (on the drum track SEL, ENV, LFO, EDIT, ARP can't move the
-        // FM-1, which stays on its page)
-        guard let s, s.home != followed?.home || s.page != followed?.page || s.layer != followed?.layer else { return }
-        followed = s
-        if s.layer == ScreenMap.of(session).selLayer { ui.soundFamily = .sel; return }   // the keys' layer held
-        // (on the drum track the FM-1 opens the synth pages too, showing "DRUM TRACK": follow those as well)
-        guard !s.home, let page = SoundPage.page(session, fw: s.page),
-              SoundPage.reached(session, page.family).contains(where: { $0.fw == page.fw }) else { return }
-        ui.soundFamily = page.family
-    }
+}
 
-    /// A knob turned on the FM-1: show its button's pages and mark it for a few seconds.
-    private func follow() {
-        guard let t = session.lastTouched, let page = SoundPage.page(session, scope: t.scope, id: t.id) else { return }
-        // with the screen link the FM-1's page decides the button; a knob turn only marks its knob
-        if !session.screenLinked, SoundPage.shown(session, page.family).contains(where: { $0.id == page.id }) {
-            ui.soundFamily = page.family
-        }
-        let key = "s\(t.scope).\(t.id)"
-        marked = key
-        // lit as long as Skiff lights the knob just turned (ui.hot_t = 40 frames, about 600 ms)
-        Task {
+/// The knob last turned on the FM-1, lit as long as Skiff lights it (ui.hot_t = 40 frames, about 600 ms). Set only
+/// when it changes, so an encoder's stream of pushes doesn't redraw every card.
+@Observable @MainActor final class ShapeMarks {
+    private(set) var key: String?
+    /// Not linked: the page last tapped here (linked, the FM-1's page is the active one).
+    var activePage: String?
+    /// MOD's KNOB 1: the route shown, 0…10 (Skiff's mod_ui_route).
+    var modRoute = 0
+    @ObservationIgnored private var gen = 0
+
+    func mark(_ k: String) {
+        if key != k { key = k }
+        gen += 1
+        let g = gen
+        Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(600))
-            if marked == key { marked = nil }
+            if self.gen == g { self.key = nil }
         }
+    }
+}
+
+/// Watches the FM-1's knob touches (every push while an encoder turns) in a view that draws nothing.
+private struct TouchFollower: View {
+    let session: DeviceSession
+    let touched: () -> Void
+    var body: some View {
+        Color.clear.onChange(of: session.lastTouched?.at) { _, _ in touched() }
     }
 }
 
@@ -565,37 +624,3 @@ struct KeyMapStrip: View {
     }
 }
 
-/// Under the track box on the Sound tab: the knob last turned on the FM-1, large. The FM-1's screen
-/// says this too, in 240 pixels; here it's readable at arm's length.
-struct FollowCard: View {
-    let session: DeviceSession
-    let ui: EditorUI
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Last turned on the FM-1").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                .accessibilityAddTraits(.isHeader)
-            if let t = session.lastTouched, let page = SoundPage.page(session, scope: t.scope, id: t.id) {
-                let slot = page.ids.firstIndex(of: t.id) ?? 0
-                let spec = KnobSpec.param(session, scope: t.scope, id: t.id, slot: slot)
-                HStack(spacing: 16) {
-                    KnobControl(ui: ui, size: 72) { KnobSpec.param(session, scope: t.scope, id: t.id, slot: slot) }
-                    VStack(alignment: .leading, spacing: 2) {
-                        let where_ = page.title(session) == page.family.rawValue ? page.family.rawValue : "\(page.family.rawValue) · \(page.title(session))"
-                        Text(where_).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                        Text(spec.label).font(.system(size: 17, weight: .semibold))
-                        Text(spec.shown).font(.system(size: 28, weight: .semibold))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .accessibilityElement(children: .combine)
-            } else {
-                Text("Turn a knob on the FM-1 and it shows here, with its button's pages on the right.")
-                    .font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .panel()
-    }
-}
