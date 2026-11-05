@@ -37,6 +37,9 @@ struct AppView: View {
                         ui.pageFromDevice = true
                         ui.page = tab
                     }
+            } else if ui.page == .song, let store = session.skiffSong, store.song != nil, store.offline {
+                // disconnected on Arrange: the last song stays, dimmed and read-only, under a status bar
+                SkiffArrangePage(session: session, store: store, ui: ui)
             } else {
                 ConnectionState(status: session.status, useDemo: $useDemo)
             }
@@ -101,6 +104,9 @@ extension AppView {
                                 SongModePanel(session: session)
                             }
                             SongPage(session: session, ui: ui)
+                        } else if let store = session.skiffSong {
+                            // Skiff's song: the whole page, lanes carrying their own track headers (board A)
+                            SkiffArrangePage(session: session, store: store, ui: ui)
                         } else {
                             leftColumn { FunctionPads(session: session, ui: ui) }
                             NotOnThisFirmware.arrange(session)
@@ -129,8 +135,10 @@ extension AppView {
                     .transition(.opacity)
                     .zIndex(1)
             }
-            Overview(session: session, ui: ui, expanded: ui.page == .sequencer || ui.timelineOpen)
-                .zIndex(2)
+            if !skiffArrange {
+                Overview(session: session, ui: ui, expanded: ui.page == .sequencer || ui.timelineOpen)
+                    .zIndex(2)
+            }
             if let r = ui.sampler, r.fromBrowse {
                 Color.black.opacity(0.35).ignoresSafeArea()
                     .transition(.opacity).zIndex(4)
@@ -157,6 +165,9 @@ extension AppView {
             ui.presetsPanel = false
         }
     }
+
+    /// Arrange on Skiff has its own lane headers: no track box over it.
+    private var skiffArrange: Bool { ui.page == .song && session.skiffSong != nil }
 
     /// The left column under the track box.
     private func leftColumn<C: View>(@ViewBuilder _ content: () -> C) -> some View {

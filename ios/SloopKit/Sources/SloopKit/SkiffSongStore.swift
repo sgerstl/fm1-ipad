@@ -87,6 +87,11 @@ public final class SkiffSongStore {
     /// The blocks of a track, placed on the bar ruler (ticks; 96 a bar).
     public func blocks(_ t: Int) -> [SongBlock] {
         guard let l = song?.tracks[safe: t] else { return [] }
+        return blocks(t, list: l)
+    }
+
+    /// A track's blocks for a list it may get (a drag in progress, before it's sent).
+    public func blocks(_ t: Int, list l: SongList) -> [SongBlock] {
         let timing = trackTiming(t)
         return SongPlacement.blocks(l, length: { p in self.pool.flatMap { $0.patterns[p].length > 0 ? $0.patterns[p].length : nil } },
                                     division: { p in self.divisions[p] }, trackLength: timing.length, trackDivision: timing.division)
@@ -96,6 +101,13 @@ public final class SkiffSongStore {
 
     /// The bars each lane ends on, and the song's length in bars.
     public var laneEnds: [Double] { lanes.map { ($0.last?.end ?? 0) / SongPlacement.ticksPerBar } }
+
+    /// One pass of pattern p (0...63) on track t, in ticks.
+    public func passTicks(_ p: Int, track t: Int) -> Double {
+        let timing = trackTiming(t)
+        let len = pool.flatMap { $0.patterns[p].length > 0 ? $0.patterns[p].length : nil } ?? timing.length
+        return Double(len) * CountedPlayhead.divisionTicks[max(0, min(9, divisions[p] ?? timing.division))]
+    }
 
     // MARK: Changes
 
@@ -194,6 +206,10 @@ public final class SkiffSongStore {
     }
 
     public func dismissRefusal() { refusal = nil }
+    /// A refusal the app decides itself (before sending anything).
+    public func refuse(track: Int?, entry: Int?, _ text: String, needsStop: Bool = false) {
+        refusal = Refusal(track: track, entry: entry, text: text, needsStop: needsStop)
+    }
 
     private func settle(_ d: SkiffDriver) async {
         if let s = try? await d.songLists() { song = s; learnDivisions(s) }

@@ -269,12 +269,12 @@ public struct ListRewrite: Equatable, Sendable {
             if a == b { continue }
             if b.isEmpty {
                 clears.append(.clear(track: t, entry: i))
-                if playing && !a.isRest { stop = "Clearing an entry needs the transport stopped" }
+                if playing && !a.isRest { stop = "Stop to rearrange: Skiff clears an entry only while stopped" }
                 continue
             }
             if a.pattern != b.pattern {
                 ops.append(.set(track: t, entry: i, pattern: b.pattern))
-                if playing && old.entryOn == i { stop = "Changing the entry the track is playing would cut it in now" }
+                if playing && old.entryOn == i { stop = "Stop to rearrange: another pattern on the entry T\(t + 1) is playing would launch it" }
             }
             if a.chained != b.chained || (!b.chained && a.reps != b.reps) || a.pattern != b.pattern {
                 ops.append(b.chained ? .chain(track: t, entry: i) : .reps(track: t, entry: i, reps: b.reps))

@@ -35,7 +35,10 @@ struct PhoneAppView: View {
                     case .library: PhoneBrowse(session: session, ui: ui)
                     case .song:
                         if session.capabilities.contains(.sloopSong) { SongPage(session: session, ui: ui, compact: true) }
-                        else { NotOnThisFirmware.arrange(session) }
+                        else if session.skiffSong != nil {
+                            NotOnThisFirmware(title: "Arrange on Skiff is on the iPad for now",
+                                              detail: "The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.")
+                        } else { NotOnThisFirmware.arrange(session) }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
