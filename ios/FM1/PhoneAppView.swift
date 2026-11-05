@@ -85,7 +85,7 @@ struct PhoneAppView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: ui.sampler)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { TrackPickerLayer(session: session, ui: ui) }
-        .overlay { GrownKnobLayer(session: session, ui: ui) }
+        .overlay { KnobPanelLayer(ui: ui) }
         .coordinateSpace(name: AppView.space)
         // the same upkeep as the iPad's AppView: projects, the screen staying on, audio, Now Playing
         .onChange(of: isConnected, initial: true) { _, on in if on { projects.connected() } }

@@ -14,6 +14,10 @@ struct KnobSpec {
     let shown: String
     let spoken: String
     let bipolar: Bool
+    /// The parameter's default (DESC), for a double-tap; nil: none known.
+    var defaultValue: Int? = nil
+    /// Named choices (DESC format 8: waveforms, modes), for the value range's lowest up: the tap opens a list.
+    var choices: [String]? = nil
     let set: (Int) -> Void
 
     var fraction: Double {
@@ -28,24 +32,24 @@ struct KnobSpec {
         let pct = t.level * 100 / 127
         return [
             KnobSpec(id: "home0", colour: Theme.knob[0], label: "SWING", value: session.swing, range: 0...100, stepperStep: 5,
-                     shown: "\(session.swing)", spoken: "\(session.swing)", bipolar: false) { session.set(global: Global.swing, to: $0) },
+                     shown: "\(session.swing)", spoken: "\(session.swing)", bipolar: false, defaultValue: 0) { session.set(global: Global.swing, to: $0) },
             KnobSpec(id: "home1", colour: Theme.knob[1], label: "LEVEL", value: t.mute ? 0 : t.level, range: 0...127, stepperStep: 8,
-                     shown: t.mute ? "0" : "\(pct)", spoken: t.mute ? "muted" : "\(pct) percent", bipolar: false) { v in
+                     shown: t.mute ? "0" : "\(pct)", spoken: t.mute ? "muted" : "\(pct) percent", bipolar: false,
+                     defaultValue: session.trackDesc(Param.level)?.defaultValue) { v in
                 // as on the device, turning LEVEL unmutes the track
                 if t.mute { session.set(track: k, param: Param.mute, to: 0) }
                 session.set(track: k, param: Param.level, to: v)
             },
             KnobSpec(id: "home2", colour: Theme.knob[2], label: "STEPS", value: t.length, range: 1...session.stepCount, stepperStep: 1,
-                     shown: "\(t.length)", spoken: "\(t.length) steps", bipolar: false) { session.set(track: k, param: Param.length, to: $0) },
+                     shown: "\(t.length)", spoken: "\(t.length) steps", bipolar: false, defaultValue: 16) { session.set(track: k, param: Param.length, to: $0) },
             KnobSpec(id: "home3", colour: Theme.knob[3], label: "PAN", value: t.pan, range: -64...63, stepperStep: 4,
                      shown: "\(t.pan)", spoken: t.pan == 0 ? "centre" : t.pan < 0 ? "\(-t.pan) left" : "\(t.pan) right",
-                     bipolar: true) { session.set(track: k, param: Param.pan, to: $0) },
+                     bipolar: true, defaultValue: 0) { session.set(track: k, param: Param.pan, to: $0) },
         ]
     }
 }
 
-/// A held knob: the grown ring sits at `center`, just above the knob and fully on screen (drawn by
-/// GrownKnobLayer over everything).
+/// A knob being turned (Shape marks it): its id; `center` is where the finger started.
 struct KnobGrab: Equatable {
     var id: String
     var center: CGPoint
@@ -69,86 +73,99 @@ struct KnobRow: View {
     }
 }
 
-/// Touch a knob and a big ring appears around the finger (moved only as far as it must to stay on
-/// screen); turn it by tracing round, clockwise for up. The turn is relative: the value moves by how
-/// far the finger goes round and never jumps to where it lands, so touching never changes a value.
-/// Works at any screen edge, which a vertical slide from the bottom row didn't. A quick tap without
-/// moving opens − / + keys (WCAG 2.2, 2.5.7: a way in without dragging).
+/// The feel shared by the knob and its big control: a light tick at the ends and, on a knob centred on zero,
+/// at the centre; a change clamped to the range.
+enum KnobFeel {
+    static func clamp(_ v: Int, _ s: KnobSpec) -> Int { min(max(v, s.range.lowerBound), s.range.upperBound) }
+    /// Whether going from `a` to `b` reaches an end or crosses the centre.
+    static func ticks(_ a: Int, _ b: Int, _ s: KnobSpec) -> Bool {
+        guard a != b else { return false }
+        if b == s.range.lowerBound || b == s.range.upperBound { return true }
+        guard s.bipolar, s.range.contains(0) else { return false }
+        return (a < 0) != (b < 0) || b == 0
+    }
+}
+
+/// Drag straight on the knob, no hold first: up raises, down lowers, the whole range in about 200 pt; the
+/// further the finger has gone sideways, the finer the turn (the iPad synths' way). A tap opens a big control at
+/// the finger (an arc or a slider, Developer › Knob tap; a list for a parameter of named choices); a double-tap
+/// puts the parameter's default back (from DESC). Light ticks at the ends and a centred knob's middle.
 struct KnobControl: View {
     let ui: EditorUI
     var size: CGFloat = 40
-    /// Builds the knob's description each time, so the grown ring shows live values.
+    /// The page around it (Shape), told on any touch: touching a knob makes its page the active one (on the FM-1
+    /// too when linked), and the knob works at once (a first tap that only activated looked dead, 2026-11-05).
+    var activate: (() -> Bool)? = nil
+    /// Builds the knob's description each time, so it shows live values.
     let make: () -> KnobSpec
     @State private var startValue = 0
-    @State private var turned = 0.0           // in value units since the grab
-    @State private var lastAngle: Double?
-    @State private var showKeys = false
+    @State private var turned = 0.0           // in value units since the drag began
+    @State private var last: CGPoint?
+    @State private var dragging = false
+    @State private var tick = 0
     @GestureState private var holding = false   // resets even when the system cancels the touch
-    @State private var touchStart = Date()
-    @Environment(\.canvasSize) private var canvas
-    @Environment(\.look) private var look
 
-    static let ringRadius: CGFloat = 80
-    static let discRadius: CGFloat = 102      // the lifted disc around the ring
+    /// Points of travel for the whole range, straight up.
+    static let travel = 200.0
 
     var body: some View {
         let spec = make()
-        let turn = DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
+        let drag = DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .updating($holding) { _, state, _ in state = true }
-            .onChanged { drag in
-                if ui.knobGrab?.id != spec.id {
-                    let edge = Self.discRadius + 4
-                    let c = CGPoint(x: min(max(drag.startLocation.x, edge), canvas.width - edge),
-                                    y: min(max(drag.startLocation.y, edge), canvas.height - edge))
-                    ui.knobGrab = KnobGrab(id: spec.id, center: c)
-                    ui.grabbedSpec = make
-                    startValue = spec.value; turned = 0; lastAngle = nil; touchStart = drag.time
+            .onChanged { v in
+                if !dragging {
+                    guard hypot(v.translation.width, v.translation.height) > 4 else { return }
+                    dragging = true
+                    _ = activate?()
+                    startValue = spec.value; turned = 0; last = v.location
+                    ui.knobGrab = KnobGrab(id: spec.id, center: v.startLocation)
                 }
-                guard let c = ui.knobGrab?.center else { return }
-                let dx = drag.location.x - c.x, dy = drag.location.y - c.y
-                guard hypot(dx, dy) > 24 else { lastAngle = nil; return }      // too near the middle to read a direction
-                let angle = atan2(Double(dx), Double(-dy)) * 180 / .pi         // 0 = up, clockwise positive
-                if let last = lastAngle {
-                    var d = angle - last
-                    if d > 180 { d -= 360 } else if d < -180 { d += 360 }
-                    let span = Double(spec.range.upperBound - spec.range.lowerBound)
-                    turned += d / 270 * span                                    // a full sweep = the knob's 270°
-                    turned = min(max(turned, Double(spec.range.lowerBound - startValue)), Double(spec.range.upperBound - startValue))
-                    let v = startValue + Int(turned.rounded())
-                    if v != spec.value { spec.set(v) }
-                }
-                lastAngle = angle
+                guard let l = last else { return }
+                let span = Double(spec.range.upperBound - spec.range.lowerBound)
+                let fine = 1 / (1 + abs(Double(v.location.x - v.startLocation.x)) / 60)
+                turned += Double(l.y - v.location.y) / Self.travel * span * fine
+                turned = min(max(turned, Double(spec.range.lowerBound - startValue)), Double(spec.range.upperBound - startValue))
+                change(spec, to: startValue + Int(turned.rounded()))
+                last = v.location
             }
-            .onEnded { drag in
-                ui.knobGrab = nil; lastAngle = nil
-                // a tap: barely moved and quick
-                if hypot(drag.translation.width, drag.translation.height) < 8, drag.time.timeIntervalSince(touchStart) < 0.35 {
-                    showKeys = true
-                }
+            .onEnded { _ in
+                dragging = false; last = nil
+                if ui.knobGrab?.id == spec.id { ui.knobGrab = nil }
             }
 
         KnobDial(spec: spec, size: size)
-            .opacity(ui.knobGrab?.id == spec.id ? 0.3 : 1)
             .contentShape(Rectangle())
-            .gesture(turn)
-            .onChange(of: holding) { _, h in if !h, ui.knobGrab?.id == spec.id { ui.knobGrab = nil; lastAngle = nil } }
-            .popover(isPresented: $showKeys, arrowEdge: .top) {
-                VStack(spacing: 8) {
-                    Text(spec.label).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    StepperKeys(label: spec.label.capitalized, value: spec.value, range: spec.range, step: spec.stepperStep,
-                                format: { _ in spec.shown }) { spec.set($0) }
-                }
-                .padding(16)
-                .presentationBackground(look.flat ? look.surface(.held) : Theme.panelTop)
-                .presentationCompactAdaptation(.popover)
+            // taps as SwiftUI tells them apart (a drag's end never comes for a plain tap in the page's scroll view):
+            // a double-tap puts the default back, one alone opens the big control at the finger
+            .onTapGesture(count: 2) {
+                _ = activate?()
+                if let d = spec.defaultValue { change(spec, to: d) }
             }
+            .onTapGesture(coordinateSpace: .global) { at in
+                _ = activate?()
+                ui.knobPanelSpec = make
+                ui.knobPanelAt = at
+            }
+            .simultaneousGesture(drag)
+            .onChange(of: holding) { _, h in
+                if !h { dragging = false; last = nil; if ui.knobGrab?.id == spec.id { ui.knobGrab = nil } }
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: tick)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spec.label.capitalized)
             .accessibilityValue(spec.spoken)
             .accessibilityAdjustableAction { dir in
-                let d = dir == .increment ? spec.stepperStep : -spec.stepperStep
-                spec.set(min(max(spec.value + d, spec.range.lowerBound), spec.range.upperBound))
+                change(spec, to: spec.value + (dir == .increment ? spec.stepperStep : -spec.stepperStep))
             }
+            .accessibilityAction(named: "Open") { ui.knobPanelSpec = make; ui.knobPanelAt = .zero }
+            .accessibilityAction(named: "Reset to default") { if let d = spec.defaultValue { change(spec, to: d) } }
+    }
+
+    private func change(_ spec: KnobSpec, to v: Int) {
+        let n = KnobFeel.clamp(v, spec)
+        guard n != spec.value else { return }
+        if KnobFeel.ticks(spec.value, n, spec) { tick += 1 }
+        spec.set(n)
     }
 }
 
@@ -198,55 +215,4 @@ func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: 
                                                             startRadius: 0, endRadius: cap * 1.5))
     ctx.stroke(Path(ellipseIn: capRect.insetBy(dx: 0.5, dy: 0.5)), with: .color(.white.opacity(0.12)), lineWidth: 1)
     ctx.stroke(needle, with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-}
-
-/// The grown ring of a held knob, drawn over the whole page: trace it to turn. The value sits in the
-/// middle; a handle on the ring marks the setting, where the needle would point.
-struct GrownKnobLayer: View {
-    let session: DeviceSession
-    let ui: EditorUI
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.look) private var look
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            if let g = ui.knobGrab, let make = ui.grabbedSpec {
-                let spec = make()
-                let r: CGFloat = 80
-                ZStack {
-                    // a lifted disc: it is being held, so it is raised off the panel
-                    // flat: elevation 3, as anything held at the finger
-                    LookChoice {
-                        Circle()
-                            .fill(LinearGradient(colors: [Theme.panelTop, Theme.panelBottom], startPoint: .top, endPoint: .bottom))
-                            .overlay(Circle().inset(by: 0.5).stroke(.white.opacity(0.06), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.55), radius: 2, y: 2)
-                            .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
-                    } flat: {
-                        Circle().fill(look.surface(.held)).elevationShadow(.held, look)
-                    }
-                    .frame(width: r * 2 + 44, height: r * 2 + 44)
-                    Canvas { ctx, sz in
-                        drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: r, line: 12, cap: 0)
-                        let a = (-135 + 270 * min(max(spec.fraction, 0), 1)) * .pi / 180
-                        let p = CGPoint(x: sz.width / 2 + r * sin(a), y: sz.height / 2 - r * cos(a))
-                        let handle = CGRect(x: p.x - 11, y: p.y - 11, width: 22, height: 22)
-                        ctx.fill(Path(ellipseIn: handle.offsetBy(dx: 0, dy: 1)), with: .color(.black.opacity(0.5)))
-                        ctx.fill(Path(ellipseIn: handle), with: .color(Theme.text))
-                    }
-                    .frame(width: r * 2 + 30, height: r * 2 + 30)
-                    VStack(spacing: 0) {
-                        Text(spec.shown).font(.system(size: 30, weight: .semibold))
-                        Text(spec.label).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    }
-                }
-                .position(g.center)
-                .transition(reduceMotion ? .opacity : .scale(scale: 0.3).combined(with: .opacity))
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.knobGrab?.id)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
 }

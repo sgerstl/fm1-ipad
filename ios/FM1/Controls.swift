@@ -171,6 +171,7 @@ struct PressSink: ButtonStyle {
 /// of the connection menu on the iPad and the ⋯ menu on the phone, the app's only settings menus.
 struct DeveloperMenu: View {
     @AppStorage(Look.styleKey) private var style = LookStyle.flat
+    @AppStorage(KnobTapStyle.key) private var knobTap = KnobTapStyle.arc
     @Environment(FirmwareCentre.self) private var firmware
 
     var body: some View {
@@ -180,6 +181,10 @@ struct DeveloperMenu: View {
             Picker("Look", selection: $style) {
                 Text("Flat").tag(LookStyle.flat)
                 Text("Physical").tag(LookStyle.physical)
+            }
+            Picker("Knob tap", selection: $knobTap) {
+                Text("Arc").tag(KnobTapStyle.arc)
+                Text("Slider").tag(KnobTapStyle.slider)
             }
         }
         #endif

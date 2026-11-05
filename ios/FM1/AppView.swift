@@ -63,7 +63,7 @@ struct AppView: View {
         .overlay(alignment: .bottom) { undoToast }
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }
-        .overlay { GrownKnobLayer(session: session, ui: ui) }
+        .overlay { KnobPanelLayer(ui: ui) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
         .font(.system(size: 15))

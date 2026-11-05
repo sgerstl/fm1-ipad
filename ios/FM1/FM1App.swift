@@ -103,7 +103,9 @@ final class EditorUI {
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
-    @ObservationIgnored var grabbedSpec: (() -> KnobSpec)?
+    /// A knob's big control, open under this point (global; .zero: VoiceOver's "Open", centred).
+    var knobPanelAt: CGPoint?
+    @ObservationIgnored var knobPanelSpec: (() -> KnobSpec)?
     var soundFamily: SoundFamily = .fx
     var keyboardOpen = false
     /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there.

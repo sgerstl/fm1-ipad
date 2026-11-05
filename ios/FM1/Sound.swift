@@ -207,7 +207,9 @@ extension KnobSpec {
         let t = session.selectedTrack
         return KnobSpec(id: "s\(scope).\(id)", colour: Theme.knob[slot % 4], label: d?.label ?? "–", value: v,
                         range: lo...hi, stepperStep: max(1, (hi - lo) / 16), shown: f.shown, spoken: f.spoken,
-                        bipolar: d?.format == 2 || d?.format == 15 || (lo < 0 && hi > 0)) { nv in
+                        bipolar: d?.format == 2 || d?.format == 15 || (lo < 0 && hi > 0),
+                        defaultValue: d.map { min(max($0.defaultValue, lo), hi) },
+                        choices: d?.format == 8 && !(d?.names.isEmpty ?? true) ? d?.names : nil) { nv in
             if scope == 0 { session.set(track: t, param: id, to: nv) } else { session.set(global: id, to: nv) }
         }
     }
@@ -313,7 +315,9 @@ struct SoundTab: View {
             HStack(spacing: 0) {
                 ForEach(0..<4, id: \.self) { slot in
                     if let id = p.ids[slot] {
-                        KnobControl(ui: ui, size: 56) { KnobSpec.param(session, scope: p.scope, id: id, slot: slot) }
+                        KnobControl(ui: ui, size: 56, activate: { if !active { activate(p) }; return active }) {
+                            KnobSpec.param(session, scope: p.scope, id: id, slot: slot)
+                        }
                             .padding(6)
                             .background {
                                 if marked == "s\(p.scope).\(id)" {
@@ -341,17 +345,10 @@ struct SoundTab: View {
                 .accessibilityHidden(true)
         }
         .accessibilityValue(onDevice ? "on the FM-1" : "")
-        // an inactive page takes the first tap anywhere on it, knobs included, and becomes the active one
-        // (on the FM-1 too); then its knobs work. A tap meant for the page kept landing on a knob and
-        // opening its − / + keys (2026-11-03). VoiceOver reaches the knobs directly, as before.
-        .overlay {
-            if !active {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { activate(p) }
-                    .accessibilityHidden(true)
-            }
-        }
+        // a tap anywhere on an inactive page makes it the active one (on the FM-1 too); touching a knob does as well,
+        // and the knob works at once (2026-11-05: the overlay that took a knob's first tap is gone)
+        .contentShape(Rectangle())
+        .onTapGesture { if !active { activate(p) } }
         .accessibilityAction(named: "Show on the FM-1") { activate(p) }
         .id(p.id)
     }
