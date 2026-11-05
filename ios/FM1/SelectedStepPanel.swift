@@ -19,9 +19,9 @@ struct SelectedStepPanel: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            if session.isDrums(t) {
-                drumDetails(session.tracks[t].drumSteps[i], part: 0)
-                drumDetails(session.tracks[t].drumSteps[i], part: 1)
+            if session.isKit(t) {
+                drumDetails(session.tracks[t].gridSteps[i], part: 0)
+                drumDetails(session.tracks[t].gridSteps[i], part: 1)
             } else {
                 synthDetails(session.tracks[t].steps[i], track: t, part: 0)
                 synthDetails(session.tracks[t].steps[i], track: t, part: 1)
@@ -106,7 +106,11 @@ struct SelectedStepPanel: View {
 
     @ViewBuilder private func drumDetails(_ s: DrumStep, part: Int) -> some View {
         let lane = ui.selectedLane
-        let i = ui.selectedStep[session.drumTrack ?? 0]
+        let i = ui.selectedStep[session.kitTrack ?? 0]
+        let names = session.drumLanes
+        let laneName = names[safe: lane] ?? "Lane \(lane + 1)"
+        // Skiff keeps a hit accented or not, and one ratchet for the whole step
+        let accents = session.drumLevelsAreAccents
         let has = s.has(lane)
         if part == 0 {
         VStack(alignment: .leading, spacing: 16) {
@@ -114,22 +118,29 @@ struct SelectedStepPanel: View {
         // that was here repeated the grid's column, 2026-11-02)
         field("Editing") {
             VStack(alignment: .leading, spacing: 6) {
-                readout(has ? "\(Music.drumLanes[lane]) · step \(i + 1)" : "No \(Music.drumLanes[lane].lowercased()) on step \(i + 1)", dim: !has)
+                readout(has ? "\(laneName) · step \(i + 1)" : "No \(laneName.lowercased()) on step \(i + 1)", dim: !has)
                 Text(has ? "Tap a lane name to edit another hit." : "Tap the grid to add one, or a lane name to pick another.")
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        field("\(Music.drumLanes[lane]) level") {
-            SegmentedKeys(label: "\(Music.drumLanes[lane]) level", options: Music.levelNames, selected: has ? s.level(lane) : -1,
-                          enabled: Array(repeating: has, count: 4)) { k in
-                session.write(drumIndex: i, s.setting(lane, on: true, level: k, ratchet: s.ratchet(lane)))
+        field("\(laneName) level") {
+            if accents {
+                SegmentedKeys(label: "\(laneName) level", options: ["Normal", "Accent"], selected: has ? (s.level(lane) == 3 ? 1 : 0) : -1,
+                              enabled: [has, has]) { k in
+                    session.write(drumIndex: i, s.setting(lane, on: true, level: k == 1 ? 3 : 0, ratchet: s.ratchet(lane)))
+                }
+            } else {
+                SegmentedKeys(label: "\(laneName) level", options: Music.levelNames, selected: has ? s.level(lane) : -1,
+                              enabled: Array(repeating: has, count: 4)) { k in
+                    session.write(drumIndex: i, s.setting(lane, on: true, level: k, ratchet: s.ratchet(lane)))
+                }
             }
         }
         }
         } else {
-        field("\(Music.drumLanes[lane]) ratchet") {
-            SegmentedKeys(label: "\(Music.drumLanes[lane]) ratchet", options: ["×1", "×2", "×3", "×4"], selected: has ? s.ratchet(lane) : -1,
+        field(accents ? "Step ratchet (all its hits)" : "\(laneName) ratchet") {
+            SegmentedKeys(label: accents ? "Step ratchet" : "\(laneName) ratchet", options: ["×1", "×2", "×3", "×4"], selected: has ? s.ratchet(lane) : -1,
                           enabled: Array(repeating: has, count: 4), minWidth: 36) { k in
                 session.write(drumIndex: i, s.setting(lane, on: true, level: s.level(lane), ratchet: k))
             }

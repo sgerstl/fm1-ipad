@@ -376,6 +376,41 @@ public struct SynthStep: Equatable, Sendable {
     }
 }
 
+// Skiff's lane hits (EDITOR_PROTOCOL.md "v5: the drum grid"): after the velocity, `hit & 127`, `acc & 127`,
+// `(hit >> 7) | (acc >> 7) << 1`, then the chance and the step's ratchet 1...4. As a DrumStep: a lane on,
+// an accented hit at level 3 (hard), the step's ratchet on each lane.
+extension SynthStep {
+    public var hits: DrumStep {
+        guard extra.count >= 3 else { return .empty }
+        let hit = Int(extra[0]) | (Int(extra[2]) & 1) << 7, acc = Int(extra[1]) | (Int(extra[2]) >> 1 & 1) << 7
+        let rat = extra.count >= 5 ? max(0, min(3, Int(extra[4]) - 1)) : 0
+        var d = DrumStep.empty
+        for l in 0..<8 where hit >> l & 1 == 1 { d = d.setting(l, on: true, level: acc >> l & 1 == 1 ? 3 : 0, ratchet: rat) }
+        return d
+    }
+
+    /// The step with these lanes as its hits; a step with hits plays them as a NOTE (a TIE or a REST plays
+    /// none), and one with neither hits nor notes goes back to a rest. A lane's ratchet is the step's.
+    public func withHits(_ d: DrumStep) -> SynthStep {
+        var s = self
+        var hit = 0, acc = 0, rat = 0
+        for l in 0..<8 where d.has(l) {
+            hit |= 1 << l
+            if d.level(l) == 3 { acc |= 1 << l }
+            rat = max(rat, d.ratchet(l))
+        }
+        var x = extra
+        if x.count < 3 { x = [0, 0, 0] }
+        x[0] = UInt8(hit & 127); x[1] = UInt8(acc & 127); x[2] = UInt8(hit >> 7 | (acc >> 7) << 1)
+        if x.count >= 5 { x[4] = UInt8(rat + 1) }
+        s.extra = x
+        if hit != 0, s.time != .note { s.time = .note; s.velocity = s.velocity > 0 ? s.velocity : 100 }
+        if hit == 0, s.notes.isEmpty, s.time == .note { s.time = .rest }
+        if !s.notes.isEmpty || hit != 0 { s.ratchets = Array(repeating: rat, count: s.notes.count) }
+        return s
+    }
+}
+
 public struct TrackStepReply: Equatable, Sendable {
     public var track: Int, index: Int, step: SynthStep
     public init(_ body: [UInt8]) throws {

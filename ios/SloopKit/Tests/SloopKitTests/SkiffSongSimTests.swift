@@ -134,4 +134,23 @@ import Testing
         await s.refresh(pool: true)
         #expect(s.song!.tracks[5].used == 0)
     }
+
+    /// A lane on a kit track: written as the step's hit bytes, read back from the sim.
+    @Test func kitLaneRoundTrips() async throws {
+        let d = try await driver()
+        let names = d.info.engines
+        let tracks = try await d.tracks()
+        guard let t = tracks.tracks.indices.first(where: { ["DRUM", "DRUM-X"].contains(names[safe: tracks.tracks[$0].engine] ?? "") }) else {
+            print("no kit track on the sim"); await d.close(); return
+        }
+        let before = try await d.synthStep(track: t, index: 62)
+        let on = before.withHits(before.hits.setting(4, on: true, level: 3))      // an accented open hat
+        let got = try await d.setSynthStep(track: t, index: 62, on)
+        print("kit T\(t + 1) step 63:", got.extra.prefix(5).map { $0 })
+        #expect(got.hits.has(4) && got.hits.level(4) == 3 && got.time == .note)
+        _ = try await d.setSynthStep(track: t, index: 62, before)
+        #expect(try await d.synthStep(track: t, index: 62).hits == before.hits)
+        await d.close()
+    }
 }
+

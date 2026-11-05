@@ -363,7 +363,7 @@ struct SequencerPage: View {
                 // first, facing away, then the card turns (inserted already turned, it just appeared)
                 ZStack {
                     Group {
-                        if session.isDrums(t) {
+                        if session.isKit(t) {
                             DrumGrid(session: session, ui: ui)
                         } else {
                             PianoRoll(session: session, ui: ui, track: t)

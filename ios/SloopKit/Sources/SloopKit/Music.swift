@@ -127,6 +127,9 @@ public enum Music {
     /// The GM note SLOOP plays each drum lane from (drums.c LANE_NOTE).
     public static let laneNotes = [36, 35, 38, 39, 42, 46, 44, 37, 40, 43, 48, 49, 51, 70, 63, 56]
     public static let levelNames = ["Normal", "Ghost", "Soft", "Hard"]
+    /// Skiff's drum grid: 8 lanes and the GM note each plays (EDITOR_PROTOCOL.md "v5: the drum grid").
+    public static let skiffDrumLanes = ["Kick", "Snare", "Clap", "Hat", "Open hat", "Tom", "Rim", "Bell"]
+    public static let skiffLaneNotes = [36, 38, 39, 42, 46, 45, 37, 56]
 
     /// P_SDIV: a step's length in beats.
     public static let divisionBeats: [Double] = [1, 0.5, 0.25, 0.125, 1.0 / 3, 1.0 / 6, 2, 4, 8]

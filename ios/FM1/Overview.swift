@@ -15,8 +15,17 @@ struct Overview: View {
     @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let rowHeight: CGFloat = 44
     static let height: CGFloat = 204                     // 8 + 4 × 44 + 3 × 4 + 8
+    /// Rows share the box's height: four at 44 pt; more (Skiff's six) thinner, in the same space, since the
+    /// box is for reading and a tap on a row selects its track (Scott, 2026-11-05). Six: about 30 pt.
+    static func rowGap(_ n: Int) -> CGFloat { n <= 4 ? 4 : 2 }
+    static func rowHeight(_ n: Int) -> CGFloat {
+        n <= 4 ? 44 : (height - 16 - CGFloat(n - 1) * rowGap(n)) / CGFloat(n)
+    }
+    /// A timeline cell's height: 20 pt in a 44 pt row, 16 in the thinner ones.
+    static func cellHeight(_ n: Int) -> CGFloat { n <= 4 ? cell.height : 16 }
+    private var rowHeight: CGFloat { Self.rowHeight(session.trackCount) }
+    private var cellHeight: CGFloat { Self.cellHeight(session.trackCount) }
     static let boxWidth: CGFloat = 320                   // the chips-and-names box = the left column
     static let fullWidth: CGFloat = Theme.canvas.width - 48
     static let gap: CGFloat = 2
@@ -38,7 +47,7 @@ struct Overview: View {
     private var progress: CGFloat { (visible - Self.boxWidth) / (Self.fullWidth - Self.boxWidth) }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: Self.rowGap(session.trackCount)) {
             ForEach(session.trackIndices, id: \.self) { t in row(t) }
         }
         .frame(width: visible - 8, alignment: .leading)
@@ -101,7 +110,7 @@ struct Overview: View {
                 selected || muteOnly ? session.toggleMute(track: t) : session.select(track: t)
             } label: {
                 TrackChip(track: t, muted: track.mute, selected: selected)
-                    .frame(width: 44, height: Self.rowHeight)
+                    .frame(width: 44, height: rowHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressSink(latched: track.mute))
@@ -127,7 +136,7 @@ struct Overview: View {
             })
             timeline(t, track: track, selected: selected, muteOnly: muteOnly)
         }
-        .frame(width: Self.rowWidth, height: Self.rowHeight, alignment: .leading)
+        .frame(width: Self.rowWidth, height: rowHeight, alignment: .leading)
         .background(alignment: .leading) {
             let raised = ui.trackMenu?.track == t
             RoundedRectangle(cornerRadius: 10)
@@ -156,7 +165,7 @@ struct Overview: View {
             Spacer(minLength: 0)
         }
         .padding(.trailing, 14)                     // clear of the timeline's pull
-        .frame(width: Self.boxWidth - 8 - 44 - 4, height: Self.rowHeight, alignment: .leading)
+        .frame(width: Self.boxWidth - 8 - 44 - 4, height: rowHeight, alignment: .leading)
         .padding(.leading, 4)
         .contentShape(Rectangle())
     }
@@ -167,17 +176,17 @@ struct Overview: View {
     private func timeline(_ t: Int, track: TrackState, selected: Bool, muteOnly: Bool) -> some View {
         let onSequence = ui.page == .sequencer
         let strip = Canvas { ctx, _ in draw(ctx, track) }
-            .frame(width: Self.timelineWidth - 6, height: Self.cell.height)
+            .frame(width: Self.timelineWidth - 6, height: cellHeight)
             // the playhead is taller than the cells: as an overlay it can't shift them off centre
-            .overlay(alignment: .leading) { OverviewPlayhead(session: session, track: t, running: progress > 0) }
-            .overlay(alignment: .leading) { if onSequence && selected { ViewBox(ui: ui) } }
+            .overlay(alignment: .leading) { OverviewPlayhead(session: session, track: t, running: progress > 0, height: cellHeight) }
+            .overlay(alignment: .leading) { if onSequence && selected { ViewBox(ui: ui, height: cellHeight) } }
             .padding(3)
             // a flat, even well: the deep inset shadow of the bigger wells made the cells read high on
             // a strip this thin; read-only, so nothing here looks raised
             .background(RoundedRectangle(cornerRadius: 5).fill(Theme.well)
                 .overlay { if !look.flat { RoundedRectangle(cornerRadius: 5).strokeBorder(.black.opacity(0.5), lineWidth: 1) } })
             .opacity(Double(progress) * (track.mute ? 0.45 : 1))
-            .frame(height: Self.rowHeight)
+            .frame(height: rowHeight)
         if !expanded {
             strip.allowsHitTesting(false).accessibilityHidden(true)
         } else if onSequence {
@@ -245,7 +254,7 @@ struct Overview: View {
     }
 
     private func draw(_ ctx: GraphicsContext, _ track: TrackState) {
-        let w = Self.cell.width, h = Self.cell.height
+        let w = Self.cell.width, h = cellHeight
         for i in track.steps.indices {
             let r = CGRect(x: CGFloat(i) * (w + Self.gap), y: 0, width: w, height: h)
             let p = Path(roundedRect: r, cornerRadius: 3)
@@ -264,11 +273,12 @@ struct Overview: View {
 /// pans, so it can sit between bars mid-pan.
 private struct ViewBox: View {
     let ui: EditorUI
+    var height = Overview.cell.height
     var body: some View {
         let pitch = Overview.cell.width + Overview.gap
         RoundedRectangle(cornerRadius: 5)
             .strokeBorder(Theme.text, lineWidth: 2)
-            .frame(width: 16 * pitch + 4, height: Overview.cell.height + 10)
+            .frame(width: 16 * pitch + 4, height: height + 10)
             .offset(x: max(0, min(48, ui.viewStep)) * pitch - 3)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -280,6 +290,7 @@ private struct OverviewPlayhead: View {
     let session: DeviceSession
     let track: Int
     var running = true
+    var height = Overview.cell.height
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -288,7 +299,7 @@ private struct OverviewPlayhead: View {
             let pitch = Overview.cell.width + Overview.gap
             Capsule()
                 .fill(Theme.text)
-                .frame(width: 2, height: Overview.cell.height + 10)
+                .frame(width: 2, height: height + 10)
                 .glow(Theme.text.opacity(0.5), radius: 3)
                 .offset(x: CGFloat(pos) * pitch - 1)
                 .opacity(session.playing ? 1 : 0)

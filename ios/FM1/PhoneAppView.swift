@@ -277,7 +277,7 @@ struct PhoneSequence: View {
                 .frame(height: 28)
             Group {
                 if width > 100, gridArea.height > 100 {
-                    if session.isDrums(t) {
+                    if session.isKit(t) {
                         PhoneDrumGrid(session: session, ui: ui, height: gridArea.height)
                     } else {
                         PhonePianoRoll(session: session, ui: ui, track: t, velocity: velocity, height: gridArea.height)
@@ -436,8 +436,8 @@ struct PhoneDrumGrid: View {
         let h = height
         HStack(alignment: .top, spacing: 2) {
                 VStack(spacing: 0) {
-                    ForEach(0..<16, id: \.self) { l in
-                        AuditionLabel(text: Music.drumLanes[l], spoken: Music.drumLanes[l], bold: l == ui.selectedLane,
+                    ForEach(session.drumLanes.indices, id: \.self) { l in
+                        AuditionLabel(text: session.drumLanes[l], spoken: session.drumLanes[l], bold: l == ui.selectedLane,
                                       select: { ui.selectedLane = l },
                                       down: { session.keyDown(l) }, up: { session.keyUp(l) })
                     }
@@ -446,10 +446,10 @@ struct PhoneDrumGrid: View {
                 .frame(width: grid.labelWidth, height: h, alignment: .top)
                 .clipped()
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: grid.drumContentSize, offset: $offset, request: request, snapX: grid.barWidth) {
+                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth) {
                         DrumGridContent(grid: grid, look: look, session: session, ui: ui)
                     }
-                    EditorPlayhead(session: session, track: session.drumTrack ?? 0, offsetX: offset.x, height: h)
+                    EditorPlayhead(session: session, track: session.kitTrack ?? 0, offsetX: offset.x, height: h)
                 }
                 .frame(width: grid.barWidth, height: h)
                 .clipShape(RoundedRectangle(cornerRadius: 8))

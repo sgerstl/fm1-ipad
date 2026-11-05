@@ -154,6 +154,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         var b: [UInt8] = [UInt8(n)] + (0..<4).map { $0 < n ? UInt8(s.notes[$0] & 0x7F) : 0 }
         // velocity 0 is Skiff's "as designed" (it plays 96): an empty step holds it
         b += [UInt8(s.time.rawValue), UInt8((s.accent ? 1 : 0) | (s.slide ? 2 : 0)), UInt8(min(max(s.velocity, 0), 127))]
+        if s.extra.count >= 3, s.extra.count < 5 { return b + s.extra.prefix(3) }     // hits only: the rest kept
         guard s.extra.count >= 5 else { return b }
         var x = s.extra
         x[4] = UInt8(min(max((s.ratchets.first ?? Int(x[4]) - 1) + 1, 1), 4))

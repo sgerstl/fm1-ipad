@@ -1,15 +1,17 @@
 import SloopKit
 import SwiftUI
 
-/// The drum track: 16 lanes by 64 steps, 12 lanes and one bar in view, two fingers pan (settling on a
-/// bar), or move the view box on the timeline.
+/// The drum track: 16 lanes (Skiff: 8) by 64 steps, 12 lanes and one bar in view, two fingers pan
+/// (settling on a bar), or move the view box on the timeline. On Skiff it's any track on a kit engine,
+/// its lanes the hits each step carries.
 struct DrumGrid: View {
     @Environment(\.grid) private var grid
     @Environment(\.look) private var look
     let session: DeviceSession
     let ui: EditorUI
-    /// The drum track (SLOOP's track 4): this grid is shown only on firmware that has one.
-    private var dt: Int { session.drumTrack ?? 0 }
+    /// The drum track (SLOOP's track 4), or the selected kit track on Skiff.
+    private var dt: Int { session.kitTrack ?? 0 }
+    private var lanes: [String] { session.drumLanes }
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<DrumGridContent>.ScrollRequest?
 
@@ -20,19 +22,19 @@ struct DrumGrid: View {
         let t = session.tracks[dt]
         let first = Int((offset.x / grid.stepWidth).rounded()) + 1
         let topLane = Int((offset.y / grid.rowHeight).rounded())
-        let below = max(0, 16 - topLane - 12)      // 12 whole lanes in view
+        let below = max(0, lanes.count - topLane - 12)      // 12 whole lanes in view
 
         VStack(spacing: 8) {
             EditorHeader(track: dt, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
-                         detail: "16 lanes · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+                         detail: "\(lanes.count) lanes · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
             StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[dt]) { ui.selectedStep[dt] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
                 VStack(spacing: 0) {
-                    ForEach(0..<16, id: \.self) { l in
-                        AuditionLabel(text: Music.drumLanes[l], spoken: Music.drumLanes[l], bold: l == ui.selectedLane,
+                    ForEach(lanes.indices, id: \.self) { l in
+                        AuditionLabel(text: lanes[l], spoken: lanes[l], bold: l == ui.selectedLane,
                                       select: { ui.selectedLane = l },
                                       down: { session.keyDown(l) }, up: { session.keyUp(l) })
                     }
@@ -42,7 +44,7 @@ struct DrumGrid: View {
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: grid.drumContentSize, offset: $offset, request: request, snapX: grid.barWidth) {
+                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(lanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth) {
                         DrumGridContent(grid: grid, look: look, session: session, ui: ui)
                     }
                     EditorPlayhead(session: session, track: dt, offsetX: offset.x, height: Self.gridHeight)
@@ -74,8 +76,10 @@ struct DrumGridContent: View {
     var look = Look()
     let session: DeviceSession
     let ui: EditorUI
-    /// The drum track (SLOOP's track 4): this grid is shown only on firmware that has one.
-    private var dt: Int { session.drumTrack ?? 0 }
+    /// The drum track (SLOOP's track 4), or the selected kit track on Skiff.
+    private var dt: Int { session.kitTrack ?? 0 }
+    private var lanes: [String] { session.drumLanes }
+    private var contentHeight: CGFloat { CGFloat(lanes.count) * grid.rowHeight }
     @State private var paintOn: Bool?          // a slide: lighting (true) or clearing (false) its lane
     @State private var painted: Set<Int> = []
 
@@ -83,14 +87,14 @@ struct DrumGridContent: View {
         let t = session.tracks[dt]
         let selected = ui.selectedStep[dt]
         ZStack(alignment: .topLeading) {
-            WideCanvas(width: grid.drumContentSize.width, height: grid.drumContentSize.height, barWidth: grid.barWidth) { ctx, size in
+            WideCanvas(width: grid.drumContentSize.width, height: contentHeight, barWidth: grid.barWidth) { ctx, size in
                 draw(ctx, size, t, selected, ui.selectedLane)
             }
                 .contentShape(Rectangle())
                 .gesture(paint.exclusively(before: SpatialTapGesture().onEnded { e in
                     // a tap turns that hit on or off, and selects it
                     let i = max(0, min(session.stepCount - 1, Int(e.location.x / grid.stepWidth)))
-                    let l = max(0, min(15, Int(e.location.y / grid.rowHeight)))
+                    let l = max(0, min(lanes.count - 1, Int(e.location.y / grid.rowHeight)))
                     ui.selectedStep[dt] = i
                     ui.selectedLane = l
                     session.toggle(drumIndex: i, lane: l)
@@ -99,14 +103,14 @@ struct DrumGridContent: View {
             HStack(spacing: 0) {
                 ForEach(session.stepIndices, id: \.self) { i in
                     Color.clear
-                        .frame(width: grid.stepWidth, height: grid.drumContentSize.height)
+                        .frame(width: grid.stepWidth, height: contentHeight)
                         .accessibilityElement()
-                        .accessibilityLabel(StepLabels.drums(index: i, t))
+                        .accessibilityLabel(StepLabels.drums(index: i, t, lanes: lanes))
                         .accessibilityAddTraits(i == selected ? [.isButton, .isSelected] : .isButton)
                         .accessibilityAction { ui.selectedStep[dt] = i }
                         .accessibilityActions {
-                            ForEach(0..<16, id: \.self) { l in
-                                Button("\(Music.drumLanes[l]) \(t.drumSteps[i].has(l) ? "off" : "on")") {
+                            ForEach(lanes.indices, id: \.self) { l in
+                                Button("\(lanes[l]) \(t.gridSteps[i].has(l) ? "off" : "on")") {
                                     ui.selectedStep[dt] = i; ui.selectedLane = l
                                     session.toggle(drumIndex: i, lane: l)
                                 }
@@ -123,14 +127,14 @@ struct DrumGridContent: View {
     private var paint: some Gesture {
         DragGesture(minimumDistance: 6)
             .onChanged { e in
-                let l = max(0, min(15, Int(e.startLocation.y / grid.rowHeight)))
+                let l = max(0, min(lanes.count - 1, Int(e.startLocation.y / grid.rowHeight)))
                 let a = max(0, min(63, Int(e.startLocation.x / grid.stepWidth)))
                 let b = max(0, min(63, Int(e.location.x / grid.stepWidth)))
-                if paintOn == nil { paintOn = !session.tracks[dt].drumSteps[a].has(l) }
+                if paintOn == nil { paintOn = !session.tracks[dt].gridSteps[a].has(l) }
                 guard let on = paintOn else { return }
                 for i in min(a, b)...max(a, b) where !painted.contains(i) {
                     painted.insert(i)
-                    if session.tracks[dt].drumSteps[i].has(l) != on { session.toggle(drumIndex: i, lane: l) }
+                    if session.tracks[dt].gridSteps[i].has(l) != on { session.toggle(drumIndex: i, lane: l) }
                 }
                 ui.selectedStep[dt] = b
                 ui.selectedLane = l
@@ -140,10 +144,11 @@ struct DrumGridContent: View {
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize, _ t: TrackState, _ selected: Int, _ lane: Int) {
         let w = grid.stepWidth, h = grid.rowHeight
+        let steps = t.gridSteps
         for b in stride(from: 1, to: 16, by: 2) {
             ctx.fill(Path(CGRect(x: CGFloat(b * 4) * w, y: 0, width: 4 * w, height: size.height)), with: .color(.white.opacity(0.025)))
         }
-        for bar in stride(from: 16, to: t.drumSteps.count, by: 16) {
+        for bar in stride(from: 16, to: steps.count, by: 16) {
             ctx.fill(Path(CGRect(x: CGFloat(bar) * w, y: 0, width: 2, height: size.height)), with: .color(Color(hex: 0x34343C)))
         }
         // the selected step's column, lit faintly the whole height
@@ -151,9 +156,9 @@ struct DrumGridContent: View {
         // empty cells: small recessed wells, collected into two paths and filled once each (a fill and a
         // path subtraction per cell cost about a third of the main thread, 2026-11-02)
         var wells = Path(), lips = Path()
-        for i in t.drumSteps.indices {
-            let s = t.drumSteps[i]
-            for l in 0..<16 {
+        for i in steps.indices {
+            let s = steps[i]
+            for l in 0..<lanes.count {
                 let x = CGFloat(i) * w, y = CGFloat(l) * h
                 if s.has(l) {
                     let rect = CGRect(x: x + 4, y: y + 6, width: w - 8, height: h - 12)
@@ -186,8 +191,8 @@ struct DrumGridContent: View {
         // the lip first, the well over it: the 1 pt of lip left showing below each well is its highlight
         if !look.flat { ctx.fill(lips, with: .color(.white.opacity(0.05))) }
         ctx.fill(wells, with: .color(Color(hex: 0x0B0B0D)))
-        if t.length < t.drumSteps.count {
-            ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(t.drumSteps.count - t.length) * w, height: size.height)),
+        if t.length < steps.count {
+            ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(steps.count - t.length) * w, height: size.height)),
                      with: .color(.black.opacity(0.4)))
         }
     }

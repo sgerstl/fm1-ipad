@@ -443,10 +443,10 @@ enum StepLabels {
         return parts.joined(separator: ", ")
     }
 
-    static func drums(index i: Int, _ t: TrackState) -> String {
-        let s = t.drumSteps[i]
+    static func drums(index i: Int, _ t: TrackState, lanes: [String] = Music.drumLanes) -> String {
+        let s = t.gridSteps[i]
         var parts = ["Drums, step \(i + 1)"]
-        parts.append(s.isOn ? "on, " + s.lanes.map { Music.drumLanes[$0] }.joined(separator: ", ") : "off")
+        parts.append(s.isOn ? "on, " + s.lanes.map { lanes[safe: $0] ?? "lane \($0 + 1)" }.joined(separator: ", ") : "off")
         if i >= t.length { parts.append("past the track's length") }
         return parts.joined(separator: ", ")
     }

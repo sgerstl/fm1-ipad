@@ -36,8 +36,11 @@ public struct TrackState: Equatable, Sendable {
     }
 
     public func isOn(_ i: Int) -> Bool {
-        isDrums ? drumSteps[i].isOn : steps[i].isOn || steps[i].time == .tie
+        isDrums ? drumSteps[i].isOn : steps[i].isOn || steps[i].time == .tie || (steps[i].time == .note && steps[i].hits.isOn)
     }
+
+    /// Each step's drum lanes: the drum track's own (SLOOP), else the lane hits a Skiff step carries.
+    public var gridSteps: [DrumStep] { isDrums ? drumSteps : steps.map(\.hits) }
 
     public var displayName: String {
         if isDrums { return presetName.isEmpty ? "Drums" : "Drums · \(presetName.capitalized)" }
@@ -205,6 +208,21 @@ public final class DeviceSession {
     public var drumTrack: Int? { shape.drumTrack }
     public func isDrums(_ t: Int) -> Bool { shape.isDrums(t) }
     public var selectedIsDrums: Bool { shape.isDrums(selectedTrack) }
+
+    /// A track shown as a drum grid: SLOOP's drum track, or on Skiff a track on a kit engine (DRUM,
+    /// DRUM-X), whose steps carry lane hits (Scott, 2026-11-05: as SLOOP's drum track).
+    public func isKit(_ t: Int) -> Bool {
+        if isDrums(t) { return true }
+        guard dialect == .skiff, trackIndices.contains(t), let names = info?.engines,
+              let name = names[safe: tracks[t].engine] else { return false }
+        return name == "DRUM" || name == "DRUM-X"
+    }
+    /// The track the drum grid edits: SLOOP's drum track, or the selected track when it's a kit.
+    public var kitTrack: Int? { drumTrack ?? (isKit(selectedTrack) ? selectedTrack : nil) }
+    /// The drum grid's lanes: SLOOP's 16, or Skiff's 8 (EDITOR_PROTOCOL.md "v5: the drum grid").
+    public var drumLanes: [String] { dialect == .skiff ? Music.skiffDrumLanes : Music.drumLanes }
+    /// Hit levels as the firmware keeps them: SLOOP's four, Skiff's accent or not.
+    public var drumLevelsAreAccents: Bool { dialect == .skiff }
     /// A step's key in the session's bookkeeping (one number per track and step).
     private func stepKey(_ t: Int, _ i: Int) -> Int { t * 256 + i }
 
@@ -1165,6 +1183,7 @@ public final class DeviceSession {
     public func keyDown(_ key: Int, velocity: Int = 100) {
         let note: Int
         if selectedIsDrums { note = drumMapGM ? Music.laneNotes[key % 16] : 36 + key % 16 }
+        else if isKit(selectedTrack) { note = Music.skiffLaneNotes[key % 8] }
         else if let p = pitch(ofKey: key) { note = p } else { return }
         held[key] = note
         driver?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
@@ -1225,6 +1244,11 @@ public final class DeviceSession {
     }
 
     public func write(drumIndex i: Int, _ step: DrumStep) {
+        // Skiff: the lanes are the step's hit bytes, written as the step
+        if drumTrack == nil, let kt = kitTrack {
+            write(track: kt, index: i, tracks[kt].steps[i].withHits(step))
+            return
+        }
         guard let dt = drumTrack else { return }
         tracks[dt].drumSteps[i] = step
         tracksEdited = true
@@ -1285,8 +1309,8 @@ public final class DeviceSession {
     }
 
     public func toggle(drumIndex i: Int, lane: Int) {
-        guard let dt = drumTrack else { return }
-        let d = tracks[dt].drumSteps[i]
+        guard let dt = kitTrack else { return }
+        let d = tracks[dt].gridSteps[i]
         write(drumIndex: i, d.setting(lane, on: !d.has(lane)))
     }
 

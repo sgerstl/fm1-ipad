@@ -143,3 +143,41 @@ import Testing
         run.cancel()
     }
 }
+
+/// Skiff's drum hits on kit tracks (DRUM, DRUM-X): the lane grid from a step's hit bytes, and back.
+@Suite(.serialized) @MainActor struct SkiffKitTests {
+    @Test func hitBytesRoundTrip() {
+        // kick and bell (lane 7) hit, the bell accented; chance 100, ratchet x2
+        var s = SynthStep(notes: [], time: .note, accent: false, slide: false, velocity: 0)
+        s.extra = [0b1, 0, 0b11, 100, 2, 0, 0, 32, 0]           // lane 7's hit and accent ride in the third byte
+        let d = s.hits
+        #expect(d.lanes == [0, 7] && d.level(7) == 3 && d.level(0) == 0 && d.ratchet(0) == 1)
+        let back = s.withHits(d)
+        #expect(back.extra == s.extra && back.time == .note)
+        // clearing every lane of a step without notes makes it a rest; a hit on a rest makes it a note
+        let none = s.withHits(.empty)
+        #expect(none.time == .rest && none.extra.prefix(3) == [0, 0, 0])
+        let one = SynthStep.empty.withHits(DrumStep.empty.setting(3, on: true))
+        #expect(one.time == .note && one.extra == [0b1000, 0, 0] && SkiffDriver.encodeStep(one).count == 11)
+    }
+
+    @Test func kitTracksShowAndWriteTheirLanes() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        defer { run.cancel() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        // the recorded sim: T4 and T6 on DRUM
+        #expect(session.isKit(3) && session.isKit(5) && !session.isKit(0))
+        #expect(session.drumLanes.count == 8 && session.drumTrack == nil)
+        session.select(track: 3)
+        try await waitFor(3) { session.kitTrack == 3 }
+        session.toggle(drumIndex: 5, lane: 1)                 // snare on step 6
+        try await waitFor(3) { fake.steps[3][5].count >= 11 && fake.steps[3][5][8] == 0b10 }
+        #expect(session.tracks[3].gridSteps[5].lanes == [1] && session.tracks[3].isOn(5))
+        session.toggle(drumIndex: 5, lane: 1)
+        try await waitFor(3) { fake.steps[3][5][8] == 0 }
+    }
+}
