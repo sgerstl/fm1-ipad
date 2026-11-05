@@ -73,6 +73,14 @@ enum SkiffCmd {
     static let track: UInt8 = 27, trackStep: UInt8 = 30, trackParam: UInt8 = 31
     static let transport: UInt8 = 76
     static let pool: UInt8 = 78, list2: UInt8 = 82
+    static let menuDesc: UInt8 = 72, menuSet: UInt8 = 73
+}
+
+/// MENU settings the editor protocol can set (editor_menu.c ED_MENU's ids, append-only).
+public enum SkiffMenu {
+    /// MENU > USB LEVEL: 0 MASTER (USB audio follows the MASTER knob), 1 FIXED (USB at the full level, MASTER
+    /// after it: the speaker can go down while the iPad keeps the sound). fx.c fx_usb_fixed.
+    public static let usbLevel = 10
 }
 
 public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
@@ -289,6 +297,32 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
 
     /// REC, as the FM-1's button (TRANSPORT op 4). Sent once: it toggles.
     public func rec() async throws { _ = try await request(SkiffCmd.transport, [4], match: 0, "TRANSPORT REC", retries: 0) }
+
+    // MARK: MENU settings (editor_menu.c)
+
+    /// A MENU setting's value, by its id: MENU_DESC walks the list (index → index, id, kind, value v14, …;
+    /// id 127: the list has ended). nil when this firmware doesn't offer it.
+    public func menuValue(id: Int) async throws -> Int? {
+        for i in 0..<64 {
+            let b = try await request(SkiffCmd.menuDesc, [UInt8(i)], match: 1, "MENU_DESC")
+            guard b.count >= 2, b[1] != 127 else { return nil }
+            if Int(b[1]) == id {
+                guard b.count >= 5 else { throw DecodeError.short(cmd: SkiffCmd.menuDesc) }
+                var r = ByteReader(Array(b[3...]), cmd: SkiffCmd.menuDesc)
+                return try r.v14()
+            }
+        }
+        return nil
+    }
+
+    /// MENU_SET: id, value → rc (0 applied and saved, 1 no such setting, 3 applied but not saved, 4 queued
+    /// until STOP), id, the value the device took.
+    public func setMenu(id: Int, value: Int) async throws -> (rc: Int, value: Int) {
+        let b = try await request(SkiffCmd.menuSet, [UInt8(id)] + Frame.v14(value), match: 0, "MENU_SET", retries: 0)
+        guard b.count >= 4 else { throw DecodeError.short(cmd: SkiffCmd.menuSet) }
+        var r = ByteReader(Array(b[2...]), cmd: SkiffCmd.menuSet)
+        return (Int(b[0]), try r.v14())
+    }
 
     // MARK: The song: lists and the pattern pool (SkiffSong.swift)
 

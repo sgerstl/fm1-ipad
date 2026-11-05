@@ -456,3 +456,43 @@ extension SkiffSongTests {
         run.cancel()
     }
 }
+
+/// Found on the real FM-1 with Skiff 2.2 (2026-11-05): the keyboard, the iPad's sound, each lane's pass.
+@Suite(.serialized) @MainActor struct SkiffOnTheDeviceTests {
+    @Test func theKeyboardPlaysOnTheSelectedTracksChannel() {
+        // Skiff's MIDI IN CH1-6 drops channel 16; track k listens on channel k + 1
+        #expect(DeviceSession.keyChannel(.skiff, track: 0) == 0)
+        #expect(DeviceSession.keyChannel(.skiff, track: 5) == 5)
+        // SLOOP routes channel 16 to the selected track
+        #expect(DeviceSession.keyChannel(.sloop, track: 3) == 15)
+    }
+
+    @Test func passProgressCountsThroughEachPass() {
+        // 4 steps of 1/16 (6 ticks): a pass is 24 ticks
+        var c = CountedPlayhead(tracks: 1)
+        let s = [CountedPlayhead.Settings(length: 4, division: 2)]
+        #expect(c.passProgress(0, at: 0, length: 4) == nil)            // stopped
+        c.start()
+        c.tick(s, globalSwing: 0)                                      // tick 0: step 0
+        #expect(c.passProgress(0, at: 0, length: 4) == 0)
+        for _ in 0..<12 { c.tick(s, globalSwing: 0) }                  // tick 12: step 2
+        #expect(c.passProgress(0, at: 12, length: 4) == 0.5)
+        #expect(abs(c.passProgress(0, at: 15, length: 4)! - 0.625) < 0.001)
+        for _ in 0..<12 { c.tick(s, globalSwing: 0) }                  // tick 24: the next pass
+        #expect(c.passProgress(0, at: 24, length: 4) == 0)
+    }
+
+    @Test func playingThroughTheIPadSetsUSBLevelFixed() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        #expect(session.canQuietSpeaker == false)
+        session.muteSpeaker(true)
+        try await waitFor(5) { session.usbAudioFull == true }
+        #expect(fake.usbLevel == 1 && session.usbAudioProblem == nil)
+        run.cancel()
+    }
+}

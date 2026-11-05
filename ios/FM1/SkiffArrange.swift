@@ -587,6 +587,13 @@ struct Lane: View {
                         .transition(reduceMotion ? .identity : .accordion)
                 }
             }
+            if session.playing, let on = list.entryOn, let i = keyed.firstIndex(where: { $0.block.entries.contains(on) }) {
+                // how far through its pass the track is, under the block it plays
+                let b = keyed[i].block
+                PassBar(session: session, track: track, width: max(8, x(preview?.places[i]?.length ?? b.length) - 4))
+                    .modifier(Place(x: x(preview?.places[i]?.start ?? b.start) + 2, y: SkiffArrangePage.laneHeight - 5))
+                    .allowsHitTesting(false)
+            }
             if let r = bracket {
                 RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2)
                     .frame(width: max(4, x(r.upperBound) - x(r.lowerBound)), height: SkiffArrangePage.laneHeight)
@@ -892,6 +899,28 @@ struct Lane: View {
     }
 }
 
+/// How far through its pass a track is: a bar under the block it plays, in the track's colour, filling once
+/// a pass (what the entry's REPS counts). From the clock-counted playhead, so it moves on a lane that loops
+/// sooner than the song, where the song's playhead line shows nothing. Reduce Motion: four steps a second.
+struct PassBar: View {
+    let session: DeviceSession
+    let track: Int
+    let width: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : nil, paused: !session.playing)) { _ in
+            let p = session.passProgress(track) ?? 0
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.track[track].opacity(0.3))
+                Capsule().fill(Theme.track[track]).frame(width: max(3, width * CGFloat(p)))
+            }
+            .frame(width: width, height: 3)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// UIKit's long press, for a block in the lanes' scroll view: it lets a scroll have the touch when the finger
 /// moves first, and once held, follows the finger until it's let go, saying whether the touch was cancelled.
 struct HoldRecognizer: UIGestureRecognizerRepresentable {
@@ -1129,10 +1158,6 @@ struct BlockView: View {
             if selected { shape.stroke(Theme.text, lineWidth: 2).padding(solid ? -3 : 1) }
             else if linked { shape.stroke(solid ? Theme.onColour : Theme.textSecondary, style: StrokeStyle(lineWidth: 2, dash: [5, 4])).padding(4) }
         }
-        .overlay(alignment: .bottomLeading) {
-            // the entry the track is on, while playing: a bar along the bottom
-            if playing { Capsule().fill(solid ? Theme.onColour : Theme.text).frame(width: min(24, width - 8), height: 3).padding(6) }
-        }
         .compositingGroup()
         .shadow(color: .black.opacity(selected && look.flat ? look.shadow(.selected).opacity : 0),
                 radius: look.shadow(.selected).radius, y: selected ? look.shadow(.selected).y : 0)
@@ -1152,6 +1177,7 @@ struct BlockView: View {
         let others = list.sharing(block.entries.lowerBound)
         if !isRest, !others.isEmpty { s += ", also on entr\(others.count == 1 ? "y" : "ies") " + others.map(Entries.letter).joined(separator: ", ") }
         if let snd = sound { s += ", sound \(Entries.soundName(snd, session: session))" }
+        if playing { s += ", playing now" }
         return s
     }
 }

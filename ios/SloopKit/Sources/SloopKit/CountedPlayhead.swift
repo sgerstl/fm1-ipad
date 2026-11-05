@@ -42,6 +42,14 @@ public struct CountedPlayhead: Equatable, Sendable {
         return max(0, min(0.999, (tick - w.startedAt) / max(1, w.nextAt - w.startedAt)))
     }
 
+    /// How far through its pass (LENGTH steps) a track is, 0..1, at `tick`; nil before its first step or on RAND.
+    /// A pass is what an entry's REPS counts, so this is where a track that loops sooner than the song is.
+    public func passProgress(_ t: Int, at tick: Double, length: Int) -> Double? {
+        guard running, walks.indices.contains(t), walks[t].step >= 0 else { return nil }
+        let w = walks[t]
+        return max(0, min(1, (Double(max(0, w.count - 1)) + phase(t, at: tick)) / Double(max(1, length))))
+    }
+
     /// Start (0xFA): every track before its first step, which plays on the first pulse.
     public mutating func start() {
         ticks = -1

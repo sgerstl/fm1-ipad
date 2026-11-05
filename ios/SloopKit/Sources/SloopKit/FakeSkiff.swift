@@ -49,6 +49,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var lists: [[FakeEntry]] = []
     var entryOn: [Int] = []
     var songMode = 0
+    /// MENU > USB LEVEL (0 MASTER, 1 FIXED): the one MENU setting the fake offers (MENU_DESC index 0, id 10).
+    var usbLevel = 0
     var poolLen = Array(repeating: 0, count: 64)
 
     /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
@@ -251,6 +253,14 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     private func answer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
         switch (cmd, a.count) {
         case (1, 0): return fx.info
+        case (72, 1):
+            // MENU_DESC: index → index, id, kind, value, min, max, … (the rest isn't read); past the list: id 127
+            return a[0] == 0 ? [0, UInt8(SkiffMenu.usbLevel), 0] + v14(usbLevel) + v14(0) + v14(1) : [a[0], 127]
+        case (73, 3):
+            let v = (Int(a[1]) | Int(a[2]) << 7) - 8192
+            guard Int(a[0]) == SkiffMenu.usbLevel else { return [1, a[0]] + v14(v) }
+            usbLevel = max(0, min(1, v))
+            return [0, a[0]] + v14(usbLevel)
         case (5, 2): return fx.desc["\(a[0] == 1 ? 1 : 0).\(a[0] == 1 ? Int(a[1]) : id(a[0], a[1]))"]
         case (10, 1): return fx.names["\(a[0])"]
         case (27, 0): return trackList()

@@ -193,3 +193,17 @@ import Testing
     }
 }
 
+
+extension SkiffSongSimTests {
+    /// MENU > USB LEVEL over the editor protocol (MENU_DESC / MENU_SET id 10), as the iPad's sound sets it;
+    /// put back as it was.
+    @Test func usbLevelFixedRoundTrips() async throws {
+        let d = try await driver()
+        let before = try #require(try await d.menuValue(id: SkiffMenu.usbLevel))
+        let r = try await d.setMenu(id: SkiffMenu.usbLevel, value: 1)
+        #expect([0, 3, 4].contains(r.rc) && r.value == 1)
+        #expect(try await d.menuValue(id: SkiffMenu.usbLevel) == 1)
+        _ = try await d.setMenu(id: SkiffMenu.usbLevel, value: before)
+        #expect(try await d.menuValue(id: SkiffMenu.usbLevel) == before)
+    }
+}

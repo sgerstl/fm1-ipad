@@ -42,10 +42,20 @@ struct TopBar: View {
                 if through.enabled { Text(through.summary) }
                 if through.enabled, !through.route.isEmpty { Text(through.route) }
                 if case .playing = through.state {
-                    Text(session.usbAudioFull == true ? "The FM-1's speaker is off; turn its MASTER to bring it back if you unplug"
-                                                      : "Setting the FM-1's USB AUDIO to FULL…")
+                    if let problem = session.usbAudioProblem {
+                        Text(problem)
+                    } else if session.canQuietSpeaker {
+                        Text(session.usbAudioFull == true ? "The FM-1's speaker is off; turn its MASTER to bring it back if you unplug"
+                                                          : "Setting the FM-1's USB AUDIO to FULL…")
+                    } else {
+                        // Skiff: Jib can't turn its MASTER (the knob alone sets it), so the level goes FIXED instead
+                        Text(session.usbAudioFull == true ? "USB LEVEL is FIXED: turn the FM-1's MASTER down to quiet its speaker. The iPad keeps the full level"
+                                                          : "Setting the FM-1's USB LEVEL to FIXED…")
+                    }
                 }
-                if through.state == .noInput { Text("Plug in the FM-1 (USB AUDIO on)") }
+                if through.state == .noInput {
+                    Text(session.canQuietSpeaker ? "Plug in the FM-1 (USB AUDIO on)" : "No sound from the FM-1 over USB: plug it in, or unplug it and plug it in again")
+                }
                 if through.state == .denied { Text("Turn on Microphone for Jib in Settings") }
             }
             if isConnected {

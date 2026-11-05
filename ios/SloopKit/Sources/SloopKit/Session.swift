@@ -99,6 +99,11 @@ public final class DeviceSession {
     /// The FM-1's HOME > AUDIO > USB AUDIO, from the settings object (nil until read): FULL sends a fixed
     /// level over USB whatever the MASTER, so the speaker can be muted while the iPad plays the sound.
     public private(set) var usbAudioFull: Bool?
+    /// Whether Jib can quiet the FM-1's speaker itself (SLOOP's MASTER over the protocol). Skiff's MASTER is
+    /// its knob alone: there Jib sets USB LEVEL = FIXED and the person turns MASTER down.
+    public var canQuietSpeaker: Bool { sloop != nil }
+    /// Why the iPad's sound setting didn't take on the FM-1, if it didn't.
+    public private(set) var usbAudioProblem: String?
     /// The iPad plays the FM-1's sound and wants its speaker quiet (AudioThrough, via the app).
     @ObservationIgnored private var speakerMuted = false
     @ObservationIgnored private var wantUSBFull = false
@@ -151,6 +156,12 @@ public final class DeviceSession {
     var skiffSongDriverForTests: SkiffDriver? { driver as? SkiffDriver }
     /// MIDI clock pulses since Start (Skiff), for the song's playhead.
     public var clockTicks: Int { counted.running ? counted.ticks : -1 }
+    /// How far through its pass track t is (0..1), from the counted clock; nil when not known (stopped, no
+    /// Start seen, RAND between notes, or firmware that sends its own positions).
+    public func passProgress(_ t: Int) -> Double? {
+        guard trackIndices.contains(t) else { return nil }
+        return counted.passProgress(t, at: Double(counted.ticks), length: tracks[t].length)
+    }
 
     private var driver: FirmwareDriver?
     /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
@@ -267,7 +278,7 @@ public final class DeviceSession {
     }
 
     private func connect(_ transport: SysExTransport) async {
-        settingsCache = nil; songOrder = nil; usbAudioFull = nil     // never write a settings object read from another FM-1
+        settingsCache = nil; songOrder = nil; usbAudioFull = nil; usbAudioProblem = nil     // never write a settings object read from another FM-1
         sampleSlots = []
         liveSeen = false
         if case .wrongFirmware = status {} else { status = .connecting }
@@ -537,6 +548,7 @@ public final class DeviceSession {
     /// Unplugged while quiet, the FM-1 stays quiet until its MASTER knob turns (SLOOP gives the knob back then).
     public func muteSpeaker(_ mute: Bool) {
         speakerMuted = mute
+        if mute, let k = driver as? SkiffDriver { fixSkiffUSBLevel(k); return }
         guard let c = sloop else { return }
         if mute, usbAudioFull != true {
             wantUSBFull = true
@@ -544,6 +556,23 @@ public final class DeviceSession {
             return
         }
         Task { _ = try? await c.masterLevel(mute ? 0 : 127) }
+    }
+
+    /// Skiff: MENU > USB LEVEL = FIXED (MENU_SET id 10), so the iPad gets the full level whatever the MASTER
+    /// knob, and turning it down quiets only the FM-1's speaker. Set once; left so afterwards, as SLOOP's FULL is.
+    private func fixSkiffUSBLevel(_ k: SkiffDriver) {
+        guard usbAudioFull != true else { return }
+        Task {
+            do {
+                if try await k.menuValue(id: SkiffMenu.usbLevel) == 1 { usbAudioFull = true; usbAudioProblem = nil; return }
+                let r = try await k.setMenu(id: SkiffMenu.usbLevel, value: 1)
+                // 3: taken, not saved; 4: taken at the next stop
+                usbAudioFull = r.value == 1 && [0, 3, 4].contains(r.rc)
+                usbAudioProblem = usbAudioFull == true ? nil : "The FM-1 didn't take USB LEVEL FIXED (code \(r.rc))"
+            } catch {
+                usbAudioProblem = "The FM-1 didn't answer about USB LEVEL"
+            }
+        }
     }
 
     private let saveLayer = 7          // LIVE op 2's layer for SAVE held (ui_layers.c LY_SONG)
@@ -1129,7 +1158,15 @@ public final class DeviceSession {
     /// The channel the keyboard plays on: 16, which no track owns by default, so SLOOP plays the
     /// selected track with it (GLO > MIDI > OTHER = SEL, seq.c midi_route), drums included.
     public static let keyboardChannel: UInt8 = 15
-    private var held: [Int: Int] = [:]        // key id -> MIDI note sent, so a note-off matches its note-on
+    /// On Skiff, channel 16 is dropped: MENU > MIDI > MIDI IN is CH1-6 by default (channels 1..6 play tracks
+    /// 1..6, 7..16 ignored; seq.c midi_slot, midi_control.c), and its AUTO CHANNEL is OFF. So the keyboard
+    /// plays on the selected track's own channel, track k on channel k + 1 (T1..T6 CHANNEL's default; Jib reads
+    /// Skiff's NOTES OUT the same way). With MIDI IN = SEL any channel plays the selected track: this one too.
+    /// A track moved to another channel in MENU > MIDI isn't followed (the editor protocol doesn't report it).
+    public static func keyChannel(_ dialect: FirmwareDialect?, track: Int) -> UInt8 {
+        dialect == .skiff ? UInt8(track & 15) : keyboardChannel
+    }
+    private var held: [Int: (note: Int, channel: UInt8)] = [:]   // key id -> what went out, so a note-off matches
     /// The FM-1's OCT buttons (song.octave), which the protocol doesn't report. The iPad keeps its own
     /// and follows the FM-1: a note from the FM-1's keys that only fits another octave moves it there.
     public var keyboardOctave = 0
@@ -1193,20 +1230,22 @@ public final class DeviceSession {
         if selectedIsDrums { note = drumMapGM ? Music.laneNotes[key % 16] : 36 + key % 16 }
         else if isKit(selectedTrack) { note = Music.skiffLaneNotes[key % 8] }
         else if let p = pitch(ofKey: key) { note = p } else { return }
-        held[key] = note
-        driver?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
+        let ch = Self.keyChannel(driver?.dialect, track: selectedTrack)
+        held[key] = (note, ch)
+        driver?.sendMIDI([0x90 | ch, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
     }
 
     /// A piano-roll row: that exact note, held while touched (drum lanes go through keyDown).
     public func noteDown(_ note: Int) {
-        held[1000 + note] = note
-        driver?.sendMIDI([0x90 | Self.keyboardChannel, UInt8(note & 0x7F), 100])
+        let ch = Self.keyChannel(driver?.dialect, track: selectedTrack)
+        held[1000 + note] = (note, ch)
+        driver?.sendMIDI([0x90 | ch, UInt8(note & 0x7F), 100])
     }
     public func noteUp(_ note: Int) { keyUp(1000 + note) }
 
     public func keyUp(_ key: Int) {
-        guard let note = held.removeValue(forKey: key) else { return }
-        driver?.sendMIDI([0x80 | Self.keyboardChannel, UInt8(note & 0x7F), 0])
+        guard let h = held.removeValue(forKey: key) else { return }
+        driver?.sendMIDI([0x80 | h.channel, UInt8(h.note & 0x7F), 0])
     }
 
     /// The notes (or drum lanes) the selected track plays at the playhead, to light the keys.
