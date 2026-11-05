@@ -108,7 +108,12 @@ extension AppView {
                             FunctionPads(session: session, ui: ui)
                             if !session.selectedIsDrums { LibraryEngines(session: session, ui: ui) }
                         }
-                        LibraryPage(session: session, ui: ui)
+                        // Skiff: a function button's sound panel pushes the browse area (four columns to two)
+                        if ui.songTab {
+                            SoundPanelHost(session: session, ui: ui, makesRoom: true) { LibraryPage(session: session, ui: ui) }
+                        } else {
+                            LibraryPage(session: session, ui: ui)
+                        }
                     }
                 case .song:
                     HStack(alignment: .top, spacing: 16) {

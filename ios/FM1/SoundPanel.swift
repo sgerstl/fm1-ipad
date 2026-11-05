@@ -53,7 +53,7 @@ enum SoundPanelControl {
         // shows what it shows)
         if ui.songTab, !s.home, s.layer == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family),
            SoundPage.shown(session, page.family).isEmpty { return true }
-        guard ui.followDevice, session.screenLinked, ui.songTab, ui.page == .song || ui.page == .mixer else { return false }
+        guard ui.followDevice, session.screenLinked, ui.songTab, [.song, .mixer, .library].contains(ui.page) else { return false }
         if s.home { ui.soundPanel = nil; return false }
         guard s.layer == 0, s.menu == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family) else { return false }
         press(page.family, session: session, ui: ui, fromDevice: true)

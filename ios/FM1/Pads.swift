@@ -167,7 +167,7 @@ struct FunctionPads: View {
         default:
             guard let f = pad.family else { return }
             // the Mixer tab keeps its place: the button's pages come in on the sound panel, as from its rail
-            if ui.songTab, ui.page == .mixer, SoundPanelControl.families.contains(f) {
+            if ui.songTab, ui.page == .mixer || ui.page == .library, SoundPanelControl.families.contains(f) {
                 SoundPanelControl.press(f, session: session, ui: ui)
                 return
             }

@@ -9,10 +9,13 @@ struct LibraryPage: View {
     let ui: EditorUI
     var columns = 4                 // 2 in the Presets panel on the Sequencer
     @State private var clearing: Int?
+    /// The sound panel pushing the page (Browse, 2026-11-06): two columns while it's open, back to four after.
+    @Environment(\.soundPanelRoom) private var panelRoom
 
     var body: some View {
         // the track it loads onto is the track strip, collapsed beside it; the engines sit under that
         presetGrid
+        .padding(.trailing, panelRoom)       // the panel's room: the grid beside it, never under it
         .task(id: session.selectedTrack) {
             session.refreshLibrary()
             if !session.selectedIsDrums { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
@@ -24,7 +27,7 @@ struct LibraryPage: View {
     private var presetGrid: some View {
         let t = session.selectedTrack
         let track = session.tracks[t]
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: self.columns)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: panelRoom > 0 ? min(2, self.columns) : self.columns)
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 Text(gridTitle).font(.system(size: 22, weight: .semibold))

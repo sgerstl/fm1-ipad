@@ -32,3 +32,11 @@ Measured with the body counter (`-count-bodies`); the simulator can't measure fr
   - Opening it is now one pass: the panel's five cards built once, the Mixer re-laid out once.
 - **The Song tab** shares the same panel and cards, so it gets the same fixes. Its page doesn't take the push, so it had no per-frame re-layout.
 - Not checked: frame timings on a device, and the 120 Hz feel.
+
+## The sound panel on Browse
+
+- **Opening it:** the rail, the FM-1's ENV to ARP, or Browse's own pads bring in the same `SoundPanelHost` for the selected track.
+- **It pushes the browse area:** four columns of presets become **two** while it's open, back to four when it closes (`browse-closed.jpg`, `browse-with-panel.jpg`). The push is instant and the panel slides, as on the Mixer.
+- **Same rules as the Mixer:** disabled buttons stay disabled; repeat presses step pages with the card coming forward; ✕, HOME, Escape or another tab closes it. A tap on the presets loads a preset, as ever, and doesn't close the panel.
+- The function buttons now behave the same on Song, Mixer and Browse. On Shape they keep jumping to sections.
+- SLOOP's Browse is unchanged.
