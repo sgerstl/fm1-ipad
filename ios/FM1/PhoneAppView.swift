@@ -86,6 +86,7 @@ struct PhoneAppView: View {
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { TrackPickerLayer(session: session, ui: ui) }
         .overlay { KnobPanelLayer(ui: ui) }
+        .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 12).padding(.horizontal, 12) }
         .coordinateSpace(name: AppView.space)
         // the same upkeep as the iPad's AppView: projects, the screen staying on, audio, Now Playing
         .onChange(of: isConnected, initial: true) { _, on in if on { projects.connected() } }

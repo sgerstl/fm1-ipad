@@ -175,7 +175,8 @@ struct Overview: View {
     @ViewBuilder
     private func timeline(_ t: Int, track: TrackState, selected: Bool, muteOnly: Bool) -> some View {
         let onSequence = ui.page == .sequencer
-        let strip = Canvas { ctx, _ in draw(ctx, track) }
+        let moves = session.motion[t]?.steps ?? []
+        let strip = Canvas { ctx, _ in draw(ctx, track, motion: moves) }
             .frame(width: Self.timelineWidth - 6, height: cellHeight)
             // the playhead is taller than the cells: as an overlay it can't shift them off centre
             .overlay(alignment: .leading) { OverviewPlayhead(session: session, track: t, running: progress > 0, height: cellHeight) }
@@ -253,17 +254,23 @@ struct Overview: View {
             .accessibilityAddTraits(.isButton)
     }
 
-    private func draw(_ ctx: GraphicsContext, _ track: TrackState) {
+    /// `motion`: steps carrying recorded knob moves (Skiff), marked by a bar along the cell's foot.
+    private func draw(_ ctx: GraphicsContext, _ track: TrackState, motion: Set<Int> = []) {
         let w = Self.cell.width, h = cellHeight
         for i in track.steps.indices {
             let r = CGRect(x: CGFloat(i) * (w + Self.gap), y: 0, width: w, height: h)
             let p = Path(roundedRect: r, cornerRadius: 3)
+            let on = i < track.length && track.isOn(i)
             if i >= track.length {
                 ctx.fill(p, with: .color(Theme.stepOutside))
-            } else if track.isOn(i) {
+            } else if on {
                 ctx.fill(p, with: .color(Theme.track[track.index]))
             } else {
                 ctx.fill(p, with: .color(Theme.stepEmpty))
+            }
+            if motion.contains(i) {
+                ctx.fill(Path(roundedRect: CGRect(x: r.minX + 2, y: r.maxY - 4, width: w - 4, height: 2), cornerRadius: 1),
+                         with: .color(on ? Theme.onColour : Theme.text))
             }
         }
     }

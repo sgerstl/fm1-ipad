@@ -112,6 +112,11 @@ public final class DeviceSession {
 
     /// Recording (a track is REC) or armed and waiting for a note: the REC pad lights.
     public private(set) var recording = false
+    /// Skiff: the armed tracks, a bit each (TRANSPORT's), and each track's motion (polled: MOTION isn't pushed).
+    public private(set) var armedTracks = 0
+    public private(set) var motion: [Int: TrackMotion] = [:]
+    /// Skiff records every knob move on the selected track, the iPad's included, while it's armed and playing.
+    public var recordingKnobs: Bool { dialect == .skiff && playing && armedTracks & (1 << selectedTrack) != 0 }
     public private(set) var bpm = 120
     public private(set) var swing = 0
     public private(set) var otherChannelsPlaySelected = true
@@ -967,11 +972,32 @@ public final class DeviceSession {
         }
     }
 
+    /// Reads a track's motion again (Skiff): after a clear, and from the ping loop (the device doesn't push it).
+    public func readMotion(track t: Int) async {
+        guard let k = driver as? SkiffDriver, trackIndices.contains(t), let m = try? await k.motion(track: t) else { return }
+        if motion[t] != m { motion[t] = m }
+    }
+
+    /// Drops a track's recorded motion and its locks (MOTION clear; on the FM-1, SAVE held undoes it).
+    public func clearMotion(track t: Int) {
+        guard let k = driver as? SkiffDriver else { return }
+        Task {
+            _ = try? await k.clearMotion(track: t)
+            await readMotion(track: t)
+        }
+    }
+
     private func pingLoop(_ c: FirmwareDriver) async {
         var n = 0
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             n += 1
+            // Skiff's motion isn't pushed: the selected track every second while it records, else every 2 s, and
+            // every track every 6 s, as Skiff's web editor polls it
+            if c is SkiffDriver {
+                if recordingKnobs || n % 2 == 0 { await readMotion(track: selectedTrack) }
+                if n % 6 == 0 { for t in trackIndices where t != selectedTrack { await readMotion(track: t) } }
+            }
             do {
                 try await c.ping()
                 if n % 10 == 0 { try await c.watch(screenLink: screenLinked) }   // watching ends on a USB reset: renew it
@@ -1030,6 +1056,7 @@ public final class DeviceSession {
         if playing != s.playing, !recentlyWritten("play") { playing = s.playing }
         let rec = s.armedTracks != 0 || s.countingIn
         if recording != rec { recording = rec }
+        if armedTracks != s.armedTracks { armedTracks = s.armedTracks }
     }
 
     /// MIDI clock from the device: Start resets the count, each pulse walks the tracks (CountedPlayhead).

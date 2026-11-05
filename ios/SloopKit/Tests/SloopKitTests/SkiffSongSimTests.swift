@@ -301,3 +301,28 @@ extension SkiffScreenLinkSimTests {
         run.cancel()
     }
 }
+
+extension SkiffSongSimTests {
+    /// MOTION on the real firmware: an editor TRACK_PARAM while the selected track is armed and playing is
+    /// recorded; op 7 reads it with its kind; op 2 clears it.
+    @Test func motionRecordsEditorEditsAndClears() async throws {
+        let d = try await driver()
+        _ = try await d.transport(play: false)
+        _ = try await d.selectTrack(0)
+        _ = try await d.clearMotion(track: 0)
+        try await d.rec()                                               // T1 armed: playing
+        try await Task.sleep(for: .milliseconds(300))
+        for v in [20, 60, 100] {                                        // CHO (34), as a knob turned from Jib
+            _ = try await d.setTrackParam(track: 0, id: 34, value: v)
+            try await Task.sleep(for: .milliseconds(150))
+        }
+        let m = try await d.motion(track: 0)
+        print("MOTION T1:", m)
+        #expect(m.recorded >= 1 && m.on && m.events.allSatisfy { $0.id == 34 && !$0.lock })
+        try await d.rec()                                               // disarm
+        _ = try await d.transport(play: false)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(try await d.clearMotion(track: 0) == 0)
+        #expect(try await d.motion(track: 0).events.isEmpty)
+    }
+}

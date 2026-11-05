@@ -61,6 +61,7 @@ struct AppView: View {
         .padding(24)
         .overlay(alignment: .bottom) { keyboard }
         .overlay(alignment: .bottom) { undoToast }
+        .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 32) }
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }
         .overlay { KnobPanelLayer(ui: ui) }
@@ -549,6 +550,21 @@ struct TrackMenuLayer: View {
                         .buttonStyle(PressSink())
                         .accessibilityHint("Records the \(UIDevice.current.model)'s microphone into a sample slot for this track")
                     }
+                    if let mo = session.motion[m.track], !mo.events.isEmpty {
+                        // Skiff's motion: knob moves recorded into the steps (and steps' locks)
+                        Button {
+                            session.clearMotion(track: m.track)
+                            ui.trackMenu = nil
+                        } label: {
+                            Label("Clear motion (\(mo.steps.count) step\(mo.steps.count == 1 ? "" : "s"))", systemImage: "waveform.path.badge.minus")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Theme.text)
+                                .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
+                                .raisedKey()
+                        }
+                        .buttonStyle(PressSink())
+                        .accessibilityHint("Drops the knob moves recorded on this track. On the FM-1, SAVE held undoes it")
+                    }
                     Button {
                         ui.lastClear = session.clearAll(track: m.track)
                         ui.trackMenu = nil
@@ -573,5 +589,34 @@ struct TrackMenuLayer: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackMenu)
+    }
+}
+
+/// Skiff records every knob move on the selected track, the iPad's included, while it's armed and playing
+/// (EDITOR_PROTOCOL.md "Motion"): Scott recorded edits without knowing (2026-11-05). Said plainly while it
+/// happens, with a way to stop. Floats at the foot of the screen, so nothing moves when it comes and goes.
+struct RecordingKnobsBar: View {
+    let session: DeviceSession
+    @Environment(\.look) private var look
+
+    var body: some View {
+        if session.recordingKnobs {
+            HStack(spacing: 12) {
+                Image(systemName: "record.circle").foregroundStyle(Theme.rec).accessibilityHidden(true)
+                Text("Recording knob moves on T\(session.selectedTrack + 1): every change, here or on the FM-1, goes into its steps.")
+                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                Button { session.toggleRec() } label: {
+                    Text("Stop recording").font(.system(size: 13, weight: .semibold))
+                        .padding(.horizontal, 12).frame(minHeight: 44).raisedKey()
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 4)
+            .frame(maxWidth: 640)
+            .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
+            .accessibilityElement(children: .contain)
+        }
     }
 }

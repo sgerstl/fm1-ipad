@@ -79,6 +79,23 @@ enum SkiffCmd {
     static let pool: UInt8 = 78, list2: UInt8 = 82
     static let menuDesc: UInt8 = 72, menuSet: UInt8 = 73
     static let screen: UInt8 = 90, screenGoto: UInt8 = 91
+    static let motion: UInt8 = 64
+}
+
+/// A track's motion (MOTION 64): knob moves recorded per step while the track is armed, playing and selected,
+/// from the FM-1's knobs and from SET / TRACK_PARAM alike (EDITOR_PROTOCOL.md "Motion"). Not pushed: polled.
+public struct TrackMotion: Equatable, Sendable {
+    public struct Event: Equatable, Sendable {
+        public var step: Int, id: Int, value: Int
+        /// false: recorded motion (automation); true: a step's lock.
+        public var lock: Bool
+    }
+    public var on: Bool
+    public var events: [Event]
+    public init(on: Bool = false, events: [Event] = []) { self.on = on; self.events = events }
+    /// The steps that carry recorded motion.
+    public var steps: Set<Int> { Set(events.filter { !$0.lock }.map(\.step)) }
+    public var recorded: Int { events.filter { !$0.lock }.count }
 }
 
 /// MENU settings the editor protocol can set (editor_menu.c ED_MENU's ids, append-only).
@@ -315,6 +332,33 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
 
     /// REC, as the FM-1's button (TRANSPORT op 4). Sent once: it toggles.
     public func rec() async throws { _ = try await request(SkiffCmd.transport, [4], match: 0, "TRANSPORT REC", retries: 0) }
+
+    // MARK: Motion (MOTION 64)
+
+    /// MOTION op 7 (the query with the kinds): track, rc, on, count, max, count × (step, id, v14), count × kind.
+    /// A step byte's bit 6 is the id's bit 7.
+    public func motion(track t: Int) async throws -> TrackMotion {
+        let b = try await request(SkiffCmd.motion, [UInt8(t), 7], match: 1, "MOTION")
+        guard b.count >= 5 else { throw DecodeError.short(cmd: SkiffCmd.motion) }
+        var r = ByteReader(Array(b[2...]), cmd: SkiffCmd.motion)
+        let on = try r.u8() != 0, n = try r.u8()
+        _ = try r.u8()                                         // max (64)
+        var events: [TrackMotion.Event] = []
+        for _ in 0..<n {
+            let s = try r.u8(), id = try r.u8(), v = try r.v14()
+            events.append(.init(step: s & 63, id: id | (s >> 6 & 1) << 7, value: v, lock: false))
+        }
+        for k in 0..<n where r.remaining > 0 { events[k].lock = try r.u8() == 1 }
+        return TrackMotion(on: on, events: events)
+    }
+
+    /// MOTION op 2: the track's motion dropped and off (on the FM-1, SAVE held undoes it). rc 0 ok, 3 a song playing.
+    @discardableResult
+    public func clearMotion(track t: Int) async throws -> Int {
+        let b = try await request(SkiffCmd.motion, [UInt8(t), 2], match: 1, "MOTION clear", retries: 0)
+        guard b.count >= 2 else { throw DecodeError.short(cmd: SkiffCmd.motion) }
+        return Int(b[1])
+    }
 
     // MARK: MENU settings (editor_menu.c)
 

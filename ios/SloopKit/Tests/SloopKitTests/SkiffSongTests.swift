@@ -621,3 +621,28 @@ extension SkiffOnTheDeviceTests {
         run.cancel()
     }
 }
+
+extension SkiffOnTheDeviceTests {
+    /// Skiff records knob moves (Jib's SET / TRACK_PARAM too) while the selected track is armed and playing: Scott
+    /// recorded edits by accident. Jib reads MOTION, says it's recording, and clears a track's motion.
+    @Test func motionIsReadFlaggedAndCleared() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        session.toggleRec()                                           // T1 armed, playing
+        try await waitFor(5) { session.recordingKnobs }
+        session.set(track: 0, param: 34, to: 90)                      // an edit from the iPad: recorded
+        try await waitFor(5) { fake.motion[0].count == 1 }
+        await session.readMotion(track: 0)
+        #expect(session.motion[0]?.steps == [0] && session.motion[0]?.recorded == 1 && session.motion[0]?.on == true)
+        session.clearMotion(track: 0)
+        try await waitFor(5) { session.motion[0]?.events.isEmpty == true }
+        #expect(fake.motion[0].isEmpty)
+        session.toggleRec()                                           // stop recording
+        try await waitFor(5) { !session.recordingKnobs }
+        run.cancel()
+    }
+}

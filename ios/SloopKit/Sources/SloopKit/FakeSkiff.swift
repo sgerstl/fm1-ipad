@@ -53,6 +53,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var usbLevel = 0
     /// Armed tracks, a bit each (song.rec), as TRANSPORT op 4 toggles them: ui_input.c rec_tap.
     var armed = 0
+    /// Each track's motion: (step, id, value, lock). An edit is recorded while its track is armed, playing and
+    /// selected, as Skiff does (at step 0 here: the fake has no playhead).
+    var motion: [[(step: Int, id: Int, value: Int, lock: Bool)]] = Array(repeating: [], count: 8)
     /// Jib's screen link patch (skiff/README.md): INFO's `56 01 01`, SCREEN, SCREEN_GOTO, WATCH bit 2.
     var screenLink = false
     var screenWatched = false
@@ -312,7 +315,13 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case (31, 2), (31, 4):
             let t = Int(a[0] & 0x3F), i = Int(a[1]) | Int(a[0] >> 6 & 1) << 7
             guard t < params.count, i < pCount else { return nil }
-            if a.count == 4 { params[t][i] = (Int(a[2]) | Int(a[3]) << 7) - 8192 }
+            if a.count == 4 {
+                params[t][i] = (Int(a[2]) | Int(a[3]) << 7) - 8192
+                if playing, t == selected, armed & (1 << t) != 0 {
+                    motion[t].removeAll { $0.step == 0 && $0.id == i && !$0.lock }
+                    motion[t].append((0, i, params[t][i], false))
+                }
+            }
             return [a[0], a[1]] + v14(params[t][i])
         case (2, 2) where a[0] == 1: return Int(a[1]) < gCount ? [1, a[1]] + v14(globals[Int(a[1])]) : nil
         case (3, 4) where a[0] == 1:
@@ -338,6 +347,13 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             var any = false
             for p in 0..<64 where poolLen[p] > 0 && uses(p) == 0 { poolLen[p] = 0; any = true }
             return poolReply(3, any ? 0 : 1)
+        case (64, 2) where a[1] == 7:
+            let t = Int(a[0]), m = motion[t]
+            return [a[0], 0, m.isEmpty ? 0 : 1, UInt8(m.count), 64]
+                + m.flatMap { [UInt8($0.step | ($0.id >> 7 & 1) << 6), UInt8($0.id & 127)] + v14($0.value) } + m.map { $0.lock ? 1 : 0 }
+        case (64, 2) where a[1] == 2:
+            motion[Int(a[0])] = []
+            return [a[0], 0, 0, 0, 64]
         case (76, 0), (76, 1):
             if a.first == 1 { setPlaying(true) } else if a.first == 2 { setPlaying(false) }
             if a.first == 4 {
