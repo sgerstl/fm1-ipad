@@ -56,3 +56,13 @@ Ran it. Every card uses Shape's existing parts: the numbered columns, the merged
 - **SAMPLES' row** has an empty first column, because the tiles do KNOB 1's job.
 - **LANES doesn't apply Skiff's per-kit lane names:** TOM becomes CONGA, RIM becomes CLAVE and BELL becomes CYM on some kits, and the user kits' empty lanes aren't dimmed.
 - **On DRUM, LANES' lane isn't tied to the drum grid's selected lane**, as it is on the FM-1.
+
+## ARP and ARP 2 graphs (added after)
+
+Both cards draw Skiff's graph_arp (ui_pgraph.c):
+- the arp's notes over 16 steps through OCTAVE and MODE (all fifteen modes, RND and WALK on Skiff's fixed picks, CHORD stacked);
+- tiles as long as GATE, the off steps late by SWING, every fourth step white;
+- the steps CHANCE would skip, outlined;
+- all of it dim while MODE is OFF (`arp.jpg`).
+
+It always shows Skiff's example chord, C E G. The protocol doesn't say which keys the FM-1 holds, so the "held notes" version can't be drawn. HOLD and ORDER don't change the drawing on the FM-1 either.

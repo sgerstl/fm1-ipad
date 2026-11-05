@@ -42,7 +42,7 @@ struct PageGraph: View {
 
     static func has(_ p: SoundPage) -> Bool {
         ["ENV", "ENV 2", "LFO", "LFO 2", "LFO DEST", "MOD", "FX", "DRIVE", "INSERT", "INSERT 2", "SLICER", "DUCK",
-         "DELAY", "REVERB", "CHORUS", "GLOBAL", "VOICE"].contains(p.title)
+         "DELAY", "REVERB", "CHORUS", "GLOBAL", "VOICE", "ARP", "ARP 2"].contains(p.title)
     }
     /// Drawn in the panel under the cards on Skiff, shorter than the graphs drawn from the panel's top.
     static let short: Set<String> = ["FX", "SLICER", "DUCK"]
@@ -75,12 +75,21 @@ struct PageGraph: View {
                 .graphLabel("Ducking over a bar", valueName(0))
             case "GLOBAL": Canvas { ctx, sz in GlobalDrawing(swing: values[1]).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Swing over a bar", "SWING \(50 + values[1] * 50 / 250) to \(50 - values[1] * 50 / 250)")
+            case "ARP", "ARP 2": Canvas { ctx, sz in ArpDrawing(v: arpValues).draw(ctx, Space(size: sz), colour) }
+                .graphLabel("The arpeggio over 16 steps", "\(Music.arpModes[safe: arpValues[0]] ?? "OFF"), an example on C E G")
             case "MOD": ModGraph(session: session, page: page, route: $modRoute, colour: colour)
             default: EmptyView()
             }
         }
         .frame(height: Self.short.contains(page.title) ? 88 : page.title == "MOD" ? 168 : 128)   // MOD: eleven routes' text
         .recessed(8)
+    }
+
+    /// ARP's MODE RATE OCTAVE GATE and ARP 2's SWING CHANCE HOLD ORDER, for either card's graph (they draw the same).
+    private var arpValues: [Int] {
+        let ps = SoundPage.pages(session)
+        let ids = ["ARP", "ARP 2"].flatMap { t in ps.first { $0.title == t }?.ids ?? [nil, nil, nil, nil] }
+        return ids.map { id in id.map { session.cell($0).value } ?? 0 } + Array(repeating: 0, count: max(0, 8 - ids.count))
     }
 
     /// INSERT's TYPE A B C and INSERT 2's MIX, from the merged card's rows.
@@ -644,6 +653,61 @@ private struct SlicerDrawing {
             } else {
                 ctx.fill(Path(roundedRect: s.r(x, 77, 9, 3), cornerRadius: 1), with: .color(Theme.tones[2]))
                 if open > 3 { ctx.fill(Path(roundedRect: s.r(x, 80 - open, 9, open), cornerRadius: 2), with: .color(Theme.tones[2])) }
+            }
+        }
+    }
+}
+
+// MARK: ARP, ARP 2 (ui_pgraph.c graph_arp)
+
+/// The arp's notes over 16 of its steps as arp_step plays them, on an example chord (C E G: the protocol doesn't say
+/// which keys the FM-1 holds) through OCTAVE and MODE: a tile as long as GATE, the off steps late by SWING, every fourth
+/// step white, the steps CHANCE would skip (a fixed pick) outlined; OFF all dim.
+private struct ArpDrawing {
+    let v: [Int]                                  // MODE RATE OCTAVE GATE, SWING CHANCE HOLD ORDER
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        let m = v[0], oct = max(1, v[2])
+        var list: [Int] = []
+        for o in 0..<oct { for n in [60, 64, 67] where list.count < 64 { list.append(min(127, n + 12 * o)) } }
+        if m == 6 { list = [67] }                                         // REPEAT
+        if m == 8 { list.append(min(127, list[0] + 12 * oct)) }           // UP+8
+        let len = list.count
+        let pitch = min(18, 102 / len), th = pitch >= 12 ? 10 : pitch > 3 ? pitch - 1 : 2
+        let base = 115 - (102 - (len - 1) * pitch) / 2
+        let gw = 2 + v[3] * 10 / 127, sw = v[4] * 12 / 250
+        for i in 0..<len {
+            let y = Double(base - i * pitch)
+            for x in stride(from: 30, through: 228, by: 3) { ctx.fill(Path(s.r(Double(x), y, 1, 1)), with: .color(lineColour)) }
+            if pitch >= 12 { s.text(ctx, Music.noteNames[list[i] % 12], 12, y + 4, dimColour) }
+        }
+        s.text(ctx, "EXAMPLE: C E G", 228, 13, dimColour, anchor: .bottomTrailing)
+        for i in 0..<16 {
+            let k = i % (2 * len > 2 ? 2 * len - 2 : 1)
+            let x = 30 + i * 124 / 10 + (i & 1 == 1 ? sw : 0)
+            let hash = UInt32(truncatingIfNeeded: UInt64(i) &* 2654435761)
+            var r: Int
+            switch m {
+            case 2: r = len - 1 - i % len
+            case 3: r = k < len ? k : 2 * len - 2 - k
+            case 7: r = k < len ? len - 1 - k : k - (len - 1)
+            case 4, 13: r = Int(hash >> 20) % len
+            case 9, 10:
+                var q = i % len
+                if m == 10 { q = len - 1 - q }
+                r = q & 1 == 1 ? len - 1 - q / 2 : q / 2
+            case 11: r = len < 2 ? 0 : k & 1 == 1 ? len - 1 : k / 2
+            case 12: r = len < 2 ? 0 : k & 1 == 1 ? 1 + k / 2 : 0
+            default: r = i % len
+            }
+            var rows = [r]
+            if m == 14 { rows = (0..<3).map { min(len - 1, (i % oct) * 3 + $0) } }   // CHORD: the held notes together
+            let skip = Int(hash >> 25 & 127) > v[5]
+            for row in rows {
+                let y = base - row * pitch - th / 2
+                let col: Color = m == 0 ? dimColour : i % 4 == 0 ? Theme.text : c
+                let rect = Path(roundedRect: s.r(Double(x), Double(y), Double(gw), Double(th)), cornerRadius: 1.5)
+                if skip { ctx.stroke(rect, with: .color(midColour), lineWidth: 1) } else { ctx.fill(rect, with: .color(col)) }
             }
         }
     }
