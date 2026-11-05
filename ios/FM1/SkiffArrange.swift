@@ -407,7 +407,7 @@ struct Lane: View {
                 .frame(width: max(44, width - lastEnd - 4), height: SkiffArrangePage.laneHeight - 12)
                 .offset(x: lastEnd + 2, y: 6)
             ForEach(blocks) { b in
-                let bx = x(b.start) + (spot.map { b.entries.lowerBound >= $0.index ? x($0.ticks) : 0 } ?? 0)
+                let bx = x(b.start) + (spot.map { b.start >= $0.at - 0.5 ? x($0.ticks) : 0 } ?? 0)
                 let w = max(8, x(b.length) - 4)
                 let selected = selection?.track == track && b.entries.contains(selection?.entry ?? -1)
                 let linked = !selected && selectedPattern != nil && b.entries.contains { list.entries[$0].poolIndex == selectedPattern }
@@ -564,6 +564,8 @@ struct DropSpot: Equatable {
     var ticks: Double
     var pattern: Int
     var text: String
+    /// The list after the drop (nil: no room).
+    var result: [SongEntry]?
 }
 
 /// The drop: the nearest block edge (entries play back to back, so a new one goes between two).
@@ -572,27 +574,26 @@ struct LaneDrop: DropDelegate {
     let blocks: [SongBlock]
 
     private func spot(_ info: DropInfo) -> DropSpot? {
-        guard let p = lane.dragPattern else { return nil }
+        guard let p = lane.dragPattern, let list = lane.store.song?.tracks[safe: lane.track] else { return nil }
         let ticks = Double(info.location.x / max(1, lane.barWidth)) * SongPlacement.ticksPerBar
-        var edges: [(index: Int, at: Double)] = blocks.map { ($0.entries.lowerBound, $0.start) }
-        let end = blocks.last.map { ($0.entries.upperBound + 1, $0.end) } ?? (lane.store.song?.tracks[safe: lane.track]?.span.map { $0.upperBound + 1 } ?? 0, 0)
-        edges.append(end)
-        guard let e = edges.min(by: { abs($0.at - ticks) < abs($1.at - ticks) }) else { return nil }
+        // the nearest pass edge, inside a repeating entry too (it splits)
+        let ins = SongSections.insert(SongEntry(pattern: p, reps: 1), list: list, blocks: blocks, at: ticks)
         let pass = lane.store.passTicks(p - 1, track: lane.track)
-        let bar = Int(e.at / SongPlacement.ticksPerBar) + 1
-        let after = blocks.filter { $0.entries.lowerBound >= e.index }
-        var text = "Drop on T\(lane.track + 1): a new entry \(Entries.letter(e.index)) at bar \(bar)"
-        if let f = after.first, let l = after.last {
+        let bar = SongSections.bars(ins.at / SongPlacement.ticksPerBar + 1)
+        let later = blocks.filter { $0.end > ins.at + 0.5 }
+        var text = "Drop on T\(lane.track + 1): a new entry \(Entries.letter(ins.index)) at bar \(bar)"
+        if let split = ins.split { text += ", " + split }
+        if let f = later.first, let l = later.last {
             let shift = pass / SongPlacement.ticksPerBar
-            let by = shift == shift.rounded() ? "\(Int(shift)) bar\(shift == 1 ? "" : "s")" : String(format: "%.2g bars", shift)
+            let by = "\(SongSections.bars(shift)) bar\(shift == 1 ? "" : "s")"
             let moved = f.entries.lowerBound == l.entries.upperBound ? Entries.letter(f.entries.lowerBound)
                 : "\(Entries.letter(f.entries.lowerBound))–\(Entries.letter(l.entries.upperBound))"
             text += ", \(moved) move\(f.entries.lowerBound == l.entries.upperBound ? "s" : "") \(by) later"
         }
-        if (lane.store.song?.tracks[safe: lane.track]?.span?.upperBound ?? -1) >= 15 {
+        if ins.result == nil {
             text = "T\(lane.track + 1) has all 16 entries, so \(Entries.number(p)) can't go in. Play one entry more times, or chain two, to free a slot"
         }
-        return DropSpot(track: lane.track, index: e.index, at: e.at, ticks: pass, pattern: p, text: text)
+        return DropSpot(track: lane.track, index: ins.index, at: ins.at, ticks: pass, pattern: p, text: text, result: ins.result)
     }
 
     func validateDrop(info: DropInfo) -> Bool { lane.dragPattern != nil }
@@ -606,8 +607,12 @@ struct LaneDrop: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         defer { lane.dropAt = nil; lane.dragPattern = nil }
         guard let s = spot(info) else { return false }
+        guard let es = s.result else {
+            lane.store.refuse(track: lane.track, entry: nil, "T\(lane.track + 1) has all 16 entries. Play one entry more times, or chain two, to free a slot")
+            return false
+        }
         lane.selection = EntryRef(track: lane.track, entry: s.index)
-        ArrangeEdits(session: lane.session, store: lane.store).insert(lane.track, SongEntry(pattern: s.pattern, reps: 1), at: s.index)
+        Task { await lane.store.rewrite(track: lane.track, to: es, focus: s.index) }
         return true
     }
 }

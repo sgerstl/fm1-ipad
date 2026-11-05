@@ -122,4 +122,33 @@ public enum SongSections {
         none.result = es + Array(repeating: .empty, count: 16 - es.count)
         return none
     }
+
+    /// A new entry dropped at `at` (ticks): it goes in at the nearest pass edge, splitting the entry it
+    /// falls inside (board 1: "Inserts an entry at the nearest pass edge"). The entry's index, the edge,
+    /// the split it makes, and the list after (nil: no room).
+    public static func insert(_ e: SongEntry, list: SongList, blocks: [SongBlock], at: Double)
+        -> (index: Int, at: Double, split: String?, result: [SongEntry]?) {
+        let lead = list.span?.lowerBound ?? 0
+        let us = units(list, blocks)
+        guard !us.isEmpty else {
+            var es = list.entries
+            es[0] = e
+            return (0, 0, nil, es)
+        }
+        let edges = [us[0].start] + us.map(\.end)
+        let k = edges.indices.min { abs(edges[$0] - at) < abs(edges[$1] - at) } ?? edges.count - 1
+        var split: String?
+        if k > 0 && k < us.count && us[k - 1].origin == us[k].origin {
+            let pass = us[..<k].filter { $0.origin == us[k].origin }.count
+            split = "splits \(String(UnicodeScalar(UInt8(65 + us[k].origin)))) after its \(passWord(pass)) pass"
+        }
+        var after = Array(us[k...])
+        for i in after.indices { after[i].origin += 100 }       // the part after a split stays its own entry
+        let before = entries(Array(us[..<k]))
+        let es = Array(repeating: SongEntry.empty, count: lead) + before + [e] + entries(after)
+        let index = lead + before.count
+        guard es.count <= 16 else { return (index, edges[k], split, nil) }
+        return (index, edges[k], split, es + Array(repeating: .empty, count: 16 - es.count))
+    }
 }
+

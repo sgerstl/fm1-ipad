@@ -263,3 +263,16 @@ extension SkiffSongTests {
         #expect(ListRewrite.plan(track: 0, from: old, to: new, playing: false, sounds: false).ops == [.reps(track: 0, entry: 1, reps: 2)])
     }
 }
+
+extension SongSectionTests {
+    @Test func aDropInsideARepeatingEntrySplitsIt() {
+        let l = list([e(1, 4), e(2, 2)])
+        // bar 3 is inside A's passes: A ×2, the new entry, A ×2, B
+        let r = SongSections.insert(e(9), list: l, blocks: blocks(l), at: 2.1 * bar)
+        #expect(r.index == 1 && r.at == 2 * bar && r.split == "splits A after its 2nd pass")
+        #expect(r.result?.prefix(5).map(\.pattern) == [1, 9, 1, 2, 0] && r.result?.prefix(4).map(\.reps) == [2, 1, 2, 2])
+        // at an entry's edge, nothing splits
+        let s = SongSections.insert(e(9), list: l, blocks: blocks(l), at: 4.2 * bar)
+        #expect(s.index == 1 && s.split == nil && s.result?.prefix(3).map(\.pattern) == [1, 9, 2])
+    }
+}
