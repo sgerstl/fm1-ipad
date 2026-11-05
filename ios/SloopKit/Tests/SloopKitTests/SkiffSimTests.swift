@@ -82,6 +82,91 @@ import Testing
         run.cancel()
     }
 
+    /// CountedPlayhead against the sequencer's own step: skiff-sim's --truth sends each track's playing step
+    /// (`F0 7D 53 4D s0..s5 F7`) whenever one changes. Six tracks of different LENGTH, DIV, DIR and swing,
+    /// then a BPM change (the shift) and a LENGTH change mid-play. Needs the sim run with --truth:
+    ///   SKIFF_SIM=1 SKIFF_TRUTH=1 swift test --filter SkiffSimTests
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SKIFF_TRUTH"] == "1"))
+    func countedPlayheadMatchesTheSimsOwnStep() async throws {
+        let d = try await driver()
+        guard let watch = MIDITransport() else { throw ClientError.timeout("no port") }
+        let ids = d.params
+        let dir = try #require(ids.direction), sw = try #require(ids.swing)
+        var settings: [CountedPlayhead.Settings] = [
+            .init(length: 5, division: 2), .init(length: 4, division: 3, direction: 1, swing: 40),
+            .init(length: 6, division: 4, direction: 2), .init(length: 7, division: 1),
+            .init(length: 3, division: 5, direction: 2, swing: 20), .init(length: 16, division: 2, swing: 10)]
+        var saved: [[Int]] = []
+        for (t, c) in settings.enumerated() {
+            var was: [Int] = []
+            for (id, v) in [(ids.length, c.length), (ids.division, c.division), (dir, c.direction), (sw, c.swing)] {
+                was.append(try await d.trackParam(track: t, id: id))
+                _ = try await d.setTrackParam(track: t, id: id, value: v)
+            }
+            saved.append(was)
+        }
+        let bpm0 = try await d.global(id: ids.bpm), gsw0 = try await d.global(id: ids.globalSwing)
+        _ = try await d.setGlobal(id: ids.bpm, value: 137); _ = try await d.setGlobal(id: ids.globalSwing, value: 0)
+
+        var model = CountedPlayhead(tracks: 6)
+        var history: [[(step: Int, start: Double)]] = []  // the model's steps at each tick, and when each began
+        var reports: [(tick: Int, steps: [Int])] = []
+        let clock = Task { @MainActor in
+            for await e in watch.clock {
+                switch e {
+                case .start: model.start(); history = []
+                case .tick:
+                    model.tick(settings, globalSwing: 0)
+                    if model.running { history.append(model.walks.map { ($0.step, $0.startedAt) }) }
+                default: break
+                }
+            }
+        }
+        let truth = Task { @MainActor in
+            for await f in watch.frames where f.count == 11 && Array(f.prefix(4)) == [0xF0, 0x7D, 0x53, 0x4D] {
+                if model.running { reports.append((history.count - 1, f[4..<10].map(Int.init))) }
+            }
+        }
+        _ = try await d.transport(play: true)
+        try await Task.sleep(for: .seconds(3))
+        _ = try await d.setGlobal(id: ids.bpm, value: 90)          // the shift: applied as Jib would, on sending
+        let changeTick = history.count
+        model.tempoChanged(from: 137, to: 90)
+        try await Task.sleep(for: .seconds(2))
+        _ = try await d.setTrackParam(track: 0, id: ids.length, value: 3)
+        settings[0].length = 3
+        try await Task.sleep(for: .seconds(2))
+        _ = try await d.transport(play: false)
+        try await Task.sleep(for: .milliseconds(200))
+        clock.cancel(); truth.cancel()
+
+        // a report can come before its step's (fractional) start: the sequencer runs an audio block (~0.4
+        // tick) ahead of its MIDI, and the clock and the reports are read from two streams, up to a tick
+        // apart. The model's step at that tick counts, or one starting within 1.5 ticks after it
+        // before the BPM change: exact. After it: the shift, which Jib can only time to a few ms (a track with
+        // a step boundary inside that window can stay a step off), so a looser bar and the rate printed
+        var checked = [0, 0], matched = [0, 0], misses: [String] = []
+        for r in reports where r.tick >= 0 && r.tick + 2 < history.count {
+            let phase = r.tick < changeTick - 3 ? 0 : 1               // (the device may switch a moment before the model)
+            for t in 0..<6 {
+                checked[phase] += 1
+                let ahead = (1...2).map { history[r.tick + $0][t] }.filter { $0.start <= Double(r.tick) + 1.5 }
+                if history[r.tick][t].step == r.steps[t] || ahead.contains(where: { $0.step == r.steps[t] }) { matched[phase] += 1 }
+                else if misses.count < 8 { misses.append("tick \(r.tick) T\(t + 1): sim \(r.steps[t]), model \(history[r.tick][t].step)") }
+            }
+        }
+        print("counted playhead vs --truth: before the BPM change \(matched[0]) of \(checked[0]), after \(matched[1]) of \(checked[1]) (\(history.count) ticks)", misses)
+        #expect(checked[0] > 300 && checked[1] > 300)
+        #expect(matched[0] == checked[0])
+        #expect(Double(matched[1]) >= Double(checked[1]) * 0.9)
+
+        for (t, was) in saved.enumerated() {
+            for (id, v) in zip([ids.length, ids.division, dir, sw], was) { _ = try await d.setTrackParam(track: t, id: id, value: v) }
+        }
+        _ = try await d.setGlobal(id: ids.bpm, value: bpm0); _ = try await d.setGlobal(id: ids.globalSwing, value: gsw0)
+        await d.close()
+    }
+
     /// What FakeSkiff answers with, from the sim: INFO, every DESC, NAMES, TRACK, each track's steps and
     /// parameters (TRACK_DUMP), the globals, UP_LIST.
     private func record(_ d: SkiffDriver) async throws {

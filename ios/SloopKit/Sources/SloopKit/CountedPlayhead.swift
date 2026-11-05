@@ -2,10 +2,11 @@ import Foundation
 
 /// The playhead on firmware that sends no step positions (Skiff): MIDI clock counted from Start, each track
 /// walked a step at a time the way Skiff's sequencer does (seq.c seq_tick / seq_next). Ported from the model
-/// `tools/skiffprobe playhead` measured against skiff-sim (vault skiff-plan.md, "Phase 1 result"): exact for
-/// FWD, RVRS and PING with swing and LENGTH / DIV changes. Not modelled yet: launches (LIST, PERFORM, the
-/// song moving on), the shift after a BPM change on the device's own clock, and re-anchoring from notes.
-/// RAND can't be predicted: such a track shows no playhead (step −1).
+/// `tools/skiffprobe playhead` measured against skiff-sim (vault skiff-plan.md, "Phase 1 result"): FWD, RVRS and
+/// PING with swing, LENGTH / DIR / SWING at the next step, a DIV change resizing the step playing, and the
+/// shift after a BPM change (tempoChanged). RAND can't be counted: such a track is placed by its notes
+/// (anchor) and is unknown (step −1) between them. Not modelled yet: launches (LIST, PERFORM, the song moving
+/// on), re-anchoring other tracks from notes, and joining mid-play (no Start seen: no playhead).
 public struct CountedPlayhead: Equatable, Sendable {
     /// A track's settings, as TRACK_PARAM reads them: LENGTH 1..64, DIV 0..9, DIR 0..3, SWING 0..100.
     public struct Settings: Equatable, Sendable {
@@ -78,6 +79,33 @@ public struct CountedPlayhead: Equatable, Sendable {
             walks[t] = w
         }
         return moved
+    }
+
+    /// BPM changed from `b1` to `b2` on the device's own clock. Skiff doesn't rescale a track's place inside
+    /// the step that's playing (only an external clock gets that, midi_clock_pulse), so a step `e` ticks in
+    /// ends `T − e × b2/b1` ticks after the change, and every track's grid stays that far off the clock's
+    /// from then on (skiffprobe's rule, measured on the sim). Jib knows when the change landed only to a few
+    /// milliseconds: a track whose step boundary falls inside that window can end up a step off the device
+    /// and stay so (against --truth, 3 runs of 7: 96–99 % after the change), until re-anchoring (not built).
+    public mutating func tempoChanged(from b1: Int, to b2: Int) {
+        guard running, b1 > 0, b2 > 0, b1 != b2, ticks >= 0 else { return }
+        let k = Double(ticks)
+        for t in walks.indices where walks[t].nextAt > k {
+            let s = walks[t].startedAt
+            walks[t].nextAt = max(s, k + walks[t].stepTicks - (k - s) * Double(b2) / Double(b1))
+        }
+    }
+
+    /// A track placed from a note it played (RAND, which no count can predict): `step` starts now and
+    /// lasts its division. At the step after, a RAND track is unknown again until its next note.
+    public mutating func anchor(track t: Int, step: Int, _ s: Settings) {
+        guard running, walks.indices.contains(t), ticks >= 0 else { return }
+        let T = Self.divisionTicks[max(0, min(9, s.division))]
+        var w = walks[t]
+        w.step = step; w.count = 1; w.stepTicks = T
+        w.startedAt = Double(ticks)
+        w.nextAt = w.startedAt + T
+        walks[t] = w
     }
 
     /// seq_next: the step after this one, for the track's LENGTH and DIR as they are now.
