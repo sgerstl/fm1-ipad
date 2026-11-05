@@ -456,33 +456,10 @@ struct SoundCard: View, Equatable {
     var body: some View {
         let _ = BodyCounter.tick("card")
         let first = rows[0]
-        let onDeviceRow = rows.firstIndex { onDevice($0) }
-        let focused = ui.focusedPage.map { f in rows.contains { $0.id == f.id } } ?? false
-        // the card brought forward: the FM-1's page when linked, else the one focused here; its edge and its lift move
-        // together, one crossfade from the card before (they jumped, 2026-11-06, on two triggers of their own)
-        let forward = session.screenLinked ? onDeviceRow != nil : focused
-        let activeRow = rows.firstIndex { isActive($0) }
-        let marked = marks.key
-        let lit = rows.contains { p in marked != nil && (p.ids + p.routes.joined()).contains { id in id.map { "s\(p.scope).\($0)" } == marked } }
+        // (what follows the FM-1's screen and the focused page, the LED, the badge, the row keys, the lit edge and
+        // the lift, are views of their own: a page change redraws them, not the card's columns and graph, 2026-11-06)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                LED(on: session.screenLinked ? onDeviceRow != nil : lit)
-                Text(rows.count > 1 ? rows.map { $0.title(session) }.joined(separator: " · ") : first.title(session))
-                    .font(.system(size: 15, weight: .semibold))
-                if let r = onDeviceRow, let k = pages.firstIndex(where: { $0.fw == rows[r].fw }) {
-                    // the page the FM-1 shows, counted as its screen counts them ("FX 1/7")
-                    Text("On the FM-1 · \(k + 1)/\(pages.count)")
-                        .font(.system(size: 12, weight: .semibold))
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Capsule().fill(.white.opacity(0.10)))
-                }
-                if first.scope == 1 {
-                    Text("all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                }
-                Spacer()
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
+            CardHeader(session: session, ui: ui, rows: rows, pages: pages, marks: marks)
             if first.title == "MOD", !first.routes.isEmpty {
                 ModColumns(session: session, ui: ui, page: first, route: modRoute(first), marked: marks.key,
                            activate: { touch(first) })
@@ -499,22 +476,9 @@ struct SoundCard: View, Equatable {
             } else {
                 ForEach(rows.indices, id: \.self) { r in
                     let p = rows[r]
-                    let focused = rows.count > 1 && (activeRow ?? 0) == r
                     HStack(spacing: 4) {
                         if rows.count > 1 {
-                            // the row's page: tap it to focus it (the FM-1's knobs follow the focused row)
-                            Button { activate(p) } label: {
-                                Text(p.title).font(.system(size: 11, weight: .semibold)).tracking(0.4)
-                                    .foregroundStyle(focused ? Theme.onColour : Theme.textSecondary)
-                                    .lineLimit(1).minimumScaleFactor(0.7)
-                                    .frame(width: 52).frame(maxHeight: .infinity)
-                                    .background(RoundedRectangle(cornerRadius: 6).fill(focused ? Theme.text : Theme.control))
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("\(p.title) row")
-                            .accessibilityAddTraits(focused ? .isSelected : [])
-                            .accessibilityHint("Puts the FM-1's knobs on this row")
+                            RowKey(session: session, marks: marks, rows: rows, row: r) { activate(p) }
                         }
                         columns(p)
                     }
@@ -527,24 +491,11 @@ struct SoundCard: View, Equatable {
         }
         .padding(16)
         .panel()
-        // brought forward: lifted a little, and lit along the top (below)
-        .shadow(color: .black.opacity(forward ? 0.45 : 0), radius: 12, y: 6)
-        .animation(reduceMotion ? nil : Self.focusMove, value: forward)
-        // the page on the FM-1's screen: a lit edge along the top, the playhead's light
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
-                .frame(height: 3)
-                .padding(.horizontal, 14)
-                .offset(y: 1)                    // on the panel's top edge
-                .glow(Theme.text.opacity(0.7), radius: 6)
-                .opacity(forward ? 1 : 0)
-                .animation(reduceMotion ? nil : Self.focusMove, value: forward)   // the light crossfades to the next card
-                .accessibilityHidden(true)
-        }
-        .accessibilityValue(onDeviceRow != nil ? "on the FM-1" : "")
+        .modifier(CardForward(session: session, ui: ui, rows: rows))
         // a tap anywhere on an inactive card makes it the active one (on the FM-1 too); touching a column does as well
+        // (read when tapped, not while drawing: the card's body doesn't follow the FM-1's page)
         .contentShape(Rectangle())
-        .onTapGesture { if activeRow == nil { activate(first) } }
+        .onTapGesture { if !rows.contains(where: { isActive($0) }) { activate(first) } }
         .accessibilityAction(named: "Show on the FM-1") { activate(first) }
         .id(first.id)
     }
@@ -564,11 +515,15 @@ struct SoundCard: View, Equatable {
         }
     }
 
-    private func onDevice(_ p: SoundPage) -> Bool {
+    private func onDevice(_ p: SoundPage) -> Bool { Self.onDevice(session, p) }
+    static func onDevice(_ session: DeviceSession, _ p: SoundPage) -> Bool {
         session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == p.fw } == true
     }
     /// The page the knobs work on: the FM-1's, or (not linked) the one last tapped here.
-    private func isActive(_ p: SoundPage) -> Bool { session.screenLinked ? onDevice(p) : marks.activePage == p.id }
+    private func isActive(_ p: SoundPage) -> Bool { Self.isActive(session, marks, p) }
+    static func isActive(_ session: DeviceSession, _ marks: ShapeMarks, _ p: SoundPage) -> Bool {
+        session.screenLinked ? onDevice(session, p) : marks.activePage == p.id
+    }
     /// A column touched: its page becomes the active one; true when it already was.
     private func touch(_ p: SoundPage) -> Bool {
         let was = isActive(p)
@@ -609,6 +564,94 @@ struct SoundCard: View, Equatable {
         })
     }
 
+}
+
+/// A card's header: the LED (the FM-1's page, or the knob just turned), the title, "On the FM-1 · 2/3", "all tracks".
+private struct CardHeader: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    let rows: [SoundPage]
+    let pages: [SoundPage]
+    let marks: ShapeMarks
+
+    var body: some View {
+        let first = rows[0]
+        let onDeviceRow = rows.firstIndex { SoundCard.onDevice(session, $0) }
+        let marked = marks.key
+        let lit = rows.contains { p in marked != nil && (p.ids + p.routes.joined()).contains { id in id.map { "s\(p.scope).\($0)" } == marked } }
+        HStack(spacing: 8) {
+            LED(on: session.screenLinked ? onDeviceRow != nil : lit)
+            Text(rows.count > 1 ? rows.map { $0.title(session) }.joined(separator: " · ") : first.title(session))
+                .font(.system(size: 15, weight: .semibold))
+            if let r = onDeviceRow, let k = pages.firstIndex(where: { $0.fw == rows[r].fw }) {
+                // the page the FM-1 shows, counted as its screen counts them ("FX 1/7")
+                Text("On the FM-1 · \(k + 1)/\(pages.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Capsule().fill(.white.opacity(0.10)))
+            }
+            if first.scope == 1 {
+                Text("all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            }
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(onDeviceRow != nil ? "on the FM-1" : "")
+    }
+}
+
+/// A merged card's row key (LFO, LFO 2): tap it to focus the row; the FM-1's knobs follow the focused row.
+private struct RowKey: View {
+    let session: DeviceSession
+    let marks: ShapeMarks
+    let rows: [SoundPage]
+    let row: Int
+    let activate: () -> Void
+
+    var body: some View {
+        let p = rows[row]
+        let focused = (rows.firstIndex { SoundCard.isActive(session, marks, $0) } ?? 0) == row
+        Button { activate() } label: {
+            Text(p.title).font(.system(size: 11, weight: .semibold)).tracking(0.4)
+                .foregroundStyle(focused ? Theme.onColour : Theme.textSecondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 52).frame(maxHeight: .infinity)
+                .background(RoundedRectangle(cornerRadius: 6).fill(focused ? Theme.text : Theme.control))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(p.title) row")
+        .accessibilityAddTraits(focused ? .isSelected : [])
+        .accessibilityHint("Puts the FM-1's knobs on this row")
+    }
+}
+
+/// The card brought forward: the FM-1's page when linked, else the one focused here: lifted a little and lit along the
+/// top, the two together in one crossfade from the card before (they jumped, 2026-11-06, on two triggers of their own).
+private struct CardForward: ViewModifier {
+    let session: DeviceSession
+    let ui: EditorUI
+    let rows: [SoundPage]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let focused = ui.focusedPage.map { f in rows.contains { $0.id == f.id } } ?? false
+        let forward = session.screenLinked ? rows.contains { SoundCard.onDevice(session, $0) } : focused
+        content
+            .shadow(color: .black.opacity(forward ? 0.45 : 0), radius: 12, y: 6)
+            .animation(reduceMotion ? nil : SoundCard.focusMove, value: forward)
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
+                    .frame(height: 3)
+                    .padding(.horizontal, 14)
+                    .offset(y: 1)                    // on the panel's top edge
+                    .glow(Theme.text.opacity(0.7), radius: 6)
+                    .opacity(forward ? 1 : 0)
+                    .animation(reduceMotion ? nil : SoundCard.focusMove, value: forward)
+                    .accessibilityHidden(true)
+            }
+    }
 }
 
 /// The knob last turned on the FM-1, lit as long as Skiff lights it (ui.hot_t = 40 frames, about 600 ms). Set only

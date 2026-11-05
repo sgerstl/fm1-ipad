@@ -46,11 +46,15 @@ struct PageGraph: View {
     }
     /// Drawn in the panel under the cards on Skiff, shorter than the graphs drawn from the panel's top.
     static let short: Set<String> = ["FX", "SLICER", "DUCK", "SCALE"]
+    @Environment(\.graphsDeferred) private var deferred
 
     var body: some View {
         let _ = BodyCounter.tick("PageGraph")
         let colour = Theme.track[session.selectedTrack]
         Group {
+            if deferred {
+                Color.clear      // (the sound panel sliding in: drawn once it settles, the well holding its place)
+            } else {
             switch page.title {
             case "ENV", "ENV 2": EnvGraph(session: session, ids: page.ids, colour: colour, hot: hot)
             case "LFO", "LFO 2": LiveLFOGraph(session: session, colour: colour)
@@ -89,6 +93,7 @@ struct PageGraph: View {
                 .graphLabel("The arpeggio over 16 steps", "\(Music.arpModes[safe: arpValues[0]] ?? "OFF"), an example on C E G")
             case "MOD": ModGraph(session: session, page: page, route: $modRoute, colour: colour)
             default: EmptyView()
+            }
             }
         }
         .frame(height: Self.short.contains(page.title) ? 88 : page.title == "MOD" ? 168 : 128)   // MOD: eleven routes' text
@@ -934,4 +939,10 @@ private struct GlobalDrawing {
         for i in 0..<4 { s.text(ctx, "\(i + 1)", Double(14 + i * 52), 36, midColour, size: 13, weight: .semibold) }
         s.text(ctx, "SWING \(50 + swing * 50 / 250):\(50 - swing * 50 / 250)", 228, 16, midColour, anchor: .bottomTrailing)
     }
+}
+
+
+extension EnvironmentValues {
+    /// The graphs wait (the sound panel still sliding in): their wells hold the place, drawn once it settles.
+    @Entry var graphsDeferred = false
 }

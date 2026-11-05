@@ -15,6 +15,7 @@ struct MixerPage: View {
     @Environment(\.soundPanelRoom) private var panelRoom
 
     var body: some View {
+        let _ = BodyCounter.tick("MixerPage")
         let shared = SoundPage.pages(session).filter { $0.family == .glo }
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
@@ -127,11 +128,13 @@ private struct MixerCards: View {
     @State private var centred: String?
     @State private var width: CGFloat = 0
     @State private var placed = false          // the first card placed on opening: not a swipe, so the section stays
+    @State private var scrolling = false       // a swipe or its snap under way: the page change waits for it to settle
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82) }
 
     var body: some View {
+        let _ = BodyCounter.tick("MixerCards")
         let cardWidth = min(640, max(440, ((width - trailing) * 0.6).rounded()))
         VStack(alignment: .leading, spacing: 10) {
             MixerHeader(title: "SHARED", lit: ui.mixerSection != .mixer)
@@ -155,6 +158,8 @@ private struct MixerCards: View {
             .scrollIndicators(.hidden)
             .padding(.trailing, trailing)
             .fixedSize(horizontal: false, vertical: true)
+            dots
+                .padding(.trailing, trailing)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .onAppear {
@@ -168,15 +173,47 @@ private struct MixerCards: View {
             withAnimation(spring) { centred = to }
         }
         .onChange(of: centred) { _, id in
-            // the card swiped into the middle is the Mixer's section, and the one the FM-1 shows
-            guard let id, let p = pages.first(where: { $0.id == id }), let t = tab(for: p) else { return }
+            // the card in the middle while scrolling: its page the knobs' (cheap); the rest when the snap settles
+            guard let id else { return }
             marks.activePage = id
             if placed { placed = false; return }
-            if ui.mixerSection != t { ui.mixerSection = t }
-            guard session.screenLinked, ui.followDevice,
-                  session.deviceScreen.map({ !$0.home && $0.page == t.page }) != true else { return }
-            session.showOnDevice(page: t.page)
+            if !scrolling { commit() }
         }
+        // the card swiped into the middle becomes the Mixer's section, and the one the FM-1 shows, once the scroll has
+        // settled: done mid-swipe, the page change rebuilt cards under the snap and it hitched (2026-11-06)
+        .onScrollPhaseChange { _, phase in
+            scrolling = phase.isScrolling
+            if !phase.isScrolling { commit() }
+        }
+    }
+
+    /// How many cards and which is in the middle: a dot each, the current one white (track-neutral), the others grey;
+    /// a tap brings that card in. They follow the swipe (`centred`).
+    private var dots: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(pages.enumerated()), id: \.element.id) { k, p in
+                let on = centred == p.id
+                Button { withAnimation(spring) { centred = p.id } } label: {
+                    Circle().fill(on ? Theme.text : Theme.textTertiary.opacity(0.6))
+                        .frame(width: 8, height: 8)
+                        .frame(width: 28, height: 28)              // the dot small, its target not
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(p.title.capitalized), card \(k + 1) of \(pages.count)")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: centred)
+    }
+
+    private func commit() {
+        guard let id = centred, let p = pages.first(where: { $0.id == id }), let t = tab(for: p) else { return }
+        if ui.mixerSection != t { ui.mixerSection = t }
+        guard session.screenLinked, ui.followDevice,
+              session.deviceScreen.map({ !$0.home && $0.page == t.page }) != true else { return }
+        session.showOnDevice(page: t.page)
     }
 
     private func card(_ p: SoundPage) -> some View {

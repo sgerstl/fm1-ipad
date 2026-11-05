@@ -119,6 +119,7 @@ struct SoundPanel: View {
     let ui: EditorUI
     let state: SoundPanelState
     @State private var marks = ShapeMarks()
+    @State private var settled = false          // slid in: the cards' graphs draw from then (not while it moves)
     @Environment(\.look) private var look
     static let width: CGFloat = 430
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -129,6 +130,7 @@ struct SoundPanel: View {
     }
 
     var body: some View {
+        let _ = BodyCounter.tick("SoundPanel")
         let t = session.selectedTrack, track = session.tracks[t]
         let pages = SoundPage.shown(session, state.family)
         VStack(alignment: .leading, spacing: 12) {
@@ -197,6 +199,8 @@ struct SoundPanel: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .onChange(of: session.deviceScreen) { _, s in SoundTab.adoptCursor(session, marks, s) }
+        .environment(\.graphsDeferred, !settled)
+        .task { try? await Task.sleep(for: .milliseconds(250)); settled = true }
         .onAppear { SoundTab.adoptCursor(session, marks, session.deviceScreen) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sound panel, \(state.family.rawValue)")
@@ -223,7 +227,10 @@ struct SoundPanelHost<Content: View>: View {
         return HStack(alignment: .top, spacing: 12) {
             content()
                 .environment(\.grid, narrowed)
+                // the push lands at once (one layout), never animated: re-laying out the strips and the carousel every
+                // frame of the slide dropped frames (2026-11-06); only the panel moves
                 .environment(\.soundPanelRoom, makesRoom && ui.soundPanel != nil ? SoundPanel.width + 12 : 0)
+                .animation(nil, value: ui.soundPanel != nil)
                 .overlay {
                     if let s = ui.soundPanel, !s.pinned, !makesRoom {
                         Color.clear.contentShape(Rectangle())
@@ -232,13 +239,15 @@ struct SoundPanelHost<Content: View>: View {
                     }
                 }
                 .overlay(alignment: .topTrailing) {
-                    if let s = ui.soundPanel {
-                        SoundPanel(session: session, ui: ui, state: s)
-                            .id(s.family)
-                            .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                    ZStack(alignment: .topTrailing) {
+                        if let s = ui.soundPanel {
+                            SoundPanel(session: session, ui: ui, state: s)
+                                .id(s.family)
+                                .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                        }
                     }
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.soundPanel?.family)
                 }
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.soundPanel?.family)
                 // another track whose engine has none of the open button's pages: closed, never an empty panel
                 .onChange(of: session.selectedTrack) { _, _ in
                     if let f = ui.soundPanel?.family, SoundPage.shown(session, f).isEmpty { ui.soundPanel = nil }
