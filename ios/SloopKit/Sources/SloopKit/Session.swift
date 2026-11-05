@@ -388,6 +388,14 @@ public final class DeviceSession {
     /// USB AUDIO = FULL: bit 11 of the settings' last word (persist_t.lights at byte 84, panel.c lights_word).
     static func usbFull(in s: [UInt8]) -> Bool? { s.count >= 88 ? s[85] & 0x08 != 0 : nil }
 
+    // MARK: Before a firmware install
+
+    /// Everything the connected firmware can back up, in its own file format (FirmwareBackup.swift).
+    public func firmwareBackup(progress: @escaping @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> DeviceBackup {
+        guard let d = driver else { throw BackupError.notSupported }
+        return try await backupTurn { try await BackupCapture.capture(driver: d, progress: progress) }
+    }
+
     // MARK: Projects (kept on the iPad; the FM-1 holds one at a time)
 
     public enum ProjectError: Error, Equatable {
