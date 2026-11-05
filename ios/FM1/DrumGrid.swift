@@ -34,7 +34,9 @@ struct DrumGrid: View {
             }
 
             StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[dt],
-                        motion: session.dialect == .skiff ? session.motion[dt]?.steps ?? [] : []) { ui.selectedStep[dt] = $0 }
+                        motion: session.dialect == .skiff ? session.motion[dt]?.steps ?? [] : [],
+                        // Skiff (a kit's steps are synth steps): steps picked along the numbers, for the bar's actions
+                        picked: session.dialect == .skiff ? Binding(get: { ui.stepSel }, set: { ui.stepSel = $0 }) : nil) { ui.selectedStep[dt] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
@@ -72,6 +74,9 @@ struct DrumGrid: View {
         .padding(12)
         .frame(height: editorHeight)
         .panel()
+        .overlay(alignment: .bottom) {
+            if session.dialect == .skiff { SelectionBar(edits: StepEdits(session: session, ui: ui, track: dt), notes: false).padding(.bottom, 12) }
+        }
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
     }
 }
@@ -92,18 +97,23 @@ struct DrumGridContent: View {
     var body: some View {
         let t = session.tracks[dt]
         let selected = ui.selectedStep[dt]
+        let _ = ui.stepSel                         // read here: picking steps redraws the canvas
         ZStack(alignment: .topLeading) {
             WideCanvas(width: grid.drumContentSize.width, height: contentHeight, barWidth: grid.barWidth) { ctx, size in
                 draw(ctx, size, t, selected, ui.selectedLane)
             }
                 .contentShape(Rectangle())
                 .gesture(paint.exclusively(before: SpatialTapGesture().onEnded { e in
-                    // a tap turns that hit on or off, and selects it
+                    // Scott's tap rules: an empty cell gets a hit, picked; the picked hit tapped again goes; a hit
+                    // that isn't picked is picked, not cleared
                     let i = max(0, min(session.stepCount - 1, Int(e.location.x / grid.stepWidth)))
                     let l = max(0, min(lanes.count - 1, Int(e.location.y / grid.rowHeight)))
+                    let has = session.tracks[dt].gridSteps[i].has(l)
+                    let picked = ui.selectedStep[dt] == i && ui.selectedLane == l && ui.stepSel.isEmpty
+                    ui.stepSel = []
                     ui.selectedStep[dt] = i
                     ui.selectedLane = l
-                    session.toggle(drumIndex: i, lane: l)
+                    if !has || picked { session.toggle(drumIndex: i, lane: l) }
                 }))
                 .accessibilityHidden(true)
             HStack(spacing: 0) {
@@ -149,6 +159,11 @@ struct DrumGridContent: View {
     }
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize, _ t: TrackState, _ selected: Int, _ lane: Int) {
+        // steps picked along the numbers: lit, with an edge
+        for k in ui.stepSel {
+            ctx.fill(Path(CGRect(x: CGFloat(k) * grid.stepWidth, y: 0, width: grid.stepWidth, height: size.height)), with: .color(.white.opacity(0.12)))
+            ctx.fill(Path(CGRect(x: CGFloat(k) * grid.stepWidth, y: 0, width: grid.stepWidth, height: 2)), with: .color(Theme.text))
+        }
         let w = grid.stepWidth, h = grid.rowHeight
         let steps = t.gridSteps
         for b in stride(from: 1, to: 16, by: 2) {

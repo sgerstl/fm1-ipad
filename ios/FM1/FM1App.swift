@@ -116,6 +116,13 @@ final class EditorUI {
     var poolOpen = false
     /// A pattern being dragged from the pool (set as the drag starts), shared by the drawer and the lanes.
     var dragPattern: Int?
+    /// Step editing: the notes picked (a tap, or a lasso) and the steps picked (along the step numbers), on this
+    /// track; what was copied; the last change that can be undone, and what it said.
+    var noteSel: Set<NoteRef> = []
+    var stepSel: Set<Int> = []
+    var selTrack = 0
+    var clip: [SynthStep]?
+    var patternUndo: PatternUndo?
     var selectedStep = Array(repeating: 0, count: 8)      // per track: room for every firmware's tracks
     /// The tempo panel, open under this point (global), from the top bar's BPM.
     var tempoAt: CGPoint?
@@ -162,4 +169,13 @@ enum FlashTarget: Equatable { case stepPanel, trackPanel, grid, patternBin }
 struct Flash: Equatable {
     var target: FlashTarget
     var id: Int
+}
+
+/// A pattern change that can be undone: the steps and LENGTH before it, and what it said ("steps 9–16 added, length
+/// 8 → 16").
+struct PatternUndo: Equatable {
+    var track: Int
+    var steps: [SynthStep]
+    var length: Int
+    var said: String
 }

@@ -42,7 +42,8 @@ struct PianoRoll: View {
                          detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
             }
 
-            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
+            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track],
+                        picked: Binding(get: { ui.stepSel }, set: { ui.stepSel = $0; if !$0.isEmpty { ui.noteSel = [] } })) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
@@ -92,7 +93,9 @@ struct PianoRoll: View {
         .panel()
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
         .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
-        .onChange(of: track) { _, _ in ui.keptRows = [:] }
+        .onChange(of: track) { _, _ in ui.keptRows = [:]; ui.noteSel = []; ui.stepSel = [] }
+        // what's picked and what can be done to it, floating over the grid's foot
+        .overlay(alignment: .bottom) { SelectionBar(edits: StepEdits(session: session, ui: ui, track: track, rows: rows)).padding(.bottom, 12) }
     }
 
     // No paging with the playhead (removed 2026-11-01, Scott): the grid moves only when panned, since
@@ -174,26 +177,48 @@ struct StepNumbers: View {
     let selected: Int
     /// Steps with recorded motion (Skiff): a bar under the number, as Skiff's step row marks them.
     var motion: Set<Int> = []
+    /// Picked steps: a drag along the numbers picks a range (as Arrange's bar ruler); while some are picked, a tap
+    /// adds a step or takes it off. nil: numbers only select.
+    var picked: Binding<Set<Int>>? = nil
     let select: (Int) -> Void
+    @State private var dragFrom: Int?
+
     var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<steps, id: \.self) { i in
                 // every step numbered now a bar fills the grid; beats a step heavier
+                let on = picked?.wrappedValue.contains(i) == true
                 Text("\(i + 1)")
-                    .font(.system(size: 11, weight: i == selected || i % 4 == 0 ? .semibold : .regular))
-                    .foregroundStyle(i == selected ? Theme.text : Theme.textSecondary)
+                    .font(.system(size: 11, weight: i == selected || i % 4 == 0 || on ? .semibold : .regular))
+                    .foregroundStyle(i == selected || on ? Theme.text : Theme.textSecondary)
                     .frame(width: grid.stepWidth, height: 20)       // centred over its column
+                    .background { if on { RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.18)) } }
                     .overlay(alignment: .bottom) {
                         if motion.contains(i) {
                             Capsule().fill(Theme.text).frame(width: max(8, grid.stepWidth - 12), height: 3)
                         }
                     }
                     .contentShape(Rectangle())
-                    .onTapGesture { select(i) }
+                    .onTapGesture {
+                        if let p = picked, !p.wrappedValue.isEmpty {
+                            if p.wrappedValue.contains(i) { p.wrappedValue.remove(i) } else { p.wrappedValue.insert(i) }
+                        } else {
+                            select(i)
+                        }
+                    }
             }
         }
         .offset(x: -offsetX)
         .frame(width: grid.barWidth, height: 20, alignment: .leading)
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 6).onChanged { v in
+            guard let p = picked else { return }
+            let at = { (x: CGFloat) in max(0, min(steps - 1, Int((x + offsetX) / grid.stepWidth))) }
+            let a = dragFrom ?? at(v.startLocation.x)
+            dragFrom = a
+            let b = at(v.location.x)
+            p.wrappedValue = Set(min(a, b)...max(a, b))
+        }.onEnded { _ in dragFrom = nil }, including: picked == nil ? .subviews : .all)
         .clipped()
         .accessibilityHidden(true)
     }
@@ -240,22 +265,33 @@ struct PianoRollContent: View {
     enum Slide { case length(start: Int), paint(note: Int, on: Bool) }
     @State private var slide: Slide?
     @State private var painted: Set<Int> = []  // the steps a paint slide has already passed
+    /// A hold, then a drag: the picked notes carried (by steps and rows), or a box drawn on empty grid.
+    enum Held: Equatable { case move(refs: Set<NoteRef>, from: CGPoint, to: CGPoint), lasso(from: CGPoint, to: CGPoint) }
+    @State private var held: Held?
+    @State private var lifted = 0              // a light haptic as a hold takes
+    /// A hold took during this touch: the tap and the slide that come with it are the hold's, not their own.
+    @State private var holdTook = false
+
+    private var edits: StepEdits { StepEdits(session: session, ui: ui, track: track, rows: rows) }
 
     var body: some View {
         let t = session.tracks[track]
         let selected = ui.selectedStep[track]
         let height = max(grid.gridHeight, CGFloat(rows.count) * grid.rowHeight)
+        // read here, so a pick, a box or a carry redraws the canvas (its closure reads them as it draws)
+        let _ = (ui.noteSel, ui.stepSel, held)
         ZStack(alignment: .topLeading) {
             WideCanvas(width: CGFloat(session.stepCount) * grid.stepWidth, height: height, barWidth: grid.barWidth) { ctx, size in draw(ctx, size, t, selected) }
                 .contentShape(Rectangle())
                 // one finger edits: drag a note's grip (its right end) to set its length; slide along a row
                 // to paint, adding from an empty cell, erasing from a note; a tap turns a note on or off
-                .gesture(lengthGesture.exclusively(before: SpatialTapGesture().onEnded { e in
-                    let i = max(0, min(63, Int(e.location.x / grid.stepWidth)))
-                    let r = Int(e.location.y / grid.rowHeight)
-                    ui.selectedStep[track] = i
-                    if r >= 0, r < rows.count { session.toggle(track: track, index: i, note: rows[r]) }
-                }))
+                // a hold first (0.35 s without moving): carry the notes under it, or draw a box on empty grid; a
+                // drag that starts at once: a note's grip sets its length, a slide paints; a tap adds, picks or
+                // (on the note already picked) deletes
+                .gesture(lengthGesture.exclusively(before: SpatialTapGesture().onEnded { e in tap(e.location) }))
+                // (alongside, not before: a long press first in an exclusive chain kept the tap from ever firing)
+                .simultaneousGesture(holdGesture)
+                .sensoryFeedback(.impact(weight: .light), trigger: lifted)
                 .accessibilityHidden(true)
             // VoiceOver: each step is a button, read in step order.
             HStack(spacing: 0) {
@@ -281,6 +317,103 @@ struct PianoRollContent: View {
         }
     }
 
+    /// Scott's tap rules: an empty cell gets a note, picked; the picked note tapped again goes (a mistaken tap undone
+    /// by a second); a note that isn't picked is picked, not deleted.
+    private func tap(_ p: CGPoint) {
+        if holdTook { holdTook = false; return }          // the lift after a hold isn't a tap
+        let i = max(0, min(63, Int(p.x / grid.stepWidth)))
+        let r = Int(p.y / grid.rowHeight)
+        ui.stepSel = []
+        guard r >= 0, r < rows.count else { ui.selectedStep[track] = i; return }
+        let n = rows[r]
+        if let start = noteStart(at: p) {
+            let ref = NoteRef(step: start, note: n)
+            ui.selectedStep[track] = start
+            if ui.noteSel == [ref] {
+                edits.apply("Deleted \(Music.noteName(n))") { s, _ in PatternEdit.remove(&s, ref) }
+                ui.noteSel = []
+            } else {
+                ui.noteSel = [ref]
+            }
+            return
+        }
+        ui.selectedStep[track] = i
+        var added = false
+        edits.apply("Added \(Music.noteName(n))") { s, _ in added = PatternEdit.add(&s, step: i, note: n) }
+        ui.noteSel = added ? [NoteRef(step: i, note: n)] : []
+    }
+
+    /// Hold, then drag: from a note, the picked notes (or that one) carried by whole steps and rows, lifted, landing
+    /// where they're let go; from empty grid, a box picking the notes it touches. A hold that doesn't move does
+    /// nothing more than pick the note under it.
+    private var holdGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.35, maximumDistance: 8)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { v in
+                guard case .second(true, let d?) = v else { return }
+                if held == nil {
+                    lifted += 1
+                    holdTook = true
+                    if let start = noteStart(at: d.startLocation), let r = row(d.startLocation) {
+                        let ref = NoteRef(step: start, note: rows[r])
+                        let refs = edits.refs.contains(ref) ? edits.refs : [ref]
+                        if !edits.refs.contains(ref) { ui.noteSel = [ref]; ui.stepSel = [] }
+                        held = .move(refs: refs, from: d.startLocation, to: d.location)
+                    } else {
+                        held = .lasso(from: d.startLocation, to: d.location)
+                    }
+                }
+                switch held {
+                case .move(let refs, let from, _): held = .move(refs: refs, from: from, to: d.location)
+                case .lasso(let from, _): held = .lasso(from: from, to: d.location)
+                case nil: break
+                }
+            }
+            .onEnded { _ in
+                defer { held = nil; Task { @MainActor in try? await Task.sleep(for: .milliseconds(80)); holdTook = false } }
+                switch held {
+                case .move(let refs, let from, let to):
+                    let (ds, dr) = offset(from, to)
+                    guard ds != 0 || dr != 0 else { return }
+                    var dest: [NoteRef: NoteRef] = [:]
+                    edits.apply("Moved") { s, _ in dest = PatternEdit.move(&s, refs, by: ds, pitch: edits.byRows(dr)) }
+                    ui.stepSel = []
+                    ui.noteSel = Set(refs.map { dest[$0] ?? $0 })
+                    if let first = ui.noteSel.min() { ui.selectedStep[track] = first.step }
+                case .lasso(let from, let to):
+                    let box = CGRect(x: min(from.x, to.x), y: min(from.y, to.y), width: abs(to.x - from.x), height: abs(to.y - from.y))
+                    ui.stepSel = []
+                    ui.noteSel = notes(in: box)
+                case nil: break
+                }
+            }
+    }
+
+    private func row(_ p: CGPoint) -> Int? {
+        let r = Int(p.y / grid.rowHeight)
+        return r >= 0 && r < rows.count ? r : nil
+    }
+
+    /// A carry's offset in whole steps and rows (down the roll is lower: fewer rows up).
+    private func offset(_ a: CGPoint, _ b: CGPoint) -> (Int, Int) {
+        (Int(((b.x - a.x) / grid.stepWidth).rounded()), -Int(((b.y - a.y) / grid.rowHeight).rounded()))
+    }
+
+    /// The notes a box touches (their pads, held steps included).
+    private func notes(in box: CGRect) -> Set<NoteRef> {
+        let st = session.tracks[track].steps
+        var out: Set<NoteRef> = []
+        for i in st.indices where st[i].time == .note {
+            let len = PatternEdit.length(st, i)
+            for n in st[i].notes {
+                guard let r = rows.firstIndex(of: n) else { continue }
+                let rect = CGRect(x: CGFloat(i) * grid.stepWidth, y: CGFloat(r) * grid.rowHeight, width: CGFloat(len) * grid.stepWidth, height: grid.rowHeight)
+                if rect.intersects(box) { out.insert(NoteRef(step: i, note: n)) }
+            }
+        }
+        return out
+    }
+
     /// From a note's grip (its right end, see gripInside): the drag's end step becomes the note's last step.
     /// Anywhere else, a slide along the row it began in: from an empty cell it adds that note on every
     /// step it passes, from a note it removes it, and never the other way (an adding slide leaves notes
@@ -288,6 +421,7 @@ struct PianoRollContent: View {
     private var lengthGesture: some Gesture {
         DragGesture(minimumDistance: 6)
             .onChanged { e in
+                if holdTook || held != nil { return }      // a hold's carry or box, not a slide
                 if slide == nil { slide = slideKind(at: e.startLocation) }
                 switch slide {
                 case .length(let start):
@@ -356,8 +490,12 @@ struct PianoRollContent: View {
         for b in stride(from: 1, to: 16, by: 2) {
             ctx.fill(Path(CGRect(x: CGFloat(b * 4) * w, y: 0, width: 4 * w, height: size.height)), with: .color(.white.opacity(0.025)))
         }
-        // the selected step's column, lit faintly the whole height
+        // the selected step's column, lit faintly the whole height; picked steps lit more, with an edge
         ctx.fill(Path(CGRect(x: CGFloat(selected) * w, y: 0, width: w, height: size.height)), with: .color(.white.opacity(0.07)))
+        for i in ui.stepSel {
+            ctx.fill(Path(CGRect(x: CGFloat(i) * w, y: 0, width: w, height: size.height)), with: .color(.white.opacity(0.12)))
+            ctx.fill(Path(CGRect(x: CGFloat(i) * w, y: 0, width: w, height: 2)), with: .color(Theme.text))
+        }
         for r in 1..<max(rows.count, 12) {
             ctx.fill(Path(CGRect(x: 0, y: CGFloat(r) * h, width: size.width, height: 1)), with: .color(.black.opacity(0.45)))
         }
@@ -376,7 +514,16 @@ struct PianoRollContent: View {
                 guard let r = rowOf[n] else { continue }
                 let rect = CGRect(x: CGFloat(i) * w + 2, y: CGFloat(r) * h + 4, width: CGFloat(len) * w - 4, height: h - 8)
                 let soft = k < s.levels.count && (s.levels[k] == 1 || s.levels[k] == 2)
-                drawPad(ctx, rect, track: track, dim: soft || i >= t.length, selected: i == selected, flat: look.flat)
+                let ref = NoteRef(step: i, note: n)
+                let picked = ui.noteSel.contains(ref) || ui.stepSel.contains(i)
+                    || (ui.noteSel.isEmpty && ui.stepSel.isEmpty && i == selected)
+                if case .move(let refs, _, _) = held, refs.contains(ref) {
+                    // carried: faint in its place (the lifted copy is drawn after)
+                    var c = ctx; c.opacity = 0.3
+                    drawPad(c, rect, track: track, flat: look.flat)
+                    continue
+                }
+                drawPad(ctx, rect, track: track, dim: soft || i >= t.length, selected: picked, flat: look.flat)
                 // a grip at the note's end (two lines): it can be dragged longer or shorter
                 for dx in [CGFloat(11), 6] {
                     ctx.fill(Path(roundedRect: CGRect(x: rect.maxX - dx, y: rect.minY + 8, width: 2, height: rect.height - 16), cornerRadius: 1),
@@ -390,8 +537,27 @@ struct PianoRollContent: View {
             ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(t.steps.count - t.length) * w, height: size.height)),
                      with: .color(.black.opacity(0.4)))
         }
+        // a carry: the notes lifted (level 3) where they'd land; a box: its outline
+        switch held {
+        case .move(let refs, let from, let to):
+            let (ds, dr) = offset(from, to)
+            let pitch = edits.byRows(dr)
+            for ref in refs {
+                guard let p = pitch(ref.note), let r = rowOf[p] else { continue }
+                let len = PatternEdit.length(t.steps, ref.step)
+                let rect = CGRect(x: CGFloat(ref.step + ds) * w + 2, y: CGFloat(r) * h + 4, width: CGFloat(len) * w - 4, height: h - 8)
+                var c = ctx
+                c.addFilter(.shadow(color: .black.opacity(0.5), radius: 8, y: 6))
+                drawPad(c, rect.offsetBy(dx: 0, dy: -2), track: track, selected: true, flat: look.flat)
+            }
+        case .lasso(let from, let to):
+            let box = CGRect(x: min(from.x, to.x), y: min(from.y, to.y), width: abs(to.x - from.x), height: abs(to.y - from.y))
+            ctx.fill(Path(roundedRect: box, cornerRadius: 4), with: .color(Theme.text.opacity(0.08)))
+            ctx.stroke(Path(roundedRect: box, cornerRadius: 4), with: .color(Theme.text), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+        case nil: break
+        }
         // the selected step, when it has no note to ring: a hollow column
-        if !t.steps[selected].isOn && t.steps[selected].time != .tie {
+        if ui.noteSel.isEmpty, ui.stepSel.isEmpty, !t.steps[selected].isOn && t.steps[selected].time != .tie {
             let r = CGRect(x: CGFloat(selected) * w + 2, y: 2, width: w - 4, height: size.height - 4)
             ctx.stroke(Path(roundedRect: r, cornerRadius: 6), with: .color(Theme.text), lineWidth: 2)
         }

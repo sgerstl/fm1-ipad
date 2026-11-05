@@ -17,19 +17,23 @@ struct SkiffSongPage: View {
     @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let songMin: CGFloat = 180, editorMin: CGFloat = 380, dividerHeight: CGFloat = 16
+    static let editorMin: CGFloat = 380, dividerHeight: CGFloat = 16
+    /// The song's least: the tool row, the ruler and every lane at its least (28 pt and its gap), so it never spills.
+    static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
 
     var body: some View {
         GeometryReader { g in
             let total = g.size.height
-            let top = min(max(total * split, Self.songMin), total - Self.editorMin - Self.dividerHeight)
+            let least = Self.songMin(session.trackCount)
+            let top = min(max(total * split, least), max(least, total - Self.editorMin - Self.dividerHeight))
             let bottom = total - top - Self.dividerHeight
             VStack(spacing: 0) {
                 SkiffArrangePage(session: session, store: store, ui: ui)
                     .environment(\.arrangeCompact, true)
                     .environment(\.arrangeLaneHeight, Self.laneHeight(top, tracks: session.trackCount))
                     .frame(height: top)
-                divider(total)
+                    .clipped()
+                divider(total, least: least)
                 PatternPane(session: session, store: store, ui: ui, height: bottom)
                     .frame(height: bottom)
             }
@@ -71,14 +75,14 @@ struct SkiffSongPage: View {
         return max(28, min(SkiffArrangePage.fullLaneHeight, lanes / CGFloat(max(1, tracks)) - SkiffArrangePage.laneGap))
     }
 
-    private func divider(_ total: CGFloat) -> some View {
+    private func divider(_ total: CGFloat, least: CGFloat) -> some View {
         Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
             .frame(maxWidth: .infinity).frame(height: Self.dividerHeight)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { v in
                     if dragFrom == nil { dragFrom = split }
-                    let lo = Self.songMin / total, hi = (total - Self.editorMin - Self.dividerHeight) / total
+                    let lo = least / total, hi = (total - Self.editorMin - Self.dividerHeight) / total
                     split = min(max((dragFrom ?? split) + v.translation.height / total, lo), hi)
                 }
                 .onEnded { _ in dragFrom = nil })

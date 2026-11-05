@@ -1392,6 +1392,15 @@ public final class DeviceSession {
     // MARK: Editing from the iPad (step 2). The app shows each change at once; the reply is what
     // the device stored, and it wins.
 
+    /// A pattern edit (PatternEdit): the steps that changed written (TRACK_STEP, one request per step at a time, as
+    /// `write`), and LENGTH when it changed.
+    public func writePattern(track t: Int, _ steps: [SynthStep], length: Int? = nil) {
+        guard trackIndices.contains(t) else { return }
+        let old = tracks[t].steps
+        for i in PatternEdit.changed(old, steps) { write(track: t, index: i, steps[i]) }
+        if let length, length != tracks[t].length { set(track: t, param: ids.length, to: length) }
+    }
+
     public func write(track t: Int, index i: Int, _ step: SynthStep) {
         guard trackIndices.contains(t), !isDrums(t) else { return }
         var st = step

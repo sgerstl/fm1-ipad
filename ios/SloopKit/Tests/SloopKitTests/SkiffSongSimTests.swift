@@ -395,3 +395,30 @@ extension SkiffSongSimTests {
         _ = try await d.clearMotion(track: 0)
     }
 }
+
+extension SkiffSongSimTests {
+    /// Step editing on the real firmware: a chord and a held note duplicated after themselves, LENGTH grown to fit,
+    /// read back as Skiff keeps them.
+    @Test func duplicateAfterOnTheRealFirmware() async throws {
+        let session = DeviceSession(transport: { MIDITransport() })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        try await waitFor(15) { if case .connected = session.status { true } else { false } }
+        session.setPlaying(false)
+        let t = session.selectedTrack
+        var steps = Array(repeating: SynthStep.empty, count: session.tracks[t].steps.count), len = 8
+        steps[0] = SynthStep(notes: [60, 64, 67], time: .note, accent: false, slide: false, velocity: 100)
+        steps[4] = SynthStep(notes: [62], time: .note, accent: false, slide: false, velocity: 90)
+        steps[5].time = .tie
+        session.writePattern(track: t, steps, length: len)
+        try await waitFor(5) { session.tracks[t].length == 8 }
+        _ = PatternEdit.duplicateAfter(&steps, steps: 0...7, notes: nil, length: &len)
+        session.writePattern(track: t, steps, length: len)
+        try await waitFor(5) { session.tracks[t].length == 16 }
+        try await Task.sleep(for: .milliseconds(500))
+        await session.rereadSteps(track: t)
+        let s = session.tracks[t].steps
+        #expect(Set(s[8].notes) == [60, 64, 67] && s[12].notes == [62] && s[13].time == .tie && s[14].time != .tie)
+        run.cancel()
+    }
+}
