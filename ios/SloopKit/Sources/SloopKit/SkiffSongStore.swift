@@ -62,9 +62,10 @@ public final class SkiffSongStore {
         guard let d = driver, !busy else { return }
         do {
             let s = try await d.songLists()
-            if !busy { song = s; learnDivisions(s) }
+            // set only when changed: an assignment wakes every view that reads it, once a second while stopped too
+            if !busy { if song != s { song = s }; learnDivisions(s) }
             reads += 1
-            if withPool || pool == nil || reads % 4 == 0 { pool = try await d.pool() }
+            if withPool || pool == nil || reads % 4 == 0 { let p = try await d.pool(); if pool != p { pool = p } }
         } catch {}
     }
 
@@ -78,7 +79,7 @@ public final class SkiffSongStore {
 
     private func learnDivisions(_ s: SkiffSong) {
         for (t, l) in s.tracks.enumerated() {
-            if let p = l.patternOn { divisions[p] = trackTiming(t).division }
+            if let p = l.patternOn, divisions[p] != trackTiming(t).division { divisions[p] = trackTiming(t).division }
         }
     }
 

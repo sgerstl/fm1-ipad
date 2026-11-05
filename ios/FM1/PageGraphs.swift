@@ -252,7 +252,7 @@ struct LiveLFOGraph: View {
 
     var body: some View {
         let lfo = self.lfo, track = session.selectedTrack, bpm = Double(session.bpm)
-        TimelineView(.animation(paused: !visible)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !visible)) { tl in
             Canvas { ctx, sz in
                 let s = Space(size: sz)
                 let n = session.lfoClock.lfoNow(lfo, track: track, bpm: bpm, opened: opened, at: tl.date)
@@ -311,7 +311,7 @@ struct LFODestGraph: View {
             guard let id else { return ("", 0) }
             return (session.trackDesc(id)?.label ?? "", session.cell(id).value)
         }
-        TimelineView(.animation(paused: !visible)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !visible)) { tl in
             Canvas { ctx, sz in
                 let s = Space(size: sz)
                 let n = session.lfoClock.lfoNow(lfo, track: track, bpm: bpm, opened: LiveLFOGraph.opened, at: tl.date)

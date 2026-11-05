@@ -22,6 +22,7 @@ struct SkiffSongPage: View {
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
 
     var body: some View {
+        let _ = BodyCounter.tick("SkiffSongPage")
         GeometryReader { g in
             let total = g.size.height
             let least = Self.songMin(session.trackCount)
@@ -104,6 +105,7 @@ struct PatternPane: View {
     static let headerHeight: CGFloat = 44
 
     var body: some View {
+        let _ = BodyCounter.tick("PatternPane")
         let t = session.selectedTrack
         let list = store.song?.tracks[safe: t]
         let pinned = ui.pinnedEntry.flatMap { $0.track == t ? $0 : nil }

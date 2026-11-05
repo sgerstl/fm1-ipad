@@ -14,6 +14,7 @@ struct TopBar: View {
     @State private var readoutFrame: CGRect = .zero
 
     var body: some View {
+        let _ = BodyCounter.tick("TopBar")
         // the tabs sit in the middle of the bar whatever the two sides hold
         ZStack {
             HStack(spacing: 0) {
@@ -304,38 +305,49 @@ struct TopBar: View {
     /// Position over tempo; a tap opens the tempo. In song mode the tempo line says SONG (PLAY plays the
     /// song order and loads sections over the tracks, so it shows on every page).
     private var readout: some View {
+        // a tap opens the tempo under it (2026-11-05; it used to open Arrange in song mode, a tab away)
+        Button {
+            ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY)
+        } label: {
+            ReadoutLabel(session: session, recording: recording)
+        }
+        .buttonStyle(.plain)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { readoutFrame = $0 }
+        .accessibilityHint("Opens the tempo")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// The position over the tempo: a view of its own, so the step moving (8 times a second at 120 BPM) redraws this,
+/// not the whole bar.
+private struct ReadoutLabel: View {
+    let session: DeviceSession
+    let recording: Bool
+
+    var body: some View {
         let pos = session.positions[session.selectedTrack]
         let song = session.song.songMode
         let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
         let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : song ? "SONG" : nil
-        // a tap opens the tempo under it (2026-11-05; it used to open Arrange in song mode, a tab away)
-        return Button {
-            ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY)
-        } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(position).font(.system(size: 20, weight: .semibold)).monospacedDigit().lineLimit(1)
-                    .foregroundStyle(recording ? Theme.recText : Theme.text)
-                HStack(spacing: 4) {
-                    if let m = mode {
-                        Text(m).fontWeight(.semibold).foregroundStyle(recording ? Theme.recText : Theme.text)
-                        Text("·")
-                    }
-                    Text("\(session.bpm) BPM").monospacedDigit()
+        VStack(alignment: .leading, spacing: 0) {
+            Text(position).font(.system(size: 20, weight: .semibold)).monospacedDigit().lineLimit(1)
+                .foregroundStyle(recording ? Theme.recText : Theme.text)
+            HStack(spacing: 4) {
+                if let m = mode {
+                    Text(m).fontWeight(.semibold).foregroundStyle(recording ? Theme.recText : Theme.text)
+                    Text("·")
                 }
-                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                Text("\(session.bpm) BPM").monospacedDigit()
             }
-            .frame(width: 112, alignment: .leading)         // "SONG REC · 120 BPM" at its widest: nothing moves
-            .padding(.horizontal, 8)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
         }
-        .buttonStyle(.plain)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { readoutFrame = $0 }
+        .frame(width: 112, alignment: .leading)         // "SONG REC · 120 BPM" at its widest: nothing moves
+        .padding(.horizontal, 8)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
                              session.playing ? "bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "stopped",
                              "\(session.bpm) BPM"].compactMap { $0 }.joined(separator: ", "))
-        .accessibilityHint("Opens the tempo")
-        .accessibilityAddTraits(.isButton)
     }
 }

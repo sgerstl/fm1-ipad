@@ -39,6 +39,7 @@ struct SkiffArrangePage: View {
     static let binWidth: CGFloat = 272
 
     var body: some View {
+        let _ = BodyCounter.tick("SkiffArrangePage")
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 toolRow
@@ -442,6 +443,7 @@ struct LaneHeader: View {
     @Environment(\.arrangeCompact) private var compact
 
     var body: some View {
+        let _ = BodyCounter.tick("LaneHeader")
         let tr = session.tracks[track]
         let used = store.song?.tracks[safe: track]?.used ?? 0
         if compact { compactBody } else { fullBody(tr, used) }
@@ -505,6 +507,7 @@ struct EntriesUsed: View {
     let colour: Color
 
     var body: some View {
+        let _ = BodyCounter.tick("EntriesUsed")
         HStack(spacing: 6) {
             Grid(horizontalSpacing: 2, verticalSpacing: 2) {
                 ForEach(0..<2, id: \.self) { row in
@@ -532,6 +535,7 @@ struct Ruler: View {
     @Binding var section: SectionRange?
     var selectBlock: () -> Void = {}
     var body: some View {
+        let _ = BodyCounter.tick("Ruler")
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 6).fill(Theme.panel)
             if let s = section {
@@ -610,6 +614,7 @@ struct Lane: View {
     private var motion: Animation? { reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86) }
 
     var body: some View {
+        let _ = BodyCounter.tick("Lane")
         var list = store.song?.tracks[safe: track] ?? SongList()
         if let s = stretch { list.entries[s.entry].reps = s.reps }
         let blocks = store.blocks(track, list: list)
@@ -973,7 +978,8 @@ struct PassBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : nil, paused: !session.playing)) { _ in
+        let _ = BodyCounter.tick("PassBar")
+        TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : 1.0 / 30, paused: !session.playing)) { _ in
             let p = session.passProgress(track) ?? 0
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.track[track].opacity(0.3))
@@ -1192,6 +1198,7 @@ struct BlockView: View {
     }
 
     var body: some View {
+        let _ = BodyCounter.tick("BlockView")
         let shape = BlockShape(cut: sound != nil ? 12 : 0)
         let wide = width >= 56
         let solid = !isRest
@@ -1286,6 +1293,7 @@ struct ChainDividers: View {
     let parts: [Double]
     let reps: Int
     var body: some View {
+        let _ = BodyCounter.tick("ChainDividers")
         GeometryReader { g in
             let total = parts.reduce(0, +) * Double(reps)
             Path { p in
@@ -1311,9 +1319,12 @@ struct SongPlayhead: View {
     let height: CGFloat
 
     var body: some View {
-        TimelineView(.animation(paused: !session.playing)) { _ in
+        let _ = BodyCounter.tick("SongPlayhead")
+        // the song's length once per body, not per frame (laneEnds places every lane's blocks); 30 frames a second
+        // move a 2 pt line smoothly enough at any tempo
+        let songTicks = (store.laneEnds.max() ?? 0) * SongPlacement.ticksPerBar
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !session.playing)) { _ in
             let ticks = session.clockTicks
-            let songTicks = (store.laneEnds.max() ?? 0) * SongPlacement.ticksPerBar
             if ticks >= 0, songTicks > 0 {
                 let at = Double(ticks).truncatingRemainder(dividingBy: songTicks)
                 Rectangle().fill(Theme.text).frame(width: 2, height: height + 8)
@@ -1344,6 +1355,7 @@ struct SectionBar: View {
     let cancel: () -> Void
 
     var body: some View {
+        let _ = BodyCounter.tick("SectionBar")
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 Text("Bars \(range.from + 1)–\(range.to)").font(.system(size: 15, weight: .semibold)).fixedSize()

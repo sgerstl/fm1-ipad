@@ -23,6 +23,7 @@ struct PianoRoll: View {
     static func rows(_ n: Int) -> String { n == 1 ? "1 row" : "\(n) rows" }
 
     var body: some View {
+        let _ = BodyCounter.tick("PianoRoll")
         let t = session.tracks[track]
         let rows = Self.rows(t, keeping: ui.keptRows[track] ?? [])
         // Skiff: the motion lanes under the velocity, the grid shorter by their height
@@ -124,6 +125,7 @@ struct AuditionLabel: View {
     @State private var pressed = false
 
     var body: some View {
+        let _ = BodyCounter.tick("AuditionLabel")
         Text(text)
             .font(.system(size: 13, weight: bold ? .semibold : .regular))
             .foregroundStyle(pressed || bold ? Theme.text : Theme.textSecondary)
@@ -153,6 +155,7 @@ struct EditorHeader: View {
     var muted = false
     let detail: String
     var body: some View {
+        let _ = BodyCounter.tick("EditorHeader")
         HStack {
             HStack(spacing: 10) {
                 TrackChip(track: track, muted: muted)
@@ -184,6 +187,7 @@ struct StepNumbers: View {
     @State private var dragFrom: Int?
 
     var body: some View {
+        let _ = BodyCounter.tick("StepNumbers")
         HStack(spacing: 0) {
             ForEach(0..<steps, id: \.self) { i in
                 // every step numbered now a bar fills the grid; beats a step heavier
@@ -236,7 +240,8 @@ struct EditorPlayhead: View {
     @Environment(\.pageVisible) private var visible
 
     var body: some View {
-        TimelineView(.animation(paused: !session.playing || !visible)) { tl in
+        let _ = BodyCounter.tick("EditorPlayhead")
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !session.playing || !visible)) { tl in
             let pos = session.playhead(track: track, at: tl.date, interpolate: !reduceMotion)
             let x = CGFloat(pos) * grid.stepWidth - offsetX
             ZStack(alignment: .top) {
@@ -275,6 +280,7 @@ struct PianoRollContent: View {
     private var edits: StepEdits { StepEdits(session: session, ui: ui, track: track, rows: rows) }
 
     var body: some View {
+        let _ = BodyCounter.tick("PianoRollContent")
         let t = session.tracks[track]
         let selected = ui.selectedStep[track]
         let height = max(grid.gridHeight, CGFloat(rows.count) * grid.rowHeight)
@@ -597,6 +603,7 @@ struct VelocityLane: View {
     let track: TrackState
     let selected: Int
     var body: some View {
+        let _ = BodyCounter.tick("VelocityLane")
         WideCanvas(width: CGFloat(track.steps.count) * grid.stepWidth, height: PianoRoll.velocityHeight, barWidth: grid.barWidth) { ctx, size in
             for i in track.steps.indices where track.steps[i].isOn {
                 let v = CGFloat(track.steps[i].velocity) / 127

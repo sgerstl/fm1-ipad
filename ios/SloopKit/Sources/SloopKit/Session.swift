@@ -941,40 +941,45 @@ public final class DeviceSession {
     private func apply(track t: Int, id: Int, value v: Int) {
         guard trackIndices.contains(t) else { return }
         if t == selectedTrack, id < params.count, params[id] != v { params[id] = v }
+        // changed on a copy, set back only when it differs: an assignment to `tracks` wakes every view that reads it
+        // (the resync reads every parameter again every few seconds, nearly always unchanged)
+        var tr = tracks[t]
         if isDrums(t), id == info?.firstEngineParam {               // the drum track's kit
-            tracks[t].preset = v
-            if kitNames.indices.contains(v) { tracks[t].presetName = kitNames[v] }
-            return
+            tr.preset = v
+            if kitNames.indices.contains(v) { tr.presetName = kitNames[v] }
+        } else {
+            switch id {
+            case ids.level: if !isDrums(t) { tr.level = v }
+            case ids.root: tr.root = max(0, min(11, v))
+            case ids.scale: tr.scale = max(0, min(Music.scales.count - 1, v))
+            case ids.quant: tr.quant = v
+            case ids.transpose: tr.transpose = v
+            case ids.chord: tr.chord = max(0, v)
+            case ids.arpMode: tr.arpMode = max(0, v)
+            case ids.length: tr.length = max(1, min(stepCount, v))
+            case ids.division: tr.division = max(0, min(Music.divisionBeats.count - 1, v))
+            case ids.pan: tr.pan = v
+            case ids.mute: tr.mute = v != 0
+            case ids.direction: tr.direction = v
+            case ids.swing: tr.swing = v
+            default: break
+            }
         }
-        switch id {
-        case ids.level: if !isDrums(t) { tracks[t].level = v }
-        case ids.root: tracks[t].root = max(0, min(11, v))
-        case ids.scale: tracks[t].scale = max(0, min(Music.scales.count - 1, v))
-        case ids.quant: tracks[t].quant = v
-        case ids.transpose: tracks[t].transpose = v
-        case ids.chord: tracks[t].chord = max(0, v)
-        case ids.arpMode: tracks[t].arpMode = max(0, v)
-        case ids.length: tracks[t].length = max(1, min(stepCount, v))
-        case ids.division: tracks[t].division = max(0, min(Music.divisionBeats.count - 1, v))
-        case ids.pan: tracks[t].pan = v
-        case ids.mute: tracks[t].mute = v != 0
-        case ids.direction: tracks[t].direction = v
-        case ids.swing: tracks[t].swing = v
-        default: break
-        }
+        if tr != tracks[t] { tracks[t] = tr }
     }
 
     private func applyGlobal(id: Int, value v: Int) {
-        if id < globals.count { globals[id] = v }
+        // (each set only when it changes, as `apply`)
+        if id < globals.count, globals[id] != v { globals[id] = v }
         switch id {
         case ids.bpm:
             // the counted playhead shifts as Skiff's sequencer does when its own clock changes speed
             if v != bpm, !capabilities.contains(.livePlayhead) { counted.tempoChanged(from: bpm, to: v) }
-            bpm = v
-        case ids.globalSwing: swing = v
-        case ids.drumLevel: if let dt = drumTrack { tracks[dt].level = v }
-        case ids.otherChannels: otherChannelsPlaySelected = v == 0
-        case ids.drumMap: drumMapGM = v == 0
+            if bpm != v { bpm = v }
+        case ids.globalSwing: if swing != v { swing = v }
+        case ids.drumLevel: if let dt = drumTrack, tracks[dt].level != v { tracks[dt].level = v }
+        case ids.otherChannels: if otherChannelsPlaySelected != (v == 0) { otherChannelsPlaySelected = v == 0 }
+        case ids.drumMap: if drumMapGM != (v == 0) { drumMapGM = v == 0 }
         default: break
         }
     }
@@ -1191,7 +1196,9 @@ public final class DeviceSession {
             try? await Task.sleep(for: resyncInterval)
             do {
                 let sel = selectedTrack
-                stats.resyncFixes += try await readSteps(sel)
+                // Skiff pushes its step changes (WATCH bit 0): the full read is a backstop, every fourth pass (64
+                // requests each time); SLOOP's every pass
+                if !(c is SkiffDriver) || pass % 4 == 0 { stats.resyncFixes += try await readSteps(sel) }
                 if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
                     let n = trackCount
                     let other = (sel + 1 + (pass / 3) % max(1, n - 1)) % n
