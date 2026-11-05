@@ -114,6 +114,8 @@ final class EditorUI {
     var pinnedEntry: EntryRef?
     /// The Song tab: the pattern pool's drawer is open.
     var poolOpen = false
+    /// A pattern being dragged from the pool (set as the drag starts), shared by the drawer and the lanes.
+    var dragPattern: Int?
     var selectedStep = Array(repeating: 0, count: 8)      // per track: room for every firmware's tracks
     /// The tempo panel, open under this point (global), from the top bar's BPM.
     var tempoAt: CGPoint?

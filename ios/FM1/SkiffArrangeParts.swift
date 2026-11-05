@@ -310,7 +310,10 @@ struct PatternBin: View {
     @Binding var all: Bool
     let selection: EntryRef?
     @Binding var dragPattern: Int?
+    /// The Song tab's drawer: the level-3 surface (held), not the bin's panel.
+    var drawer = false
     @State private var confirmClear = false
+    @Environment(\.look) private var look
 
     /// Pattern (0...63) → the tracks whose lists name it.
     private var tracksOf: [Int: [Int]] {
@@ -367,7 +370,11 @@ struct PatternBin: View {
         }
         .padding(16)
         .frame(maxHeight: .infinity, alignment: .top)
-        .panel()
+        .background {
+            // the drawer stands over the page (level 3), its one shadow on its shape; the bin sits in it (level 1)
+            if drawer { RoundedRectangle(cornerRadius: 16).fill(look.surface(.held)).elevationShadow(.held, look) }
+        }
+        .modifier(BinPanel(on: !drawer))
     }
 
     private func row(_ p: Int, tracks: [Int]) -> some View {
@@ -474,3 +481,8 @@ struct OfflineBar: View {
     }
 }
 
+
+private struct BinPanel: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View { if on { content.panel() } else { content } }
+}

@@ -15,8 +15,10 @@ struct SkiffArrangePage: View {
     @State private var selection: EntryRef?
     @State private var zoomBars: Int?
     @State private var allPatterns = false
-    /// A pattern being dragged from the bin (set when the drag starts), and where it would go.
-    @State private var dragPattern: Int?
+    /// A pattern being dragged from the bin (set when the drag starts; EditorUI's, so the Song tab's drawer can
+    /// start one), and where it would go.
+    private var dragPattern: Int? { ui.dragPattern }
+    private var dragPatternBinding: Binding<Int?> { Binding(get: { ui.dragPattern }, set: { ui.dragPattern = $0 }) }
     @State private var dropAt: DropSpot?
     /// A block held (lifted, the lanes don't scroll), where it would move to, and the menu open (a block's,
     /// an entry's sounds, a lane's add menu).
@@ -62,15 +64,13 @@ struct SkiffArrangePage: View {
                 if !compact { inspector }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // the Song tab: the pool is a drawer at the song's right edge, still where blocks are dragged from
-            if !compact || ui.poolOpen {
-                PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: $dragPattern)
+            // (the Song tab: the pool is a full-height drawer of the page's, SkiffSongPage)
+            if !compact {
+                PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: dragPatternBinding)
                     .frame(width: Self.binWidth)
                     .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
         // the Song tab: a block selected is the one the editor below shows (pinned); Follow lets it go
         .onChange(of: selection) { _, r in
             guard compact, r != ui.pinnedEntry else { return }
@@ -257,7 +257,7 @@ struct SkiffArrangePage: View {
                               selectBlock: { selection = nil })
                         ForEach(0..<session.trackCount, id: \.self) { t in
                             Lane(session: session, store: store, track: t, barWidth: barWidth, width: contentWidth,
-                                 selection: $selection, dragPattern: $dragPattern, dropAt: $dropAt, lifted: $lifted, moveAt: $moveAt,
+                                 selection: $selection, dragPattern: dragPatternBinding, dropAt: $dropAt, lifted: $lifted, moveAt: $moveAt,
                                  menuRef: menuRef, openMenu: openMenu, focus: $blockFocus, ui: ui,
                                  bracket: bracket(t))
                         }

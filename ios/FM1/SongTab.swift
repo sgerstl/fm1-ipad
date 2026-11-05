@@ -13,6 +13,9 @@ struct SkiffSongPage: View {
     /// The song's share of the height, kept across launches.
     @AppStorage("songSplit") private var split = 0.40
     @State private var dragFrom: Double?
+    @State private var allPatterns = false
+    @Environment(\.look) private var look
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let songMin: CGFloat = 180, editorMin: CGFloat = 380, dividerHeight: CGFloat = 16
 
@@ -30,6 +33,35 @@ struct SkiffSongPage: View {
                 PatternPane(session: session, store: store, ui: ui, height: bottom)
                     .frame(height: bottom)
             }
+            .overlay { drawer }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
+        }
+    }
+
+    /// The pattern pool (Scott: "Full height"): a level-3 drawer down the page's right edge, over both halves, the
+    /// source a pattern is dragged from onto a lane. A tap outside, Escape or Patterns closes it. While a pattern is
+    /// dragged the tap catcher steps aside, so the drop reaches the lanes (the editor takes none).
+    @ViewBuilder private var drawer: some View {
+        if ui.poolOpen {
+            ZStack(alignment: .trailing) {
+                Color.clear.contentShape(Rectangle())
+                    .onTapGesture { ui.poolOpen = false }
+                    .allowsHitTesting(ui.dragPattern == nil)
+                    .accessibilityHidden(true)
+                PatternBin(session: session, store: store, all: $allPatterns, selection: ui.pinnedEntry,
+                           dragPattern: Binding(get: { ui.dragPattern }, set: { ui.dragPattern = $0 }), drawer: true)
+                    .frame(width: 288)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+            }
+            .background {
+                Button("Close the patterns") { ui.poolOpen = false; ui.dragPattern = nil }
+                    .keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape) { ui.poolOpen = false }
         }
     }
 

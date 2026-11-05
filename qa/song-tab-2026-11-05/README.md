@@ -37,11 +37,14 @@ Skiff's protocol edits a track's loaded pattern (TRACK_STEP). There's no way to 
 isn't loaded, so a pinned entry can't be edited while the song plays another one. Hence the "opens when the song
 stops" state.
 
-## Questions for Scott
+## The pool drawer (Scott: "Full height")
 
-- **The pool drawer:** at a 40 % split it shows two or three patterns at a time (it scrolls). It could instead open
-  over the whole page height, over the editor. It would still be a drag source, but over the editor, not beside the
-  lanes.
+Down the page's right edge over both halves, 288 pt, the level-3 surface with its one shadow on its shape, about 14
+patterns in view (`04-drawer-full-height.jpg`). Dragging a pattern onto a lane adds a block (the drag state is now
+EditorUI's, shared by the drawer and the lanes). The editor takes no drop. A tap outside, Escape or Patterns closes
+it. While a pattern is dragged, the tap catcher steps aside so the drop reaches the lanes. While open it covers the
+tool row's Patterns button, so a tap outside is the way out (or Escape). Not checked: a drag from the drawer onto a
+lane on the simulator.
 
 ## Checked on the simulator (demo)
 
