@@ -231,6 +231,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
                 steps[t][i] = s
             }
         }
+        // T1 with recorded motion (CHORUS turned up across its first bar, as skiff-sim recorded it), so Jib's
+        // motion marks show in the demo
+        motion[0] = (2...13).map { (step: $0, id: 34, value: $0 * 9, lock: false) }
         setPlaying(true)
     }
 

@@ -14,3 +14,25 @@ What Jib does now:
 Tests: MOTION decoded, recorded, flagged and cleared through the fake; the same against skiff-sim.
 
 Not done: per-parameter detail (which parameter moves on which step) and a step's locks shown apart from recorded motion. Clear motion drops both, as Skiff's op 2 does.
+
+## "I don't see the motion changes" (Scott, real FM-1, on ec594dd)
+
+What was checked:
+- **The protocol, on Skiff's own firmware code:** skiff-sim recorded CHORUS moves on T1 (steps 3–14) and T2, and Jib's
+  MOTION op 7 read them back (`leavesMotionForTheApp`, `SKIFF_SIM=1 SKIFF_KEEP_MOTION=1`, which leaves them there).
+- **The poll:** it runs for any Skiff connection (the ping loop: the selected track every 2 s, all of them every 6 s).
+  No INFO capability gates it.
+- **What not checked:** the app talking to skiff-sim end to end. The iOS simulator doesn't see the host's virtual MIDI
+  port, so that leg can only be checked on the iPad with the FM-1.
+
+Cause: the only sign of motion was a 2 pt bar along the foot of each step in the timeline at the top (16 pt cells with
+six tracks), dark on a lit step. Nothing in the Sequence grid and nothing on the track. Next to invisible.
+
+Fix (screenshot 02):
+- A **MOTION** tag after the track's name, while it has recorded motion.
+- A **bar under the step number** over the Sequence grid for each step with motion (synth and drum grids).
+- The timeline's foot bar 3 pt and wider.
+- The demo (`-demo-skiff`) starts with motion recorded on T1, steps 3–14, so this can be seen without the FM-1.
+
+If the tag still doesn't appear on the FM-1, the track's motion is empty there (cleared, or never kept) or the read
+fails quietly. The next step would be a Developer readout of the last MOTION reply.

@@ -326,3 +326,28 @@ extension SkiffSongSimTests {
         #expect(try await d.motion(track: 0).events.isEmpty)
     }
 }
+
+extension SkiffSongSimTests {
+    /// Leaves motion recorded on T1 and T2 for the app to show (SKIFF_SIM=1 SKIFF_KEEP_MOTION=1): Jib on the iPad
+    /// simulator, connected to the same skiff-sim, then reads it as it would a real FM-1's.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SKIFF_KEEP_MOTION"] == "1"))
+    func leavesMotionForTheApp() async throws {
+        let d = try await driver()
+        for t in [0, 1] {
+            _ = try await d.transport(play: false)
+            _ = try await d.selectTrack(t)
+            try await d.rec()
+            try await Task.sleep(for: .milliseconds(300))
+            for v in stride(from: 10, through: 120, by: 10) {
+                _ = try await d.setTrackParam(track: t, id: 34, value: v)
+                try await Task.sleep(for: .milliseconds(120))
+            }
+            try await d.rec()
+            _ = try await d.transport(play: false)
+            try await Task.sleep(for: .milliseconds(200))
+            let m = try await d.motion(track: t)
+            print("MOTION T\(t + 1):", m.steps.sorted())
+            #expect(m.recorded > 0)
+        }
+    }
+}

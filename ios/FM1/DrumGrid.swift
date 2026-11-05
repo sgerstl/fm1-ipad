@@ -28,7 +28,8 @@ struct DrumGrid: View {
             EditorHeader(track: dt, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
                          detail: "\(lanes.count) lanes · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
-            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[dt]) { ui.selectedStep[dt] = $0 }
+            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[dt],
+                        motion: session.motion[dt]?.steps ?? []) { ui.selectedStep[dt] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {

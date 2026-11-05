@@ -32,7 +32,8 @@ struct PianoRoll: View {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
                          detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
 
-            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track]) { ui.selectedStep[track] = $0 }
+            StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track],
+                        motion: session.motion[track]?.steps ?? []) { ui.selectedStep[track] = $0 }
                 .padding(.leading, 88)
 
             HStack(alignment: .top, spacing: 8) {
@@ -158,6 +159,8 @@ struct StepNumbers: View {
     var steps = 64
     let offsetX: CGFloat
     let selected: Int
+    /// Steps with recorded motion (Skiff): a bar under the number, as Skiff's step row marks them.
+    var motion: Set<Int> = []
     let select: (Int) -> Void
     var body: some View {
         HStack(spacing: 0) {
@@ -167,6 +170,11 @@ struct StepNumbers: View {
                     .font(.system(size: 11, weight: i == selected || i % 4 == 0 ? .semibold : .regular))
                     .foregroundStyle(i == selected ? Theme.text : Theme.textSecondary)
                     .frame(width: grid.stepWidth, height: 20)       // centred over its column
+                    .overlay(alignment: .bottom) {
+                        if motion.contains(i) {
+                            Capsule().fill(Theme.text).frame(width: max(8, grid.stepWidth - 12), height: 3)
+                        }
+                    }
                     .contentShape(Rectangle())
                     .onTapGesture { select(i) }
             }

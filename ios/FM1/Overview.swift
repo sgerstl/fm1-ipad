@@ -162,6 +162,7 @@ struct Overview: View {
             // CHORD and ARP, by SLOOP's names, on every page; a tag opens its Sound page
             if !session.isDrums(t), track.chord > 0 { modeTag(Music.chordNames[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
             if !session.isDrums(t), track.arpMode > 0 { modeTag("ARP " + (Music.arpModes[safe: track.arpMode] ?? ""), track: t, family: .arp) }
+            if let mo = session.motion[t], mo.recorded > 0 { motionTag(mo) }
             Spacer(minLength: 0)
         }
         .padding(.trailing, 14)                     // clear of the timeline's pull
@@ -230,6 +231,20 @@ struct Overview: View {
         ui.viewJump = ViewJump(bar: max(0, min(3, bar)), id: (ui.viewJump?.id ?? 0) + 1)
     }
 
+    /// Skiff: the track has recorded motion (knob moves in its steps); the steps carry a bar at their foot.
+    private func motionTag(_ m: TrackMotion) -> some View {
+        Label("MOTION", systemImage: "waveform.path")
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Theme.text)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .frame(height: 20)
+            .background(Capsule().strokeBorder(Theme.text.opacity(0.5), lineWidth: 1))
+            .accessibilityLabel("Motion recorded on \(m.steps.count) step\(m.steps.count == 1 ? "" : "s")")
+    }
+
     /// A small tag after the name: what the track's notes become (a chord, an arpeggio).
     private func modeTag(_ text: String, track t: Int, family: SoundFamily) -> some View {
         Text(text)
@@ -269,7 +284,7 @@ struct Overview: View {
                 ctx.fill(p, with: .color(Theme.stepEmpty))
             }
             if motion.contains(i) {
-                ctx.fill(Path(roundedRect: CGRect(x: r.minX + 2, y: r.maxY - 4, width: w - 4, height: 2), cornerRadius: 1),
+                ctx.fill(Path(roundedRect: CGRect(x: r.minX + 1, y: r.maxY - 4, width: w - 2, height: 3), cornerRadius: 1.5),
                          with: .color(on ? Theme.onColour : Theme.text))
             }
         }
