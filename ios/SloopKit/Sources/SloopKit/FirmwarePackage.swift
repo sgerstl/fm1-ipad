@@ -38,7 +38,7 @@ public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
     }
     public var sha256: String {
         switch self {
-        case .skiff: "f11c90e342bc67045f67eccf0291fd44a25918442c022d126ed3eb6f1890f11e"
+        case .skiff: "0c0972ab0dc9b8a259b02d6a93b4ee48564290903dcd09217cc49eb853324679"
         case .sloop: "97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110"
         case .stock: "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a"
         }

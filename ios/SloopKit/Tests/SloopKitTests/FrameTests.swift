@@ -93,8 +93,8 @@ import Testing
         // note on C4, running-status note on E4, a SysEx frame in between, note on with velocity 0 = off
         let frames = a.feed([0x90, 60, 100, 64, 90, 0xF0, 0x7D, 0x46, 0x4C, 0x19, 0x00, 0xF7, 0x80, 60, 0, 0x91, 64, 0, 0xB0, 1, 2])
         #expect(frames.count == 1)
-        #expect(a.drainNotes() == [NoteEvent(on: true, channel: 0, note: 60), NoteEvent(on: true, channel: 0, note: 64),
-                                   NoteEvent(on: false, channel: 0, note: 60), NoteEvent(on: false, channel: 1, note: 64)])
+        #expect(a.drainNotes() == [NoteEvent(on: true, channel: 0, note: 60, velocity: 100), NoteEvent(on: true, channel: 0, note: 64, velocity: 90),
+                                   NoteEvent(on: false, channel: 0, note: 60, velocity: 0), NoteEvent(on: false, channel: 1, note: 64, velocity: 0)])
         #expect(a.drainNotes().isEmpty)
     }
 

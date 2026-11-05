@@ -35,3 +35,14 @@ Merging `refs/heads/skiff-screen-link` with the METER build and pinning its hash
 - Not checked: the estimate from real note output (the demo's fake sends no notes); the real METER (the firmware isn't merged yet); VoiceOver (the lines are hidden from it, the dB under the fader speaks).
 
 Design pre-flight: ran. It's the FM-1's own mark, in the track's colour, over the rail's grey. There's no new type or target, motion is the meter's fall (none under Reduce Motion), and it's display-link coalesced.
+
+## The METER firmware landed (same day)
+
+- **Merged** `refs/heads/skiff-screen-link` (6704d65, tag `lupe-skiff-2.2-screen-link.3`). The bundled package is pinned at `0c0972ab…4679` (610,429 B, INFO `56 01 03`) and replaces `f11c90e3…f11e`. FIRMWARE.md is updated. **Not on a real FM-1 yet.**
+- **The update offer** now goes to stock Skiff 2.2 and to both earlier screen-link builds (`56 01 01`, `56 01 02`), worded for what the new build adds: the cursor and the levels.
+- **Lupe checked against the final format** (skiff/README.md "METER"): WATCH bit 3, push 92 with six bytes 0–127, already ballistic on the device. Lupe now draws the values **as they come and holds them between pushes**; it no longer adds its own fall. After **1.5 s** with no push, a reading is stale (watching probably lapsed) and the notes' estimate takes over until METER returns. Silence arrives as six zeros once a second.
+- **Tests made deterministic:**
+  - `WorkflowTests.aSectionClearsOnlyWhenStopped` now waits until "stopped" has held past an in-flight live poll before clearing. That poll could report PLAY once more, so the clear was refused.
+  - `aLoopSavedToASectionComesBack` waits for `sectionPlaying` instead of racing it.
+  - `FrameTests.notesOutsideSysEx` expects velocities now.
+  - Two full runs both passed afterwards.

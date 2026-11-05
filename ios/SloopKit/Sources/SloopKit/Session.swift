@@ -225,6 +225,8 @@ public final class DeviceSession {
     /// Skiff's second screen link build (`56 01 02`): the screen carries the page's cursor (MOD's route, …) and
     /// Lupe can set it. False on the first build (`56 01 01`), which Lupe offers to update.
     public private(set) var screenCursor = false
+    /// The third (`56 01 03`): METER, each track's level. False on the builds before, which Lupe offers to update.
+    public private(set) var screenMeter = false
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
     /// Device changes in the last 250 ms, and when a sound last loaded: a burst of several parameters at once (a
@@ -354,6 +356,7 @@ public final class DeviceSession {
             else { screenLinked = false; deviceScreen = nil }
             if screenLinked { capabilities.insert(.screenLink) }
             screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
+            screenMeter = screenLinked && (c as? SkiffDriver)?.skiff.hasMeter == true
             try await c.watch(screenLink: screenLinked)
             if let s = c as? SkiffDriver {
                 if let store = skiffEdit { store.attach(s) } else {

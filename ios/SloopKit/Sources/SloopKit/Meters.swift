@@ -4,7 +4,10 @@ import Observation
 /// Each track's level for the Mixer's lines beside its faders, as the FM-1 draws them on MIXER (ui_graph.c
 /// draw_tracks: a thin line by the fader, 60 dB over its height, falling about 2 dB a 16 ms frame). Two sources:
 /// - measured: Skiff's METER push (the screen link's `56 01 03`, editor.c ed_met_tick), 0…127 on the meter's own
-///   scale, already zero while muted and already falling as the screen's do;
+///   scale (60 dB: 0 = −54 dB or quieter, 127 = +6 dB), already zero while muted and with the device's own ballistics
+///   (peak since the last reading, falling about 125 dB/s): drawn as it comes, held between pushes. A push goes out
+///   only when a level changes (and once a second as a keep-alive), so nothing for 1.5 s means watching lapsed: stale,
+///   and the notes' estimate takes over until METER comes back;
 /// - estimated: the notes each track sends over USB MIDI (NOTES OUT, a channel a track), a note-on rising to its
 ///   velocity, held while notes sound, then falling at the meter's own rate. Note activity, not audio.
 /// A muted track's line comes from its notes either way (METER says 0 for it), drawn dimmed by the Mixer, so a
@@ -27,6 +30,8 @@ public final class TrackMeters {
 
     /// The meter's fall: its 30 px a 16 ms frame on the FM-1, so the whole scale in about half a second.
     public static let fallPerSecond = 1.0 / 30 / 0.016
+    /// METER silent this long: stale (its keep-alive comes once a second).
+    public static let stale: TimeInterval = 1.5
 
     public init() {}
 
@@ -63,7 +68,7 @@ public final class TrackMeters {
     /// Track t's level now, 0…1. `muted`: the notes' estimate (the FM-1's METER reads 0 for a muted track).
     public func level(track t: Int, muted: Bool = false, at now: Date = .now) -> Double {
         guard t < level.count else { return 0 }
-        if measured && !muted { return Self.fallen(level[t], since: at[t], now) }
+        if measured && !muted && now.timeIntervalSince(at[t]) < Self.stale { return level[t] }
         if !held[t].isEmpty { return max(heldVelocity[t], Self.fallen(noteLevel[t], since: noteAt[t], now)) }
         return Self.fallen(noteLevel[t], since: noteAt[t], now)
     }

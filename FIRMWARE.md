@@ -6,9 +6,9 @@ Lupe installs the FM-1 firmware it speaks, so testers don't need a computer, and
 |---|---|---|---|
 | File | `skiff-2.2-screen-link.fwsc` | `sloop-2.8.4-screen-link.fwsc` | `FM-1_015.fwsc` |
 | Size | 610,429 bytes | 610,052 bytes | 699,956 bytes |
-| SHA-256 | `f11c90e342bc67045f67eccf0291fd44a25918442c022d126ed3eb6f1890f11e` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
+| SHA-256 | `0c0972ab0dc9b8a259b02d6a93b4ee48564290903dcd09217cc49eb853324679` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
 | Identity it reports | `FM-1_722` (its update loader: `ota-FM-1_722`) | `FM-1_900` (loader: `ota-FM-1_900`) | `FM-1_015` (M-VAVE's loader: `ota-FM-1_015`) |
-| INFO version | `FELUCCA v2.2`, and `56 01 02` at the end of INFO (the screen link with the page's cursor) | `FELUCCA SLOOP 2.8.4`, protocol 12 | (none: Lupe doesn't speak to it) |
+| INFO version | `FELUCCA v2.2`, and `56 01 03` at the end of INFO (the screen link with the page's cursor and METER) | `FELUCCA SLOOP 2.8.4`, protocol 12 | (none: Lupe doesn't speak to it) |
 | Update loader in the package | Skiff's (`FELUCCA-LOADER-1`) | SLOOP's (`FELUCCA-LOADER-1`) | M-VAVE's `usb_hid_ota.bin` (header CRC 0xEBAA, body CRC 0x5881, 0x4DE1 bytes) |
 | Source | [illuminus5/skiff](https://github.com/illuminus5/skiff), tag `v2.2`, plus `skiff/0001-screen-link.patch` | [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), tag `v2.8.4`, plus `sloop/0001-screen-link.patch` | [m-vave/fm1_open](https://github.com/m-vave/fm1_open) `sdk/firmware/FM-1_015.fwsc`, commit `4c7496d` (added in `3be7fbd`) |
 | Built | 2026-11-05 from `~/code/skiff-src` branch `screen-link` (`2ebba0f` on `v2.2`), see `skiff/README.md` | 2026-11-01, see `sloop/README.md` | Not built: M-VAVE's binary, unchanged, downloaded 2026-11-05 |
@@ -16,7 +16,7 @@ Lupe installs the FM-1 firmware it speaks, so testers don't need a computer, and
 
 Notes:
 
-- The Skiff file was built here from Skiff v2.2 plus Lupe's screen link patch (`skiff/README.md`: 131 lines in `editor.c`, SCREEN 90 with the page's cursor, SCREEN_GOTO 91, WATCH bit 2). Skiff's build isn't byte-for-byte reproducible, so the pin is this file's. Until 2026-11-05 Lupe carried stock 2.2 (`d0013c4f…8603`). An FM-1 on stock Skiff 2.2, or on the link's first build (`9d8eb232…acb71`, `56 01 01`, no cursor; it never left this Mac), is offered this one as an update (same identity, `FM-1_722`; Lupe tells them apart by INFO's `56 01` tag). **Not installed on a real FM-1 yet.**
+- The Skiff file was built here from Skiff v2.2 plus Lupe's screen link patch (`skiff/README.md`: 131 lines in `editor.c`, SCREEN 90 with the page's cursor, SCREEN_GOTO 91, WATCH bit 2). Skiff's build isn't byte-for-byte reproducible, so the pin is this file's. Until 2026-11-05 Lupe carried stock 2.2 (`d0013c4f…8603`). An FM-1 on stock Skiff 2.2, or on an earlier screen-link build (`9d8eb232…acb71`, `56 01 01`, no cursor; `f11c90e3…f11e`, `56 01 02`, no METER), is offered this one as an update (same identity, `FM-1_722`; Lupe tells them apart by INFO's `56 01` tag). **Not installed on a real FM-1 yet.**
 - The V15 file's hash is the one Skiff pins for its own "return to official V15" (`STOCK_V15_SHA256` in Skiff's `tools/fm1_install.py` and `web/fm1pkg.js`). That is the same file the FM-1 Firmware Hub serves for "Back to official V15".
 - Stock SLOOP 2.8.4 also reports `FM-1_900`; the app tells the screen-link build apart by asking `UI` (cmd 90) after connecting.
 - All three packages' flash.bin is 0x93000 bytes. Skiff's and SLOOP's pass Skiff's `files_ok` and SLOOP's `package_damage`. V15's extra entries (types 50, 52, 161, 251) store CRCs of something else, so for it only flash.bin and the loader are CRC-checked, as Skiff's `files_ok` does. Only the pinned V15 file is ever installed with M-VAVE's loader: any other package without a Felucca loader is refused.

@@ -45,7 +45,7 @@ import Testing
         try await waitFor { !fake.steps[0][1].notes.contains(60) }
         s.playSection(3)
         try await waitFor { self.has(s, track: 0, step: 1, note: 60) }
-        #expect(fake.sectionPlaying == 3)
+        try await waitFor { fake.sectionPlaying == 3 }       // (set as the load finishes: waited for, not raced)
     }
 
     @Test func unsavedEditsAreReplacedWhenASectionLoads() async throws {
@@ -184,7 +184,12 @@ import Testing
         // stopped: C empties on the FM-1 and on the iPad
         s.setPlaying(false)
         try await waitFor { !fake.playing && !s.playing }
+        // a live poll already out when STOP went can report PLAY once more: wait until stopped has held past it, so
+        // the clear isn't refused in that window (it flaked under the full suite's load)
+        try await Task.sleep(for: .milliseconds(300))
+        try await waitFor { !s.playing }
         s.clearSection(2)
+        #expect(s.songMessage == nil)
         try await waitFor { fake.stored & 0b100 == 0 && !s.song.stored(2) }
     }
 
