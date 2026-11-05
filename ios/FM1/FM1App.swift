@@ -177,6 +177,12 @@ final class EditorUI {
     var addedLanes: [Int: [Int]] = [:]
     /// The motion lanes hidden from the pattern header's chip (they show whenever there's motion otherwise).
     var motionHidden = false
+    /// The Song tab's sound panel (a button's Shape cards from the right); nil: closed. -sound-panel LFO opens it.
+    var soundPanel: SoundPanelState? = {
+        let a = ProcessInfo.processInfo.arguments
+        guard let i = a.firstIndex(of: "-sound-panel"), i + 1 < a.count, let f = SoundFamily(rawValue: a[i + 1]) else { return nil }
+        return SoundPanelState(family: f)
+    }()
     var projectsOpen = false
     /// A place the FM-1 sent Jib to, lit for a moment (the whole-track controls for PATTERN, and so on).
     var flash: Flash?

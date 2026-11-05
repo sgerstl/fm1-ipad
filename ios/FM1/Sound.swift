@@ -315,7 +315,8 @@ struct SoundTab: View {
     }
 
     /// MOD's route: the FM-1's cursor, when the link carries it (KNOB 1 turned there).
-    private func adoptCursor(_ s: UIState?) {
+    private func adoptCursor(_ s: UIState?) { Self.adoptCursor(session, marks, s) }
+    static func adoptCursor(_ session: DeviceSession, _ marks: ShapeMarks, _ s: UIState?) {
         guard let s, !s.home, let c = s.cursor, let title = SoundPage.page(session, fw: s.page)?.title else { return }
         if title == "MOD" { marks.adoptRoute(c) } else if let key = SkiffEdit.pickKey(title) { marks.adoptPick(key, c) }
     }
@@ -348,8 +349,8 @@ struct ShapeScroll: View {
                     if session.selectedIsDrums, SoundPage.shown(session, ui.soundFamily).isEmpty {
                         DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
                     }
-                    ForEach(sections, id: \.0) { family, pages in
-                        section(family, pages)
+                    ForEach(sections, id: \.0) { family, _ in
+                        ShapeSection(session: session, ui: ui, marks: marks, family: family)
                     }
                 }
                 .padding(.bottom, 8)
@@ -362,9 +363,20 @@ struct ShapeScroll: View {
         }
     }
 
-    // MARK: A button's section: its pages in Skiff's order, merged pages as one card
+}
 
-    private func section(_ family: SoundFamily, _ pages: [SoundPage]) -> some View {
+/// One button's section of Shape: its pages in Skiff's order, merged pages as one card, `columns` to a row (two on
+/// the Shape tab, one in the Song tab's sound panel). A view of its own so it can move between them unchanged.
+struct ShapeSection: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    let marks: ShapeMarks
+    let family: SoundFamily
+    var columns = 2
+    var showsHeader = true
+
+    var body: some View {
+        let pages = SoundPage.shown(session, family)
         // the cards: a page alone, or a page with the ones merged into it
         var cards: [[SoundPage]] = []
         for p in pages {
@@ -377,29 +389,31 @@ struct ShapeScroll: View {
         }
         let lit = ui.soundFamily == family
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text(family.rawValue).font(.system(size: 13, weight: .semibold)).tracking(0.6)
-                    .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
-                Rectangle().fill(Theme.stepEmpty).frame(height: 1)
+            if showsHeader {
+                HStack(spacing: 8) {
+                    Text(family.rawValue).font(.system(size: 13, weight: .semibold)).tracking(0.6)
+                        .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
+                    Rectangle().fill(Theme.stepEmpty).frame(height: 1)
+                }
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityLabel("\(family.rawValue) button")
             }
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityLabel("\(family.rawValue) button")
             if family == .sel, !session.selectedIsDrums { KeyMapStrip(session: session) }
             // a plain grid: a lazy one kept stale positions when the strip above it changed height
             Grid(horizontalSpacing: 16, verticalSpacing: 16) {
-                ForEach(Array(stride(from: 0, to: cards.count, by: 2)), id: \.self) { i in
+                ForEach(Array(stride(from: 0, to: cards.count, by: columns)), id: \.self) { i in
                     GridRow(alignment: .top) {
-                        SoundCard(session: session, ui: ui, rows: cards[i], pages: pages, marks: marks).equatable()
-                        if i + 1 < cards.count {
-                            SoundCard(session: session, ui: ui, rows: cards[i + 1], pages: pages, marks: marks).equatable()
-                        } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
+                        ForEach(0..<columns, id: \.self) { k in
+                            if i + k < cards.count {
+                                SoundCard(session: session, ui: ui, rows: cards[i + k], pages: pages, marks: marks).equatable()
+                            } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
+                        }
                     }
                 }
             }
         }
         .id(family)
     }
-
 }
 
 /// One card of Shape: a page's columns (or merged pages' rows) over its graph. A view of its own, so a change that
@@ -612,7 +626,7 @@ struct SoundCard: View, Equatable {
 }
 
 /// Watches the FM-1's knob touches (every push while an encoder turns) in a view that draws nothing.
-private struct TouchFollower: View {
+struct TouchFollower: View {
     let session: DeviceSession
     let touched: () -> Void
     var body: some View {

@@ -34,7 +34,10 @@ struct AppView: View {
                     // a button pressed on the FM-1 brings up the tab that shows its screen
                     .onChange(of: session.deviceScreen) { _, s in
                         // Skiff: every button lands somewhere (SkiffButtonMap), GLO in the mixer panel
-                        if session.dialect == .skiff { if let s { SkiffNavigator.follow(s, session: session, ui: ui) }; return }
+                        if session.dialect == .skiff {
+                            if let s, !SoundPanelControl.follow(s, session: session, ui: ui) { SkiffNavigator.follow(s, session: session, ui: ui) }
+                            return
+                        }
                         guard ui.followDevice, let s, let tab = SoundPage.tab(for: s, session), tab != ui.page else { return }
                         ui.pageFromDevice = true
                         ui.page = tab
@@ -115,7 +118,9 @@ extension AppView {
                             SongPage(session: session, ui: ui)
                         } else if let store = session.skiffSong {
                             // Skiff's Song tab: Arrange's lanes over the pattern editor, a divider between (boards 19, 20)
-                            SkiffSongPage(session: session, store: store, ui: ui)
+                            SoundPanelHost(session: session, ui: ui) {
+                                SkiffSongPage(session: session, store: store, ui: ui)
+                            }
                         } else {
                             leftColumn { FunctionPads(session: session, ui: ui) }
                             NotOnThisFirmware.arrange(session)
@@ -177,6 +182,7 @@ extension AppView {
         .onChange(of: ui.page) { _, _ in
             ui.timelineOpen = false
             ui.presetsPanel = false
+            ui.soundPanel = nil
         }
     }
 

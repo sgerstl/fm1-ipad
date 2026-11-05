@@ -163,7 +163,7 @@ struct SkiffArrangePage: View {
         HStack(spacing: 12) {
             Text("Song").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
             Text("\(songBars) bar\(songBars == 1 ? "" : "s") · \(session.trackCount) tracks")
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(Theme.textSecondary).lineLimit(1).fixedSize()
             // SONG: off loops each track's entry, on plays the lists, once plays them once and stops (LIST op 6)
             SegmentedKeys(label: "Song mode", options: ["Loop", "Song", "Once"], selected: store.song?.mode.rawValue ?? -1,
                           enabled: [!store.offline, !store.offline, !store.offline]) { k in
@@ -181,11 +181,14 @@ struct SkiffArrangePage: View {
                 .disabled(store.busy || store.offline)
             }
             if let w = loopApartWarning {
+                // the first to give way when the row is narrow (the sound panel's rail beside it): it shortens
                 Label(w, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
                     .foregroundStyle(Theme.text)
                     .padding(.horizontal, 12).frame(height: 32)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
+                    .layoutPriority(-1)
+                    .accessibilityLabel(w)
             }
             if compact {
                 Button { ui.poolOpen.toggle() } label: {
