@@ -16,10 +16,11 @@ struct SkiffArrangePage: View {
     /// A pattern being dragged from the bin (set when the drag starts), and where it would go.
     @State private var dragPattern: Int?
     @State private var dropAt: DropSpot?
-    /// A block held (lifted, the lanes don't scroll), where it would move to, and its menu once let go.
+    /// A block held (lifted, the lanes don't scroll), where it would move to, and the menu open (a block's,
+    /// an entry's sounds, a lane's add menu).
     @State private var lifted: EntryRef?
     @State private var moveAt: MoveSpot?
-    @State private var held: HeldBlock?
+    @State private var menu: OpenMenu?
     @State private var pageFrame: CGRect = .zero
     @AccessibilityFocusState private var blockFocus: EntryRef?
     /// A bar range across the lanes (board 3): its first bar and the bar after its last, 0-based.
@@ -63,8 +64,13 @@ struct SkiffArrangePage: View {
                 .frame(width: Self.binWidth)
         }
         .overlay(alignment: .top) { if store.offline { OfflineBar(session: session) } }
-        .overlay { holdMenu }
+        .overlay { menuOverlay }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pageFrame = $0 }
+        // a menu on an entry that's gone (the song changed under it) closes; leaving the page drops every hold
+        .onChange(of: store.song) { if let m = menu, !menuStillThere(m) { menu = nil } }
+        // an entry's sounds belong to the selected entry: another one selected, they close
+        .onChange(of: selection) { _, now in if case .sound(let r) = menu?.kind, r != now { menu = nil } }
+        .onDisappear { menu = nil; lifted = nil; moveAt = nil; dropAt = nil }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         // a change that would erase a pattern asks first (CLEAR erases one nothing else uses)
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
@@ -78,31 +84,54 @@ struct SkiffArrangePage: View {
         } message: { c in Text(c.message) }
     }
 
-    // MARK: The hold menu (canvas board 2): Jib's own, at the finger, rows 52 pt high
+    /// The block whose menu is open: it stays lifted, and holds still.
+    private var menuRef: EntryRef? { if case .block(let r) = menu?.kind { r } else { nil } }
 
-    @ViewBuilder private var holdMenu: some View {
-        if let h = held, let list = store.song?.tracks[safe: h.ref.track],
-           let b = store.blocks(h.ref.track).first(where: { $0.entries.contains(h.ref.entry) }) {
-            let close = {
-                held = nil
-                selection = h.ref
-                blockFocus = h.ref                      // focus goes back to the block
-            }
+    // MARK: Menus (canvas board 2): Jib's own, at the finger, one style across the page
+
+    private var menus: ArrangeMenus { ArrangeMenus(session: session, store: store, ui: ui) { selection = $0 } }
+
+    private func openMenu(_ kind: ArrangeMenu, _ at: CGPoint) { menu = OpenMenu(kind: kind, at: at) }
+
+    private func block(_ r: EntryRef) -> SongBlock? { store.blocks(r.track).first { $0.entries.contains(r.entry) } }
+
+    private func menuStillThere(_ m: OpenMenu) -> Bool {
+        switch m.kind {
+        case .block(let r), .sound(let r): block(r) != nil
+        case .add(let t): store.song?.tracks[safe: t] != nil
+        }
+    }
+
+    @ViewBuilder private var menuOverlay: some View {
+        if let m = menu, menuStillThere(m) {
+            let (title, groups, close): (String, [[MenuItem]], () -> Void) = {
+                switch m.kind {
+                case .block(let r):
+                    let b = block(r)!
+                    return ("T\(r.track + 1) · entr\(b.isChain ? "ies" : "y") \(Entries.letters(b.entries))", menus.block(r.track, b),
+                            { menu = nil; selection = r; blockFocus = r })        // focus goes back to the block
+                case .sound(let r):
+                    let b = block(r)!
+                    return ("T\(r.track + 1) · sound on entry \(Entries.letter(r.entry))", menus.sound(r.track, b), { menu = nil })
+                case .add(let t):
+                    return ("T\(t + 1) · after the last entry", menus.add(t), { menu = nil })
+                }
+            }()
             GeometryReader { g in
                 ZStack(alignment: .topLeading) {
                     // a tap anywhere else closes it
                     Color.clear.contentShape(Rectangle()).onTapGesture { close() }
                         .accessibilityHidden(true)
-                    HoldMenu(session: session, store: store, ui: ui, track: h.ref.track, block: b, list: list,
-                             selection: $selection, close: close)
+                    MenuPanel(title: title, groups: groups, close: close)
+                        .id(m)
                         .fixedSize()
                         .alignmentGuide(.leading) { d in
-                            let x = h.at.x - pageFrame.minX - 24
+                            let x = m.at.x - pageFrame.minX - 24
                             return -min(max(0, x), g.size.width - d.width)
                         }
                         .alignmentGuide(.top) { d in
                             // below the finger, or above it where it wouldn't fit
-                            let y = h.at.y - pageFrame.minY
+                            let y = m.at.y - pageFrame.minY
                             return -(y + 16 + d.height <= g.size.height ? y + 16 : max(0, y - 16 - d.height))
                         }
                 }
@@ -197,7 +226,7 @@ struct SkiffArrangePage: View {
                         ForEach(0..<session.trackCount, id: \.self) { t in
                             Lane(session: session, store: store, track: t, barWidth: barWidth, width: contentWidth,
                                  selection: $selection, dragPattern: $dragPattern, dropAt: $dropAt, lifted: $lifted, moveAt: $moveAt,
-                                 held: $held, focus: $blockFocus, ui: ui,
+                                 menuRef: menuRef, openMenu: openMenu, focus: $blockFocus, ui: ui,
                                  bracket: bracket(t))
                         }
                     }
@@ -324,7 +353,7 @@ struct SkiffArrangePage: View {
         if let sel = selection, let song = store.song, sel.track < song.tracks.count,
            let block = store.blocks(sel.track).first(where: { $0.entries.contains(sel.entry) }) {
             EntryInspector(session: session, store: store, ui: ui, track: sel.track, block: block,
-                           list: song.tracks[sel.track], selection: $selection)
+                           list: song.tracks[sel.track], selection: $selection, openMenu: openMenu)
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 Text("No entry selected").font(.system(size: 15, weight: .semibold))
@@ -479,11 +508,22 @@ struct Lane: View {
     @Binding var dropAt: DropSpot?
     @Binding var lifted: EntryRef?
     @Binding var moveAt: MoveSpot?
-    @Binding var held: HeldBlock?
+    /// The block whose menu is open, and how to open one.
+    let menuRef: EntryRef?
+    let openMenu: (ArrangeMenu, CGPoint) -> Void
     var focus: AccessibilityFocusState<EntryRef?>.Binding
     let ui: EditorUI
     /// A section's range on this track, snapped to its passes (ticks).
     var bracket: ClosedRange<Double>? = nil
+
+    /// The block (or its edge) under a finger: SwiftUI puts it back to nil however the touch ends (let go,
+    /// taken by the scroll view, cancelled), and that's where every press's state is cleared.
+    @GestureState private var press: EntryRef?
+    /// How far the finger has gone since touch-down, where it is, and where it was when the block lifted.
+    @State private var travel: CGFloat = 0
+    @State private var last: CGPoint = .zero
+    @State private var liftedAt: CGPoint?
+    @State private var holdTimer: Task<Void, Never>?
     /// A right edge being dragged: the block's last entry and the REPS it would get.
     @State private var stretch: (entry: Int, reps: Int)?
     @State private var stretchStart: Int = 1
@@ -493,17 +533,26 @@ struct Lane: View {
     @State private var laneFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    static let holdTime: Duration = .milliseconds(400)
+    /// The lane's own coordinates: where a finger is along it, however far the lanes have scrolled.
+    private var laneSpace: NamedCoordinateSpace { .named("lane\(track)") }
+    /// A hold that wanders further than this before it lifts is a scroll, not a hold.
+    static let holdSlop: CGFloat = 10
+
     private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
     private func x(_ ticks: Double) -> CGFloat { CGFloat(ticks / SongPlacement.ticksPerBar) * barWidth }
+    /// The SLOOP Arrange page's motion, so the two pages move alike; none with Reduce Motion.
+    private var motion: Animation? { reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86) }
 
     var body: some View {
         var list = store.song?.tracks[safe: track] ?? SongList()
         if let s = stretch { list.entries[s.entry].reps = s.reps }
         let blocks = store.blocks(track, list: list)
-        // a block being moved here: the lane drawn as it would be, the block a ghost at its new place
+        let keyed = Self.keyed(blocks, list)
+        // a block being moved here: every block laid out where the move would put it (the views stay the
+        // list's own, so the one under the finger keeps its gesture), and the RESTs it would add
         let move = moveAt?.track == track ? moveAt : nil
-        if let r = move?.result, move?.unchanged == false { list.entries = r }
-        let shown = move?.result != nil && move?.unchanged == false ? store.blocks(track, list: list) : blocks
+        let preview = Self.preview(move, blocks: blocks, store: store, track: track)
         let selectedPattern: Int? = selection.flatMap { s in
             s.track == track ? list.entries[safe: s.entry]?.poolIndex : nil
         }
@@ -511,60 +560,31 @@ struct Lane: View {
         let spot = dropAt?.track == track ? dropAt : nil
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 8).fill(Theme.well)
-            // after the last block: a tap adds (repeat, new, rest, pick)
-            addMenu(list: list)
+            // after the last block: a tap opens the add menu at the finger (repeat, new, rest, pick)
+            Color.clear.contentShape(Rectangle())
                 .frame(width: max(44, width - lastEnd - 4), height: SkiffArrangePage.laneHeight - 12)
+                .onTapGesture(coordinateSpace: .global) { at in
+                    if !store.offline { openMenu(.add(track), at) }
+                }
+                .accessibilityElement()
+                .accessibilityLabel("Add to track \(track + 1)")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { openMenu(.add(track), CGPoint(x: laneFrame.minX + lastEnd + 24, y: laneFrame.midY)) }
                 .offset(x: lastEnd + 2, y: 6)
-            ForEach(shown) { b in
-                let bx = x(b.start) + (spot.map { b.start >= $0.at - 0.5 ? x($0.ticks) : 0 } ?? 0)
-                let ref = EntryRef(track: track, entry: b.entries.lowerBound)
-                let w = max(8, x(b.length) - 4)
-                if let move, !move.unchanged, b.entries.lowerBound == move.index {
-                    // where the held block would land: an empty place, the block itself under the finger
-                    RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [5, 4]))
-                        .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
-                        .offset(x: bx + 2, y: 6)
+            ForEach(Array(keyed.enumerated()), id: \.element.key) { i, item in
+                blockView(item.block, list: list, place: preview?.places[i], landing: preview?.moved == i,
+                          spot: spot, selectedPattern: selectedPattern)
+                    .transition(item.block.kind == .rest && !reduceMotion ? .accordion : .identity)
+            }
+            if let preview {
+                // the RESTs the move would add: they open from their left edge, and close back into it
+                ForEach(preview.rests, id: \.key) { r in
+                    BlockView(session: session, track: track, block: r.block, list: preview.list, width: max(8, x(r.block.length) - 4),
+                              selected: false, linked: false, playing: false)
+                        .frame(width: max(8, x(r.block.length) - 4), height: SkiffArrangePage.laneHeight - 12)
+                        .modifier(Place(x: x(r.block.start) + 2, y: 6))
                         .allowsHitTesting(false)
-                } else {
-                let isHeld = lifted == ref || held?.ref == ref
-                let selected = selection?.track == track && b.entries.contains(selection?.entry ?? -1)
-                let linked = !selected && selectedPattern != nil && b.entries.contains { list.entries[$0].poolIndex == selectedPattern }
-                // a held block holds still: no playing mark while it's lifted or its menu is open
-                BlockView(session: session, track: track, block: b, list: list, width: w,
-                          selected: selected, linked: linked, playing: !isHeld && session.playing && b.entries.contains(list.entryOn ?? -1))
-                    .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
-                    // carried but not yet anywhere new: its own place shows faint (once it would move, the
-                    // lane is drawn as it would be, and its place is the dashed one)
-                    .opacity(finger != nil && lifted == ref && move?.unchanged != false ? 0.35 : 1)
-                    .scaleEffect(isHeld && finger == nil && !reduceMotion ? 1.03 : 1)
-                    .shadow(color: .black.opacity(isHeld && finger == nil ? Look().shadow(.held).opacity : 0),
-                            radius: Look().shadow(.held).radius, y: isHeld ? Look().shadow(.held).y : 0)
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHeld)
-                    .onTapGesture(count: 2) { open(b) }
-                    .onTapGesture { selection = ref }
-                    // hold lifts it: let go without moving for the menu, drag to move it along the track
-                    .gesture(holdGesture(b, ref: ref))
-                    .sensoryFeedback(.impact(weight: .medium), trigger: lifted == ref)
-                    .accessibilityFocused(focus, equals: ref)
-                    // the edge grip sits outside the hold gesture's view: its press would take the drag
-                    .overlay(alignment: .trailing) { if b.kind != .gap { grip(b, list: list) } }
-                    .overlay(alignment: .bottomTrailing) {
-                        if stretch?.entry == b.entries.upperBound {
-                            Text("×\(b.reps) · \(bars(b.length)) bars").font(.system(size: 12, weight: .semibold))
-                                .padding(.horizontal, 8).frame(height: 24)
-                                .elevated(.held, radius: 6)
-                                .offset(x: 40, y: 30)
-                        }
-                    }
-                    .offset(x: bx + 2, y: 6)
-                    .accessibilityAction { selection = EntryRef(track: track, entry: b.entries.lowerBound) }
-                    .accessibilityAction(named: "Edit pattern") { open(b) }
-                    .accessibilityAction(named: "Play once more") { edits.setReps(track, b, b.reps + 1) }
-                    .accessibilityAction(named: "Play once less") { edits.setReps(track, b, b.reps - 1) }
-                    .accessibilityAction(named: "Duplicate after") { edits.duplicateAfter(track, b) }
-                    .accessibilityAction(named: "Move earlier") { moveBy(b, -1) }
-                    .accessibilityAction(named: "Move later") { moveBy(b, 1) }
-                    .accessibilityAction(named: "Delete entry") { edits.delete(track, b) }
+                        .transition(reduceMotion ? .identity : .accordion)
                 }
             }
             if let r = bracket {
@@ -573,14 +593,14 @@ struct Lane: View {
                     .offset(x: x(r.lowerBound))
                     .allowsHitTesting(false)
             }
-            if let move, !move.unchanged, let g = shown.first(where: { $0.entries.lowerBound == move.index }) {
+            if let preview, let m = preview.moved, let at = preview.places[m] {
                 // where the moved block lands
                 Rectangle().fill(Theme.text).frame(width: 2, height: SkiffArrangePage.laneHeight + 8)
-                    .offset(x: x(g.start) - 1, y: -4)
+                    .modifier(Place(x: x(at.start) - 1, y: -4))
                     .allowsHitTesting(false)
             }
-            if let finger, let r = lifted, let b = blocks.first(where: { $0.entries.lowerBound == r.entry }) {
-                // the held block under the finger (level 3)
+            if let finger, let r = lifted, r.track == track, let b = store.blocks(track).first(where: { $0.entries.lowerBound == r.entry }) {
+                // the held block under the finger (level 3); it follows the finger exactly, no animation
                 let w = max(8, x(b.length) - 4)
                 BlockView(session: session, track: track, block: b, list: store.song?.tracks[safe: track] ?? list, width: w,
                           selected: false, linked: false, playing: false)
@@ -589,6 +609,7 @@ struct Lane: View {
                     .elevationShadow(.held, Look())
                     .offset(x: finger - grab, y: 6)
                     .allowsHitTesting(false)
+                    .transaction { $0.animation = nil }
             }
             if let spot {
                 // where the dragged pattern goes: a line, and its ghost lifted under the finger
@@ -607,10 +628,125 @@ struct Lane: View {
         }
         .frame(width: width, height: SkiffArrangePage.laneHeight)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        // an edge being dragged follows the finger exactly; everything else slides (SLOOP Arrange's motion)
+        .transaction { if stretch != nil { $0.animation = nil } }
+        .animation(motion, value: list.entries)
+        .animation(motion, value: spot)
+        .coordinateSpace(laneSpace)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { laneFrame = $0 }
+        .onChange(of: press) { _, now in
+            if let now { startHold(now) } else { endPress() }
+        }
         .onDrop(of: [.plainText], delegate: LaneDrop(lane: self, blocks: blocks))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))")
+    }
+
+    /// A move's layout: each of the list's blocks (by index) where it would be, the moved one's index, the
+    /// RESTs it adds past the end, and the list it would leave (for those RESTs' labels).
+    struct Preview {
+        var places: [Int: (start: Double, length: Double)]
+        var moved: Int?
+        var rests: [(key: String, block: SongBlock)]
+        var list: SongList
+    }
+
+    @MainActor static func preview(_ move: MoveSpot?, blocks: [SongBlock], store: SkiffSongStore, track: Int) -> Preview? {
+        guard let move, !move.unchanged, let r = move.result,
+              let bi = blocks.firstIndex(where: { $0.entries.lowerBound == move.from }) else { return nil }
+        let list = SongList(entries: r)
+        let after = store.blocks(track, list: list)
+        var others = Array(blocks.indices)
+        others.remove(at: bi)
+        let at = min(move.to, others.count)
+        let added = after.count - blocks.count
+        guard added >= 0 else { return nil }
+        // the order after: the others, with the RESTs and then the moved block at its place
+        let order: [Int?] = others[..<at].map { $0 } + Array(repeating: nil, count: added) + [bi] + others[at...].map { $0 }
+        guard order.count == after.count else { return nil }
+        var p = Preview(places: [:], moved: bi, rests: [], list: list)
+        for (k, o) in order.enumerated() {
+            if let o { p.places[o] = (after[k].start, after[k].length) } else { p.rests.append(("rest+\(p.rests.count)", after[k])) }
+        }
+        return p
+    }
+
+    /// Blocks keyed by what they play (their patterns and sounds, the nth of its kind), not by entry number:
+    /// a block that moves keeps its view, so it slides to its new place instead of changing in place.
+    static func keyed(_ bs: [SongBlock], _ l: SongList) -> [(key: String, block: SongBlock)] {
+        var seen: [String: Int] = [:]
+        return bs.map { b in
+            let sig = b.kind == .gap ? "gap" : b.entries.map { i -> String in
+                let e = l.entries[i]
+                return "\(e.pattern)" + (e.chained ? "c" : "") + (e.sound.map { "s\($0.s0).\($0.s1)" } ?? "")
+            }.joined(separator: "-")
+            let n = seen[sig, default: 0]
+            seen[sig] = n + 1
+            return ("\(sig)#\(n)", b)
+        }
+    }
+
+    @ViewBuilder
+    private func blockView(_ b: SongBlock, list: SongList, place: (start: Double, length: Double)?, landing: Bool,
+                           spot: DropSpot?, selectedPattern: Int?) -> some View {
+        let start = place?.start ?? b.start
+        let bx = x(start) + (spot.map { start >= $0.at - 0.5 ? x($0.ticks) : 0 } ?? 0)
+        let ref = EntryRef(track: track, entry: b.entries.lowerBound)
+        let w = max(8, x(place?.length ?? b.length) - 4)
+        do {
+            let isHeld = (lifted == ref && finger == nil) || menuRef == ref
+            let selected = selection?.track == track && b.entries.contains(selection?.entry ?? -1)
+            let linked = !selected && selectedPattern != nil && b.entries.contains { list.entries[$0].poolIndex == selectedPattern }
+            // a held block holds still: no playing mark while it's lifted or its menu is open
+            BlockView(session: session, track: track, block: b, list: list, width: w,
+                      selected: selected, linked: linked,
+                      playing: !isHeld && lifted != ref && session.playing && b.entries.contains(list.entryOn ?? -1))
+                .frame(width: w, height: SkiffArrangePage.laneHeight - 12)
+                // carried: faint in its own place, or, once it would move, an empty dashed place where it lands
+                // (the block itself is under the finger). The view stays, so the finger's gesture does too
+                .opacity(landing ? 0 : finger != nil && lifted == ref ? 0.35 : 1)
+                .overlay {
+                    if landing {
+                        RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [5, 4]))
+                    }
+                }
+                .scaleEffect(isHeld && !reduceMotion ? 1.03 : 1)
+                .shadow(color: .black.opacity(isHeld ? Look().shadow(.held).opacity : 0),
+                        radius: Look().shadow(.held).radius, y: isHeld ? Look().shadow(.held).y : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHeld)
+                .onTapGesture(count: 2) { open(b) }
+                .onTapGesture { selection = ref }
+                // hold lifts it: let go for its menu, drag to move it. UIKit's long press, which shares a touch
+                // with the lanes' scroll view: a press that moves first scrolls, one held still lifts
+                .gesture(HoldRecognizer(space: laneSpace,
+                    began: { p, _ in if lifted == nil, !store.offline { liftedAt = p; lifted = ref } },
+                    changed: { p, _ in if lifted == ref { carry(b, ref: ref, at: p) } },
+                    ended: { _, global, cancelled in
+                        if lifted == ref, !cancelled { release(b, ref: ref, at: global) }
+                        endPress()
+                    }))
+                .sensoryFeedback(.impact(weight: .medium), trigger: lifted == ref)
+                .accessibilityFocused(focus, equals: ref)
+                // the edge: drag at once for REPS, or hold it like the rest of the block
+                .overlay(alignment: .trailing) { if b.kind != .gap { grip(b, ref: ref).opacity(landing ? 0 : 1) } }
+                .overlay(alignment: .bottomTrailing) {
+                    if stretch?.entry == b.entries.upperBound {
+                        Text("×\(b.reps) · \(bars(b.length)) bars").font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 8).frame(height: 24)
+                            .elevated(.held, radius: 6)
+                            .offset(x: 40, y: 30)
+                    }
+                }
+                .modifier(Place(x: bx + 2, y: 6))
+                .accessibilityAction { selection = ref }
+                .accessibilityAction(named: "Edit pattern") { open(b) }
+                .accessibilityAction(named: "Play once more") { edits.setReps(track, b, b.reps + 1) }
+                .accessibilityAction(named: "Play once less") { edits.setReps(track, b, b.reps - 1) }
+                .accessibilityAction(named: "Duplicate after") { edits.duplicateAfter(track, b) }
+                .accessibilityAction(named: "Move earlier") { moveBy(b, -1) }
+                .accessibilityAction(named: "Move later") { moveBy(b, 1) }
+                .accessibilityAction(named: "Delete entry") { edits.delete(track, b) }
+        }
     }
 
     private func bars(_ ticks: Double) -> String {
@@ -619,109 +755,123 @@ struct Lane: View {
     }
 
     /// The edge you drag for REPS: drawn 8 pt, a 44 pt hit area; a pass at a time.
-    private func grip(_ b: SongBlock, list: SongList) -> some View {
-        let pass = max(1, x(b.pass))
-        return Capsule().fill(Theme.text.opacity(0.35)).frame(width: 4, height: 28)
+    private func grip(_ b: SongBlock, ref: EntryRef) -> some View {
+        Capsule().fill(Theme.text.opacity(0.35)).frame(width: 4, height: 28)
             // 36 pt wide, 8 pt of it past the edge: no more than the gap and a sliver of the next block
             .frame(width: 36, height: SkiffArrangePage.laneHeight - 12)
             .contentShape(Rectangle())
             .offset(x: 8)
             // from touch-down: a drag that waits for movement loses to the lanes' scroll view
-            // measured globally: the grip moves with the edge it drags
-            .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .onChanged { v in
-                    if stretch == nil { stretchStart = list.entries[b.entries.upperBound].reps }
-                    let n = max(1, min(16, stretchStart + Int((v.translation.width / pass).rounded())))
-                    stretch = (b.entries.upperBound, n)
-                }
-                .onEnded { v in
-                    // a tap on the grip (no drag) is a tap on its block
-                    if abs(v.translation.width) < 4 && abs(v.translation.height) < 4 {
-                        stretch = nil
-                        selection = EntryRef(track: track, entry: b.entries.lowerBound)
-                        return
-                    }
-                    guard let s = stretch else { return }
-                    stretch = nil
-                    if s.reps != stretchStart, let blk = store.blocks(track).first(where: { $0.entries.contains(s.entry) }) {
-                        edits.setReps(track, blk, s.reps)
-                    }
-                })
+            .highPriorityGesture(edgeGesture(b, ref: ref))
             .accessibilityHidden(true)
     }
 
-    /// Hold (0.4 s) lifts the block and stops the lanes scrolling; then a drag moves it within the track,
-    /// and letting go without moving opens its menu at the finger.
-    private func holdGesture(_ b: SongBlock, ref: EntryRef) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.4)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+    // MARK: Pressing a block
+    //
+    // Held still for 0.4 s (within 10 pt), a block lifts and the lanes stop scrolling; then a drag moves it,
+    // and letting go without moving opens its menu. Its edge takes the drag at once, for REPS, so the edge
+    // runs its own hold timer: held still there, the block lifts just the same (a narrow block is nearly all
+    // edge). However a touch ends (let go, taken by the scroll view, cancelled), endPress puts everything
+    // back: the long press says so itself, and the edge's `press` goes back to nil.
+
+    private func edgeGesture(_ b: SongBlock, ref: EntryRef) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: laneSpace)
+            .updating($press) { _, state, _ in if state == nil { state = ref } }
             .onChanged { v in
-                guard !store.offline, case .second(true, let d) = v else {
-                    if case .first(true) = v, lifted == nil { lifted = ref }
-                    return
-                }
-                lifted = ref
-                guard let d, finger != nil || abs(d.translation.width) > 6 || abs(d.translation.height) > 6 else { return }
-                let at = d.location.x - laneFrame.minX
-                if finger == nil { grab = d.startLocation.x - laneFrame.minX - x(b.start) - 2 }
-                finger = at
-                let m = MoveSpot.make(store: store, track: track, entry: ref.entry, barWidth: barWidth, at: at)
-                if m != moveAt { moveAt = m }
+                last = v.location
+                if holdTimer == nil && lifted == nil && stretch == nil { startHold(ref) }
+                if lifted == ref { carry(b, ref: ref, at: v.location); return }
+                travel = max(travel, hypot(v.translation.width, v.translation.height))
+                if travel > 4 { stretchTo(b, v) }
             }
             .onEnded { v in
-                let moved = finger != nil
-                defer { lifted = nil; finger = nil }
-                guard case .second(true, let d) = v else { return }
-                if moved {
-                    let m = moveAt
-                    moveAt = nil
-                    if let m { commit(m) }
-                    return
+                if lifted == ref {
+                    release(b, ref: ref, at: CGPoint(x: v.location.x + laneFrame.minX, y: v.location.y + laneFrame.minY))
+                } else {
+                    endStretch(b, ref: ref, v)
                 }
-                // let go where it was lifted: the menu, at the finger (or under the block's start)
-                selection = ref
-                let fallback = CGPoint(x: laneFrame.minX + x(b.start) + min(40, x(b.length) / 2), y: laneFrame.midY)
-                held = HeldBlock(ref: ref, at: d?.location ?? fallback)
             }
     }
 
-    private func commit(_ m: MoveSpot) {
-        guard !m.unchanged else { return }
-        if let why = m.refusal {
-            store.refuse(track: track, entry: m.from, why, needsStop: why.hasPrefix("Stop"))
+    /// The edge's hold: lifts the block if the finger is still down, near where it started, 0.4 s on.
+    private func startHold(_ r: EntryRef) {
+        travel = 0
+        holdTimer = Task { @MainActor in
+            try? await Task.sleep(for: Self.holdTime)
+            guard !Task.isCancelled, press == r, travel < Self.holdSlop, stretch == nil, !store.offline, lifted == nil else { return }
+            liftedAt = last
+            lifted = r
+        }
+    }
+
+    /// Every way out of a press: the held block, the finger, the edge, the preview, all back to rest.
+    private func endPress() {
+        holdTimer?.cancel()
+        holdTimer = nil
+        // after the gesture's own onEnded, which may still need them
+        Task { @MainActor in
+            if let r = lifted, r.track == track { lifted = nil }
+            finger = nil
+            liftedAt = nil
+            stretch = nil
+            travel = 0
+            if moveAt?.track == track { withAnimation(motion) { moveAt = nil } }
+        }
+    }
+
+    private func carry(_ b: SongBlock, ref: EntryRef, at p: CGPoint) {
+        let from = liftedAt ?? p
+        guard finger != nil || hypot(p.x - from.x, p.y - from.y) > 6 else { return }
+        let at = p.x
+        if finger == nil { grab = from.x - x(b.start) - 2 }
+        finger = at
+        let m = MoveSpot.make(store: store, track: track, entry: ref.entry, barWidth: barWidth, at: at)
+        if m != moveAt { withAnimation(motion) { moveAt = m } }
+    }
+
+    private func release(_ b: SongBlock, ref: EntryRef, at: CGPoint) {
+        if finger != nil {
+            let m = moveAt
+            if let m, !m.unchanged, m.refusal == nil, let es = m.result {
+                // the lane already shows the result. The rewrite draws it at once (before its first request),
+                // and endPress, queued after it, clears the preview: no jump back in between
+                // the selection moves in the same turn as the store's new list, so it never rings the wrong block
+                Task {
+                    selection = EntryRef(track: track, entry: m.index)
+                    await store.rewrite(track: track, to: es, focus: m.index)
+                }
+            } else if let m, let why = m.refusal {
+                // said in the inspector of the block that didn't move, with Stop where stopping lets it
+                selection = EntryRef(track: track, entry: m.from)
+                store.refuse(track: track, entry: m.from, why, needsStop: why.hasPrefix("Stop"))
+            }
             return
         }
-        guard let es = m.result else { return }
-        selection = EntryRef(track: track, entry: m.index)
-        Task { await store.rewrite(track: track, to: es, focus: m.index) }
+        // let go where it was lifted: the menu, at the finger
+        selection = ref
+        openMenu(.block(ref), at)
+    }
+
+    private func stretchTo(_ b: SongBlock, _ v: DragGesture.Value) {
+        guard let list = store.song?.tracks[safe: track] else { return }
+        if stretch == nil { stretchStart = list.entries[b.entries.upperBound].reps }
+        let n = max(1, min(16, stretchStart + Int((v.translation.width / max(1, x(b.pass))).rounded())))
+        stretch = (b.entries.upperBound, n)
+    }
+
+    private func endStretch(_ b: SongBlock, ref: EntryRef, _ v: DragGesture.Value) {
+        // a tap on the edge (no drag) is a tap on its block
+        guard let s = stretch else {
+            if travel <= 4 { selection = ref }
+            return
+        }
+        if s.reps != stretchStart, let blk = store.blocks(track).first(where: { $0.entries.contains(s.entry) }) {
+            edits.setReps(track, blk, s.reps)
+        }
     }
 
     private func moveBy(_ b: SongBlock, _ delta: Int) {
         if let i = edits.move(track, b, by: delta) { selection = EntryRef(track: track, entry: i) }
-    }
-
-    /// After a lane's last block: repeat the last pattern, a new empty one, a rest, or pick one.
-    private func addMenu(list: SongList) -> some View {
-        let last = list.span.map { list.entries[$0.upperBound] }
-        let kept = (0..<64).filter { (store.pool?.patterns[$0].length ?? 0) > 0 }
-        return Menu {
-            Section("T\(track + 1) · after the last entry") {
-                if let last, let p = last.poolIndex {
-                    Button("Repeat \(Entries.number(p + 1)) again") { edits.appendAtEnd(track, SongEntry(pattern: p + 1, reps: last.reps)) }
-                }
-                Button("New empty pattern") { edits.newPatternAtEnd(track) }.disabled((store.pool?.free ?? 0) == 0)
-                Button("Rest") { edits.appendAtEnd(track, SongEntry(pattern: SongEntry.rest, reps: 1)) }
-                Menu("Pick a pattern…") {
-                    ForEach(kept, id: \.self) { p in
-                        Button(Entries.number(p + 1)) { edits.appendAtEnd(track, SongEntry(pattern: p + 1, reps: 1)) }
-                    }
-                }
-            }
-        } label: {
-            Color.clear.contentShape(Rectangle())
-        }
-        .accessibilityLabel("Add to track \(track + 1)")
-        .disabled(store.offline || store.busy)
     }
 
     /// Double-tap: Sequence on the entry's pattern. Stopped, the track goes to the entry (LIST op 3) first.
@@ -742,6 +892,45 @@ struct Lane: View {
     }
 }
 
+/// UIKit's long press, for a block in the lanes' scroll view: it lets a scroll have the touch when the finger
+/// moves first, and once held, follows the finger until it's let go, saying whether the touch was cancelled.
+struct HoldRecognizer: UIGestureRecognizerRepresentable {
+    /// The finger is reported in this space (the lane's), and globally (for a menu at the finger).
+    var space: NamedCoordinateSpace
+    var began: (CGPoint, CGPoint) -> Void
+    var changed: (CGPoint, CGPoint) -> Void
+    var ended: (CGPoint, CGPoint, _ cancelled: Bool) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let g = UILongPressGestureRecognizer()
+        g.minimumPressDuration = 0.4
+        g.allowableMovement = Lane.holdSlop
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ g: UILongPressGestureRecognizer, context: Context) {
+        let p = context.converter.location(in: space)
+        let global = context.converter.location(in: .global)
+        switch g.state {
+        case .began: began(p, global)
+        case .changed: changed(p, global)
+        case .ended: ended(p, global, false)
+        case .cancelled, .failed: ended(p, global, true)
+        default: break
+        }
+    }
+}
+
+/// A block's place in its lane, set by layout (alignment guides), not by an offset: the frame moves with it,
+/// so the accordion's mask and the slide both follow the block.
+struct Place: ViewModifier {
+    var x: CGFloat
+    var y: CGFloat
+    func body(content: Content) -> some View {
+        content.alignmentGuide(.leading) { _ in -x }.alignmentGuide(.top) { _ in -y }
+    }
+}
+
 /// Where a pattern dragged from the bin would go: the entry index, the x it's drawn at (ticks), how long
 /// it plays, and what the drop does, said in words.
 struct DropSpot: Equatable {
@@ -753,12 +942,6 @@ struct DropSpot: Equatable {
     var text: String
     /// The list after the drop (nil: no room).
     var result: [SongEntry]?
-}
-
-/// A block whose menu is open: which, and where the finger let go (global).
-struct HeldBlock: Equatable {
-    var ref: EntryRef
-    var at: CGPoint
 }
 
 /// Where a held block would move to: its block (`from`, its first entry now), its place among the others,
