@@ -34,6 +34,7 @@ import Testing
         #expect(s.tracks.count == 6 && s.tracks.allSatisfy { $0.loaded && !$0.isDrums && $0.steps.count == 64 })
         #expect(s.tracks.map(\.engineName) == ["ANALOG", "FM6", "LOFI", "DRUM", "SAMPLE", "DRUM"])
         #expect(s.ids.chord == 81 && s.ids.direction == 91)
+        #expect(s.shape.trackColours == DeviceShape.skiffColours && s.shape.trackColours.count >= s.trackCount)
         #expect(s.ids.drumLevel == nil && s.ids.otherChannels == nil)
         #expect(!s.capabilities.contains(.livePlayhead) && !s.capabilities.contains(.sloopSong) && !s.capabilities.contains(.screenLink))
         let pages = try #require(s.pageLayout)
@@ -120,5 +121,30 @@ import Testing
         s[0].length = 4
         for _ in 0..<6 { p.tick(s, globalSwing: 0) }
         #expect(p.steps[0] == 3)                                    // (10 + 1) mod 4: carries on from where it was
+    }
+
+    @Test func aTempoChangeShiftsTheStepPlayingAndTheGridAfter() {
+        var p = CountedPlayhead(tracks: 1)
+        p.start()
+        let s: [CountedPlayhead.Settings] = [.init(length: 16, division: 2)]
+        for _ in 0...15 { p.tick(s, globalSwing: 0) }              // tick 15: step 2, 3 ticks in (it began on 12)
+        #expect(p.steps[0] == 2)
+        p.tempoChanged(from: 90, to: 150)                           // ends 6 − 3 × 150/90 = 1 tick from now
+        p.tick(s, globalSwing: 0)
+        #expect(p.steps[0] == 3)                                    // tick 16, not 18
+        for _ in 0..<6 { p.tick(s, globalSwing: 0) }
+        #expect(p.steps[0] == 4 && p.walks[0].startedAt == 22)     // the grid stays 2 ticks early
+    }
+
+    @Test func aRandTrackIsPlacedByItsNotes() {
+        var p = CountedPlayhead(tracks: 1)
+        p.start()
+        let s: [CountedPlayhead.Settings] = [.init(length: 8, division: 2, direction: 3)]
+        for _ in 0...10 { p.tick(s, globalSwing: 0) }
+        #expect(p.steps[0] == -1)
+        p.anchor(track: 0, step: 5, s[0])
+        #expect(p.steps[0] == 5)
+        for _ in 0..<6 { p.tick(s, globalSwing: 0) }
+        #expect(p.steps[0] == -1)                                   // unknown again until the next note
     }
 }

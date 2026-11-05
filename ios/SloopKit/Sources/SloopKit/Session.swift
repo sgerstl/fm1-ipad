@@ -842,7 +842,10 @@ public final class DeviceSession {
     private func applyGlobal(id: Int, value v: Int) {
         if id < globals.count { globals[id] = v }
         switch id {
-        case ids.bpm: bpm = v
+        case ids.bpm:
+            // the counted playhead shifts as Skiff's sequencer does when its own clock changes speed
+            if v != bpm, !capabilities.contains(.livePlayhead) { counted.tempoChanged(from: bpm, to: v) }
+            bpm = v
         case ids.globalSwing: swing = v
         case ids.drumLevel: if let dt = drumTrack { tracks[dt].level = v }
         case ids.otherChannels: otherChannelsPlaySelected = v == 0
@@ -1125,8 +1128,25 @@ public final class DeviceSession {
     private func noteLoop(_ t: SysExTransport) async {
         for await e in t.notes {
             let n = Int(e.note)
-            if e.on { deviceNotes.insert(n); followOctave(n) } else { deviceNotes.remove(n) }
+            if capabilities.contains(.livePlayhead) {
+                if e.on { deviceNotes.insert(n); followOctave(n) } else { deviceNotes.remove(n) }
+                continue
+            }
+            // Skiff sends every track's notes (NOTES OUT ALL, channels 1..6), the sequencer's included: only
+            // the selected track's light the keys, and they don't move the keyboard's octave
+            let track = Int(e.channel)
+            if track == selectedTrack { if e.on { deviceNotes.insert(n) } else { deviceNotes.remove(n) } }
+            if e.on, trackIndices.contains(track), tracks[track].direction == 3 { anchorRandom(track: track, note: n) }
         }
+    }
+
+    /// A RAND track's note places its playhead: the step holding that note (the first, when several do).
+    private func anchorRandom(track t: Int, note n: Int) {
+        let tr = tracks[t]
+        let len = max(1, min(tr.length, tr.steps.count))
+        guard let i = (0..<len).first(where: { tr.steps[$0].time == .note && tr.steps[$0].notes.contains(n) }) else { return }
+        counted.anchor(track: t, step: i, .init(length: tr.length, division: tr.division, direction: 3, swing: tr.swing))
+        applyCounted()
     }
 
     /// A note from the FM-1 that no key plays at the iPad's octave, but one does at another: the FM-1's

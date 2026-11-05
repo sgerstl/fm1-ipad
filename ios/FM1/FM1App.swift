@@ -25,7 +25,9 @@ struct RootView: View {
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
-        _session = State(initialValue: DeviceSession(demo: demo))
+        let s = DeviceSession(demo: demo)
+        _session = State(initialValue: s)
+        TrackColours.session = s
     }
 
     @Environment(\.horizontalSizeClass) private var widthClass
@@ -60,7 +62,7 @@ struct RootView: View {
         .environment(\.look, Look(style: lookStyle, strength: lookStrength))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         .task(id: useDemo) {
-            if session.isDemo != useDemo { session = DeviceSession(demo: useDemo) }
+            if session.isDemo != useDemo { session = DeviceSession(demo: useDemo); TrackColours.session = session }
             projects.attach(session)
             await session.run()
         }
