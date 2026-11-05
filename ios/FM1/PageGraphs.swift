@@ -10,10 +10,15 @@ private let gw = 240.0, gh = 140.0
 
 private struct Space {
     let size: CGSize
+    /// The drawing's height in Skiff's pixels: 140 for the graphs drawn from the panel's top, about 96 for FX,
+    /// SLICER and DUCK, which Skiff draws in the panel under its cards.
+    var gh = 140.0
     func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x / gw * size.width, y: y / gh * size.height) }
     func r(_ x: Double, _ y: Double, _ w: Double, _ h: Double) -> CGRect {
         CGRect(x: x / gw * size.width, y: y / gh * size.height, width: w / gw * size.width, height: h / gh * size.height)
     }
+    /// A point of the view back in Skiff's space.
+    func back(_ pt: CGPoint) -> (Double, Double) { (Double(pt.x / max(1, size.width)) * gw, Double(pt.y / max(1, size.height)) * gh) }
     func line(_ pts: [(Double, Double)]) -> Path { Path { $0.addLines(pts.map { p($0.0, $0.1) }) } }
     /// Skiff's small type (AF_S) with its baseline at y.
     func text(_ ctx: GraphicsContext, _ s: String, _ x: Double, _ base: Double, _ c: Color, size: CGFloat = 11,
@@ -30,11 +35,17 @@ private let midColour = Theme.textSecondary       // T_MID
 struct PageGraph: View {
     let session: DeviceSession
     let page: SoundPage
+    /// The pages of a merged card (LFO + LFO 2, INSERT + INSERT 2): one graph from all their values.
+    var rows: [SoundPage] = []
     let hot: Int?
+    @Binding var modRoute: Int
 
     static func has(_ p: SoundPage) -> Bool {
-        ["ENV", "ENV 2", "LFO", "LFO 2", "LFO DEST", "DRIVE", "DELAY", "REVERB", "CHORUS", "VOICE"].contains(p.title)
+        ["ENV", "ENV 2", "LFO", "LFO 2", "LFO DEST", "MOD", "FX", "DRIVE", "INSERT", "INSERT 2", "SLICER", "DUCK",
+         "DELAY", "REVERB", "CHORUS", "VOICE"].contains(p.title)
     }
+    /// Drawn in the panel under the cards on Skiff, shorter than the graphs drawn from the panel's top.
+    static let short: Set<String> = ["FX", "SLICER", "DUCK"]
 
     var body: some View {
         let colour = Theme.track[session.selectedTrack]
@@ -53,11 +64,46 @@ struct PageGraph: View {
                 .graphLabel("Chorus", valueName(2))
             case "VOICE": Canvas { ctx, sz in VoiceDrawing(v: values, glide: glideText).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Voice", valueName(0))
+            case "FX": Canvas { ctx, sz in FXDrawing(v: values).draw(ctx, Space(size: sz, gh: 96), colour) }
+                .graphLabel("Sends", "distortion \(values[0]), chorus \(values[1]), delay \(values[2]), reverb \(values[3])")
+            case "INSERT", "INSERT 2": Canvas { ctx, sz in InsertDrawing(v: insertValues).draw(ctx, Space(size: sz), colour) }
+                .graphLabel("Insert", insertName)
+            case "SLICER": Canvas { ctx, sz in SlicerDrawing(v: values).draw(ctx, Space(size: sz, gh: 96), colour) }
+                .graphLabel("Slicer pattern", "\(valueName(0)), pattern \(values[1])")
+            case "DUCK": Canvas { ctx, sz in duck.draw(ctx, Space(size: sz, gh: 96), colour) }
+                .graphLabel("Ducking over a bar", valueName(0))
+            case "MOD": ModGraph(session: session, page: page, route: $modRoute, colour: colour)
             default: EmptyView()
             }
         }
-        .frame(height: 128)
+        .frame(height: Self.short.contains(page.title) ? 88 : page.title == "MOD" ? 168 : 128)   // MOD: eleven routes' text
         .recessed(8)
+    }
+
+    /// INSERT's TYPE A B C and INSERT 2's MIX, from the merged card's rows.
+    private var insertValues: [Int] {
+        let all = (rows.isEmpty ? [page] : rows).flatMap { p in p.ids.map { id in id.flatMap { $0 < session.params.count ? session.params[$0] : nil } } }
+        let v = all.compactMap { $0 }
+        return v.count >= 5 ? Array(v.prefix(5)) : v + Array(repeating: 127, count: max(0, 5 - v.count))
+    }
+    private var insertName: String { InsertDrawing.names[safe: insertValues[0]] ?? "OFF" }
+
+    /// DUCK's source: its steps over a bar at the tempo.
+    private var duck: DuckDrawing {
+        let v = values, src = v[0], me = session.selectedTrack
+        guard src > 0, src - 1 < session.tracks.count, src - 1 != me else { return DuckDrawing(depth: v[1], release: 0, hits: nil, colour: .clear) }
+        let s = session.tracks[src - 1]
+        let ticks = CountedPlayhead.divisionTicks[safe: s.division] ?? 6, len = max(1, s.length)
+        let nb = max(1, Int(96 / ticks))
+        let hits = (0..<min(nb, 64)).filter { i in
+            let k = i % len
+            // a kit (DRUM, DRUM-X) ducks on its KICK lane only
+            let kit = session.isDrums(src - 1) || s.engineName.uppercased().hasPrefix("DRUM")
+            return k < s.steps.count && (kit ? s.gridSteps[k].has(0) : s.isOn(k))
+        }.map { Double($0) * ticks / 96 }
+        let bar = 4 * 60 / Double(max(40, session.bpm))
+        let rel = SkiffLFO.fadeSeconds(max(1, v[2])) / bar
+        return DuckDrawing(depth: v[1], release: rel, hits: hits, colour: Theme.track[src - 1])
     }
 
     /// The page's four values (0 for an empty slot), the track's or the globals.
@@ -461,5 +507,224 @@ private struct VoiceDrawing {
             ctx.fill(Path(s.r(100, 120, w, 1)), with: .color(dimColour))
         }
         s.text(ctx, glide, 100 + w / 2, 135, midColour, anchor: .bottom)
+    }
+}
+
+// MARK: FX (ui_graph.c graph_fx): the four sends as sliders under their columns
+
+private struct FXDrawing {
+    let v: [Int]                                  // DIST, CHORUS, DELAY, REVERB
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        for i in 0..<4 {
+            let x = 30 + Double(i) * 60 - 2, h = Double(v[i] * 76 / 127)      // under each column's middle
+            ctx.fill(Path(roundedRect: s.r(x, 6, 4, 82), cornerRadius: 2), with: .color(Theme.tones[2]))
+            if h > 3 { ctx.fill(Path(roundedRect: s.r(x, 88 - h, 4, h), cornerRadius: 2), with: .color(c)) }
+            let cap = s.r(x - 4, 85 - h, 12, 6)
+            ctx.fill(Path(roundedRect: CGRect(x: cap.midX - 9, y: cap.minY, width: 18, height: max(6, cap.height)), cornerRadius: 3), with: .color(c))
+        }
+    }
+}
+
+// MARK: The curve and the wave (ui_pgraph.c pg_curve_graph), DRIVE's look, shared with INSERT
+
+private func curveGraph(_ ctx: GraphicsContext, _ s: Space, _ c: Color, at: (Int) -> Int, wave w: [Int]) {
+    let ys = (0...116).map { i in 66 - Double(at((i - 58) * 32768 / 58)) * 58 / 32768 }
+    let pts = ys.enumerated().map { (12 + Double($0.offset), $0.element) }
+    var under = s.line(pts)
+    under.addLine(to: s.p(128, 124)); under.addLine(to: s.p(12, 124)); under.closeSubpath()
+    ctx.fill(under, with: .color(c.opacity(0.14)))
+    ctx.fill(Path(s.r(12, 66, 116, 1)), with: .color(lineColour))
+    ctx.fill(Path(s.r(70, 8, 1, 117)), with: .color(lineColour))
+    ctx.fill(Path(s.r(140, 88, 87, 1)), with: .color(lineColour))
+    ctx.stroke(s.line([(12, 124), (128, 8)]), with: .color(dimColour), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+    ctx.stroke(s.line(pts), with: .color(c), style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
+    let wp = w.enumerated().map { (140 + Double($0.offset), 88 - Double($0.element) * 32 / 32768) }
+    var wf = s.line(wp)
+    wf.addLine(to: s.p(227, 88)); wf.addLine(to: s.p(140, 88)); wf.closeSubpath()
+    ctx.fill(wf, with: .color(c.opacity(0.14)))
+    ctx.stroke(s.line(wp), with: .color(c), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+}
+
+// MARK: INSERT + INSERT 2 (ui_pgraph.c graph_insert, fx.c ins_*)
+
+private struct InsertDrawing {
+    let v: [Int]                                  // TYPE, A, B, C, MIX
+    static let names = ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"]
+
+    static func sine(_ ph: UInt32) -> Int { Int(32767 * sin(Double(ph) / 4_294_967_296 * 2 * .pi)) }
+    static func tri(_ q: UInt32) -> Int { let t = q >> 16; return Int(t < 32768 ? t << 1 : (65535 - t) << 1) }
+    /// LEVEL_Q12: 0 off, else (v − 112) / 2 dB.
+    static func level(_ v: Int) -> Int { v <= 0 ? 0 : Int((4096 * pow(10, Double(v - 112) / 40)).rounded()) }
+    /// ins_lpk: the one-pole low-pass of cutoff index c (SVF_G), Q16.
+    static func lpk(_ c: Int) -> Int {
+        let f = 30 * pow(16000.0 / 30, Double(min(max(c, 0), 127)) / 127)
+        let g = Int(4096 * tan(Double.pi * min(f, 0.45 * 44100) / 44100))
+        return (g << 16) / (4096 + g)
+    }
+    static func mixq(_ m: Int) -> Int { m >= 127 ? 32768 : m <= 0 ? 0 : m * 258 }
+    /// IT_* to DriveDrawing's shapes (SOFT HARD FOLD CRUSH FUZZ).
+    static let shapeOf = [0: -1, 1: 0, 2: 1, 3: 2, 4: 4, 5: 3]
+
+    /// pg_ins_curve: the drives' transfer blended by MIX; the swept ones' sweep over a cycle.
+    func at(_ x: Int) -> Int {
+        let ty = v[0], a = v[1], b = v[2], c = v[3], mix = Self.mixq(v[4])
+        guard ty > 0, mix > 0 else { return x }
+        if ty >= 6 {
+            let ph = UInt32(truncatingIfNeeded: x + 32768) << 16
+            var s = ty == 8 ? Self.sine(ph) : Self.tri(ph) - 32768
+            if ty == 7 { s = Int((UInt32(s + 32768) * UInt32(s + 32768)) >> 16) - 32768 }
+            return s * b / 127
+        }
+        let y = ty == 5 ? DriveDrawing.shape(3, x, 15 - (min(max(a, 0), 127) >> 3))
+            : (DriveDrawing.shape(Self.shapeOf[ty] ?? 0, ((x >> 3) * (4096 + a * a * 3)) >> 9, 0) * Self.level(c)) >> 12
+        return x + Int((Int64(min(max(y, -40000), 40000) - x) * Int64(mix)) >> 15)
+    }
+
+    func wave() -> [Int] {
+        let ty = v[0], b = v[2], c = v[3]
+        let hold = [64, 48, 40, 32, 24, 20, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1][min(max(b, 0), 127) >> 3]
+        let kq = Self.lpk(ty == 5 ? c : b)
+        var lp1 = 0, lp2 = 0, h = 0, out = [Int](repeating: 0, count: 88)
+        for i in 0..<176 {
+            let x = Self.sine(UInt32(truncatingIfNeeded: i &* 48_806_447)) * 3 / 4
+            let y: Int
+            if ty >= 6 {
+                y = at((i % 44) * 65536 / 44 - 32768)
+            } else {
+                if ty != 5 || i % hold == 0 { h = at(x) }
+                lp1 += ((h - lp1) * kq >> 16) * 2
+                lp2 += ((lp1 - lp2) * kq >> 16) * 2
+                y = ty != 0 ? lp2 : x
+            }
+            if i >= 88 { out[i - 88] = y }
+        }
+        return out
+    }
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        curveGraph(ctx, s, c, at: at, wave: wave())
+        s.text(ctx, Self.names[safe: v[0]] ?? "OFF", 140, 26, v[0] != 0 && v[4] != 0 ? c : dimColour, size: 13, weight: .semibold)
+    }
+}
+
+// MARK: SLICER (ui_graph.c graph_slicer)
+
+private struct SlicerDrawing {
+    let v: [Int]                                  // SLICER (OFF GATE STUT), PATTERN 1…16, RATE, DEPTH
+    static let patterns: [UInt16] = [0x5555, 0xB6DB, 0x5249, 0xB777, 0x6D6D, 0x0F0F, 0x1111, 0x54A5,
+                                     0x5333, 0xA929, 0xAAFF, 0xD501, 0xAAAA, 0xAB6B, 0xBB5D, 0x7597]
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        let pat = Self.patterns[((v[1] - 1) % 16 + 16) % 16], mode = v[0]
+        let open = Double(70 - v[3] * 70 / 127)
+        let col = mode == 0 ? dimColour : c
+        for i in 0..<16 {
+            let x = Double(12 + i * 13 + (i / 4) * 4)
+            if pat >> i & 1 == 1 {
+                ctx.fill(Path(roundedRect: s.r(x, 8, 9, 72), cornerRadius: 2), with: .color(mode == 0 ? Theme.tones[2] : col))
+            } else if mode == 2 {
+                for y in stride(from: 8.0, to: 80, by: 4) { ctx.fill(Path(s.r(x, y, 9, 1)), with: .color(col)) }
+            } else {
+                ctx.fill(Path(roundedRect: s.r(x, 77, 9, 3), cornerRadius: 1), with: .color(Theme.tones[2]))
+                if open > 3 { ctx.fill(Path(roundedRect: s.r(x, 80 - open, 9, open), cornerRadius: 2), with: .color(Theme.tones[2])) }
+            }
+        }
+    }
+}
+
+// MARK: DUCK (ui_graph.c graph_duck)
+
+/// The track's level over a bar of its source's hits: full, down by DEPTH at each hit (the source's colour under
+/// it; a drum source's kick lane only), back in a line over RELEASE. BY OFF (or the track itself): the empty box.
+private struct DuckDrawing {
+    let depth: Int
+    let release: Double                           // RELEASE as a part of the bar
+    let hits: [Double]?                           // where in the bar (0…1) the source hits
+    let colour: Color
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        ctx.fill(Path(s.r(8, 10, 224, 62)), with: .color(Theme.tones[2]))
+        guard let hits else { return }
+        for h in hits { ctx.fill(Path(s.r(8 + h * 224, 78, 3, 8)), with: .color(colour)) }
+        for x in 0..<224 {
+            let tau = Double(x) / 224
+            var dip = 0.0
+            if let last = hits.last(where: { $0 <= tau }) ?? hits.last {
+                let dt = last <= tau ? tau - last : tau + 1 - last
+                if release > 0, dt < release { dip = 62 * Double(depth) / 127 * (release - dt) / release }
+            }
+            ctx.fill(Path(s.r(8 + Double(x), 10 + dip, 1.2, 62 - dip)), with: .color(c))
+        }
+    }
+}
+
+// MARK: MOD (ui_graph.c graph_mod): the fixed routes' grid, the matrix's slots, the route picked lit
+
+struct ModGraph: View {
+    let session: DeviceSession
+    let page: SoundPage
+    @Binding var route: Int
+    let colour: Color
+
+    static let cx: [Double] = [84, 124, 166, 208]
+
+    private func value(_ id: Int?) -> Int { id.flatMap { $0 < session.params.count ? session.params[$0] : nil } ?? 0 }
+    private func shown(_ id: Int?) -> String { formatValue(id.flatMap { session.trackDesc($0) }, value(id)).shown }
+
+    var body: some View {
+        GeometryReader { g in
+            Canvas { ctx, sz in draw(ctx, Space(size: sz)) }
+                .contentShape(Rectangle())
+                .gesture(SpatialTapGesture().onEnded { e in pick(Space(size: g.size).back(e.location)) })
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Modulation routes")
+        .accessibilityValue("route \(route + 1) of 11")
+        .accessibilityAdjustableAction { d in route = min(10, max(0, route + (d == .increment ? 1 : -1))) }
+    }
+
+    /// A tap on a value in the grid or a slot's row picks that route (as KNOB 1 does).
+    private func pick(_ p: (Double, Double)) {
+        let (x, y) = p
+        if y < 64 {
+            let row = y < 42 ? 0 : 1
+            guard let col = Self.cx.indices.min(by: { abs(Self.cx[$0] - x) < abs(Self.cx[$1] - x) }), x > 60 else { return }
+            let q = row * 4 + col
+            if q < 7 { route = q }
+        } else {
+            let k = Int((y - 67) / 18)
+            if (0..<4).contains(k) { route = 7 + k }
+        }
+    }
+
+    private func draw(_ ctx: GraphicsContext, _ s: Space) {
+        let cols = ["PITCH", "CUT", "SHAPE", "AMP"]
+        for (k, n) in cols.enumerated() { s.text(ctx, n, Self.cx[k], 16, midColour, anchor: .bottom) }
+        for q in 0..<8 {
+            let base = 35 + 21 * Double(q / 4), x = Self.cx[q % 4]
+            if q % 4 == 0 { s.text(ctx, q == 0 ? "LFO" : "ENV", 12, base, Theme.text, weight: .semibold) }
+            let sel = q < 7 && q == route
+            let id = q < 7 ? page.routes[safe: q]?.first ?? nil : nil
+            // the grid's values without their unit, as Skiff writes them; the route picked white (Skiff's T_THEME)
+            let text = q < 7 ? splitUnit(shown(id)).value : "–"
+            if sel { ctx.fill(Path(roundedRect: s.r(x - 19, base - 14, 39, 19), cornerRadius: 4), with: .color(Theme.text)) }
+            let v = q < 7 ? value(id) : 0
+            s.text(ctx, text, x, base + 1, sel ? Theme.onColour : v == 0 ? dimColour : colour, size: 12, weight: .semibold, anchor: .bottom)
+        }
+        ctx.fill(Path(s.r(8, 64, 224, 1)), with: .color(lineColour))
+        for k in 0..<4 {
+            let r = page.routes[safe: 7 + k] ?? [nil, nil, nil]
+            let y = 67 + 18 * Double(k), sel = route == 7 + k
+            let on = value(r[safe: 0] ?? nil) != 0 && value(r[safe: 1] ?? nil) != 0 && value(r[safe: 2] ?? nil) != 0
+            let col = sel ? Theme.onColour : on ? colour : dimColour, ar = sel ? Theme.onColour : on ? Theme.text : dimColour
+            if sel { ctx.fill(Path(roundedRect: s.r(6, y, 228, 17), cornerRadius: 4), with: .color(Theme.text)) }
+            s.text(ctx, "\(8 + k)", 12, y + 13, sel ? Theme.onColour : midColour)
+            s.text(ctx, shown(r[safe: 0] ?? nil), 34, y + 13, col, weight: .semibold)
+            ctx.stroke(s.line([(78, y + 8), (95, y + 8)]), with: .color(ar), lineWidth: 1)
+            ctx.stroke(s.line([(91, y + 4), (95, y + 8), (91, y + 12)]), with: .color(ar), lineWidth: 1)
+            s.text(ctx, shown(r[safe: 1] ?? nil), 102, y + 13, col, weight: .semibold)
+            s.text(ctx, shown(r[safe: 2] ?? nil), 228, y + 13, col, weight: .semibold, anchor: .bottomTrailing)
+        }
     }
 }

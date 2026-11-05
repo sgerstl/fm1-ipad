@@ -32,6 +32,7 @@ struct SoundPage: Identifiable {
     var drums = false            // the drum track has this page too (params.c page_for_drum)
     var analogOnly = false       // EDIT > FILTER: ANALOG only (page_shown)
     var engineEdit = 0           // 1 / 2: EDIT 1 / EDIT 2, titled by the engine (NAMES)
+    var routes: [[Int?]] = []    // Skiff's MOD: its eleven routes' parameters (PageSpec.routes)
     var id: String { "\(family.rawValue).\(title)" }
 
     static let all: [SoundPage] = [
@@ -79,15 +80,14 @@ struct SoundPage: Identifiable {
             var fw = 100 + k
             if session.dialect == .skiff, let d = skiffPages[p.title], !used.contains(d) { fw = d; used.insert(d) }
             return SoundPage(fw: fw, title: p.title, family: SoundFamily(rawValue: p.family) ?? .edit, scope: p.scope,
-                             ids: p.ids, engineEdit: p.engineEdit)
+                             ids: p.ids, engineEdit: p.engineEdit, routes: p.routes)
         }
     }
 
     /// Skiff 2.2's PAGES (fm1-ipad skiff/README.md) for the pages Jib lays out: title → index. MOD's four
-    /// pages are one there (the first stands for it), PATTERN 2's knob is on PATTERN; Jib's ENV DEST and
-    /// LFO DEST have no page of their own on Skiff. The table belongs with the firmware version.
+    /// PATTERN 2's knob is on PATTERN. The table belongs with the firmware version.
     static let skiffPages: [String: Int] = [
-        "ENV": 0, "ENV 2": 1, "LFO": 2, "LFO 2": 3, "MOD 1": 4, "FX": 5, "DRIVE": 6, "INSERT": 7, "INSERT 2": 8,
+        "ENV": 0, "ENV 2": 1, "LFO": 2, "LFO 2": 3, "MOD": 4, "FX": 5, "DRIVE": 6, "INSERT": 7, "INSERT 2": 8,
         "SLICER": 9, "DUCK": 10, "SCALE": 11, "CHORD": 12, "FOLLOW": 13, "EDIT 1": 14, "EDIT 2": 15,
         "VOICE": 28, "VOICE 2": 29, "DELAY": 31, "REVERB": 32, "CHORUS": 33, "GLOBAL": 34, "ARP": 39, "ARP 2": 40,
         "PATTERN": 43,
@@ -152,7 +152,7 @@ struct SoundPage: Identifiable {
     /// The page a parameter is on, the first one when it appears on several (as MIDI's channels do).
     @MainActor
     static func page(_ session: DeviceSession, scope: Int, id: Int) -> SoundPage? {
-        pages(session).first { $0.scope == scope && $0.ids.contains(id) && !$0.analogOnly }
+        pages(session).first { $0.scope == scope && ($0.ids.contains(id) || $0.routes.joined().contains(id)) && !$0.analogOnly }
     }
 
     @MainActor
@@ -248,32 +248,37 @@ struct SoundTab: View {
     @State private var marked: String?          // the knob last turned on the FM-1, marked for a moment
     @State private var followed: UIState?       // the FM-1's screen as last followed
     @State private var activePage: String?      // not linked: the page last tapped here (linked, the FM-1's page)
+    @State private var modRoute = 0             // MOD's KNOB 1: the route shown, 0…10 (Skiff's mod_ui_route)
+
+    /// The FM-1's buttons in the order Skiff's PAGES table lists their pages (params.c): Shape's sections. GLO's
+    /// shared effects keep their place after them for now; SEQ's PATTERN pages close the list.
+    static let order: [SoundFamily] = [.env, .lfo, .fx, .sel, .edit, .arp, .glo, .seq]
+    /// Pages that drive one thing, shown as rows over its one graph: the first page's title → the others'.
+    static let merged: [String: [String]] = ["LFO": ["LFO 2"], "INSERT": ["INSERT 2"]]
 
     var body: some View {
-        let pages = SoundPage.shown(session, ui.soundFamily)
+        let sections = Self.order.map { ($0, SoundPage.shown(session, $0)) }.filter { !$0.1.isEmpty }
         VStack(alignment: .leading, spacing: 16) {
             EntrySoundNote(session: session)
-            // the button is chosen on the pads in the left column, as on the FM-1
-            ScrollView {
-                VStack(spacing: 0) {
-                    if session.selectedIsDrums, pages.isEmpty {
-                        DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
-                    }
-                    if ui.soundFamily == .sel, !session.selectedIsDrums { KeyMapStrip(session: session) }
-                    // a plain grid (seven pages at most): a lazy one kept stale positions when the strip
-                    // above it changed height, and drew a panel over the strip
-                    Grid(horizontalSpacing: 16, verticalSpacing: 16) {
-                        ForEach(Array(stride(from: 0, to: pages.count, by: 2)), id: \.self) { i in
-                            GridRow(alignment: .top) {
-                                pagePanel(pages[i], of: pages)
-                                if i + 1 < pages.count { pagePanel(pages[i + 1], of: pages) } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
-                            }
+            // the button is chosen on the pads in the left column, as on the FM-1: it scrolls to its section
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        if session.selectedIsDrums, SoundPage.shown(session, ui.soundFamily).isEmpty {
+                            DrumNoPages(session: session, ui: ui, family: ui.soundFamily)
+                        }
+                        ForEach(sections, id: \.0) { family, pages in
+                            section(family, pages)
                         }
                     }
                     .padding(.bottom, 8)
                 }
+                .scrollIndicators(.hidden)
+                .onChange(of: ui.soundFamily) { _, f in
+                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(f, anchor: .top) }
+                }
+                .onAppear { proxy.scrollTo(ui.soundFamily, anchor: .top) }
             }
-            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)   // the page area fills its column
         .onChange(of: session.lastTouched?.at) { _, _ in follow() }
@@ -285,47 +290,97 @@ struct SoundTab: View {
         }
     }
 
-    // MARK: A page: its four knobs, as on the FM-1
+    // MARK: A button's section: its pages in Skiff's order, merged pages as one card
 
-    private func pagePanel(_ p: SoundPage, of pages: [SoundPage]) -> some View {
-        let touchedHere = marked != nil && p.ids.contains { id in id.map { "s\(p.scope).\($0)" } == marked }
-        // linked (fm1-ipad firmware): the light is the FM-1's own page; otherwise the knob just turned
-        let onDevice = session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == p.fw } == true
-        // the page the knobs work on: the FM-1's, or (not linked) the one last tapped here
-        let active = session.screenLinked ? onDevice : activePage == p.id
+    private func section(_ family: SoundFamily, _ pages: [SoundPage]) -> some View {
+        // the cards: a page alone, or a page with the ones merged into it
+        var cards: [[SoundPage]] = []
+        for p in pages {
+            if Self.merged.values.contains(where: { $0.contains(p.title) }),
+               let k = cards.firstIndex(where: { Self.merged[$0[0].title]?.contains(p.title) == true }) {
+                cards[k].append(p)
+            } else {
+                cards.append([p])
+            }
+        }
+        let lit = ui.soundFamily == family
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                LED(on: session.screenLinked ? onDevice : touchedHere)
-                Text(p.title(session)).font(.system(size: 15, weight: .semibold))
-                if onDevice, let k = pages.firstIndex(where: { $0.fw == p.fw }) {
+                Text(family.rawValue).font(.system(size: 13, weight: .semibold)).tracking(0.6)
+                    .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
+                Rectangle().fill(Theme.stepEmpty).frame(height: 1)
+            }
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel("\(family.rawValue) button")
+            if family == .sel, !session.selectedIsDrums { KeyMapStrip(session: session) }
+            // a plain grid: a lazy one kept stale positions when the strip above it changed height
+            Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                ForEach(Array(stride(from: 0, to: cards.count, by: 2)), id: \.self) { i in
+                    GridRow(alignment: .top) {
+                        card(cards[i], of: pages)
+                        if i + 1 < cards.count { card(cards[i + 1], of: pages) } else { Color.clear.gridCellUnsizedAxes([.vertical]) }
+                    }
+                }
+            }
+        }
+        .id(family)
+    }
+
+    // MARK: A card: one page's four columns, or rows of merged pages, over the graph
+
+    private func card(_ rows: [SoundPage], of pages: [SoundPage]) -> some View {
+        let first = rows[0]
+        let onDeviceRow = rows.firstIndex { onDevice($0) }
+        let activeRow = rows.firstIndex { isActive($0) }
+        let lit = rows.contains { p in marked != nil && (p.ids + p.routes.joined()).contains { id in id.map { "s\(p.scope).\($0)" } == marked } }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                LED(on: session.screenLinked ? onDeviceRow != nil : lit)
+                Text(rows.count > 1 ? rows.map { $0.title(session) }.joined(separator: " · ") : first.title(session))
+                    .font(.system(size: 15, weight: .semibold))
+                if let r = onDeviceRow, let k = pages.firstIndex(where: { $0.fw == rows[r].fw }) {
                     // the page the FM-1 shows, counted as its screen counts them ("FX 1/7")
                     Text("On the FM-1 · \(k + 1)/\(pages.count)")
                         .font(.system(size: 12, weight: .semibold))
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(.white.opacity(0.10)))
                 }
-                if p.scope == 1 {
+                if first.scope == 1 {
                     Text("all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            // the four columns, as Skiff's cards; the column of the knob just turned is white
-            HStack(spacing: 4) {
-                ForEach(0..<4, id: \.self) { slot in
-                    if let id = p.ids[slot] {
-                        KnobControl(ui: ui, activate: { if !active { activate(p) }; return active },
-                                    column: (slot + 1, Theme.track[session.selectedTrack], marked == "s\(p.scope).\(id)")) {
-                            KnobSpec.param(session, scope: p.scope, id: id, slot: slot)
+            if first.title == "MOD", !first.routes.isEmpty {
+                ModColumns(session: session, ui: ui, page: first, route: $modRoute, marked: marked,
+                           activate: { touch(first) })
+            } else {
+                ForEach(rows.indices, id: \.self) { r in
+                    let p = rows[r]
+                    let focused = rows.count > 1 && (activeRow ?? 0) == r
+                    HStack(spacing: 4) {
+                        if rows.count > 1 {
+                            // the row's page: tap it to focus it (the FM-1's knobs follow the focused row)
+                            Button { activate(p) } label: {
+                                Text(p.title).font(.system(size: 11, weight: .semibold)).tracking(0.4)
+                                    .foregroundStyle(focused ? Theme.onColour : Theme.textSecondary)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                                    .frame(width: 52).frame(maxHeight: .infinity)
+                                    .background(RoundedRectangle(cornerRadius: 6).fill(focused ? Theme.text : Theme.control))
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(p.title) row")
+                            .accessibilityAddTraits(focused ? .isSelected : [])
+                            .accessibilityHint("Puts the FM-1's knobs on this row")
                         }
-                    } else {
-                        EmptyColumn()
+                        columns(p)
                     }
+                    .fixedSize(horizontal: false, vertical: true)   // the columns' own height: an empty one matches them
                 }
             }
-            .fixedSize(horizontal: false, vertical: true)   // the columns' own height: an empty one matches them
-            graph(for: p)
+            graph(for: first, rows: rows)
         }
         .padding(16)
         .panel()
@@ -336,17 +391,42 @@ struct SoundTab: View {
                 .padding(.horizontal, 14)
                 .offset(y: 1)                    // on the panel's top edge
                 .glow(Theme.text.opacity(0.7), radius: 6)
-                .opacity(onDevice ? 1 : 0)
-                .animation(.easeOut(duration: 0.15), value: onDevice)   // the light fades; nothing else animates
+                .opacity(onDeviceRow != nil ? 1 : 0)
+                .animation(.easeOut(duration: 0.15), value: onDeviceRow != nil)   // the light fades; nothing else animates
                 .accessibilityHidden(true)
         }
-        .accessibilityValue(onDevice ? "on the FM-1" : "")
-        // a tap anywhere on an inactive page makes it the active one (on the FM-1 too); touching a knob does as well,
-        // and the knob works at once (2026-11-05: the overlay that took a knob's first tap is gone)
+        .accessibilityValue(onDeviceRow != nil ? "on the FM-1" : "")
+        // a tap anywhere on an inactive card makes it the active one (on the FM-1 too); touching a column does as well
         .contentShape(Rectangle())
-        .onTapGesture { if !active { activate(p) } }
-        .accessibilityAction(named: "Show on the FM-1") { activate(p) }
-        .id(p.id)
+        .onTapGesture { if activeRow == nil { activate(first) } }
+        .accessibilityAction(named: "Show on the FM-1") { activate(first) }
+        .id(first.id)
+    }
+
+    /// A page's four columns, as Skiff's cards; the column of the knob just turned is white.
+    private func columns(_ p: SoundPage) -> some View {
+        ForEach(0..<4, id: \.self) { slot in
+            if let id = p.ids[slot] {
+                KnobControl(ui: ui, activate: { touch(p) },
+                            column: (slot + 1, Theme.track[session.selectedTrack], marked == "s\(p.scope).\(id)")) {
+                    KnobSpec.param(session, scope: p.scope, id: id, slot: slot)
+                }
+            } else {
+                EmptyColumn()
+            }
+        }
+    }
+
+    private func onDevice(_ p: SoundPage) -> Bool {
+        session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == p.fw } == true
+    }
+    /// The page the knobs work on: the FM-1's, or (not linked) the one last tapped here.
+    private func isActive(_ p: SoundPage) -> Bool { session.screenLinked ? onDevice(p) : activePage == p.id }
+    /// A column touched: its page becomes the active one; true when it already was.
+    private func touch(_ p: SoundPage) -> Bool {
+        let was = isActive(p)
+        if !was { activate(p) }
+        return was
     }
 
     private func activate(_ p: SoundPage) {
@@ -355,11 +435,11 @@ struct SoundTab: View {
     }
 
     /// The page's graph, as Skiff draws it under the cards (PageGraph): ENV's curve, the LFO running, DRIVE…
-    @ViewBuilder private func graph(for p: SoundPage) -> some View {
+    @ViewBuilder private func graph(for p: SoundPage, rows: [SoundPage]) -> some View {
         // the knob being turned, here or on the FM-1 (marked), lights its point
         let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == g.id } }
             ?? marked.flatMap { m in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == m } }
-        if PageGraph.has(p) { PageGraph(session: session, page: p, hot: turning) }
+        if PageGraph.has(p) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: $modRoute) }
     }
 
     /// The FM-1 changed page (a button pressed on it): show that button's pages here. Holding SEL

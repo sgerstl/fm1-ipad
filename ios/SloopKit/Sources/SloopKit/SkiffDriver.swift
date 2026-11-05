@@ -432,7 +432,14 @@ public enum SkiffPages {
         var nth = 1
     }
 
+    /// In Skiff's PAGES order (params.c), button by button: ENV, LFO, FX, SCL, EDIT, GLO, ARP, SEQ. The fixed MOD
+    /// routes' and the matrix slots' pages aren't shown: they make up MOD (`modSources`).
     static let specs: [Spec] = [
+        Spec(title: "ENV", family: "ENV", scope: 0, labels: ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"]),
+        Spec(title: "ENV 2", family: "ENV", scope: 0, labels: ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"], nth: 2),
+        Spec(title: "LFO", family: "LFO", scope: 0, labels: ["RATE", "WAVE", "PHASE", "FADE"]),
+        Spec(title: "LFO 2", family: "LFO", scope: 0, labels: ["SYNC", "TRIG", "POLARITY", "ENV SYNC"]),
+        Spec(title: "MOD", family: "LFO", scope: 0, labels: [nil, "SRC1", "DEST1", "AMT1"]),
         Spec(title: "FX", family: "FX", scope: 0, labels: ["DIST", "CHORUS", "DELAY", "REVERB"]),
         Spec(title: "DRIVE", family: "FX", scope: 0, labels: ["DIST", "TYPE", "TONE", nil]),
         Spec(title: "INSERT", family: "FX", scope: 0, labels: ["TYPE", "A", "B", "C"], nth: 2),
@@ -442,16 +449,6 @@ public enum SkiffPages {
         Spec(title: "SCALE", family: "SEL", scope: 0, labels: ["ROOT", "SCALE", "QUANTIZE", "TRANSP"]),
         Spec(title: "CHORD", family: "SEL", scope: 0, labels: ["CHORD", "VOICING", nil, nil]),
         Spec(title: "FOLLOW", family: "SEL", scope: 0, labels: ["FOLLOW", "MODE", "NOTE", nil]),
-        Spec(title: "ENV", family: "ENV", scope: 0, labels: ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"]),
-        Spec(title: "ENV 2", family: "ENV", scope: 0, labels: ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"], nth: 2),
-        Spec(title: "ENV DEST", family: "ENV", scope: 0, labels: ["CUTOFF", "PITCH", "SHAPE", "FX"]),
-        Spec(title: "LFO", family: "LFO", scope: 0, labels: ["RATE", "WAVE", "PHASE", "FADE"]),
-        Spec(title: "LFO 2", family: "LFO", scope: 0, labels: ["SYNC", "TRIG", "POLARITY", "ENV SYNC"]),
-        Spec(title: "LFO DEST", family: "LFO", scope: 0, labels: ["PITCH", "CUTOFF", "SHAPE", "AMP"], nth: 2),
-        Spec(title: "MOD 1", family: "LFO", scope: 0, labels: ["SRC1", "DEST1", "AMT1", nil]),
-        Spec(title: "MOD 2", family: "LFO", scope: 0, labels: ["SRC2", "DEST2", "AMT2", nil]),
-        Spec(title: "MOD 3", family: "LFO", scope: 0, labels: ["SRC3", "DEST3", "AMT3", nil]),
-        Spec(title: "MOD 4", family: "LFO", scope: 0, labels: ["SRC4", "DEST4", "AMT4", nil]),
         Spec(title: "VOICE", family: "EDIT", scope: 0, labels: ["VOICE", "GLIDE", "GL MODE", "PRIORITY"]),
         Spec(title: "VOICE 2", family: "EDIT", scope: 0, labels: ["ALLOC", "DETUNE", "SPREAD", nil]),
         Spec(title: "DELAY", family: "GLO", scope: 1, labels: ["TIME", "FEEDBACK", "COLOR", "MIX"]),
@@ -464,9 +461,18 @@ public enum SkiffPages {
         Spec(title: "PATTERN 2", family: "SEQ", scope: 0, labels: ["DIR", nil, nil, nil]),
     ]
 
+    /// Where MOD's routes come from (ui.c MOD_FIXED, then the slots): LFO DEST's and ENV DEST's of before, by label.
+    static let modSources: [Spec] = [
+        Spec(title: "LFO DEST", family: "LFO", scope: 0, labels: ["PITCH", "CUTOFF", "SHAPE", "AMP"], nth: 2),
+        Spec(title: "ENV DEST", family: "ENV", scope: 0, labels: ["CUTOFF", "PITCH", "SHAPE", "FX"]),
+        Spec(title: "MOD 1", family: "LFO", scope: 0, labels: ["SRC1", "DEST1", "AMT1", nil]),
+        Spec(title: "MOD 2", family: "LFO", scope: 0, labels: ["SRC2", "DEST2", "AMT2", nil]),
+        Spec(title: "MOD 3", family: "LFO", scope: 0, labels: ["SRC3", "DEST3", "AMT3", nil]),
+        Spec(title: "MOD 4", family: "LFO", scope: 0, labels: ["SRC4", "DEST4", "AMT4", nil]),
+    ]
+
     public static func build(track: [ParamDesc], globals: [ParamDesc], firstEngineParam e0: Int) -> [PageSpec] {
-        var pages: [PageSpec] = []
-        for s in specs {
+        func ids(_ s: Spec) -> [Int?] {
             let ds = s.scope == 0 ? track : globals
             var prev = -1
             var ids: [Int?] = []
@@ -479,7 +485,21 @@ public enum SkiffPages {
                 if let id { prev = id }
                 ids.append(id)
             }
-            if ids.contains(where: { $0 != nil }) { pages.append(PageSpec(title: s.title, family: s.family, scope: s.scope, ids: ids)) }
+            return ids
+        }
+        var pages: [PageSpec] = []
+        let src = modSources.map(ids)
+        for s in specs {
+            let k = ids(s)
+            guard k.contains(where: { $0 != nil }) else { continue }
+            var page = PageSpec(title: s.title, family: s.family, scope: s.scope, ids: k)
+            if s.title == "MOD" {
+                // the fixed routes: LFO → PITCH CUT SHAPE AMP, ENV → PITCH CUT SHAPE (ENV DEST lists CUTOFF first)
+                let lfo = src[0], env = src[1]
+                page.routes = [[lfo[0]], [lfo[1]], [lfo[2]], [lfo[3]], [env[1]], [env[0]], [env[2]]]
+                    + src[2...5].map { Array($0.prefix(3)) }
+            }
+            pages.append(page)
         }
         // the engine's eight, titled by NAMES; after VOICE's pages on the EDIT button, as on the device
         let edit = [PageSpec(title: "EDIT 1", family: "EDIT", scope: 0, ids: (0..<4).map { e0 + $0 }, engineEdit: 1),

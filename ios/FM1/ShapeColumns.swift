@@ -11,7 +11,7 @@ func splitUnit(_ shown: String) -> (value: String, unit: String) {
     if shown.hasSuffix("%"), shown.count > 1 { return (String(shown.dropLast()), "%") }
     if let sp = shown.lastIndex(of: " ") {
         let u = String(shown[shown.index(after: sp)...])
-        if ["Hz", "kHz", "ms", "s", "dB", "st", "ct", "bpm", "BPM"].contains(u) { return (String(shown[..<sp]), u) }
+        if ["Hz", "kHz", "ms", "s", "dB", "st", "ct", "bpm", "BPM", "/11"].contains(u) { return (String(shown[..<sp]), u) }
     }
     return (shown, "")
 }
@@ -22,11 +22,13 @@ struct ColumnFace: View {
     let number: Int
     let tint: Color
     let hot: Bool
+    /// A value that doesn't turn here (MOD's fixed routes' SOURCE and DEST): dim, no gauge.
+    var dim = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let (value, unit) = splitUnit(spec.shown)
-        let ink = hot ? Theme.onColour : Theme.text
+        let ink = hot ? Theme.onColour : dim ? Theme.textTertiary : Theme.text
         let label = hot ? Color(hex: 0x3A3A42) : Theme.textSecondary
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
@@ -45,7 +47,7 @@ struct ColumnFace: View {
             .foregroundStyle(ink)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-            Gauge(fraction: spec.fraction, bipolar: spec.bipolar, tint: tint, track: hot ? Color(hex: 0xC9C9CF) : Theme.stepEmpty)
+            Gauge(fraction: dim ? 0 : spec.fraction, bipolar: spec.bipolar, tint: tint, track: hot ? Color(hex: 0xC9C9CF) : Theme.stepEmpty)
                 .frame(height: 3)
                 .padding(.horizontal, -10)
                 .padding(.top, 6)

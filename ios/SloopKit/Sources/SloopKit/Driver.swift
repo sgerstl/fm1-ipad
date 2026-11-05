@@ -66,8 +66,12 @@ public struct PageSpec: Equatable, Sendable {
     public var ids: [Int?]
     /// 1 / 2: the engine's EDIT pages, titled by NAMES.
     public var engineEdit = 0
-    public init(title: String, family: String, scope: Int, ids: [Int?], engineEdit: Int = 0) {
+    /// Skiff's MOD page: its eleven routes' parameters, a route a row: the seven fixed ones' AMOUNT (LFO → PITCH
+    /// CUT SHAPE AMP, ENV → PITCH CUT SHAPE) as [amount], then the matrix's four slots as [source, dest, amount].
+    public var routes: [[Int?]] = []
+    public init(title: String, family: String, scope: Int, ids: [Int?], engineEdit: Int = 0, routes: [[Int?]] = []) {
         self.title = title; self.family = family; self.scope = scope; self.ids = ids; self.engineEdit = engineEdit
+        self.routes = routes
     }
 }
 
