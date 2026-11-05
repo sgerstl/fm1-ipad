@@ -69,9 +69,14 @@ public struct PageSpec: Equatable, Sendable {
     /// Skiff's MOD page: its eleven routes' parameters, a route a row: the seven fixed ones' AMOUNT (LFO → PITCH
     /// CUT SHAPE AMP, ENV → PITCH CUT SHAPE) as [amount], then the matrix's four slots as [source, dest, amount].
     public var routes: [[Int?]] = []
-    public init(title: String, family: String, scope: Int, ids: [Int?], engineEdit: Int = 0, routes: [[Int?]] = []) {
+    /// Skiff's engine pages: shown only on these engines (empty: on any).
+    public var engines: [Int] = []
+    /// Skiff's LANES and LANE MIX: KNOB 1 picks a lane, and these are its knobs 2–4, a lane a row.
+    public var picks: [[Int?]] = []
+    public init(title: String, family: String, scope: Int, ids: [Int?], engineEdit: Int = 0, routes: [[Int?]] = [],
+                engines: [Int] = [], picks: [[Int?]] = []) {
         self.title = title; self.family = family; self.scope = scope; self.ids = ids; self.engineEdit = engineEdit
-        self.routes = routes
+        self.routes = routes; self.engines = engines; self.picks = picks
     }
 }
 

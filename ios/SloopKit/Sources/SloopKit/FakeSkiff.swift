@@ -63,7 +63,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// The page's cursor, where the page has one (`cursorRange`); reset as a page opens.
     var cursor = 0
     /// The pages with a cursor and its top (skiff/README.md): MOD's routes, the lanes, the samples, USER's slots.
-    static let cursorRange: [Int: Int] = [4: 10, 18: 7, 20: 7, 22: 15, 36: 31, 37: 63]
+    static let cursorRange: [Int: Int] = [4: 10, 16: 5, 18: 7, 19: 7, 20: 7, 22: 15, 36: 31, 37: 63]
     var screenWatched = false
     /// home, page, layer, menu, flags (the track is `selected`).
     var screen = (home: true, page: 0, layer: 0, menu: 0, flags: 0)
@@ -81,6 +81,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let a = ProcessInfo.processInfo.arguments
             screenLink = a.contains("-demo-link")       // the screen link patch, so the button map can be seen
             if a.contains("-demo-link-v1") { screenLinkVersion = 1 }   // the first build: no cursor
+            // -demo-track N: track N selected (1…6), -demo-engine E: on engine E (DRUM-X 14, SLICE 13: none in the fixture)
+            if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
+            if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }
             // -demo-mod-walk: MOD opened on the FM-1, then KNOB 1 walks its routes, a route every 1.5 s
             if a.contains("-demo-mod-walk") {
                 DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in

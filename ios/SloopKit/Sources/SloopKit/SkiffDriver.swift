@@ -563,7 +563,35 @@ public enum SkiffPages {
         let edit = [PageSpec(title: "EDIT 1", family: "EDIT", scope: 0, ids: (0..<4).map { e0 + $0 }, engineEdit: 1),
                     PageSpec(title: "EDIT 2", family: "EDIT", scope: 0, ids: (4..<8).map { e0 + $0 }, engineEdit: 2)]
         let at = pages.firstIndex { $0.family == "EDIT" } ?? pages.count
-        pages.insert(contentsOf: edit, at: at)
+        pages.insert(contentsOf: edit + enginePages(track: track, e0: e0), at: at)
+        return pages
+    }
+
+    /// Skiff 2.2's engines (engines.c), for the pages only some of them show (ui.c page_visible).
+    public enum Engine {
+        public static let sample = 4, drum = 10, fm6 = 12, slice = 13, drumX = 14
+    }
+
+    /// The engine pages after EDIT 1 and 2, in PAGES order (ui.c page_visible): OPERATOR and ALL OPS (FM6), LANES
+    /// (DRUM), SOUND (DRUM-X), LANE MIX (DRUM, DRUM-X), SLICES (SLICE), SAMPLES (SAMPLE on a user set). Their knobs
+    /// come from code on the FM-1, not from PAGES. The lanes' parameters are found from the first KICK (P_LN0):
+    /// TUNE, DECAY and PAN share labels with other parameters, so each is the first after the block before it.
+    /// OP1–OP4 ENV and OP LEVEL belong to DIGITAL, which Skiff 2.2 doesn't build: never shown, not here.
+    static func enginePages(track: [ParamDesc], e0: Int) -> [PageSpec] {
+        func first(_ label: String, after: Int) -> Int? { track.filter { $0.label == label && $0.id > after }.map(\.id).min() }
+        var pages = [PageSpec(title: "OPERATOR", family: "EDIT", scope: 0, ids: [nil, nil, nil, nil], engines: [Engine.fm6]),
+                     PageSpec(title: "ALL OPS", family: "EDIT", scope: 0, ids: [nil, nil, nil, nil], engines: [Engine.fm6])]
+        if let ln = first("KICK", after: -1), let tune = first("TUNE", after: ln + 7), let decay = first("DECAY", after: tune + 7),
+           let pan = first("PAN", after: decay + 7) {
+            pages.append(PageSpec(title: "LANES", family: "EDIT", scope: 0, ids: [nil, ln, tune, decay], engines: [Engine.drum],
+                                  picks: (0..<8).map { [ln + $0, tune + $0, decay + $0] }))
+            pages.append(PageSpec(title: "SOUND", family: "EDIT", scope: 0, ids: [nil, nil, nil, nil], engines: [Engine.drumX],
+                                  picks: (0..<8).map { [ln + $0] }))
+            pages.append(PageSpec(title: "LANE MIX", family: "EDIT", scope: 0, ids: [nil, ln, pan, nil], engines: [Engine.drum, Engine.drumX],
+                                  picks: (0..<8).map { [ln + $0, pan + $0, nil] }))
+        }
+        pages.append(PageSpec(title: "SLICES", family: "EDIT", scope: 0, ids: [e0, e0 + 1, nil, nil], engines: [Engine.slice]))
+        pages.append(PageSpec(title: "SAMPLES", family: "EDIT", scope: 1, ids: [nil, nil, nil, nil], engines: [Engine.sample]))
         return pages
     }
 }

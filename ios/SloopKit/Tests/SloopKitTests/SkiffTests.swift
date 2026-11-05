@@ -41,6 +41,15 @@ import Testing
         #expect(pages.first { $0.title == "EDIT 1" }?.ids == [138, 139, 140, 141])
         #expect(pages.first { $0.title == "PATTERN" }?.ids == [29, 30, 31, 32])
         #expect(s.trackDescs[138]?.label == "WAVE")
+        // the EDIT engine pages after EDIT 2, the lanes' parameters found from the first KICK (core.h: LN 83, LTUNE 101,
+        // LDECAY 109, LPAN 127; PAN 39 and ENV's DECAY come before and mustn't be taken)
+        #expect(pages.filter { $0.family == "EDIT" }.map(\.title)
+                == ["EDIT 1", "EDIT 2", "OPERATOR", "ALL OPS", "LANES", "SOUND", "LANE MIX", "SLICES", "SAMPLES", "VOICE", "VOICE 2"])
+        let lanes = try #require(pages.first { $0.title == "LANES" })
+        #expect(lanes.engines == [10] && lanes.picks.count == 8 && lanes.picks[1] == [84, 102, 110] && lanes.picks[7] == [90, 108, 116])
+        let mix = try #require(pages.first { $0.title == "LANE MIX" })
+        #expect(mix.engines == [10, 14] && mix.picks[0] == [83, 127, nil] && mix.picks[7] == [90, 134, nil])
+        #expect(pages.first { $0.title == "SLICES" }?.ids == [138, 139, nil, nil])
         #expect(s.bpm == 120)
         run.cancel()
     }

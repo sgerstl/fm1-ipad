@@ -140,7 +140,12 @@ final class EditorUI {
     /// A knob's big control, open under this point (global; .zero: VoiceOver's "Open", centred).
     var knobPanelAt: CGPoint?
     @ObservationIgnored var knobPanelSpec: (() -> KnobSpec)?
-    var soundFamily: SoundFamily = .fx
+    /// -family EDIT (a button's name) opens Shape on that button (screenshots)
+    var soundFamily: SoundFamily = {
+        let a = ProcessInfo.processInfo.arguments
+        guard let i = a.firstIndex(of: "-family"), i + 1 < a.count else { return .fx }
+        return SoundFamily(rawValue: a[i + 1]) ?? .fx
+    }()
     var keyboardOpen = false
     /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there.
     var followDevice = true

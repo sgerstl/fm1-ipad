@@ -33,6 +33,8 @@ struct SoundPage: Identifiable {
     var analogOnly = false       // EDIT > FILTER: ANALOG only (page_shown)
     var engineEdit = 0           // 1 / 2: EDIT 1 / EDIT 2, titled by the engine (NAMES)
     var routes: [[Int?]] = []    // Skiff's MOD: its eleven routes' parameters (PageSpec.routes)
+    var engines: [Int] = []      // Skiff's engine pages: only on these engines (PageSpec.engines)
+    var picks: [[Int?]] = []     // Skiff's LANES, LANE MIX: a lane's knobs 2–4 (PageSpec.picks)
     var id: String { "\(family.rawValue).\(title)" }
 
     static let all: [SoundPage] = [
@@ -80,7 +82,7 @@ struct SoundPage: Identifiable {
             var fw = 100 + k
             if session.dialect == .skiff, let d = skiffPages[p.title], !used.contains(d) { fw = d; used.insert(d) }
             return SoundPage(fw: fw, title: p.title, family: SoundFamily(rawValue: p.family) ?? .edit, scope: p.scope,
-                             ids: p.ids, engineEdit: p.engineEdit, routes: p.routes)
+                             ids: p.ids, engineEdit: p.engineEdit, routes: p.routes, engines: p.engines, picks: p.picks)
         }
     }
 
@@ -89,6 +91,7 @@ struct SoundPage: Identifiable {
     static let skiffPages: [String: Int] = [
         "ENV": 0, "ENV 2": 1, "LFO": 2, "LFO 2": 3, "MOD": 4, "FX": 5, "DRIVE": 6, "INSERT": 7, "INSERT 2": 8,
         "SLICER": 9, "DUCK": 10, "SCALE": 11, "CHORD": 12, "FOLLOW": 13, "EDIT 1": 14, "EDIT 2": 15,
+        "OPERATOR": 16, "ALL OPS": 17, "LANES": 18, "SOUND": 19, "LANE MIX": 20, "SLICES": 21, "SAMPLES": 22,
         "VOICE": 28, "VOICE 2": 29, "DELAY": 31, "REVERB": 32, "CHORUS": 33, "GLOBAL": 34, "ARP": 39, "ARP 2": 40,
         "PATTERN": 43,
     ]
@@ -98,16 +101,27 @@ struct SoundPage: Identifiable {
         let t = session.tracks[session.selectedTrack]
         return pages(session).filter { p in
             p.family == family && (!t.isDrums || p.drums) && (!p.analogOnly || (!t.isDrums && t.engine == 0))
+                && (p.engines.isEmpty || p.engines.contains(t.engine)) && (p.title != "SAMPLES" || SkiffEdit.userSlot(session) != nil)
+                && !(session.dialect == .skiff && skiffHides(p, engine: t.engine))
         }
+    }
+
+    /// Skiff's pages an engine leaves out (ui.c page_visible): the one-shot kits (DRUM, DRUM-X) have no SCL, ENV or
+    /// VOICE pages; FM6, whose operators have their own envelopes, no ENV.
+    static func skiffHides(_ p: SoundPage, engine e: Int) -> Bool {
+        let kit = [SkiffPages.Engine.drum, SkiffPages.Engine.drumX].contains(e)
+        if kit, p.family == .sel || ["ENV", "ENV 2", "VOICE", "VOICE 2"].contains(p.title) { return true }
+        return e == SkiffPages.Engine.fm6 && ["ENV", "ENV 2"].contains(p.title)
     }
 
     static func page(fw: Int) -> SoundPage? { all.first { $0.fw == fw } }
 
     /// The page the FM-1's screen is on, in the connected firmware's terms. Skiff's engine pages (16–27:
-    /// OPERATOR, LANES, SOUND…), which Jib shows as EDIT 1 and 2, stand for the EDIT button.
+    /// OPERATOR, LANES, SOUND…) are Lupe's own where it lays them out; any other stands for the EDIT button.
     @MainActor static func page(_ session: DeviceSession, fw: Int) -> SoundPage? {
+        if let p = pages(session).first(where: { $0.fw == fw }) { return p }
         if session.dialect == .skiff, (16...27).contains(fw) { return pages(session).first { $0.family == .edit } }
-        return pages(session).first { $0.fw == fw }
+        return nil
     }
 
     /// The pages a button opens on the FM-1 for the selected track: its own, or on the drum track for a
@@ -168,7 +182,7 @@ struct SoundPage: Identifiable {
 
 /// A parameter's value as text, as the FM-1 shows it (EDITOR_PROTOCOL.md "fmt"; the curves for TIME,
 /// LFOHZ, CUTOFF and DB are SLOOP's own, in DeviceDisplay).
-func formatValue(_ d: ParamDesc?, _ v: Int) -> (shown: String, spoken: String) {
+func formatValue(_ d: ParamDesc?, _ v: Int, skiff: Bool = false) -> (shown: String, spoken: String) {
     guard let d else { return ("\(v)", "\(v)") }
     // as the FM-1's screen: its curves for times, rates, cutoffs and levels, and name lists on numbers
     if let (text, u) = DeviceDisplay.value(d, v) {
@@ -178,6 +192,8 @@ func formatValue(_ d: ParamDesc?, _ v: Int) -> (shown: String, spoken: String) {
     }
     let unit = d.unit.isEmpty ? "" : " \(d.unit.lowercased())"
     switch d.format {
+    // Skiff's BIPCT (params.c): v × 100 / 64 below zero, / 63 above, cut
+    case 2 where skiff: let p = v < 0 ? v * 100 / 64 : v * 100 / 63; return (p > 0 ? "+\(p)%" : "\(p)%", "\(p) percent")
     case 2: let p = Int((Double(v) * 100 / 64).rounded()); return (p > 0 ? "+\(p)%" : "\(p)%", "\(p) percent")
     case 7: return (v > 0 ? "+\(v) st" : "\(v) st", "\(v) semitones")
     case 8:
@@ -187,6 +203,11 @@ func formatValue(_ d: ParamDesc?, _ v: Int) -> (shown: String, spoken: String) {
     case 10: return (Music.noteNames[((v % 12) + 12) % 12], Music.spokenNoteNames[((v % 12) + 12) % 12])
     case 11: return (v != 0 ? "ON" : "OFF", v != 0 ? "on" : "off")
     case 12: return (v > 0 ? "+\(v)" : "\(v)", "octave \(v)")
+    // Skiff's ST16 (params.c): ±12 semitones in 3/16 steps, shown in tenths, rounded half away from zero
+    case 14 where skiff:
+        let t = (v - 64) * 30, x = (t + (t < 0 ? -8 : 8)) / 16
+        let s = "\(x < 0 ? "-" : x > 0 ? "+" : "")\(abs(x) / 10).\(abs(x) % 10)"
+        return ("\(s) st", "\(s) semitones")
     case 14: let p = 50 + v / 4; return ("\(p)%", "\(p) percent swing")
     case 15:
         if v == 0 { return ("OFF", "off") }
@@ -207,7 +228,7 @@ extension KnobSpec {
         // the selected track's value from its own cell: this knob redraws when this parameter changes, not any
         let v = locked ?? (scope == 0 ? session.cell(id).value : id < values.count ? values[id] : 0)
         let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
-        let f = formatValue(d, v)
+        let f = formatValue(d, v, skiff: session.dialect == .skiff)
         let t = session.selectedTrack
         return KnobSpec(id: "s\(scope).\(id)", colour: Theme.knob[slot % 4], label: d?.label ?? "–", value: v,
                         range: lo...hi, stepperStep: max(1, (hi - lo) / 16), shown: f.shown, spoken: f.spoken,
@@ -295,7 +316,8 @@ struct SoundTab: View {
 
     /// MOD's route: the FM-1's cursor, when the link carries it (KNOB 1 turned there).
     private func adoptCursor(_ s: UIState?) {
-        if let s, !s.home, let c = s.cursor, SoundPage.page(session, fw: s.page)?.title == "MOD" { marks.adoptRoute(c) }
+        guard let s, !s.home, let c = s.cursor, let title = SoundPage.page(session, fw: s.page)?.title else { return }
+        if title == "MOD" { marks.adoptRoute(c) } else if let key = SkiffEdit.pickKey(title) { marks.adoptPick(key, c) }
     }
 
     /// A knob turned on the FM-1: show its button's pages and mark it for a few seconds.
@@ -425,6 +447,8 @@ struct SoundCard: View, Equatable {
             if first.title == "MOD", !first.routes.isEmpty {
                 ModColumns(session: session, ui: ui, page: first, route: modRoute(first), marked: marks.key,
                            activate: { touch(first) })
+            } else if ["LANES", "LANE MIX"].contains(first.title), !first.picks.isEmpty {
+                LaneColumns(session: session, ui: ui, page: first, lane: pick(first), marked: marks.key, activate: { touch(first) })
             } else {
                 ForEach(rows.indices, id: \.self) { r in
                     let p = rows[r]
@@ -514,6 +538,16 @@ struct SoundCard: View, Equatable {
         if PageGraph.has(p) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: modRoute(p)) }
     }
 
+    /// KNOB 1's pick on an engine page (the lane, …): picked here, the FM-1's cursor goes there too, as MOD's route.
+    private func pick(_ p: SoundPage) -> Binding<Int> {
+        let key = SkiffEdit.pickKey(p.title) ?? p.title
+        return Binding(get: { marks.pick(key) }, set: { v in
+            guard v != marks.pick(key) else { return }
+            marks.pick(key, v)
+            if session.screenCursor { session.showOnDevice(page: p.fw, cursor: v) }
+        })
+    }
+
     /// MOD's route: picked here, the FM-1's cursor goes there too (and MOD opens on it), where the link carries
     /// the cursor; the FM-1's own turns come in through SoundTab.followScreen.
     private func modRoute(_ p: SoundPage) -> Binding<Int> {
@@ -539,6 +573,17 @@ struct SoundCard: View, Equatable {
     @ObservationIgnored private var routePicked = Date.distantPast
 
     func pickRoute(_ r: Int) { modRoute = r; routePicked = .now }
+
+    /// KNOB 1's pick on the engine pages (SkiffEdit.pickKey: the lane, the sample, the operator), as modRoute is MOD's.
+    private(set) var picks: [String: Int] = [:]
+    @ObservationIgnored private var picked: [String: Date] = [:]
+    func pick(_ key: String) -> Int { picks[key] ?? 0 }
+    func pick(_ key: String, _ v: Int) { if picks[key] != v { picks[key] = v }; picked[key] = .now }
+    /// The FM-1's cursor for this pick: taken unless it was picked here in the last half second.
+    func adoptPick(_ key: String, _ v: Int) {
+        guard Date.now.timeIntervalSince(picked[key] ?? .distantPast) > 0.5, picks[key] != v else { return }
+        picks[key] = v
+    }
     /// The FM-1's cursor on MOD: taken unless a route was picked here in the last half second.
     func adoptRoute(_ r: Int) {
         guard Date.now.timeIntervalSince(routePicked) > 0.5, r != modRoute, (0...10).contains(r) else { return }
