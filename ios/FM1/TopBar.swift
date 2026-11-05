@@ -7,6 +7,8 @@ struct TopBar: View {
     @Binding var useDemo: Bool
     @Environment(AudioThrough.self) private var through
     @Environment(ProjectStore.self) private var projects
+    @Environment(FirmwareCentre.self) private var firmware
+    @State private var connectionFrame: CGRect = .zero
     @State private var projectsOpen = false
     @State private var naming: NamePrompt?
     @State private var readoutFrame: CGRect = .zero
@@ -29,46 +31,8 @@ struct TopBar: View {
     // MARK: Connection: tap for the device / demo choice
 
     private var connection: some View {
-        Menu {
-            Text("\(statusLine) · \(versionLine)")
-            Picker("Source", selection: $useDemo) {
-                Text("FM-1 over USB").tag(false)
-                Text("Demo FM-1 (no device)").tag(true)
-            }
-            if session.screenLinked {
-                Toggle("Follow the FM-1's screen", isOn: Binding(get: { ui.followDevice }, set: { ui.followDevice = $0 }))
-            }
-            Section("iPad audio") {
-                Toggle("Play through the iPad", isOn: Binding(get: { through.enabled }, set: { through.enabled = $0 }))
-                if through.enabled { Text(through.summary) }
-                if through.enabled, !through.route.isEmpty { Text(through.route) }
-                if case .playing = through.state {
-                    if let problem = session.usbAudioProblem {
-                        Text(problem)
-                    } else if session.canQuietSpeaker {
-                        Text(session.usbAudioFull == true ? "The FM-1's speaker is off; turn its MASTER to bring it back if you unplug"
-                                                          : "Setting the FM-1's USB AUDIO to FULL…")
-                    } else {
-                        // Skiff: Jib can't turn its MASTER (the knob alone sets it), so the level goes FIXED instead
-                        Text(session.usbAudioFull == true ? "USB LEVEL is FIXED: turn the FM-1's MASTER down to quiet its speaker. The iPad keeps the full level"
-                                                          : "Setting the FM-1's USB LEVEL to FIXED…")
-                    }
-                }
-                if through.state == .noInput {
-                    Text(session.canQuietSpeaker ? "Plug in the FM-1 (USB AUDIO on)" : "No sound from the FM-1 over USB: plug it in, or unplug it and plug it in again")
-                }
-                if through.state == .denied { Text("Turn on Microphone for Jib in Settings") }
-            }
-            if isConnected {
-                // Diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?
-                let s = session.stats
-                Section("Since connecting") {
-                    Text("Step pushes \(s.stepPushes) · all pushes \(s.pushes)")
-                    Text("Steps fixed by re-sync \(s.resyncFixes)")
-                    Text(String(format: "LIVE %.1f a second · timeouts %d", s.pollsPerSecond, s.timeouts))
-                }
-            }
-            DeveloperMenu()
+        Button {
+            ui.menu = JibMenu(title: "FM-1", groups: { connectionGroups }, at: CGPoint(x: connectionFrame.minX, y: connectionFrame.maxY))
         } label: {
             HStack(spacing: 10) {
                 LED(on: isConnected, colour: Theme.text)
@@ -82,8 +46,48 @@ struct TopBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { connectionFrame = $0 }
         .accessibilityLabel("\(statusLine), \(versionLine)")
         .accessibilityHint("Choose the FM-1 or the demo")
+    }
+
+    /// The connection menu (Jib's own, 2026-11-05: the system's was cramped): the source, the screen link, the
+    /// iPad's audio and what it says, the diagnostics, Developer.
+    private var connectionGroups: [[MenuItem]] {
+        var g: [[MenuItem]] = [[.note("\(statusLine) · \(versionLine)")]]
+        g.append([MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !useDemo) { useDemo = false },
+                  MenuItem(title: "Demo FM-1 (no device)", icon: "play.rectangle", checked: useDemo) { useDemo = true }])
+        if session.screenLinked {
+            g.append([MenuItem(title: "Follow the FM-1's screen", icon: "rectangle.on.rectangle", checked: ui.followDevice) { ui.followDevice.toggle() }])
+        }
+        var audio: [MenuItem] = [MenuItem(title: "Play through the iPad", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
+        if through.enabled { audio.append(.note(through.summary)) }
+        if through.enabled, !through.route.isEmpty { audio.append(.note(through.route)) }
+        if case .playing = through.state {
+            if let problem = session.usbAudioProblem {
+                audio.append(.note(problem))
+            } else if session.canQuietSpeaker {
+                audio.append(.note(session.usbAudioFull == true ? "The FM-1's speaker is off; turn its MASTER to bring it back if you unplug"
+                                                                : "Setting the FM-1's USB AUDIO to FULL…"))
+            } else {
+                // Skiff: Jib can't turn its MASTER (the knob alone sets it), so the level goes FIXED instead
+                audio.append(.note(session.usbAudioFull == true ? "USB LEVEL is FIXED: turn the FM-1's MASTER down to quiet its speaker. The iPad keeps the full level"
+                                                                : "Setting the FM-1's USB LEVEL to FIXED…"))
+            }
+        }
+        if through.state == .noInput {
+            audio.append(.note(session.canQuietSpeaker ? "Plug in the FM-1 (USB AUDIO on)" : "No sound from the FM-1 over USB: plug it in, or unplug it and plug it in again"))
+        }
+        if through.state == .denied { audio.append(.note("Turn on Microphone for Jib in Settings")) }
+        g.append(audio)
+        if isConnected {
+            // diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?
+            let s = session.stats
+            g.append([.note("Since connecting: step pushes \(s.stepPushes) · all pushes \(s.pushes) · steps fixed by re-sync \(s.resyncFixes) · "
+                            + String(format: "LIVE %.1f a second · timeouts %d", s.pollsPerSecond, s.timeouts))])
+        }
+        if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
+        return g
     }
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }

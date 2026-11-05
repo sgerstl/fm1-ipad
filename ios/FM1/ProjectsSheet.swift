@@ -10,6 +10,8 @@ struct ProjectsSheet: View {
     @State private var naming: NamePrompt?
     @State private var deleting: ProjectFile?
     @State private var tab: Tab = .projects
+    /// A row's menu, Jib's own (the sheet covers the app's root, so it has its own layer).
+    @State private var menu: JibMenu?
 
     enum Tab { case projects, safety }
 
@@ -77,6 +79,7 @@ struct ProjectsSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
+        .overlay { JibMenuLayer(menu: $menu) }
         .interactiveDismissDisabled(store.busy != nil)
         .alert(openTitle, isPresented: Binding(get: { opening != nil }, set: { if !$0 { opening = nil } }),
                presenting: opening) { o in
@@ -110,37 +113,29 @@ struct ProjectsSheet: View {
     private func row(_ p: ProjectFile) -> some View {
         HStack(spacing: 8) {
             openButton(p)
-            Menu {
-                actions(p)
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)           // its own target in the row, not part of the open button
-            .disabled(store.busy != nil)
-            .accessibilityLabel("Manage \(p.name)")
-            .accessibilityHint("Rename, duplicate, export or delete")
+            RowMenuKey(name: p.name, disabled: store.busy != nil) { at in openMenu(p, at) }
         }
-        .contextMenu { actions(p) }
+        // a long press anywhere on the row: the same menu, at the finger
+        .gesture(HoldRecognizer(space: .named("projectRows"), began: { _, g in if store.busy == nil { openMenu(p, g) } },
+                                changed: { _, _ in }, ended: { _, _, _ in }))
         .swipeActions {
             Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
             Button { naming = .rename(p) } label: { Label("Rename", systemImage: "pencil") }
         }
     }
 
-    @ViewBuilder private func actions(_ p: ProjectFile) -> some View {
-        Button { naming = .rename(p) } label: { Label("Rename", systemImage: "pencil") }
-        if !p.isSafetyCopy {
-            Button { store.duplicate(p) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-        }
-        // SLOOP's song file: opens in SLOOP's web editor too
-        ShareLink(item: SloopSongExport(project: p), preview: SharePreview(p.name)) {
-            Label("Export…", systemImage: "square.and.arrow.up")
-        }
-        Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
+    /// A project's menu (Jib's own): rename, duplicate, export, delete.
+    private func openMenu(_ p: ProjectFile, _ at: CGPoint) {
+        menu = JibMenu(title: p.name, groups: {
+            var g: [[MenuItem]] = [[MenuItem(title: "Rename", icon: "pencil") { naming = .rename(p) }]]
+            if !p.isSafetyCopy { g[0].append(MenuItem(title: "Duplicate", icon: "plus.square.on.square") { store.duplicate(p) }) }
+            // SLOOP's song file: opens in SLOOP's web editor too; the share sheet is the system's
+            g[0].append(MenuItem(title: "Export…", icon: "square.and.arrow.up") {
+                if let url = try? SloopSongExport(project: p).write() { ShareSheet.present(url, at: at) }
+            })
+            g.append([MenuItem(title: "Delete", icon: "trash") { deleting = p }])
+            return g
+        }, at: at)
     }
 
     private func openButton(_ p: ProjectFile) -> some View {
@@ -289,5 +284,41 @@ private struct NamePromptModifier: ViewModifier {
 extension View {
     func namePrompt(_ prompt: Binding<NamePrompt?>, store: ProjectStore) -> some View {
         modifier(NamePromptModifier(prompt: prompt, store: store))
+    }
+}
+
+/// A row's ⋯ key: opens the row's menu under itself.
+private struct RowMenuKey: View {
+    let name: String
+    let disabled: Bool
+    let open: (CGPoint) -> Void
+    @State private var frame: CGRect = .zero
+
+    var body: some View {
+        Button { open(CGPoint(x: frame.maxX - 300, y: frame.maxY)) } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)           // its own target in the row, not part of the open button
+        .disabled(disabled)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .accessibilityLabel("Manage \(name)")
+        .accessibilityHint("Rename, duplicate, export or delete")
+    }
+}
+
+/// The system's share sheet for a file, from wherever a Jib menu was (a sheet included).
+@MainActor enum ShareSheet {
+    static func present(_ url: URL, at point: CGPoint) {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
+              var top = scene.keyWindow?.rootViewController else { return }
+        while let p = top.presentedViewController { top = p }
+        let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        vc.popoverPresentationController?.sourceView = top.view
+        vc.popoverPresentationController?.sourceRect = CGRect(origin: top.view.convert(point, from: nil), size: .zero)
+        top.present(vc, animated: true)
     }
 }

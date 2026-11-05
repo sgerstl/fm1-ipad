@@ -114,7 +114,9 @@ struct PhoneTopBar: View {
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(AudioThrough.self) private var through
+    @Environment(FirmwareCentre.self) private var firmware
     @Environment(\.look) private var look
+    @State private var moreFrame: CGRect = .zero
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
     private var recording: Bool { session.recording || session.song.songRecording }
@@ -256,18 +258,26 @@ struct PhoneTopBar: View {
         .opacity(isConnected ? 1 : 0.45)
     }
 
+    /// The ⋯ menu, Jib's own (2026-11-05): the phone's audio, the source, Developer.
     private var more: some View {
-        Menu {
-            Toggle("Play through the iPhone", isOn: Binding(get: { through.enabled }, set: { through.enabled = $0 }))
-            if through.enabled { Text(through.summary) }
-            Button(useDemo ? "Use the FM-1" : "Use the demo FM-1") { useDemo.toggle() }
-            DeveloperMenu()
+        Button {
+            ui.menu = JibMenu(title: "Jib", groups: {
+                var g: [[MenuItem]] = []
+                var audio = [MenuItem(title: "Play through the iPhone", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
+                if through.enabled { audio.append(.note(through.summary)) }
+                g.append(audio)
+                g.append([MenuItem(title: useDemo ? "Use the FM-1" : "Use the demo FM-1", icon: useDemo ? "cable.connector" : "play.rectangle") { useDemo.toggle() }])
+                if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
+                return g
+            }, at: CGPoint(x: moreFrame.maxX - 300, y: moreFrame.maxY))
         } label: {
             Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
                 .background { Color.clear.raisedKey() }
                 .contentShape(Rectangle())
         }
+        .buttonStyle(PressSink())
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { moreFrame = $0 }
         .accessibilityLabel("More")
     }
 }

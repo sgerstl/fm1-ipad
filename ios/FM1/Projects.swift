@@ -324,7 +324,7 @@ struct SloopSongExport: Transferable {
         FileRepresentation(exportedContentType: .json) { e in SentTransferredFile(try e.write()) }
     }
 
-    private func write() throws -> URL {
+    func write() throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appending(path: "Export")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let name = project.name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")

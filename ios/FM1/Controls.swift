@@ -167,26 +167,27 @@ struct PressSink: ButtonStyle {
     }
 }
 
-/// Developer settings, in debug builds only: the look experiment's switch (2026-11-05). Sits at the foot
-/// of the connection menu on the iPad and the ⋯ menu on the phone, the app's only settings menus.
-struct DeveloperMenu: View {
-    @AppStorage(Look.styleKey) private var style = LookStyle.flat
-    @AppStorage(KnobTapStyle.key) private var knobTap = KnobTapStyle.arc
-    @Environment(FirmwareCentre.self) private var firmware
-
-    var body: some View {
+/// Developer settings, in debug builds only, as a Jib menu item (a submenu): Install firmware…, the look's
+/// switch, the knob tap's (2026-11-05). At the foot of the connection menu on the iPad and the ⋯ menu on the phone.
+enum DeveloperItems {
+    @MainActor static func item(firmware: FirmwareCentre) -> MenuItem? {
         #if DEBUG
-        Menu("Developer") {
-            Button("Install firmware…") { firmware.pickerNote = nil; firmware.showPicker = true }
-            Picker("Look", selection: $style) {
-                Text("Flat").tag(LookStyle.flat)
-                Text("Physical").tag(LookStyle.physical)
-            }
-            Picker("Knob tap", selection: $knobTap) {
-                Text("Arc").tag(KnobTapStyle.arc)
-                Text("Slider").tag(KnobTapStyle.slider)
-            }
-        }
+        let d = UserDefaults.standard
+        let look = LookStyle(rawValue: d.string(forKey: Look.styleKey) ?? "") ?? .flat
+        let tap = KnobTapStyle(rawValue: d.string(forKey: KnobTapStyle.key) ?? "") ?? .arc
+        return MenuItem(title: "Developer", icon: "hammer", children: {
+            [
+                [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true }],
+                [MenuItem.note("Look"),
+                 MenuItem(title: "Flat", checked: look == .flat) { d.set(LookStyle.flat.rawValue, forKey: Look.styleKey) },
+                 MenuItem(title: "Physical", checked: look == .physical) { d.set(LookStyle.physical.rawValue, forKey: Look.styleKey) }],
+                [MenuItem.note("Knob tap"),
+                 MenuItem(title: "Arc", checked: tap == .arc) { d.set(KnobTapStyle.arc.rawValue, forKey: KnobTapStyle.key) },
+                 MenuItem(title: "Slider", checked: tap == .slider) { d.set(KnobTapStyle.slider.rawValue, forKey: KnobTapStyle.key) }],
+            ]
+        })
+        #else
+        return nil
         #endif
     }
 }

@@ -12,8 +12,48 @@ struct MenuItem {
     var chip: (text: String, colour: Color)? = nil
     var enabled = true
     var checked = false
+    /// A line that says something (a status, a reason), not a choice: smaller, wraps, never focused.
+    var note = false
     var children: (() -> [[MenuItem]])? = nil
     var action: (() -> Void)? = nil
+
+    static func note(_ text: String) -> MenuItem { MenuItem(title: text, enabled: false, note: true) }
+}
+
+/// A Jib menu anywhere in the app (2026-11-05: every system menu becomes one): a title, its groups (built when it
+/// opens, and again as it's shown, so values stay live), and where it opens (global).
+struct JibMenu: Identifiable {
+    let id = UUID()
+    var title: String
+    var groups: () -> [[MenuItem]]
+    var at: CGPoint
+}
+
+/// Draws an open JibMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
+/// tap anywhere else or Escape. The app's root has one; a sheet, which covers the root, has its own.
+struct JibMenuLayer: View {
+    @Binding var menu: JibMenu?
+    @State private var frame: CGRect = .zero
+
+    var body: some View {
+        GeometryReader { g in
+            if let m = menu {
+                ZStack(alignment: .topLeading) {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { menu = nil }
+                        .accessibilityHidden(true)
+                    MenuPanel(title: m.title, groups: m.groups(), close: { menu = nil })
+                        .id(m.id)
+                        .fixedSize()
+                        .alignmentGuide(.leading) { d in -min(max(12, m.at.x - frame.minX), g.size.width - d.width - 12) }
+                        .alignmentGuide(.top) { d in
+                            let y = m.at.y - frame.minY
+                            return -(y + 8 + d.height <= g.size.height ? y + 8 : max(12, y - 8 - d.height))
+                        }
+                }
+            }
+        }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+    }
 }
 
 /// Which menu is open on the Arrange page, and where (global).
@@ -33,6 +73,7 @@ struct MenuPanel: View {
     let groups: [[MenuItem]]
     let close: () -> Void
     @State private var stack: [(title: String, groups: [[MenuItem]])] = []
+    @State private var contentHeight: CGFloat = 0
     @FocusState private var focus: Int?
     @Environment(\.look) private var look
 
@@ -42,7 +83,6 @@ struct MenuPanel: View {
     var body: some View {
         let level = stack.last ?? (title, groups)
         let flat = level.groups.flatMap { $0 }
-        let height = CGFloat(flat.count) * Self.rowHeight + CGFloat(max(0, level.groups.count - 1)) * 9
         VStack(alignment: .leading, spacing: 0) {
             if stack.isEmpty {
                 Text(title).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
@@ -69,13 +109,14 @@ struct MenuPanel: View {
                         if gi > 0 { divider }
                         ForEach(level.groups[gi].indices, id: \.self) { k in
                             let i = level.groups[..<gi].reduce(0) { $0 + $1.count } + k
-                            row(level.groups[gi][k], index: i)
+                            if level.groups[gi][k].note { noteRow(level.groups[gi][k]) } else { row(level.groups[gi][k], index: i) }
                         }
                     }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
             .scrollIndicators(.automatic)
-            .frame(height: min(height, CGFloat(Self.maxRows) * Self.rowHeight))
+            .frame(height: min(max(contentHeight, Self.rowHeight), CGFloat(Self.maxRows) * Self.rowHeight))
         }
         .padding(.vertical, 4)
         .frame(width: 300)
@@ -130,6 +171,13 @@ struct MenuPanel: View {
             if items[k].enabled { return k }
         }
         return nil
+    }
+
+    private func noteRow(_ item: MenuItem) -> some View {
+        Text(item.title).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func row(_ item: MenuItem, index: Int) -> some View {

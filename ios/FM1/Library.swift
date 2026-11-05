@@ -140,12 +140,16 @@ struct LibraryPage: View {
                         if full { Task { await session.useSample(slot: k, onTrack: t) } }
                         else { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }
                     }
-                    .contextMenu {
-                        if full {
-                            Button { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) } label: { Label("Record over", systemImage: "mic") }
-                            Button(role: .destructive) { clearing = k } label: { Label("Clear", systemImage: "trash") }
-                        }
-                    }
+                    // a long press on a recorded slot: Jib's menu at the finger (it was the system's)
+                    .gesture(HoldRecognizer(space: .named(AppView.space), began: { _, at in
+                        guard full else { return }
+                        ui.menu = JibMenu(title: "SMPL\(k + 1) · \(s?.name ?? "")", groups: {
+                            [[MenuItem(title: "Record over", icon: "mic") { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }],
+                             [MenuItem(title: "Clear", icon: "trash") { clearing = k }]]
+                        }, at: at)
+                    }, changed: { _, _ in }, ended: { _, _, _ in }))
+                    .accessibilityAction(named: "Record over") { if full { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) } }
+                    .accessibilityAction(named: "Clear") { if full { clearing = k } }
                     .id("usr-\(k)")
                 }
             }
