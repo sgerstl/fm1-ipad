@@ -274,7 +274,7 @@ public final class FirmwareInstaller: @unchecked Sendable {
         dev.link.close()
         guard s.finished else {
             throw InstallError(code: s.lost ? .lost : .stopped,
-                               message: "The FM-1 \(s.lost ? "was disconnected" : "stopped answering") after \(s.served) requests. Nothing was written: it still runs its firmware.",
+                               message: s.lost ? "The FM-1 dropped off USB while it checked the firmware file." : "The FM-1 stopped asking for the firmware file partway through the check.",
                                served: s.served)
         }
         step(.loader)
@@ -297,7 +297,7 @@ public final class FirmwareInstaller: @unchecked Sendable {
         ota.link.close()
         guard s.finished else {
             throw InstallError(code: s.lost ? .lost : .stopped,
-                               message: "The update loader \(s.lost ? "was disconnected" : "stopped answering") after \(s.served) requests.",
+                               message: s.lost ? "The FM-1 dropped off USB during the write." : "The FM-1 stopped asking for data during the write.",
                                served: s.served, inUpdateMode: true)
         }
         step(.write(100))

@@ -172,10 +172,12 @@ struct PressSink: ButtonStyle {
 struct DeveloperMenu: View {
     @AppStorage(Look.styleKey) private var style = LookStyle.flat
     @AppStorage(Look.strengthKey) private var strength = ElevationStrength.medium
+    @Environment(FirmwareCentre.self) private var firmware
 
     var body: some View {
         #if DEBUG
         Menu("Developer") {
+            Button("Install firmware…") { firmware.pickerNote = nil; firmware.showPicker = true }
             Picker("Look", selection: $style) {
                 Text("Flat").tag(LookStyle.flat)
                 Text("Physical").tag(LookStyle.physical)

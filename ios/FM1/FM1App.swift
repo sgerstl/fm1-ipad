@@ -20,6 +20,7 @@ struct RootView: View {
     @State private var ui = EditorUI()
     @State private var through = AudioThrough()
     @State private var projects = ProjectStore()
+    @State private var firmware = FirmwareCentre()
     @AppStorage(Look.styleKey) private var lookStyle = LookStyle.flat
     @AppStorage(Look.strengthKey) private var lookStrength = ElevationStrength.medium
 
@@ -59,15 +60,22 @@ struct RootView: View {
             }
         }
         .background(Theme.page)
+        .environment(firmware)
+        .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
         .environment(\.look, Look(style: lookStyle, strength: lookStrength))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
-        .task(id: useDemo) {
+        .task(id: SessionRun(demo: useDemo, paused: firmware.holdsDevice)) {
             if session.isDemo != useDemo { session = DeviceSession(demo: useDemo); TrackColours.session = session }
+            guard !firmware.holdsDevice else { return }      // the firmware installer has the FM-1 to itself
             projects.attach(session)
             await session.run()
         }
+        .task(id: ObjectIdentifier(session)) { await firmware.watch(session) }
     }
 }
+
+/// The session runs per source, and not while a firmware install holds the FM-1.
+private struct SessionRun: Equatable { var demo: Bool, paused: Bool }
 
 enum Page: String, CaseIterable, Identifiable {
     // labels name what each tab is for (2026-11-02): sequence a pattern, shape its sound, arrange the song, browse sounds
