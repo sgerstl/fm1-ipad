@@ -321,25 +321,52 @@ struct TopBar: View {
     /// nothing until it happens, so it has three other ways in: the VoiceOver action "Play from the start", ⇧Space,
     /// and the pointer's tooltip; and when it happens a tag under the key says so. Skiff only: SLOOP's editor can't
     /// restart, so there the hold, the action and the shortcut aren't there.
+    ///
+    /// One press gesture decides tap or hold, not a Button with a long press beside it: whether the Button still
+    /// fired on the release that ended a hold changed from press to press in the simulator (2026-11-06), so a hold
+    /// sometimes stopped what it had just started. Here a release is a tap only if the hold hadn't fired and the
+    /// finger stayed on the key. The key sinks as PressSink's do.
     private var playKey: some View {
         let canHold = session.canPlayFromStart && isConnected
-        return Button {
-            // the release that ends a hold isn't a tap
-            if heldFired { heldFired = false; return }
-            session.setPlaying(!session.playing)
-        } label: {
-            Image(systemName: session.playing ? "stop.fill" : "play.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Theme.text)
-                .frame(width: 44, height: 44)
-                .background { if session.playing { Color.clear.raisedKey() } }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressSink())
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.5, maximumDistance: 44)
-            .onChanged { _ in heldFired = false }           // a new press: a hold left over from one dragged off is gone
-            .onEnded { _ in heldFired = true; playFromStart() },
-            including: canHold ? .all : .subviews)
+        return Image(systemName: session.playing ? "stop.fill" : "play.fill")
+        .font(.system(size: 17, weight: .semibold))
+        .foregroundStyle(Theme.text)
+        .frame(width: 44, height: 44)
+        .background { if session.playing { Color.clear.raisedKey() } }
+        .environment(\.keyPressed, playDown)
+        .offset(y: playDown ? (look.flat ? 2 : 1) : 0)
+        .brightness(!look.flat && playDown ? -0.06 : 0)
+        .animation(reduceMotion || !look.flat ? nil : .easeOut(duration: playDown ? 0.06 : 0.1), value: playDown)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { v in
+                guard isConnected else { return }
+                if !pressing {
+                    pressing = true
+                    holdFired = false
+                    playDown = true
+                    if canHold {
+                        holdTimer = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(500))
+                            guard !Task.isCancelled, playDown else { return }
+                            holdFired = true
+                            playFromStart()
+                        }
+                    }
+                } else if abs(v.translation.width) > 44 || abs(v.translation.height) > 44 {
+                    // dragged off the key: neither a tap nor a hold
+                    playDown = false
+                    holdTimer?.cancel()
+                }
+            }
+            .onEnded { _ in
+                holdTimer?.cancel()
+                let tap = pressing && playDown && !holdFired
+                pressing = false
+                playDown = false
+                if tap { session.setPlaying(!session.playing) }
+            })
         .disabled(!isConnected)
         .opacity(isConnected ? 1 : 0.4)
         .sensoryFeedback(.impact(weight: .medium), trigger: fromStartCount)
@@ -363,14 +390,20 @@ struct TopBar: View {
                 .opacity(0).accessibilityHidden(true)
         }
         .help(canHold ? "Tap to play or stop · hold to play from the start (⇧Space)" : "Play or stop")
+        .accessibilityElement()
         .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { if isConnected { session.setPlaying(!session.playing) } }
         .accessibilityHint(canHold ? "Hold to play from the start" : "")
         .accessibilityActions {
             if canHold { Button("Play from the start", action: playFromStart) }
         }
     }
 
-    @State private var heldFired = false
+    @State private var pressing = false
+    @State private var playDown = false
+    @State private var holdFired = false
+    @State private var holdTimer: Task<Void, Never>?
     @State private var fromStartShown = false
     @State private var fromStartCount = 0
     @State private var fromStartHide: Task<Void, Never>?

@@ -1847,7 +1847,11 @@ public final class DeviceSession {
         playing = true
         recentWrites["play"] = Date()
         Task {
-            try? await s.playFromStart()
+            // a request that went unanswered part way: plain PLAY at least, as a tap would
+            do { try await s.playFromStart() } catch {
+                print("play from start: \(error)")
+                _ = try? await s.transport(play: true)
+            }
             if let after = try? await s.transportState() { applyTransport(after) }
             await skiffSong?.refresh()
         }

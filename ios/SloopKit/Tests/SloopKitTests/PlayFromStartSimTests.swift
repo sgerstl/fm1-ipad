@@ -96,3 +96,27 @@ import Testing
         _ = try await d.transport(play: false)
     }
 }
+
+/// The same through the session, on the demo's FakeSkiff (no sim needed): stopped, a hold plays, every track on its
+/// first entry.
+@Suite(.serialized) @MainActor struct PlayFromStartTests {
+    @Test func holdFromStoppedPlaysFromTheFirstEntries() async throws {
+        let fake = try #require(FakeSkiff(demo: true))
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        defer { run.cancel() }
+        try await waitFor(10) { if case .connected = s.status { true } else { false } }
+        #expect(s.canPlayFromStart)
+        s.setPlaying(false)
+        try await waitFor(5) { !fake.playing }
+        for t in 0..<fake.entryOn.count { fake.entryOn[t] = 1 }
+        s.playFromStart()
+        try await waitFor(5) { fake.playing }
+        let firsts = fake.lists.map { l in l.firstIndex { $0.p != 0 } }
+        for (t, e) in fake.entryOn.enumerated() where firsts[t] != nil { #expect(e == firsts[t], "T\(t + 1)") }
+        try await Task.sleep(for: .seconds(1.5))
+        #expect(fake.playing && s.playing, "still playing")
+    }
+}
