@@ -1836,6 +1836,22 @@ public final class DeviceSession {
         guard let c = driver else { return }
         Task { if let l = try? await c.transport(play: on) { self.applyLive(l) } }
     }
+
+    /// Play from the start, as Skiff's GLO + PLAY (Scott, 2026-11-06: hold PLAY): every track from its first entry
+    /// with SONG on, the patterns from their first step with it off. Skiff only: SLOOP's editor has no restart (LIVE
+    /// op 1 plays or stops), so there the hold does nothing.
+    public var canPlayFromStart: Bool { driver is SkiffDriver }
+
+    public func playFromStart() {
+        guard let s = driver as? SkiffDriver else { return }
+        playing = true
+        recentWrites["play"] = Date()
+        Task {
+            try? await s.playFromStart()
+            if let after = try? await s.transportState() { applyTransport(after) }
+            await skiffSong?.refresh()
+        }
+    }
 }
 
 extension ConnectionStatus {
