@@ -70,6 +70,13 @@ enum SoundPanelControl {
 
     /// Closed (the close arrow, HOME, Escape, another tab).
     @MainActor static func close(_ ui: EditorUI) { ui.soundPanel = nil }
+    /// Closed by the user (the arrow, Escape), on any tab: the FM-1 goes HOME too, as its own panel would (Scott,
+    /// 2026-11-06). A tab change or HOME pressed on the FM-1 closes it without this.
+    @MainActor static func dismiss(_ ui: EditorUI, session: DeviceSession) {
+        guard ui.soundPanel != nil else { return }
+        close(ui)
+        if session.screenLinked, ui.followDevice, session.deviceScreen?.home != true { session.showOnDevice(page: SkiffButtonMap.home) }
+    }
 }
 
 /// The rail: the six buttons with pages, as the FM-1's keys; the one whose pages are open is lit.
@@ -191,7 +198,7 @@ struct SoundPanel: View {
                 // SAVE > USER: the track's sound to a user slot, its name asked
                 if session.dialect == .skiff { SaveSoundKey(session: session, ui: ui) }
                 // closes: an arrow the way the panel leaves (Scott, 2026-11-06; it was ✕)
-                Button { SoundPanelControl.close(ui) } label: {
+                Button { SoundPanelControl.dismiss(ui, session: session) } label: {
                     Image(systemName: "arrow.right").font(.system(size: 15, weight: .semibold))
                         .frame(width: 44, height: 44).raisedKey(8).contentShape(Rectangle())
                 }
@@ -252,7 +259,7 @@ struct SoundPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sound panel, \(state.family.rawValue)")
-        .accessibilityAction(.escape) { SoundPanelControl.close(ui) }
+        .accessibilityAction(.escape) { SoundPanelControl.dismiss(ui, session: session) }
     }
 }
 

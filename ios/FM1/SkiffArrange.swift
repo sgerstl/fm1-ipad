@@ -271,6 +271,7 @@ struct SkiffArrangePage: View {
                 .scrollIndicators(.hidden)
                 .scrollDisabled(lifted != nil)
             }
+            .background(alignment: .topLeading) { selectedRow }
             .overlay(alignment: .topTrailing) { knobBox }
             .opacity(store.offline ? 0.5 : 1)
         }
@@ -292,6 +293,20 @@ struct SkiffArrangePage: View {
             let below = top + laneHeight + 4
             TrackKnobBox(session: session, ui: ui)
                 .offset(x: -4, y: below + TrackKnobBox.height <= total ? below : max(0, top - 4 - TrackKnobBox.height))
+        }
+    }
+
+    /// The selected track's whole row lit, header and lane, in its colour (Scott, 2026-11-06: not only the chip and the
+    /// name). Behind the blocks; the name's weight still marks it without colour.
+    @ViewBuilder private var selectedRow: some View {
+        if compact {
+            let t = session.selectedTrack
+            RoundedRectangle(cornerRadius: 8).fill(Theme.track[t].opacity(0.14))
+                .frame(height: laneHeight + Self.laneGap)
+                .offset(y: 24 + Self.laneGap / 2 + CGFloat(t) * (laneHeight + Self.laneGap))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
     }
 

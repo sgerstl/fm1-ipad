@@ -158,6 +158,8 @@ final class EditorUI {
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
+    /// The value being slid, magnified above the finger (ValueLoupe.swift); only the loupe reads it.
+    let loupe = LoupeState()
     /// A knob's big control, open under this point (global; .zero: VoiceOver's "Open", centred).
     var knobPanelAt: CGPoint?
     @ObservationIgnored var knobPanelSpec: (() -> KnobSpec)?

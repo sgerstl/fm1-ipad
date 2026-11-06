@@ -152,8 +152,10 @@ struct KnobControl: View {
                 _ = activate?()
                 startValue = make().value; turned = 0; last = p; start = p
                 ui.knobGrab = KnobGrab(id: make().id, center: p)
+                ui.loupe.show(make, .dial, at: p)
             }, changed: { p in
                 guard dragging, let l = last else { return }
+                ui.loupe.finger = p
                 let s = make()
                 let span = Double(s.range.upperBound - s.range.lowerBound)
                 let fine = 1 / (1 + abs(Double(p.x - start.x)) / 60)
@@ -163,6 +165,7 @@ struct KnobControl: View {
                 last = p
             }, ended: {
                 dragging = false; last = nil
+                ui.loupe.hide()
                 if ui.knobGrab?.id == make().id { ui.knobGrab = nil }
             })))
             // held: the value in a bubble above the knob
@@ -184,8 +187,10 @@ struct KnobControl: View {
                 _ = activate?()
                 startValue = make().value; turned = 0; last = p
                 ui.knobGrab = KnobGrab(id: make().id, center: p)
+                if let c = column { ui.loupe.show(make, .column(number: c.number, tint: c.tint), at: p) }
             }, changed: { p in
                 guard column != nil, dragging, let l = last else { return }
+                ui.loupe.finger = p
                 let s = make()
                 let span = Double(s.range.upperBound - s.range.lowerBound)
                 turned += Double(p.x - l.x) / Self.columnTravel * span     // right raises, the range in about 240 pt
@@ -194,6 +199,7 @@ struct KnobControl: View {
                 last = p
             }, ended: {
                 dragging = false; last = nil
+                ui.loupe.hide()
                 if ui.knobGrab?.id == make().id { ui.knobGrab = nil }
             })))
             .sensoryFeedback(.impact(weight: .light), trigger: tick)

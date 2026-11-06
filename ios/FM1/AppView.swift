@@ -74,6 +74,7 @@ struct AppView: View {
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }
         .overlay { KnobPanelLayer(ui: ui) }
+        .overlay { ValueLoupeLayer(loupe: ui.loupe) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
         .font(.system(size: 15))
