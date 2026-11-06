@@ -89,7 +89,7 @@ enum KnobFeel {
 /// Press and hold (0.3 s, a light tap when it takes), then drag: up raises, down lowers, the whole range in about
 /// 200 pt, finer the further the finger goes sideways; release to finish. While held the page doesn't scroll and a
 /// bubble shows the value; a drag that starts before the hold takes is the page's scroll, so a knob never steals one
-/// (Scott, 2026-11-05: "drag straight on" was terrible). Shape's columns turn on a horizontal drag instead. A tap opens
+/// (Scott, 2026-11-05: "drag straight on" was terrible). Columns turn on a slide instead (sideways unless Settings says otherwise, 2026-11-06). A tap opens
 /// the big control at the finger (Done keeps, Cancel puts it back); a double-tap puts the default back (DESC). Light
 /// ticks at the ends and a centred knob's middle.
 struct KnobControl: View {
@@ -112,11 +112,15 @@ struct KnobControl: View {
     @State private var tick = 0
     @State private var engaged = 0             // the hold took: a light haptic
     @Environment(\.columnsOverScroll) private var columnsOverScroll
+    /// Settings' "Slide to turn" (2026-11-06): which way a column turns. A dial keeps its hold-then-drag.
+    @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
 
     /// Points of travel for the whole range, straight up.
     static let travel = 200.0
     /// A column's: across.
     static let columnTravel = 240.0
+    /// A column's, up and down (Slide to turn: Up and down, or Both): the dial's.
+    static let columnTravelUp = 200.0
 
     var body: some View {
         let _ = BodyCounter.tick("KnobControl")
@@ -180,20 +184,22 @@ struct KnobControl: View {
                         .accessibilityHidden(true)
                 }
             }
-            // a column: a horizontal pan of UIKit's, so the scroll view keeps every vertical drag
-            .modifier(ColumnPan(on: column != nil, pan: HorizontalPan(winsOverScroll: columnsOverScroll, began: { p in
+            // a column: a pan of UIKit's that begins only along the way Settings says (sideways by default, so the scroll
+            // view keeps every vertical drag; up and down, or whichever way the finger first goes)
+            .modifier(ColumnPan(on: column != nil, pan: ColumnSlidePan(mode: slideToTurn, winsOverScroll: columnsOverScroll, began: { p in
                 guard column != nil else { return }
                 dragging = true
                 _ = activate?()
                 startValue = make().value; turned = 0; last = p
                 ui.knobGrab = KnobGrab(id: make().id, center: p)
                 if let c = column { ui.loupe.show(make, .column(number: c.number, tint: c.tint), at: p) }
-            }, changed: { p in
+            }, changed: { p, vertical in
                 guard column != nil, dragging, let l = last else { return }
                 ui.loupe.finger = p
                 let s = make()
                 let span = Double(s.range.upperBound - s.range.lowerBound)
-                turned += Double(p.x - l.x) / Self.columnTravel * span     // right raises, the range in about 240 pt
+                // right raises, the range in about 240 pt; up raises, in about 200
+                turned += vertical ? Double(l.y - p.y) / Self.columnTravelUp * span : Double(p.x - l.x) / Self.columnTravel * span
                 turned = min(max(turned, Double(s.range.lowerBound - startValue)), Double(s.range.upperBound - startValue))
                 change(s, to: startValue + Int(turned.rounded()))
                 last = p
@@ -270,36 +276,60 @@ func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: 
     ctx.stroke(needle, with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
 }
 
-/// A pan that begins only when the finger moves more across than up or down (UIKit decides, before the scroll view
-/// does): Shape's columns turn on a horizontal drag, and a vertical one is the page's scroll from the first point.
-struct HorizontalPan: UIGestureRecognizerRepresentable {
+/// A column's pan (UIKit decides, before the scroll view does). Sideways (the default): it begins only when the finger
+/// moves more across than up or down, so a vertical drag is the page's scroll from the first point. Up and down: only
+/// when it moves more up or down, and a vertical scroll view waits for it to fail (a panel scrolls from the gaps between
+/// columns). Both (Scott, 2026-11-06): the first movement's stronger axis decides for that drag. Points are global (the
+/// loupe follows them); `changed` says whether this drag goes up and down.
+struct ColumnSlidePan: UIGestureRecognizerRepresentable {
+    var mode: SlideToTurn = .sideways
     /// Over a horizontal scroll view (the Mixer's cards): the column takes the slide and the scroll waits for it
     /// to fail. Both began at once there, so the carousel drifted and snapped under a turning value (2026-11-06).
     var winsOverScroll = false
     var began: (CGPoint) -> Void
-    var changed: (CGPoint) -> Void
+    var changed: (CGPoint, _ vertical: Bool) -> Void
     var ended: () -> Void
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var mode: SlideToTurn = .sideways
         var winsOverScroll = false
+        /// The axis this drag took when it began.
+        var vertical = false
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard let p = g as? UIPanGestureRecognizer else { return true }
             let v = p.velocity(in: p.view)
-            return abs(v.x) > abs(v.y)
+            let up = abs(v.y) > abs(v.x)
+            switch mode {
+            case .sideways: guard !up else { return false }
+            case .vertical: guard up else { return false }
+            case .both: break
+            }
+            vertical = up
+            return true
         }
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            guard winsOverScroll, let s = other.view as? UIScrollView, other === s.panGestureRecognizer else { return false }
-            return s.contentSize.width > s.bounds.width + 1          // a horizontal scroll only; a vertical one never waits
+            guard let s = other.view as? UIScrollView, other === s.panGestureRecognizer else { return false }
+            let across = s.contentSize.width > s.bounds.width + 1
+            let upDown = s.contentSize.height > s.bounds.height + 1
+            switch mode {
+            case .sideways: return winsOverScroll && across          // a horizontal scroll only; a vertical one never waits
+            case .vertical: return upDown || (winsOverScroll && across)
+            case .both: return upDown || (winsOverScroll && across)
+            }
         }
     }
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
-    func updateUIGestureRecognizer(_ g: UIPanGestureRecognizer, context: Context) { context.coordinator.winsOverScroll = winsOverScroll }
+    func updateUIGestureRecognizer(_ g: UIPanGestureRecognizer, context: Context) {
+        context.coordinator.winsOverScroll = winsOverScroll
+        context.coordinator.mode = mode
+    }
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
         let g = UIPanGestureRecognizer()
         g.delegate = context.coordinator
         g.maximumNumberOfTouches = 1
         context.coordinator.winsOverScroll = winsOverScroll
+        context.coordinator.mode = mode
         return g
     }
 
@@ -307,17 +337,17 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
         let p = context.converter.location(in: .global)
         switch g.state {
         case .began: began(p)
-        case .changed: changed(p)
+        case .changed: changed(p, context.coordinator.vertical)
         case .ended, .cancelled, .failed: ended()
         default: break
         }
     }
 }
 
-/// The horizontal pan on a column only (a dial keeps its own drag, up and down with a sideways fine control).
+/// The slide on a column only (a dial keeps its own drag, up and down with a sideways fine control).
 private struct ColumnPan: ViewModifier {
     let on: Bool
-    let pan: HorizontalPan
+    let pan: ColumnSlidePan
     func body(content: Content) -> some View {
         if on { content.gesture(pan) } else { content }
     }
@@ -348,7 +378,7 @@ struct HoldDrag: UIGestureRecognizerRepresentable {
     }
 }
 
-/// The hold on a dial only (a column turns by HorizontalPan).
+/// The hold on a dial only (a column turns by ColumnSlidePan).
 private struct DialHold: ViewModifier {
     let on: Bool
     let hold: HoldDrag

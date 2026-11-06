@@ -64,6 +64,30 @@ import Testing
         PatternEdit.add(&b, step: 3, note: 61)
         #expect(PatternEdit.changed(a, b) == [3])
     }
+
+    /// Paste replaces (Scott, 2026-11-06): the covered steps take the clip's as they are; "Paste and keep" merges.
+    @Test func pasteReplacesOrKeeps() {
+        // the clip: a note held one step, then a REST
+        let clip = Array(pattern([(0, [72], 2)])[0...2])
+        // over a chord, a note and a long note that runs past the clip
+        var r = pattern([(4, [60, 64], 1), (5, [67], 1), (6, [55], 4)])
+        var len = 16
+        PatternEdit.paste(&r, clip: clip, at: 4, length: &len, keep: false)
+        #expect(r[4].notes == [72] && r[4].velocity == 90 && r[5].time == .tie && r[6].time == .rest && r[6].notes.isEmpty)
+        #expect(r[7].time == .rest && r[8].time == .rest && r[9].time == .rest)    // the cut note's TIEs go with it
+        #expect(len == 16)
+        // and keep: the clip's note joins the chord, a clip TIE doesn't land on a NOTE
+        var k = pattern([(4, [60, 64], 1), (5, [67], 1)])
+        PatternEdit.paste(&k, clip: clip, at: 4, length: &len, keep: true)
+        #expect(Set(k[4].notes) == [60, 64, 72] && k[5].notes == [67] && k[5].time == .note)
+        // past the end: LENGTH grows to fit, up to 64
+        var e = pattern([]), l = 16
+        PatternEdit.paste(&e, clip: clip, at: 15, length: &l, keep: false)
+        #expect(l == 18 && e[15].notes == [72] && e[16].time == .tie)
+        var m = pattern([]), ml = 64
+        PatternEdit.paste(&m, clip: clip, at: 63, length: &ml, keep: false)
+        #expect(ml == 64 && m[63].notes == [72])
+    }
 }
 
 extension SkiffScreenLinkTests {

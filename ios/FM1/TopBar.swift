@@ -12,6 +12,7 @@ struct TopBar: View {
     private var projectsOpen: Binding<Bool> { Binding(get: { ui.projectsOpen }, set: { ui.projectsOpen = $0 }) }
     @State private var naming: NamePrompt?
     @State private var readoutFrame: CGRect = .zero
+    @State private var settingsOpen = false
 
     var body: some View {
         let _ = BodyCounter.tick("TopBar")
@@ -80,46 +81,24 @@ struct TopBar: View {
         .buttonStyle(.plain)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { connectionFrame = $0 }
         .accessibilityLabel("\(statusLine), \(versionLine)")
-        .accessibilityHint("Choose the FM-1 or the demo")
+        .accessibilityHint("Choose the FM-1 or a demo, install firmware, or open Settings")
+        .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
     }
 
-    /// The connection menu (Jib's own, 2026-11-05: the system's was cramped): the source, the screen link, the
-    /// iPad's audio and what it says, the diagnostics, Developer.
+    /// The connection menu (Jib's own, 2026-11-05). Scott, 2026-11-06, cut to four things: one line of status, the
+    /// source (the FM-1 over USB, or a demo FM-1 running Skiff or SLOOP), Install firmware… and Settings…. Gone: the
+    /// "Follow the FM-1's screen" switch (it always follows now), the iPad's audio and its lines (Settings has them),
+    /// the diagnostics line and the Developer submenu (its look switch with it).
     private var connectionGroups: [[MenuItem]] {
-        var g: [[MenuItem]] = [[.note("\(statusLine) · \(versionLine)")]]
-        g.append([MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !useDemo) { useDemo = false },
-                  MenuItem(title: "Demo FM-1 (no device)", icon: "play.rectangle", checked: useDemo) { useDemo = true }])
-        if session.screenLinked {
-            g.append([MenuItem(title: "Follow the FM-1's screen", icon: "rectangle.on.rectangle", checked: ui.followDevice) { ui.followDevice.toggle() }])
-        }
-        var audio: [MenuItem] = [MenuItem(title: "Play through the iPad", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
-        if through.enabled { audio.append(.note(through.summary)) }
-        if through.enabled, !through.route.isEmpty { audio.append(.note(through.route)) }
-        if case .playing = through.state {
-            if let problem = session.usbAudioProblem {
-                audio.append(.note(problem))
-            } else if session.canQuietSpeaker {
-                audio.append(.note(session.usbAudioFull == true ? "The FM-1's speaker is off; turn its MASTER to bring it back if you unplug"
-                                                                : "Setting the FM-1's USB AUDIO to FULL…"))
-            } else {
-                // Skiff: Jib can't turn its MASTER (the knob alone sets it), so the level goes FIXED instead
-                audio.append(.note(session.usbAudioFull == true ? "USB LEVEL is FIXED: turn the FM-1's MASTER down to quiet its speaker. The iPad keeps the full level"
-                                                                : "Setting the FM-1's USB LEVEL to FIXED…"))
-            }
-        }
-        if through.state == .noInput {
-            audio.append(.note(session.canQuietSpeaker ? "Plug in the FM-1 (USB AUDIO on)" : "No sound from the FM-1 over USB: plug it in, or unplug it and plug it in again"))
-        }
-        if through.state == .denied { audio.append(.note("Turn on Microphone for Lupe in Settings")) }
-        g.append(audio)
-        if isConnected {
-            // diagnostics for the feel test: are pushes arriving, or is the re-sync doing the work?
-            let s = session.stats
-            g.append([.note("Since connecting: step pushes \(s.stepPushes) · all pushes \(s.pushes) · steps fixed by re-sync \(s.resyncFixes) · "
-                            + String(format: "LIVE %.1f a second · timeouts %d", s.pollsPerSecond, s.timeouts))])
-        }
-        if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
-        return g
+        let demo = useDemo
+        return [
+            [.note("\(statusLine) · \(versionLine)")],
+            [MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !demo) { useDemo = false },
+             MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: demo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
+             MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: demo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }],
+            [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true },
+             MenuItem(title: "Settings…", icon: "gearshape") { settingsOpen = true }],
+        ]
     }
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }

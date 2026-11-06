@@ -151,6 +151,32 @@ public enum PatternEdit {
         return (to...end, old, length)
     }
 
+    /// A clip pasted at step `at` (Scott, 2026-11-06: "Paste replaces"). `keep` false: each step the clip covers takes
+    /// the clip's step as it is (notes, rests and TIEs, velocity and the rest of its fields), overwriting what was
+    /// there; a note the paste cut into loses the TIE steps that ran on past the clip. `keep` true is the old merge,
+    /// "Paste and keep": the clip's notes join what's on the steps, and a clip TIE lands only on a REST. Either way
+    /// LENGTH grows to fit past the end, up to 64.
+    public static func paste(_ s: inout [SynthStep], clip: [SynthStep], at: Int, length: inout Int, keep: Bool) {
+        guard s.indices.contains(at), !clip.isEmpty else { return }
+        let end = min(at + clip.count, s.count)               // one past the last step the clip reaches
+        if keep {
+            for (k, st) in clip.enumerated() where at + k < s.count {
+                if st.time == .note { for n in st.notes { add(&s, step: at + k, note: n, velocity: st.velocity) } }
+                else if st.time == .tie, s[at + k].time == .rest { s[at + k].time = .tie }
+            }
+        } else {
+            // TIE steps just past the clip whose note the paste overwrote: they'd hold the clip's last step on instead
+            var orphans: [Int] = []
+            if end < s.count, s[end].time == .tie, owner(s, end) >= at {
+                var j = end
+                while j < s.count, s[j].time == .tie { orphans.append(j); j += 1 }
+            }
+            for (k, st) in clip.enumerated() where at + k < s.count { s[at + k] = st }
+            for j in orphans { s[j].time = .rest; s[j].notes = []; s[j].levels = []; s[j].ratchets = [] }
+        }
+        if at + clip.count > length { length = min(maxSteps, at + clip.count) }
+    }
+
     /// Steps that differ between two versions of a pattern: what to write.
     public static func changed(_ a: [SynthStep], _ b: [SynthStep]) -> [Int] {
         a.indices.filter { $0 < b.count && a[$0] != b[$0] }

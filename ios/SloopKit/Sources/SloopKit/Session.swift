@@ -129,6 +129,8 @@ public final class DeviceSession {
     public private(set) var drumMapGM = true
     public private(set) var positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: DeviceShape.sloop.trackCount)
     public private(set) var isDemo = false
+    /// The demo pretends to be Skiff (FakeSkiff) rather than SLOOP; false for a real FM-1.
+    public private(set) var demoSkiff = false
     /// Counted on every poll, and no view reads it: kept out of observation so a poll doesn't count
     /// as a change.
     @ObservationIgnored public private(set) var stats = Stats()
@@ -317,14 +319,20 @@ public final class DeviceSession {
     /// push it held back shows up here at the latest. Each pass also re-reads one other track.
     public var resyncInterval: Duration = .seconds(1)
 
-    public init(demo: Bool = false) {
+    /// `skiff`: which firmware the demo FM-1 pretends to run (Scott, 2026-11-06: the menu offers a Skiff demo and a
+    /// SLOOP demo); nil takes it from the launch flag.
+    public init(demo: Bool = false, skiff: Bool? = nil) {
         isDemo = demo
         // -demo-still: the demo FM-1 makes no edits of its own (screen recordings, screenshots)
         let still = ProcessInfo.processInfo.arguments.contains("-demo-still")
         // -demo-skiff: a pretend Skiff 2.2 answering as skiff-sim did (FakeSkiff), instead of SLOOP
-        let skiff = ProcessInfo.processInfo.arguments.contains("-demo-skiff")
+        let skiff = skiff ?? Self.launchedSkiffDemo
+        demoSkiff = demo && skiff
         makeTransport = !demo ? { MIDITransport() } : skiff ? { FakeSkiff(demo: true) } : { FakeSloop(autoEdits: !still) }
     }
+
+    /// The launch asked for the Skiff demo (-demo-skiff: screenshots and tests).
+    public static var launchedSkiffDemo: Bool { ProcessInfo.processInfo.arguments.contains("-demo-skiff") }
 
     public init(transport: @escaping () -> SysExTransport?) {
         makeTransport = transport

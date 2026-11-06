@@ -49,7 +49,7 @@ struct TrackKnobBox: View {
         let home = Self.homeIDs(session)
         VStack(alignment: .leading, spacing: 4) {
             // HOME's four as the columns everywhere else (Scott, 2026-11-06), the track's colour, numbered as the FM-1's
-            // knobs; a sideways slide turns one, as on every column, and it turns that knob's parameter on the FM-1 too
+            // knobs; a slide turns one, as on every column (the way Settings says), and it turns that knob's parameter on the FM-1 too
             if !home.isEmpty {
                 HStack(spacing: 4) {
                     ForEach(Array(home.enumerated()), id: \.offset) { k, id in
@@ -82,8 +82,9 @@ struct TrackKnobBox: View {
     }
 }
 
-/// A small dial with its name and value beside it. Slide up to raise, down to lower, from the first point: the whole
-/// range in about 200 pt, finer the further the finger goes sideways. The box sits outside the lanes' horizontal
+/// A small dial with its name and value beside it. Slide up or right to raise, down or left to lower (Scott, 2026-11-06:
+/// sideways turns too; the way the finger first goes, past 4 pt, decides for that slide, whatever Settings' Slide to turn
+/// says): the whole range in about 200 pt, finer the further the finger strays across that way. The box sits outside the lanes' horizontal
 /// scroll and the top half doesn't scroll up and down, so the drag takes nothing from a scroll. A tap opens the big
 /// control at the finger (the way without a drag), a double-tap puts the default back; light ticks at the ends and a
 /// centred knob's middle.
@@ -91,6 +92,8 @@ struct SlideKnob: View {
     let ui: EditorUI
     let make: () -> KnobSpec
     @State private var from: Int?
+    /// This slide's axis, once the finger has gone 4 pt: true up and down, false sideways.
+    @State private var vertical: Bool?
     @State private var tick = 0
     @Environment(\.look) private var look
 
@@ -121,11 +124,15 @@ struct SlideKnob: View {
             .onChanged { v in
                 let s = make()
                 if from == nil { from = s.value; ui.loupe.show(make, .dial, at: v.location) } else { ui.loupe.finger = v.location }
+                let dx = Double(v.translation.width), dy = Double(v.translation.height)
+                if vertical == nil, max(abs(dx), abs(dy)) >= 4 { vertical = abs(dy) >= abs(dx) }
+                guard let up = vertical else { return }
                 let span = Double(s.range.upperBound - s.range.lowerBound)
-                let fine = 1 / (1 + abs(Double(v.translation.width)) / 60)
-                change(s, to: (from ?? s.value) + Int((-Double(v.translation.height) / KnobControl.travel * span * fine).rounded()))
+                let along = up ? -dy : dx, across = up ? dx : dy
+                let fine = 1 / (1 + abs(across) / 60)
+                change(s, to: (from ?? s.value) + Int((along / KnobControl.travel * span * fine).rounded()))
             }
-            .onEnded { _ in from = nil; ui.loupe.hide() })
+            .onEnded { _ in from = nil; vertical = nil; ui.loupe.hide() })
         .sensoryFeedback(.impact(weight: .light), trigger: tick)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spec.label.capitalized)

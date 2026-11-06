@@ -16,7 +16,9 @@ import SwiftUI
     /// The finger, in global points.
     var finger: CGPoint = .zero
 
+    /// Settings' Magnifier off (2026-11-06): it never shows.
     func show(_ make: @escaping () -> KnobSpec, _ face: Face, at p: CGPoint) {
+        guard Magnifier.on else { return }
         self.make = make; self.face = face; finger = p; on = true
     }
     func hide() { on = false }

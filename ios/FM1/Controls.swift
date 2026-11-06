@@ -168,7 +168,7 @@ struct PressSink: ButtonStyle {
 }
 
 /// Developer settings, in debug builds only, as a Jib menu item (a submenu): Install firmware…, the look's
-/// switch, the knob tap's (2026-11-05). At the foot of the connection menu on the iPad and the ⋯ menu on the phone.
+/// switch, the knob tap's (2026-11-05). At the foot of the phone's ⋯ menu (the iPad's connection menu dropped it, 2026-11-06).
 enum DeveloperItems {
     @MainActor static func item(firmware: FirmwareCentre) -> MenuItem? {
         #if DEBUG

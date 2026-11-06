@@ -25,7 +25,7 @@ struct RootView: View {
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
-        let s = DeviceSession(demo: demo)
+        let s = DeviceSession(demo: demo, skiff: DeviceSession.launchedSkiffDemo)
         _session = State(initialValue: s)
         TrackColours.session = s
     }
@@ -71,8 +71,11 @@ struct RootView: View {
         .overlay { if !introOver { LaunchIntro { introOver = true } } }
         .environment(\.look, Look(style: lookStyle))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
-        .task(id: SessionRun(demo: useDemo, paused: firmware.holdsDevice)) {
-            if session.isDemo != useDemo { session = DeviceSession(demo: useDemo); TrackColours.session = session }
+        // the source (Scott, 2026-11-06): the FM-1 over USB, the Skiff demo or the SLOOP demo; a change makes a new session
+        .task(id: SessionRun(demo: useDemo, skiff: ui.demoSkiff, paused: firmware.holdsDevice)) {
+            if session.isDemo != useDemo || (useDemo && session.demoSkiff != ui.demoSkiff) {
+                session = DeviceSession(demo: useDemo, skiff: ui.demoSkiff); TrackColours.session = session
+            }
             guard !firmware.holdsDevice else { return }      // the firmware installer has the FM-1 to itself
             projects.attach(session)
             await session.run()
@@ -82,7 +85,7 @@ struct RootView: View {
 }
 
 /// The session runs per source, and not while a firmware install holds the FM-1.
-private struct SessionRun: Equatable { var demo: Bool, paused: Bool }
+private struct SessionRun: Equatable { var demo: Bool, skiff: Bool, paused: Bool }
 
 enum Page: String, CaseIterable, Identifiable {
     // labels name what each tab is for (2026-11-02): sequence a pattern, shape its sound, arrange the song, browse sounds
@@ -170,8 +173,12 @@ final class EditorUI {
         return SoundFamily(rawValue: a[i + 1]) ?? .fx
     }()
     var keyboardOpen = false
-    /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there.
-    var followDevice = true
+    /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there. Always, since
+    /// Scott took the switch out of the menu (2026-11-06); kept as a property so what reads it stays as it was.
+    var followDevice: Bool { true }
+    /// Which firmware the demo FM-1 pretends to run: Skiff, or SLOOP (the menu's "Skiff demo" / "SLOOP demo",
+    /// 2026-11-06). Starts from the launch flag (-demo-skiff) so screenshots and tests open where they did.
+    var demoSkiff = DeviceSession.launchedSkiffDemo
     /// The track box's timeline, pulled open with its handle on the other tabs; shut again on a page change.
     /// On Sequence it is always open.
     var timelineOpen = false

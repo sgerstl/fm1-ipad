@@ -69,15 +69,14 @@ struct StepEdits {
         ui.clip = clip
     }
 
-    func paste() {
+    /// Paste (Scott, 2026-11-06): the clip replaces what's on the steps it covers, each step as it was copied (notes,
+    /// rests and TIEs, velocity). `keep` is the old merge, "Paste and keep" (a press and hold on Paste, or VoiceOver's
+    /// action): the clip's notes join what's there. One change either way, so Undo puts the steps back.
+    func paste(keep: Bool = false) {
         guard let clip = ui.clip else { return }
         let at = ui.selectedStep[track]
-        apply("Pasted at step \(at + 1)") { s, len in
-            for (k, st) in clip.enumerated() where at + k < s.count {
-                if st.time == .note { for n in st.notes { PatternEdit.add(&s, step: at + k, note: n, velocity: st.velocity) } }
-                else if st.time == .tie, s[at + k].time == .rest { s[at + k].time = .tie }
-            }
-            if at + clip.count > len { len = min(PatternEdit.maxSteps, at + clip.count) }
+        apply((keep ? "Pasted and kept at step " : "Pasted at step ") + "\(at + 1)") { s, len in
+            PatternEdit.paste(&s, clip: clip, at: at, length: &len, keep: keep)
         }
     }
 
@@ -139,7 +138,7 @@ struct SelectionBar: View {
                     icon("plus.square.on.square", "Duplicate after", primary: true) { edits.duplicateAfter() }
                     icon("doc.on.doc", "Copy") { edits.copy() }
                 }
-                if ui.clip != nil { icon("doc.on.clipboard", "Paste at the selected step") { edits.paste() } }
+                if ui.clip != nil { pasteKey }
                 if edits.any {
                     gap
                     icon("arrow.left", "Move a step earlier") { edits.move(by: -1) }
@@ -168,6 +167,18 @@ struct SelectionBar: View {
         .background { if !inline && (picking || undo != nil) { RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.selected, Look()) } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Selection")
+    }
+
+    /// Paste replaces the steps it covers; a press and hold (the context menu) offers "Paste and keep", which adds the
+    /// clip's notes to what's there (Scott, 2026-11-06), and VoiceOver gets it as an action.
+    private var pasteKey: some View {
+        icon("doc.on.clipboard", "Paste at the selected step") { edits.paste() }
+            .contextMenu {
+                Button { edits.paste() } label: { Label("Paste", systemImage: "doc.on.clipboard") }
+                Button { edits.paste(keep: true) } label: { Label("Paste and keep", systemImage: "square.on.square") }
+            }
+            .accessibilityHint("Replaces the notes on the steps it covers")
+            .accessibilityAction(named: "Paste and keep the notes already there") { edits.paste(keep: true) }
     }
 
     /// 8 pt more between groups (the keys already sit 8 pt apart inside their 44 pt targets).
