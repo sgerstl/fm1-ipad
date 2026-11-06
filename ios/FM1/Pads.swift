@@ -138,6 +138,8 @@ struct FunctionPads: View {
         case .home:
             ui.page = .sequencer
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).home) }
+        case .save where session.dialect == .skiff && ui.songTab:
+            SkiffNavigator.save(session: session, ui: ui)
         case .save:
             // as the FM-1's SAVE: the presets first; pressed again, the song (SLOOP's SECTION page)
             if ui.page == .library { openSong() } else {

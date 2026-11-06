@@ -131,6 +131,8 @@ public struct PatternPool: Equatable, Sendable {
 /// LIST2's and POOL's answer codes, and what Jib says for each.
 public enum SongRC: Int, Sendable, Error {
     case done = 0, empty = 1, withoutAutomation = 2, playing = 3, patternsFull = 4, failed = 5
+    /// POOL CLEAR of a pattern something uses (an entry, a track, a saved project).
+    case inUse = 6
 
     public var isDone: Bool { self == .done || self == .withoutAutomation }
     public var reason: String {
@@ -141,6 +143,7 @@ public enum SongRC: Int, Sendable, Error {
         case .playing: "Stop to change this: Skiff does it only while stopped"
         case .patternsFull: "All 64 patterns are taken. Clear unused ones to free a number"
         case .failed: "Skiff couldn't do it"
+        case .inUse: "Something still uses that pattern: an entry, a track or a saved project"
         }
     }
 }

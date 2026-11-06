@@ -418,12 +418,37 @@ enum SkiffNavigator {
             flash(f == .pattern ? .trackPanel : f == .automation ? .grid : .stepPanel, ui)
         case .arrange(let patterns):
             go(.song, ui)
-            if patterns { flash(.patternBin, ui) }
-        case .browse: go(.library, ui)
+            // SAVE > PATTERNS: the Song tab's Patterns drawer, open
+            if patterns { if ui.songTab { ui.poolOpen = true }; flash(.patternBin, ui) }
+        case .browse: browse(user: s.page == 36, session: session, ui: ui)
         case .projects:
-            // the Projects sheet, where this firmware has projects (SLOOP's backups; Skiff 2.2 has none)
-            if session.capabilities.contains(.projects) { ui.projectsOpen = true }
+            // the Projects sheet: SLOOP's backups, or Skiff's 4 slots on the FM-1 beside the iPad's projects
+            if session.capabilities.contains(.projects) || session.dialect == .skiff { ui.projectsOpen = true }
         case .mixer: break
+        }
+    }
+
+    /// SAVE's PRESETS (35) and USER (36) pages: the Sounds tab, on the factory sounds or the user slots.
+    @MainActor private static func browse(user: Bool, session: DeviceSession, ui: EditorUI) {
+        go(.library, ui)
+        if user { ui.librarySection = .user }
+        else if ui.librarySection == .user, !session.selectedIsDrums { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
+    }
+
+    /// The SAVE pad on Skiff: PRESETS, USER, PATTERNS, PROJECT in turn, as the FM-1's SAVE steps its pages. From the
+    /// FM-1's screen when linked; otherwise from where Jib is.
+    @MainActor static func save(session: DeviceSession, ui: EditorUI) {
+        let now: Int? = if session.screenLinked, let s = session.deviceScreen, !s.home, (35...38).contains(s.page) { s.page }
+            else if ui.page == .song && ui.poolOpen { 37 }
+            else if ui.page == .library { ui.librarySection == .user ? 36 : 35 }
+            else { nil }
+        let next = now.map { $0 == 38 ? 35 : $0 + 1 } ?? 35
+        if session.screenLinked, ui.followDevice { session.showOnDevice(page: next) }
+        if next != 37 { ui.poolOpen = false }
+        switch next {
+        case 35, 36: browse(user: next == 36, session: session, ui: ui)
+        case 37: go(.song, ui); ui.poolOpen = true
+        default: ui.projectsOpen = true
         }
     }
 

@@ -1692,6 +1692,51 @@ public final class DeviceSession {
         Task { _ = try? await c.userLoad(slot: p.slot) }
     }
 
+    // MARK: Skiff's SAVE pages: USER's slots, PROJECT's slots
+
+    /// The FM-1's 4 project slots (Skiff), read when the Projects sheet opens and after a load or a save.
+    public private(set) var skiffProjects: SkiffProjects?
+
+    /// UP_STORE: the selected track's sound into user slot 0…31, then the slots read again. rc 0: done.
+    public func storeUserPreset(slot: Int, name: String) async -> Int {
+        guard let k = driver as? SkiffDriver, let rc = try? await k.userStore(slot: slot, name: name) else { return 2 }
+        if let u = try? await k.userPresets() { userPresets = u }
+        if rc == 0 { tracks[selectedTrack].presetName = name.uppercased() }
+        return rc
+    }
+    /// UP_ERASE: user slot 0…31 emptied, then the slots read again. rc 0: done.
+    public func eraseUserPreset(slot: Int) async -> Int {
+        guard let k = driver as? SkiffDriver, let rc = try? await k.userErase(slot: slot) else { return 2 }
+        if let u = try? await k.userPresets() { userPresets = u }
+        return rc
+    }
+
+    public func refreshSkiffProjects() async {
+        guard let k = driver as? SkiffDriver, let p = try? await k.projects() else { return }
+        if skiffProjects != p { skiffProjects = p }
+    }
+    /// PROJECT load of slot 0…3 (it stops the transport), then everything read again. False: an empty slot, or no answer.
+    public func loadSkiffProject(slot: Int) async -> Bool {
+        guard let k = driver as? SkiffDriver, (try? await k.projectLoad(slot: slot)) == true else { return false }
+        await rereadAfterProject()
+        if let store = skiffSong { await store.refresh(pool: true) }
+        await refreshSkiffProjects()
+        return true
+    }
+    /// SAVE AS into slot 0…3. rc 0: done.
+    public func saveSkiffProject(slot: Int, name: String) async -> Int {
+        guard let k = driver as? SkiffDriver, let rc = try? await k.projectSaveAs(slot: slot, name: name) else { return 2 }
+        await refreshSkiffProjects()
+        return rc
+    }
+    /// A whole backup of the FM-1, saved in the app's documents (Files): before a save over a project slot.
+    public func backUpDevice() async throws -> URL {
+        guard let d = driver else { throw ClientError.timeout("no FM-1") }
+        let b = try await backupTurn { try await BackupCapture.capture(driver: d) }
+        let docs = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        return try b.save(in: docs)
+    }
+
     /// What a clear took away, so the iPad can put it back (SLOOP's own undo covers device edits only).
     public struct ClearedTrack: Equatable, Sendable {
         public let track: Int

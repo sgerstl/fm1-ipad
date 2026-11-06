@@ -38,21 +38,29 @@ struct ProjectsSheet: View {
                 }
                 switch tab {
                 case .projects:
-                    Section {
-                        Button { request(nil) } label: { Label("New project", systemImage: "plus") }
-                            .disabled(!connected || store.busy != nil)
-                            .accessibilityHint("Clears the FM-1: empty tracks, no sections, the default sounds, 90 BPM")
-                        Button { naming = .saveAs(store.nextName()) } label: { Label("Save as…", systemImage: "square.and.arrow.down") }
-                            .disabled(!connected || store.busy != nil)
-                    } footer: {
-                        if !connected { Text("Plug in the FM-1 to open or save a project. You can still rename and delete.") }
-                    }
-                    Section {
-                        if store.projects.isEmpty {
-                            Text("No projects yet. Save what's on the FM-1 to make your first one.")
+                    if session.dialect == .skiff { SkiffProjectSlots(session: session) }
+                    if ipadProjects {
+                        Section {
+                            Button { request(nil) } label: { Label("New project", systemImage: "plus") }
+                                .disabled(!connected || store.busy != nil)
+                                .accessibilityHint("Clears the FM-1: empty tracks, no sections, the default sounds, 90 BPM")
+                            Button { naming = .saveAs(store.nextName()) } label: { Label("Save as…", systemImage: "square.and.arrow.down") }
+                                .disabled(!connected || store.busy != nil)
+                        } footer: {
+                            if !connected { Text("Plug in the FM-1 to open or save a project. You can still rename and delete.") }
+                        }
+                        Section {
+                            if store.projects.isEmpty {
+                                Text("No projects yet. Save what's on the FM-1 to make your first one.")
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            ForEach(store.projects) { row($0) }
+                        }
+                    } else {
+                        Section("On this iPad") {
+                            Text("Projects saved on this iPad open on SLOOP. On Skiff, save to the FM-1's slots above; the backups Lupe takes before a save are in Files.")
                                 .foregroundStyle(Theme.textSecondary)
                         }
-                        ForEach(store.projects) { row($0) }
                     }
                 case .safety:
                     Section {
@@ -104,6 +112,9 @@ struct ProjectsSheet: View {
         }
         .namePrompt($naming, store: store)
     }
+
+    /// SLOOP's backup objects make the iPad's projects; firmware without them (Skiff) has its own slots instead.
+    private var ipadProjects: Bool { session.dialect == nil || session.capabilities.contains(.projects) }
 
     // MARK: Rows
 

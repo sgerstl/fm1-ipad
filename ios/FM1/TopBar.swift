@@ -21,6 +21,7 @@ struct TopBar: View {
                 // collide with it)
                 HStack(spacing: 12) {
                     connection
+                    skiffProjectsKey
                     Spacer(minLength: 12)
                     tabs
                     Spacer(minLength: 12)
@@ -42,6 +43,20 @@ struct TopBar: View {
             }
         }
         .frame(height: 64)
+        .sheet(isPresented: projectsOpen) { ProjectsSheet(store: projects, session: session) }
+        .namePrompt($naming, store: projects)
+    }
+
+    /// Skiff's folder: the Projects sheet, its 4 slots on the FM-1 beside the iPad's projects (SAVE > PROJECT).
+    private var skiffProjectsKey: some View {
+        Button { ui.projectsOpen = true } label: {
+            Image(systemName: "folder").font(.system(size: 17)).foregroundStyle(Theme.textSecondary)
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Projects")
+        .accessibilityValue(session.skiffProjects.flatMap { p in p.name.isEmpty ? nil : p.name.capitalized + (p.changed ? ", changed" : "") } ?? "")
+        .accessibilityHint("The FM-1's project slots and the projects on this iPad")
     }
 
     // MARK: Connection: tap for the device / demo choice
@@ -163,8 +178,6 @@ struct TopBar: View {
                     .accessibilityLabel(projects.busy?.label ?? "Working")
             }
         }
-        .sheet(isPresented: projectsOpen) { ProjectsSheet(store: projects, session: session) }
-        .namePrompt($naming, store: projects)
     }
 
     private var projectName: String {

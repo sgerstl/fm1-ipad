@@ -312,7 +312,11 @@ struct PatternBin: View {
     @Binding var dragPattern: Int?
     /// The Song tab's drawer: the level-3 surface (held), not the bin's panel.
     var drawer = false
+    /// Where a pattern's own menu opens (Empty, Clear: the drawer's SAVE > PATTERNS housekeeping); nil: no menu.
+    var ui: EditorUI? = nil
     @State private var confirmClear = false
+    /// A one-pattern change waiting on its confirm: POOL op 1 (Clear) or 2 (Empty), and the pattern 0…63.
+    @State private var pending: (op: Int, p: Int)?
     @Environment(\.look) private var look
 
     /// Pattern (0...63) → the tracks whose lists name it.
@@ -367,6 +371,13 @@ struct PatternBin: View {
             } message: {
                 Text("Patterns no list and no saved project uses. This can't be undone.")
             }
+            .alert(pendingTitle, isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), presenting: pending) { x in
+                Button(x.op == 1 ? "Clear pattern" : "Empty pattern", role: .destructive) { run(x.op, x.p) }
+                Button("Cancel", role: .cancel) {}
+            } message: { x in
+                Text(x.op == 1 ? "Its number comes free for a new pattern. This can't be undone."
+                     : "Its steps go; the pattern and the entries that use it stay. This can't be undone.")
+            }
         }
         .padding(16)
         .frame(maxHeight: .infinity, alignment: .top)
@@ -401,8 +412,9 @@ struct PatternBin: View {
             }
             Spacer(minLength: 0)
             if n > 0 { Text("\(n)×").font(.system(size: 12)).foregroundStyle(Theme.textSecondary) }
+            if ui != nil, !free { PatternMore(number: p + 1) { at in openMenu(p, at: at) } }
         }
-        .padding(.horizontal, 8)
+        .padding(.leading, 8).padding(.trailing, ui != nil && !free ? 0 : 8)
         .frame(height: 40)
         .background { if selected { RoundedRectangle(cornerRadius: 8).fill(Theme.control) } }
         .contentShape(Rectangle())
@@ -418,6 +430,57 @@ struct PatternBin: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint(free ? "" : "Drag onto a track to add it")
+        .accessibilityAction(named: "Empty pattern") { if !free { ask(2, p) } }
+        .accessibilityAction(named: "Clear pattern") { if !free { ask(1, p) } }
+    }
+
+    private var pendingTitle: String {
+        guard let x = pending else { return "" }
+        return "\(x.op == 1 ? "Clear" : "Empty") pattern \(Entries.number(x.p + 1))?"
+    }
+
+    /// A pattern's menu: Empty (its steps), Clear (the number itself, when nothing uses it). Stopped only, as Skiff.
+    private func openMenu(_ p: Int, at: CGPoint) {
+        guard let ui else { return }
+        ui.menu = JibMenu(title: "Pattern \(Entries.number(p + 1))", groups: {
+            let uses = store.pool?.patterns[p].uses ?? 0
+            let playing = session.playing
+            var notes: [MenuItem] = []
+            if playing { notes.append(.note("Stop to change patterns: Skiff does this only while stopped.")) }
+            else if uses > 0 { notes.append(.note("Clear needs it unused: \(uses == 1 ? "1 entry or track uses" : "\(uses) entries and tracks use") it.")) }
+            return [[MenuItem(title: "Empty its steps…", icon: "square.dashed", enabled: !playing) { ask(2, p) },
+                     MenuItem(title: "Clear pattern…", icon: "trash", enabled: !playing && uses == 0) { ask(1, p) }]]
+                + (notes.isEmpty ? [] : [notes])
+        }, at: at)
+    }
+
+    private func ask(_ op: Int, _ p: Int) {
+        if session.playing { store.refuse(track: nil, entry: nil, SongRC.playing.reason, needsStop: true); return }
+        pending = (op, p)
+    }
+
+    private func run(_ op: Int, _ p: Int) {
+        Task {
+            let rc = await store.poolOp(op, pattern: p)
+            if !rc.isDone { store.refuse(track: nil, entry: nil, rc == .empty ? "Nothing there to \(op == 1 ? "clear" : "empty")" : rc.reason, needsStop: rc == .playing) }
+        }
+    }
+}
+
+/// A pattern row's "more" key: 44 pt square, its menu opening under it.
+private struct PatternMore: View {
+    let number: Int
+    let open: (CGPoint) -> Void
+    @State private var frame: CGRect = .zero
+
+    var body: some View {
+        Button { open(CGPoint(x: frame.minX - 220, y: frame.maxY)) } label: {
+            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                .frame(width: 44, height: 40).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .accessibilityLabel("Pattern \(Entries.number(number)) options")
     }
 }
 

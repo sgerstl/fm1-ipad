@@ -55,7 +55,7 @@ struct SkiffSongPage: View {
                     .allowsHitTesting(ui.dragPattern == nil)
                     .accessibilityHidden(true)
                 PatternBin(session: session, store: store, all: $allPatterns, selection: ui.pinnedEntry,
-                           dragPattern: Binding(get: { ui.dragPattern }, set: { ui.dragPattern = $0 }), drawer: true)
+                           dragPattern: Binding(get: { ui.dragPattern }, set: { ui.dragPattern = $0 }), drawer: true, ui: ui)
                     .frame(width: 288)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here

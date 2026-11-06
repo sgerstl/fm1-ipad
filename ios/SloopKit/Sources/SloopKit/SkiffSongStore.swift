@@ -334,6 +334,17 @@ public final class SkiffSongStore {
         for t in tracks { _ = await perform(t, last.tracks[t].entries, focus: nil) }
     }
 
+    /// EMPTY one pattern (its steps; every entry naming it stays) or CLEAR one nothing uses (POOL ops 2, 1): stopped only.
+    public func poolOp(_ op: Int, pattern p: Int) async -> SongRC {
+        guard let d = driver, !busy else { return .failed }
+        busy = true
+        defer { busy = false }
+        guard let r = try? await d.poolOp(op, pattern: p) else { return .failed }
+        pool = r.pool
+        if r.rc.isDone { if let s = try? await d.songLists() { song = s } }
+        return r.rc
+    }
+
     public func clearUnused() async -> SongRC {
         guard !busyRefusal(nil), let d = driver else { return .failed }
         busy = true

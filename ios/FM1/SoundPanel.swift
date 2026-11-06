@@ -169,6 +169,8 @@ struct SoundPanel: View {
                 Text("T\(t + 1) \(Entries.trackName(t, session: session)) · \(pages.count) page\(pages.count == 1 ? "" : "s")")
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
+                // SAVE > USER: the track's sound to a user slot, its name asked
+                if session.dialect == .skiff { SaveSoundKey(session: session, ui: ui) }
                 Button { ui.soundPanel?.pinned.toggle() } label: {
                     Label(state.pinned ? "Pinned" : "Pin", systemImage: state.pinned ? "pin.fill" : "pin")
                         .font(.system(size: 13, weight: .semibold)).padding(.horizontal, 12).frame(minHeight: 44)

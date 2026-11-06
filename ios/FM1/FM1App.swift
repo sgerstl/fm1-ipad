@@ -65,6 +65,7 @@ struct RootView: View {
         .environment(firmware)
         .overlay { TempoOverlay(session: session, ui: ui) }
         .overlay { JibMenuLayer(menu: $ui.menu) }
+        .modifier(SaveSoundPrompt(session: session, ui: ui))
         .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
         // Lupe's intro on every cold launch, over the app, which starts (and connects) underneath it
         .overlay { if !introOver { LaunchIntro { introOver = true } } }
@@ -152,6 +153,8 @@ final class EditorUI {
     var tempoAt: CGPoint?
     /// A Jib menu open over the app (the connection menu, the phone's ⋯, Library's slots).
     var menu: JibMenu?
+    /// A sound waiting on its name before it goes to a user slot (Skiff's SAVE > USER).
+    var saveSound: SaveSoundRequest?
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
@@ -178,7 +181,7 @@ final class EditorUI {
     var trackPicker: CGPoint?                    // the phone's one chip tapped (more than four tracks): the tracks, there
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: DeviceSession.ClearedTrack?   // offered for undo for a few seconds
-    var librarySection: LibrarySection = .engine(0)
+    var librarySection: LibrarySection = ProcessInfo.processInfo.arguments.contains("-library-user") ? .user : .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs.
     var presetsPanel = false
     /// The sampler is open: flipped in place of the grid (from a track's menu) or up from the bottom (Browse).

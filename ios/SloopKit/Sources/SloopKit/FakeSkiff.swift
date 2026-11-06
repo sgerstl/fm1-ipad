@@ -97,6 +97,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// Pages SCREEN_GOTO refuses as Skiff does for one the track's engine doesn't show (LANES on ANALOG).
     var refusedPages: Set<Int> = [18]
     var poolLen = Array(repeating: 0, count: 64)
+    /// USER's 32 slots (engine, name; nil empty) and PROJECT's 4 (nil empty), for the SAVE pages.
+    var userSlots: [(engine: Int, name: String)?] = Array(repeating: nil, count: 32)
+    var projectSlots: [String?] = ["SONG ONE", nil, nil, nil]
+    var musicSlot: Int? = 0
+    var projectLoads = 0
 
     /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
     public convenience init?(demo: Bool) {
@@ -113,6 +118,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
             if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }
             if a.contains("-demo-usr") { params[selected][138] = 3 }      // SAMPLE on USR1
+            // -demo-user-sounds: three of USER's slots hold sounds, and P1 and P2 hold projects (the SAVE pages' screenshots)
+            if a.contains("-demo-user-sounds") {
+                userSlots[0] = (0, "WARM PAD"); userSlots[1] = (2, "ACID LINE"); userSlots[4] = (0, "GLASS KEYS")
+                projectSlots[1] = "LIVE SET"
+            }
             // -demo-chord N: the selected track's CHORD (81: 1 DIA3 … 9 POW), for the SEL pages' screenshots
             if let i = a.firstIndex(of: "-demo-chord"), a.indices.contains(i + 1), let c = Int(a[i + 1]) { params[selected][81] = c }
             // -demo-mod-walk: MOD opened on the FM-1, then KNOB 1 walks its routes, a route every 1.5 s
@@ -185,6 +195,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     }
 
     private func uses(_ p: Int) -> Int { lists.reduce(0) { $0 + $1.filter { $0.p == p + 1 }.count } }
+
+    private func projectReply(_ op: UInt8, _ rc: UInt8) -> [UInt8] {
+        [op, rc, UInt8(musicSlot ?? 127), 0] + Array((musicSlot.flatMap { projectSlots[$0] } ?? "").utf8) + [0]
+            + projectSlots.flatMap { n -> [UInt8] in [n == nil ? 0 : 1] + Array((n ?? "").utf8) + [0] }
+    }
 
     private func poolReply(_ op: UInt8, _ rc: UInt8) -> [UInt8] {
         [op, rc] + (0..<64).flatMap { [UInt8(poolLen[$0]), UInt8(min(127, uses($0)))] }
@@ -476,7 +491,43 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             meterWatched = screenLink && screenLinkVersion >= 3 && a[0] & 8 != 0
             return [a[0] & (screenLink ? (screenLinkVersion >= 3 ? 15 : 7) : 3)]
         case (25, 0): return [0]
-        case (16, 2): return a[0] == 0 ? fx.userList : [a[0], 0, fx.userList.count > 2 ? fx.userList[2] : 32]
+        case (16, 2):
+            // UP_LIST: start, count, total, then per slot used, engine, name
+            let st = Int(a[0]), n = min(Int(a[1]), 32 - st)
+            return [a[0], UInt8(n), 32] + (st..<(st + n)).flatMap { k -> [UInt8] in
+                guard let u = userSlots[k] else { return [0, 0, 0] }
+                return [1, UInt8(u.engine)] + Array(u.name.utf8) + [0]
+            }
+        case (19, _) where a.count >= 2 && Int(a[0]) < 32:
+            // UP_STORE: the selected track's sound, under the name (as Skiff, upper case)
+            let name = String(decoding: a[1...].prefix { $0 != 0 }, as: UTF8.self).uppercased()
+            userSlots[Int(a[0])] = (engines[selected].engine, name)
+            return [a[0], 0]
+        case (21, 1) where Int(a[0]) < 32:
+            userSlots[Int(a[0])] = nil
+            return [a[0], 0]
+        case (9, 2) where a[0] == 0 && a[1] < 4:
+            // PROJECT load: a used slot replaces the music, the transport stopped
+            let k = Int(a[1]), used = projectSlots[k] != nil
+            if used { setPlaying(false); musicSlot = k; projectLoads += 1 }
+            return [0, a[1], used ? 1 : 0]
+        case (77, 0): return projectReply(0, 0)
+        case (77, _) where a.count >= 2 && a[0] == 1 && a[1] < 4:
+            setPlaying(false)
+            projectSlots[Int(a[1])] = String(decoding: a[2...].prefix { $0 != 0 }, as: UTF8.self).uppercased()
+            musicSlot = Int(a[1])
+            return projectReply(1, 0)
+        case (78, 2) where a[0] == 1 || a[0] == 2:
+            // CLEAR one nothing uses, or EMPTY one (its steps; it stays): stopped only
+            let p = Int(a[1])
+            // as skiff-sim: nothing there answers 1 before playing is refused
+            guard p < 64, poolLen[p] > 0 else { return poolReply(a[0], 1) }
+            if playing { return poolReply(a[0], 3) }
+            if a[0] == 1 {
+                guard uses(p) == 0 else { return poolReply(1, 2) }
+                poolLen[p] = 0
+            }
+            return poolReply(a[0], 0)
         case (20, 1): return [a[0], 1]
         case (8, 2):
             engines[selected] = (Int(a[0]), Int(a[1])); return [a[0], a[1]]

@@ -9,6 +9,8 @@ struct LibraryPage: View {
     let ui: EditorUI
     var columns = 4                 // 2 in the Presets panel on the Sequencer
     @State private var clearing: Int?
+    /// A user slot waiting on its erase confirm (Skiff's SAVE > USER).
+    @State private var erasing: UserPreset?
     /// The sound panel pushing the page (Browse, 2026-11-06): two columns while it's open, back to four after.
     @Environment(\.soundPanelRoom) private var panelRoom
 
@@ -18,7 +20,8 @@ struct LibraryPage: View {
         .padding(.trailing, panelRoom)       // the panel's room: the grid beside it, never under it
         .task(id: session.selectedTrack) {
             session.refreshLibrary()
-            if !session.selectedIsDrums { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
+            // the track's engine; the user slots stay (SAVE > USER lands here, and they aren't an engine's)
+            if !session.selectedIsDrums, ui.librarySection != .user { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
         }
     }
 
@@ -51,6 +54,9 @@ struct LibraryPage: View {
                             }
                             .id("preset-\(e)-\(i)")
                         }
+                    } else if skiff {
+                        // all 32 of Skiff's slots: a sound loads at a tap (its ⋯ replaces or erases it); an empty one saves
+                        ForEach(0..<32, id: \.self) { k in userSlot(k).id("user-\(k)") }
                     } else {
                         ForEach(session.userPresets) { p in
                             presetKey(p.name, detail: String(format: "U%02d · %@", p.slot + 1, engineName(p.engine)),
@@ -66,13 +72,61 @@ struct LibraryPage: View {
             }
             .scrollIndicators(.hidden)
             if session.isDrums(t) && session.kitNames.isEmpty { emptyNote("Reading the kits from the FM-1…") }
-            if !session.isDrums(t) && ui.librarySection == .user && session.userPresets.isEmpty {
+            if !session.isDrums(t) && ui.librarySection == .user && session.userPresets.isEmpty && !skiff {
                 emptyNote("No user presets yet. Save one on the FM-1: SAVE, then the USER page.")
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .panel()
+        .alert("Erase \(erasing.map { SaveSound.slotName($0.slot) } ?? "")?", isPresented: Binding(get: { erasing != nil }, set: { if !$0 { erasing = nil } }),
+               presenting: erasing) { p in
+            Button("Erase sound", role: .destructive) { Task { _ = await session.eraseUserPreset(slot: p.slot) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { p in
+            Text("“\(p.name.capitalized)” is removed from the FM-1. Tracks playing it keep their sound. This can't be undone.")
+        }
+    }
+
+    private var skiff: Bool { session.dialect == .skiff }
+
+    /// One of Skiff's 32 user slots. A sound: loads at a tap, its ⋯ menu replaces it with the track's sound or erases
+    /// it. Empty: a dashed key that saves the track's sound there (its name asked).
+    @ViewBuilder private func userSlot(_ k: Int) -> some View {
+        let t = session.selectedTrack, track = session.tracks[t]
+        if let p = session.userPresets.first(where: { $0.slot == k }) {
+            presetKey(p.name, detail: "\(SaveSound.slotName(k)) · \(engineName(p.engine))",
+                      current: track.presetName.uppercased() == p.name.uppercased() && track.engine == p.engine) { session.loadUserPreset(p) }
+                .overlay(alignment: .trailing) {
+                    UserSlotMore(name: p.name) { at in
+                        ui.menu = JibMenu(title: "\(SaveSound.slotName(k)) · \(p.name.capitalized)", groups: {
+                            [[MenuItem(title: "Replace with T\(t + 1)'s sound…", icon: "arrow.triangle.2.circlepath") {
+                                ui.saveSound = SaveSoundRequest(slot: k, replacing: p.name)
+                             }],
+                             [MenuItem(title: "Erase…", icon: "trash") { erasing = p }]]
+                        }, at: at)
+                    }
+                }
+        } else {
+            Button { ui.saveSound = SaveSoundRequest(slot: k) } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(SaveSound.slotName(k)).foregroundStyle(Theme.textSecondary)
+                        Text("Empty").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.ledOff, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSink())
+            .disabled(session.isDrums(t))
+            .accessibilityLabel("\(SaveSound.slotName(k)), empty")
+            .accessibilityHint("Saves track \(t + 1)'s sound here")
+        }
     }
 
     private var gridTitle: String {
@@ -89,7 +143,7 @@ struct LibraryPage: View {
             if case .engine(let e) = ui.librarySection { return session.namesCache[e]?.count ?? 0 }
             return session.userPresets.count
         }()
-        let what = session.isDrums(t) ? "kits" : ui.librarySection == .user ? "saved" : "presets"
+        let what = session.isDrums(t) ? "kits" : ui.librarySection == .user ? (skiff ? "of 32 saved" : "saved") : "presets"
         return columns < 4 ? "\(n) \(what)" : "\(n) \(what) · Tap one to load it onto track \(t + 1); its pattern, mix and key stay."
     }
 
@@ -232,4 +286,22 @@ struct LibraryEngines: View {
 enum LibrarySection: Equatable {
     case engine(Int)
     case user
+}
+
+/// A user slot's ⋯: its menu (replace, erase) under it, a 44 pt target at the key's right.
+private struct UserSlotMore: View {
+    let name: String
+    let open: (CGPoint) -> Void
+    @State private var frame: CGRect = .zero
+
+    var body: some View {
+        Button { open(CGPoint(x: frame.maxX - 300, y: frame.maxY)) } label: {
+            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                .frame(width: 44, height: 56).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .accessibilityLabel("Manage \(name.capitalized)")
+        .accessibilityHint("Replace or erase this saved sound")
+    }
 }
