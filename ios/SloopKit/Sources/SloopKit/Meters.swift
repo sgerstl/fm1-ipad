@@ -102,3 +102,37 @@ public final class TrackMeters {
         }
     }
 }
+
+/// The FM-1's output for the EDIT pages' scope, as Skiff draws it where an engine's EDIT page has no graph of its own
+/// (ui_graph.c graph_scope): Skiff's SCOPE push (the screen link's `56 01 04`, asked with WATCH bit 4 only while a
+/// scope is on show: DeviceSession.showScope), 120 samples 0…127 with 64 the centre line, already triggered on a rising
+/// zero crossing and auto-scaled, up to about 15 a second. Its own object, read only by the scope's drawing, so a
+/// frame redraws the scope and nothing else (the session's observers never see it).
+@MainActor @Observable
+public final class ScopeFrames {
+    /// The last frame; empty: nothing to draw but the centre line (none yet, or the frames stopped).
+    public private(set) var frame: [UInt8] = []
+
+    @ObservationIgnored private var flatten: Task<Void, Never>?
+    /// No frame this long: the trace goes flat (silence, or watching lapsed), never frozen on the last one.
+    public static let stale: Duration = .milliseconds(500)
+
+    public init() {}
+
+    /// A SCOPE push.
+    public func take(_ f: [UInt8]) {
+        if f != frame { frame = f }
+        flatten?.cancel()
+        flatten = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.stale)
+            guard !Task.isCancelled, let self else { return }
+            if !self.frame.isEmpty { self.frame = [] }
+        }
+    }
+
+    /// The device went away, or the scope left the screen.
+    public func reset() {
+        flatten?.cancel(); flatten = nil
+        if !frame.isEmpty { frame = [] }
+    }
+}

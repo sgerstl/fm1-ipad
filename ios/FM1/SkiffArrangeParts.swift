@@ -560,3 +560,82 @@ private struct BinPanel: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View { if on { content.panel() } else { content } }
 }
+
+/// The Song tab: the bar of the pattern the grid shows, framed on the block the grid is editing (the selected
+/// track's lane), as SLOOP's view box frames it on the overview (Overview.swift). It reads the grid's
+/// `viewStep` itself, in a frame as big as its lane that never changes size, so a pan redraws this box and
+/// nothing else (2026-11-07). On the repeat playing while the song plays (its pass, four times a second, as
+/// LaneMarks reads it), else the first. Dragged, it moves the grid bar by bar (`Lane.boxGesture`); with
+/// Reduce Motion it steps from bar to bar instead of sliding with the pan.
+struct GridViewBox<G: Gesture>: View {
+    let session: DeviceSession
+    let store: SkiffSongStore
+    let ui: EditorUI
+    let track: Int
+    /// The entry the grid edits, the block it's in, and that entry's part of the block (a chain's nth).
+    let entry: Int
+    let block: SongBlock
+    let part: Int
+    let barWidth: CGFloat
+    let laneWidth: CGFloat
+    let laneHeight: CGFloat
+    let gesture: G
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private func x(_ ticks: Double) -> CGFloat { CGFloat(ticks / SongPlacement.ticksPerBar) * barWidth }
+
+    var body: some View {
+        let _ = BodyCounter.tick("GridViewBox")
+        Group {
+            if session.playing, store.song?.tracks[safe: track]?.entryOn == entry {
+                TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+                    box(rep: (store.marks(track, launchIn: nil).pass ?? 1) - 1)
+                }
+            } else {
+                box(rep: 0)
+            }
+        }
+        .frame(width: laneWidth, height: laneHeight, alignment: .topLeading)
+    }
+
+    @ViewBuilder private func box(rep: Int) -> some View {
+        let len = max(1, session.tracks[safe: track]?.length ?? 16)
+        let bars = Self.bars(len)
+        let bar = Self.bar(ui.viewStep, bars: bars)
+        // Reduce Motion: the bar it settles on, not every point of the pan
+        let from = max(0, min(CGFloat(len), reduceMotion ? CGFloat(bar * 16) : ui.viewStep))
+        let to = min(CGFloat(len), from + 16)
+        if to > from, block.parts.indices.contains(part) {
+            let partTicks = block.parts[part]
+            let at = block.start + Double(max(0, min(block.reps - 1, rep))) * block.pass + block.parts[..<part].reduce(0, +)
+            // blocks sit 2 pt in and are 4 pt short of their span: the box overhangs its bar by 2 pt a side
+            let x0 = x(at + partTicks * Double(from) / Double(len))
+            let w = max(12, x(partTicks * Double(to - from) / Double(len)))
+            RoundedRectangle(cornerRadius: 6)
+                // light on the lane, with a dark keyline inside so its sides hold on a light track colour too
+                .strokeBorder(Theme.text, lineWidth: 2)
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.onColour, lineWidth: 1).padding(2))
+                .frame(width: w, height: laneHeight - 4)
+                // at least 28 pt to take hold of, however narrow the bar is drawn
+                .frame(width: max(w, 28), height: laneHeight - 4)
+                .contentShape(Rectangle())
+                .highPriorityGesture(gesture)
+                .accessibilityElement()
+                .accessibilityLabel("Grid view")
+                .accessibilityValue("bar \(bar + 1) of \(bars)")
+                .accessibilityHint(bars > 1 ? "Swipe up or down to show another bar in the grid" : "")
+                .accessibilityAdjustableAction { d in Self.show(ui, bar: bar + (d == .increment ? 1 : -1), bars: bars) }
+                .offset(x: x0 - (max(w, 28) - w) / 2, y: 2)
+        }
+    }
+
+    /// Bars of a pattern of `len` steps, as far as the grid pans (four).
+    static func bars(_ len: Int) -> Int { max(1, min(4, (len + 15) / 16)) }
+    static func bar(_ viewStep: CGFloat, bars: Int) -> Int { max(0, min(bars - 1, Int((viewStep / 16).rounded()))) }
+    /// The grid to that bar (the request the grids obey, followsView).
+    @MainActor static func show(_ ui: EditorUI, bar: Int, bars: Int) {
+        let b = max(0, min(bars - 1, bar))
+        if b == Self.bar(ui.viewStep, bars: bars) && ui.viewStep == CGFloat(b * 16) { return }
+        ui.viewJump = ViewJump(bar: b, id: (ui.viewJump?.id ?? 0) + 1)
+    }
+}

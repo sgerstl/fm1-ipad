@@ -174,8 +174,9 @@ public protocol FirmwareDriver: AnyObject, Sendable {
     func desc(scope: Int, id: Int) async throws -> ParamDesc
     /// The selected track's parameters and every global.
     func dump() async throws -> ParamDump
-    /// Starts the pushes; `screenLink` also asks for the screen state where the firmware has it.
-    func watch(screenLink: Bool) async throws
+    /// Starts the pushes; `screenLink` also asks for the screen state where the firmware has it, `scope` for SCOPE
+    /// (Skiff's `56 01 04`) while a scope is on show.
+    func watch(screenLink: Bool, scope: Bool) async throws
     func ping() async throws
     /// Loads a factory preset onto the selected track.
     func preset(engine: Int, index: Int) async throws -> (engine: Int, preset: Int)

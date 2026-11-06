@@ -287,7 +287,9 @@ struct SoundTab: View {
     /// Pages that drive one thing, shown as rows over its one graph: the first page's title → the others'.
     /// (Skiff's pairs on one graph: GR_LFO, GR_INS, and GR_ARP / GR_ARP2, both graph_arp. ENV and ENV 2 are both GR_ADSR
     /// but each draws its own envelope: two cards.)
-    static let merged: [String: [String]] = ["LFO": ["LFO 2"], "INSERT": ["INSERT 2"], "ARP": ["ARP 2"]]
+    /// EDIT 1 and EDIT 2 on one card with one graph (Scott, 2026-11-07): ANALOG's OSC and FLT side by side, the scope
+    /// on most other engines (EditGraph).
+    static let merged: [String: [String]] = ["LFO": ["LFO 2"], "INSERT": ["INSERT 2"], "ARP": ["ARP 2"], "EDIT 1": ["EDIT 2"]]
 
     var body: some View {
         let _ = BodyCounter.tick("SoundTab")
@@ -540,7 +542,7 @@ struct SoundCard: View, Equatable {
         // the knob being turned, here or on the FM-1 (marked), lights its point
         let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == g.id } }
             ?? marks.key.flatMap { m in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == m } }
-        if PageGraph.has(p) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: modRoute(p)) }
+        if PageGraph.has(p, session) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: modRoute(p)) }
     }
 
     /// KNOB 1's pick on an engine page (the lane, …): picked here, the FM-1's cursor goes there too, as MOD's route.

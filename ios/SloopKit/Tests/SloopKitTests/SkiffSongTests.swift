@@ -641,6 +641,61 @@ extension SkiffOnTheDeviceTests {
         run.cancel()
     }
 
+    /// SCOPE (93) decodes as its 120 samples, kept in 0…127.
+    @Test func scopeDecodes() throws {
+        let body = (0..<120).map { UInt8($0 % 128) }
+        #expect(try Push(cmd: 93, body: body) == .scope(body))
+        #expect(try Push(cmd: 93, body: [200 & 127, 64]) == .scope([72, 64]))
+        #expect(Cmd.pushes.contains(93))
+    }
+
+    /// The fourth build (56 01 04): SCOPE is asked for (WATCH bit 4) only while a scope is on show, its frames land in
+    /// the session's ScopeFrames, and the last scope leaving stops it and clears the trace.
+    @Test func theScopeBuildWatchesOnlyWhileShown() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.screenLink = true; fake.screenLinkVersion = 4
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        try await waitFor(10) { s.screenLinked && fake.meterWatched }
+        #expect(s.screenScope && !fake.scopeWatched && !s.scopeWatching)
+        let a = UUID(), b = UUID()
+        s.showScope(a, true); s.showScope(b, true)
+        try await waitFor(5) { fake.scopeWatched }
+        let frame = (0..<120).map { UInt8(64 + Int(40 * sin(Double($0) / 120 * 4 * .pi))) }
+        fake.push(93, frame)
+        try await waitFor(5) { s.scope.frame == frame }
+        s.showScope(a, false)                                            // one still on show: still watched
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(fake.scopeWatched && s.scopeWatching)
+        s.showScope(b, false)
+        try await waitFor(5) { !fake.scopeWatched }
+        #expect(s.scope.frame.isEmpty && fake.meterWatched)              // (METER carries on)
+        run.cancel()
+    }
+
+    /// The third build (56 01 03) has no SCOPE: a scope on show asks nothing of it.
+    @Test func theMeterBuildHasNoScope() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.screenLink = true; fake.screenLinkVersion = 3
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .seconds(60)
+        let run = Task { await s.run() }
+        try await waitFor(10) { s.screenLinked && fake.meterWatched }
+        s.showScope(UUID(), true)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!s.screenScope && !s.scopeWatching && !fake.scopeWatched)
+        run.cancel()
+    }
+
+    /// The fake's SCOPE is flat in silence (all 64, the centre line).
+    @Test func theFakeScopeIsFlatInSilence() throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        #expect(fake.scopeFrame() == [UInt8](repeating: 64, count: 120))
+    }
+
     /// Without METER, a track's notes: up to the velocity, held while sounding, then falling as the FM-1's meter.
     @Test func noteActivityRisesHoldsAndFalls() {
         let m = TrackMeters()

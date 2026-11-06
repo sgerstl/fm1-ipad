@@ -44,6 +44,11 @@ struct PageGraph: View {
         ["ENV", "ENV 2", "LFO", "LFO 2", "LFO DEST", "MOD", "FX", "DRIVE", "INSERT", "INSERT 2", "SLICER", "DUCK",
          "DELAY", "REVERB", "CHORUS", "GLOBAL", "VOICE", "ARP", "ARP 2", "SCALE", "CHORD", "FOLLOW"].contains(p.title)
     }
+    /// With the session: EDIT 1's card too (EDIT 1 and 2 share one graph, Scott 2026-11-07), where its engine draws
+    /// one Lupe has (EditGraph.kind: ANALOG's OSC and FLT, or the scope).
+    @MainActor static func has(_ p: SoundPage, _ session: DeviceSession) -> Bool {
+        has(p) || (p.title == "EDIT 1" && EditGraph.kind(session) != nil)
+    }
     /// Drawn in the panel under the cards on Skiff, shorter than the graphs drawn from the panel's top.
     static let short: Set<String> = ["FX", "SLICER", "DUCK", "SCALE"]
     @Environment(\.graphsDeferred) private var deferred
@@ -94,6 +99,15 @@ struct PageGraph: View {
             case "ARP", "ARP 2": Canvas { ctx, sz in ArpDrawing(v: arpValues).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("The arpeggio over 16 steps", "\(Music.arpModes[safe: arpValues[0]] ?? "OFF"), an example on C E G")
             case "MOD": ModGraph(session: session, page: page, route: $modRoute, colour: colour)
+            case "EDIT 1":
+                switch EditGraph.kind(session) {
+                case .analog?:
+                    let d = analogDrawing
+                    Canvas { ctx, sz in d.draw(ctx, Space(size: sz), colour) }
+                        .graphLabel("Oscillator and filter", d.spoken)
+                case .scope?: ScopeGraph(session: session, colour: colour)
+                case nil: EmptyView()
+                }
             default: EmptyView()
             }
             }
@@ -140,6 +154,20 @@ struct PageGraph: View {
         let ps = SoundPage.pages(session)
         let ids = ["ARP", "ARP 2"].flatMap { t in ps.first { $0.title == t }?.ids ?? [nil, nil, nil, nil] }
         return ids.map { id in id.map { session.cell($0).value } ?? 0 } + Array(repeating: 0, count: max(0, 8 - ids.count))
+    }
+
+    /// ANALOG's EDIT 1 (WAVE DETUNE MIX NOISE) and EDIT 2 (CUTOFF RESO …), from the merged card's rows.
+    private var analogDrawing: AnalogDrawing {
+        let ps = SoundPage.pages(session)
+        let e1 = (rows.first { $0.title == "EDIT 1" } ?? ps.first { $0.title == "EDIT 1" })?.ids ?? []
+        let e2 = (rows.first { $0.title == "EDIT 2" } ?? ps.first { $0.title == "EDIT 2" })?.ids ?? []
+        func v(_ ids: [Int?], _ k: Int) -> Int { (ids[safe: k] ?? nil).map { session.cell($0).value } ?? 0 }
+        func shown(_ ids: [Int?], _ k: Int) -> String {
+            guard let id = ids[safe: k] ?? nil else { return "" }
+            return formatValue(session.trackDesc(id), session.cell(id).value, skiff: true).shown
+        }
+        return AnalogDrawing(wave: v(e1, 0), detune: v(e1, 1), mix: v(e1, 2), noise: v(e1, 3),
+                             cutoff: v(e2, 0), cutoffText: shown(e2, 0), reso: v(e2, 1))
     }
 
     /// INSERT's TYPE A B C and INSERT 2's MIX, from the merged card's rows.
@@ -956,6 +984,151 @@ private struct GlobalDrawing {
         }
         for i in 0..<4 { s.text(ctx, "\(i + 1)", Double(14 + i * 52), 36, midColour, size: 13, weight: .semibold) }
         s.text(ctx, "SWING \(50 + swing * 50 / 250):\(50 - swing * 50 / 250)", 228, 16, midColour, anchor: .bottomTrailing)
+    }
+}
+
+
+// MARK: EDIT 1 and 2: ANALOG's OSC and FLT side by side, or the scope
+
+/// What EDIT 1 and 2's shared card draws, as Skiff's draw_graph picks for an engine page (ui_graph.c, its default
+/// case): ANALOG its own two (ui_pgraph.c graph_osc, graph_flt); WHEEL, SAMPLE and FM6 their own graphs, which Lupe
+/// doesn't draw yet (nil); every other engine the scope (graph_scope). Skiff only.
+enum EditGraph {
+    case analog, scope
+
+    static let analogEngine = 0, wheelEngine = 7
+    @MainActor static func kind(_ session: DeviceSession) -> EditGraph? {
+        guard session.dialect == .skiff else { return nil }
+        let e = session.tracks[session.selectedTrack].engine
+        if e == analogEngine { return .analog }
+        if [wheelEngine, SkiffPages.Engine.sample, SkiffPages.Engine.fm6].contains(e) { return nil }
+        return .scope
+    }
+}
+
+/// ANALOG's two graphs in one (Scott 2026-11-07: EDIT 1 and 2 share one graphic), side by side as DRIVE pairs its
+/// curve and its wave: graph_osc on the left half (x 12…116), graph_flt on the right (x 128…228), each Skiff's own
+/// drawing narrowed to its half, a hairline between them. OSC: the wave twice (Skiff three times across the panel) as
+/// the oscillator makes it (SAW SQR TRI SIN PWM; SYNC draws as SAW, SUB as SQR, wave % 5), the second one under it in
+/// grey a little out (DETUNE) while MIX lets it in, the first gone at MIX 127, NOISE's specks; the wave's name above,
+/// the second's detune below. FLT: the low pass's curve on a pitch axis, flat, a peak at CUTOFF as high as RESO, falling
+/// after, filled under, a dim line at CUTOFF and its value beside it, LOW and HIGH below.
+private struct AnalogDrawing {
+    let wave, detune, mix, noise, cutoff: Int, cutoffText: String, reso: Int
+    /// Named as Skiff names the drawing: wave % 5, so SYNC reads SAW and SUB SQR, the waves it draws.
+    static let names = ["SAW", "SQR", "TRI", "SIN", "PWM"]
+
+    /// osc_shape: the wave at phase f (0…1), ±1.
+    static func shape(_ w: Int, _ f: Double) -> Double {
+        let f = f - f.rounded(.down)
+        switch w {
+        case 1: return f < 0.5 ? 1 : -1
+        case 2: return f < 0.5 ? -1 + 4 * f : 3 - 4 * f
+        case 3: return sin(f * 2 * .pi)
+        case 4: return f < 0.25 ? 1 : -1
+        default: return -1 + 2 * f
+        }
+    }
+
+    var spoken: String {
+        let name = Self.names[((wave % 5) + 5) % 5]
+        let second = mix > 0 && detune > 0 ? ", a second one \(detune) cents up" : ""
+        return "\(name)\(second), low pass at \(cutoffText), resonance \(reso)"
+    }
+
+    func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        // OSC, x 12…116: a cycle 52 px (Skiff's 72 over 216)
+        let w = ((wave % 5) + 5) % 5, x0 = 12.0, ow = 104.0, cyc = 52.0
+        let k = 1 + Double(detune) / 1000                       // the second one's cycle a little shorter
+        if mix > 0 {
+            let pts = (0...Int(ow)).map { x in (x0 + Double(x), 72 - Self.shape(w, Double(x) / cyc * k) * 48) }
+            ctx.stroke(s.line(pts), with: .color(midColour), lineWidth: 1)
+        }
+        if mix < 127 {
+            let pts = (0...Int(ow)).map { x in (x0 + Double(x), 72 - Self.shape(w, Double(x) / cyc) * 48) }
+            ctx.stroke(s.line(pts), with: .color(c), style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
+        }
+        for i in 0..<max(0, noise / 3) {                       // NOISE's specks, the same each time
+            let h = UInt32(truncatingIfNeeded: (i + 1) &* 2_654_435_761)
+            ctx.fill(Path(s.r(x0 + Double(h % UInt32(ow)), 24 + Double((h >> 16) % 96), 2, 2)), with: .color(midColour))
+        }
+        s.text(ctx, Self.names[w], x0, 16, midColour)
+        if mix > 0, detune > 0 { s.text(ctx, "2ND ONE \(detune) CT UP", x0, 135, dimColour) }
+
+        ctx.fill(Path(s.r(122, 8, 1, 116)), with: .color(lineColour))
+
+        // FLT, x 128…228
+        let f0 = 128.0, fw = 100.0
+        let fc = Double(cutoff) / 127, xc = f0 + fc * fw
+        ctx.fill(Path(s.r(xc, 8, 1, 114)), with: .color(dimColour))
+        let peak = 0.62 + 0.38 * Double(reso) / 127
+        let pts: [(Double, Double)] = (0...Int(fw)).map { x in
+            let f = Double(x) / fw, d = fc - f
+            var l = d >= 0 ? 0.62 + (d < 0.06 ? (0.38 * Double(reso) / 127) * (0.0036 - d * d) / 0.0036 : 0) : peak + d * 3.2
+            l = max(0, l)
+            return (f0 + Double(x), 120 - l * 104)
+        }
+        var under = s.line(pts)
+        under.addLine(to: s.p(f0 + fw, 120)); under.addLine(to: s.p(f0, 120)); under.closeSubpath()
+        ctx.fill(under, with: .color(c.opacity(0.14)))
+        ctx.stroke(s.line(pts), with: .color(c), style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
+        if xc < 190 { s.text(ctx, cutoffText, xc + 5, 20, Theme.text) }
+        else { s.text(ctx, cutoffText, xc - 4, 20, Theme.text, anchor: .bottomTrailing) }
+        s.text(ctx, "LOW", f0, 135, dimColour)
+        s.text(ctx, "HIGH", 228, 135, dimColour, anchor: .bottomTrailing)
+    }
+}
+
+/// graph_scope: the FM-1's output, a 2 pt trace over a faint centre line across the panel (x 12…228, ±46 about the
+/// middle), from Skiff's SCOPE push (the screen link's fourth build), which arrives triggered and auto-scaled. Lupe
+/// asks for it (WATCH bit 4) only while this is on screen, scrolled into view and the app active (DeviceSession
+/// .showScope); the frames live in their own object (session.scope, ScopeFrames), read here only, so each one
+/// redraws this view and nothing else, in a fixed frame. Live whatever Reduce Motion says, as the LFO's wave: it's
+/// the instrument's sound, not decoration. Hidden from VoiceOver: it says nothing the columns don't, and a running
+/// trace has nothing to read. Older Skiff: a quiet note in the well.
+private struct ScopeGraph: View {
+    let session: DeviceSession
+    let colour: Color
+    @State private var id = UUID()
+    @State private var appeared = false
+    @State private var visible = true
+    @Environment(\.scenePhase) private var phase
+
+    var body: some View {
+        let on = appeared && visible && phase == .active
+        Group {
+            if session.screenScope {
+                ScopeTrace(frames: session.scope, colour: colour)
+            } else {
+                Text(session.screenLinked ? "Scope needs a newer Skiff 2.2 screen link" : "Scope needs Skiff 2.2 with the screen link")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .onAppear { appeared = true }
+        .onDisappear { appeared = false }
+        .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
+        .onChange(of: on, initial: true) { _, v in session.showScope(id, v) }
+        .onDisappear { session.showScope(id, false) }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The trace alone: the only view that reads a frame.
+private struct ScopeTrace: View {
+    let frames: ScopeFrames
+    let colour: Color
+
+    var body: some View {
+        let f = frames.frame
+        Canvas { ctx, sz in
+            let s = Space(size: sz), cy = gh / 2
+            ctx.fill(Path(s.r(12, cy, 216, 1)), with: .color(Theme.tones[2]))
+            guard f.count > 1 else { return }
+            let n = Double(f.count - 1)
+            let pts = f.enumerated().map { (12 + Double($0.offset) * 216 / n, cy - (Double($0.element) - 64) / 63 * 46) }
+            ctx.stroke(s.line(pts), with: .color(colour), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        }
     }
 }
 

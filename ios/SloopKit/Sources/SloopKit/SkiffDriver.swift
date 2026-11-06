@@ -67,6 +67,8 @@ public struct SkiffInfo: Equatable, Sendable {
     public var hasScreenCursor: Bool { (tags[0x56]?.first ?? 0) >= 2 }
     /// The third (`56 01 03`): METER, each track's level as the MIXER draws it, pushed with WATCH bit 3.
     public var hasMeter: Bool { (tags[0x56]?.first ?? 0) >= 3 }
+    /// The fourth (`56 01 04`): SCOPE, the FM-1's output as its EDIT pages' scope draws it, pushed with WATCH bit 4.
+    public var hasScope: Bool { (tags[0x56]?.first ?? 0) >= 4 }
 
     public var deviceInfo: DeviceInfo {
         DeviceInfo(version: version, engines: engines, paramCount: paramCount, globalCount: globalCount, stepCount: stepCount,
@@ -321,9 +323,11 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         try ParamDump(await request(SkiffCmd.dump, [], match: 0, "DUMP"), paramCount: info.paramCount, globalCount: info.globalCount)
     }
     /// WATCH 3: the pushes and TRACK_CHANGED. Skiff has no screen link.
-    /// WATCH: steps and parameters (bits 0, 1), and with the screen link patch the screen too (bit 2).
-    public func watch(screenLink: Bool) async throws {
+    /// WATCH: steps and parameters (bits 0, 1), and with the screen link patch the screen too (bit 2), METER (bit 3)
+    /// and, while a scope is on show (`scope`), SCOPE (bit 4).
+    public func watch(screenLink: Bool, scope: Bool) async throws {
         let bits = (screenLink && skiff.hasScreenLink ? 7 : 3) | (screenLink && skiff.hasMeter ? 8 : 0)
+            | (screenLink && scope && skiff.hasScope ? 16 : 0)
         _ = try await request(SkiffCmd.watch, [UInt8(bits)], match: 0, "WATCH")
     }
 

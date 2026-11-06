@@ -92,6 +92,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var meterWatched = false
     private var meterLevels = [Double](repeating: 0, count: 8)
     private var meterTick = 0
+    /// SCOPE (the fourth build, `screenLinkVersion` 4): asked with WATCH bit 4, pushed about 16 a second while playing:
+    /// the tracks sounding now, each a wave at its note's pitch as loud as its meter, summed, triggered and scaled as
+    /// the FM-1 sends it; flat once every track has fallen silent (and none while stopped: Lupe flattens it).
+    var scopeWatched = false
+    private var scopeNote = [Int](repeating: 60, count: 8)
     /// home, page, layer, menu, flags (the track is `selected`).
     var screen = (home: true, page: 0, layer: 0, menu: 0, flags: 0)
     /// Pages SCREEN_GOTO refuses as Skiff does for one the track's engine doesn't show (LANES on ANALOG).
@@ -114,6 +119,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             screenLink = a.contains("-demo-link")       // the screen link patch, so the button map can be seen
             if a.contains("-demo-link-v1") { screenLinkVersion = 1 }   // the first build: no cursor
             if a.contains("-demo-meter") { screenLinkVersion = 3 }     // the third: METER
+            if a.contains("-demo-scope") { screenLink = true; screenLinkVersion = 4 }   // the fourth: SCOPE (the link implied)
             // -demo-track N: track N selected (1…6), -demo-engine E: on engine E (DRUM-X 14, SLICE 13: none in the fixture)
             if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
             if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }
@@ -338,12 +344,37 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         for t in steps.indices where t < meterLevels.count {
             let fall = dt / 0.016 / 30
             meterLevels[t] = max(0, meterLevels[t] - fall)
-            if onStep, steps[t][step].first ?? 0 != 0, params[t][40] == 0 { meterLevels[t] = 0.85 }
+            if onStep, steps[t][step].first ?? 0 != 0, params[t][40] == 0 {
+                meterLevels[t] = 0.85
+                if steps[t][step].count > 1 { scopeNote[t] = Int(steps[t][step][1]) }
+            }
         }
         let b = meterLevels.prefix(steps.count).map { UInt8(min(127, max(0, Int($0 * 127)))) }
         let on = meterWatched && meterTick % 2 == 0
+        let scope = scopeWatched && meterTick % 3 == 0 ? scopeFrame() : nil
         lock.unlock()
         if on { push(92, b) }
+        if let scope { push(93, scope) }
+    }
+
+    /// SCOPE's 120 samples from the tracks sounding now (the lock held): each a wave of its note's pitch (2 cycles
+    /// across at C3, an octave up twice as many), a saw's first harmonics on ANALOG, a sine with its octave elsewhere,
+    /// started at phase 0 so the sum rises through the centre at the left as the FM-1's trigger puts it; auto-scaled
+    /// to ±58 about 64. All 64 in silence.
+    func scopeFrame() -> [UInt8] {
+        var y = [Double](repeating: 0, count: 120)
+        for t in steps.indices where t < meterLevels.count && meterLevels[t] > 0.02 {
+            let cycles = min(9, max(1, 2 * pow(2, Double(scopeNote[t] - 48) / 12)))
+            let saw = engines[t].engine == 0
+            for i in 0..<120 {
+                let ph = Double(i) / 120 * cycles * 2 * .pi
+                let w = saw ? sin(ph) + sin(2 * ph) / 2 + sin(3 * ph) / 3 : sin(ph) + 0.3 * sin(2 * ph)
+                y[i] += w * meterLevels[t]
+            }
+        }
+        let peak = y.map(abs).max() ?? 0
+        guard peak > 0.01 else { return [UInt8](repeating: 64, count: 120) }
+        return y.map { UInt8(min(127, max(0, Int((64 + $0 / peak * 58).rounded())))) }
     }
 
     deinit { clockTimer?.cancel() }
@@ -489,7 +520,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             watching = a[0] != 0
             screenWatched = screenLink && a[0] & 4 != 0
             meterWatched = screenLink && screenLinkVersion >= 3 && a[0] & 8 != 0
-            return [a[0] & (screenLink ? (screenLinkVersion >= 3 ? 15 : 7) : 3)]
+            scopeWatched = screenLink && screenLinkVersion >= 4 && a[0] & 16 != 0
+            return [a[0] & (screenLink ? (screenLinkVersion >= 4 ? 31 : screenLinkVersion >= 3 ? 15 : 7) : 3)]
         case (25, 0): return [0]
         case (16, 2):
             // UP_LIST: start, count, total, then per slot used, engine, name

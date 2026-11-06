@@ -169,6 +169,10 @@ public final class DeviceSession {
     public private(set) var skiffEdit: SkiffEditStore?
     /// Each track's level for the Mixer's lines: Skiff's METER when it sends one, else note activity.
     public let meters = TrackMeters()
+    /// The FM-1's output for an EDIT page's scope (Skiff's SCOPE): its own object, read only by the scope's drawing.
+    public let scope = ScopeFrames()
+    /// The scopes on show (showScope): SCOPE is asked for (WATCH bit 4) only while there is one.
+    @ObservationIgnored private var scopeViewers = Set<UUID>()
     /// The Skiff driver, for the sim tests' own requests (TRANSPORT, cleanup).
     var skiffSongDriverForTests: SkiffDriver? { driver as? SkiffDriver }
     /// MIDI clock pulses since Start (Skiff), for the song's playhead.
@@ -253,6 +257,8 @@ public final class DeviceSession {
     public private(set) var screenCursor = false
     /// The third (`56 01 03`): METER, each track's level. False on the builds before, which Lupe offers to update.
     public private(set) var screenMeter = false
+    /// The fourth (`56 01 04`): SCOPE, the FM-1's output for the EDIT pages' scope. False on the builds before.
+    public private(set) var screenScope = false
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
     /// Device changes in the last 250 ms, and when a sound last loaded: a burst of several parameters at once (a
@@ -356,6 +362,7 @@ public final class DeviceSession {
 
     private func connect(_ transport: SysExTransport) async {
         meters.reset()
+        scope.reset()
         settingsCache = nil; songOrder = nil; usbAudioFull = nil; usbAudioProblem = nil     // never write a settings object read from another FM-1
         sampleSlots = []
         liveSeen = false
@@ -391,7 +398,8 @@ public final class DeviceSession {
             if screenLinked { capabilities.insert(.screenLink) }
             screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
             screenMeter = screenLinked && (c as? SkiffDriver)?.skiff.hasMeter == true
-            try await c.watch(screenLink: screenLinked)
+            screenScope = screenLinked && (c as? SkiffDriver)?.skiff.hasScope == true
+            try await c.watch(screenLink: screenLinked, scope: !scopeViewers.isEmpty)
             if let s = c as? SkiffDriver {
                 if let store = skiffEdit { store.attach(s) } else {
                     let store = SkiffEditStore(driver: s)
@@ -1013,7 +1021,7 @@ public final class DeviceSession {
     private func pushLoop(_ c: FirmwareDriver) async {
         for await p in c.pushes {
             stats.pushes += 1
-            switch p { case .ui, .meter: break; default: onEdit?() }     // (levels aren't edits)
+            switch p { case .ui, .meter, .scope: break; default: onEdit?() }     // (levels and the scope aren't edits)
             switch p {
             case .stepChanged(let i, let t):
                 stats.stepPushes += 1
@@ -1041,6 +1049,8 @@ public final class DeviceSession {
                 adoptTrack(from: s)
             case .meter(let v):
                 meters.measure(v)
+            case .scope(let f):
+                if !scopeViewers.isEmpty { scope.take(f) }       // (one last frame after the scope left: dropped)
             }
         }
     }
@@ -1153,7 +1163,7 @@ public final class DeviceSession {
             }
             do {
                 try await c.ping()
-                if n % 10 == 0 { try await c.watch(screenLink: screenLinked) }   // watching ends on a USB reset: renew it
+                if n % 10 == 0 { try await c.watch(screenLink: screenLinked, scope: !scopeViewers.isEmpty) }   // watching ends on a USB reset: renew it
             } catch ClientError.closed { return } catch { stats.timeouts += 1 }
         }
     }
@@ -1812,6 +1822,22 @@ public final class DeviceSession {
             }
         }
     }
+
+    /// A scope (an EDIT page's, where the engine has no graph of its own) came on screen or left it, `id` its own. SCOPE
+    /// is asked for (WATCH bit 4) while any is on show and stopped when the last one goes, so the FM-1 sends its frames
+    /// only while one is drawn. Only on the screen link's fourth build (`screenScope`); elsewhere nothing is sent.
+    public func showScope(_ id: UUID, _ on: Bool) {
+        let was = !scopeViewers.isEmpty
+        if on { scopeViewers.insert(id) } else { scopeViewers.remove(id) }
+        let now = !scopeViewers.isEmpty
+        guard now != was else { return }
+        if !now { scope.reset() }
+        guard screenScope, let c = driver else { return }
+        // (the state as the request goes, not as it was asked: on and off quickly end on the last)
+        Task { try? await c.watch(screenLink: self.screenLinked, scope: !self.scopeViewers.isEmpty) }
+    }
+    /// Whether SCOPE is asked for now (a scope on show, on firmware with it): for the tests.
+    var scopeWatching: Bool { screenScope && !scopeViewers.isEmpty }
 
     /// Opens a page on the FM-1 (fm1-ipad firmware): its screen switches as if its button had been pressed.
     /// On Skiff with the screen link, SCREEN_GOTO: 127 is HOME, and a refused page answers the screen as it was,

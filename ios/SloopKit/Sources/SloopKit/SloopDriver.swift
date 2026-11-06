@@ -44,7 +44,7 @@ public final class SloopDriver: FirmwareDriver {
         try await client.dump(paramCount: info.paramCount, globalCount: info.globalCount)
     }
     /// WATCH 3: pushes and TRACK_CHANGED; 7 also the screen state (fm1-ipad firmware).
-    public func watch(screenLink: Bool) async throws { _ = try await client.watch(screenLink ? 7 : 3) }
+    public func watch(screenLink: Bool, scope: Bool) async throws { _ = try await client.watch(screenLink ? 7 : 3) }
     public func ping() async throws { try await client.ping() }
     public func preset(engine: Int, index: Int) async throws -> (engine: Int, preset: Int) {
         try await client.preset(engine: engine, index: index)

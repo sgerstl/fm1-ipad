@@ -638,6 +638,10 @@ struct Lane: View {
     @State private var finger: CGFloat?
     @State private var grab: CGFloat = 0
     @State private var laneFrame: CGRect = .zero
+    /// The grid's view box being dragged: the bar it started on and the bar asked for last; when it was last tapped.
+    @State private var boxFrom: Int?
+    @State private var boxBar: Int?
+    @State private var boxTapped: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let holdTime: Duration = .milliseconds(400)
@@ -696,6 +700,13 @@ struct Lane: View {
                         .allowsHitTesting(false)
                         .transition(reduceMotion ? .identity : .accordion)
                 }
+            }
+            if preview == nil, spot == nil, let g = gridEntry(list), let b = blocks.first(where: { $0.kind == .pattern && $0.entries.contains(g) }),
+               lifted != EntryRef(track: track, entry: b.entries.lowerBound) {
+                // the Song tab: the bar the grid shows, on the block it edits (the box reads the grid's place itself)
+                GridViewBox(session: session, store: store, ui: ui, track: track, entry: g, block: b, part: g - b.entries.lowerBound,
+                            barWidth: barWidth, laneWidth: width, laneHeight: laneHeight,
+                            gesture: boxGesture(b, entry: g))
             }
             if session.playing, let on = list.entryOn, let i = keyed.firstIndex(where: { $0.block.entries.contains(on) }) {
                 // how far through its pass the track is, under the block it plays
@@ -916,12 +927,59 @@ struct Lane: View {
             }
     }
 
+    /// The Song tab: the entry the grid below edits, when it's on this lane and loaded (the editor's own rule,
+    /// PatternPane: the entry pinned on the selected track, else the one it plays; pinned elsewhere while
+    /// playing, the grid is greyed and there's no box).
+    private func gridEntry(_ list: SongList) -> Int? {
+        guard compact, track == session.selectedTrack, let on = list.entryOn, !(list.entries[safe: on]?.isRest ?? true) else { return nil }
+        if let p = ui.pinnedEntry, p.track == track, p.entry != on { return nil }
+        return on
+    }
+
+    /// The grid's view box: dragged, the grid follows bar by bar (one request per bar, as SLOOP's overview); a
+    /// tap is a tap on its block (select, twice to open), and held still it lifts the block like the rest of it.
+    private func boxGesture(_ b: SongBlock, entry e: Int) -> some Gesture {
+        let ref = EntryRef(track: track, entry: b.entries.lowerBound)
+        return DragGesture(minimumDistance: 0, coordinateSpace: laneSpace)
+            .updating($press) { _, state, _ in if state == nil { state = ref } }
+            .onChanged { v in
+                last = v.location
+                if lifted == ref { carry(b, ref: ref, at: v.location); return }
+                travel = max(travel, hypot(v.translation.width, v.translation.height))
+                let k = e - b.entries.lowerBound
+                guard travel > 4, b.parts.indices.contains(k) else { return }
+                let len = max(1, session.tracks[safe: track]?.length ?? 16)
+                let bars = GridViewBox<DragGesture>.bars(len)
+                if boxFrom == nil { boxFrom = GridViewBox<DragGesture>.bar(ui.viewStep, bars: bars) }
+                let barPx = max(8, x(b.parts[k] * 16 / Double(len)))
+                let bar = max(0, min(bars - 1, (boxFrom ?? 0) + Int((v.translation.width / barPx).rounded())))
+                if bar != boxBar { boxBar = bar; GridViewBox<DragGesture>.show(ui, bar: bar, bars: bars) }
+            }
+            .onEnded { v in
+                let dragged = boxFrom != nil
+                boxFrom = nil
+                boxBar = nil
+                if lifted == ref {
+                    release(b, ref: ref, at: CGPoint(x: v.location.x + laneFrame.minX, y: v.location.y + laneFrame.minY))
+                    return
+                }
+                guard !dragged, travel <= 4 else { return }
+                if let t = boxTapped, Date().timeIntervalSince(t) < 0.3 {
+                    boxTapped = nil
+                    open(b)
+                } else {
+                    boxTapped = Date()
+                    selection = EntryRef(track: track, entry: e)
+                }
+            }
+    }
+
     /// The edge's hold: lifts the block if the finger is still down, near where it started, 0.4 s on.
     private func startHold(_ r: EntryRef) {
         travel = 0
         holdTimer = Task { @MainActor in
             try? await Task.sleep(for: Self.holdTime)
-            guard !Task.isCancelled, press == r, travel < Self.holdSlop, stretch == nil, !store.offline, lifted == nil else { return }
+            guard !Task.isCancelled, press == r, travel < Self.holdSlop, stretch == nil, boxFrom == nil, !store.offline, lifted == nil else { return }
             liftedAt = last
             lifted = r
         }
