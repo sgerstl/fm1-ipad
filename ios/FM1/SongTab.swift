@@ -177,27 +177,46 @@ struct PatternPane: View {
                 .accessibilityHint("Gives this entry its own copy of the pattern")
             }
             Spacer(minLength: 0)
-            if let p = pinned {
-                Label("Pinned to entry \(Entries.letter(p.entry))", systemImage: "pin").font(.system(size: 13))
-                    .padding(.horizontal, 10).frame(height: 36)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
-                Button { ui.pinnedEntry = nil } label: {
-                    Text("Follow").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 14).frame(height: 36).raisedKey()
-                }
-                .buttonStyle(PressSink())
-                .accessibilityHint("Shows the pattern each track plays now again")
-            } else {
-                HStack(spacing: 6) {
-                    Circle().fill(Color(hex: 0x30D158)).frame(width: 8, height: 8).accessibilityHidden(true)
-                    Text("Following the song").font(.system(size: 13, weight: .semibold))
-                }
-                .padding(.horizontal, 10).frame(height: 36)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.tones[2]))
-                .accessibilityElement(children: .combine)
-            }
+            // what's picked and what can be done to it: in the header's empty middle, under the divider's handle
+            // (Scott, 2026-11-06: over the grid's foot it covered the velocity and the motion lanes)
+            SelectionBar(edits: StepEdits(session: session, ui: ui, track: t,
+                                          rows: session.isKit(t) ? [] : PianoRoll.rows(session.tracks[t], keeping: ui.keptRows[t] ?? [])),
+                         notes: !session.isKit(t), inline: true)
+                .fixedSize()
+            Spacer(minLength: 0)
+            followToggle(t, entry: entry, pinned: pinned)
         }
         .frame(height: Self.headerHeight)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { headerFrame = $0 }
+    }
+
+    /// Follow, one toggle (Scott, 2026-11-06: "Following the song" was a pill that looked like a button, beside a real
+    /// Follow button). On: sunk with its LED lit, the editor showing what the track plays now. Off: raised, and it
+    /// says which entry it's pinned to; tapped, it follows again. Tapped while following, it pins the entry playing.
+    private func followToggle(_ t: Int, entry: Int?, pinned: EntryRef?) -> some View {
+        let on = pinned == nil
+        return Button {
+            if on { if let entry { ui.pinnedEntry = EntryRef(track: t, entry: entry) } } else { ui.pinnedEntry = nil }
+        } label: {
+            HStack(spacing: 8) {
+                LED(on: on)
+                Text("Follow").font(.system(size: 13, weight: on ? .semibold : .regular))
+                if let p = pinned {
+                    Label("pinned to \(Entries.letter(p.entry))", systemImage: "pin.fill")
+                        .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 14).frame(height: 36).latchedKey(on)
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink(latched: on))
+        .disabled(on && entry == nil)
+        .help(on ? "Following the song: tap to stay on this entry" : "Pinned to entry \(Entries.letter(pinned!.entry)): tap to follow the song")
+        .accessibilityLabel("Follow the song")
+        .accessibilityValue(on ? "on" : "off, pinned to entry \(Entries.letter(pinned!.entry))")
+        .accessibilityHint(on ? "Keeps the editor on this entry" : "Shows the pattern each track plays now again")
+        .accessibilityAddTraits(on ? [.isToggle, .isSelected] : .isToggle)
     }
 
     /// The picker: the pool's patterns, those in use and the free ones, and a new empty one (LIST op 1, op 7).
@@ -217,21 +236,24 @@ struct PatternPane: View {
     }
 
     /// Pinned to an entry that isn't what the track plays: Skiff edits the pattern a track has, and sending the
-    /// track there while playing would launch it, so it opens on STOP.
+    /// track there while playing would launch it, so it opens on STOP. (Wording, Scott 2026-11-06: plain English, no
+    /// firmware talk; what each button does said on it.)
     private func notLoaded(_ p: EntryRef, list: SongList?) -> some View {
-        VStack(spacing: 12) {
-            Text("Entry \(Entries.letter(p.entry))'s pattern opens when the song stops")
+        let c = Entries.letter(p.entry)
+        return VStack(spacing: 12) {
+            Text("Entry \(c) can't open while the song plays")
                 .font(.system(size: 17, weight: .semibold))
-            Text("Skiff edits the pattern a track is playing; going to entry \(Entries.letter(p.entry)) now would launch it.")
+                .accessibilityAddTraits(.isHeader)
+            Text("Opening it now would make this track jump to \(c).")
                 .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
             HStack(spacing: 8) {
                 Button { session.setPlaying(false) } label: {
-                    Text("Stop").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
+                    Text("Stop and edit \(c)").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
                         .padding(.horizontal, 18).frame(minHeight: 44).raisedKey(primary: true)
                 }
                 .buttonStyle(PressSink())
                 Button { ui.pinnedEntry = nil } label: {
-                    Text("Follow").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 18).frame(minHeight: 44).raisedKey()
+                    Text("Follow the song").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 18).frame(minHeight: 44).raisedKey()
                 }
                 .buttonStyle(PressSink())
             }

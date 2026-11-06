@@ -117,73 +117,75 @@ struct StepEdits {
     }
 }
 
-/// The bar under the grid while something's picked, and the line after a change (with Undo).
+/// What's picked and what can be done to it, and the line after a change (with Undo). Icon keys (Scott, 2026-11-06:
+/// the old bar of words covered the velocity and the motion lanes): on the Song tab it sits in the pattern header's
+/// empty middle, under the divider's handle (`inline`), so nothing over the grid's foot is covered; on Sequence it
+/// still floats over the grid's foot. Every key is 44 pt to touch (36 pt drawn), named for VoiceOver and the pointer.
 struct SelectionBar: View {
     let edits: StepEdits
     var notes = true                      // the drum grid: steps only (no transpose)
+    var inline = false                    // the Song tab's pattern header: no floating panel of its own
 
     var body: some View {
         let ui = edits.ui
-        VStack(spacing: 6) {
-            if let u = ui.patternUndo, u.track == edits.track {
-                HStack(spacing: 10) {
-                    Text(u.said).font(.system(size: 13))
-                    Button("Undo") { edits.undo() }.font(.system(size: 13, weight: .semibold)).frame(minHeight: 36)
-                        .keyboardShortcut("z", modifiers: .command)
-                    Button { ui.patternUndo = nil } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
-                        .frame(width: 36, height: 36).accessibilityLabel("Dismiss")
+        let undo = ui.patternUndo.flatMap { $0.track == edits.track ? $0 : nil }
+        let picking = edits.any || ui.clip != nil
+        HStack(spacing: 0) {
+            if picking {
+                Text(ui.stepSel.isEmpty ? "\(ui.noteSel.count) note\(ui.noteSel.count == 1 ? "" : "s")" : "steps \(label(ui.stepSel))")
+                    .font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
+                    .padding(.horizontal, 8)
+                if edits.any {
+                    icon("plus.square.on.square", "Duplicate after", primary: true) { edits.duplicateAfter() }
+                    icon("doc.on.doc", "Copy") { edits.copy() }
                 }
-                .padding(.horizontal, 12)
-                .background(Capsule().fill(Theme.control))
+                if ui.clip != nil { icon("doc.on.clipboard", "Paste at the selected step") { edits.paste() } }
+                if edits.any {
+                    gap
+                    icon("arrow.left", "Move a step earlier") { edits.move(by: -1) }
+                    icon("arrow.right", "Move a step later") { edits.move(by: 1) }
+                    if notes {
+                        gap
+                        icon("arrow.down", "Transpose down a semitone") { edits.transpose(-1) }
+                        icon("arrow.up", "Transpose up a semitone") { edits.transpose(1) }
+                    }
+                    gap
+                    icon("trash", "Delete") { edits.delete() }
+                    icon("xmark", "Cancel the selection") { edits.clear() }.keyboardShortcut(.cancelAction)
+                }
             }
-            if edits.any || ui.clip != nil {
-                HStack(spacing: 6) {
-                    Text(ui.stepSel.isEmpty ? "\(ui.noteSel.count) note\(ui.noteSel.count == 1 ? "" : "s")" : "steps \(label(ui.stepSel))")
-                        .font(.system(size: 13, weight: .semibold)).padding(.horizontal, 8)
-                    if edits.any {
-                        key("Duplicate after", primary: true) { edits.duplicateAfter() }
-                        key("Copy") { edits.copy() }
-                    }
-                    if ui.clip != nil { key("Paste") { edits.paste() } }
-                    if edits.any {
-                        Text("Move").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).padding(.leading, 4)
-                        icon("chevron.left", "Move a step earlier") { edits.move(by: -1) }
-                        icon("chevron.right", "Move a step later") { edits.move(by: 1) }
-                        if notes {
-                            Text("Transpose").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).padding(.leading, 4)
-                            icon("minus", "Transpose down a semitone") { edits.transpose(-1) }
-                            icon("plus", "Transpose up a semitone") { edits.transpose(1) }
-                        }
-                        key("Delete") { edits.delete() }
-                        key("Cancel") { edits.clear() }.keyboardShortcut(.cancelAction)
-                    }
-                }
-                .padding(6)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.selected, Look()))
+            if let u = undo {
+                if picking { gap }
+                // what changed, in words while there's room (it gives way first), and Undo
+                Text(u.said).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    .padding(.horizontal, 6).layoutPriority(-1)
+                    .accessibilityHidden(true)
+                icon("arrow.uturn.backward", "Undo: \(u.said)") { edits.undo() }.keyboardShortcut("z", modifiers: .command)
+                if !picking { icon("xmark", "Dismiss") { ui.patternUndo = nil } }
             }
         }
+        .padding(.horizontal, inline ? 0 : 4)
+        .background { if !inline && (picking || undo != nil) { RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.selected, Look()) } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Selection")
     }
+
+    /// 8 pt more between groups (the keys already sit 8 pt apart inside their 44 pt targets).
+    private var gap: some View { Color.clear.frame(width: 8, height: 1).accessibilityHidden(true) }
 
     private func label(_ s: Set<Int>) -> String {
         guard let a = s.min(), let b = s.max() else { return "" }
         return s.count == b - a + 1 ? (a == b ? "\(a + 1)" : "\(a + 1)–\(b + 1)") : "\(s.count) picked"
     }
 
-    private func key(_ t: String, primary: Bool = false, _ action: @escaping () -> Void) -> some View {
+    private func icon(_ s: String, _ label: String, primary: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(t).font(.system(size: 13, weight: .semibold)).foregroundStyle(primary ? Theme.onColour : Theme.text)
-                .padding(.horizontal, 10).frame(minHeight: 36).raisedKey(primary: primary).contentShape(Rectangle())
+            Image(systemName: s).font(.system(size: 15, weight: .semibold)).foregroundStyle(primary ? Theme.onColour : Theme.text)
+                .frame(width: 36, height: 36).raisedKey(primary: primary)
+                .frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
-    }
-
-    private func icon(_ s: String, _ label: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: s).font(.system(size: 13, weight: .semibold)).frame(width: 36, height: 36).raisedKey().contentShape(Rectangle())
-        }
-        .buttonStyle(PressSink())
+        .help(label)
         .accessibilityLabel(label)
     }
 }

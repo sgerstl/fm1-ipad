@@ -75,7 +75,7 @@ struct DrumGrid: View {
         .frame(height: editorHeight)
         .panel()
         .overlay(alignment: .bottom) {
-            if session.dialect == .skiff { SelectionBar(edits: StepEdits(session: session, ui: ui, track: dt), notes: false).padding(.bottom, 12) }
+            if session.dialect == .skiff, !inSongTab { SelectionBar(edits: StepEdits(session: session, ui: ui, track: dt), notes: false).padding(.bottom, 12) }
         }
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
     }
