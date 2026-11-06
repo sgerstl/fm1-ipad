@@ -3,7 +3,8 @@ import Testing
 @testable import SloopKit
 
 /// Against skiff-sim (Skiff 2.2's own firmware on the Mac, `skiff-sim/`), over CoreMIDI. Skipped unless
-/// SKIFF_SIM=1, so `swift test` stays offline. Run the sim first: `skiff-sim/build/skiff-sim`.
+/// SKIFF_SIM=1, so `swift test` stays offline. Run the sim first: `skiff-sim/build/skiff-sim`. With several sims
+/// running, give yours a --name and FELUCCA_PORT=<that name>.
 ///   SKIFF_SIM=1 swift test --filter SkiffSimTests
 /// SKIFF_RECORD=1 also writes Sources/SloopKit/Resources/skiff-2.2.json (what FakeSkiff answers with) from the sim.
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["SKIFF_SIM"] == "1"))
@@ -43,6 +44,39 @@ import Testing
             #expect((r.rc == .done) == SkiffMotion.recordable(id), "id \(id): rc \(r.rc)")
             if r.rc == .done { _ = try await d.deleteMotion(track: 0, step: 63, id: id) }
         }
+    }
+
+    /// The motion lane editor's stroke against the firmware: stopped, a painted plan lands as planned (a change where
+    /// the value changes, what played after it put back); playing, what Skiff answers a write is noted. Cleans up.
+    @Test func aPaintedStrokeLandsOnTheFirmware() async throws {
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return MIDITransport() })
+        let run = Task { await session.run() }
+        try await waitFor(20) { if case .connected = session.status { true } else { false } }
+        let t = 5, id = 36                                              // T6, REVERB send
+        await session.clearMotionLane(track: t, id: id)
+        let base = session.cell(id).value
+        let p = MotionPaint.plan(events: session.motion[t]?.events ?? [], id: id, base: base,
+                                 painted: [40: 77, 41: 77, 42: 99, 43: 99], lock: false, steps: 64)
+        #expect(p.writes.map(\.step) == [44, 40, 42] && p.cost == 3)
+        #expect(await session.paintMotion(track: t, id: id, plan: p) == nil)
+        await session.readMotion(track: t)
+        let m = try #require(session.motion[t])
+        #expect(m.value(of: id, at: 41, base: base).value == 77 && m.value(of: id, at: 43, base: base).value == 99)
+        #expect(m.value(of: id, at: 44, base: base).value == base && m.record(id, at: 41) == nil)
+
+        // playing: what the firmware says to a write (Lupe's lanes don't offer one, but the answer is worth knowing)
+        session.setPlaying(true)
+        try await waitFor(5) { session.playing }
+        let rc = await session.setMotion(track: t, step: 50, id: id, value: 10, lock: false)
+        print("skiff-sim: a MOTION write while playing (pattern, not song) answered \(String(describing: rc))")
+        session.setPlaying(false)
+        try await waitFor(5) { !session.playing }
+
+        await session.clearMotionLane(track: t, id: id)
+        await session.readMotion(track: t)
+        #expect(session.motion[t]?.events.contains { $0.id == id } != true)
+        run.cancel()
     }
 
     @Test func stepsRoundTripKeepingSkiffsBytes() async throws {

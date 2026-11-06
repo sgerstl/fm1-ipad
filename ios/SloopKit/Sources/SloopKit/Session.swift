@@ -1114,6 +1114,18 @@ public final class DeviceSession {
         for e in motion[t]?.events.filter({ $0.id == id }) ?? [] { await deleteMotion(track: t, step: e.step, id: id) }
     }
 
+    /// A painted stroke's plan (MotionPaint) sent: its deletes, then its writes in order, stopping at the first one
+    /// Skiff refuses (the 64 used, a song playing), which is said on the lanes as any refusal. nil: all taken.
+    @discardableResult
+    public func paintMotion(track t: Int, id: Int, plan: MotionPaint.Plan) async -> MotionRC? {
+        for s in plan.deletes { await deleteMotion(track: t, step: s, id: id) }
+        for w in plan.writes {
+            let rc = await setMotion(track: t, step: w.step, id: id, value: w.value, lock: w.lock)
+            if rc != .done { return rc ?? .invalid }
+        }
+        return nil
+    }
+
     /// The locks on `step` gone, its recorded changes kept (MOTION op 6).
     public func clearLocks(track t: Int, step: Int) async {
         guard let k = driver as? SkiffDriver, trackIndices.contains(t) else { return }
