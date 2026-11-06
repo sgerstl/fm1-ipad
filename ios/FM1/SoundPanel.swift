@@ -5,13 +5,13 @@ import SwiftUI
 // FX, SEL, EDIT and ARP (the rail down the right edge, or the FM-1's own buttons) bring in the selected track's
 // sound from the right, at level 3 over the song and the pattern: the sound and its Sounds browser on top, that
 // button's Shape cards below (ShapeSection, the Shape tab's own). Another button switches it; the same one again
-// steps its pages, as on the FM-1 (the page's card scrolls to the top and lights); HOME, ✕, Escape or a tap outside
-// closes it, and Pin keeps it open. Built to drop into the Mixer tab later as it is.
+// steps its pages, as on the FM-1 (the page's card scrolls to the top and lights); HOME, the close arrow, Escape or
+// another tab closes it. Since 2026-11-06 (Scott) the page beside it stays live, every tab: a tap on the page is the
+// page's own and never closes the panel, so Pin had no job left and went.
 
-/// What the panel shows: a button's pages, and whether it stays open on a tap outside.
+/// What the panel shows: a button's pages.
 struct SoundPanelState: Equatable {
     var family: SoundFamily
-    var pinned = false
 }
 
 enum SoundPanelControl {
@@ -27,7 +27,7 @@ enum SoundPanelControl {
             if !fromDevice { step(f, session: session, ui: ui) }
             return
         }
-        ui.soundPanel = SoundPanelState(family: f, pinned: ui.soundPanel?.pinned ?? false)
+        ui.soundPanel = SoundPanelState(family: f)
         ui.soundFamily = f
         guard !fromDevice, let first = SoundPage.reached(session, f).first else { return }
         ui.focus(first)
@@ -68,11 +68,8 @@ enum SoundPanelControl {
         return "No \(f.rawValue) pages on \(t.engineName.isEmpty ? "this engine" : t.engineName)"
     }
 
-    /// Closed (✕, HOME, a tap outside unless pinned, another tab).
-    @MainActor static func close(_ ui: EditorUI, unlessPinned: Bool = false) {
-        guard let p = ui.soundPanel, !(unlessPinned && p.pinned) else { return }
-        ui.soundPanel = nil
-    }
+    /// Closed (the close arrow, HOME, Escape, another tab).
+    @MainActor static func close(_ ui: EditorUI) { ui.soundPanel = nil }
 }
 
 /// The rail: the six buttons with pages, as the FM-1's keys; the one whose pages are open is lit.
@@ -124,13 +121,17 @@ struct SoundPanel: View {
     @State private var settled = false          // slid in: the cards' graphs draw from then (not while it moves)
     @Environment(\.look) private var look
     static let width: CGFloat = 430
+    /// The Song tab's step while the panel is open (SoundPanelHost).
+    static let openStep: CGFloat = 24
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The button's pages as chips: tap one to bring it forward (and onto the FM-1), as pressing the key again steps
     /// them. The one on the FM-1 (or focused here) is lit.
     /// The panel's pages as the FM-1 labels its buttons (Scott, 2026-11-06): plain words that light when theirs is the
     /// page, no pill. Unlit in the secondary grey; lit in the primary text with a soft glow and the heavier weight
-    /// (its width held by the heavier word, so nothing shifts). 44 pt high to tap.
+    /// (its width held by the heavier word, so nothing shifts). 44 pt high to tap. Over the lit one, a lit white line
+    /// as wide as its word (Scott, 2026-11-06: as the Mixer marks the section on the FM-1, DeviceEdge's 3 pt line and
+    /// glow); the weight and the selected trait still say it without the line.
     private func pageChips(_ pages: [SoundPage]) -> some View {
         let current = session.screenLinked ? pages.first { SoundCard.onDevice(session, $0) }?.id : ui.focusedPage?.id
         // (the track's colour was tried: it reads more like an LED, but its orange is 3.4:1 on the panel; text is 9:1)
@@ -151,6 +152,14 @@ struct SoundPanel: View {
                                     .shadow(color: on ? lit.opacity(0.55) : .clear, radius: 6)
                             }
                             .padding(.horizontal, 12).frame(minHeight: 44)
+                            .overlay(alignment: .top) {
+                                RoundedRectangle(cornerRadius: 1.5).fill(lit)
+                                    .frame(height: 3)
+                                    .glow(lit.opacity(0.7), radius: 6)
+                                    .padding(.horizontal, 12).padding(.top, 8)
+                                    .opacity(on ? 1 : 0)
+                                    .animation(.easeOut(duration: 0.15), value: on)
+                            }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -161,6 +170,7 @@ struct SoundPanel: View {
             .padding(.leading, -12)          // the first word on the panel's edge; its target reaches past it
         }
         .scrollIndicators(.hidden)
+        .scrollClipDisabled()                // the line's glow isn't cut at the row's top
     }
 
     private func reveal(_ f: FocusedPage?, _ proxy: ScrollViewProxy, animated: Bool) {
@@ -180,17 +190,9 @@ struct SoundPanel: View {
                 Spacer(minLength: 0)
                 // SAVE > USER: the track's sound to a user slot, its name asked
                 if session.dialect == .skiff { SaveSoundKey(session: session, ui: ui) }
-                Button { ui.soundPanel?.pinned.toggle() } label: {
-                    Label(state.pinned ? "Pinned" : "Pin", systemImage: state.pinned ? "pin.fill" : "pin")
-                        .font(.system(size: 13, weight: .semibold)).padding(.horizontal, 12).frame(minHeight: 44)
-                        .background { if state.pinned { Color.clear.selectedKey(8) } else { Color.clear.raisedKey(8) } }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-                .accessibilityHint("Keeps the panel open when you tap outside it")
-                .accessibilityAddTraits(state.pinned ? .isSelected : [])
+                // closes: an arrow the way the panel leaves (Scott, 2026-11-06; it was ✕)
                 Button { SoundPanelControl.close(ui) } label: {
-                    Image(systemName: "xmark").font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "arrow.right").font(.system(size: 15, weight: .semibold))
                         .frame(width: 44, height: 44).raisedKey(8).contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink())
@@ -243,20 +245,26 @@ struct SoundPanel: View {
         .onChange(of: session.deviceScreen) { _, s in SoundTab.adoptCursor(session, marks, s) }
         .environment(\.graphsDeferred, !settled)
         .task { try? await Task.sleep(for: .milliseconds(250)); settled = true }
-        .onAppear { SoundTab.adoptCursor(session, marks, session.deviceScreen) }
+        .onAppear {
+            SoundTab.adoptCursor(session, marks, session.deviceScreen)
+            // opened with none of its pages focused (from a Shape redirect, or -sound-panel): its first is the lit one
+            if !pages.contains(where: { $0.id == ui.focusedPage?.id }), let first = pages.first { ui.focus(first) }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sound panel, \(state.family.rawValue)")
         .accessibilityAction(.escape) { SoundPanelControl.close(ui) }
     }
 }
 
-/// The rail beside a page and the panel over it (the Song tab now; the Mixer tab once its redesign merges): a tap on
-/// the page outside the panel closes it unless pinned.
+/// The rail beside a page and the panel beside it (Song, Mix, Sounds). The page always makes way for the panel, never
+/// under it, and stays live: a tap on it is the page's own and doesn't close the panel; the close arrow, HOME, Escape
+/// or another tab do (Scott, 2026-11-06: on the Song tab, moving between patterns and blocks with the panel open).
 struct SoundPanelHost<Content: View>: View {
     let session: DeviceSession
     let ui: EditorUI
-    /// The Mixer tab: the page makes way for the panel (its soundPanelRoom hook) instead of being covered, so a tap
-    /// on it is the page's own (a fader) and doesn't close the panel; ✕, the key again, HOME or a tab do.
+    /// The page makes its own room (its soundPanelRoom hook: the Mixer's carousel runs under the panel's edge, Browse
+    /// drops to two columns). false (the Song tab): the host narrows the whole page by the panel's width, its lanes and
+    /// its editor with it (the editor's grid scrolls for the steps past its edge).
     var makesRoom = false
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -266,20 +274,20 @@ struct SoundPanelHost<Content: View>: View {
         // the page gives the rail its width: a step narrower, so a bar of the grid still fits across
         var narrowed = grid
         narrowed.stepWidth = grid.stepWidth - (SoundRail.width + 12) / 16
+        // the Song tab with the panel open: the editor's bar (its viewport is one bar, paged by bar) narrows to steps
+        // of 24 pt, WCAG 2.5.8's least, and the page gives up just what that frees (about 428 pt). The panel is 430, so
+        // the pattern's card meets the panel's edge, no gap; at the full 442 the steps would be 23.1 pt.
+        let pushes = !makesRoom && ui.soundPanel != nil
+        let room = pushes ? max(0, narrowed.stepWidth - SoundPanel.openStep) * 16 : 0
+        if pushes { narrowed.stepWidth = min(narrowed.stepWidth, SoundPanel.openStep) }
         return HStack(alignment: .top, spacing: 12) {
             content()
                 .environment(\.grid, narrowed)
                 // the push lands at once (one layout), never animated: re-laying out the strips and the carousel every
                 // frame of the slide dropped frames (2026-11-06); only the panel moves
                 .environment(\.soundPanelRoom, makesRoom && ui.soundPanel != nil ? SoundPanel.width + 12 : 0)
+                .padding(.trailing, room)
                 .animation(nil, value: ui.soundPanel != nil)
-                .overlay {
-                    if let s = ui.soundPanel, !s.pinned, !makesRoom {
-                        Color.clear.contentShape(Rectangle())
-                            .onTapGesture { SoundPanelControl.close(ui, unlessPinned: true) }
-                            .accessibilityHidden(true)
-                    }
-                }
                 .overlay(alignment: .topTrailing) {
                     ZStack(alignment: .topTrailing) {
                         if let s = ui.soundPanel {

@@ -105,7 +105,8 @@ extension AppView {
                 case .library:
                     HStack(alignment: .top, spacing: 16) {
                         leftColumn {
-                            FunctionPads(session: session, ui: ui)
+                            // Skiff: no pads here (Scott, 2026-11-06): the rail beside the presets has the same keys
+                            if !ui.songTab { FunctionPads(session: session, ui: ui) }
                             if !session.selectedIsDrums { LibraryEngines(session: session, ui: ui) }
                         }
                         // Skiff: a function button's sound panel pushes the browse area (four columns to two)
