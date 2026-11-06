@@ -73,7 +73,6 @@ struct AppView: View {
         .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 32) }
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }
-        .overlay { if ui.songTab { TrackControlsLayer(session: session, ui: ui) } }
         .overlay { KnobPanelLayer(ui: ui) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)

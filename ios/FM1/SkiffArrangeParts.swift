@@ -339,10 +339,21 @@ struct PatternBin: View {
         let other = (pool?.patterns.enumerated().filter { m[$0.offset] == nil && $0.element.uses > 0 }.count) ?? 0
         let shown = (0..<64).filter { p in all ? true : m[p] != nil }
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Patterns").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
-                Text("\(used) in this song · \(other) in other projects · \(pool?.free ?? 0) free")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            HStack(spacing: 8) {
+                // the drawer: an arrow to close it, left of the title (Scott, 2026-11-06), pointing the way it goes
+                if drawer, let ui {
+                    Button { ui.poolOpen = false; ui.dragPattern = nil } label: {
+                        Image(systemName: "chevron.right").font(.system(size: 15, weight: .semibold))
+                            .frame(width: 44, height: 44).raisedKey()
+                    }
+                    .buttonStyle(PressSink())
+                    .accessibilityLabel("Close patterns")
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Patterns").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                    Text("\(used) in this song · \(other) in other projects · \(pool?.free ?? 0) free")
+                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                }
             }
             SegmentedKeys(label: "Show", options: ["This song", "All 64"], selected: all ? 1 : 0) { all = $0 == 1 }
             ScrollView {
