@@ -70,12 +70,17 @@ enum SoundPanelControl {
 
     /// Closed (the close arrow, HOME, Escape, another tab).
     @MainActor static func close(_ ui: EditorUI) { ui.soundPanel = nil }
-    /// Closed by the user (the arrow, Escape), on any tab: the FM-1 goes HOME too, as its own panel would (Scott,
-    /// 2026-11-06). A tab change or HOME pressed on the FM-1 closes it without this.
+    /// Closed by the user (the arrow, Escape): the FM-1 goes back to the tab's own button, as its own panel would
+    /// (Scott, 2026-11-06): HOME on Song, GLO's page on Mix, SAVE's on Sounds (HOME everywhere had left Mix and
+    /// Sounds on a screen that wasn't theirs). A tab change or a button pressed on the FM-1 closes it without this.
     @MainActor static func dismiss(_ ui: EditorUI, session: DeviceSession) {
         guard ui.soundPanel != nil else { return }
         close(ui)
-        if session.screenLinked, ui.followDevice, session.deviceScreen?.home != true { session.showOnDevice(page: SkiffButtonMap.home) }
+        guard session.screenLinked, ui.followDevice else { return }
+        switch ui.page {
+        case .mixer, .library: TopBar.driveDevice(session: session, ui: ui, to: ui.page)
+        default: if session.deviceScreen?.home != true { session.showOnDevice(page: SkiffButtonMap.home) }
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 /// A scroll view that pans with two fingers only, so one finger always reaches the cells
 /// (design brief, "Grid gestures"). A trackpad's two-finger scroll pans it too. Reports its offset
@@ -15,6 +16,9 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     var rowHeight: CGFloat = 0
     /// Where a horizontal pan comes to rest: a multiple of this (a bar), never between.
     var snapX: CGFloat? = nil
+    /// The grid's hold (seconds) before a one-finger drag carries or boxes notes: a ring fills around the finger
+    /// over that time, so you can see when it's ready (Scott, 2026-11-06). Nil: no hold on this grid.
+    var holdRing: Double? = nil
     @ViewBuilder var content: () -> Content
 
     struct ScrollRequest: Equatable {
@@ -25,7 +29,7 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(offset: $offset, snapX: snapX) }
 
     func makeUIView(context: Context) -> UIScrollView {
-        let sv = UIScrollView()
+        let sv = GridScrollView()
         sv.panGestureRecognizer.minimumNumberOfTouches = 2
         sv.panGestureRecognizer.allowedScrollTypesMask = .all
         sv.delaysContentTouches = false
@@ -46,11 +50,18 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         sv.addSubview(host.view)
         sv.contentSize = contentSize
         context.coordinator.host = host
+        // every touch on the grid, watched without taking it: a second finger hands the gesture to the pan, and a
+        // still first finger gets the hold's ring
+        let watch = TouchWatch()
+        watch.delegate = context.coordinator
+        context.coordinator.watch(watch)
+        sv.addGestureRecognizer(watch)
         return sv
     }
 
     func updateUIView(_ sv: UIScrollView, context: Context) {
         let c = context.coordinator
+        c.holdRing = holdRing
         // the hosted grid joins the view-controller tree once it's on screen: outside it, on a landscape
         // iPhone, it laid out and drew but never showed (2026-11-04)
         c.host?.rootView = content()
@@ -81,14 +92,46 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, UIScrollViewDelegate {
+    final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         var host: UIHostingController<Content>?
+        var holdRing: Double?
+        private let ring = HoldRing()
+        private var downAt: CGPoint?
         var offset: Binding<CGPoint>
         var lastRequest: ScrollRequest?
         var lastRowKeys: [Int]?
         var adjusting = false          // a shift made inside updateUIView: the binding is set after it
         let snapX: CGFloat?
         init(offset: Binding<CGPoint>, snapX: CGFloat?) { self.offset = offset; self.snapX = snapX }
+
+        func watch(_ w: TouchWatch) {
+            w.down = { [unowned self] t in
+                guard let v = host?.view, let hold = holdRing else { return }
+                let p = t.location(in: v)
+                downAt = p
+                ring.start(at: p, in: v.layer, duration: hold)
+            }
+            w.moved = { [unowned self] t in
+                guard let v = host?.view, let a = downAt else { return }
+                let p = t.location(in: v)
+                if hypot(p.x - a.x, p.y - a.y) > 8 { ring.cancel(); downAt = nil }   // the hold's own 8 pt: no hold now
+            }
+            w.up = { [unowned self] in ring.cancel(); downAt = nil }
+            // Two fingers: a pan. The grid's one-finger gesture (a paint, a hold) began on the first finger as it
+            // drifted, a few milliseconds before the second landed, and iOS then refused the pan for the whole
+            // touch: horizontal and vertical both, unless the grid was already moving (2026-11-06). Cancel it.
+            w.second = { [unowned self] in
+                ring.cancel(); downAt = nil
+                guard let v = host?.view else { return }
+                for g in Self.recognizers(in: v) where g.isEnabled { g.isEnabled = false; g.isEnabled = true }
+                NotificationCenter.default.post(name: .gridTwoFingers, object: nil)
+            }
+        }
+        private static func recognizers(in v: UIView) -> [UIGestureRecognizer] {
+            (v.gestureRecognizers ?? []) + v.subviews.flatMap { recognizers(in: $0) }
+        }
+        /// The watch takes nothing from anyone.
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith o: UIGestureRecognizer) -> Bool { true }
         func scrollViewDidScroll(_ sv: UIScrollView) {
             guard !adjusting else { return }
             let o = sv.contentOffset
@@ -110,6 +153,115 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
 
 extension Notification.Name {
     static let gridPannedByHand = Notification.Name("gridPannedByHand")
+    /// A second finger landed on a grid: its one-finger gesture was cancelled, so a slide's state starts over.
+    static let gridTwoFingers = Notification.Name("gridTwoFingers")
+}
+
+/// The grid's scroll view: its two-finger pan runs alongside the grid's own gestures instead of losing to one that
+/// began first (the touch watch then cancels that one).
+final class GridScrollView: UIScrollView {
+    @objc func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith o: UIGestureRecognizer) -> Bool {
+        g === panGestureRecognizer && o.view !== self && o.view?.isDescendant(of: self) == true
+    }
+}
+
+/// Watches the touches on a grid and never recognizes: the first finger down, its moves, a second finger, all up.
+final class TouchWatch: UIGestureRecognizer {
+    var down: ((UITouch) -> Void)?, moved: ((UITouch) -> Void)?, second: (() -> Void)?, up: (() -> Void)?
+    private var touching = Set<UITouch>()
+
+    init() {
+        super.init(target: nil, action: nil)
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+    }
+    override func touchesBegan(_ t: Set<UITouch>, with e: UIEvent) {
+        let was = touching.count
+        touching.formUnion(t)
+        if was == 0, touching.count == 1, let f = touching.first { down?(f) }
+        if was < 2, touching.count >= 2 { second?() }
+    }
+    override func touchesMoved(_ t: Set<UITouch>, with e: UIEvent) {
+        if touching.count == 1, let f = touching.first { moved?(f) }
+    }
+    override func touchesEnded(_ t: Set<UITouch>, with e: UIEvent) { lift(t) }
+    override func touchesCancelled(_ t: Set<UITouch>, with e: UIEvent) { lift(t) }
+    private func lift(_ t: Set<UITouch>) {
+        touching.subtract(t)
+        guard touching.isEmpty else { return }
+        up?()
+        state = .failed
+    }
+    override func reset() { touching = [] }
+}
+
+/// A ring around a still finger that fills over the hold's time; full, it pulses out (the hold took: carry or box).
+/// It appears 0.1 s in, already that far round, so a tap never flashes it. Reduce Motion: no fill, the full ring
+/// shows when the hold takes and fades.
+final class HoldRing {
+    private let box = CALayer(), track = CAShapeLayer(), fill = CAShapeLayer()
+    private var pending: [DispatchWorkItem] = []
+    static let radius: CGFloat = 36             // clear of a fingertip (about 44 pt across)
+    static let delay = 0.1
+
+    init() {
+        let r = Self.radius
+        let path = UIBezierPath(arcCenter: .zero, radius: r, startAngle: -.pi / 2, endAngle: 1.5 * .pi, clockwise: true).cgPath
+        for (l, a) in [(track, 0.22), (fill, 0.95)] {
+            l.path = path
+            l.fillColor = nil
+            l.strokeColor = UIColor(Theme.text).withAlphaComponent(a).cgColor
+            l.lineWidth = 3
+            l.lineCap = .round
+            box.addSublayer(l)
+        }
+        box.zPosition = 10
+    }
+
+    func start(at p: CGPoint, in host: CALayer, duration: Double) {
+        cancel()
+        let still = UIAccessibility.isReduceMotionEnabled
+        let show = DispatchWorkItem { [self] in
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            box.position = p
+            box.opacity = 1
+            box.transform = CATransform3DIdentity
+            fill.strokeEnd = 1
+            host.addSublayer(box)
+            CATransaction.commit()
+            let a = CABasicAnimation(keyPath: "strokeEnd")
+            a.fromValue = Self.delay / duration
+            a.toValue = 1
+            a.duration = duration - Self.delay
+            fill.add(a, forKey: "fill")
+        }
+        let took = DispatchWorkItem { [self] in
+            if still {
+                CATransaction.begin(); CATransaction.setDisableActions(true)
+                box.position = p; fill.strokeEnd = 1; box.opacity = 1
+                host.addSublayer(box)
+                CATransaction.commit()
+            }
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(still ? 0.25 : 0.2)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeOut))
+            CATransaction.setCompletionBlock { [self] in if box.opacity == 0 { box.removeFromSuperlayer() } }
+            if !still { box.transform = CATransform3DMakeScale(1.18, 1.18, 1) }
+            box.opacity = 0
+            CATransaction.commit()
+        }
+        pending = still ? [took] : [show, took]
+        if !still { DispatchQueue.main.asyncAfter(deadline: .now() + Self.delay, execute: show) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: took)
+    }
+
+    func cancel() {
+        pending.forEach { $0.cancel() }
+        pending = []
+        fill.removeAllAnimations()
+        box.removeFromSuperlayer()
+    }
 }
 
 extension View {

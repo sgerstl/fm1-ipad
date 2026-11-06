@@ -418,7 +418,8 @@ struct PhonePianoRoll: View {
                     ZStack(alignment: .topLeading) {
                         TwoFingerScrollView(contentSize: CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
                                             offset: $offset, request: request,
-                                            rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth) {
+                                            rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth,
+                                            holdRing: PianoRollContent.holdTime) {
                             PianoRollContent(grid: inner, session: session, ui: ui, track: track, rows: rows)
                         }
                         EditorPlayhead(session: session, track: track, offsetX: offset.x, height: h)

@@ -113,6 +113,8 @@ struct DrumGridContent: View {
                     ui.selectedLane = l
                     if !has || picked { session.toggle(drumIndex: i, lane: l) }
                 }))
+                // a second finger cancelled the slide (the grid pans): it starts over
+                .onReceive(NotificationCenter.default.publisher(for: .gridTwoFingers)) { _ in paintOn = nil; painted = [] }
                 .accessibilityHidden(true)
             HStack(spacing: 0) {
                 ForEach(session.stepIndices, id: \.self) { i in

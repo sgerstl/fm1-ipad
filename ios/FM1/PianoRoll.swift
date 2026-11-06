@@ -62,7 +62,8 @@ struct PianoRoll: View {
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request,
-                                        rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth) {
+                                        rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth,
+                                        holdRing: PianoRollContent.holdTime) {
                         PianoRollContent(grid: grid, session: session, ui: ui, track: track, rows: rows)
                     }
                     EditorPlayhead(session: session, track: track, offsetX: offset.x, height: gridHeight)
@@ -277,6 +278,8 @@ struct PianoRollContent: View {
     @State private var lifted = 0              // a light haptic as a hold takes
     /// A hold took during this touch: the tap and the slide that come with it are the hold's, not their own.
     @State private var holdTook = false
+    /// The hold before a drag carries or boxes notes (the grid's ring fills over it).
+    static let holdTime = 0.35
 
     private var edits: StepEdits { StepEdits(session: session, ui: ui, track: track, rows: rows) }
 
@@ -298,6 +301,10 @@ struct PianoRollContent: View {
                 .gesture(lengthGesture.exclusively(before: SpatialTapGesture().onEnded { e in tap(e.location) }))
                 // (alongside, not before: a long press first in an exclusive chain kept the tap from ever firing)
                 .simultaneousGesture(holdGesture)
+                // a second finger cancelled the gesture (the grid pans): a slide or hold starts over
+                .onReceive(NotificationCenter.default.publisher(for: .gridTwoFingers)) { _ in
+                    slide = nil; painted = []; held = nil; holdTook = false
+                }
                 .sensoryFeedback(.impact(weight: .light), trigger: lifted)
                 .accessibilityHidden(true)
             // VoiceOver: each step is a button, read in step order.
@@ -354,7 +361,7 @@ struct PianoRollContent: View {
     /// where they're let go; from empty grid, a box picking the notes it touches. A hold that doesn't move does
     /// nothing more than pick the note under it.
     private var holdGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.35, maximumDistance: 8)
+        LongPressGesture(minimumDuration: Self.holdTime, maximumDistance: 8)
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { v in
                 guard case .second(true, let d?) = v else { return }
