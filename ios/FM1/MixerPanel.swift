@@ -19,12 +19,14 @@ struct MixerPage: View {
         let shared = SoundPage.pages(session).filter { $0.family == .glo }
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
-                MixerHeader(title: "MIXER", lit: ui.mixerSection == .mixer) { sections }
+                // the header reads the section in its own body: read here, every swipe of the cards re-ran this
+                // page and re-measured the whole tab (2026-11-06)
+                MixerSectionsHeader(session: session, ui: ui)
                 MixerStrips(session: session, ui: ui, touched: { show(.mixer) })
                     .padding(16)
                     .frame(maxHeight: .infinity)
                     .panel()
-                    .overlay(alignment: .top) { DeviceEdge(on: onDevice(SkiffButtonMap.MixerTab.mixer.page)) }
+                    .overlay(alignment: .top) { MixerDeviceEdge(session: session) }      // (the FM-1's screen read there)
                     .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
             }
             .padding(.trailing, panelRoom)
@@ -34,6 +36,35 @@ struct MixerPage: View {
         }
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func onDevice(_ page: Int) -> Bool {
+        session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == page } == true
+    }
+
+    private func show(_ t: SkiffButtonMap.MixerTab) {
+        if ui.mixerSection != t { ui.mixerSection = t }
+        if session.screenLinked, ui.followDevice, !onDevice(t.page) { session.showOnDevice(page: t.page) }
+    }
+}
+
+/// The strips' lit edge while the FM-1 shows MIXER: its own view, so a page change on the FM-1 redraws only it.
+private struct MixerDeviceEdge: View {
+    let session: DeviceSession
+
+    var body: some View {
+        let page = SkiffButtonMap.MixerTab.mixer.page
+        DeviceEdge(on: session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == page } == true)
+    }
+}
+
+/// MIXER's header with GLO's sections across it, the current one lit.
+private struct MixerSectionsHeader: View {
+    let session: DeviceSession
+    let ui: EditorUI
+
+    var body: some View {
+        MixerHeader(title: "MIXER", lit: ui.mixerSection == .mixer) { sections }
     }
 
     /// GLO's pages in the FM-1's order, numbered as GLO steps them, the current one lit: a tap goes there (the
@@ -127,6 +158,8 @@ private struct MixerCards: View {
     @State private var marks = ShapeMarks()
     @State private var centred: String?
     @State private var width: CGFloat = 0
+    /// The tallest card, once laid out: the carousel's height from then on (see the frame below)
+    @State private var height: CGFloat?
     @State private var placed = false          // the first card placed on opening: not a swipe, so the section stays
     @State private var scrolling = false       // a swipe or its snap under way: the page change waits for it to settle
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -140,7 +173,9 @@ private struct MixerCards: View {
             MixerHeader(title: "SHARED", lit: ui.mixerSection != .mixer)
                 .padding(.trailing, trailing)
             ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 16) {
+                // all four built once, not lazily: a lazy stack made the card coming in (columns, graph) on every
+                // swipe, 70–85 ms of view creation and layout on the iPad Air (Instruments, 2026-11-06)
+                HStack(alignment: .top, spacing: 16) {
                     ForEach(pages) { p in
                         card(p)
                             .frame(width: cardWidth)
@@ -148,6 +183,9 @@ private struct MixerCards: View {
                                 c.scaleEffect(phase.isIdentity ? 1 : 0.92)
                             }
                             .id(p.id)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                                if h > (height ?? 0) + 0.5 { height = h }
+                            }
                     }
                 }
                 .scrollTargetLayout()
@@ -157,7 +195,10 @@ private struct MixerCards: View {
             .contentMargins(.horizontal, max(0, (width - trailing - cardWidth) / 2), for: .scrollContent)
             .scrollIndicators(.hidden)
             .padding(.trailing, trailing)
-            .fixedSize(horizontal: false, vertical: true)
+            // a fixed height once the cards are measured, not .fixedSize: sized by its content, every change in a
+            // card (a swipe's page change, a value) asked the whole tab to measure again (2026-11-06)
+            .frame(height: height)
+            .fixedSize(horizontal: false, vertical: height == nil)
             dots
                 .padding(.trailing, trailing)
         }
