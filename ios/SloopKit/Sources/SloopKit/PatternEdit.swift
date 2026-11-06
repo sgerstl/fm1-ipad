@@ -151,6 +151,27 @@ public enum PatternEdit {
         return (to...end, old, length)
     }
 
+    /// Duplicate before (Scott, 2026-11-06: "here I am in a position where I want to duplicate to the left"): the
+    /// selection again on the steps just before it, replacing what's there, as Paste does. Whole steps, or the notes
+    /// alone. LENGTH doesn't change. nil when it doesn't fit: the selection starts too near step 1.
+    public static func duplicateBefore(_ s: inout [SynthStep], steps: ClosedRange<Int>?, notes refs: Set<NoteRef>?)
+        -> ClosedRange<Int>? {
+        guard let span = steps ?? refs.flatMap({ span(s, $0) }) else { return nil }
+        let n = span.count, to = span.lowerBound - n
+        guard to >= 0 else { return nil }
+        if let refs, steps == nil {
+            var copy = s
+            for r in refs where copy.indices.contains(r.step - n) {
+                add(&copy, step: r.step - n, note: r.note, velocity: s[r.step].velocity)
+            }
+            s = copy
+        } else {
+            var length = Int.max
+            paste(&s, clip: Array(s[span]), at: to, length: &length, keep: false)
+        }
+        return to...(span.lowerBound - 1)
+    }
+
     /// A clip pasted at step `at` (Scott, 2026-11-06: "Paste replaces"). `keep` false: each step the clip covers takes
     /// the clip's step as it is (notes, rests and TIEs, velocity and the rest of its fields), overwriting what was
     /// there; a note the paste cut into loses the TIE steps that ran on past the clip. `keep` true is the old merge,

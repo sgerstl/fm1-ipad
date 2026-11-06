@@ -66,6 +66,17 @@ import Testing
     }
 
     /// Paste replaces (Scott, 2026-11-06): the covered steps take the clip's as they are; "Paste and keep" merges.
+    /// Duplicate before (2026-11-06): steps 9–12 copied onto 5–8, replacing what was there; no room before step 3.
+    @Test func duplicateBeforeReplacesTheStepsToTheLeft() {
+        var s = pattern([(5, [60], 1), (8, [62], 1), (9, [72], 1), (11, [74], 1)])
+        let r = PatternEdit.duplicateBefore(&s, steps: 8...11, notes: nil)
+        #expect(r == 4...7)
+        #expect(s[4].notes == [62] && s[5].notes == [72] && s[6].time == .rest && s[7].notes == [74])
+        #expect(s[8].notes == [62] && s[9].notes == [72])                  // the originals stay
+        var t = pattern([(2, [60], 1)])
+        #expect(PatternEdit.duplicateBefore(&t, steps: 2...5, notes: nil) == nil)
+    }
+
     @Test func pasteReplacesOrKeeps() {
         // the clip: a note held one step, then a REST
         let clip = Array(pattern([(0, [72], 2)])[0...2])

@@ -56,6 +56,16 @@ struct StepEdits {
         if ui.patternUndo != nil, !said.isEmpty { ui.patternUndo?.said = said }
     }
 
+    func duplicateBefore() {
+        var said = ""
+        apply("Duplicated") { s, _ in
+            let r = PatternEdit.duplicateBefore(&s, steps: stepRange, notes: stepRange == nil ? refs : nil)
+            guard let r else { said = "No room before it: the selection starts too near step 1"; return }
+            said = "steps \(r.lowerBound + 1)–\(r.upperBound + 1) replaced"
+        }
+        if ui.patternUndo != nil, !said.isEmpty { ui.patternUndo?.said = said }
+    }
+
     func copy() {
         guard let span = stepRange ?? PatternEdit.span(steps, refs) else { return }
         var clip = Array(steps[span])
@@ -135,6 +145,8 @@ struct SelectionBar: View {
                     .font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
                     .padding(.horizontal, 8)
                 if edits.any {
+                    // either side (Scott, 2026-11-06): before replaces the steps to the left; after adds to the right
+                    icon("plus.square.on.square", "Duplicate before", flip: true) { edits.duplicateBefore() }
                     icon("plus.square.on.square", "Duplicate after", primary: true) { edits.duplicateAfter() }
                     icon("doc.on.doc", "Copy") { edits.copy() }
                 }
@@ -189,9 +201,10 @@ struct SelectionBar: View {
         return s.count == b - a + 1 ? (a == b ? "\(a + 1)" : "\(a + 1)–\(b + 1)") : "\(s.count) picked"
     }
 
-    private func icon(_ s: String, _ label: String, primary: Bool = false, _ action: @escaping () -> Void) -> some View {
+    private func icon(_ s: String, _ label: String, primary: Bool = false, flip: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: s).font(.system(size: 15, weight: .semibold)).foregroundStyle(primary ? Theme.onColour : Theme.text)
+                .scaleEffect(x: flip ? -1 : 1)                 // (the mirror image: the copy lands on the other side)
                 .frame(width: 36, height: 36).raisedKey(primary: primary)
                 .frame(width: 44, height: 44).contentShape(Rectangle())
         }
