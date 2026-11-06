@@ -69,3 +69,13 @@ When the screen link is on, the FM-1's own SAVE page sends Jib to the same place
 ## Screens
 - panel-save-key.png: the sound panel with its Save sound key (beside Pin).
 - panel-save-menu.png: its menu, "Save to U03…" and "Replace a saved sound ›".
+
+## Page chips as lit labels (follow-up, same day)
+The sound panel's page chips stop being pills (Scott, via the parent session). They're now plain words, LFO · LFO 2 · MOD, that light like the FM-1's button labels:
+- **Unlit:** text.secondary, regular weight.
+- **Lit:** text.primary, semibold, with a soft glow in the same colour.
+- The width is held by the semibold word, so nothing shifts when one lights. There's no background, border or pill.
+- Targets are 44 pt high, with 12 pt either side. VoiceOver reads "LFO 2 page, selected".
+- **Primary vs track colour:** both were tried (chips-primary-crop.png, chips-track-crop.png). The track colour reads more like an LED, but Acid's orange measures 3.4:1 on the panel (13 pt text needs 4.5:1), and other track colours vary. Primary measures 9.1:1, so primary it is.
+- **Flag:** the unlit grey (Theme.textSecondary on the panel's held surface) measures 4.1:1, below 4.5:1. It's the panel's existing secondary token, the same one "T1 Acid · 3 pages" uses, so it isn't changed here; fixing it means a new token, which is Scott's call.
+- With no page focused (just opened, unlinked) nothing is lit, as before.

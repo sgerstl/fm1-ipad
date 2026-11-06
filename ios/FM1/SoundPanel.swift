@@ -128,28 +128,37 @@ struct SoundPanel: View {
 
     /// The button's pages as chips: tap one to bring it forward (and onto the FM-1), as pressing the key again steps
     /// them. The one on the FM-1 (or focused here) is lit.
+    /// The panel's pages as the FM-1 labels its buttons (Scott, 2026-11-06): plain words that light when theirs is the
+    /// page, no pill. Unlit in the secondary grey; lit in the primary text with a soft glow and the heavier weight
+    /// (its width held by the heavier word, so nothing shifts). 44 pt high to tap.
     private func pageChips(_ pages: [SoundPage]) -> some View {
         let current = session.screenLinked ? pages.first { SoundCard.onDevice(session, $0) }?.id : ui.focusedPage?.id
+        // (the track's colour was tried: it reads more like an LED, but its orange is 3.4:1 on the panel; text is 9:1)
+        let lit = Theme.text
         return ScrollView(.horizontal) {
-            HStack(spacing: 4) {
+            HStack(spacing: 0) {
                 ForEach(pages) { p in
                     let on = current == p.id
+                    let title = p.title(session)
                     Button {
                         ui.focus(p)
                         if session.screenLinked, ui.followDevice { session.showOnDevice(page: p.fw) }
                     } label: {
-                        Text(p.title(session)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                            .foregroundStyle(on ? Theme.onColour : Theme.textSecondary)
-                            .padding(.horizontal, 10).frame(minHeight: 32)
-                            .background(Capsule().fill(on ? Theme.text : Theme.control))
-                            .padding(.vertical, 4)          // a 40 pt target
+                        Text(title).font(.system(size: 13, weight: .semibold)).tracking(0.4).lineLimit(1).hidden()
+                            .overlay {
+                                Text(title).font(.system(size: 13, weight: on ? .semibold : .regular)).tracking(0.4).lineLimit(1)
+                                    .foregroundStyle(on ? lit : Theme.textSecondary)
+                                    .shadow(color: on ? lit.opacity(0.55) : .clear, radius: 6)
+                            }
+                            .padding(.horizontal, 12).frame(minHeight: 44)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(p.title(session)) page")
+                    .accessibilityLabel("\(title) page")
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
+            .padding(.leading, -12)          // the first word on the panel's edge; its target reaches past it
         }
         .scrollIndicators(.hidden)
     }
