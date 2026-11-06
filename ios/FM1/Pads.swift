@@ -149,6 +149,14 @@ struct FunctionPads: View {
             ui.mixerSection = ui.page == .mixer ? SkiffButtonMap.MixerTab(rawValue: (ui.mixerSection.rawValue + 1) % 5)! : .mixer
             ui.page = .mixer
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: ui.mixerSection.page) }
+        case .seq where ui.songTab:
+            // as the rail's SEQ: the Song tab's places, NOTES first (from Mix or Sounds, the Song tab)
+            ui.soundPanel = nil
+            if ui.page != .song { ui.page = .song }
+            let now = session.deviceScreen.flatMap { s in s.home ? nil : SeqKey.pages.firstIndex(of: s.page) }
+            let p = SeqKey.pages[now.map { ($0 + 1) % SeqKey.pages.count } ?? 0]
+            if session.screenLinked, ui.followDevice { session.showOnDevice(page: p) }
+            SeqKey.focus(p, ui)
         case .seq where session.dialect == .skiff:
             // NOTES (Sequence, the step panel); pressed again, PATTERN (the whole-track controls)
             let again = ui.page == .sequencer && session.deviceScreen?.page == 41
@@ -167,7 +175,7 @@ struct FunctionPads: View {
         default:
             guard let f = pad.family else { return }
             // the Mixer tab keeps its place: the button's pages come in on the sound panel, as from its rail
-            if ui.songTab, ui.page == .mixer || ui.page == .library, SoundPanelControl.families.contains(f) {
+            if ui.songTab, SoundPanelControl.families.contains(f) {
                 SoundPanelControl.press(f, session: session, ui: ui)
                 return
             }

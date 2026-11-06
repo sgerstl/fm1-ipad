@@ -217,7 +217,7 @@ struct TopBar: View {
                     ui.page = p
                     Self.driveDevice(session: session, ui: ui, to: p)
                 } label: {
-                    Text(ui.songTab && p == .song ? "Song" : p.rawValue)
+                    Text(p.title(skiff: ui.songTab))
                         .fontWeight(current ? .semibold : .regular)
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
                         .padding(.horizontal, 18)

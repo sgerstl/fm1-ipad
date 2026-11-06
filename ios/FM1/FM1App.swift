@@ -92,7 +92,17 @@ enum Page: String, CaseIterable, Identifiable {
     /// The tabs on SLOOP (no Mixer: its GLO pages are Shape's).
     static let sloopTabs: [Page] = [.sequencer, .sound, .song, .library]
     /// The tabs on Skiff: Song · Shape · Mixer · Browse.
-    static let skiffTabs: [Page] = [.song, .sound, .mixer, .library]
+    static let skiffTabs: [Page] = [.song, .mixer, .library]
+    /// A tab's name: Skiff's are Song · Mix · Sounds (2026-11-06).
+    func title(skiff: Bool) -> String {
+        guard skiff else { return rawValue }
+        switch self {
+        case .song: return "Song"
+        case .mixer: return "Mix"
+        case .library: return "Sounds"
+        default: return rawValue
+        }
+    }
 }
 
 struct ViewJump: Equatable {
@@ -109,12 +119,20 @@ final class EditorUI {
         guard let i = a.firstIndex(of: "-page"), i + 1 < a.count else { return .sequencer }
         return ["sound": .sound, "song": .song, "library": .library, "mixer": .mixer][a[i + 1]] ?? .sequencer
     }() {
-        // Skiff: Sequence and Arrange are one Song tab; whatever asks for Sequence (HOME, SEQ, a tab) lands there
-        didSet { if songTab, page == .sequencer { page = .song } }
+        // Skiff: Sequence and Arrange are one Song tab; whatever asks for Sequence (HOME, SEQ, a tab) lands there.
+        // And there's no Shape tab (Scott, 2026-11-06): whatever asks for Shape brings the button's pages in on the
+        // sound panel, over the tab that was up
+        didSet {
+            if songTab, page == .sequencer { page = .song }
+            if songTab, page == .sound {
+                page = oldValue == .sound ? .song : oldValue
+                if SoundPanelControl.families.contains(soundFamily) { soundPanel = SoundPanelState(family: soundFamily, pinned: soundPanel?.pinned ?? false) }
+            }
+        }
     }
     /// Skiff: the Song tab (Arrange's lanes over the pattern editor) stands for Sequence and Arrange.
     var songTab = false {
-        didSet { if songTab, page == .sequencer { page = .song } }
+        didSet { if songTab, page == .sequencer || page == .sound { page = .song } }
     }
     /// The Song tab: the entry the editor is pinned to (a block tapped); nil follows what each track plays.
     var pinnedEntry: EntryRef?

@@ -15,7 +15,8 @@ struct SoundPanelState: Equatable {
 }
 
 enum SoundPanelControl {
-    static let families: [SoundFamily] = [.env, .lfo, .fx, .sel, .edit, .arp]
+    /// The rail's order is the FM-1's, top to bottom (then SEQ, its own key: SeqKey).
+    static let families: [SoundFamily] = [.fx, .sel, .env, .lfo, .edit, .arp]
 
     /// A button pressed (on the rail, the pads, or on the FM-1 while the Song or Mixer tab is up): its pages; pressed
     /// again, its next page (Scott, 2026-11-05: the same key steps and reveals, as the FM-1's does; it no longer
@@ -53,7 +54,7 @@ enum SoundPanelControl {
         // shows what it shows)
         if ui.songTab, !s.home, s.layer == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family),
            SoundPage.shown(session, page.family).isEmpty { return true }
-        guard ui.followDevice, session.screenLinked, ui.songTab, [.song, .mixer, .library].contains(ui.page) else { return false }
+        guard ui.followDevice, session.screenLinked, ui.songTab else { return false }
         if s.home { ui.soundPanel = nil; return false }
         guard s.layer == 0, s.menu == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family) else { return false }
         press(page.family, session: session, ui: ui, fromDevice: true)
@@ -102,6 +103,7 @@ struct SoundRail: View {
                 .accessibilityValue(on ? "open" : none ? SoundPanelControl.noPages(f, session) : "")
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
+            SeqKey(session: session, ui: ui)
             Spacer(minLength: 0)
         }
         .padding(.vertical, 8).padding(.horizontal, 6)
@@ -123,6 +125,34 @@ struct SoundPanel: View {
     @Environment(\.look) private var look
     static let width: CGFloat = 430
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The button's pages as chips: tap one to bring it forward (and onto the FM-1), as pressing the key again steps
+    /// them. The one on the FM-1 (or focused here) is lit.
+    private func pageChips(_ pages: [SoundPage]) -> some View {
+        let current = session.screenLinked ? pages.first { SoundCard.onDevice(session, $0) }?.id : ui.focusedPage?.id
+        return ScrollView(.horizontal) {
+            HStack(spacing: 4) {
+                ForEach(pages) { p in
+                    let on = current == p.id
+                    Button {
+                        ui.focus(p)
+                        if session.screenLinked, ui.followDevice { session.showOnDevice(page: p.fw) }
+                    } label: {
+                        Text(p.title(session)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                            .foregroundStyle(on ? Theme.onColour : Theme.textSecondary)
+                            .padding(.horizontal, 10).frame(minHeight: 32)
+                            .background(Capsule().fill(on ? Theme.text : Theme.control))
+                            .padding(.vertical, 4)          // a 40 pt target
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(p.title(session)) page")
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
 
     private func reveal(_ f: FocusedPage?, _ proxy: ScrollViewProxy, animated: Bool) {
         guard let f, let card = SoundPage.cardID(of: f.id, session), card.hasPrefix(state.family.rawValue + ".") else { return }
@@ -156,6 +186,7 @@ struct SoundPanel: View {
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Close the \(state.family.rawValue) pages")
             }
+            if pages.count > 1 { pageChips(pages) }
             // the track's sound, and the browser for another
             HStack(spacing: 10) {
                 TrackChip(track: t, muted: track.mute)
@@ -253,6 +284,53 @@ struct SoundPanelHost<Content: View>: View {
                     if let f = ui.soundPanel?.family, SoundPage.shown(session, f).isEmpty { ui.soundPanel = nil }
                 }
             SoundRail(session: session, ui: ui)
+        }
+    }
+}
+
+
+/// SEQ on the rail (as the FM-1's): on the Song tab it steps SEQ's pages as the tab's own places, the same as an FM-1
+/// SEQ press: NOTES and FEEL the step inspector, PATTERN the whole-track popover, AUTOMATION the motion lanes, SONG the
+/// lanes. From Mix or Sounds it goes to the Song tab first, on NOTES. Linked, the FM-1 goes there too (and its screen
+/// coming back is what lights the place); not linked, the place is lit here.
+struct SeqKey: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    /// Skiff's SEQ pages (PAGES 41–45): NOTES, FEEL, PATTERN, AUTOMATION, SONG.
+    static let pages = [41, 42, 43, 44, 45]
+    @State private var last: Int?
+
+    var body: some View {
+        Button { press() } label: {
+            Text("SEQ").font(.system(size: 12, weight: .semibold)).tracking(0.5)
+                .foregroundStyle(Theme.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background { Color.clear.raisedKey(8) }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .accessibilityLabel("SEQ pages")
+        .accessibilityHint("Steps the Song tab through NOTES, FEEL, PATTERN, AUTOMATION and SONG")
+    }
+
+    private func press() {
+        ui.soundPanel = nil
+        let onSong = ui.page == .song
+        let now = session.screenLinked ? session.deviceScreen.flatMap { s in s.home ? nil : Self.pages.firstIndex(of: s.page) } : last
+        let k = onSong ? (now.map { ($0 + 1) % Self.pages.count } ?? 0) : 0
+        last = k
+        if !onSong { ui.page = .song }
+        if session.screenLinked, ui.followDevice { session.showOnDevice(page: Self.pages[k]) }
+        Self.focus(Self.pages[k], ui)
+    }
+
+    /// A SEQ page's place on the Song tab.
+    @MainActor static func focus(_ page: Int, _ ui: EditorUI) {
+        switch page {
+        case 41, 42: SkiffNavigator.flash(.stepPanel, ui)
+        case 43: ui.trackControlsOpen = true
+        case 44: ui.motionHidden = false; SkiffNavigator.flash(.grid, ui)
+        default: break                                   // SONG: the lanes, the tab's own top half
         }
     }
 }
