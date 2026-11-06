@@ -127,7 +127,7 @@ final class EditorUI {
             if songTab, page == .sequencer { page = .song }
             if songTab, page == .sound {
                 page = oldValue == .sound ? .song : oldValue
-                if SoundPanelControl.families.contains(soundFamily) { soundPanel = SoundPanelState(family: soundFamily, pinned: soundPanel?.pinned ?? false) }
+                if SoundPanelControl.families.contains(soundFamily) { soundPanel = SoundPanelState(family: soundFamily) }
             }
         }
     }

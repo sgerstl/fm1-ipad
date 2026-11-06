@@ -233,6 +233,10 @@ struct LibraryPage: View {
 struct LibraryEngines: View {
     let session: DeviceSession
     let ui: EditorUI
+    /// How much of the list is past each edge: there it fades out, so a cut list reads as one that scrolls (Scott,
+    /// 2026-11-06: the engines ran past the box with no hint). Nothing past an edge, no fade.
+    @State private var past = (above: false, below: false)
+    private static let fade: CGFloat = 56            // past a row: the cut one shows faintly, the one above it starts to go
 
     var body: some View { engineList }
 
@@ -255,7 +259,22 @@ struct LibraryEngines: View {
                     .padding(.top, 4)
             }
         }
-        .scrollIndicators(.hidden)
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 1 } action: { _, v in past.above = v }
+        .onScrollGeometryChange(for: Bool.self) { g in
+            g.contentSize.height - (g.contentOffset.y + g.containerSize.height - g.contentInsets.bottom) > 1
+        } action: { _, v in past.below = v }
+        .mask {
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: past.above ? Self.fade : 0)
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: past.below ? Self.fade : 0)
+            }
+        }
+        // and the bar: shown while it scrolls, flashed when the list comes up cut
+        .scrollIndicators(.automatic)
+        .scrollIndicatorsFlash(onAppear: true)
         .padding(12)
         .frame(maxHeight: .infinity, alignment: .top)
         .panel()
