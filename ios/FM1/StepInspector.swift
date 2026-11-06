@@ -14,62 +14,86 @@ struct SkiffStepInspector: View {
 
     static let conditions = ["--", "FILL", "!FILL", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4"]
 
+    @State private var soundFrame: CGRect = .zero    // the collapsed "Sound at this step" key, for its menu
+
     var body: some View {
         let t = session.selectedTrack, i = ui.selectedStep[t]
-        let s = session.tracks[t].steps[i]
-        let tint = Theme.track[t]
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("T\(t + 1) \(session.tracks[t].displayName) · selected step").font(.system(size: 12))
-                            .foregroundStyle(Theme.textSecondary).lineLimit(1)
-                        Text("Step \(i + 1)").font(.system(size: 22, weight: .semibold))
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isHeader)
-                    Spacer()
-                    stepKey("chevron.left", "Previous step") { go(-1) }
-                    stepKey("chevron.right", "Next step") { go(1) }
-                }
-                notes(s, tint)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("The FM-1's knobs on NOTES").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    // two by two: the left column is too narrow for four labels across
-                    Grid(horizontalSpacing: 4, verticalSpacing: 4) {
-                        GridRow {
-                            column(1, tint, s.isOn) { pitchSpec(t, i) }
-                            column(2, tint, s.isOn) { moveSpec(t, i) }
-                        }
-                        GridRow {
-                            column(3, tint, s.isOn) { lengthSpec(t, i) }
-                            column(4, tint, s.isOn) { velocitySpec(t, i) }
-                        }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                // FEEL's four: no knob numbers, so they fit across
-                HStack(spacing: 4) {
-                    column(0, tint, s.isOn && s.extra.count >= 4) { extraSpec(t, i, k: 3, label: "CHANCE", range: 0...100, shown: { "\($0)%" }) }
-                    column(0, tint, s.isOn) { ratchetSpec(t, i) }
-                    column(0, tint, s.isOn && s.extra.count >= 7) {
-                        extraSpec(t, i, k: 6, label: "COND", range: 0...11, shown: { Self.conditions[safe: $0] ?? "--" }, choices: Self.conditions)
-                    }
-                    column(0, tint, s.isOn && s.extra.count >= 8) { nudgeSpec(t, i) }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                Rectangle().fill(Theme.stepEmpty).frame(height: 1)
-                soundAtStep(t, i, tint)
-            }
-            .padding(16)
+        // never a scroll (Scott, 2026-11-06): everything when it fits, else the sound rows behind a disclosure
+        ViewThatFits(in: .vertical) {
+            content(t, i, collapsed: false)
+            content(t, i, collapsed: true)
         }
-        .scrollIndicators(.hidden)
+        .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .clipped()
         .panel()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Step \(i + 1)")
         .onChange(of: i) { _, n in if session.lockStep != nil { session.lockStep = n } }
         .onDisappear { session.lockStep = nil }
+    }
+
+    private func content(_ t: Int, _ i: Int, collapsed: Bool) -> some View {
+        let s = session.tracks[t].steps[i]
+        let tint = Theme.track[t]
+        let locks = session.motion[t]?.events.contains { $0.lock && $0.step == i } ?? false
+        return VStack(alignment: .leading, spacing: collapsed ? 10 : 12) {
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // (short: the step's notes ride on this line instead of their own row)
+                    Text("T\(t + 1) \(session.tracks[t].displayName)" + (collapsed && s.isOn ? " · " + s.notes.map(Music.noteName).joined(separator: " ") : ""))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    Text("Step \(i + 1)").font(.system(size: 20, weight: .semibold))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 4)
+                if locks {
+                    Button("Clear locks") { Task { await session.clearLocks(track: t, step: i) } }
+                        .font(.system(size: 12, weight: .semibold)).underline()
+                        .frame(minHeight: 44)
+                        .disabled(session.song.songPlaying)
+                        .accessibilityHint("Takes this step's locks off; its recorded changes stay")
+                }
+                stepKey("chevron.left", "Previous step") { go(-1) }
+                stepKey("chevron.right", "Next step") { go(1) }
+            }
+            if !collapsed { notes(s, tint) }
+            // NOTES' four (their badges say which knob), two by two: the column is too narrow for four across
+            Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+                GridRow {
+                    column(1, tint, s.isOn) { pitchSpec(t, i) }
+                    column(2, tint, s.isOn) { moveSpec(t, i) }
+                }
+                GridRow {
+                    column(3, tint, s.isOn) { lengthSpec(t, i) }
+                    column(4, tint, s.isOn) { velocitySpec(t, i) }
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            // FEEL's four: no knob numbers, so they fit across
+            HStack(spacing: 4) {
+                column(0, tint, s.isOn && s.extra.count >= 4) { extraSpec(t, i, k: 3, label: "CHANCE", range: 0...100, shown: { "\($0)%" }) }
+                column(0, tint, s.isOn) { ratchetSpec(t, i) }
+                column(0, tint, s.isOn && s.extra.count >= 7) {
+                    extraSpec(t, i, k: 6, label: "COND", range: 0...11, shown: { Self.conditions[safe: $0] ?? "--" }, choices: Self.conditions)
+                }
+                column(0, tint, s.isOn && s.extra.count >= 8) { nudgeSpec(t, i) }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            if !collapsed { Rectangle().fill(Theme.stepEmpty).frame(height: 1) }
+            if collapsed {
+                // a short box: the sound rows in a menu, and the lock key beside it, one row
+                HStack(spacing: 8) {
+                    soundAtStep(t, i, tint, collapsed: true)
+                    lockKey(i, compact: true)
+                }
+            } else {
+                soundAtStep(t, i, tint, collapsed: false)
+                lockKey(i)
+            }
+        }
     }
 
     private func go(_ d: Int) {
@@ -189,27 +213,45 @@ struct SkiffStepInspector: View {
 
     // MARK: The sound at this step
 
-    @ViewBuilder private func soundAtStep(_ t: Int, _ i: Int, _ tint: Color) -> some View {
+    /// What the track's sound is at this step, a parameter a line: its mark (recorded, locked, the sound's own), name and
+    /// value; the source said to VoiceOver. Collapsed (a short box), behind "Sound at this step".
+    @ViewBuilder private func soundAtStep(_ t: Int, _ i: Int, _ tint: Color, collapsed: Bool) -> some View {
         let m = session.motion[t] ?? TrackMotion()
         let ids = MotionLanes.laneIDs(session, ui, track: t)
-        let locks = m.events.contains { $0.lock && $0.step == i }
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("The sound at step \(i + 1)").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Button("Clear this step's locks") { Task { await session.clearLocks(track: t, step: i) } }
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(locks ? Theme.text : Theme.textTertiary)
-                    .underline(locks)
-                    .frame(minHeight: 44)
-                    .disabled(!locks || session.song.songPlaying)
+        if ids.isEmpty {
+            Text("Nothing recorded or locked on T\(t + 1).").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+        } else if collapsed {
+            Button {
+                ui.menu = JibMenu(title: "Sound at step \(i + 1)", groups: {
+                    [ids.map { id in
+                        let r = m.value(of: id, at: i, base: session.cell(id).value)
+                        let mark = r.source == .lock ? "◆ " : r.source == .recorded ? "— " : ""
+                        return MenuItem.note("\(mark)\(session.trackDesc(id)?.label ?? "\(id)")  \(formatValue(session.trackDesc(id), r.value).shown)")
+                    }]
+                }, at: CGPoint(x: soundFrame.minX, y: soundFrame.maxY))
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Sound at this step").font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            if ids.isEmpty {
-                Text("Every parameter is the sound's own here: nothing is recorded or locked on T\(t + 1).")
-                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
-            }
+            .buttonStyle(.plain)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { soundFrame = $0 }
+            .accessibilityHint("Lists what each recorded parameter is at this step")
+        } else {
+            rows(ids, m, i, tint)
+        }
+    }
+
+    private func rows(_ ids: [Int], _ m: TrackMotion, _ i: Int, _ tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(ids, id: \.self) { id in
                 let base = session.cell(id).value
                 let r = m.value(of: id, at: i, base: base)
+                let name = session.trackDesc(id)?.label ?? "\(id)"
+                let value = formatValue(session.trackDesc(id), r.value).shown
                 HStack(spacing: 10) {
                     Group {
                         switch r.source {
@@ -219,32 +261,35 @@ struct SkiffStepInspector: View {
                         }
                     }
                     .frame(width: 16)
-                    Text(session.trackDesc(id)?.label ?? "\(id)").font(.system(size: 13)).lineLimit(1).frame(width: 76, alignment: .leading)
-                    Text(formatValue(session.trackDesc(id), r.value).shown).font(.system(size: 15, weight: .semibold)).monospacedDigit()
-                        .frame(width: 64, alignment: .trailing)
-                    Text(r.source == .lock ? "locked on this step" : r.source == .recorded ? "recorded" : "the sound's own")
-                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    Text(name).font(.system(size: 13)).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(value).font(.system(size: 15, weight: .semibold)).monospacedDigit()
                 }
-                .frame(height: 30)
-                .accessibilityElement(children: .combine)
+                .frame(height: 26)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(name), \(value), " + (r.source == .lock ? "locked on this step" : r.source == .recorded ? "recorded" : "the sound's own"))
             }
-            // knob turns to this step: a lock there, as holding a step and turning a knob does on the FM-1
-            Button {
-                session.lockStep = session.lockStep == nil ? i : nil
-            } label: {
-                Label(session.lockStep == nil ? "Lock knob turns to step \(i + 1)" : "Locking knob turns to step \(i + 1)",
-                      systemImage: session.lockStep == nil ? "lock.open" : "lock.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(session.lockStep == nil ? Theme.text : Theme.onColour)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(session.lockStep == nil ? Theme.control : Theme.text))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .disabled(session.song.songPlaying)
-            .padding(.top, 6)
-            .accessibilityHint("While on, turning a knob of this track sets a lock on this step instead of changing the sound")
-            .accessibilityAddTraits(.isToggle)
         }
+    }
+
+    /// Knob turns to this step: a lock there, as holding a step and turning a knob does on the FM-1.
+    private func lockKey(_ i: Int, compact: Bool = false) -> some View {
+        Button {
+            session.lockStep = session.lockStep == nil ? i : nil
+        } label: {
+            Label(compact ? "Lock" : session.lockStep == nil ? "Lock knob turns to step \(i + 1)" : "Locking knob turns to step \(i + 1)",
+                  systemImage: session.lockStep == nil ? "lock.open" : "lock.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(session.lockStep == nil ? Theme.text : Theme.onColour)
+                .padding(.horizontal, compact ? 12 : 0)
+                .frame(maxWidth: compact ? nil : .infinity, minHeight: 44)
+                .background(RoundedRectangle(cornerRadius: 8).fill(session.lockStep == nil ? Theme.control : Theme.text))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .disabled(session.song.songPlaying)
+        .accessibilityLabel(session.lockStep == nil ? "Lock knob turns to step \(i + 1)" : "Locking knob turns to step \(i + 1)")
+        .accessibilityHint("While on, turning a knob of this track sets a lock on this step instead of changing the sound")
+        .accessibilityAddTraits(.isToggle)
     }
 }

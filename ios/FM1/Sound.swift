@@ -229,11 +229,10 @@ extension KnobSpec {
     @MainActor
     static func param(_ session: DeviceSession, scope: Int, id: Int, slot: Int) -> KnobSpec {
         let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
-        let values = scope == 0 ? [] : session.globals
         // locking knob turns to a step (Skiff): the knob shows that step's lock, if it has one
         let locked = scope == 0 ? session.lockStep.flatMap { s in session.motion[session.selectedTrack]?.events.first { $0.lock && $0.step == s && $0.id == id }?.value } : nil
-        // the selected track's value from its own cell: this knob redraws when this parameter changes, not any
-        let v = locked ?? (scope == 0 ? session.cell(id).value : id < values.count ? values[id] : 0)
+        // the value from its own cell (the track's, or the global's): this knob redraws when this parameter changes, not any
+        let v = locked ?? (scope == 0 ? session.cell(id).value : session.globalCell(id).value)
         let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
         let f = formatValue(d, v, skiff: session.dialect == .skiff)
         let t = session.selectedTrack

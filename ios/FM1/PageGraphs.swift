@@ -170,7 +170,8 @@ struct PageGraph: View {
     private var values: [Int] {
         // the track's from their cells: this graph redraws when its own parameters change
         if page.scope == 0 { return page.ids.map { id in id.map { session.cell($0).value } ?? 0 } }
-        return page.ids.map { id in id.flatMap { $0 < session.globals.count ? session.globals[$0] : nil } ?? 0 }
+        // the globals' own cells: this graph redraws when its own globals change, not when any does
+        return page.ids.map { id in id.map { session.globalCell($0).value } ?? 0 }
     }
     private func desc(_ k: Int) -> ParamDesc? {
         guard let id = page.ids[k] else { return nil }
@@ -490,13 +491,28 @@ private struct ReverbDrawing {
         let len = Double((40 + v[1] * 144 / 127) * (hall ? 2 : 1)), k = 1 - 3 / len
         let dim = Double(20 + v[2] * 60 / 127) / 100
         for (i, h) in er.enumerated() { ctx.fill(Path(s.r(12 + Double(i * 6), 126 - h, 3, h)), with: .color(Theme.text)) }
+        // the tail as two shapes under horizontal gradients (the damped top, the body), not 370 one-column fills: it
+        // redraws on every change while a knob turns, and the columns cost the Mixer its frames (2026-11-06)
+        var tops: [(Double, Double)] = [], mids: [(Double, Double)] = []
         var e = 1.0
-        for x in 44...228 {
-            let h = 84 * e, top = h * dim, t = Double(x - 44) / 184
-            ctx.fill(Path(s.r(Double(x), 126 - h, 1.2, top)), with: .color(c.opacity(0.45 - t * 0.3)))
-            ctx.fill(Path(s.r(Double(x), 126 - h + top, 1.2, h - top)), with: .color(c.opacity(1 - t * 0.6)))
+        for x in 44...229 {
+            let h = 84 * e
+            tops.append((Double(x), 126 - h)); mids.append((Double(x), 126 - h + h * dim))
             e *= k
         }
+        let band = Path { p in
+            p.addLines(tops.map { s.p($0.0, $0.1) })
+            p.addLines(mids.reversed().map { s.p($0.0, $0.1) })
+            p.closeSubpath()
+        }
+        let body = Path { p in
+            p.addLines(mids.map { s.p($0.0, $0.1) })
+            p.addLine(to: s.p(229, 126)); p.addLine(to: s.p(44, 126))
+            p.closeSubpath()
+        }
+        let from = s.p(44, 0), to = s.p(228, 0)
+        ctx.fill(band, with: .linearGradient(Gradient(colors: [c.opacity(0.45), c.opacity(0.15)]), startPoint: from, endPoint: to))
+        ctx.fill(body, with: .linearGradient(Gradient(colors: [c.opacity(1), c.opacity(0.4)]), startPoint: from, endPoint: to))
         if v[0] == 1 {
             s.text(ctx, "SPRING", 12, 17, midColour)
             // the coil: 13/256 of a turn a pixel (sine_i(x × 0x0D000000))

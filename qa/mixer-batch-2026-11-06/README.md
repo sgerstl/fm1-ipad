@@ -40,3 +40,33 @@ Measured with the body counter (`-count-bodies`); the simulator can't measure fr
 - **Same rules as the Mixer:** disabled buttons stay disabled; repeat presses step pages with the card coming forward; ✕, HOME, Escape or another tab closes it. A tap on the presets loads a preset, as ever, and doesn't close the panel.
 - The function buttons now behave the same on Song, Mixer and Browse. On Shape they keep jumping to sections.
 - SLOOP's Browse is unchanged.
+
+## The Song tab's step inspector fits, never scrolls
+
+- **The scroll view is gone.**
+  - The "The FM-1's knobs on NOTES" caption is dropped (the field badges say it).
+  - The sound rows are one line each (mark, name, value), with the source ("recorded", "locked on this step", "the sound's own") said to VoiceOver instead of shown.
+  - "Clear locks" moved into the step's ‹ › row, shown only when the step has locks.
+  - The "nothing recorded" note is one line.
+  - At the default divider it all fits with room to spare (`inspector-default.jpg`).
+- **Short box:** a `ViewThatFits` switches to the short layout when the full one doesn't fit:
+  - the notes ride on the header line;
+  - the sound rows sit behind "Sound at this step ▾", a small menu listing them;
+  - the lock key shortens to "Lock" beside it, one row.
+  It never scrolls.
+- **The divider's lowest point** rises a little (the editor's minimum, 380 → 420 pt), so the short layout always fits whole (`inspector-lowest.jpg`). Below that, the four NOTES knobs, FEEL's four and a key row can't share the height.
+
+## Turning a value on the Mixer's shared cards
+
+Measured with the body counter, one drag on Delay's FEEDBACK:
+
+- **Per value change, only the turned column and its card's graph redraw, before and after.** So the stutter wasn't a fan-out to other cards in the simulator. The strips and cards each rebuild once per gesture, at the first touch, which makes that card's page the active one.
+- **What changed anyway (hygiene):**
+  - **The globals have per-parameter cells** like the track's, so a shared column or graph follows its own global, not the whole array.
+  - **The session's write bookkeeping is ignored by Observation** (`recentWrites`, `paramWrites`, `paramSending`, the step queues). Nothing draws it, so nothing should wake on each write.
+- **The likely cost: the Reverb graph's tail** was 370 one-column fills, each with its own opacity, rasterised on every change while the knob turned. It's now **two filled shapes under horizontal gradients**, and looks the same (`reverb-tail.jpg`). The other graphs already draw a handful of paths.
+- **Not proven on the device:** the stutter was Scott's on the iPad Air M3, and only Instruments there can show which of these was the frame cost. Worth a look: whether the Delay and Chorus cards still stutter with Reverb fixed.
+
+## Test flake
+
+`aSectionClearsOnlyWhenStopped` still failed now and then in the full run after the first fix. Its last wait covers a backup write through the SLOOP fake: begin, data, then a commit SLOOP is given 5 s. Under the suite's parallel load that sometimes outran the test's 5 s wait. The wait is now 15 s. Two full runs passed since.

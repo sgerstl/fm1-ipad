@@ -190,7 +190,9 @@ import Testing
         try await waitFor { !s.playing }
         s.clearSection(2)
         #expect(s.songMessage == nil)
-        try await waitFor { fake.stored & 0b100 == 0 && !s.song.stored(2) }
+        // a backup write (begin, data, a commit SLOOP gives 5 s): under the full suite's parallel load it outran a 5 s
+        // wait now and then, so the wait gives it room
+        try await waitFor(15) { fake.stored & 0b100 == 0 && !s.song.stored(2) }
     }
 
     @Test func theSpeakerGoesQuietOnlyWithUSBAudioFull() async throws {

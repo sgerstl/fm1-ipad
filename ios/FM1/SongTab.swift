@@ -17,7 +17,8 @@ struct SkiffSongPage: View {
     @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let editorMin: CGFloat = 380, dividerHeight: CGFloat = 16
+    /// (420: the step inspector's short layout fits whole at the divider's lowest, never scrolling; 2026-11-06)
+    static let editorMin: CGFloat = 420, dividerHeight: CGFloat = 16
     /// The song's least: the tool row, the ruler and every lane at its least (28 pt and its gap), so it never spills.
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
 

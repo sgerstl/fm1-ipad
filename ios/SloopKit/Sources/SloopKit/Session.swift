@@ -213,7 +213,22 @@ public final class DeviceSession {
             if c.value != v { c.value = v }
         }
     }
-    public private(set) var globals: [Int] = []
+    public private(set) var globals: [Int] = [] { didSet { syncGlobalCells() } }
+    /// The globals one by one, as `cell` is for the track's: a view reading `globalCell(id).value` redraws when that
+    /// global changes, not when any does (turning REVERB's SIZE redrew every shared card on the Mixer, 2026-11-06).
+    @ObservationIgnored private var globalCells: [Int: ParamCell] = [:]
+    public func globalCell(_ id: Int) -> ParamCell {
+        if let c = globalCells[id] { return c }
+        let c = ParamCell(id < _globals.count ? _globals[id] : 0)
+        globalCells[id] = c
+        return c
+    }
+    private func syncGlobalCells() {
+        for (id, c) in globalCells {
+            let v = id < _globals.count ? _globals[id] : 0
+            if c.value != v { c.value = v }
+        }
+    }
     /// DESC of every parameter: label, range, format, enum names. The engine's P_E0..P_E7 are re-read
     /// whenever the selected track or its engine changes.
     public private(set) var trackDescs: [Int: ParamDesc] = [:]
@@ -234,19 +249,21 @@ public final class DeviceSession {
     @ObservationIgnored private var recentChanges: [(key: Int, at: Date)] = []
     @ObservationIgnored private var soundLoadedAt = Date.distantPast
 
-    private var pendingSteps: Set<Int> = []        // stepKey(track, index)
+    @ObservationIgnored private var pendingSteps: Set<Int> = []        // stepKey(track, index)
     /// Steps and parameters the iPad wrote lately. SLOOP doesn't push about the editor's own writes,
     /// and a read already queued before a write would bring back the old value, so reads leave these
     /// alone for a moment. Keys: "s<stepKey>", "p<track>.<id>", "g<id>".
-    private var recentWrites: [String: Date] = [:]
-    private var stepWrites: [Int: SynthStep] = [:]
+    /// (This bookkeeping is never drawn: ignored by Observation, or every knob write woke whatever read it while
+    /// drawing; the Mixer's strips redrew on each turn of a shared card's column, 2026-11-06.)
+    @ObservationIgnored private var recentWrites: [String: Date] = [:]
+    @ObservationIgnored private var stepWrites: [Int: SynthStep] = [:]
     @ObservationIgnored private var reloadingAll = false
     @ObservationIgnored private var reloadAgain = false
-    private var stepSending: Set<Int> = []
+    @ObservationIgnored private var stepSending: Set<Int> = []
     @ObservationIgnored private var drumWrites: [Int: DrumStep] = [:]
     @ObservationIgnored private var drumSending: Set<Int> = []
-    private var paramWrites: [String: Int] = [:]      // latest value waiting to be sent (knob drags)
-    private var paramSending: Set<String> = []
+    @ObservationIgnored private var paramWrites: [String: Int] = [:]      // latest value waiting to be sent (knob drags)
+    @ObservationIgnored private var paramSending: Set<String> = []
     private func recentlyWritten(_ key: String) -> Bool {
         guard let d = recentWrites[key] else { return false }
         return Date().timeIntervalSince(d) < 1.5
