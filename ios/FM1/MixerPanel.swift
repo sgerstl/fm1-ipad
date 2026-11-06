@@ -14,7 +14,7 @@ struct MixerPage: View {
     let ui: EditorUI
     @Environment(\.soundPanelRoom) private var panelRoom
 
-    /// The cards' whole height (header, carousel, dots), once laid out.
+    /// The cards' whole height (the selector beside the carousel), once laid out.
     @State private var cardsHeight: CGFloat?
 
     var body: some View {
@@ -25,23 +25,20 @@ struct MixerPage: View {
         // main thread on the iPad Air, hitches up to 233 ms (Instruments, 2026-11-06). A fixed frame stops it there.
         GeometryReader { g in
             let w = g.size.width, cards = shared.isEmpty ? 0 : (cardsHeight.map { $0 + 24 } ?? 0)
-            let strips = max(200, g.size.height - 8 - cards - 24 - 10 - 32)       // header, spacing, the panel's padding
+            let strips = max(200, g.size.height - 8 - cards - 32)                 // the panel's padding
+            // no headings and no section list over the strips or the cards (Scott, 2026-11-06): the strips and the
+            // cards speak for themselves, and the selector beside the cards says which is in the middle
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 10) {
-                    // the header reads the section in its own body: read here, every swipe of the cards re-ran this
-                    // page and re-measured the whole tab (2026-11-06)
-                    MixerSectionsHeader(session: session, ui: ui)
-                    MixerStrips(session: session, ui: ui, touched: { show(.mixer) })
-                        .frame(width: max(0, w - panelRoom - 32), height: strips)
-                        .padding(16)
-                        .panel()
-                        .overlay(alignment: .top) { MixerDeviceEdge(session: session) }      // (the FM-1's screen read there)
-                        .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
-                }
-                .padding(.trailing, panelRoom)
+                MixerStrips(session: session, ui: ui, touched: { show(.mixer) })
+                    .frame(width: max(0, w - panelRoom - 32), height: strips)
+                    .padding(16)
+                    .panel()
+                    .overlay(alignment: .top) { MixerDeviceEdge(session: session) }      // (the FM-1's screen read there)
+                    .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
+                    .padding(.trailing, panelRoom)
                 if !shared.isEmpty {
-                    MixerCards(session: session, ui: ui, pages: shared, trailing: panelRoom)
-                        .frame(width: w, height: cardsHeight)
+                    MixerCards(session: session, ui: ui, pages: shared, trailing: panelRoom, width: w)
+                        .frame(width: w, height: cardsHeight, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: cardsHeight == nil)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
                             if cardsHeight == nil, h > 0 { cardsHeight = h.rounded(.up) }
@@ -73,74 +70,11 @@ private struct MixerDeviceEdge: View {
     }
 }
 
-/// MIXER's header with GLO's sections across it, the current one lit.
-private struct MixerSectionsHeader: View {
-    let session: DeviceSession
-    let ui: EditorUI
-
-    var body: some View {
-        MixerHeader(title: "MIXER", lit: ui.mixerSection == .mixer) { sections }
-    }
-
-    /// GLO's pages in the FM-1's order, numbered as GLO steps them, the current one lit: a tap goes there (the
-    /// strips, or that card into the middle), and it's how VoiceOver moves between them.
-    private var sections: some View {
-        HStack(spacing: 2) {
-            ForEach(SkiffButtonMap.MixerTab.allCases) { t in
-                let on = ui.mixerSection == t
-                Button { show(t) } label: {
-                    HStack(spacing: 6) {
-                        LED(on: on)
-                        Text(t.title).font(.system(size: 13, weight: on ? .semibold : .regular))
-                            .foregroundStyle(on ? Theme.text : Theme.textSecondary)
-                            .lineLimit(1).fixedSize()           // narrowed by the sound panel: never a letter a line
-                    }
-                    .padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(t.title), GLO page \(t.rawValue + 1) of \(SkiffButtonMap.MixerTab.allCases.count)")
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .frame(height: 24)
-    }
-
-    private func onDevice(_ page: Int) -> Bool {
-        session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == page } == true
-    }
-
-    private func show(_ t: SkiffButtonMap.MixerTab) {
-        if ui.mixerSection != t { ui.mixerSection = t }
-        if session.screenLinked, ui.followDevice, !onDevice(t.page) { session.showOnDevice(page: t.page) }
-    }
-}
-
 /// The sound panel's room (ENV LFO FX SEL EDIT ARP bring it in from the right, for the selected track; built for
 /// the Song tab, not yet here): whoever shows the panel over the Mixer tab sets its width, and the strips and the
 /// cards make way. 0 while it's out. Nothing on the tab sits on the right edge or takes a swipe from it.
 extension EnvironmentValues {
     @Entry var soundPanelRoom: CGFloat = 0
-}
-
-private struct MixerHeader<Trailing: View>: View {
-    let title: String
-    let lit: Bool
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(title).font(.system(size: 13, weight: .semibold)).tracking(0.6)
-                .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
-                .accessibilityAddTraits(.isHeader)
-            Rectangle().fill(Theme.stepEmpty).frame(height: 1)
-            trailing
-        }
-        .frame(minHeight: 24)
-    }
-}
-
-extension MixerHeader where Trailing == EmptyView {
-    init(title: String, lit: Bool) { self.init(title: title, lit: lit, trailing: { EmptyView() }) }
 }
 
 /// The page on the FM-1's screen: a lit edge along a panel's top, as Shape's cards have it.
@@ -170,9 +104,10 @@ private struct MixerCards: View {
     let ui: EditorUI
     let pages: [SoundPage]
     let trailing: CGFloat
+    /// The tab's width, given (measured here, beside the selector, it went round in a circle and came out 0)
+    let width: CGFloat
     @State private var marks = ShapeMarks()
     @State private var centred: String?
-    @State private var width: CGFloat = 0
     /// The tallest card, once laid out: the carousel's height from then on (see the frame below)
     @State private var height: CGFloat?
     @State private var placed = false          // the first card placed on opening: not a swipe, so the section stays
@@ -184,10 +119,12 @@ private struct MixerCards: View {
 
     var body: some View {
         let _ = BodyCounter.tick("MixerCards")
-        let cardWidth = min(640, max(440, ((width - trailing) * 0.6).rounded()))
-        VStack(alignment: .leading, spacing: 10) {
-            MixerHeader(title: "SHARED", lit: ui.mixerSection != .mixer)
-                .padding(.trailing, trailing)
+        // the carousel beside the selector: the card in the middle roomy, its neighbours partly in view on both sides
+        // (Scott, 2026-11-06: "a little narrower once we put the buttons in on the left")
+        let room = max(0, width - trailing - Self.selectorWidth - 16)
+        let cardWidth = min(560, max(380, (room * 0.56).rounded()))
+        HStack(alignment: .center, spacing: 16) {
+            selector
             ScrollView(.horizontal) {
                 // all four built once, not lazily: a lazy stack made the card coming in (columns, graph) on every
                 // swipe, 70–85 ms of view creation and layout on the iPad Air (Instruments, 2026-11-06)
@@ -208,17 +145,14 @@ private struct MixerCards: View {
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $centred, anchor: .center)
-            .contentMargins(.horizontal, max(0, (width - trailing - cardWidth) / 2), for: .scrollContent)
+            .contentMargins(.horizontal, max(0, (room - cardWidth) / 2), for: .scrollContent)
             .scrollIndicators(.hidden)
-            .padding(.trailing, trailing)
-            // a fixed height once the cards are measured, not .fixedSize: sized by its content, every change in a
+            // a fixed size once the cards are measured, not .fixedSize: sized by its content, every change in a
             // card (a swipe's page change, a value) asked the whole tab to measure again (2026-11-06)
-            .frame(height: height)
+            .frame(width: room, height: height)
             .fixedSize(horizontal: false, vertical: height == nil)
-            dots
-                .padding(.trailing, trailing)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .padding(.trailing, trailing)
         .onAppear {
             placed = true
             centred = id(for: ui.mixerSection) ?? pages.first?.id
@@ -249,25 +183,33 @@ private struct MixerCards: View {
         }
     }
 
-    /// How many cards and which is in the middle: a dot each, the current one white (track-neutral), the others grey;
-    /// a tap brings that card in. They follow the swipe (`centred`).
-    private var dots: some View {
-        HStack(spacing: 0) {
+    static let selectorWidth: CGFloat = 132
+
+    /// DELAY REVERB CHORUS GLOBAL down the left (Scott, 2026-11-06, in place of the dots and the section names): the
+    /// card in the middle lit, a tap brings that card in (and, linked, its page to the FM-1). They follow the swipe.
+    private var selector: some View {
+        VStack(spacing: 8) {
             ForEach(Array(pages.enumerated()), id: \.element.id) { k, p in
                 let on = centred == p.id
                 Button { withAnimation(spring) { centred = p.id } } label: {
-                    Circle().fill(on ? Theme.text : Theme.textTertiary.opacity(0.6))
-                        .frame(width: 8, height: 8)
-                        .frame(width: 28, height: 28)              // the dot small, its target not
-                        .contentShape(Rectangle())
+                    HStack(spacing: 8) {
+                        LED(on: on)
+                        Text(p.title.capitalized).font(.system(size: 15, weight: on ? .semibold : .regular))
+                            .foregroundStyle(on ? Theme.text : Theme.textSecondary)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(width: Self.selectorWidth, height: 44)
+                    .background { if on { Color.clear.selectedKey(10) } else { Color.clear.raisedKey(10) } }
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(p.title.capitalized), card \(k + 1) of \(pages.count)")
+                .buttonStyle(PressSink())
+                .accessibilityLabel("\(p.title.capitalized), shared effect \(k + 1) of \(pages.count)")
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .frame(maxWidth: .infinity)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: centred)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: centred)
     }
 
     /// The card nearest the middle when the finger lifts, one further when it was flicked that way; landed with `spring`.
