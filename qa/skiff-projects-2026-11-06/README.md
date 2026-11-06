@@ -103,6 +103,8 @@ The same project UX as SLOOP's: New project, Save as, Save, open with the save-f
 
 ## Not verified
 
-- **No screenshots.** Every simulator launch on this Mac hung (`simctl launch` stuck for every session at once), so the sheet hasn't been seen running. The app builds for the iPad simulator and for My Mac. The coordinating session was asked about restarting CoreSimulatorService.
+- **No screenshots.** Every simulator launch on this Mac hung (`simctl launch` stuck for every session at once), so the sheet hasn't been seen running. The app builds for the iPad simulator and for My Mac. Restarting CoreSimulatorService would have stopped every session's simulator, so Scott chose to skip the screenshots.
+- **The move to the new folders, in the app.** It's unit-tested (`ProjectFoldersTests`), but hasn't been watched on a real container. On first launch after this change, check Files › On My iPad › Lupe: the old `Projects` and `Backups` folders gone, everything under `SLOOP/` and `Skiff/`.
+- **Design pre-flight, rendered checks.** The sheet uses the existing Theme tokens and the sheet's own row, section and alert patterns, with no new colours, sizes or controls. Contrast, focus order, VoiceOver labels and Dynamic Type still need checking on a running build.
 - **Not tried on Scott's FM-1.** Nothing here needs a flash, and nothing was flashed. On the real unit, check that save stops the transport cleanly, that open's progress isn't too slow (GETs of 256 bytes over USB MIDI), and the PATTERNS page after an open that brought new patterns.
 - **The app against skiff-sim from the iPad UI.** Only the transfer layer was run end to end (above), not through the sheet.
