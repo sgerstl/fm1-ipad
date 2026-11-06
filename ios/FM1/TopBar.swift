@@ -43,6 +43,7 @@ struct TopBar: View {
             }
         }
         .frame(height: 64)
+        .zIndex(1)              // the play key's "Playing from the start" tag hangs below the bar, over the page
         .sheet(isPresented: projectsOpen) { ProjectsSheet(store: projects, session: session) }
         .namePrompt($naming, store: projects)
     }
@@ -315,19 +316,111 @@ struct TopBar: View {
         .accessibilityAddTraits(.isToggle)
     }
 
+    /// Tap: play or stop. Hold (half a second): play from the start, as the FM-1's GLO + PLAY (Scott, 2026-11-06):
+    /// every track from its first entry with SONG on, the patterns from their first step with it off. A hold shows
+    /// nothing until it happens, so it has three other ways in: the VoiceOver action "Play from the start", ⇧Space,
+    /// and the pointer's tooltip; and when it happens a tag under the key says so. Skiff only: SLOOP's editor can't
+    /// restart, so there the hold, the action and the shortcut aren't there.
+    ///
+    /// One press gesture decides tap or hold, not a Button with a long press beside it: whether the Button still
+    /// fired on the release that ended a hold changed from press to press in the simulator (2026-11-06), so a hold
+    /// sometimes stopped what it had just started. Here a release is a tap only if the hold hadn't fired and the
+    /// finger stayed on the key. The key sinks as PressSink's do.
     private var playKey: some View {
-        Button { session.setPlaying(!session.playing) } label: {
-            Image(systemName: session.playing ? "stop.fill" : "play.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Theme.text)
-                .frame(width: 44, height: 44)
-                .background { if session.playing { Color.clear.raisedKey() } }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressSink())
+        let canHold = session.canPlayFromStart && isConnected
+        return Image(systemName: session.playing ? "stop.fill" : "play.fill")
+        .font(.system(size: 17, weight: .semibold))
+        .foregroundStyle(Theme.text)
+        .frame(width: 44, height: 44)
+        .background { if session.playing { Color.clear.raisedKey() } }
+        .environment(\.keyPressed, playDown)
+        .offset(y: playDown ? (look.flat ? 2 : 1) : 0)
+        .brightness(!look.flat && playDown ? -0.06 : 0)
+        .animation(reduceMotion || !look.flat ? nil : .easeOut(duration: playDown ? 0.06 : 0.1), value: playDown)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { v in
+                guard isConnected else { return }
+                if !pressing {
+                    pressing = true
+                    holdFired = false
+                    playDown = true
+                    if canHold {
+                        holdTimer = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(500))
+                            guard !Task.isCancelled, playDown else { return }
+                            holdFired = true
+                            playFromStart()
+                        }
+                    }
+                } else if abs(v.translation.width) > 44 || abs(v.translation.height) > 44 {
+                    // dragged off the key: neither a tap nor a hold
+                    playDown = false
+                    holdTimer?.cancel()
+                }
+            }
+            .onEnded { _ in
+                holdTimer?.cancel()
+                let tap = pressing && playDown && !holdFired
+                pressing = false
+                playDown = false
+                if tap { session.setPlaying(!session.playing) }
+            })
         .disabled(!isConnected)
         .opacity(isConnected ? 1 : 0.4)
+        .sensoryFeedback(.impact(weight: .medium), trigger: fromStartCount)
+        .overlay(alignment: .top) {
+            if fromStartShown {
+                Text("Playing from the start")
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
+                    .fixedSize()
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(look.surface(.held)).elevationShadow(.held, look))
+                    .offset(y: 52)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -4)))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)              // VoiceOver hears it as an announcement
+            }
+        }
+        .background {
+            Button("Play from the start", action: playFromStart)
+                .keyboardShortcut(.space, modifiers: .shift)
+                .disabled(!canHold)
+                .opacity(0).accessibilityHidden(true)
+        }
+        .help(canHold ? "Tap to play or stop · hold to play from the start (⇧Space)" : "Play or stop")
+        .accessibilityElement()
         .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { if isConnected { session.setPlaying(!session.playing) } }
+        .accessibilityHint(canHold ? "Hold to play from the start" : "")
+        .accessibilityActions {
+            if canHold { Button("Play from the start", action: playFromStart) }
+        }
+    }
+
+    @State private var pressing = false
+    @State private var playDown = false
+    @State private var holdFired = false
+    @State private var holdTimer: Task<Void, Never>?
+    @State private var fromStartShown = false
+    @State private var fromStartCount = 0
+    @State private var fromStartHide: Task<Void, Never>?
+    @Environment(\.look) private var look
+
+    private func playFromStart() {
+        guard session.canPlayFromStart, isConnected else { return }
+        session.playFromStart()
+        fromStartCount += 1
+        AccessibilityNotification.Announcement("Playing from the start").post()
+        withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .easeOut(duration: 0.15)) { fromStartShown = true }
+        fromStartHide?.cancel()
+        fromStartHide = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.12)) { fromStartShown = false }
+        }
     }
 
     /// Position over tempo; a tap opens the tempo. In song mode the tempo line says SONG (PLAY plays the

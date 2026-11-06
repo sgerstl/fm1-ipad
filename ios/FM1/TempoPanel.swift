@@ -6,25 +6,44 @@ import SwiftUI
 // a number typed in with its range. Following another clock (CLOCK / SYNC = USB or TRS) it's all off, and says
 // why. BPM LOCK doesn't stop it: that only makes the FM-1's SELECT knob need GLO held (Skiff ui_input.c).
 
-/// Where the tempo panel opens (global): under the readout that was tapped.
+/// Where the tempo panel opens (global): under the readout that was tapped. It grows out of the readout and shrinks
+/// back into it (Scott, 2026-11-06: it used to pop in): scale and opacity anchored at the readout, a short spring in
+/// and a quicker ease out; Reduce Motion, a fade. Only the transform and opacity move: the panel's one shadow is on
+/// its plain background shape, so nothing re-blurs per frame on a 120 Hz iPad.
 struct TempoOverlay: View {
     let session: DeviceSession
     @Bindable var ui: EditorUI
     @State private var frame: CGRect = .zero
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The panel's width (TempoPanel's frame) and half the top bar's readout (ReadoutLabel's 112 + 16): where it
+    /// grows from. The phone's readout is narrower; a few points off at that size and speed don't show.
+    private static let width: CGFloat = 300, readoutHalf: CGFloat = 64
 
     var body: some View {
+        let open = ui.tempoAt != nil
         GeometryReader { g in
-            if let at = ui.tempoAt {
-                ZStack(alignment: .topLeading) {
+            // the panel conditional on its own (not inside the catcher's stack), so its transition is the one that runs
+            ZStack(alignment: .topLeading) {
+                if open {
                     Color.clear.contentShape(Rectangle()).onTapGesture { ui.tempoAt = nil }
                         .accessibilityHidden(true)
+                }
+                if let at = ui.tempoAt {
+                    let left = min(max(16, at.x - frame.minX), g.size.width - Self.width - 16)
+                    // the readout's middle, over the panel's top edge
+                    let anchor = UnitPoint(x: min(1, max(0, (at.x - frame.minX + Self.readoutHalf - left) / Self.width)), y: 0)
                     TempoPanel(session: session) { ui.tempoAt = nil }
                         .fixedSize()
-                        .alignmentGuide(.leading) { d in -min(max(16, at.x - frame.minX), g.size.width - d.width - 16) }
+                        .alignmentGuide(.leading) { _ in -left }
                         .alignmentGuide(.top) { _ in -(at.y - frame.minY + 8) }
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.2, anchor: anchor).combined(with: .opacity))
                 }
             }
+            .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
         }
+        .animation(reduceMotion ? .easeOut(duration: open ? 0.15 : 0.1)
+                                : open ? .spring(duration: 0.25, bounce: 0.12) : .easeIn(duration: 0.15), value: open)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
     }
 }

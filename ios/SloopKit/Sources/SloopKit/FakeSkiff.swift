@@ -568,6 +568,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             return [a[0], 0, 0, 0, 64]
         case (76, 0), (76, 1):
             if a.first == 1 { setPlaying(true) } else if a.first == 2 { setPlaying(false) }
+            if a.first == 3 { setPlaying(false); setPlaying(true) }      // RESTART: from the top, playing on
             if a.first == 4 {
                 // rec_tap: the selected track armed disarms them all; otherwise it's armed too (and a stopped
                 // transport starts)

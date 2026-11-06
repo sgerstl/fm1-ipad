@@ -381,6 +381,43 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         return TransportState(playing: playing, countingIn: b[2] != 0, armedTracks: Int(b[4]), selected: Int(b[5]))
     }
 
+    /// GLO + PLAY: play from the start (Scott, 2026-11-06: hold PLAY). The editor has no op for it, so it goes as the
+    /// panel does it (ui_layer.c layer_play). SONG on or ONCE: every track on its list's first entry, then PLAY
+    /// (bank.c song_top: stopped there and then, each track put on its first entry, PLAY); LIST PLAY on a stopped
+    /// track puts it straight there (entry_go), so the stop has to be the audio's, not just asked for. SONG off:
+    /// RESTART playing (op 3, every pattern from its first step), PLAY stopped (op 1 plays a chain from its first
+    /// part, as the panel's).
+    public func playFromStart() async throws {
+        let song = skiff.hasSongLists ? try await songLists() : nil
+        let (playing, _) = try await transportRaw()
+        guard let song, song.mode != .off else {
+            _ = try await request(SkiffCmd.transport, [playing ? 3 : 1], match: 0, "TRANSPORT", retries: 0)
+            return
+        }
+        if playing {
+            _ = try await transport(play: false)
+            // the audio takes the STOP at its next block (seq.c transport_req): a few ms
+            for _ in 0..<30 {
+                let (on, pending) = try await transportRaw()
+                if !on && pending == 0 { break }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+        for (t, l) in song.tracks.enumerated() {
+            guard let e = l.entries.firstIndex(where: { !$0.isEmpty }) else { continue }
+            _ = try await list(.play(track: t, entry: e))
+        }
+        _ = try await transport(play: true)
+    }
+
+    /// TRANSPORT's playing and the request the audio has yet to take, as they are (transportState counts a pending
+    /// request as done).
+    private func transportRaw() async throws -> (playing: Bool, pending: UInt8) {
+        let b = try await request(SkiffCmd.transport, [], match: 0, "TRANSPORT", timeout: .milliseconds(200))
+        guard b.count >= 6 else { throw DecodeError.short(cmd: SkiffCmd.transport) }
+        return (b[1] != 0, b[3])
+    }
+
     /// REC, as the FM-1's button (TRANSPORT op 4). Sent once: it toggles.
     public func rec() async throws { _ = try await request(SkiffCmd.transport, [4], match: 0, "TRANSPORT REC", retries: 0) }
 
