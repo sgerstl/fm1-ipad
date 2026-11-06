@@ -96,8 +96,11 @@ struct PianoRoll: View {
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
         .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
         .onChange(of: track) { _, _ in ui.keptRows = [:]; ui.noteSel = []; ui.stepSel = [] }
-        // what's picked and what can be done to it, floating over the grid's foot
-        .overlay(alignment: .bottom) { SelectionBar(edits: StepEdits(session: session, ui: ui, track: track, rows: rows)).padding(.bottom, 12) }
+        // what's picked and what can be done to it, floating over the grid's foot (the Song tab: in its pattern
+        // header instead, so the velocity and the motion lanes stay uncovered; 2026-11-06)
+        .overlay(alignment: .bottom) {
+            if !inSongTab { SelectionBar(edits: StepEdits(session: session, ui: ui, track: track, rows: rows)).padding(.bottom, 12) }
+        }
     }
 
     // No paging with the playhead (removed 2026-11-01, Scott): the grid moves only when panned, since
