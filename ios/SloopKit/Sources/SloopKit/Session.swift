@@ -1024,7 +1024,7 @@ public final class DeviceSession {
     private func pushLoop(_ c: FirmwareDriver) async {
         for await p in c.pushes {
             stats.pushes += 1
-            if case .ui = p {} else { onEdit?() }
+            switch p { case .ui, .meter: break; default: onEdit?() }     // (levels aren't edits)
             switch p {
             case .stepChanged(let i, let t):
                 stats.stepPushes += 1
@@ -1728,6 +1728,31 @@ public final class DeviceSession {
         guard let k = driver as? SkiffDriver, let rc = try? await k.projectSaveAs(slot: slot, name: name) else { return 2 }
         await refreshSkiffProjects()
         return rc
+    }
+    /// The music on the FM-1 as a project for the iPad (Skiff: it stops the transport, as a save on the FM-1 does).
+    public func readSkiffProject() async throws -> SkiffProjectData {
+        guard let k = driver as? SkiffDriver, let info else { throw ProjectError.notConnected }
+        return try await backupTurn { try await SkiffProjectTransfer.read(firmware: info.version, request: SkiffProjectTransfer.request(k)) }
+    }
+    /// An iPad project onto the FM-1 as the music, named `name` (SkiffProject.swift), then everything read again.
+    public func writeSkiffProject(_ p: SkiffProjectData, name: String?, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {
+        guard let k = driver as? SkiffDriver else { throw ProjectError.notConnected }
+        projectBusy = true
+        defer { projectBusy = false }
+        do {
+            try await backupTurn {
+                try await SkiffProjectTransfer.write(p, name: name, request: SkiffProjectTransfer.request(k)) { v in Task { @MainActor in progress(v) } }
+            }
+        } catch {
+            await rereadAfterSkiffProject()     // patterns may be in the pool now; the music is as it was or the new one
+            throw error
+        }
+        await rereadAfterSkiffProject()
+    }
+    private func rereadAfterSkiffProject() async {
+        await rereadAfterProject()
+        if let store = skiffSong { await store.refresh(pool: true) }
+        await refreshSkiffProjects()
     }
     /// A whole backup of the FM-1, saved in the app's documents (Files): before a save over a project slot.
     public func backUpDevice() async throws -> URL {
