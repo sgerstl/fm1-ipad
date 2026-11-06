@@ -177,6 +177,7 @@ private struct MixerCards: View {
     @State private var height: CGFloat?
     @State private var placed = false          // the first card placed on opening: not a swipe, so the section stays
     @State private var scrolling = false       // a swipe or its snap under way: the page change waits for it to settle
+    @State private var grabbed: Int?           // the card in the middle when the finger came down: a swipe moves one from it
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.88) }   // ~0.25 s, a hint of bounce
@@ -241,7 +242,9 @@ private struct MixerCards: View {
             scrolling = phase.isScrolling
             // the finger lifts: snap to the card now with a stiff spring instead of the scroll view's own slow settle,
             // and make it the section at once, so its columns take the finger while it lands (Scott, 2026-11-06)
-            if old == .interacting, phase == .decelerating { snap(velocity: context.velocity?.dx ?? 0) }
+            if phase == .interacting, old != .interacting { grabbed = centred.flatMap { c in pages.firstIndex { $0.id == c } } }
+            // any release, a flick or a slow one: a slow one went to the scroll view's own long settle (2026-11-06)
+            if old == .interacting, phase != .interacting { snap(velocity: context.velocity?.dx ?? 0) }
             if !phase.isScrolling { commit() }
         }
     }
@@ -268,11 +271,15 @@ private struct MixerCards: View {
     }
 
     /// The card nearest the middle when the finger lifts, one further when it was flicked that way; landed with `spring`.
+    /// Magnets (Scott, 2026-11-06: "it too easily flings past the next pane"): a swipe lands on the card it started
+    /// from or one either side, never further. A flick goes one on from the card grabbed (not from the one that had
+    /// already reached the middle under the finger, which flung two); a slow release goes to the nearest of those.
     private func snap(velocity: CGFloat) {
         guard let cur = centred, let k = pages.firstIndex(where: { $0.id == cur }) else { return }
-        var to = k
-        if abs(velocity) > 0.4 { to = velocity > 0 ? k + 1 : k - 1 }        // (points per millisecond: a flick)
-        to = min(max(to, 0), pages.count - 1)
+        let from = grabbed ?? k
+        var to = abs(velocity) > 0.4 ? (velocity > 0 ? from + 1 : from - 1) : k     // (points per millisecond: a flick)
+        to = min(max(to, from - 1, 0), from + 1, pages.count - 1)
+        grabbed = nil
         withAnimation(spring) { centred = pages[to].id }
         scrolling = false
         commit()
