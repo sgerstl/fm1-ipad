@@ -111,6 +111,7 @@ struct KnobControl: View {
     @State private var dragging = false
     @State private var tick = 0
     @State private var engaged = 0             // the hold took: a light haptic
+    @Environment(\.columnsOverScroll) private var columnsOverScroll
 
     /// Points of travel for the whole range, straight up.
     static let travel = 200.0
@@ -177,7 +178,7 @@ struct KnobControl: View {
                 }
             }
             // a column: a horizontal pan of UIKit's, so the scroll view keeps every vertical drag
-            .modifier(ColumnPan(on: column != nil, pan: HorizontalPan(began: { p in
+            .modifier(ColumnPan(on: column != nil, pan: HorizontalPan(winsOverScroll: columnsOverScroll, began: { p in
                 guard column != nil else { return }
                 dragging = true
                 _ = activate?()
@@ -266,23 +267,33 @@ func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: 
 /// A pan that begins only when the finger moves more across than up or down (UIKit decides, before the scroll view
 /// does): Shape's columns turn on a horizontal drag, and a vertical one is the page's scroll from the first point.
 struct HorizontalPan: UIGestureRecognizerRepresentable {
+    /// Over a horizontal scroll view (the Mixer's cards): the column takes the slide and the scroll waits for it
+    /// to fail. Both began at once there, so the carousel drifted and snapped under a turning value (2026-11-06).
+    var winsOverScroll = false
     var began: (CGPoint) -> Void
     var changed: (CGPoint) -> Void
     var ended: () -> Void
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var winsOverScroll = false
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard let p = g as? UIPanGestureRecognizer else { return true }
             let v = p.velocity(in: p.view)
             return abs(v.x) > abs(v.y)
         }
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            guard winsOverScroll, let s = other.view as? UIScrollView, other === s.panGestureRecognizer else { return false }
+            return s.contentSize.width > s.bounds.width + 1          // a horizontal scroll only; a vertical one never waits
+        }
     }
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+    func updateUIGestureRecognizer(_ g: UIPanGestureRecognizer, context: Context) { context.coordinator.winsOverScroll = winsOverScroll }
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
         let g = UIPanGestureRecognizer()
         g.delegate = context.coordinator
         g.maximumNumberOfTouches = 1
+        context.coordinator.winsOverScroll = winsOverScroll
         return g
     }
 
@@ -338,4 +349,9 @@ private struct DialHold: ViewModifier {
     func body(content: Content) -> some View {
         if on { content.gesture(hold) } else { content }
     }
+}
+
+extension EnvironmentValues {
+    /// Columns inside a horizontal scroll view whose slide should win over it (the Mixer's cards).
+    @Entry var columnsOverScroll = false
 }

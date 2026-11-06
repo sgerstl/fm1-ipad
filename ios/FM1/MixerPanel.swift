@@ -14,28 +14,43 @@ struct MixerPage: View {
     let ui: EditorUI
     @Environment(\.soundPanelRoom) private var panelRoom
 
+    /// The cards' whole height (header, carousel, dots), once laid out.
+    @State private var cardsHeight: CGFloat?
+
     var body: some View {
         let _ = BodyCounter.tick("MixerPage")
         let shared = SoundPage.pages(session).filter { $0.family == .glo }
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 10) {
-                // the header reads the section in its own body: read here, every swipe of the cards re-ran this
-                // page and re-measured the whole tab (2026-11-06)
-                MixerSectionsHeader(session: session, ui: ui)
-                MixerStrips(session: session, ui: ui, touched: { show(.mixer) })
-                    .padding(16)
-                    .frame(maxHeight: .infinity)
-                    .panel()
-                    .overlay(alignment: .top) { MixerDeviceEdge(session: session) }      // (the FM-1's screen read there)
-                    .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
+        // Fixed sizes for the strips and the cards, worked out here: with flexible stacks, a value turning on a card
+        // (its text a little wider) re-measured the whole tab, every strip and fader, on every frame. 98% of the
+        // main thread on the iPad Air, hitches up to 233 ms (Instruments, 2026-11-06). A fixed frame stops it there.
+        GeometryReader { g in
+            let w = g.size.width, cards = shared.isEmpty ? 0 : (cardsHeight.map { $0 + 24 } ?? 0)
+            let strips = max(200, g.size.height - 8 - cards - 24 - 10 - 32)       // header, spacing, the panel's padding
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 10) {
+                    // the header reads the section in its own body: read here, every swipe of the cards re-ran this
+                    // page and re-measured the whole tab (2026-11-06)
+                    MixerSectionsHeader(session: session, ui: ui)
+                    MixerStrips(session: session, ui: ui, touched: { show(.mixer) })
+                        .frame(width: max(0, w - panelRoom - 32), height: strips)
+                        .padding(16)
+                        .panel()
+                        .overlay(alignment: .top) { MixerDeviceEdge(session: session) }      // (the FM-1's screen read there)
+                        .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
+                }
+                .padding(.trailing, panelRoom)
+                if !shared.isEmpty {
+                    MixerCards(session: session, ui: ui, pages: shared, trailing: panelRoom)
+                        .frame(width: w, height: cardsHeight)
+                        .fixedSize(horizontal: false, vertical: cardsHeight == nil)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                            if cardsHeight == nil, h > 0 { cardsHeight = h.rounded(.up) }
+                        }
+                }
             }
-            .padding(.trailing, panelRoom)
-            if !shared.isEmpty {
-                MixerCards(session: session, ui: ui, pages: shared, trailing: panelRoom)
-            }
+            .padding(.bottom, 8)
+            .frame(width: w, height: g.size.height, alignment: .topLeading)
         }
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func onDevice(_ page: Int) -> Bool {
@@ -274,6 +289,7 @@ private struct MixerCards: View {
     private func card(_ p: SoundPage) -> some View {
         let middle = centred == p.id
         return SoundCard(session: session, ui: ui, rows: [p], pages: glo, marks: marks).equatable()
+            .environment(\.columnsOverScroll, true)       // a slide on a column turns it; the carousel moves from elsewhere
             // a card at the side takes a tap anywhere and comes to the middle; its columns work once it's there
             .overlay {
                 if !middle {
