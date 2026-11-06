@@ -68,7 +68,7 @@ struct ValueLoupeLayer: View {
 private struct LoupeFace: View {
     let spec: KnobSpec
     let face: LoupeState.Face
-    @Environment(\.look) private var look
+    private let look = Look()
 
     var body: some View {
         Group {
@@ -80,7 +80,7 @@ private struct LoupeFace: View {
                 HStack(spacing: 8) {
                     Canvas { ctx, sz in
                         drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar,
-                                 radius: 13, line: 3, cap: 8, flat: look.flat)
+                                 radius: 13, line: 3, cap: 8)
                     }
                     .frame(width: 32, height: 32)
                     VStack(alignment: .leading, spacing: 0) {

@@ -67,7 +67,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case transport(play: Bool)                 // LIVE op 1
     case rec                                   // LIVE op 4: REC, as the FM-1's REC button
     case layerKey(layer: Int, key: Int, down: Bool)   // LIVE op 2: a layer's key (SAVE = 7: sections, store, mode, SONG REC)
-    case chain([Int])                          // LIVE op 9: play these sections in turn (only while playing; [] stops)
     case masterLevel(Int)                      // LIVE op 11: the master level 0..126; 127 gives it back to the MASTER knob
     case bkList                                // backup: list the objects (and snapshot them)
     case bkGet(id: Int, offset: Int, count: Int)
@@ -104,7 +103,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: Cmd.desc
         case .watch: Cmd.watch
         case .ping: Cmd.ping
-        case .live, .transport, .rec, .layerKey, .chain, .masterLevel: Cmd.live
+        case .live, .transport, .rec, .layerKey, .masterLevel: Cmd.live
         case .bkList: Cmd.bkList
         case .bkGet: Cmd.bkGet
         case .bkPut: Cmd.bkPut
@@ -141,7 +140,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .transport(let play): [1, play ? 1 : 0]
         case .rec: [4, 0]                       // padded: SLOOP runs a LIVE op only with 2+ bytes (editor_live.c), as its editor pads
         case .layerKey(let l, let k, let d): [2, UInt8(l), UInt8(k), d ? 1 : 0]
-        case .chain(let s): [9, UInt8(min(s.count, 8))] + s.prefix(8).map { UInt8($0 & 3) }
         case .masterLevel(let v): [11, UInt8(max(0, min(127, v)))]
         case .bkList: []
         case .bkGet(let id, let off, let n): [UInt8(id)] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)]
@@ -180,7 +178,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .transport: body.first == 1
         case .rec: body.first == 4
         case .layerKey: body.first == 2
-        case .chain: body.first == 9
         case .masterLevel: body.first == 11
         case .bkList: true
         case .bkGet(let id, let off, _): body.count >= 7 && body[0] == UInt8(id) && Pack7.readU35(body[2...]) == UInt32(off)
@@ -200,7 +197,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         }
     }
 
-    /// The doc says requests that toggle are never sent twice: REC, layer keys and chains are sent with
+    /// The doc says requests that toggle are never sent twice: REC and layer keys are sent with
     /// retries: 0 (Client); the rest set an explicit state and may be retried after a timeout.
     public var description: String {
         let a = args.prefix(8).map(String.init).joined(separator: ",")     // (a sample write carries ~290 bytes)
@@ -218,7 +215,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: "DESC"
         case .watch: "WATCH"
         case .ping: "PING"
-        case .live, .transport, .rec, .layerKey, .chain, .masterLevel: "LIVE"
+        case .live, .transport, .rec, .layerKey, .masterLevel: "LIVE"
         case .bkList: "BK_LIST"
         case .bkGet: "BK_GET"
         case .bkPut: "BK_PUT"

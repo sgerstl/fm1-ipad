@@ -651,7 +651,6 @@ private struct CardForward: ViewModifier {
                     .frame(height: 3)
                     .padding(.horizontal, 14)
                     .offset(y: 1)                    // on the panel's top edge
-                    .glow(Theme.text.opacity(0.7), radius: 6)
                     .opacity(forward ? 1 : 0)
                     .animation(reduceMotion ? nil : SoundCard.focusMove, value: forward)
                     .accessibilityHidden(true)

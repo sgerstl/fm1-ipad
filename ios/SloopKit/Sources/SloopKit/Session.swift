@@ -92,8 +92,6 @@ public final class DeviceSession {
     /// The tracks were edited from the iPad since the last section was stored or loaded: picking a
     /// section in loop mode would replace those edits (SLOOP keeps no copy there).
     public private(set) var tracksEdited = false
-    /// The chain the iPad last asked for (LIVE reports its length and position, not its sections).
-    public private(set) var chainAsked: [Int] = []
     /// Why the last song edit didn't take, for the Song page to say (nil: fine).
     public private(set) var songMessage: String?
     private var settingsCache: [UInt8]?
@@ -466,7 +464,7 @@ public final class DeviceSession {
         try await readTrackList()
         for t in trackIndices { try await readParams(t) }
         try await readGlobals()
-        for t in trackIndices { try await readSteps(t) }
+        for t in trackIndices { _ = try await readSteps(t) }
         try await readLibrary()
         try await readSoundParams(descs: true)
         if capabilities.contains(.sloopSong) { try? await readSongOrder() }
@@ -747,22 +745,6 @@ public final class DeviceSession {
         }
     }
 
-    /// A chain: the sections in turn, each for its pattern length, round and round. Only while playing.
-    public func playChain(_ sections: [Int]) {
-        guard let c = sloop else { return }
-        guard playing else { songMessage = "Press play first: a chain starts on the next bar"; return }
-        guard sections.allSatisfy(song.stored) else { songMessage = "A chain can only use stored sections"; return }
-        songMessage = nil
-        chainAsked = Array(sections.prefix(8))
-        Task { _ = try? await c.chain(chainAsked) }
-    }
-
-    public func stopChain() {
-        guard let c = sloop else { return }
-        chainAsked = []
-        Task { _ = try? await c.chain([]) }
-    }
-
     /// Writes a new song order (only while the song is stopped, as on the device).
     /// Each write re-reads the settings object first and changes only the order's bytes, so settings
     /// changed on the FM-1 since connect are kept; one write runs at a time and the latest order wins.
@@ -930,10 +912,6 @@ public final class DeviceSession {
         }
     }
 
-    /// Reads all of a track's steps; returns how many differed from what the app had.
-    @discardableResult
-    /// `deviceWins`: after a section loaded over the tracks, the device's steps replace even ones the
-    /// iPad just wrote.
     /// Reads one of a track's parameters again (Skiff: one the FM-1 changes without a push, as FM6's PATCH after a write).
     public func rereadParam(track t: Int, id: Int) async {
         guard let c = driver, let v = try? await c.trackParam(track: t, id: id) else { return }
@@ -946,6 +924,9 @@ public final class DeviceSession {
         _ = try? await readSteps(t)
     }
 
+    /// Reads all of a track's steps; returns how many differed from what the app had.
+    /// `deviceWins`: after a section loaded over the tracks, the device's steps replace even ones the
+    /// iPad just wrote.
     private func readSteps(_ t: Int, deviceWins: Bool = false) async throws -> Int {
         guard let c = driver, trackIndices.contains(t) else { return 0 }
         var fixes = 0
@@ -1309,7 +1290,6 @@ public final class DeviceSession {
         let firstLive = !liveSeen
         liveSeen = true
         if song != l.song { song = l.song }
-        if l.song.chainLength == 0 { chainAsked = [] }
         // SONG REC just ended, or a section was stored on the device: the order may have changed. Not on
         // the first LIVE after a connect, where `song` goes from blank to the device's (it marked a just-
         // opened project edited, and failed the sample test when that poll landed mid-upload)

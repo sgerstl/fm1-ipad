@@ -262,12 +262,7 @@ struct SamplerPanel: View {
             if on { rec.stop() } else { message = nil; Task { await rec.record() } }
         } label: {
             ZStack {
-                LookChoice {
-                    Circle().fill(LinearGradient(colors: [Theme.raisedTop, Theme.raisedBottom], startPoint: .top, endPoint: .bottom))
-                        .shadow(color: .black.opacity(0.5), radius: 2, y: 2)
-                } flat: {
-                    RecKeyChiclet()
-                }
+                RecKeyChiclet()
                 if on {
                     Circle().fill(Theme.rec)
                     RoundedRectangle(cornerRadius: 4).fill(Theme.text).frame(width: 24, height: 24)
@@ -385,7 +380,7 @@ struct FlipFace: ViewModifier, Animatable {
     }
 }
 
-/// The sampler's round REC key on the flat look: a round chiclet on its 2 pt edge.
+/// The sampler's round REC key: a round chiclet on its 2 pt edge.
 private struct RecKeyChiclet: View {
     @Environment(\.keyPressed) private var pressed
     var body: some View {

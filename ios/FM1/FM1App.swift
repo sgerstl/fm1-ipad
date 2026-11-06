@@ -21,7 +21,6 @@ struct RootView: View {
     @State private var through = AudioThrough()
     @State private var projects = ProjectStore()
     @State private var firmware = FirmwareCentre()
-    @AppStorage(Look.styleKey) private var lookStyle = LookStyle.flat
 
     init() {
         let demo = ProcessInfo.processInfo.arguments.contains("-demo")
@@ -69,7 +68,6 @@ struct RootView: View {
         .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
         // Lupe's intro on every cold launch, over the app, which starts (and connects) underneath it
         .overlay { if !introOver { LaunchIntro { introOver = true } } }
-        .environment(\.look, Look(style: lookStyle))
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
         // the source (Scott, 2026-11-06): the FM-1 over USB, the Skiff demo or the SLOOP demo; a change makes a new session
         .task(id: SessionRun(demo: useDemo, skiff: ui.demoSkiff, paused: firmware.holdsDevice)) {
@@ -199,10 +197,8 @@ final class EditorUI {
     var pageFromDevice = false
     /// Skiff's GLO pages: the Mixer tab's section (the strips, Delay, Reverb, Chorus, Global), as GLO steps them.
     var mixerSection: SkiffButtonMap.MixerTab = .mixer
-    /// The Song tab's whole-track controls (SWING LEVEL STEPS PAN): open under the selected lane's control, whose
-    /// frame (global) the lane header keeps here.
+    /// The Song tab's whole-track controls (SWING LEVEL STEPS PAN): open under the selected lane's control.
     var trackControlsOpen = false
-    var trackControlsAnchor: CGRect = .zero
     /// Motion lanes added with + Lane, per track (parameters with no records yet).
     var addedLanes: [Int: [Int]] = [:]
     /// The motion lanes hidden from the pattern header's chip (they show whenever there's motion otherwise).

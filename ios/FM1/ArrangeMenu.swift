@@ -75,7 +75,7 @@ struct MenuPanel: View {
     @State private var stack: [(title: String, groups: [[MenuItem]])] = []
     @State private var contentHeight: CGFloat = 0
     @FocusState private var focus: Int?
-    @Environment(\.look) private var look
+    private let look = Look()
 
     static let rowHeight: CGFloat = 52
     static let maxRows = 9

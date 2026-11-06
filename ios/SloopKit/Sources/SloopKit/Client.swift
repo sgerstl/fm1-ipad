@@ -186,7 +186,6 @@ public extension SloopClient {
         if let up = try? await send(.layerKey(layer: layer, key: key, down: false), retries: 0) { return up }
         return try await send(.layerKey(layer: layer, key: key, down: false), retries: 0)
     }
-    func chain(_ sections: [Int]) async throws -> [UInt8] { try await send(.chain(sections), retries: 0) }
     /// The FM-1's master level (speaker and headphones), 0..126; 127 gives it back to the MASTER knob. Sets a state: may be resent.
     func masterLevel(_ v: Int) async throws -> [UInt8] { try await send(.masterLevel(v)) }
 

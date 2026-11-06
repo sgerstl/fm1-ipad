@@ -6,26 +6,12 @@ import SwiftUI
 /// pages and, pressed again, steps to the next one; HOME is the sequencer, SAVE the library. With the
 /// screen link the FM-1's screen moves with them. The active pad sinks and its label lights, as the
 /// FM-1 lights the active button.
-/// A rubber pad, as the keyboard's keys: raised; pressed in when it is the active one. Flat look: a
-/// chiclet, latched down while active (its button style holds it down).
+/// A pad, as the keyboard's keys: a chiclet, latched down while active (its button style holds it down).
 struct PadSurface: View {
     var pressed: Bool
-    @Environment(\.look) private var look
     @Environment(\.keyPressed) private var underFinger
     var body: some View {
-        if look.flat {
-            Chiclet(radius: 10, down: underFinger, edge: !pressed && !underFinger, top: Theme.control)
-        } else {
-            rubber
-        }
-    }
-
-    private var rubber: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .fill(pressed ? Color(hex: 0x1C1D20) : Color(hex: 0x26272B))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.black.opacity(pressed ? 0.6 : 0.45), lineWidth: 6).blur(radius: 5)
-                .clipShape(RoundedRectangle(cornerRadius: 10)))
-            .shadow(color: .black.opacity(pressed ? 0.2 : 0.55), radius: pressed ? 1 : 4, y: pressed ? 0 : 3)
+        Chiclet(radius: 10, down: underFinger, edge: !pressed && !underFinger, top: Theme.control)
     }
 }
 
@@ -33,7 +19,6 @@ struct FunctionPads: View {
     let session: DeviceSession
     let ui: EditorUI
     @State private var heldSave = false
-    @Environment(\.look) private var look
 
     enum Pad: String, CaseIterable, Identifiable {
         case fx = "FX", sel = "SEL", env = "ENV", lfo = "LFO", edit = "EDIT", glo = "GLO"
@@ -76,7 +61,6 @@ struct FunctionPads: View {
             Text(pad == .play && session.playing ? "STOP" : pad.rawValue)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(on ? Theme.text : usable && hasPages(pad) ? Theme.textSecondary : Theme.textTertiary)
-                .shadow(color: on && !look.flat ? Theme.text.opacity(0.8) : .clear, radius: 5)   // flat: lit, no glow
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background { if usable { PadSurface(pressed: on) } else { RoundedRectangle(cornerRadius: 9).fill(Theme.control.opacity(0.5)) } }
                 .overlay(alignment: .topTrailing) {

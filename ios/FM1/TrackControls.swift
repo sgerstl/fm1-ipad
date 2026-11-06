@@ -11,7 +11,7 @@ import SwiftUI
 struct TrackKnobBox: View {
     let session: DeviceSession
     let ui: EditorUI
-    @Environment(\.look) private var look
+    private let look = Look()
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
     static let height: CGFloat = 116
@@ -95,13 +95,12 @@ struct SlideKnob: View {
     /// This slide's axis, once the finger has gone 4 pt: true up and down, false sideways.
     @State private var vertical: Bool?
     @State private var tick = 0
-    @Environment(\.look) private var look
 
     var body: some View {
         let spec = make()
         HStack(spacing: 6) {
             Canvas { ctx, sz in
-                drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 13, line: 3, cap: 8, flat: look.flat)
+                drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 13, line: 3, cap: 8)
             }
             .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 0) {

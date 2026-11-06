@@ -117,7 +117,6 @@ struct PhoneTopBar: View {
     @Binding var useDemo: Bool
     @Environment(AudioThrough.self) private var through
     @Environment(FirmwareCentre.self) private var firmware
-    @Environment(\.look) private var look
     @State private var moreFrame: CGRect = .zero
 
     private var isConnected: Bool { if case .connected = session.status { true } else { false } }
@@ -158,14 +157,10 @@ struct PhoneTopBar: View {
             .frame(width: 40, height: 44)
             .background {
                 if on {
-                    // flat: lit in its colour and lifted (elevation 2, with the ring), so it reads as selected
-                    LookChoice {
-                        RoundedRectangle(cornerRadius: 9).fill(Theme.pad(t))
-                    } flat: {
-                        RoundedRectangle(cornerRadius: 8).fill(Theme.track[t])
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2))
-                            .elevationShadow(.selected, look)
-                    }
+                    // lit in its colour and lifted (elevation 2, with the ring), so it reads as selected
+                    RoundedRectangle(cornerRadius: 8).fill(Theme.track[t])
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2))
+                        .elevationShadow(.selected, Look())
                 } else { Color.clear.raisedKey() }
             }
             .contentShape(Rectangle())
@@ -345,7 +340,7 @@ struct PhoneSequence: View {
             Button { setPanel(!stepPanel) } label: {
                 Text("Step \(i + 1)").font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 10).frame(height: 28)
-                    .latchedKey(stepPanel, 8, sunkFill: nil)
+                    .latchedKey(stepPanel, 8)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressSink(latched: stepPanel))
@@ -358,7 +353,7 @@ struct PhoneSequence: View {
                         Text("Velocity").font(.system(size: 12, weight: .semibold))
                     }
                     .padding(.horizontal, 10).frame(height: 28)
-                    .latchedKey(velocity, 8, sunkFill: nil)
+                    .latchedKey(velocity, 8)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink(latched: velocity))
@@ -394,7 +389,6 @@ struct PhoneSequence: View {
 /// header and step numbers (the ruler above says where you are); the velocity lane on a toggle.
 struct PhonePianoRoll: View {
     @Environment(\.grid) private var grid
-    @Environment(\.look) private var look
     let session: DeviceSession
     let ui: EditorUI
     let track: Int
@@ -425,7 +419,7 @@ struct PhonePianoRoll: View {
                         TwoFingerScrollView(contentSize: CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
                                             offset: $offset, request: request,
                                             rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth) {
-                            PianoRollContent(grid: inner, look: look, session: session, ui: ui, track: track, rows: rows)
+                            PianoRollContent(grid: inner, session: session, ui: ui, track: track, rows: rows)
                         }
                         EditorPlayhead(session: session, track: track, offsetX: offset.x, height: h)
                     }
@@ -458,7 +452,6 @@ struct PhonePianoRoll: View {
 /// Scott 2026-11-04). Lane names play the sound and pick the lane, as on the iPad.
 struct PhoneDrumGrid: View {
     @Environment(\.grid) private var grid
-    @Environment(\.look) private var look
     let session: DeviceSession
     let ui: EditorUI
     let height: CGFloat
@@ -480,7 +473,7 @@ struct PhoneDrumGrid: View {
                 .clipped()
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth) {
-                        DrumGridContent(grid: grid, look: look, session: session, ui: ui)
+                        DrumGridContent(grid: grid, session: session, ui: ui)
                     }
                     EditorPlayhead(session: session, track: session.kitTrack ?? 0, offsetX: offset.x, height: h)
                 }

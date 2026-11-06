@@ -212,7 +212,7 @@ final class ProjectStore {
 
     /// Saves into the current project (Save), or as a new one with this name (first save, Save as).
     func save(as name: String? = nil) async {
-        guard let s = session, busy == nil else { return }
+        guard session != nil, busy == nil else { return }
         busy = ("Saving…", nil)
         defer { busy = nil }
         do {

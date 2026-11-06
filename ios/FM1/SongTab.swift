@@ -14,7 +14,6 @@ struct SkiffSongPage: View {
     @AppStorage("songSplit") private var split = 0.40
     @State private var dragFrom: Double?
     @State private var allPatterns = false
-    @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// (420: the step inspector's short layout fits whole at the divider's lowest, never scrolling; 2026-11-06)

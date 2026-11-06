@@ -115,7 +115,7 @@ Lupe also runs on [Skiff](https://github.com/illuminus5/skiff) 2.2, a Felucca-ba
 
 ### The look
 
-Buttons are flat keys that stand on a thin edge and drop onto it when pressed; a key that's on stays down. What's selected is lifted, with a white ring. The earlier, more physical look is under the connection menu › Developer in debug builds, if you want to compare.
+Buttons are flat keys that stand on a thin edge and drop onto it when pressed; a key that's on stays down. What's selected is lifted, with a white ring.
 
 ## 5. Known gaps
 

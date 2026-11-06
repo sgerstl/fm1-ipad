@@ -232,12 +232,11 @@ struct KnobControl: View {
 struct KnobDial: View {
     let spec: KnobSpec
     var size: CGFloat = 40
-    @Environment(\.look) private var look
 
     var body: some View {
         VStack(spacing: 3) {
             let k = size / 40
-            Canvas { ctx, sz in drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 17 * k, line: 4 * k, cap: 11 * k, flat: look.flat) }
+            Canvas { ctx, sz in drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 17 * k, line: 4 * k, cap: 11 * k) }
                 .frame(width: size, height: size)
             Text(spec.label).font(.system(size: size > 40 ? 12 : 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             Text(spec.shown).font(.system(size: size > 40 ? 15 : 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
@@ -247,7 +246,7 @@ struct KnobDial: View {
 }
 
 func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: Color, bipolar: Bool,
-              radius: CGFloat, line: CGFloat, cap: CGFloat, flat: Bool = false) {
+              radius: CGFloat, line: CGFloat, cap: CGFloat) {
     let c = CGPoint(x: size.width / 2, y: size.height / 2)
     let f = min(max(fraction, 0), 1)
     func arc(_ a: Double, _ b: Double) -> Path {
@@ -262,17 +261,8 @@ func drawDial(_ ctx: GraphicsContext, _ size: CGSize, fraction: Double, colour: 
     let capRect = CGRect(x: c.x - cap, y: c.y - cap, width: cap * 2, height: cap * 2)
     let rad = a * .pi / 180
     let needle = Path { p in p.move(to: c); p.addLine(to: CGPoint(x: c.x + cap * 0.82 * sin(rad), y: c.y - cap * 0.82 * cos(rad))) }
-    if flat {
-        // a flat cap on the ring: one tone, no shine, no contact shadow
-        ctx.fill(Path(ellipseIn: capRect), with: .color(Theme.tones[2]))
-        ctx.stroke(needle, with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-        return
-    }
-    ctx.fill(Path(ellipseIn: capRect.offsetBy(dx: 0, dy: 1)), with: .color(.black.opacity(0.5)))
-    ctx.fill(Path(ellipseIn: capRect), with: .radialGradient(Gradient(colors: [Color(hex: 0x5A5A63), Color(hex: 0x1F1F24)]),
-                                                            center: CGPoint(x: capRect.minX + cap * 0.8, y: capRect.minY + cap * 0.6),
-                                                            startRadius: 0, endRadius: cap * 1.5))
-    ctx.stroke(Path(ellipseIn: capRect.insetBy(dx: 0.5, dy: 0.5)), with: .color(.white.opacity(0.12)), lineWidth: 1)
+    // a flat cap on the ring: one tone, no shine, no contact shadow
+    ctx.fill(Path(ellipseIn: capRect), with: .color(Theme.tones[2]))
     ctx.stroke(needle, with: .color(Theme.text), style: StrokeStyle(lineWidth: 2, lineCap: .round))
 }
 

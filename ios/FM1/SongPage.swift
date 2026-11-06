@@ -49,7 +49,6 @@ struct SectionsPanel: View {
     /// The key just held: its release isn't a tap (a tap loads the section, over the tracks being saved).
     @State private var held: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.look) private var look
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -149,7 +148,7 @@ struct SectionsPanel: View {
             }
             .foregroundStyle(state.inTracks ? Theme.onColour : state == .empty ? Theme.textTertiary : Theme.text)
             .frame(maxWidth: .infinity, minHeight: 84)
-            .background { keyFace(state, colour: colour, k: k) }
+            .background { keyFace(state, colour: colour) }
             .overlay(alignment: .topTrailing) { keyBadge(state) }
             .overlay { if state == .nextBar { nextBarOutline(colour) } }
             .contentShape(Rectangle())
@@ -171,10 +170,10 @@ struct SectionsPanel: View {
     }
 
     @ViewBuilder
-    private func keyFace(_ state: KeyState, colour: Color, k: Int) -> some View {
+    private func keyFace(_ state: KeyState, colour: Color) -> some View {
         if state.inTracks {
             RoundedRectangle(cornerRadius: 12)
-                .fill(LinearGradient(colors: [look.flat ? colour : Theme.trackTop[k], colour], startPoint: .top, endPoint: .bottom))
+                .fill(colour)
                 .overlay(alignment: .bottom) {
                     if state.sounding || (state == .edited && session.playing) {
                         // the bar passing, as the song blocks' pills
@@ -250,7 +249,7 @@ struct SongPage: View {
     /// and no flick-to-delete (too easy to set off on a phone; Delete is in the block's menu).
     var compact = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.look) private var look
+    private let look = Look()
 
     /// A step in the order, with an identity that survives moves (two blocks can hold the same step).
     struct Slot: Identifiable, Equatable {
@@ -522,12 +521,12 @@ struct SongPage: View {
     /// The block itself, with its lift.
     private func slotFace(_ i: Int, _ slot: Slot, width w: CGFloat, lifted: Bool) -> some View {
         block(i, slot.step, width: w, open: menu == slot.id)
-        // the lift itself springs even while the block follows the finger (flat: elevation 3's scale and shadow)
+        // the lift itself springs even while the block follows the finger (elevation 3's scale and shadow)
         .animation(motion) {
-            $0.scaleEffect(lifted ? (look.flat ? (reduceMotion ? 1 : 1.03) : 1.04) : 1)
-                .shadow(color: .black.opacity(lifted ? (look.flat ? look.shadow(.held).opacity : 0.55) : 0),
-                        radius: lifted ? (look.flat ? look.shadow(.held).radius : 12) : 0,
-                        y: lifted ? (look.flat ? look.shadow(.held).y : 6) : 0)
+            $0.scaleEffect(lifted ? (reduceMotion ? 1 : 1.03) : 1)
+                .shadow(color: .black.opacity(lifted ? look.shadow(.held).opacity : 0),
+                        radius: lifted ? look.shadow(.held).radius : 0,
+                        y: lifted ? look.shadow(.held).y : 0)
         }
         .contentShape(Rectangle())
     }
@@ -573,7 +572,7 @@ struct SongPage: View {
         .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 10)
         .frame(width: w, height: blockHeight, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 12)
-            .fill(Theme.pad(step.section, flat: look.flat)))
+            .fill(Theme.pad(step.section)))
         // the edge you drag for length
         .overlay(alignment: .trailing) {
             Capsule().fill(Theme.onColour.opacity(0.35)).frame(width: 4, height: 28).padding(.trailing, 4)
@@ -692,7 +691,7 @@ struct SongPage: View {
                     .buttonStyle(PressSink())
                 }
                 .padding(.leading, 14).padding(.trailing, 4).frame(height: 44)
-                .background(Capsule().fill(Theme.raisedBottom))
+                .background(Capsule().fill(Theme.tones[1]))
                 .transition(.opacity)
             } else {
                 Text(editable ? (compact ? "Tap a block to change it. Press and drag to move it, drag its right edge for length."
@@ -726,11 +725,7 @@ struct SongPage: View {
         .padding(6)
         .fixedSize()
         .background {
-            LookChoice {
-                RoundedRectangle(cornerRadius: 14).fill(Theme.raisedBottom).shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-            } flat: {
-                Color.clear.elevated(.held)
-            }
+            Color.clear.elevated(.held)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Menu for step \(i + 1), section \(DeviceSession.sectionName(slot.step.section))")
@@ -759,7 +754,7 @@ struct SongPage: View {
                 .frame(width: 48, height: 44)
                 .background {
                     if stored {
-                        RoundedRectangle(cornerRadius: 9).fill(Theme.pad(k, flat: look.flat))
+                        RoundedRectangle(cornerRadius: 9).fill(Theme.pad(k))
                     } else {
                         RoundedRectangle(cornerRadius: 9).fill(Theme.well).recessed(9)
                     }
@@ -921,11 +916,7 @@ struct BarsControl: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background {
-            LookChoice {
-                RoundedRectangle(cornerRadius: 14).fill(Theme.raisedBottom).shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-            } flat: {
-                Color.clear.elevated(.held)
-            }
+            Color.clear.elevated(.held)
         }
     }
 

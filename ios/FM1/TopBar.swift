@@ -313,9 +313,8 @@ struct TopBar: View {
         .frame(width: 44, height: 44)
         .background { if session.playing { Color.clear.raisedKey() } }
         .environment(\.keyPressed, playDown)
-        .offset(y: playDown ? (look.flat ? 2 : 1) : 0)
-        .brightness(!look.flat && playDown ? -0.06 : 0)
-        .animation(reduceMotion || !look.flat ? nil : .easeOut(duration: playDown ? 0.06 : 0.1), value: playDown)
+        .offset(y: playDown ? 2 : 0)
+        .animation(reduceMotion ? nil : .easeOut(duration: playDown ? 0.06 : 0.1), value: playDown)
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
         .gesture(DragGesture(minimumDistance: 0)
@@ -386,7 +385,7 @@ struct TopBar: View {
     @State private var fromStartShown = false
     @State private var fromStartCount = 0
     @State private var fromStartHide: Task<Void, Never>?
-    @Environment(\.look) private var look
+    private let look = Look()
 
     private func playFromStart() {
         guard session.canPlayFromStart, isConnected else { return }

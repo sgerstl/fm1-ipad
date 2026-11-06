@@ -81,11 +81,10 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     var uiPage = 5, uiHome = false        // FX, page 1
     var recOn = false
 
-    // The song (as SLOOP: four sections, an order of up to 16 steps, chains, loop / song mode, SONG REC)
+    // The song (as SLOOP: four sections, an order of up to 16 steps, loop / song mode, SONG REC)
     var stored = 0b0111                        // A, B, C hold loops; D is empty
     var sectionPlaying: Int? = 0, sectionQueued: Int?
     var songMode = false, songRec = false
-    var chain: [Int] = [], chainAt = 0
     var settings: [UInt8] = {
         var s = [UInt8](repeating: 0, count: 96)
         s[0] = 0x33; s[1] = 0x52; s[2] = 0x45; s[3] = 0x50          // "PER3", little-endian
@@ -109,7 +108,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     var masterLevel = 127
 
     /// What a section holds, as on SLOOP: the four tracks' steps and lengths. Storing copies the tracks
-    /// in; a section that starts playing (picked when stopped, from the next bar, a chain or a song
+    /// in; a section that starts playing (picked when stopped, from the next bar, or a song
     /// step) copies them back out over the tracks, which is why unsaved edits are lost in song mode.
     struct Snapshot: Equatable { var steps: [[SynthStep]]; var drums: [DrumStep]; var lengths: [Int] }
     var sections: [Snapshot?] = [nil, nil, nil, nil]
@@ -164,7 +163,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         }
     }
 
-    /// The song's clock: on every new bar, a queued section starts, a chain moves on, the song steps.
+    /// The song's clock: on every new bar, a queued section starts, the song steps.
     private func tickSong() {
         guard playing else { lastBar = -1; return }
         let bar = Int(now() / (60.0 / Double(bpm) * 4))
@@ -186,9 +185,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             load(o.steps[songStep].section)
             return
         }
-        if !chain.isEmpty {
-            if bar % 2 == 0 { chainAt = (chainAt + 1) % chain.count; load(chain[chainAt]) }
-        } else if let q = sectionQueued {
+        if let q = sectionQueued {
             sectionQueued = nil; load(q)
         }
         if songRec, let s = sectionPlaying {
@@ -489,17 +486,12 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             if a.first == 4, a.count >= 2 { recOn.toggle() }      // as ed_live: an op with no second byte does nothing
             if a.first == 11, a.count >= 2 { masterLevel = Int(a[1]) }
             if a.first == 2, a.count >= 4, a[1] == 7, a[3] == 1 { saveLayerKey(Int(a[2])) }
-            if a.first == 9, a.count >= 2 {
-                let n = Int(a[1])
-                chain = n == 0 ? [] : a.dropFirst(2).prefix(n).map { Int($0) }
-                chainAt = 0
-            }
             tickSong()
             let mutes = UInt8((0..<4).reduce(0) { $0 | (params[$1][Param.mute] != 0 ? 1 << $1 : 0) })   // as editor_live.c
             let songPlays = songMode && playing
             let flags: UInt8 = (playing ? 1 : 0) | (songMode ? 4 : 0) | (songPlays ? 8 : 0) | (songRec ? 64 : 0)
             var b: [UInt8] = [a.first ?? 0, flags, 0] + Frame.v14(bpm)
-            b += [UInt8((sectionPlaying ?? -1) + 1), UInt8((sectionQueued ?? -1) + 1), UInt8(chain.count), UInt8(chainAt)]
+            b += [UInt8((sectionPlaying ?? -1) + 1), UInt8((sectionQueued ?? -1) + 1), 0, 0]   // no chain
             b += [mutes, 0, recOn ? UInt8(1 << selected) : 0, UInt8(selected), 0, playing ? 24 : 8]
             b += [UInt8(songStep), UInt8(order.steps.count), UInt8(songBarInStep), UInt8(order.steps[min(songStep, order.steps.count - 1)].bars), UInt8(stored)]
             for t in 0..<4 { b += [UInt8(stepAt(t)), UInt8(params[t][Param.length]), playing ? 72 : 0] }
@@ -524,7 +516,6 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
         switch w {
         case 0..<4:
             guard stored >> w & 1 == 1, !(songMode && playing) else { return }
-            chain = []
             if playing { sectionQueued = w } else { load(w) }
         case 4..<8:
             let s = w - 4

@@ -317,14 +317,7 @@ extension AppView {
                     .buttonStyle(PressSink())
                 }
                 .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
-                .background {
-                    LookChoice {
-                        RoundedRectangle(cornerRadius: 14).fill(Theme.panelTop)
-                            .shadow(color: .black.opacity(0.5), radius: 2, y: 2).shadow(color: .black.opacity(0.4), radius: 16, y: 8)
-                    } flat: {
-                        Color.clear.elevated(.panel)
-                    }
-                }
+                .background { Color.clear.elevated(.panel) }
                 .padding(.bottom, 132)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .task(id: c) {
@@ -631,7 +624,7 @@ struct TrackMenuLayer: View {
 /// happens, with a way to stop. Floats at the foot of the screen, so nothing moves when it comes and goes.
 struct RecordingKnobsBar: View {
     let session: DeviceSession
-    @Environment(\.look) private var look
+    private let look = Look()
 
     var body: some View {
         if session.recordingKnobs {

@@ -317,7 +317,7 @@ struct PatternBin: View {
     @State private var confirmClear = false
     /// A one-pattern change waiting on its confirm: POOL op 1 (Clear) or 2 (Empty), and the pattern 0…63.
     @State private var pending: (op: Int, p: Int)?
-    @Environment(\.look) private var look
+    private let look = Look()
 
     /// Pattern (0...63) → the tracks whose lists name it.
     private var tracksOf: [Int: [Int]] {

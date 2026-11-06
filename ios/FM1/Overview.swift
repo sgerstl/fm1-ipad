@@ -12,7 +12,6 @@ struct Overview: View {
     let session: DeviceSession
     let ui: EditorUI
     var expanded = true
-    @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let height: CGFloat = 204                     // 8 + 4 × 44 + 3 × 4 + 8
@@ -140,8 +139,8 @@ struct Overview: View {
         .background(alignment: .leading) {
             let raised = ui.trackMenu?.track == t
             RoundedRectangle(cornerRadius: 10)
-                // flat: no colour wash; the selected track shows by its lifted chip and its bold name
-                .fill(raised ? Color.white.opacity(0.10) : selected && !look.flat ? Theme.track[t].opacity(0.16) : .clear)
+                // no colour wash; the selected track shows by its lifted chip and its bold name
+                .fill(raised ? Color.white.opacity(0.10) : .clear)
                 .shadow(color: .black.opacity(raised ? 0.5 : 0), radius: raised ? 8 : 0, y: raised ? 4 : 0)
                 .frame(width: hitWidth)
         }
@@ -185,8 +184,7 @@ struct Overview: View {
             .padding(3)
             // a flat, even well: the deep inset shadow of the bigger wells made the cells read high on
             // a strip this thin; read-only, so nothing here looks raised
-            .background(RoundedRectangle(cornerRadius: 5).fill(Theme.well)
-                .overlay { if !look.flat { RoundedRectangle(cornerRadius: 5).strokeBorder(.black.opacity(0.5), lineWidth: 1) } })
+            .background(RoundedRectangle(cornerRadius: 5).fill(Theme.well))
             .opacity(Double(progress) * (track.mute ? 0.45 : 1))
             .frame(height: rowHeight)
         if !expanded {
@@ -322,7 +320,6 @@ private struct OverviewPlayhead: View {
             Capsule()
                 .fill(Theme.text)
                 .frame(width: 2, height: height + 10)
-                .glow(Theme.text.opacity(0.5), radius: 3)
                 .offset(x: CGFloat(pos) * pitch - 1)
                 .opacity(session.playing ? 1 : 0)
         }
@@ -331,29 +328,22 @@ private struct OverviewPlayhead: View {
     }
 }
 
-/// A track's number on its colour, raised. Muted, it sinks into the panel and greys, as a pressed
-/// toggle does (the brief's physical rule), with the colour kept as a thin underline.
-/// Flat look (2026-11-05): as a key (`selected` given, the track box), a grey chiclet at rest and, on
-/// the selected track, its colour, lifted to elevation 2 with the ring; as a label (`selected` nil, a
-/// panel's heading), its colour, flat. Muted, it sits down on its edge, grey, with the underline.
 struct TrackMenu: Equatable {
     var track: Int
     var at: CGPoint
 }
 
+/// A track's number (2026-11-05): as a key (`selected` given, the track box), a grey chiclet at rest and,
+/// on the selected track, its colour, lifted to elevation 2 with the ring; as a label (`selected` nil, a
+/// panel's heading), its colour, flat. Muted, it sits down on its edge, grey, with the underline.
 struct TrackChip: View {
     let track: Int
     var size: CGFloat = 28
     var muted = false
     var selected: Bool?
-    @Environment(\.look) private var look
     @Environment(\.keyPressed) private var pressed
 
     var body: some View {
-        if look.flat { flatChip } else { physicalChip }
-    }
-
-    private var flatChip: some View {
         let lit = !muted && selected != false
         return Text("\(track + 1)")
             .font(.system(size: size > 28 ? 15 : 13, weight: .semibold))
@@ -366,30 +356,11 @@ struct TrackChip: View {
                 } else if selected == true {
                     RoundedRectangle(cornerRadius: 7).fill(Theme.track[track])
                         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.text, lineWidth: 2))
-                        .elevationShadow(.selected, look)
+                        .elevationShadow(.selected, Look())
                 } else if selected == false {
                     Chiclet(radius: 7, down: pressed, edge: !pressed)
                 } else {
                     RoundedRectangle(cornerRadius: 7).fill(Theme.track[track])
-                }
-            }
-            .accessibilityHidden(true)
-    }
-
-    private var physicalChip: some View {
-        Text("\(track + 1)")
-            .font(.system(size: size > 28 ? 15 : 13, weight: .semibold))
-            .foregroundStyle(muted ? Theme.textSecondary : Theme.onColour)
-            .frame(width: size, height: size)
-            .background {
-                if muted {
-                    RoundedRectangle(cornerRadius: 7).fill(Theme.pressed).recessed(7)
-                        .overlay(alignment: .bottom) { Capsule().fill(Theme.track[track]).frame(width: size - 12, height: 2).padding(.bottom, 4) }
-                } else {
-                    RoundedRectangle(cornerRadius: 7).fill(Theme.pad(track))
-                        .overlay(RoundedRectangle(cornerRadius: 7).inset(by: 0.5).stroke(.white.opacity(0.35), lineWidth: 1)
-                            .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center)))
-                        .shadow(color: .black.opacity(0.6), radius: 1, y: 1)
                 }
             }
             .accessibilityHidden(true)

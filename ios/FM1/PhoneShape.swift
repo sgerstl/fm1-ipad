@@ -57,7 +57,7 @@ struct PhoneShape: View {
                     }
                     .foregroundStyle(on ? Theme.text : Theme.textSecondary)
                     .frame(maxWidth: .infinity).frame(height: 44)
-                    .latchedKey(on, sunkFill: nil)
+                    .latchedKey(on)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink(latched: on))
@@ -138,7 +138,6 @@ struct PhoneShape: View {
         .overlay(alignment: .top) {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
                 .frame(height: 3).padding(.horizontal, 14).offset(y: 1)
-                .glow(Theme.text.opacity(0.7), radius: 6)
                 .opacity(lit ? 1 : 0)
                 .animation(.easeOut(duration: 0.15), value: lit)
                 .accessibilityHidden(true)

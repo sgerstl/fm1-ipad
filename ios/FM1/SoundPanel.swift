@@ -126,7 +126,7 @@ struct SoundPanel: View {
     let state: SoundPanelState
     @State private var marks = ShapeMarks()
     @State private var settled = false          // slid in: the cards' graphs draw from then (not while it moves)
-    @Environment(\.look) private var look
+    private let look = Look()
     static let width: CGFloat = 430
     /// The Song tab's step while the panel is open (SoundPanelHost).
     static let openStep: CGFloat = 24
@@ -162,7 +162,6 @@ struct SoundPanel: View {
                             .overlay(alignment: .top) {
                                 RoundedRectangle(cornerRadius: 1.5).fill(lit)
                                     .frame(height: 3)
-                                    .glow(lit.opacity(0.7), radius: 6)
                                     .padding(.horizontal, 12).padding(.top, 8)
                                     .opacity(on ? 1 : 0)
                                     .animation(.easeOut(duration: 0.15), value: on)

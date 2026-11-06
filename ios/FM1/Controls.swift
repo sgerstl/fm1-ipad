@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Keys you can press: raised (chiclets, on the flat look). A segmented choice sits in a recessed track
+// Keys you can press: raised chiclets. A segmented choice sits in a recessed track
 // with the chosen segment raised. A toggle sinks in and lights its LED when on.
 
 /// One of several, as raised segments in a well. `selected` -1 means none (shown, but nothing raised).
@@ -83,8 +83,8 @@ struct IconKey: View {
                 .foregroundStyle(!enabled ? Theme.textTertiary : on ? Theme.text : Theme.textSecondary)
                 .frame(width: 44, height: 44)
                 .background {
-                    // flat: on is a latched chiclet, down on its edge
-                    if on { LookChoice { Color.clear.raisedKey() } flat: { Color.clear.latchedKey(true) } }
+                    // on is a latched chiclet, down on its edge
+                    if on { Color.clear.latchedKey(true) }
                 }
                 .contentShape(Rectangle())
         }
@@ -140,46 +140,32 @@ struct StepperKeys: View {
     }
 }
 
-/// Pressing sinks a key a little; disabled keys fade. Flat look: the key drops 2 pt onto its edge
+/// Pressing sinks a key: it drops 2 pt onto its edge
 /// (60 ms in, 100 ms out, instant with Reduce Motion), and a `latched` key (a toggle that's on) stays
 /// down. Disabled, a flat key loses its edge and top (RaisedKey draws the outline) and its label greys.
 struct PressSink: ButtonStyle {
     var latched = false
     @Environment(\.isEnabled) private var enabled
-    @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         let down = configuration.isPressed
-        if look.flat {
-            configuration.label
-                .environment(\.keyPressed, down)
-                .foregroundStyle(enabled ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.textTertiary))
-                .offset(y: down || latched ? 2 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: down ? 0.06 : 0.1), value: down)
-        } else {
-            configuration.label
-                .environment(\.keyPressed, down)
-                .offset(y: down ? 1 : 0)
-                .brightness(down ? -0.06 : 0)
-                .opacity(enabled ? 1 : 0.45)
-        }
+        configuration.label
+            .environment(\.keyPressed, down)
+            .foregroundStyle(enabled ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.textTertiary))
+            .offset(y: down || latched ? 2 : 0)
+            .animation(reduceMotion ? nil : .easeOut(duration: down ? 0.06 : 0.1), value: down)
     }
 }
 
-/// Developer settings, in debug builds only, as a Jib menu item (a submenu): Install firmware…, the look's
-/// switch, the knob tap's (2026-11-05). At the foot of the phone's ⋯ menu (the iPad's connection menu dropped it, 2026-11-06).
+/// Developer settings, in debug builds only, as a Jib menu item (a submenu): Install firmware… (2026-11-05).
+/// At the foot of the phone's ⋯ menu (the iPad's connection menu dropped it, 2026-11-06).
 enum DeveloperItems {
     @MainActor static func item(firmware: FirmwareCentre) -> MenuItem? {
         #if DEBUG
-        let d = UserDefaults.standard
-        let look = LookStyle(rawValue: d.string(forKey: Look.styleKey) ?? "") ?? .flat
         return MenuItem(title: "Developer", icon: "hammer", children: {
             [
                 [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true }],
-                [MenuItem.note("Look"),
-                 MenuItem(title: "Flat", checked: look == .flat) { d.set(LookStyle.flat.rawValue, forKey: Look.styleKey) },
-                 MenuItem(title: "Physical", checked: look == .physical) { d.set(LookStyle.physical.rawValue, forKey: Look.styleKey) }],
             ]
         })
         #else

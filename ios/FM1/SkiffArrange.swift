@@ -30,7 +30,6 @@ struct SkiffArrangePage: View {
     /// A bar range across the lanes (board 3): its first bar and the bar after its last, 0-based.
     @State private var section: SectionRange?
     @State private var leftOut: Set<Int> = []
-    @Environment(\.look) private var look
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let headerWidth: CGFloat = 152
@@ -1215,7 +1214,7 @@ struct BlockView: View {
     var state: String? = nil
     /// Loop entry (SONG OFF): every entry loops and REPS doesn't apply, so the block says ↻, not ×N.
     var loops = false
-    @Environment(\.look) private var look
+    private let look = Look()
     @Environment(\.arrangeCompact) private var compact
     @Environment(\.arrangeLaneHeight) private var laneHeight
 
@@ -1303,7 +1302,7 @@ struct BlockView: View {
         .compositingGroup()
         // the Song tab while playing: what isn't playing dimmed, so each track's playing block stands out
         .opacity(compact && session.playing && !playing && !selected ? 0.5 : 1)
-        .shadow(color: .black.opacity(selected && look.flat ? look.shadow(.selected).opacity : 0),
+        .shadow(color: .black.opacity(selected ? look.shadow(.selected).opacity : 0),
                 radius: look.shadow(.selected).radius, y: selected ? look.shadow(.selected).y : 0)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)

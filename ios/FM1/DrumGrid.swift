@@ -6,7 +6,6 @@ import SwiftUI
 /// its lanes the hits each step carries.
 struct DrumGrid: View {
     @Environment(\.grid) private var grid
-    @Environment(\.look) private var look
     let session: DeviceSession
     let ui: EditorUI
     /// The drum track (SLOOP's track 4), or the selected kit track on Skiff.
@@ -53,7 +52,7 @@ struct DrumGrid: View {
 
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(lanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth) {
-                        DrumGridContent(grid: grid, look: look, session: session, ui: ui)
+                        DrumGridContent(grid: grid, session: session, ui: ui)
                     }
                     EditorPlayhead(session: session, track: dt, offsetX: offset.x, height: gridHeight)
                 }
@@ -84,7 +83,6 @@ struct DrumGrid: View {
 struct DrumGridContent: View {
     /// Passed in, not read from the environment: it lives in a UIHostingController, which doesn't inherit it.
     var grid = GridMetrics.pad
-    var look = Look()
     let session: DeviceSession
     let ui: EditorUI
     /// The drum track (SLOOP's track 4), or the selected kit track on Skiff.
@@ -174,9 +172,9 @@ struct DrumGridContent: View {
         }
         // the selected step's column, lit faintly the whole height
         ctx.fill(Path(CGRect(x: CGFloat(selected) * w, y: 0, width: w, height: size.height)), with: .color(.white.opacity(0.07)))
-        // empty cells: small recessed wells, collected into two paths and filled once each (a fill and a
-        // path subtraction per cell cost about a third of the main thread, 2026-11-02)
-        var wells = Path(), lips = Path()
+        // empty cells: small wells, collected into one path and filled once (a fill and a path
+        // subtraction per cell cost about a third of the main thread, 2026-11-02)
+        var wells = Path()
         for i in steps.indices {
             let s = steps[i]
             for l in 0..<lanes.count {
@@ -186,7 +184,7 @@ struct DrumGridContent: View {
                     let level = s.level(l)                       // 0 normal, 1 ghost, 2 soft, 3 hard
                     let ratchet = s.ratchet(l) + 1
                     drawPad(ctx, rect, track: dt, dim: level == 1 || level == 2 || i >= t.length,
-                            selected: i == selected && l == lane, flat: look.flat)
+                            selected: i == selected && l == lane)
                     // a second channel besides brightness: hard hits get a bright cap, ratchets split the pad
                     if level == 3 {
                         ctx.fill(Path(roundedRect: CGRect(x: rect.minX + 6, y: rect.minY + 4, width: rect.width - 12, height: 3), cornerRadius: 1.5),
@@ -201,7 +199,6 @@ struct DrumGridContent: View {
                 } else {
                     let r = CGRect(x: x + (w - 8) / 2, y: y + (h - 8) / 2, width: 8, height: 8)
                     wells.addEllipse(in: r)
-                    lips.addEllipse(in: r.offsetBy(dx: 0, dy: 1))
                     if i == selected && l == lane {
                         ctx.stroke(Path(roundedRect: CGRect(x: x + 4, y: y + 6, width: w - 8, height: h - 12), cornerRadius: 6),
                                    with: .color(Theme.text), lineWidth: 2)
@@ -209,8 +206,6 @@ struct DrumGridContent: View {
                 }
             }
         }
-        // the lip first, the well over it: the 1 pt of lip left showing below each well is its highlight
-        if !look.flat { ctx.fill(lips, with: .color(.white.opacity(0.05))) }
         ctx.fill(wells, with: .color(Color(hex: 0x0B0B0D)))
         if t.length < steps.count {
             ctx.fill(Path(CGRect(x: CGFloat(t.length) * w, y: 0, width: CGFloat(steps.count - t.length) * w, height: size.height)),

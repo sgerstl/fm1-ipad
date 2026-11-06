@@ -86,7 +86,6 @@ struct DeviceEdge: View {
             .frame(height: 3)
             .padding(.horizontal, 14)
             .offset(y: 1)
-            .glow(Theme.text.opacity(0.7), radius: 6)
             .opacity(on ? 1 : 0)
             .animation(.easeOut(duration: 0.15), value: on)
             .accessibilityHidden(true)

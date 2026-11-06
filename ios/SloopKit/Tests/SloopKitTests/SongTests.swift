@@ -38,13 +38,12 @@ import Testing
 
     @Test func songRequestsEncode() {
         #expect(Request.layerKey(layer: 7, key: 4, down: true).bytes == Frame.encode(Cmd.live, [2, 7, 4, 1]))
-        #expect(Request.chain([0, 1, 1, 2]).bytes == Frame.encode(Cmd.live, [9, 4, 0, 1, 1, 2]))
         #expect(Request.bkGet(id: 1, offset: 0, count: 96).args == [1, 0, 0, 0, 0, 0, 96, 0])
     }
 }
 
 @Suite(.serialized) @MainActor struct SongSessionTests {
-    @Test func sectionsChainsOrderAndSongRec() async throws {
+    @Test func sectionsOrderAndSongMode() async throws {
         let fake = FakeSloop(autoEdits: false)
         fake.manualClock = true                                 // no bar ticks mid-test
         var once = false
@@ -87,15 +86,6 @@ import Testing
         try await waitFor { fake.songMode }
         session.toggleSongMode()
         try await waitFor { !fake.songMode }
-
-        // a chain needs playback, and the session has to have seen it (playChain refuses otherwise)
-        session.setPlaying(true)
-        try await waitFor { fake.playing && session.playing }
-        session.playChain([0, 2])
-        #expect(session.songMessage == nil)
-        try await waitFor { fake.chain == [0, 2] }
-        session.stopChain()
-        try await waitFor { fake.chain.isEmpty }
         run.cancel()
     }
 }

@@ -2,17 +2,11 @@ import SloopKit
 import SwiftUI
 
 // A knob tapped: a big control at the finger in Jib's own menu style (level 3), no stepper (Scott, 2026-11-05).
-// Two to compare on the iPad, Developer › Knob tap: an arc of about 200 pt, its dot dragged anywhere round it,
-// or a horizontal slider under the value shown large. A parameter of named choices opens a list instead. Both
-// put the default back on a double-tap and from a key, and take a typed number where the value is a plain one.
+// An arc of about 200 pt, its dot dragged anywhere round it (the slider it was compared with went 2026-11-06).
+// A parameter of named choices opens a list instead. It puts the default back on a double-tap and from a key,
+// and takes a typed number where the value is a plain one.
 // Done keeps the value (tapping outside does too, and Return); Cancel puts back the value it had when it opened
 // (Escape too). Changes go to the FM-1 as they're made, so it previews live either way (Scott, 2026-11-05).
-
-enum KnobTapStyle: String, CaseIterable, Identifiable {
-    case arc, slider
-    var id: String { rawValue }
-    static let key = "knobTap"
-}
 
 /// Where the big control opens: under the finger that tapped, kept on screen.
 struct KnobPanelLayer: View {
@@ -48,13 +42,12 @@ struct KnobPanelLayer: View {
 struct KnobPanel: View {
     let make: () -> KnobSpec
     let close: () -> Void
-    private let style = KnobTapStyle.arc           // (the Developer switch to the slider is gone, 2026-11-06)
     @State private var typed = ""
     @State private var typedProblem: String?
     @State private var tick = 0
     @State private var lastTap: Date?
     @State private var opened: Int?              // the value when it opened, for Cancel
-    @Environment(\.look) private var look
+    private let look = Look()
 
     var body: some View {
         let spec = make()
@@ -64,10 +57,7 @@ struct KnobPanel: View {
             if let choices = spec.choices {
                 choiceList(spec, choices)
             } else {
-                switch style {
-                case .arc: arc(spec)
-                case .slider: slider(spec)
-                }
+                arc(spec)
                 if spec.shown == "\(spec.value)" { field(spec) }
                 if let d = spec.defaultValue, d != spec.value {
                     Button { change(spec, to: d) } label: {
@@ -147,34 +137,6 @@ struct KnobPanel: View {
         .accessibilityAdjustableAction { dir in change(spec, to: spec.value + (dir == .increment ? spec.stepperStep : -spec.stepperStep)) }
     }
 
-    // MARK: Slider: the value large, a wide track under it
-
-    private func slider(_ spec: KnobSpec) -> some View {
-        VStack(spacing: 12) {
-            Text(spec.shown).font(.system(size: 40, weight: .semibold)).monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.5).frame(maxWidth: .infinity)
-            GeometryReader { g in
-                let w = g.size.width, f = CGFloat(min(max(spec.fraction, 0), 1))
-                let from: CGFloat = spec.bipolar ? w / 2 : 0
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.well).frame(height: 10)
-                    Capsule().fill(spec.colour).frame(width: abs(w * f - from), height: 10).offset(x: min(from, w * f))
-                    Circle().fill(Theme.text).frame(width: 28, height: 28).offset(x: w * f - 14)
-                }
-                .frame(height: 44)
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onChanged { v in
-                    change(spec, to: value(spec, at: Double(min(max(v.location.x / max(1, w), 0), 1))))
-                }.onEnded { _ in doubleTap(spec) })
-            }
-            .frame(height: 44)
-            .accessibilityElement()
-            .accessibilityLabel(spec.label.capitalized)
-            .accessibilityValue(spec.spoken)
-            .accessibilityAdjustableAction { dir in change(spec, to: spec.value + (dir == .increment ? spec.stepperStep : -spec.stepperStep)) }
-        }
-    }
-
     // MARK: A parameter of named choices: a list
 
     private func choiceList(_ spec: KnobSpec, _ names: [String]) -> some View {
@@ -243,7 +205,7 @@ struct KnobPanel: View {
         spec.range.lowerBound + Int((Double(spec.range.upperBound - spec.range.lowerBound) * f).rounded())
     }
 
-    /// A second touch on the dial or slider within 0.3 s: the default back.
+    /// A second touch on the dial within 0.3 s: the default back.
     private func doubleTap(_ spec: KnobSpec) {
         let now = Date()
         if let t = lastTap, now.timeIntervalSince(t) < 0.3, let d = spec.defaultValue { lastTap = nil; change(spec, to: d); return }

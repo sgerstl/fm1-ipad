@@ -107,7 +107,6 @@ public struct SongState: Equatable, Sendable {
     public var fillNow = false, fillNextBar = false
     public var sectionPlaying: Int?       // 0..3
     public var sectionQueued: Int?        // asked for: starts on the next bar
-    public var chainLength = 0, chainIndex = 0
     public var songStep = 0, songSteps = 0, songBar = 0, songStepBars = 0
     public var sectionsStored = 0         // bit per section
     public init() {}
@@ -124,7 +123,7 @@ extension LiveState {
         s.songRecording = f & 64 != 0
         s.sectionPlaying = body[5] == 0 ? nil : Int(body[5]) - 1
         s.sectionQueued = body[6] == 0 ? nil : Int(body[6]) - 1
-        s.chainLength = Int(body[7]); s.chainIndex = Int(body[8])
+        // body[7], body[8]: a chain's length and position (the app plays no chains)
         s.songStep = Int(body[15]); s.songSteps = Int(body[16]); s.songBar = Int(body[17]); s.songStepBars = Int(body[18])
         s.sectionsStored = Int(body[19])
         return s

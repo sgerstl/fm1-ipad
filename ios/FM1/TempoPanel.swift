@@ -55,7 +55,7 @@ struct TempoPanel: View {
     @State private var typedProblem: String?
     @State private var taps: [Date] = []
     @FocusState private var fieldFocused: Bool
-    @Environment(\.look) private var look
+    private let look = Look()
 
     private var range: ClosedRange<Int> { session.bpmRange }
     private var following: String? { session.externalClock }
