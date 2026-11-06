@@ -33,6 +33,22 @@ public final class SkiffSongStore {
     /// The tracks' LENGTH and DIV and whether it plays: the session's.
     @ObservationIgnored let trackTiming: @MainActor (Int) -> (length: Int, division: Int)
     @ObservationIgnored let isPlaying: @MainActor () -> Bool
+    /// The passes a track has begun since Start (the session's counted clock), to know where an entry's REPS are.
+    @ObservationIgnored public var passCount: @MainActor (Int) -> Int? = { _ in nil }
+    /// The pass each track came onto its entry on (Skiff doesn't say how many REPS have played): recorded as the list
+    /// shows another entry (entries change at a pass end, so the pass playing then is the first), and from pass 1 at
+    /// Start. Read by the marks' own timelines, not drawn from.
+    @ObservationIgnored public private(set) var arrival: [Int: (entry: Int, pass: Int)] = [:]
+    /// The playback marks of track t now (SongPlayback).
+    public func marks(_ t: Int, launchIn: Double?) -> SongPlayback.Marks {
+        guard let s = song, let l = s.tracks[safe: t] else { return SongPlayback.Marks() }
+        let p = passCount(t)
+        if let e = l.entryOn, let p {
+            // came onto another entry, or the clock started again: from the pass playing now
+            if arrival[t]?.entry != e || (arrival[t]?.pass ?? 0) > p { arrival[t] = (e, p == 1 ? 1 : p) }
+        }
+        return SongPlayback.marks(mode: s.mode, list: l, blocks: blocks(t), passCount: p, arrivalPass: arrival[t]?.pass, launchIn: launchIn)
+    }
 
     init(driver: SkiffDriver, trackTiming: @escaping @MainActor (Int) -> (length: Int, division: Int),
          isPlaying: @escaping @MainActor () -> Bool) {

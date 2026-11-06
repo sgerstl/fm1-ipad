@@ -164,11 +164,7 @@ struct SkiffArrangePage: View {
             Text("Song").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
             Text("\(songBars) bar\(songBars == 1 ? "" : "s") · \(session.trackCount) tracks")
                 .foregroundStyle(Theme.textSecondary).lineLimit(1).fixedSize()
-            // SONG: off loops each track's entry, on plays the lists, once plays them once and stops (LIST op 6)
-            SegmentedKeys(label: "Song mode", options: ["Loop", "Song", "Once"], selected: store.song?.mode.rawValue ?? -1,
-                          enabled: [!store.offline, !store.offline, !store.offline]) { k in
-                Task { await store.send(.song(SongMode(rawValue: k) ?? .on)) }
-            }
+            // (the playback mode moved to the top bar, beside play and stop: SongModeKeys, 2026-11-06)
             Spacer(minLength: 8)
             if !store.undoStack.isEmpty {
                 // Jib's own undo: the lists before the last change (a delete, a move, a section)
@@ -667,6 +663,11 @@ struct Lane: View {
                     .modifier(Place(x: x(preview?.places[i]?.start ?? b.start) + 2, y: laneHeight - 5))
                     .allowsHitTesting(false)
             }
+            if compact, session.playing, preview == nil {
+                // where each track is in its entry's REPS, where it goes next, a launch waiting (SongPlayback)
+                LaneMarks(session: session, store: store, track: track, blocks: blocks, barWidth: barWidth, laneHeight: laneHeight)
+                    .allowsHitTesting(false)
+            }
             if let r = bracket {
                 RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2)
                     .frame(width: max(4, x(r.upperBound) - x(r.lowerBound)), height: laneHeight)
@@ -779,7 +780,8 @@ struct Lane: View {
             // a held block holds still: no playing mark while it's lifted or its menu is open
             BlockView(session: session, track: track, block: b, list: list, width: w,
                       selected: selected, linked: linked,
-                      playing: !isHeld && lifted != ref && session.playing && b.entries.contains(list.entryOn ?? -1))
+                      playing: !isHeld && lifted != ref && session.playing && b.entries.contains(list.entryOn ?? -1),
+                      state: compact && session.playing ? LaneMarks.spoken(store.marks(track, launchIn: session.ticksToLaunch(track)), block: b, launch: session.launchMode) : nil)
                 .frame(width: w, height: laneHeight - 12)
                 // carried: faint in its own place, or, once it would move, an empty dashed place where it lands
                 // (the block itself is under the finger). The view stays, so the finger's gesture does too
@@ -1178,6 +1180,8 @@ struct BlockView: View {
     let selected: Bool
     let linked: Bool
     let playing: Bool
+    /// The Song tab while playing: what VoiceOver says of its playback ("pass 2 of 4", "next", "queued, …").
+    var state: String? = nil
     @Environment(\.look) private var look
     @Environment(\.arrangeCompact) private var compact
     @Environment(\.arrangeLaneHeight) private var laneHeight
@@ -1266,7 +1270,7 @@ struct BlockView: View {
         let others = list.sharing(block.entries.lowerBound)
         if !isRest, !others.isEmpty { s += ", also on entr\(others.count == 1 ? "y" : "ies") " + others.map(Entries.letter).joined(separator: ", ") }
         if let snd = sound { s += ", sound \(Entries.soundName(snd, session: session))" }
-        if playing { s += ", playing now" }
+        if let state { s += ", " + state } else if playing { s += ", playing now" }
         return s
     }
 }
@@ -1422,5 +1426,105 @@ extension EnvironmentValues {
     var arrangeCompact: Bool {
         get { self[ArrangeCompactKey.self] }
         set { self[ArrangeCompactKey.self] = newValue }
+    }
+}
+
+
+/// The Song tab's playback marks over a lane, while playing (SongPlayback; Skiff's README: SONG OFF / ON / ONCE,
+/// LAUNCH): on the block playing, its pass of its REPS ("2/4"), or ↻ looping (Loop entry); a quiet outline on the
+/// block it goes to next (Play song, Play once), with a wrap mark when that's the first again; END on the last
+/// (Play once); a launch waiting: a pulsing outline and its countdown. Its own 4 Hz timeline, so the lane's blocks
+/// don't redraw for it; marks per track (tracks drift apart). Reduce Motion: no pulse.
+struct LaneMarks: View {
+    let session: DeviceSession
+    let store: SkiffSongStore
+    let track: Int
+    let blocks: [SongBlock]
+    let barWidth: CGFloat
+    let laneHeight: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private func x(_ ticks: Double) -> CGFloat { CGFloat(ticks / SongPlacement.ticksPerBar) * barWidth }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.25)) { tl in
+            let m = store.marks(track, launchIn: session.ticksToLaunch(track))
+            let h = laneHeight - 12
+            ZStack(alignment: .topLeading) {
+                ForEach(blocks) { b in
+                    let w = max(8, x(b.length) - 4)
+                    ZStack(alignment: .topLeading) {
+                        if m.playing == b.id { playingBadge(m).frame(width: w, height: h, alignment: .topTrailing) }
+                        if m.next == b.id {
+                            RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text.opacity(0.55), lineWidth: 1.5).padding(2)
+                            if m.wraps { badge(Image(systemName: "arrow.uturn.backward"), "").frame(width: w, height: h, alignment: .topLeading) }
+                        }
+                        if m.playing == b.id, m.ends { badge(nil, "END").frame(width: w, height: h, alignment: .bottomTrailing) }
+                        if m.queued == b.id {
+                            let pulse = reduceMotion ? 1 : 0.55 + 0.45 * abs(sin(tl.date.timeIntervalSinceReferenceDate * .pi))
+                            RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, lineWidth: 2).opacity(pulse).padding(1)
+                            badge(Image(systemName: "timer"), Self.countdown(m.launchIn, session.launchMode)).frame(width: w, height: h, alignment: .bottomLeading)
+                        }
+                    }
+                    .frame(width: w, height: h)
+                    .offset(x: x(b.start) + 2, y: 6)
+                }
+            }
+        }
+        .accessibilityHidden(true)          // (each block says its state itself)
+    }
+
+    @ViewBuilder private func playingBadge(_ m: SongPlayback.Marks) -> some View {
+        if m.loops { badge(Image(systemName: "repeat"), "") }
+        else if let p = m.pass, m.reps > 1 { badge(nil, "\(p)/\(m.reps)") }
+    }
+
+    private func badge(_ icon: Image?, _ text: String) -> some View {
+        HStack(spacing: 2) {
+            icon?.font(.system(size: 9, weight: .bold))
+            if !text.isEmpty { Text(text).font(.system(size: 10, weight: .bold)).monospacedDigit() }
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 4).frame(height: 14)
+        .background(Capsule().fill(Theme.page.opacity(0.85)))
+        .padding(3)
+    }
+
+    /// A launch's countdown in beats (24 ticks), as short as fits: "now", "1 beat", "3 beats".
+    static func countdown(_ ticks: Double?, _ launch: SongPlayback.Launch) -> String {
+        guard let t = ticks else { return launch == .loop ? "pass end" : launch == .bar ? "next bar" : "next beat" }
+        let beats = Int((t / 24).rounded(.up))
+        return beats <= 0 ? "now" : beats == 1 ? "1 beat" : "\(beats) beats"
+    }
+
+    /// What a block's state is, for VoiceOver.
+    static func spoken(_ m: SongPlayback.Marks, block b: SongBlock, launch: SongPlayback.Launch) -> String? {
+        var parts: [String] = []
+        if m.playing == b.id {
+            parts.append("playing")
+            if m.loops { parts.append("looping") } else if let p = m.pass { parts.append("pass \(p) of \(m.reps)") }
+            if m.ends { parts.append("the last: the song ends after it") }
+        }
+        if m.next == b.id { parts.append(m.wraps ? "next, back to the start" : "next") }
+        if m.queued == b.id {
+            let at = ["at the end of the pass", "at the next bar", "at the next beat", "now"][launch.rawValue]
+            parts.append("queued, starts \(at)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+}
+
+
+/// SONG OFF / ON / ONCE (LIST op 6) as what each does: Loop entry, Play song, Play once. In the top bar beside play and
+/// stop; the FM-1's own changes come back with the lists (polled), so the two stay in step.
+struct SongModeKeys: View {
+    let store: SkiffSongStore
+
+    var body: some View {
+        SegmentedKeys(label: "Playback", options: ["Loop entry", "Play song", "Play once"], selected: store.song?.mode.rawValue ?? -1,
+                      enabled: [!store.offline, !store.offline, !store.offline]) { k in
+            Task { await store.send(.song(SongMode(rawValue: k) ?? .on)) }
+        }
+        .accessibilityHint("Loop entry loops each track's entry; Play song plays the lists round; Play once plays them once and stops")
     }
 }

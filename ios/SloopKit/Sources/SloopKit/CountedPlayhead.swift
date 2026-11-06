@@ -23,6 +23,7 @@ public struct CountedPlayhead: Equatable, Sendable {
         var nextAt = 0.0          // the tick the next step starts on
         var stepTicks = 6.0       // this step's ticks before swing (DIV can change it while it plays)
         var startedAt = 0.0
+        var passes = 0            // passes begun since Start (the first is 1): what an entry's REPS counts
     }
 
     /// Ticks per step for DIV 0..9: 1/4 1/8 1/16 1/32 8T 16T 1/2 1/1 2BAR 4BAR.
@@ -48,6 +49,12 @@ public struct CountedPlayhead: Equatable, Sendable {
         guard running, walks.indices.contains(t), walks[t].step >= 0 else { return nil }
         let w = walks[t]
         return max(0, min(1, (Double(max(0, w.count - 1)) + phase(t, at: tick)) / Double(max(1, length))))
+    }
+
+    /// Passes track t has begun since Start (the first is 1); nil before its first step or on RAND.
+    public func passCount(_ t: Int) -> Int? {
+        guard running, walks.indices.contains(t), walks[t].passes > 0 else { return nil }
+        return walks[t].passes
     }
 
     /// Start (0xFA): every track before its first step, which plays on the first pulse.
@@ -134,5 +141,6 @@ public struct CountedPlayhead: Equatable, Sendable {
         }
         if dir == 0 ? w.step == 0 : (w.count == 0 || w.count >= ln) { w.count = 0 }
         w.count += 1
+        if w.count == 1 && w.step >= 0 { w.passes += 1 }
     }
 }

@@ -173,6 +173,17 @@ public final class DeviceSession {
     var skiffSongDriverForTests: SkiffDriver? { driver as? SkiffDriver }
     /// MIDI clock pulses since Start (Skiff), for the song's playhead.
     public var clockTicks: Int { counted.running ? counted.ticks : -1 }
+    /// Passes track t has begun since Start (Skiff), for an entry's repeat count; nil when not known.
+    public func passCount(_ t: Int) -> Int? { trackIndices.contains(t) ? counted.passCount(t) : nil }
+    /// Skiff's LAUNCH (PERFORM): where a launch while playing lands. Read on connecting and every few seconds.
+    public private(set) var launchMode: SongPlayback.Launch = .loop
+    /// Ticks until a launch on track t lands, at LAUNCH's point; nil when the clock isn't known.
+    public func ticksToLaunch(_ t: Int) -> Double? {
+        guard trackIndices.contains(t), counted.running else { return nil }
+        let tr = tracks[t]
+        let passTicks = CountedPlayhead.divisionTicks[max(0, min(9, tr.division))] * Double(max(1, tr.length))
+        return SongPlayback.ticksToLaunch(launchMode, ticks: counted.ticks, passProgress: passProgress(t), passTicks: passTicks)
+    }
     /// How far through its pass track t is (0..1), from the counted clock; nil when not known (stopped, no
     /// Start seen, RAND between notes, or firmware that sends its own positions).
     public func passProgress(_ t: Int) -> Double? {
@@ -394,6 +405,7 @@ public final class DeviceSession {
                         guard let self, t < self.tracks.count else { return (16, 2) }
                         return (self.tracks[t].length, self.tracks[t].division)
                     }, isPlaying: { [weak self] in self?.playing ?? false })
+                    skiffSong?.passCount = { [weak self] t in self?.passCount(t) }
                 }
                 await skiffSong?.refresh(pool: true)
             } else {
@@ -1133,7 +1145,8 @@ public final class DeviceSession {
             n += 1
             // Skiff's motion isn't pushed: the selected track every second while it records, else every 2 s, and
             // every track every 6 s, as Skiff's web editor polls it
-            if c is SkiffDriver {
+            if let k = c as? SkiffDriver {
+                if n % 5 == 1, let l = try? await k.launchMode(), l != launchMode { launchMode = l }
                 if recordingKnobs || n % 2 == 0 { await readMotion(track: selectedTrack) }
                 if n % 6 == 0 { for t in trackIndices where t != selectedTrack { await readMotion(track: t) } }
             }

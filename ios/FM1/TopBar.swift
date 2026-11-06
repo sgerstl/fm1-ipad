@@ -15,16 +15,31 @@ struct TopBar: View {
 
     var body: some View {
         let _ = BodyCounter.tick("TopBar")
-        // the tabs sit in the middle of the bar whatever the two sides hold
-        ZStack {
-            HStack(spacing: 0) {
-                connection
-                // projects are SLOOP's backup objects: firmware without them (Skiff) shows none
-                if session.dialect == nil || session.capabilities.contains(.projects) { project }
-                Spacer(minLength: 12)
-                transport
+        Group {
+            if ui.songTab, let store = session.skiffSong {
+                // Skiff: the playback mode sits beside play and stop, so the bar is one row (centred tabs would
+                // collide with it)
+                HStack(spacing: 12) {
+                    connection
+                    Spacer(minLength: 12)
+                    tabs
+                    Spacer(minLength: 12)
+                    SongModeKeys(store: store).fixedSize()
+                    transport
+                }
+            } else {
+                // the tabs sit in the middle of the bar whatever the two sides hold
+                ZStack {
+                    HStack(spacing: 0) {
+                        connection
+                        // projects are SLOOP's backup objects: firmware without them (Skiff) shows none
+                        if session.dialect == nil || session.capabilities.contains(.projects) { project }
+                        Spacer(minLength: 12)
+                        transport
+                    }
+                    tabs
+                }
             }
-            tabs
         }
         .frame(height: 64)
     }

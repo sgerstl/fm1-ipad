@@ -77,6 +77,93 @@ import Testing
         await d.close()
     }
 
+    /// The playback marks' rules against the real firmware (T6, two 1-bar patterns at 120 BPM): SONG ON goes A, B, then
+    /// A again, as the marks predict (next B, then a wrap); SONG ONCE stops the transport after the last; a launch lands
+    /// at the next bar with LAUNCH BAR, at the track's pass end with LAUNCH LOOP.
+    @Test func songPlaybackRulesOnTheFirmware() async throws {
+        let d = try await driver()
+        try await clearT6(d)
+        _ = try await d.list(.new(track: 5, entry: 0))
+        _ = try await d.list(.new(track: 5, entry: 1))
+        _ = try await d.list(.play(track: 5, entry: 0))
+        func entryOn() async throws -> Int? { try await d.songLists().tracks[5].entryOn }
+        func predicted() async throws -> SongPlayback.Marks {
+            let s = try await d.songLists()
+            let store = SkiffSongStore(song: s, pool: try await d.pool(), timing: Array(repeating: (16, 2), count: 6))
+            return store.marks(5, launchIn: nil)
+        }
+
+        // SONG ON: the order played, against the marks
+        _ = try await d.list(.song(.on))
+        var m = try await predicted()
+        #expect(m.playing == 0 && m.next == 1 && !m.wraps)
+        _ = try await d.transport(play: true)
+        var seen: [Int] = []
+        let t0 = Date()
+        while Date().timeIntervalSince(t0) < 6.5 {
+            if let e = try await entryOn(), seen.last != e {
+                seen.append(e)
+                if e == 1 { m = try await predicted(); #expect(m.next == 0 && m.wraps) }    // on the last: A next, wrapping
+            }
+            try await Task.sleep(for: .milliseconds(80))
+        }
+        print("SONG ON played", seen)
+        #expect(Array(seen.prefix(3)) == [0, 1, 0])
+        _ = try await d.transport(play: false)
+        try await Task.sleep(for: .milliseconds(300))
+
+        // SONG ONCE: on the last entry the marks say it ends, and the transport stops after it
+        _ = try await d.list(.play(track: 5, entry: 0))
+        _ = try await d.list(.song(.once))
+        _ = try await d.transport(play: true)
+        let t1 = Date()
+        var stopped: TimeInterval?
+        while Date().timeIntervalSince(t1) < 7 {
+            if try await entryOn() == 1 { m = try await predicted(); #expect(m.ends) }
+            if try await d.transportState()?.playing == false { stopped = Date().timeIntervalSince(t1); break }
+            try await Task.sleep(for: .milliseconds(80))
+        }
+        print("SONG ONCE stopped after", stopped ?? -1)
+        #expect(stopped.map { $0 > 3 && $0 < 5.5 } == true)
+
+        // LAUNCH: A at 2 bars (LENGTH 32), SONG OFF; B staged 0.5 s in lands at the next bar (BAR), or at A's pass end
+        // (LOOP, 4 s), not the bar before it
+        _ = try await d.transport(play: false)
+        try await Task.sleep(for: .milliseconds(300))
+        _ = try await d.list(.song(.off))
+        _ = try await d.list(.play(track: 5, entry: 0))
+        _ = try await d.setTrackParam(track: 5, id: 29, value: 32)
+        let was = try await d.launchMode()
+        func launch(_ l: SongPlayback.Launch, to e: Int, after wait: Double) async throws -> TimeInterval? {
+            _ = try await d.request(80, [5, UInt8(l.rawValue)], match: 0, "PERFORM LAUNCH")
+            _ = try await d.transport(play: true)
+            let t = Date()
+            try await Task.sleep(for: .seconds(wait))
+            _ = try await d.list(.play(track: 5, entry: e))
+            #expect(try await d.songLists().tracks[5].staged == e)
+            while Date().timeIntervalSince(t) < wait + 5 {
+                if try await entryOn() == e { return Date().timeIntervalSince(t) }
+                try await Task.sleep(for: .milliseconds(40))
+            }
+            return nil
+        }
+        let bar = try await launch(.bar, to: 1, after: 0.5)
+        _ = try await d.transport(play: false)
+        try await Task.sleep(for: .milliseconds(300))
+        _ = try await d.list(.play(track: 5, entry: 0))
+        let loop = try await launch(.loop, to: 1, after: 0.5)
+        print("landed: BAR", bar ?? -1, "LOOP", loop ?? -1)
+        #expect(bar.map { $0 > 1.7 && $0 < 2.5 } == true)          // the next bar: 2 s in
+        #expect(loop.map { $0 > 3.7 && $0 < 4.6 } == true)         // A's pass end: 4 s in, not 2
+
+        _ = try await d.transport(play: false)
+        try await Task.sleep(for: .milliseconds(300))
+        _ = try await d.request(80, [5, UInt8(was.rawValue)], match: 0, "PERFORM LAUNCH")
+        _ = try await d.setTrackParam(track: 5, id: 29, value: 16)
+        try await clearT6(d)
+        await d.close()
+    }
+
     /// The store's writes against the sim: each one read back with LIST2 matches what was drawn.
     @Test func storeWritesRoundTrip() async throws {
         let d0 = try await driver()

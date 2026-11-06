@@ -341,6 +341,12 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         if let cursor, skiff.hasScreenCursor { a.append(UInt8(max(0, min(126, cursor)))) }
         return try UIState(await request(SkiffCmd.screenGoto, a, match: 0, "SCREEN_GOTO", retries: 0))
     }
+    /// PERFORM's state (80, no args): op, rc, LAUNCH (0 LOOP, 1 BAR, 2 BEAT, 3 NOW), … Only LAUNCH is read.
+    public func launchMode() async throws -> SongPlayback.Launch {
+        let r = try await request(80, [], match: 0, "PERFORM")
+        guard r.count >= 3 else { throw DecodeError.short(cmd: 80) }
+        return SongPlayback.Launch(rawValue: Int(r[2])) ?? .loop
+    }
     /// TRANSPORT is Skiff's keep-alive (EDITOR_PROTOCOL.md: "instead of PING").
     public func ping() async throws { _ = try await transportState() }
     public func preset(engine: Int, index: Int) async throws -> (engine: Int, preset: Int) {
