@@ -194,7 +194,7 @@ struct TopBar: View {
         switch session.status {
         case .connected(let v): session.screenLinked ? "\(v) · screen link" : v
         case .wrongFirmware(let found, _): found.replacingOccurrences(of: "FELUCCA ", with: "")
-        default: "needs SLOOP 2.8.4"
+        default: "needs SLOOP 2.8.4 or Skiff 2.2"
         }
     }
 

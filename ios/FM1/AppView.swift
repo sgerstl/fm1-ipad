@@ -423,12 +423,12 @@ struct NotOnThisFirmware: View {
     let title: String
     let detail: String
 
-    /// Arrange is SLOOP's sections and song order; Skiff's song (lists, the pattern pool, scenes) is
-    /// another model, its Arrange still being designed (vault skiff-plan.md, phase 4).
+    /// Arrange is SLOOP's sections and song order. A Skiff that lands here has no song lists (older than 2.0),
+    /// so Lupe's Song tab can't show its song: say how to get it (2026-11-06, was "still being designed").
     @MainActor static func arrange(_ session: DeviceSession) -> NotOnThisFirmware {
-        NotOnThisFirmware(title: "Arrange isn't on Skiff yet",
-                          detail: "Skiff keeps a song as each track's list of patterns, with scenes. "
-                              + "Lupe's Arrange for that is still being designed. Until then, arrange on the FM-1 itself.")
+        NotOnThisFirmware(title: "Update Skiff to use the Song tab",
+                          detail: "This Skiff is older than 2.0, so it can't share its song with Lupe. "
+                              + "Install Skiff 2.2 from the menu (Install firmware…) to arrange here.")
     }
 
     var body: some View {
@@ -543,14 +543,16 @@ struct TrackMenuLayer: View {
                         TrackChip(track: m.track, size: 24)
                         Text("Track \(m.track + 1)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                     }
-                    // the sound, from here: the Presets panel slides out over the page
+                    // the sound, from here: the Presets panel slides out over the page. On Skiff it's "Sounds…", and
+                    // not on the Sounds tab, where the browser is the page itself (Scott, 2026-11-06)
+                    if !(ui.songTab && ui.page == .library) {
                     Button {
                         session.select(track: m.track)
                         ui.timelineOpen = false            // the open timeline would run under the panel
                         ui.presetsPanel = true
                         ui.trackMenu = nil
                     } label: {
-                        Label(session.isDrums(m.track) ? "Kits…" : "Presets…", systemImage: "square.grid.2x2")
+                        Label(session.isDrums(m.track) ? "Kits…" : ui.songTab ? "Sounds…" : "Presets…", systemImage: "square.grid.2x2")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Theme.text)
                             .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
@@ -558,6 +560,7 @@ struct TrackMenuLayer: View {
                     }
                     .buttonStyle(PressSink())
                     .accessibilityHint("Pick this track's sound without leaving the page")
+                    }
                     if !session.isDrums(m.track), session.capabilities.contains(.samples) {
                         // the grid turns over to the sampler; Use on track puts the take on this track
                         Button {

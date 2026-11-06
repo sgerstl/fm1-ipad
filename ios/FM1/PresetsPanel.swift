@@ -16,7 +16,7 @@ struct PresetsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
                 TrackChip(track: t, size: 28)
-                Text(session.isDrums(t) ? "Kits" : "Presets for track \(t + 1)").font(.system(size: 22, weight: .semibold))
+                Text(session.isDrums(t) ? "Kits" : session.dialect == .skiff ? "Sounds for track \(t + 1)" : "Presets for track \(t + 1)").font(.system(size: 22, weight: .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Button { ui.presetsPanel = false } label: {
@@ -36,6 +36,6 @@ struct PresetsPanel: View {
         .background(RoundedRectangle(cornerRadius: 20).fill(Theme.well)
             .shadow(color: .black.opacity(0.5), radius: 14, x: -6))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(session.isDrums(t) ? "Kits for the drum track" : "Presets for track \(t + 1)")
+        .accessibilityLabel(session.isDrums(t) ? "Kits for the drum track" : session.dialect == .skiff ? "Sounds for track \(t + 1)" : "Presets for track \(t + 1)")
     }
 }

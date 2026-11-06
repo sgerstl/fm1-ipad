@@ -1465,7 +1465,7 @@ public final class DeviceSession {
     public var sounding: Set<Int> {
         guard playing else { return [] }
         let t = selectedTrack, i = positions[t].step % stepCount
-        if isDrums(t) { return Set(tracks[t].drumSteps[i].lanes) }
+        if isDrums(t) || (dialect == .skiff && isKit(t)) { return Set(tracks[t].drumSteps[i].lanes) }   // (a Skiff kit's lanes too)
         // a held note sounds through its TIE steps
         var k = i
         while k > 0, tracks[t].steps[k].time == .tie { k -= 1 }

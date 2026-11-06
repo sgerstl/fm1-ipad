@@ -465,8 +465,9 @@ struct LaneHeader: View {
     let track: Int
     /// While a section is picked: what it does to this track (a split, the cost of snapping, left out).
     var note: String?
-    /// The Song tab's (unused now the whole-track knobs sit in the timeline, TrackKnobBox).
+    /// The Song tab's: the track menu a long press on the name opens.
     var ui: EditorUI? = nil
+    @State private var pressAt: CGPoint = .zero
     @Environment(\.arrangeLaneHeight) private var laneHeight
     @Environment(\.arrangeCompact) private var compact
 
@@ -498,8 +499,17 @@ struct LaneHeader: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // long press: the track's menu by the finger, Sounds… first (Scott, 2026-11-06: picking a sound from the
+            // Song page is useful; the Song tab's names never had the press the other pages' track list has)
+            .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
+                .onChanged { pressAt = $0.location })
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                session.select(track: track)
+                ui?.trackMenu = TrackMenu(track: track, at: pressAt)
+            })
             .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))\(muted ? ", muted" : "")")
             .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityAction(named: "Track menu") { ui?.trackMenu = TrackMenu(track: track, at: CGPoint(x: 200, y: 160 + CGFloat(track) * 48)) }
         }
         .frame(width: SkiffArrangePage.headerWidth - 8, height: laneHeight, alignment: .leading)
     }

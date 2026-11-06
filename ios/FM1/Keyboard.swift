@@ -19,7 +19,9 @@ struct KeyboardDrawer: View {
     static let keyHeight: CGFloat = 112
 
     var body: some View {
-        let drums = session.selectedIsDrums
+        // SLOOP's drum track, or a Skiff kit (DRUM, DRUM-X): the lanes on the white keys (Scott, 2026-11-06: on Skiff
+        // the drawer was a piano whose keys played the kit's lanes out of order, none of them named)
+        let drums = session.selectedIsDrums || (session.dialect == .skiff && session.isKit(session.selectedTrack))
         VStack(spacing: 12) {
             header(drums)
             keys(drums)
@@ -68,6 +70,10 @@ struct KeyboardDrawer: View {
         func pitch(_ k: Int) -> Int? { session.pitch(ofKey: k) }
         func name(_ k: Int) -> String { pitch(k).map(Music.noteName) ?? "" }
         func spoken(_ k: Int) -> String { pitch(k).map(Music.spokenNoteName) ?? "silent" }
+        // drums: a lane per white key, the kit's own names (Skiff's 8, SLOOP's 16); keys past the kit are silent
+        let lanes = session.drumLanes
+        func laneName(_ k: Int) -> String { k < lanes.count ? lanes[k] : "" }
+        let blackPlays = !(session.dialect == .skiff)        // SLOOP's black key plays the lane to its left, as on the FM-1
         return GeometryReader { geo in
             let spacing = geo.size.width / 16, keyW = spacing * 0.74
             // (taller, 94 → 112, nearer the FM-1's own tall pills; Scott, 2026-11-06)
@@ -77,11 +83,11 @@ struct KeyboardDrawer: View {
                     let key = Self.whiteOffsets[k] + 1
                     let id = drums ? k : key         // drums: the lane of the white key to its left, as on the device
                     let p = pitch(key)
-                    MembraneKey(name: "", spoken: drums ? Music.drumLanes[k] : spoken(key),
+                    MembraneKey(name: "", spoken: drums ? (blackPlays ? laneName(k) : "silent") : spoken(key),
                                 lit: !drums && p.map(sounding.contains) == true,
                                 held: drums ? onDeviceLanes.contains(k) : p.map(deviceNotes.contains) == true,
-                                silent: !drums && p == nil,
-                                down: { session.keyDown(id) }, up: { session.keyUp(id) })
+                                silent: drums ? !blackPlays : p == nil,
+                                down: { if !drums || blackPlays { session.keyDown(id) } }, up: { session.keyUp(id) })
                         .frame(width: keyW, height: topH)
                         .offset(x: CGFloat(k + 1) * spacing - keyW / 2, y: 0)
                 }
@@ -89,11 +95,12 @@ struct KeyboardDrawer: View {
                     let key = Self.whiteOffsets[k]
                     let id = drums ? k : key
                     let p = pitch(key)
-                    MembraneKey(name: drums ? Music.drumLanes[k] : name(key),
-                                spoken: drums ? Music.drumLanes[k] : spoken(key),
+                    MembraneKey(name: drums ? laneName(k) : name(key),
+                                spoken: drums ? (k < lanes.count ? laneName(k) : "silent") : spoken(key),
                                 lit: drums ? sounding.contains(k) : p.map(sounding.contains) == true,
                                 held: drums ? onDeviceLanes.contains(k) : p.map(deviceNotes.contains) == true,
-                                down: { session.keyDown(id) }, up: { session.keyUp(id) })
+                                silent: drums && k >= lanes.count,
+                                down: { if !drums || k < lanes.count { session.keyDown(id) } }, up: { session.keyUp(id) })
                         .frame(width: keyW, height: bottomH)
                         .offset(x: CGFloat(k) * spacing + (spacing - keyW) / 2, y: bottomY)
                 }
