@@ -291,7 +291,9 @@ struct SkiffArrangePage: View {
             let total = 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap)
             let below = top + laneHeight + 4
             TrackKnobBox(session: session, ui: ui)
-                .offset(x: -4, y: below + TrackKnobBox.height <= total ? below : max(0, top - 4 - TrackKnobBox.height))
+                // a sound panel over the page: the box steps left of it, so it stays in view (2026-11-06)
+                .offset(x: -4 - (ui.soundPanel != nil ? SoundPanel.width + 12 : 0),
+                        y: below + TrackKnobBox.height <= total ? below : max(0, top - 4 - TrackKnobBox.height))
         }
     }
 

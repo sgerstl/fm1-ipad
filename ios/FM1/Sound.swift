@@ -505,7 +505,7 @@ struct SoundCard: View, Equatable {
         ForEach(0..<4, id: \.self) { slot in
             if let id = p.ids[slot] {
                 KnobControl(ui: ui, activate: { touch(p) },
-                            column: (slot + 1, Theme.track[session.selectedTrack], marks.key == "s\(p.scope).\(id)")) {
+                            column: (slot + 1, p.scope == 1 ? Theme.text : Theme.track[session.selectedTrack], marks.key == "s\(p.scope).\(id)")) {   // (shared: white)
                     KnobSpec.param(session, scope: p.scope, id: id, slot: slot)
                 }
             } else {

@@ -276,6 +276,9 @@ struct SoundPanelHost<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.grid) private var grid
 
+    /// The panel's slide, and on the Song tab the page's with it, so their edges stay together.
+    static var slide: Animation { .easeOut(duration: 0.2) }
+
     var body: some View {
         // the page gives the rail its width: a step narrower, so a bar of the grid still fits across
         var narrowed = grid
@@ -283,14 +286,15 @@ struct SoundPanelHost<Content: View>: View {
         // the Song tab with the panel open: the editor's bar (its viewport is one bar, paged by bar) narrows to steps
         // of 24 pt, WCAG 2.5.8's least, and the page gives up just what that frees (about 428 pt). The panel is 430, so
         // the pattern's card meets the panel's edge, no gap; at the full 442 the steps would be 23.1 pt.
-        let pushes = !makesRoom && ui.soundPanel != nil
-        let room = pushes ? max(0, narrowed.stepWidth - SoundPanel.openStep) * 16 : 0
-        if pushes { narrowed.stepWidth = min(narrowed.stepWidth, SoundPanel.openStep) }
+        // the Song tab: the panel lies over the page, which keeps its width (Scott, 2026-11-06: "I thought the panel was
+        // supposed to overlay this page"); narrowing it made the timeline lurch as the panel slid. Lanes scroll, so
+        // nothing under the panel is out of reach.
+        let room: CGFloat = 0
         return HStack(alignment: .top, spacing: 12) {
             content()
                 .environment(\.grid, narrowed)
-                // the push lands at once (one layout), never animated: re-laying out the strips and the carousel every
-                // frame of the slide dropped frames (2026-11-06); only the panel moves
+                // the Mixer and Browse make their own room, at once (one layout), never animated: re-laying out the strips
+                // and the carousel every frame of the slide dropped frames (2026-11-06); only the panel moves
                 .environment(\.soundPanelRoom, makesRoom && ui.soundPanel != nil ? SoundPanel.width + 12 : 0)
                 .padding(.trailing, room)
                 .animation(nil, value: ui.soundPanel != nil)
@@ -302,7 +306,7 @@ struct SoundPanelHost<Content: View>: View {
                                 .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                         }
                     }
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.soundPanel?.family)
+                    .animation(reduceMotion ? nil : Self.slide, value: ui.soundPanel?.family)
                 }
                 // another track whose engine has none of the open button's pages: closed, never an empty panel
                 .onChange(of: session.selectedTrack) { _, _ in

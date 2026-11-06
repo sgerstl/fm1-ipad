@@ -50,7 +50,9 @@ struct PageGraph: View {
 
     var body: some View {
         let _ = BodyCounter.tick("PageGraph")
-        let colour = Theme.track[session.selectedTrack]
+        // a shared page (Delay, Reverb, Chorus, Global: scope 1) sets every track, so it isn't drawn in the selected
+        // track's colour: grey for the effect, its white parts kept for contrast (Scott, 2026-11-06)
+        let colour = page.scope == 1 ? Theme.textSecondary : Theme.track[session.selectedTrack]
         Group {
             if deferred {
                 Color.clear      // (the sound panel sliding in: drawn once it settles, the well holding its place)
