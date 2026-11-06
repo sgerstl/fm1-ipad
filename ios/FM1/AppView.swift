@@ -433,7 +433,7 @@ struct NotOnThisFirmware: View {
     /// another model, its Arrange still being designed (vault skiff-plan.md, phase 4).
     @MainActor static func arrange(_ session: DeviceSession) -> NotOnThisFirmware {
         NotOnThisFirmware(title: "Arrange isn't on Skiff yet",
-                          detail: "Skiff keeps a song as each track's list of patterns, with scenes, not SLOOP's four sections. "
+                          detail: "Skiff keeps a song as each track's list of patterns, with scenes. "
                               + "Lupe's Arrange for that is still being designed. Until then, arrange on the FM-1 itself.")
     }
 

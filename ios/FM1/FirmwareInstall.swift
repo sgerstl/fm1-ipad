@@ -184,7 +184,7 @@ final class FirmwareCentre {
                     Task { @MainActor in self.phase = .backingUp(total > 0 ? Double(done) / Double(total) : 1) }
                 }
                 let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                backupName = try b.save(in: docs).lastPathComponent
+                backupName = b.place(try b.save(in: docs))
             } catch {
                 phase = .idle
                 pickerNote = "The backup didn't finish: \(error) Nothing was installed."
@@ -454,7 +454,7 @@ struct FirmwarePicker: View {
             ? " Stock V15 can’t read Skiff’s or SLOOP’s projects, and installing over it later can write over some of them: the backup is how they come back."
             : ""
         if case .connected = session.status {
-            return "Lupe backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Lupe › Backups), then writes. Keep the FM-1 plugged in for about a minute." + stock
+            return "Lupe backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Lupe › \(session.dialect == .skiff ? "Skiff" : "SLOOP") › Backups), then writes. Keep the FM-1 plugged in for about a minute." + stock
         }
         return "There’s no backup this time: the FM-1 isn’t connected to Lupe. Keep it plugged in for about a minute." + stock
     }
@@ -589,7 +589,7 @@ struct FirmwareInstallCover: View {
                     Text("Lupe can’t connect to the stock firmware. When you want Lupe back, plug the FM-1 in and choose Skiff or SLOOP.").bodyText(primary: true)
                 }
                 if let backup {
-                    Text("The backup is in Files: On My \(deviceWord) › Lupe › Backups › \(backup)." + (centre.target.isStock ? " Restore it with that firmware’s editor once it’s back on." : "")).bodyText()
+                    Text("The backup is in Files: On My \(deviceWord) › Lupe › \(backup)." + (centre.target.isStock ? " Restore it with that firmware’s editor once it’s back on." : "")).bodyText()
                 }
             }
             HStack { Spacer(); CardKey(title: "Done", primary: true) { centre.close() } }
@@ -615,7 +615,7 @@ struct FirmwareInstallCover: View {
                 } else {
                     Text("Nothing was written: the FM-1 still runs its firmware. Check the cable and try again.").bodyText()
                 }
-                if let backup { Text("The backup taken first is in Files: Lupe › Backups › \(backup).").bodyText() }
+                if let backup { Text("The backup taken first is in Files: Lupe › \(backup).").bodyText() }
             }
             HStack(spacing: 8) {
                 Spacer()

@@ -376,7 +376,7 @@ final class NowPlaying {
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = [
             MPMediaItemPropertyTitle: session.song.songMode ? "FM-1 · song" : "FM-1",
-            MPMediaItemPropertyArtist: "SLOOP",
+            MPMediaItemPropertyArtist: session.dialect == .skiff ? "Skiff" : "SLOOP",   // (the firmware it runs)
             MPNowPlayingInfoPropertyPlaybackRate: session.playing ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyIsLiveStream: true,
         ]

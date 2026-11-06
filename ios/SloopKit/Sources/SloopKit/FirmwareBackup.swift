@@ -30,9 +30,16 @@ public struct DeviceBackup: Sendable {
         return "\(f.string(from: created)) \(fw).json"
     }
 
-    /// Kept in Documents/Backups, where the Files app shows it.
+    /// The firmware's own folder in Lupe's documents: "SLOOP" or "Skiff" (each keeps its own files, nothing shared).
+    public var folder: String { Self.folder(format: format) }
+    public static func folder(format: String) -> String { format == "sloop-backup" ? "SLOOP" : "Skiff" }
+
+    /// Where it's kept from Files: "Skiff › Backups › 2026-11-05 0412 v2.2.json".
+    public func place(_ url: URL) -> String { "\(folder) › Backups › \(url.lastPathComponent)" }
+
+    /// Kept in Documents/<firmware>/Backups, where the Files app shows it.
     public func save(in documents: URL) throws -> URL {
-        let dir = documents.appendingPathComponent("Backups", isDirectory: true)
+        let dir = documents.appendingPathComponent(folder, isDirectory: true).appendingPathComponent("Backups", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(fileName)
         try json.write(to: url, options: .atomic)

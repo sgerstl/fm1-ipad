@@ -43,11 +43,15 @@ struct ProjectsSheet: View {
                         Section {
                             Button { request(nil) } label: { Label("New project", systemImage: "plus") }
                                 .disabled(!connected || store.busy != nil)
-                                .accessibilityHint("Clears the FM-1: empty tracks, no sections, the default sounds, 90 BPM")
+                                .accessibilityHint(skiff ? "Clears the music: each track's power-on sound, no patterns. The pattern pool keeps its patterns"
+                                                         : "Clears the FM-1: empty tracks, no sections, the default sounds, 90 BPM")
                             Button { naming = .saveAs(store.nextName()) } label: { Label("Save as…", systemImage: "square.and.arrow.down") }
                                 .disabled(!connected || store.busy != nil)
+                        } header: {
+                            if skiff { Text("On this iPad") }      // (beside the FM-1's own slots)
                         } footer: {
                             if !connected { Text("Plug in the FM-1 to open or save a project. You can still rename and delete.") }
+                            else if skiff { Text("Saving here or opening stops the FM-1. A project keeps its patterns with it; user sounds and samples stay on the FM-1.") }
                         }
                         Section {
                             if store.projects.isEmpty {
@@ -55,11 +59,6 @@ struct ProjectsSheet: View {
                                     .foregroundStyle(Theme.textSecondary)
                             }
                             ForEach(store.projects) { row($0) }
-                        }
-                    } else {
-                        Section("On this iPad") {
-                            Text("Projects saved on this iPad open on SLOOP. On Skiff, save to the FM-1's slots above; the backups Lupe takes before a save are in Files.")
-                                .foregroundStyle(Theme.textSecondary)
                         }
                     }
                 case .safety:
@@ -113,8 +112,10 @@ struct ProjectsSheet: View {
         .namePrompt($naming, store: store)
     }
 
-    /// SLOOP's backup objects make the iPad's projects; firmware without them (Skiff) has its own slots instead.
-    private var ipadProjects: Bool { session.dialect == nil || session.capabilities.contains(.projects) }
+    /// SLOOP's backup objects make its iPad projects; Skiff's backup commands move one project and its patterns (qa/skiff-projects-2026-11-06).
+    private var ipadProjects: Bool { session.dialect == nil || skiff || session.capabilities.contains(.projects) }
+    /// Skiff's projects (connected to Skiff, or last connected to it): its words, its folder.
+    private var skiff: Bool { store.firmware == .skiff }
 
     // MARK: Rows
 
@@ -124,7 +125,8 @@ struct ProjectsSheet: View {
     private func row(_ p: ProjectFile) -> some View {
         HStack(spacing: 8) {
             openButton(p)
-            RowMenuKey(name: p.name, disabled: store.busy != nil) { at in openMenu(p, at) }
+            RowMenuKey(name: p.name, hint: p.skiff == nil ? "Rename, duplicate, export or delete" : "Rename, duplicate or delete",
+                       disabled: store.busy != nil) { at in openMenu(p, at) }
         }
         // a long press anywhere on the row: the same menu, at the finger
         .gesture(HoldRecognizer(space: .named("projectRows"), began: { _, g in if store.busy == nil { openMenu(p, g) } },
@@ -140,10 +142,13 @@ struct ProjectsSheet: View {
         menu = JibMenu(title: p.name, groups: {
             var g: [[MenuItem]] = [[MenuItem(title: "Rename", icon: "pencil") { naming = .rename(p) }]]
             if !p.isSafetyCopy { g[0].append(MenuItem(title: "Duplicate", icon: "plus.square.on.square") { store.duplicate(p) }) }
-            // SLOOP's song file: opens in SLOOP's web editor too; the share sheet is the system's
-            g[0].append(MenuItem(title: "Export…", icon: "square.and.arrow.up") {
-                if let url = try? SloopSongExport(project: p).write() { ShareSheet.present(url, at: at) }
-            })
+            // SLOOP's song file: opens in SLOOP's web editor too; the share sheet is the system's. (Skiff's project file
+            // is Lupe's own, already in Files › Lupe › Skiff › Projects: no export)
+            if p.skiff == nil {
+                g[0].append(MenuItem(title: "Export…", icon: "square.and.arrow.up") {
+                    if let url = try? SloopSongExport(project: p).write() { ShareSheet.present(url, at: at) }
+                })
+            }
             g.append([MenuItem(title: "Delete", icon: "trash") { deleting = p }])
             return g
         }, at: at)
@@ -167,7 +172,7 @@ struct ProjectsSheet: View {
                     Text(detail(p)).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer(minLength: 12)
-                SectionMarks(filled: p.data.sectionsFilled)
+                if p.skiff == nil { SectionMarks(filled: p.data.sectionsFilled) }
             }
             .frame(minHeight: 52)
             .contentShape(Rectangle())
@@ -189,10 +194,14 @@ struct ProjectsSheet: View {
 
     private func detail(_ p: ProjectFile) -> String {
         let when = p.saved.formatted(.relative(presentation: .named))
-        return [p.isSafetyCopy ? "Taken \(when)" : "Saved \(when)", p.data.bpm.map { "\($0) BPM" }].compactMap { $0 }.joined(separator: " · ")
+        let what = p.skiff.map { k in k.patternCount == 1 ? "1 pattern" : "\(k.patternCount) patterns" } ?? p.data.bpm.map { "\($0) BPM" }
+        return [p.isSafetyCopy ? "Taken \(when)" : "Saved \(when)", what].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func accessibilityLabel(_ p: ProjectFile, onFM1: Bool) -> String {
+        if p.skiff != nil {
+            return [p.name, onFM1 ? (store.edited ? "on the FM-1, edited" : "on the FM-1") : nil, detail(p)].compactMap { $0 }.joined(separator: ", ")
+        }
         let filled = p.data.sectionsFilled.enumerated().filter(\.element).map { DeviceSession.sectionName($0.offset) }
         let sections = filled.isEmpty ? "no sections" : "sections \(filled.joined(separator: ", "))"
         return [p.name, onFM1 ? (store.edited ? "on the FM-1, edited" : "on the FM-1") : nil, detail(p), sections]
@@ -227,7 +236,9 @@ struct ProjectsSheet: View {
     }
 
     private func openMessage(_ o: Opening) -> String {
-        let replaces = "Opening \(o.name) replaces what's on the FM-1."
+        let replaces = skiff
+            ? "Opening \(o.name) replaces the music on the FM-1. Patterns it brings go to free places in the pool; none are written over."
+            : "Opening \(o.name) replaces what's on the FM-1."
         let stops = session.playing || session.song.songPlaying ? " It stops first." : ""
         let copy = store.needsSaving ? " Without saving, Lupe still keeps a safety copy." : ""
         return replaces + stops + copy
@@ -267,7 +278,7 @@ private struct NamePromptModifier: ViewModifier {
     @State private var text = ""
 
     func body(content: Content) -> some View {
-        content.alert(title, isPresented: Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } })) {
+        content.alert(title, isPresented: Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } }), actions: {
             TextField("Name", text: $text)
             Button("Cancel", role: .cancel) {}
             Button(isRename ? "Rename" : "Save") {
@@ -278,7 +289,10 @@ private struct NamePromptModifier: ViewModifier {
                 }
             }
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)    // an empty name did nothing, silently
-        }
+        }, message: {
+            // Skiff: reading the music stops the transport (as a save on the FM-1 does)
+            if !isRename, store.firmware == .skiff { Text("Saving stops the FM-1.") }
+        })
         .onChange(of: prompt?.id) {
             switch prompt {
             case .saveAs(let n): text = n
@@ -301,6 +315,7 @@ extension View {
 /// A row's ⋯ key: opens the row's menu under itself.
 private struct RowMenuKey: View {
     let name: String
+    let hint: String
     let disabled: Bool
     let open: (CGPoint) -> Void
     @State private var frame: CGRect = .zero
@@ -317,7 +332,7 @@ private struct RowMenuKey: View {
         .disabled(disabled)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
         .accessibilityLabel("Manage \(name)")
-        .accessibilityHint("Rename, duplicate, export or delete")
+        .accessibilityHint(hint)
     }
 }
 

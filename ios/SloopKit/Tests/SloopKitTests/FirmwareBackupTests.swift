@@ -81,7 +81,12 @@ import Testing
         let b = DeviceBackup(format: "sloop-backup", firmware: "FELUCCA SLOOP 2.8.4", created: Date(timeIntervalSince1970: 0),
                              objects: [], json: Data("{}".utf8))
         let url = try b.save(in: dir)
-        #expect(url.path.contains("/Backups/") && FileManager.default.fileExists(atPath: url.path))
+        #expect(url.path.contains("/SLOOP/Backups/") && FileManager.default.fileExists(atPath: url.path))
+        // each firmware its own folder: Skiff's beside SLOOP's, never in it
+        let k = DeviceBackup(format: "felucca-backup", firmware: "FELUCCA v2.2", created: Date(timeIntervalSince1970: 0),
+                             objects: [], json: Data("{}".utf8))
+        let ku = try k.save(in: dir)
+        #expect(ku.path.contains("/Skiff/Backups/") && k.place(ku).hasPrefix("Skiff › Backups › "))
         try? FileManager.default.removeItem(at: dir)
     }
 }

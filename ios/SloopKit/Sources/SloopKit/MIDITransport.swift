@@ -26,10 +26,12 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
             MIDIObjectGetStringProperty(e, kMIDIPropertyDisplayName, &s)
             return (s?.takeRetainedValue() as String?) ?? ""
         }
+        // FELUCCA_PORT (tests): another port's name, so a second skiff-sim (--name) can run beside the first
+        let match = ProcessInfo.processInfo.environment["FELUCCA_PORT"] ?? "felucca"
         let sources = (0..<MIDIGetNumberOfSources()).map(MIDIGetSource)
         let dests = (0..<MIDIGetNumberOfDestinations()).map(MIDIGetDestination)
-        guard let s = sources.first(where: { name($0).localizedCaseInsensitiveContains("felucca") }),
-              let d = dests.first(where: { name($0).localizedCaseInsensitiveContains("felucca") }) else { return nil }
+        guard let s = sources.first(where: { name($0).localizedCaseInsensitiveContains(match) }),
+              let d = dests.first(where: { name($0).localizedCaseInsensitiveContains(match) }) else { return nil }
         return (s, d, name(s))
     }
 
