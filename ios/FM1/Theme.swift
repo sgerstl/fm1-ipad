@@ -30,6 +30,8 @@ enum Theme {
 
     static let text = Color(hex: 0xEDEDF0)
     static let textSecondary = Color(hex: 0xA1A1AA)
+    /// secondary text on a raised (held) surface, such as the sound panel: textSecondary there is only 4.1:1 (6.1:1 here)
+    static let textSecondaryRaised = Color(hex: 0xC4C4CC)
     static let textTertiary = Color(hex: 0x71717A)
     static let onColour = Color(hex: 0x101012)
 

@@ -147,7 +147,7 @@ struct SoundPanel: View {
                         Text(title).font(.system(size: 13, weight: .semibold)).tracking(0.4).lineLimit(1).hidden()
                             .overlay {
                                 Text(title).font(.system(size: 13, weight: on ? .semibold : .regular)).tracking(0.4).lineLimit(1)
-                                    .foregroundStyle(on ? lit : Theme.textSecondary)
+                                    .foregroundStyle(on ? lit : Theme.textSecondaryRaised)
                                     .shadow(color: on ? lit.opacity(0.55) : .clear, radius: 6)
                             }
                             .padding(.horizontal, 12).frame(minHeight: 44)
@@ -176,7 +176,7 @@ struct SoundPanel: View {
             HStack(spacing: 10) {
                 Text(state.family.rawValue).font(.system(size: 20, weight: .semibold)).accessibilityAddTraits(.isHeader)
                 Text("T\(t + 1) \(Entries.trackName(t, session: session)) · \(pages.count) page\(pages.count == 1 ? "" : "s")")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
                 Spacer(minLength: 0)
                 // SAVE > USER: the track's sound to a user slot, its name asked
                 if session.dialect == .skiff { SaveSoundKey(session: session, ui: ui) }
@@ -203,7 +203,7 @@ struct SoundPanel: View {
                 TrackChip(track: t, muted: track.mute)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.presetName.isEmpty ? track.displayName : track.presetName.capitalized).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                    Text(track.engineName).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    Text(track.engineName).font(.system(size: 12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Button { ui.presetsPanel = true } label: {
@@ -222,7 +222,7 @@ struct SoundPanel: View {
             ScrollView {
                 if pages.isEmpty {
                     Text("T\(t + 1)'s engine has no \(state.family.rawValue) pages.")
-                        .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        .font(.system(size: 13)).foregroundStyle(Theme.textSecondaryRaised)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
                 } else {
                     ShapeSection(session: session, ui: ui, marks: marks, family: state.family, columns: 1, showsHeader: false)
