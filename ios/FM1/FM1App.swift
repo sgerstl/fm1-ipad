@@ -198,6 +198,16 @@ final class EditorUI {
     var addedLanes: [Int: [Int]] = [:]
     /// The motion lanes hidden from the pattern header's chip (they show whenever there's motion otherwise).
     var motionHidden = false
+    /// The motion lane opened into its editor (one at a time): its track and parameter. -motion-lane 36 opens that
+    /// lane on the selected track (screenshots).
+    var openLane: OpenLane? = {
+        let a = ProcessInfo.processInfo.arguments
+        guard let i = a.firstIndex(of: "-motion-lane"), i + 1 < a.count, let id = Int(a[i + 1]) else { return nil }
+        return OpenLane(track: 0, id: id)
+    }()
+    struct OpenLane: Equatable { var track: Int, id: Int }
+    /// What a touch on the open lane writes: false a recorded change that holds, true a lock on that step only.
+    var motionWritesLocks = false
     /// The page last brought forward (FocusedPage).
     var focusedPage: FocusedPage?
     func focus(_ p: SoundPage) { focusedPage = FocusedPage(id: p.id, n: (focusedPage?.n ?? 0) + 1) }

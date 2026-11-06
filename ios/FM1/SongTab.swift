@@ -27,7 +27,9 @@ struct SkiffSongPage: View {
         GeometryReader { g in
             let total = g.size.height
             let least = Self.songMin(session.trackCount)
-            let top = min(max(total * split, least), max(least, total - Self.editorMin - Self.dividerHeight))
+            // a motion lane open in its editor lifts the divider (MotionLanes, approach A); Done puts it back
+            let lift: CGFloat = MotionLanes.openID(session, ui, track: session.selectedTrack) != nil ? 120 : 0
+            let top = max(least, min(max(total * split, least), max(least, total - Self.editorMin - Self.dividerHeight)) - lift)
             let bottom = total - top - Self.dividerHeight
             VStack(spacing: 0) {
                 SkiffArrangePage(session: session, store: store, ui: ui)
@@ -41,6 +43,7 @@ struct SkiffSongPage: View {
             }
             .overlay { drawer }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.openLane)
         }
     }
 

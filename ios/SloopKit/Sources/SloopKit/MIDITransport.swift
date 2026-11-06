@@ -19,19 +19,19 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
     private var finished = false
     public let name: String
 
-    /// The device's endpoints, or nil when no Felucca port is there.
+    /// The device's endpoints, or nil when no Felucca port is there. FELUCCA_PORT names another port to look for
+    /// (one skiff-sim among several on the Mac, each run with its own --name).
     public static func findDevice() -> (source: MIDIEndpointRef, destination: MIDIEndpointRef, name: String)? {
+        let want = ProcessInfo.processInfo.environment["FELUCCA_PORT"] ?? "felucca"
         func name(_ e: MIDIEndpointRef) -> String {
             var s: Unmanaged<CFString>?
             MIDIObjectGetStringProperty(e, kMIDIPropertyDisplayName, &s)
             return (s?.takeRetainedValue() as String?) ?? ""
         }
-        // FELUCCA_PORT (tests): another port's name, so a second skiff-sim (--name) can run beside the first
-        let match = ProcessInfo.processInfo.environment["FELUCCA_PORT"] ?? "felucca"
         let sources = (0..<MIDIGetNumberOfSources()).map(MIDIGetSource)
         let dests = (0..<MIDIGetNumberOfDestinations()).map(MIDIGetDestination)
-        guard let s = sources.first(where: { name($0).localizedCaseInsensitiveContains(match) }),
-              let d = dests.first(where: { name($0).localizedCaseInsensitiveContains(match) }) else { return nil }
+        guard let s = sources.first(where: { name($0).localizedCaseInsensitiveContains(want) }),
+              let d = dests.first(where: { name($0).localizedCaseInsensitiveContains(want) }) else { return nil }
         return (s, d, name(s))
     }
 
