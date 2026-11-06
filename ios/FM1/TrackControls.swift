@@ -14,7 +14,7 @@ struct TrackKnobBox: View {
     @Environment(\.look) private var look
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
-    static let height: CGFloat = 100
+    static let height: CGFloat = 116
     /// KnobSpec.all's LEVEL, STEPS, PAN (0 is SWING, global).
     static let knobs = 1..<4
 
@@ -48,11 +48,15 @@ struct TrackKnobBox: View {
         let t = session.selectedTrack
         let home = Self.homeIDs(session)
         VStack(alignment: .leading, spacing: 4) {
-            // HOME's four, in the FM-1's knob colours; turning one turns that knob's parameter on the FM-1 too
+            // HOME's four as the columns everywhere else (Scott, 2026-11-06), the track's colour, numbered as the FM-1's
+            // knobs; a sideways slide turns one, as on every column, and it turns that knob's parameter on the FM-1 too
             if !home.isEmpty {
                 HStack(spacing: 4) {
                     ForEach(Array(home.enumerated()), id: \.offset) { k, id in
-                        SlideKnob(ui: ui) { KnobSpec.param(session, scope: 0, id: id, slot: k) }
+                        KnobControl(ui: ui, column: (number: k + 1, tint: Theme.track[t], hot: false)) {
+                            KnobSpec.param(session, scope: 0, id: id, slot: k)
+                        }
+                        .frame(width: 92, height: 56)
                     }
                 }
             }

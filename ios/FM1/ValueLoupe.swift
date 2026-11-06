@@ -48,7 +48,11 @@ struct ValueLoupeLayer: View {
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
                     .scaleEffect(Self.scale)
                     .position(x: x, y: y)
-                    .transition(reduceMotion ? .opacity : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                    // grows from and shrinks back into the finger (anchored in the layer, which .position fills: a
+                    // .bottom anchor shrank it toward the foot of the screen, Scott, 2026-11-06)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.2, anchor: UnitPoint(x: p.x / max(g.size.width, 1),
+                                                                                               y: p.y / max(g.size.height, 1)))
+                                    .combined(with: .opacity))
             }
         }
         .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.9), value: loupe.on)
