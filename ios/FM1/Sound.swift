@@ -638,8 +638,14 @@ private struct CardForward: ViewModifier {
         let focused = ui.focusedPage.map { f in rows.contains { $0.id == f.id } } ?? false
         let forward = session.screenLinked ? rows.contains { SoundCard.onDevice(session, $0) } : focused
         content
-            .shadow(color: .black.opacity(forward ? 0.45 : 0), radius: 12, y: 6)
-            .animation(reduceMotion ? nil : SoundCard.focusMove, value: forward)
+            // the lift as a shape's shadow behind the card, not the card's own: a shadow on the content was drawn
+            // offscreen again every time the content changed (a graph redrawing as a knob turns: Reverb, 2026-11-06)
+            .background {
+                RoundedRectangle(cornerRadius: 14).fill(Theme.panel)
+                    .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
+                    .opacity(forward ? 1 : 0)
+                    .animation(reduceMotion ? nil : SoundCard.focusMove, value: forward)
+            }
             .overlay(alignment: .top) {
                 RoundedRectangle(cornerRadius: 1.5).fill(Theme.text)
                     .frame(height: 3)

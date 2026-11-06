@@ -70,3 +70,11 @@ Measured with the body counter, one drag on Delay's FEEDBACK:
 ## Test flake
 
 `aSectionClearsOnlyWhenStopped` still failed now and then in the full run after the first fix. Its last wait covers a backup write through the SLOOP fake: begin, data, then a commit SLOOP is given 5 s. Under the suite's parallel load that sometimes outran the test's 5 s wait. The wait is now 15 s. Two full runs passed since.
+
+## Reverb still choppy on the device; the carousel's settle (618f21c feedback)
+
+- **Choppiness, suspected cause: an offscreen shadow.** The card in the middle is "brought forward" with a lift, and that lift was a `.shadow` on the **whole card**. A shadow on changing content is drawn again offscreen whenever the content changes, here on every value of a turning knob as the graph redraws. Body counts can't show that cost (it's rendering, not view updates), which is why the simulator looked clean. The lift is now the shadow of a plain shape behind the card, which doesn't change as the card's content does. The panel's own shadow was already drawn that way.
+  - Not confirmed on the device yet. The Instruments trace (Time Profiler plus Hitches) the parent is getting from Scott's iPad will tell whether it was this, the graph, or the writes.
+- **The settle: snapped at lift.** When the finger lifts, Lupe takes over the scroll view's own deceleration and lands the card with a stiff spring (response 0.22 s, damping 0.88: settled in about 0.25 s, a hint of bounce). The card nearest the middle is chosen, or one further for a flick faster than 400 pt/s (0.4 pt/ms; ScrollPhaseChangeContext's velocity is in points per millisecond).
+  - **The landing card is the section, and its columns take the finger, at lift**, not after the spring ends. The FM-1 goes there at once and the dots follow (`flick-landed.jpg`, about 100 ms after the lift).
+  - The dot taps and GLO stepping use the same spring.

@@ -131,7 +131,7 @@ private struct MixerCards: View {
     @State private var scrolling = false       // a swipe or its snap under way: the page change waits for it to settle
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82) }
+    private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.88) }   // ~0.25 s, a hint of bounce
 
     var body: some View {
         let _ = BodyCounter.tick("MixerCards")
@@ -181,8 +181,11 @@ private struct MixerCards: View {
         }
         // the card swiped into the middle becomes the Mixer's section, and the one the FM-1 shows, once the scroll has
         // settled: done mid-swipe, the page change rebuilt cards under the snap and it hitched (2026-11-06)
-        .onScrollPhaseChange { _, phase in
+        .onScrollPhaseChange { old, phase, context in
             scrolling = phase.isScrolling
+            // the finger lifts: snap to the card now with a stiff spring instead of the scroll view's own slow settle,
+            // and make it the section at once, so its columns take the finger while it lands (Scott, 2026-11-06)
+            if old == .interacting, phase == .decelerating { snap(velocity: context.velocity?.dx ?? 0) }
             if !phase.isScrolling { commit() }
         }
     }
@@ -206,6 +209,17 @@ private struct MixerCards: View {
         }
         .frame(maxWidth: .infinity)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: centred)
+    }
+
+    /// The card nearest the middle when the finger lifts, one further when it was flicked that way; landed with `spring`.
+    private func snap(velocity: CGFloat) {
+        guard let cur = centred, let k = pages.firstIndex(where: { $0.id == cur }) else { return }
+        var to = k
+        if abs(velocity) > 0.4 { to = velocity > 0 ? k + 1 : k - 1 }        // (points per millisecond: a flick)
+        to = min(max(to, 0), pages.count - 1)
+        withAnimation(spring) { centred = pages[to].id }
+        scrolling = false
+        commit()
     }
 
     private func commit() {
