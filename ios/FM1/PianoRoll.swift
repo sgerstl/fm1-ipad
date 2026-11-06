@@ -4,11 +4,7 @@ import SwiftUI
 /// The selected synth track as a piano roll folded to its scale: one bar in view, two fingers pan (it
 /// settles on a bar), or move the view box on the track's timeline row.
 struct PianoRoll: View {
-    @Environment(\.grid) private var baseGrid
-    /// Taller rows (Scott, 2026-11-06: the keys down the side nearer the FM-1's own rubber keys); the grid's rows,
-    /// the scroll's row snap and the note pads all follow `grid.rowHeight`, so they keep in step.
-    private var grid: GridMetrics { var g = baseGrid; g.rowHeight = Self.keyRowHeight; return g }
-    static let keyRowHeight: CGFloat = 54
+    @Environment(\.grid) private var grid
     @Environment(\.look) private var look
     let session: DeviceSession
     let ui: EditorUI
@@ -16,7 +12,7 @@ struct PianoRoll: View {
     @State private var offset = CGPoint.zero
     @State private var request: TwoFingerScrollView<PianoRollContent>.ScrollRequest?
 
-    static let gridHeight: CGFloat = 534        // ten note rows (54 pt) or so; one bar wide (grid.barWidth)
+    static let gridHeight: CGFloat = 534        // 11 note rows and a bit; one bar wide (grid.barWidth)
     /// Both editors are this tall, so switching to the drum track moves nothing below them.
     static let panelHeight: CGFloat = 684
     /// The panel's height where it's laid out: 684 on Sequence, what the Song tab's divider leaves below it.
@@ -38,8 +34,7 @@ struct PianoRoll: View {
         let contentSize = CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(gridHeight, CGFloat(rows.count) * grid.rowHeight))
         let first = Int((offset.x / grid.stepWidth).rounded()) + 1
         let topRow = Int((offset.y / grid.rowHeight).rounded())
-        let inView = max(1, Int(gridHeight / grid.rowHeight))
-        let hidden = (above: topRow, below: max(0, rows.count - topRow - inView))
+        let hidden = (above: topRow, below: max(0, rows.count - topRow - 11))
         let rowsNote = hidden.below > 0 ? " · \(Self.rows(hidden.below)) below" : hidden.above > 0 ? " · \(Self.rows(hidden.above)) above" : ""
         let scaleName = t.scale == 0 ? "chromatic, folded to the notes used" : "\(Music.noteNames[t.root % 12]) \(Music.scales[min(t.scale, 15)].spoken)"
 
@@ -55,15 +50,13 @@ struct PianoRoll: View {
 
             HStack(alignment: .top, spacing: 8) {
                 VStack(spacing: 0) {
-                    let onStep = t.steps[ui.selectedStep[track]].time == .note ? Set(t.steps[ui.selectedStep[track]].notes) : []
                     ForEach(rows, id: \.self) { n in
                         // off-scale rows (quantise off) keep readable grey and say so with a mark, not a fainter grey
                         AuditionLabel(text: Music.noteName(n) + (Music.inScale(n, root: t.root, scale: t.scale) ? "" : " ∗"),
-                                      spoken: Music.spokenNoteName(n), key: true, lit: onStep.contains(n),
+                                      spoken: Music.spokenNoteName(n),
                                       down: { session.noteDown(n) }, up: { session.noteUp(n) })
                     }
                 }
-                .environment(\.grid, grid)
                 .offset(y: -offset.y)
                 .frame(width: 80, height: gridHeight, alignment: .top)
                 .clipped()
@@ -130,26 +123,19 @@ struct AuditionLabel: View {
     let text: String
     let spoken: String
     var bold = false
-    /// The piano roll's keys (2026-11-06): a rubber key as on the FM-1, its LED slit lit while held and half lit
-    /// for the notes on the selected step. Drum lanes stay plain names.
-    var key = false
-    var lit = false
     var select: (() -> Void)? = nil
     let down: () -> Void
     let up: () -> Void
     @State private var pressed = false
-    @Environment(\.look) private var look
 
     var body: some View {
         let _ = BodyCounter.tick("AuditionLabel")
         Text(text)
             .font(.system(size: 13, weight: bold ? .semibold : .regular))
-            .foregroundStyle(pressed || bold || (key && lit) ? Theme.text : Theme.textSecondary)
-            .padding(.trailing, key ? 14 : 8)
+            .foregroundStyle(pressed || bold ? Theme.text : Theme.textSecondary)
+            .padding(.trailing, 8)
             .frame(width: grid.labelWidth, height: grid.rowHeight, alignment: .trailing)
-            .background {
-                if key { rubberKey } else { RoundedRectangle(cornerRadius: 8).fill(.white.opacity(pressed ? 0.08 : 0)).padding(.vertical, 4) }
-            }
+            .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(pressed ? 0.08 : 0)).padding(.vertical, 4))
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { _ in if !pressed { pressed = true; select?(); down() } }
@@ -164,37 +150,6 @@ struct AuditionLabel: View {
             .accessibilityActions {
                 if let select { Button("Edit \(spoken) on the selected step") { select() } }
             }
-            .accessibilityValue(key && lit ? "on the selected step" : "")
-    }
-
-    /// Matte rubber, as Keyboard.swift's membrane keys (no blur: a column of them redraws as the roll pans), with the
-    /// slit at its left: 6 pt wide, the keyboard's 4 pt widened to read at this size. Flat look: a chiclet on its edge.
-    private var rubberKey: some View {
-        let glow = pressed ? 1.0 : lit ? 0.5 : 0
-        let shape = RoundedRectangle(cornerRadius: 10)
-        return ZStack(alignment: .leading) {
-            if look.flat {
-                shape.fill(pressed ? Theme.controlPressed : Theme.control)
-                    .offset(y: pressed ? 2 : 0)
-                    .background(shape.fill(Theme.chicletEdge).offset(y: 2))
-            } else {
-                shape.fill(Color(hex: 0x232427))
-                    .overlay(shape.strokeBorder(LinearGradient(colors: [.black.opacity(pressed ? 0.25 : 0.4), .black.opacity(pressed ? 0.35 : 0.55)],
-                                                               startPoint: .top, endPoint: .bottom), lineWidth: 3))
-                    .overlay(shape.fill(LinearGradient(colors: [.white.opacity(pressed ? 0.02 : 0.05), .clear], startPoint: .top, endPoint: .center)))
-                    .background(shape.fill(.black.opacity(pressed ? 0.3 : 0.5)).offset(y: pressed ? 1 : 3))
-            }
-            Capsule()
-                .fill(Color(hex: 0x0B0B0D))
-                .overlay(Capsule().fill(Theme.text.opacity(glow)))
-                .frame(width: 6, height: grid.rowHeight - 24)
-                .shadow(color: Theme.text.opacity(look.flat ? 0 : glow * 0.9), radius: glow > 0 && !look.flat ? 5 : 0)
-                .padding(.leading, 12)
-                .offset(y: look.flat && pressed ? 2 : 0)
-        }
-        .padding(.vertical, 4).padding(.leading, 2).padding(.trailing, 4)
-        .scaleEffect(pressed && !look.flat ? 0.97 : 1)
-        .accessibilityHidden(true)
     }
 }
 

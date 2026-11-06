@@ -32,12 +32,13 @@ Two departures from the brief's wording:
 
 What each button does is unchanged.
 
-## 4. The piano roll's keys
+## 4. The keyboard drawer's keys: taller, with wider light strips
 
-- **Before:** the note names were plain grey text (`before-5-…`). They weren't keys yet, so they were made into keys here. Each is a matte rubber key in the style of Keyboard.swift's membrane keys, with an LED slit at its left. The slit is 6 pt wide, against the keyboard's 4 pt. It lights fully while the key is held and half-lit for the notes on the selected step. VoiceOver adds "on the selected step" to those keys. The flat look draws a chiclet instead.
-- **Taller:** the piano roll's rows went from 46 to 54 pt (`PianoRoll.keyRowHeight`). The grid lines, the note pads, the two-finger row snap and the "rows below" count all follow, so they stay in step. The drum grid keeps 46 pt rows and plain lane names.
-- **Cost:** about one note row fewer in view. At the divider's lowest position that leaves three rows instead of four (`after-5-…` against `before-5-…`).
-- **Waiting on an answer:** I asked the coordinating session whether "keys with an LED" meant this. No reply had arrived by the time I committed.
+The coordinating session confirmed this item means the keyboard drawer (Keyboard.swift, the rubber keys drawn from the photo of the FM-1), not the piano roll.
+
+- **Keys:** 94 → 112 pt tall, top and bottom rows (`KeyboardDrawer.keyHeight`). The drawer grows by 36 pt and still clears the Song tab's pattern header (`after-6-keyboard.jpg`; before: `before-6-keyboard.jpg`).
+- **Light strips:** 4 → 6 pt wide, and 38 → 46 pt tall to match the taller key. Lit, held and silent states are unchanged.
+- **The piano roll is as it was on `main`:** 46 pt rows and plain note names. My first try made its note names into rubber keys. I reverted that once the coordinating session answered, so shots `after-1` to `after-5` still show it. They're for items 1–3 only.
 
 ## Tests
 
@@ -67,4 +68,4 @@ Not checked:
 
 - Try the icon keys by finger: are they clear without words? The tooltips show only with a pointer.
 - Check that "Stop and edit D" stops the song and opens D on the FM-1, as Stop did before.
-- Do the taller keys and the slit feel right next to the FM-1's own keys, and is losing a row at the divider's lowest acceptable?
+- Do the taller drawer keys and wider light strips feel close to the FM-1's own keys?

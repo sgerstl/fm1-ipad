@@ -15,6 +15,8 @@ struct KeyboardDrawer: View {
     static let whiteOffsets = [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26]   // semitones above F
     /// A black key sits after these white keys (index into the 16).
     static let blackAfter = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14]
+    /// Each row's keys, top and bottom, with 18 pt between the rows.
+    static let keyHeight: CGFloat = 112
 
     var body: some View {
         let drums = session.selectedIsDrums
@@ -68,7 +70,8 @@ struct KeyboardDrawer: View {
         func spoken(_ k: Int) -> String { pitch(k).map(Music.spokenNoteName) ?? "silent" }
         return GeometryReader { geo in
             let spacing = geo.size.width / 16, keyW = spacing * 0.74
-            let topH: CGFloat = 94, bottomH: CGFloat = 94, bottomY = geo.size.height - bottomH   // a gap between rows, no overlap
+            // (taller, 94 → 112, nearer the FM-1's own tall pills; Scott, 2026-11-06)
+            let topH = Self.keyHeight, bottomH = Self.keyHeight, bottomY = geo.size.height - bottomH   // a gap between rows, no overlap
             ZStack(alignment: .topLeading) {
                 ForEach(Self.blackAfter, id: \.self) { k in
                     let key = Self.whiteOffsets[k] + 1
@@ -96,7 +99,7 @@ struct KeyboardDrawer: View {
                 }
             }
         }
-        .frame(height: 206)
+        .frame(height: Self.keyHeight * 2 + 18)
         .padding(.horizontal, 12)
         .padding(.vertical, 14)
         // the membrane sheet the keys rise out of: nearly the keys' own charcoal
@@ -149,7 +152,8 @@ private struct MembraneKey: View {
                     .fill(Color(hex: 0x0B0B0D))
                     .overlay(Capsule().fill(Theme.text.opacity(glow)))
                     .overlay(Capsule().stroke(.white.opacity(0.05), lineWidth: 0.5).offset(y: 0.5))
-                    .frame(width: 4, height: 38)
+                    // 6 pt wide (was 4) and taller with the key: the FM-1's light strips read wider (2026-11-06)
+                    .frame(width: 6, height: 46)
                     .shadow(color: Theme.text.opacity(look.flat ? 0 : glow * 0.9), radius: glow > 0 && !look.flat ? 6 : 0)   // the glow only while lit (none when flat)
                 if !name.isEmpty {
                     Text(name).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.7)
