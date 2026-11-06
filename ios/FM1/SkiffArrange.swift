@@ -271,6 +271,7 @@ struct SkiffArrangePage: View {
                 .scrollIndicators(.hidden)
                 .scrollDisabled(lifted != nil)
             }
+            .overlay(alignment: .topTrailing) { knobBox }
             .opacity(store.offline ? 0.5 : 1)
         }
         .frame(height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap))
@@ -278,6 +279,20 @@ struct SkiffArrangePage: View {
         // a keyboard: arrows move between blocks and lanes, + and − set REPS, Delete deletes, Return opens.
         // Shortcuts on hidden buttons: iPadOS sends them without the lanes holding focus.
         .background { keyboardShortcuts }
+    }
+
+    /// The Song tab: the selected track's LEVEL, STEPS and PAN at the timeline's right end, just under its lane, or
+    /// just above it where it would run past the last lane (Scott, 2026-11-06). Over the lanes, outside their
+    /// horizontal scroll; out of the way while a pattern or a block is carried, so the drop reaches the lane.
+    @ViewBuilder private var knobBox: some View {
+        if compact, dragPattern == nil, lifted == nil {
+            let t = session.selectedTrack
+            let top = 24 + Self.laneGap + CGFloat(t) * (laneHeight + Self.laneGap)
+            let total = 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap)
+            let below = top + laneHeight + 4
+            TrackKnobBox(session: session, ui: ui)
+                .offset(x: -4, y: below + TrackKnobBox.height <= total ? below : max(0, top - 4 - TrackKnobBox.height))
+        }
     }
 
     private var keyboardShortcuts: some View {
@@ -436,7 +451,7 @@ struct LaneHeader: View {
     let track: Int
     /// While a section is picked: what it does to this track (a split, the cost of snapping, left out).
     var note: String?
-    /// The Song tab's: the selected lane's header carries the whole-track controls' key.
+    /// The Song tab's (unused now the whole-track knobs sit in the timeline, TrackKnobBox).
     var ui: EditorUI? = nil
     @Environment(\.arrangeLaneHeight) private var laneHeight
     @Environment(\.arrangeCompact) private var compact
@@ -448,14 +463,19 @@ struct LaneHeader: View {
         if compact { compactBody } else { fullBody(tr, used) }
     }
 
-    /// The Song tab: the chip and the name on one line, as tall as the lane allows.
+    /// The Song tab: the chip and the name on one line, as tall as the lane allows. The chip mutes, as SLOOP's Song
+    /// tab did (Scott, 2026-11-06): on the selected track a tap mutes and unmutes; on another it selects, so a stray
+    /// tap can't mute a track you weren't on. Muted: the chip goes grey with a line of the track's colour, and a
+    /// crossed speaker leads the name.
     private var compactBody: some View {
         let selected = session.selectedTrack == track
-        let keyed = selected && ui != nil && note == nil
+        let muted = session.tracks[track].mute
         return HStack(spacing: 0) {
+            MuteChip(session: session, track: track, selected: selected, size: 28)
+                .frame(width: 44, height: max(laneHeight, 28))
             Button { session.select(track: track) } label: {
-                HStack(spacing: 8) {
-                    TrackChip(track: track, selected: selected).frame(width: 28, height: 28)
+                HStack(spacing: 4) {
+                    if muted { Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
                     Text(note ?? Entries.trackName(track, session: session)).font(.system(size: 13, weight: selected ? .semibold : .regular))
                         .foregroundStyle(selected || note != nil ? Theme.text : Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
@@ -464,25 +484,18 @@ struct LaneHeader: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))")
+            .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))\(muted ? ", muted" : "")")
             .accessibilityAddTraits(selected ? .isSelected : [])
-            if keyed, let ui { TrackControlsKey(ui: ui, height: laneHeight) }
         }
         .frame(width: SkiffArrangePage.headerWidth - 8, height: laneHeight, alignment: .leading)
     }
 
     private func fullBody(_ tr: TrackState, _ used: Int) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Button { session.select(track: track) } label: {
-                TrackChip(track: track, selected: session.selectedTrack == track)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .accessibilityLabel("Track \(track + 1)")
-            .accessibilityAddTraits(session.selectedTrack == track ? .isSelected : [])
+            MuteChip(session: session, track: track, selected: session.selectedTrack == track, size: 28)
+                .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 4) {
-                Text(Entries.trackName(track, session: session)).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                Text(Entries.trackName(track, session: session) + (tr.mute ? " · muted" : "")).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                 Text(tr.engineName + (tr.length != 16 ? " · \(tr.length) steps" : ""))
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
                 if let note {
@@ -609,6 +622,8 @@ struct Lane: View {
 
     private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
     private func x(_ ticks: Double) -> CGFloat { CGFloat(ticks / SongPlacement.ticksPerBar) * barWidth }
+    /// Loop entry (SONG OFF): the blocks say ↻ in place of ×N.
+    private var loops: Bool { store.song?.mode == .off }
     /// The SLOOP Arrange page's motion, so the two pages move alike; none with Reduce Motion.
     private var motion: Animation? { reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86) }
 
@@ -649,7 +664,7 @@ struct Lane: View {
                 // the RESTs the move would add: they open from their left edge, and close back into it
                 ForEach(preview.rests, id: \.key) { r in
                     BlockView(session: session, track: track, block: r.block, list: preview.list, width: max(8, x(r.block.length) - 4),
-                              selected: false, linked: false, playing: false)
+                              selected: false, linked: false, playing: false, loops: loops)
                         .frame(width: max(8, x(r.block.length) - 4), height: laneHeight - 12)
                         .modifier(Place(x: x(r.block.start) + 2, y: 6))
                         .allowsHitTesting(false)
@@ -684,7 +699,7 @@ struct Lane: View {
                 // the held block under the finger (level 3); it follows the finger exactly, no animation
                 let w = max(8, x(b.length) - 4)
                 BlockView(session: session, track: track, block: b, list: store.song?.tracks[safe: track] ?? list, width: w,
-                          selected: false, linked: false, playing: false)
+                          selected: false, linked: false, playing: false, loops: loops)
                     .frame(width: w, height: laneHeight - 12)
                     .scaleEffect(reduceMotion ? 1 : 1.03)
                     .elevationShadow(.held, Look())
@@ -781,7 +796,8 @@ struct Lane: View {
             BlockView(session: session, track: track, block: b, list: list, width: w,
                       selected: selected, linked: linked,
                       playing: !isHeld && lifted != ref && session.playing && b.entries.contains(list.entryOn ?? -1),
-                      state: compact && session.playing ? LaneMarks.spoken(store.marks(track, launchIn: session.ticksToLaunch(track)), block: b, launch: session.launchMode) : nil)
+                      state: compact && session.playing ? LaneMarks.spoken(store.marks(track, launchIn: session.ticksToLaunch(track)), block: b, launch: session.launchMode) : nil,
+                      loops: loops)
                 .frame(width: w, height: laneHeight - 12)
                 // carried: faint in its own place, or, once it would move, an empty dashed place where it lands
                 // (the block itself is under the finger). The view stays, so the finger's gesture does too
@@ -1182,6 +1198,8 @@ struct BlockView: View {
     let playing: Bool
     /// The Song tab while playing: what VoiceOver says of its playback ("pass 2 of 4", "next", "queued, …").
     var state: String? = nil
+    /// Loop entry (SONG OFF): every entry loops and REPS doesn't apply, so the block says ↻, not ×N.
+    var loops = false
     @Environment(\.look) private var look
     @Environment(\.arrangeCompact) private var compact
     @Environment(\.arrangeLaneHeight) private var laneHeight
@@ -1198,8 +1216,12 @@ struct BlockView: View {
         return Entries.number(first.pattern)
     }
 
+    /// How many times it plays: ×N, or ↻ in Loop entry, playing or stopped (Scott, 2026-11-06: blocks said ×N in a
+    /// mode where they loop whatever their REPS).
+    private var count: String { loops ? "↻" : "×\(block.reps)" }
+
     private var sub: String {
-        var s = (block.isChain ? "chain ×" : "×") + "\(block.reps)"
+        var s = (block.isChain ? "chain " : "") + count
         if let snd = sound { s += " · " + Entries.soundName(snd, session: session) }
         return s
     }
@@ -1214,9 +1236,18 @@ struct BlockView: View {
         let dim = strong
         VStack(alignment: .leading, spacing: 2) {
             if laneHeight < 52 {
-                // a short lane (the Song tab): one line, "B · 05"
-                Text(wide ? "\(Entries.letters(block.entries)) · \(isRest ? "REST" : label)" : (isRest ? "–" : label))
-                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
+                // a short lane (the Song tab): one line, "B · 05 ×2"; a narrow block, its count under it where the
+                // lane has room for two lines, else after it, shrinking before it cuts (Scott, 2026-11-06: narrow
+                // blocks hid their count)
+                if wide {
+                    Text("\(Entries.letters(block.entries)) · \(isRest ? "REST" : label) \(count)")
+                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
+                } else if laneHeight >= 40 {
+                    Text(isRest ? "–" : label).font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
+                    Text(count).font(.system(size: 11)).foregroundStyle(dim)
+                } else {
+                    Text("\(isRest ? "–" : label) \(count)").font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
+                }
             } else if wide {
                 HStack(spacing: 4) {
                     Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(dim)
@@ -1226,11 +1257,16 @@ struct BlockView: View {
                 Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(strong)
                 Text(sub).font(.system(size: 12)).foregroundStyle(dim)
             } else {
+                // narrow: the pattern, then its count (and the sound's mark beside it)
                 Text(isRest ? "–" : label).font(.system(size: 13, weight: .semibold)).foregroundStyle(strong)
-                if sound != nil { Image(systemName: "waveform").font(.system(size: 10, weight: .semibold)).foregroundStyle(strong) }
+                HStack(spacing: 2) {
+                    Text(count).font(.system(size: 12)).foregroundStyle(dim)
+                    if sound != nil { Image(systemName: "waveform").font(.system(size: 10, weight: .semibold)).foregroundStyle(strong) }
+                }
             }
         }
         .lineLimit(1)
+        .minimumScaleFactor(wide ? 1 : 0.7)
         .padding(.horizontal, wide ? 8 : 4).padding(.vertical, laneHeight < 52 ? 0 : 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: laneHeight < 52 ? .leading : .topLeading)
         .background {
@@ -1266,7 +1302,8 @@ struct BlockView: View {
         let to = max(from, Int((block.end / SongPlacement.ticksPerBar).rounded(.up)))
         var s = "T\(track + 1) \(Entries.trackName(track, session: session)), entr\(block.isChain ? "ies" : "y") \(Entries.letters(block.entries)), "
         s += isRest ? "rest" : block.isChain ? "chain \(label)" : "pattern \(label)"
-        s += ", \(block.reps) time\(block.reps == 1 ? "" : "s"), bars \(from) to \(to)"
+        s += loops ? ", loops" : ", \(block.reps) time\(block.reps == 1 ? "" : "s")"
+        s += ", bars \(from) to \(to)"
         let others = list.sharing(block.entries.lowerBound)
         if !isRest, !others.isEmpty { s += ", also on entr\(others.count == 1 ? "y" : "ies") " + others.map(Entries.letter).joined(separator: ", ") }
         if let snd = sound { s += ", sound \(Entries.soundName(snd, session: session))" }
@@ -1525,6 +1562,7 @@ struct SongModeKeys: View {
                       enabled: [!store.offline, !store.offline, !store.offline]) { k in
             Task { await store.send(.song(SongMode(rawValue: k) ?? .on)) }
         }
-        .accessibilityHint("Loop entry loops each track's entry; Play song plays the lists round; Play once plays them once and stops")
+        // (Scott, 2026-11-06: say it plainly)
+        .accessibilityHint("Loop entry: each track repeats the block it's on. Play song: each track plays its blocks in order and starts over. Play once: plays through once and stops.")
     }
 }
