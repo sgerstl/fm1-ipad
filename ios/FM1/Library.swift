@@ -39,6 +39,7 @@ struct LibraryPage: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
+            if let r = session.soundRefusal { SoundRefusalNote(session: session, refusal: r) }
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 8) {
                     if session.isDrums(t) {
@@ -251,8 +252,11 @@ struct LibraryEngines: View {
                     .padding(.leading, 8).padding(.bottom, 6)
                     .accessibilityAddTraits(.isHeader)
                 ForEach(Array(engines.enumerated()), id: \.offset) { e, name in
+                    // Skiff's light tracks (5 and 6) can't play GRAIN or PHYS: there they show, greyed, and say why
+                    let plays = session.shape.canPlay(track: session.selectedTrack, engine: e)
                     row(name.capitalized, count: session.namesCache[e]?.count ?? 0,
-                        current: t.engine == e, browsing: ui.librarySection == .engine(e)) { ui.librarySection = .engine(e) }
+                        current: t.engine == e, browsing: ui.librarySection == .engine(e),
+                        notHere: plays ? nil : "not on track \(session.selectedTrack + 1)") { ui.librarySection = .engine(e) }
                 }
                 row("User presets", count: session.userPresets.count, current: false,
                     browsing: ui.librarySection == .user) { ui.librarySection = .user }
@@ -281,13 +285,14 @@ struct LibraryEngines: View {
     }
 
     /// A list row: raised while it's the one being browsed; an LED marks the track's own engine.
-    private func row(_ name: String, count: Int, current: Bool, browsing: Bool, _ action: @escaping () -> Void) -> some View {
+    private func row(_ name: String, count: Int, current: Bool, browsing: Bool, notHere: String? = nil,
+                     _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 LED(on: current)
                 Text(name).fontWeight(browsing ? .semibold : .regular)
                 Spacer()
-                Text("\(count)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text(notHere ?? "\(count)").font(.system(size: notHere == nil ? 13 : 11)).foregroundStyle(Theme.textSecondary)
             }
             .foregroundStyle(browsing ? Theme.text : Theme.textSecondary)
             .padding(.horizontal, 12)
@@ -296,7 +301,9 @@ struct LibraryEngines: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
-        .accessibilityLabel("\(name), \(count) presets\(current ? ", the track's engine" : "")")
+        .disabled(notHere != nil)
+        .opacity(notHere == nil ? 1 : 0.5)
+        .accessibilityLabel("\(name), \(notHere ?? "\(count) presets")\(current ? ", the track's engine" : "")")
         .accessibilityAddTraits(browsing ? .isSelected : [])
     }
 
@@ -322,5 +329,32 @@ private struct UserSlotMore: View {
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
         .accessibilityLabel("Manage \(name.capitalized)")
         .accessibilityHint("Replace or erase this saved sound")
+    }
+}
+
+/// The FM-1 kept the track's sound (Session.soundRefusal): said over the presets, gone after a few seconds or ✕.
+private struct SoundRefusalNote: View {
+    let session: DeviceSession
+    let refusal: DeviceSession.SoundRefusal
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(Theme.caution).accessibilityHidden(true)
+            Text(refusal.text).font(.system(size: 13)).foregroundStyle(Theme.text)
+            Spacer(minLength: 0)
+            Button { session.dismissSoundRefusal() } label: {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.leading, 12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
+        .accessibilityElement(children: .contain)
+        .task(id: refusal.at) {
+            AccessibilityNotification.Announcement(refusal.text).post()
+            try? await Task.sleep(for: .seconds(6))
+            if session.soundRefusal == refusal { session.dismissSoundRefusal() }
+        }
     }
 }

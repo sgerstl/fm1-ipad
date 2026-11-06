@@ -57,6 +57,19 @@ import Testing
         run.cancel()
     }
 
+    /// Tracks 5 and 6 are light on Skiff: a GRAIN or PHYS sound there is refused before anything is sent, said, and
+    /// the track keeps showing what it plays (Scott, 2026-11-06: track 5 showed GRAIN and played the drums).
+    @Test func aLightTrackRefusesGrainAndPhys() async throws {
+        let (s, _, run) = try await connect()
+        #expect(!s.shape.canPlay(track: 4, engine: 8) && !s.shape.canPlay(track: 5, engine: 9) && s.shape.canPlay(track: 0, engine: 8))
+        s.select(track: 4)
+        let before = s.tracks[4]
+        s.loadPreset(engine: 8, index: 0)
+        #expect(s.tracks[4].engine == before.engine && s.tracks[4].presetName == before.presetName)
+        #expect(s.soundRefusal?.text.contains("Tracks 5 and 6") == true)
+        run.cancel()
+    }
+
     /// A stream of reads (screen pushes while a knob turns on the FM-1) is one read out and one after it, never a queue.
     @Test func readsDontQueueUp() async throws {
         let (s, fake, run) = try await connect()

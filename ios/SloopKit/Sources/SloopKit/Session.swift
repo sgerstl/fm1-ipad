@@ -1686,23 +1686,45 @@ public final class DeviceSession {
     public func loadPreset(engine e: Int, index i: Int) {
         let t = selectedTrack
         guard !isDrums(t), let info else { return }
+        guard shape.canPlay(track: t, engine: e) else { refuseSound(track: t, engine: e); return }
+        let was = tracks[t]
         tracks[t].engine = e; tracks[t].preset = i
         tracks[t].engineName = info.engines[e]
         tracks[t].presetName = i < (namesCache[e]?.count ?? 0) ? namesCache[e]![i] : "Preset \(i + 1)"
         onEdit?()
         guard let c = driver else { return }
-        Task { _ = try? await c.preset(engine: e, index: i) }
+        Task {
+            // the FM-1 answers with what it loaded: a sound it kept is shown again, not the one asked for
+            guard let r = try? await c.preset(engine: e, index: i), r.engine != e, tracks[t].engine == e else { return }
+            tracks[t].engine = was.engine; tracks[t].preset = was.preset
+            tracks[t].engineName = was.engineName; tracks[t].presetName = was.presetName
+            refuseSound(track: t, engine: e)
+        }
     }
 
     public func loadUserPreset(_ p: UserPreset) {
         let t = selectedTrack
         guard !isDrums(t), let info else { return }
+        guard shape.canPlay(track: t, engine: p.engine) else { refuseSound(track: t, engine: p.engine); return }
         if p.engine < info.engines.count { tracks[t].engine = p.engine; tracks[t].engineName = info.engines[p.engine] }
         tracks[t].presetName = p.name
         onEdit?()
         guard let c = driver else { return }
         Task { _ = try? await c.userLoad(slot: p.slot) }
     }
+
+    /// A sound the FM-1 won't load on that track (Skiff: tracks 5 and 6 are light, no GRAIN or PHYS): said for a
+    /// few seconds where sounds are picked. Before, Lupe showed the pick while the FM-1 kept the old sound, so the
+    /// keys played the drums under a GRAIN name (Scott, 2026-11-06).
+    public private(set) var soundRefusal: SoundRefusal?
+    public struct SoundRefusal: Equatable, Sendable { public let text: String; public let at: Date }
+    private func refuseSound(track t: Int, engine e: Int) {
+        let name = info.map { e < $0.engines.count ? $0.engines[e].uppercased() : "That engine" } ?? "That engine"
+        let light = (0..<trackCount).filter { !shape.canPlay(track: $0, engine: e) }.map { "\($0 + 1)" }
+        let tracksText = light.count > 1 ? "Tracks \(light.dropLast().joined(separator: ", ")) and \(light.last!)" : "Track \(t + 1)"
+        soundRefusal = SoundRefusal(text: "\(tracksText) can't play \(name) sounds on Skiff. Pick another engine, or use tracks 1–4.", at: .now)
+    }
+    public func dismissSoundRefusal() { soundRefusal = nil }
 
     // MARK: Skiff's SAVE pages: USER's slots, PROJECT's slots
 
