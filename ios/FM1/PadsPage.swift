@@ -43,11 +43,13 @@ struct PadsPage: View {
     /// Over the pattern editor (the Song tab's split, Scott 2026-11-07, board 28): the strip as lane heads, the pads
     /// in two rows of 8, a shorter scene row.
     var compact = false
+    /// The Song tab's split (SkiffSongPage): Edit pattern opens the editor when it's shut.
+    @AppStorage("songSplit") private var songSplit = 0.40
 
     static let stripWidth: CGFloat = 248, gap: CGFloat = 12, sceneHeight: CGFloat = 56
     static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 40, rowHeight: CGFloat = 46
     /// The compact pads' least: the tool row, six lane heads, the scene row (the strip sets the height; the pads fill it).
-    static func compactMin(_ tracks: Int) -> CGFloat { 44 + 10 + CGFloat(tracks) * (rowHeight + 4) }
+    static func compactMin(_ tracks: Int) -> CGFloat { 44 + 10 + CGFloat(tracks) * (rowHeight + 4) + 8 }
 
     var body: some View {
         let _ = BodyCounter.tick("PadsPage")
@@ -86,6 +88,8 @@ struct PadsPage: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
+        .padding(.bottom, compact ? 8 : 0)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
@@ -144,7 +148,7 @@ struct PadsPage: View {
     // MARK: Pads
 
     private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date) -> some View {
-        let side = min(size.width, size.height), small = size.height < 120
+        let side = min(size.width, size.height), small = size.height < 120 || size.width < 150
         let list = store.song?.tracks[safe: t]
         let e = list?.entries[safe: i] ?? .empty
         let blocks = store.blocks(t)
@@ -345,7 +349,8 @@ struct PadsPage: View {
         let l = store.song?.tracks[safe: t]
         if l?.entryOn != i, !session.playing { Task { await store.send(.play(track: t, entry: i)) } }
         ui.pinnedEntry = EntryRef(track: t, entry: i)
-        ui.songView = .timeline
+        // the editor is under the pads now: no trip to the Timeline (Scott, 2026-11-07); shut, it opens
+        if songSplit >= 0.999 { songSplit = 0.40 }
     }
 
     /// CLEAR (stopped only: playing, the store says "Stop to…" with a Stop key). A pattern nothing else names goes with

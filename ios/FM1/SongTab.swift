@@ -10,12 +10,17 @@ struct SkiffSongPage: View {
     let session: DeviceSession
     let store: SkiffSongStore
     let ui: EditorUI
-    /// The song's share of the height, kept across launches.
+    /// The top half's share of the height, kept across launches; 1, the editor closed (the lanes or the pads full size).
+    /// One split for both views (Scott, 2026-11-07: Timeline and Pads "should just toggle the top and leave the bottom,
+    /// since they are the same").
     @AppStorage("songSplit") private var split = 0.40
-    /// The Pads view's own divider (Scott, 2026-11-07: "the bottom half of the timeline page just came up as a panel on
-    /// the pads page"): its share of the height; 1, the editor closed and the pads full size for jamming.
-    @AppStorage("padsSplit") private var padsSplit = 0.42
-    @State private var dragFrom: Double?
+    @State private var dragFrom: CGFloat?
+    /// Past where the editor still fits, the editor slides down under the fold and the top half grows into the room,
+    /// the finger dragging it against some give; let go, it springs shut or back (Scott: "an elastic snap, not too
+    /// intense, but enough to make it feel physical"). How far it has slid, in points.
+    @State private var slide: CGFloat = 0
+    /// This drag began with the editor shut: it follows the finger one to one, and stays once a third of the way up.
+    @State private var fromShut = false
     @State private var allPatterns = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -23,15 +28,46 @@ struct SkiffSongPage: View {
     static let editorMin: CGFloat = 420, dividerHeight: CGFloat = 16
     /// The song's least: the tool row, the ruler and every lane at its least (28 pt and its gap), so it never spills.
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
+    /// The give past the editor's least: the slide follows the finger at this rate.
+    static let give: CGFloat = 0.6
+    private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.72) }
 
     var body: some View {
         let _ = BodyCounter.tick("SkiffSongPage")
-        Group {
-            if ui.songView == .pads, store.performs, store.song != nil {
-                pads
-            } else {
-                timeline
+        let pads = ui.songView == .pads && store.performs && store.song != nil
+        GeometryReader { g in
+            let total = g.size.height
+            let least = pads ? PadsPage.compactMin(session.trackCount) : Self.songMin(session.trackCount)
+            // a motion lane open in its editor lifts the divider (MotionLanes, approach A); Done puts it back
+            let lift: CGFloat = MotionLanes.openID(session, ui, track: session.selectedTrack) != nil ? 120 : 0
+            let open = max(least, total - Self.editorMin - Self.dividerHeight)        // the top's most, the editor showing
+            let closed = split >= 0.999 && slide == 0
+            let base = closed ? total - Self.dividerHeight : max(least, min(total * split, open) - lift)
+            let top = base + slide
+            let bottom = total - base - Self.dividerHeight
+            VStack(spacing: 0) {
+                Group {
+                    if pads {
+                        PadsPage(session: session, store: store, ui: ui, compact: !closed)
+                    } else {
+                        SkiffArrangePage(session: session, store: store, ui: ui)
+                            .environment(\.arrangeCompact, true)
+                            .environment(\.arrangeLaneHeight, Self.laneHeight(top, tracks: session.trackCount))
+                    }
+                }
+                .frame(height: top)
+                .clipped()
+                divider(total, least: least, open: open, bottom: bottom)
+                if !closed {
+                    PatternPane(session: session, store: store, ui: ui, height: bottom)
+                        .frame(height: bottom)
+                }
             }
+            .frame(height: total, alignment: .top)
+            .clipped()
+            .overlay { drawer }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.openLane)
         }
         // each pattern a track is on, drawn for its pads (PadThumb): in both views, so the pads have them on arrival
         .task {
@@ -40,79 +76,6 @@ struct SkiffSongPage: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-    }
-
-    private var timeline: some View {
-        GeometryReader { g in
-            let total = g.size.height
-            let least = Self.songMin(session.trackCount)
-            // a motion lane open in its editor lifts the divider (MotionLanes, approach A); Done puts it back
-            let lift: CGFloat = MotionLanes.openID(session, ui, track: session.selectedTrack) != nil ? 120 : 0
-            let top = max(least, min(max(total * split, least), max(least, total - Self.editorMin - Self.dividerHeight)) - lift)
-            let bottom = total - top - Self.dividerHeight
-            VStack(spacing: 0) {
-                SkiffArrangePage(session: session, store: store, ui: ui)
-                    .environment(\.arrangeCompact, true)
-                    .environment(\.arrangeLaneHeight, Self.laneHeight(top, tracks: session.trackCount))
-                    .frame(height: top)
-                    .clipped()
-                divider(total, least: least)
-                PatternPane(session: session, store: store, ui: ui, height: bottom)
-                    .frame(height: bottom)
-            }
-            .overlay { drawer }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.openLane)
-        }
-    }
-
-    /// Pads over the editor, the Timeline's divider between (board 28): compact pads in two rows of 8 above the pattern
-    /// pane; dragged to the foot, the editor closes and the pads go full size; dragged up again, it comes back.
-    private var pads: some View {
-        GeometryReader { g in
-            let total = g.size.height
-            let least = PadsPage.compactMin(session.trackCount)
-            let open = total - Self.editorMin - Self.dividerHeight           // the pads' most with the editor showing
-            let closed = padsSplit >= 0.999
-            let top = closed ? total - Self.dividerHeight : max(least, min(total * padsSplit, open))
-            let bottom = total - top - Self.dividerHeight
-            VStack(spacing: 0) {
-                PadsPage(session: session, store: store, ui: ui, compact: !closed)
-                    .frame(height: top)
-                    .clipped()
-                padsDivider(total, least: least, open: open)
-                if !closed {
-                    PatternPane(session: session, store: store, ui: ui, height: bottom)
-                        .frame(height: bottom)
-                }
-            }
-            .overlay { drawer }
-            // (no animation on closing or opening: the pads change layout, 4 × 4 to 2 × 8, and animated they flew
-            // across each other; the switch is instant)
-        }
-    }
-
-    private func padsDivider(_ total: CGFloat, least: CGFloat, open: CGFloat) -> some View {
-        Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
-            .frame(maxWidth: .infinity).frame(height: Self.dividerHeight)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .global)
-                .onChanged { v in
-                    if dragFrom == nil { dragFrom = padsSplit >= 0.999 ? Double(open / total) : padsSplit }
-                    padsSplit = min(max((dragFrom ?? padsSplit) + v.translation.height / total, least / total), 1)
-                }
-                .onEnded { _ in
-                    // past where the editor still fits: halfway to the foot closes it, short of that it stays open
-                    let o = Double(open / total)
-                    if padsSplit > o { padsSplit = padsSplit > (o + 1) / 2 ? 1 : o }
-                    dragFrom = nil
-                })
-            .accessibilityElement()
-            .accessibilityLabel("Divider between the pads and the pattern")
-            .accessibilityValue(padsSplit >= 0.999 ? "pattern editor closed" : "pads \(Int((padsSplit * 100).rounded())) percent")
-            .accessibilityAdjustableAction { d in
-                padsSplit = d == .increment ? 1 : min(Double(open / total), 0.42)
-            }
     }
 
     /// The pattern pool (Scott: "Full height"): a level-3 drawer down the page's right edge, over both halves, the
@@ -148,21 +111,50 @@ struct SkiffSongPage: View {
         return max(28, min(SkiffArrangePage.fullLaneHeight, lanes / CGFloat(max(1, tracks)) - SkiffArrangePage.laneGap))
     }
 
-    private func divider(_ total: CGFloat, least: CGFloat) -> some View {
-        Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
+    /// The handle: dragged, the top's share; past where the editor fits, the editor slides off below with some give,
+    /// and let go it springs shut (past a third of the way) or back. From shut, the editor slides back up the same way.
+    private func divider(_ total: CGFloat, least: CGFloat, open: CGFloat, bottom: CGFloat) -> some View {
+        let travel = max(1, total - Self.dividerHeight - open)        // from the editor's least to shut
+        return Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
             .frame(maxWidth: .infinity).frame(height: Self.dividerHeight)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { v in
-                    if dragFrom == nil { dragFrom = split }
-                    let lo = least / total, hi = (total - Self.editorMin - Self.dividerHeight) / total
-                    split = min(max((dragFrom ?? split) + v.translation.height / total, lo), hi)
+                    if dragFrom == nil {
+                        fromShut = split >= 0.999
+                        if fromShut {                         // from shut: open, the editor all the way down
+                            split = Double(open / total)
+                            slide = travel
+                            dragFrom = open + travel
+                        } else {
+                            dragFrom = min(total * split, open)
+                        }
+                    }
+                    let at = (dragFrom ?? open) + v.translation.height
+                    if at <= open {
+                        slide = 0
+                        split = Double(max(least, at) / total)
+                    } else {
+                        split = Double(open / total)
+                        slide = min(travel, (at - open) * (fromShut ? 1 : Self.give))
+                    }
                 }
-                .onEnded { _ in dragFrom = nil })
+                .onEnded { _ in
+                    dragFrom = nil
+                    guard slide > 0 else { return }
+                    if slide > travel * (fromShut ? 2.0 / 3 : 1.0 / 3) {
+                        withAnimation(spring) { slide = travel } completion: { split = 1; slide = 0 }
+                    } else {
+                        withAnimation(spring) { slide = 0 }
+                    }
+                })
             .accessibilityElement()
             .accessibilityLabel("Divider between the song and the pattern")
-            .accessibilityValue("song \(Int((split * 100).rounded())) percent")
-            .accessibilityAdjustableAction { d in split = min(max(split + (d == .increment ? 0.05 : -0.05), 0.2), 0.6) }
+            .accessibilityValue(split >= 0.999 ? "pattern editor closed" : "song \(Int((split * 100).rounded())) percent")
+            .accessibilityAdjustableAction { d in
+                if d == .increment { split = split >= Double(open / total) - 0.001 ? 1 : min(split + 0.05, Double(open / total)) }
+                else { split = split >= 0.999 ? Double(open / total) : max(split - 0.05, Double(least / total)) }
+            }
     }
 }
 
