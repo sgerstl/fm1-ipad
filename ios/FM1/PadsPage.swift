@@ -66,9 +66,9 @@ struct PadsPage: View {
                     // in it, so the change rides the divider's spring instead of jumping (Scott, 2026-11-07)
                     ZStack(alignment: .topLeading) {
                         if compact {
-                            TrackStripRow(session: session, store: store, track: k, preview: preview).transition(.opacity)
+                            TrackStripRow(session: session, store: store, ui: ui, track: k, preview: preview).transition(.opacity)
                         } else {
-                            TrackStripCard(session: session, store: store, track: k, preview: preview)
+                            TrackStripCard(session: session, store: store, ui: ui, track: k, preview: preview)
                                 .frame(maxHeight: .infinity, alignment: .top).transition(.opacity)
                         }
                     }
@@ -489,6 +489,7 @@ struct PadsPage: View {
 struct TrackStripCard: View {
     let session: DeviceSession
     let store: SkiffSongStore
+    let ui: EditorUI
     let track: Int
     /// A scene held: where this track would go and its mute (nil: no scene held, or one not seen yet).
     var preview: SkiffSongStore.SceneTrack? = nil
@@ -530,6 +531,7 @@ struct TrackStripCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .trackMenuPress(session: session, ui: ui, track: t)
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", on the pads" : "")")
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityHint(selected ? "" : "Puts its entries on the pads")
@@ -700,6 +702,7 @@ struct SmoothBar: View {
 struct TrackStripRow: View {
     let session: DeviceSession
     let store: SkiffSongStore
+    let ui: EditorUI
     let track: Int
     let preview: SkiffSongStore.SceneTrack?
     @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
@@ -738,6 +741,7 @@ struct TrackStripRow: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .trackMenuPress(session: session, ui: ui, track: t)
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -780,5 +784,31 @@ struct PadGrid: Layout {
             v.place(at: CGPoint(x: bounds.minX + CGFloat(c) * (cell.width + gap), y: bounds.minY + CGFloat(r) * (cell.height + gap)),
                     proposal: ProposedViewSize(cell))
         }
+    }
+}
+
+/// A long press on a track: its menu beside the finger (TrackMenuLayer: Sounds…, a sample, clearing its steps), the track
+/// selected, as the Timeline's track names have it (Scott, 2026-11-07: the Pads strip had none).
+struct TrackMenuPress: ViewModifier {
+    let session: DeviceSession
+    let ui: EditorUI
+    let track: Int
+    @State private var pressAt: CGPoint = .zero
+
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
+                .onChanged { pressAt = $0.location })
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                session.select(track: track)
+                ui.trackMenu = TrackMenu(track: track, at: pressAt)
+            })
+            .accessibilityAction(named: "Track menu") { ui.trackMenu = TrackMenu(track: track, at: CGPoint(x: 200, y: 160 + CGFloat(track) * 48)) }
+    }
+}
+
+extension View {
+    func trackMenuPress(session: DeviceSession, ui: EditorUI, track: Int) -> some View {
+        modifier(TrackMenuPress(session: session, ui: ui, track: track))
     }
 }
