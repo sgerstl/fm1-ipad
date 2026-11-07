@@ -11,6 +11,8 @@ import SwiftUI
 struct TrackKnobBox: View {
     let session: DeviceSession
     let ui: EditorUI
+    /// On the selected row's tab (the Song tab): no card of its own, the tab is its surface.
+    var embedded = false
     private let look = Look()
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
@@ -66,10 +68,10 @@ struct TrackKnobBox: View {
                 }
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, embedded ? 8 : 6)
         .padding(.vertical, 4)
         .frame(height: Self.homeIDs(session).isEmpty ? 52 : Self.height)
-        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
+        .background { if !embedded { RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look) } }
         .flashRing(ui, .trackPanel)
         // the SEQ pad's TRACK page still asks for the popover by name (SoundPanel): light the box instead
         .onChange(of: ui.trackControlsOpen) { _, open in

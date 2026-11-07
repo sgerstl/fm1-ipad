@@ -9,6 +9,7 @@ import SwiftUI
 struct SkiffArrangePage: View {
     @Environment(\.arrangeLaneHeight) private var laneHeight
     @Environment(\.arrangeCompact) private var compact
+    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
     let session: DeviceSession
     let store: SkiffSongStore
     let ui: EditorUI
@@ -291,10 +292,16 @@ struct SkiffArrangePage: View {
             let top = 24 + Self.laneGap + CGFloat(t) * (laneHeight + Self.laneGap)
             let total = 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap)
             let below = top + laneHeight + 4
-            TrackKnobBox(session: session, ui: ui)
-                // a sound panel over the page: the box steps left of it, so it stays in view (2026-11-06)
-                .offset(x: -4 - (ui.soundPanel != nil ? SoundPanel.width + 12 : 0),
-                        y: below + TrackKnobBox.height <= total ? below : max(0, top - 4 - TrackKnobBox.height))
+            let down = below + TrackKnobBox.height <= total
+            // a sound panel over the page: the box steps left of it, so it stays in view (2026-11-06), and hangs free
+            let panel = ui.soundPanel != nil
+            // a tab of the selected row's own colour, hanging from its right end (above it on the last rows): the knobs
+            // part of the track, not floating over the next one (Scott, 2026-11-07)
+            TrackKnobBox(session: session, ui: ui, embedded: true)
+                .background { RowTab(down: down, flushRight: !panel).fill(SelectionTint.fill(t, selectionTint)) }
+                .offset(x: panel ? -(SoundPanel.width + 12) : 0,
+                        y: down ? below : max(0, top - 4 - TrackKnobBox.height))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
         }
     }
 
@@ -303,7 +310,7 @@ struct SkiffArrangePage: View {
     @ViewBuilder private var selectedRow: some View {
         if compact {
             let t = session.selectedTrack
-            RoundedRectangle(cornerRadius: 8).fill(Theme.track[t].opacity(0.14))
+            RoundedRectangle(cornerRadius: 8).fill(SelectionTint.fill(t, selectionTint))
                 .frame(height: laneHeight + Self.laneGap)
                 .offset(y: 24 + Self.laneGap / 2 + CGFloat(t) * (laneHeight + Self.laneGap))
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
@@ -674,7 +681,8 @@ struct Lane: View {
         let lastEnd = x(blocks.last?.end ?? 0)
         let spot = dropAt?.track == track ? dropAt : nil
         return ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 8).fill(Theme.well)
+            // the selected track's lane: no well, the row's colour shows round its blocks (Scott, 2026-11-07)
+            RoundedRectangle(cornerRadius: 8).fill(compact && session.selectedTrack == track ? .clear : Theme.well)
             // after the last block: a tap opens the add menu at the finger (repeat, new, rest, pick)
             Color.clear.contentShape(Rectangle())
                 .frame(width: max(44, width - lastEnd - 4), height: laneHeight - 12)
@@ -1649,5 +1657,52 @@ struct SongModeKeys: View {
         }
         // (Scott, 2026-11-06: say it plainly)
         .accessibilityHint("Loop entry: each track repeats the block it's on. Play song: each track plays its blocks in order and starts over. Play once: plays through once and stops.")
+    }
+}
+
+/// The selected track's colour on the Song tab (its row and the knobs' tab): the track's colour mixed into the page,
+/// opaque, so the tab covers the lane under it cleanly. How much: a trial in Settings (Scott, 2026-11-07, to pick by
+/// eye on the iPad), 18, 24 or 30 %.
+enum SelectionTint {
+    static let key = "selectionTint"
+    static let standard = 24
+    static let choices = [18, 24, 30]
+    static func fill(_ t: Int, _ percent: Int) -> Color {
+        var a = (r: CGFloat(0), g: CGFloat(0), b: CGFloat(0), x: CGFloat(0)), p = a
+        UIColor(Theme.track[t]).getRed(&a.r, green: &a.g, blue: &a.b, alpha: &a.x)
+        UIColor(Theme.page).getRed(&p.r, green: &p.g, blue: &p.b, alpha: &p.x)
+        let k = CGFloat(percent) / 100
+        return Color(red: p.r + (a.r - p.r) * k, green: p.g + (a.g - p.g) * k, blue: p.b + (a.b - p.b) * k)
+    }
+}
+
+/// The knobs' tab under (or over) the selected row: its body the box's rect, run 8 pt into the row past its rounded
+/// corner, with a concave 8 pt fillet where it leaves the row's edge (both sides when it hangs free, beside a panel).
+struct RowTab: Shape {
+    var down: Bool
+    var flushRight: Bool
+    static let fillet: CGFloat = 8, radius: CGFloat = 12
+
+    func path(in rect: CGRect) -> Path {
+        let f = Self.fillet, r = Self.radius, x0 = rect.minX, x1 = rect.maxX, h = rect.height
+        var p = Path()
+        // drawn hanging down from y = 0 (the row's edge), then flipped for a tab above the row
+        p.move(to: CGPoint(x: x0 - f, y: -f))
+        p.addLine(to: CGPoint(x: flushRight ? x1 : x1 + f, y: -f))
+        if flushRight {
+            p.addLine(to: CGPoint(x: x1, y: h - r))
+        } else {
+            p.addLine(to: CGPoint(x: x1 + f, y: 0))
+            p.addQuadCurve(to: CGPoint(x: x1, y: f), control: CGPoint(x: x1, y: 0))
+            p.addLine(to: CGPoint(x: x1, y: h - r))
+        }
+        p.addArc(tangent1End: CGPoint(x: x1, y: h), tangent2End: CGPoint(x: x1 - r, y: h), radius: r)
+        p.addLine(to: CGPoint(x: x0 + r, y: h))
+        p.addArc(tangent1End: CGPoint(x: x0, y: h), tangent2End: CGPoint(x: x0, y: h - r), radius: r)
+        p.addLine(to: CGPoint(x: x0, y: f))
+        p.addQuadCurve(to: CGPoint(x: x0 - f, y: 0), control: CGPoint(x: x0, y: 0))
+        p.closeSubpath()
+        guard !down else { return p.offsetBy(dx: 0, dy: rect.minY) }
+        return p.applying(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: rect.minY + h))
     }
 }
