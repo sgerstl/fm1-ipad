@@ -23,6 +23,14 @@ struct SkiffSongPage: View {
 
     var body: some View {
         let _ = BodyCounter.tick("SkiffSongPage")
+        if ui.songView == .pads, store.performs, store.song != nil {
+            PadsPage(session: session, store: store, ui: ui)
+        } else {
+            timeline
+        }
+    }
+
+    private var timeline: some View {
         GeometryReader { g in
             let total = g.size.height
             let least = Self.songMin(session.trackCount)

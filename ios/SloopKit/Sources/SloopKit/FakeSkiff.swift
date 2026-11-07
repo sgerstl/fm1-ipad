@@ -49,6 +49,13 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var lists: [[FakeEntry]] = []
     var entryOn: [Int] = []
     var songMode = 0
+    /// PERFORM (SkiffPerform.swift): the 16 scenes (each track's entry and mute), the one recalled or stored last,
+    /// LAUNCH, each track's mute and a mute staged (1 to unmute, 2 to mute; it lands 2 s on, the fake's launch point).
+    var scenes: [[(entry: Int, mute: Bool)]?] = Array(repeating: nil, count: 16)
+    var lastScene = 127
+    var launch = 1
+    var muted: [Bool] = []
+    var stagedMute: [Int] = []
     /// MENU > USB LEVEL (0 MASTER, 1 FIXED): the one MENU setting the fake offers (MENU_DESC index 0, id 10).
     var usbLevel = 0
     /// Armed tracks, a bit each (song.rec), as TRANSPORT op 4 toggles them: ui_input.c rec_tap.
@@ -173,6 +180,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         globals = try! (0..<gCount).map { _ in try r.v14() }
         lists = Array(repeating: Array(repeating: FakeEntry(), count: 16), count: info.trackCount)
         entryOn = Array(repeating: 127, count: info.trackCount)
+        muted = Array(repeating: false, count: info.trackCount)
+        stagedMute = Array(repeating: 0, count: info.trackCount)
     }
 
     /// The song on the canvas's board A (vault skiff-arrange-spec.md): six lanes, linked copies, rests,
@@ -196,6 +205,12 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         }
         poolLen = (0..<64).map { $0 < 14 ? 16 : 0 }
         poolLen[7] = 64; poolLen[8] = 64; poolLen[9] = 12            // 08, 09 on 64 steps; 10 on 12
+        // three scenes kept (the Pads view's): A everywhere; B on the first two; the breakdown, drums muted
+        let n = lists.count
+        scenes[0] = (0..<n).map { _ in (0, false) }
+        scenes[1] = (0..<n).map { ($0 < 2 ? 1 : 0, false) }
+        scenes[2] = (0..<n).map { ($0 == 1 ? 1 : 0, $0 == 3 || $0 == 5) }
+        lastScene = 0
         if params.count > 3 { params[2][29] = 64; params[3][29] = 12 }  // LENGTH (id 29): T3's and T4's
         songMode = 1
     }
@@ -211,12 +226,55 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         [op, rc] + (0..<64).flatMap { [UInt8(poolLen[$0]), UInt8(min(127, uses($0)))] }
     }
 
+    private func performReply(_ op: UInt8, _ rc: UInt8) -> [UInt8] {
+        let bits = (0..<16).reduce(0) { $0 | (scenes[$1] == nil ? 0 : 1 << $1) }
+        var b: [UInt8] = [op, rc, UInt8(launch), UInt8(lastScene), UInt8(bits & 127), UInt8(bits >> 7 & 127), UInt8(bits >> 14 & 3)]
+        for t in muted.indices { b += [muted[t] ? 1 : 0, UInt8(stagedMute[t])] }
+        return b
+    }
+
+    /// PERFORM's ops, as editor_song.c does them (the fake's launch point: 2 s on).
+    private func performOp(_ a: [UInt8]) -> [UInt8]? {
+        guard a.count == 2 || a == [4] else { return nil }
+        switch a[0] {
+        case 1 where a[1] < 16:
+            scenes[Int(a[1])] = lists.indices.map { (entryOn[$0] < 16 ? entryOn[$0] : 0, muted[$0]) }
+            lastScene = Int(a[1])
+        case 2 where a[1] < 16:
+            guard let s = scenes[Int(a[1])] else { return performReply(2, 1) }
+            for (t, x) in s.enumerated() where t < lists.count {
+                if lists[t][x.entry].p != 0 { entryOn[t] = x.entry }
+                if muted[t] != x.mute { stage(t) }
+            }
+            lastScene = Int(a[1])
+        case 3 where Int(a[1]) < muted.count: stage(Int(a[1]))
+        case 4: stagedMute = stagedMute.map { _ in 0 }
+        case 5 where a[1] < 4: launch = Int(a[1])
+        default: return nil
+        }
+        return performReply(a[0], 0)
+    }
+
+    /// A track's mute the other way: at once stopped; playing, staged (a staged one taken back), landing 2 s on.
+    private func stage(_ t: Int) {
+        guard playing else { muted[t].toggle(); return }
+        if stagedMute[t] != 0 { stagedMute[t] = 0; return }
+        stagedMute[t] = muted[t] ? 1 : 2
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            if self.stagedMute[t] != 0 { self.muted[t] = self.stagedMute[t] == 2; self.stagedMute[t] = 0 }
+            self.lock.unlock()
+        }
+    }
+
     private func listReply(_ op: UInt8, _ rc: UInt8) -> [UInt8] {
         var b: [UInt8] = [op, rc, UInt8(songMode)]
         for t in lists.indices {
             let on = entryOn[t]
             let pat = on < 16 && lists[t][on].p >= 1 && lists[t][on].p <= 64 ? lists[t][on].p - 1 : 127
-            b += [UInt8(on), on < 16 && playing ? UInt8((on + 1) % 16) : 127, UInt8(pat)]
+            // (the song's next is staged in SONG ON and ONCE; in SONG OFF nothing is, until a launch)
+            b += [UInt8(on), on < 16 && playing && songMode != 0 ? UInt8((on + 1) % 16) : 127, UInt8(pat)]
             for x in lists[t] { b += [UInt8(x.p), UInt8(x.r), UInt8(x.s0), UInt8(x.s1)] }
         }
         return b
@@ -563,6 +621,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case (20, 1): return [a[0], 1]
         case (8, 2):
             engines[selected] = (Int(a[0]), Int(a[1])); return [a[0], a[1]]
+        case (80, 0): return performReply(0, 0)
+        case (80, _): return performOp(a)
         case (82, 0): return listReply(0, 0)
         case (82, _): return listOp(a)
         case (78, 0): return poolReply(0, 0)

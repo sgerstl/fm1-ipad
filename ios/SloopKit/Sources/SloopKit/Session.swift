@@ -181,6 +181,8 @@ public final class DeviceSession {
     public func passCount(_ t: Int) -> Int? { trackIndices.contains(t) ? counted.passCount(t) : nil }
     /// Skiff's LAUNCH (PERFORM): where a launch while playing lands. Read on connecting and every few seconds.
     public private(set) var launchMode: SongPlayback.Launch = .loop
+    /// LAUNCH as PERFORM just answered it (the Pads view set it): the countdowns use it at once, not at the next read.
+    public func adoptLaunch(_ l: SongPlayback.Launch) { if l != launchMode { launchMode = l } }
     /// Ticks until a launch on track t lands, at LAUNCH's point; nil when the clock isn't known.
     public func ticksToLaunch(_ t: Int) -> Double? {
         guard trackIndices.contains(t), counted.running else { return nil }
