@@ -104,6 +104,10 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         private var downAt: CGPoint?
         /// The first finger's landing, in the grid's points, and when.
         private var landed: (p: CGPoint, t: TimeInterval)?
+        /// A one-finger pan moved by hand: where it began (window points), the offset then, its last point and time,
+        /// and its speed (points a second, for the throw).
+        struct HandPan { var from: CGPoint, offset: CGPoint, last: CGPoint, at: TimeInterval, speed: CGPoint = .zero }
+        private var drag: HandPan?
         var offset: Binding<CGPoint>
         var lastRequest: ScrollRequest?
         var lastRowKeys: [Int]?
@@ -121,11 +125,23 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
                 ring.start(at: p, in: v.layer, duration: hold)
             }
             w.moved = { [unowned self] t in
-                guard let v = host?.view, let a = downAt else { return }
+                guard let v = host?.view else { return }
                 let p = t.location(in: v)
-                if hypot(p.x - a.x, p.y - a.y) > 8 { ring.cancel(); downAt = nil }   // the hold's own 8 pt: no hold now
+                if let a = downAt, hypot(p.x - a.x, p.y - a.y) > 8 { ring.cancel(); downAt = nil }   // the hold's own 8 pt
+                // A finger moving off before the hold took is a pan, moved here by hand: the scroll view's own pan
+                // had already failed by then, beaten by the grid's SwiftUI gestures, and a failed one can't come back
+                // (2026-11-07, "doesn't work at all"; its state read 5, failed, at 10 pt). A drag from a grip, or
+                // after the hold, stays the grid's.
+                let w = t.location(in: nil)
+                if let d = drag { follow(d, w, t.timestamp); return }
+                guard let (l, at) = landed, hypot(p.x - l.x, p.y - l.y) > 10 else { return }
+                if let hold = holdRing, t.timestamp - at >= hold { return }
+                guard panFrom?(l) ?? true, let sv = v.superview as? UIScrollView, !sv.isDragging, !sv.isDecelerating else { return }
+                drag = HandPan(from: w, offset: sv.contentOffset, last: w, at: t.timestamp)
+                cancelGrid()
+                NotificationCenter.default.post(name: .gridPannedByHand, object: nil)
             }
-            w.up = { [unowned self] in ring.cancel(); downAt = nil; landed = nil }
+            w.up = { [unowned self] in ring.cancel(); downAt = nil; landed = nil; if let d = drag { drag = nil; settle(d) } }
             // Two fingers: a pan. A gesture the grid began on the first finger, a few milliseconds before the second
             // landed, made iOS refuse the pan for the whole touch (2026-11-06). Cancel it.
             w.second = { [unowned self] in cancelGrid() }
@@ -136,6 +152,34 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
             guard g.numberOfTouches < 2, let (p, t) = landed else { return true }
             if let hold = holdRing, ProcessInfo.processInfo.systemUptime - t >= hold { return false }
             return panFrom?(p) ?? true
+        }
+        private func follow(_ d: HandPan, _ w: CGPoint, _ t: TimeInterval) {
+            guard let sv = host?.view.superview as? UIScrollView else { return }
+            let maxX = max(0, sv.contentSize.width - sv.bounds.width), maxY = max(0, sv.contentSize.height - sv.bounds.height)
+            sv.contentOffset = CGPoint(x: min(max(0, d.offset.x - (w.x - d.from.x)), maxX),
+                                       y: min(max(0, d.offset.y - (w.y - d.from.y)), maxY))
+            var n = d
+            let dt = t - d.at
+            if dt > 0.004 {
+                let v = CGPoint(x: (w.x - d.last.x) / dt, y: (w.y - d.last.y) / dt)
+                n.speed = CGPoint(x: d.speed.x * 0.4 + v.x * 0.6, y: d.speed.y * 0.4 + v.y * 0.6)
+                n.last = w; n.at = t
+            }
+            drag = n
+        }
+        /// The finger lifts: as the scroll view's own pan ends, on the nearest bar in the direction it was thrown.
+        private func settle(_ d: HandPan) {
+            guard let sv = host?.view.superview as? UIScrollView else { return }
+            var target = sv.contentOffset
+            let maxY = max(0, sv.contentSize.height - sv.bounds.height)
+            target.y = min(max(0, target.y - d.speed.y * 0.15), maxY)
+            if let w = snapX, w > 0 {
+                let maxX = max(0, sv.contentSize.width - sv.bounds.width)
+                let start = sv.contentOffset.x / w, vx = -d.speed.x / 1000
+                let bar: CGFloat = abs(vx) > 0.3 ? (vx > 0 ? start.rounded(.up) : start.rounded(.down)) : start.rounded()
+                target.x = min(max(0, bar * w), maxX)
+            }
+            if target != sv.contentOffset { sv.setContentOffset(target, animated: true) }
         }
         /// A pan took the touch: the grid's one-finger gesture (a tap about to land, a hold not yet taken) stops.
         private func cancelGrid() {
