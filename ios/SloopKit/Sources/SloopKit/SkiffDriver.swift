@@ -56,6 +56,8 @@ public struct SkiffInfo: Equatable, Sendable {
     }
     /// A step's ties byte (57 bit 6) and FLAM / COND / NUDGE (43): how long a step is on the wire.
     public var hasTies: Bool { (tags[0x57]?.first ?? 0) & 0x40 != 0 }
+    /// PERFORM's scenes, staged mutes and LAUNCH (57 bit 4), and LIST (bit 3): the Song tab's Pads view.
+    public var hasPerform: Bool { (tags[0x57]?.first ?? 0) & 0x18 == 0x18 }
     public var hasFlam: Bool { tags[0x43] != nil }
     /// Skiff 2.0's song (`58 01` bit 0): LIST2, NEW, COPY+, CHAIN, SONG ONCE; bit 1 the entries' sounds.
     public var hasSongLists: Bool { (tags[0x58]?.first ?? 0) & 1 != 0 }
@@ -352,6 +354,14 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         let r = try await request(80, [], match: 0, "PERFORM")
         guard r.count >= 3 else { throw DecodeError.short(cmd: 80) }
         return SongPlayback.Launch(rawValue: Int(r[2])) ?? .loop
+    }
+    /// PERFORM whole (SkiffPerform.swift): the state, or one op and the state after it (sent once, as LIST's).
+    public func perform(_ op: PerformOp? = nil) async throws -> (rc: PerformRC, state: PerformState) {
+        let a = op?.bytes ?? []
+        let b = try await request(80, a, match: op == nil ? 0 : 1, "PERFORM" + (op == nil ? "" : " op \(a[0])"),
+                                  timeout: .milliseconds(op == nil ? 400 : 1500), retries: op == nil ? 1 : 0)
+        guard b.count >= 7 else { throw DecodeError.short(cmd: 80) }
+        return (PerformRC(rawValue: Int(b[1])) ?? .failed, try PerformState(b[2...], tracks: shape.trackCount))
     }
     /// TRANSPORT is Skiff's keep-alive (EDITOR_PROTOCOL.md: "instead of PING").
     public func ping() async throws { _ = try await transportState() }

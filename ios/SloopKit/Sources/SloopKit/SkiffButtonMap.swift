@@ -38,6 +38,8 @@ public enum SkiffButtonMap {
     public static func isShape(_ page: Int) -> Bool { (0...29).contains(page) || page == 39 || page == 40 }
     /// SCL held: the keys' layer (Skiff LY_SCALE).
     public static let keysLayer = 3
+    /// ARP held: PERFORM, the list's entries or the scenes on the keys (Skiff LAYER_PERF); Lupe shows its Pads.
+    public static let performLayer = 7
 
     /// Where the FM-1's screen lands in Jib; nil for a screen with no place (a MENU, another layer held).
     public static func place(for s: UIState) -> Place? {

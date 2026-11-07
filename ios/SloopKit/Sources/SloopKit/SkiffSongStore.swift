@@ -20,6 +20,9 @@ public final class SkiffSongStore {
     public private(set) var offline = false
     public private(set) var undoStack: [SkiffSong] = []
     public let sounds: Bool
+    /// PERFORM (57 bit 4): the scenes, the staged mutes and LAUNCH, read with the lists (SkiffPerform.swift).
+    public let performs: Bool
+    public private(set) var perform: PerformState?
 
     public struct Refusal: Equatable, Sendable {
         public var track: Int?
@@ -54,6 +57,7 @@ public final class SkiffSongStore {
          isPlaying: @escaping @MainActor () -> Bool) {
         self.driver = driver
         self.sounds = driver.skiff.hasEntrySounds
+        self.performs = driver.skiff.hasPerform
         self.trackTiming = trackTiming
         self.isPlaying = isPlaying
     }
@@ -63,6 +67,7 @@ public final class SkiffSongStore {
         self.song = song
         self.pool = pool
         self.sounds = sounds
+        self.performs = false
         self.trackTiming = { t in t < timing.count ? timing[t] : (16, 2) }
         self.isPlaying = { false }
         self.offline = false
@@ -81,6 +86,7 @@ public final class SkiffSongStore {
             // set only when changed: an assignment wakes every view that reads it, once a second while stopped too
             if !busy { if song != s { song = s }; learnDivisions(s) }
             reads += 1
+            if performs, let p = try? await d.perform().state, !busy, perform != p { perform = p }
             if withPool || pool == nil || reads % 4 == 0 { let p = try await d.pool(); if pool != p { pool = p } }
         } catch {}
     }
@@ -352,6 +358,43 @@ public final class SkiffSongStore {
         guard let r = try? await d.clearUnusedPatterns() else { return .failed }
         pool = r.pool
         return r.rc
+    }
+
+    // MARK: PERFORM (the Pads view)
+
+    /// A scene stored, recalled, a track's mute switched (staged while playing), all that waits cancelled, or LAUNCH
+    /// set; then the lists again (a recall moves entries). Storing over a kept scene asks first: the editor's STORE
+    /// overwrites without the FM-1's own dialog (bank.c scene_saved; EDITOR_PROTOCOL.md: "the editor asks").
+    @discardableResult
+    public func performOp(_ op: PerformOp, confirmed: Bool = false) async -> Bool {
+        if case .store(let s) = op, !confirmed, perform?.kept[safe: s] == true {
+            confirmation = Confirmation(title: "Replace scene \(s + 1)?",
+                                        message: "Scene \(s + 1) becomes what each track plays now, and its mute. The scene it held is gone: the FM-1 keeps no copy.",
+                                        confirmLabel: "Replace scene \(s + 1)") { [weak self] in await self?.performOp(op, confirmed: true) }
+            return false
+        }
+        guard !busyRefusal(nil) else { return false }
+        guard let d = driver else {
+            refusal = Refusal(track: nil, entry: nil, text: "The FM-1 is disconnected: editing is off until it's back")
+            return false
+        }
+        busy = true
+        defer { busy = false }
+        do {
+            let r = try await d.perform(op)
+            perform = r.state
+            if let s = try? await d.songLists() { song = s }
+            guard r.rc.isDone else {
+                refusal = Refusal(track: nil, entry: nil, text: r.rc.reason)
+                return false
+            }
+            refusal = nil
+            return true
+        } catch {
+            refusal = Refusal(track: nil, entry: nil, text: "The FM-1 didn't answer; the scenes are as it says now")
+            if let p = try? await d.perform().state { perform = p }
+            return false
+        }
     }
 
     public func dismissRefusal() { refusal = nil }

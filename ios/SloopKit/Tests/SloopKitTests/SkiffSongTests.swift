@@ -106,6 +106,55 @@ import Testing
         return (session, fake, s, run)
     }
 
+    // MARK: PERFORM (the Pads view)
+
+    @Test func performDecodes() throws {
+        // LAUNCH BAR, scene 3 last, scenes 1, 3 and 16 kept, T2 muted, T4 to mute, T1 to unmute
+        let b: [UInt8] = [1, 2, 0b101, 0, 2, 0, 1, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0]
+        let p = try PerformState(b, tracks: 6)
+        #expect(p.launch == .bar && p.lastScene == 2)
+        #expect(p.kept.indices.filter { p.kept[$0] } == [0, 2, 15])
+        #expect(p.muted == [false, true, false, false, false, false])
+        #expect(p.staged == [.unmute, .none, .none, .mute, .none, .none] && p.anyStaged)
+        #expect(try PerformState([0, 127, 0, 0, 0] + Array(repeating: 0, count: 12), tracks: 6).lastScene == nil)
+        #expect(throws: (any Error).self) { try PerformState([1, 2, 0, 0], tracks: 6) }
+    }
+
+    @Test func performOpsEncode() {
+        #expect(PerformOp.store(scene: 15).bytes == [1, 15] && PerformOp.recall(scene: 3).bytes == [2, 3])
+        #expect(PerformOp.mute(track: 5).bytes == [3, 5] && PerformOp.cancel.bytes == [4] && PerformOp.launch(.now).bytes == [5, 3])
+    }
+
+    @Test func scenesStoreRecallAndMuteThroughTheFake() async throws {
+        let (session, fake, s, run) = try await store()
+        #expect(s.performs)
+        try await waitFor(5) { s.perform != nil }
+        #expect(s.perform?.kept.prefix(4) == [true, true, true, false] && s.perform?.lastScene == 0)
+        // recall the breakdown, stopped: T2 to entry B, drums (T4, T6) muted at once
+        #expect(await s.performOp(.recall(scene: 2)))
+        #expect(s.song?.tracks[1].entryOn == 1 && s.perform?.muted == [false, false, false, true, false, true])
+        #expect(s.perform?.lastScene == 2)
+        // an empty scene says so
+        #expect(await s.performOp(.recall(scene: 9)) == false)
+        #expect(s.refusal?.text.contains("empty") == true)
+        // storing over a kept scene asks first; a free one stores at once
+        #expect(await s.performOp(.store(scene: 1)) == false && s.confirmation != nil)
+        s.confirmation = nil
+        #expect(await s.performOp(.store(scene: 4)))
+        #expect(s.perform?.kept[4] == true && fake.scenes[4]?[3].mute == true)
+        // playing: a mute is staged, and CANCEL takes it back
+        session.setPlaying(true)
+        try await waitFor(5) { fake.playing }
+        #expect(await s.performOp(.mute(track: 0)))
+        #expect(s.perform?.staged[0] == .mute && s.perform?.muted[0] == false)
+        #expect(await s.performOp(.cancel))
+        #expect(s.perform?.anyStaged == false)
+        // LAUNCH set, and the session's countdowns take it
+        #expect(await s.performOp(.launch(.beat)))
+        #expect(s.perform?.launch == .beat && fake.launch == 2)
+        run.cancel()
+    }
+
     @Test func readsBoardAsSong() async throws {
         let (_, _, s, run) = try await store()
         let song = try #require(s.song)

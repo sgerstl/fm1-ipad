@@ -10,6 +10,8 @@ struct AppView: View {
     @Environment(AudioThrough.self) private var through
     @Environment(ProjectStore.self) private var projects
     @Environment(\.scenePhase) private var scenePhase
+    /// The Song tab's view before ARP was held on the FM-1 (the Pads while it's held), to go back to.
+    @State private var padsReturn: SongView?
 
     /// The iPad is playing the FM-1's sound, in front: the FM-1's own speaker goes quiet. Anything else
     /// (the switch off, no input, the app in the background) gives its MASTER knob back.
@@ -56,6 +58,23 @@ struct AppView: View {
         .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
+        // the Song tab's view follows the playback mode as it changes (Loop entry: Pads; Play song, Play once: Timeline),
+        // then it's the user's; ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07)
+        .onChange(of: session.skiffSong?.song?.mode) { old, new in
+            guard let old, let new, old != new, session.skiffSong?.performs == true else { return }
+            ui.songView = new == .off ? .pads : .timeline
+        }
+        .onChange(of: session.screenLinked && session.deviceScreen?.layer == SkiffButtonMap.performLayer) { _, held in
+            guard session.skiffSong?.performs == true, ui.followDevice else { return }
+            if held {
+                padsReturn = ui.songView
+                ui.songView = .pads
+                if ui.page != .song { ui.pageFromDevice = true; ui.page = .song }
+            } else if let r = padsReturn {
+                ui.songView = r
+                padsReturn = nil
+            }
+        }
         // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
         .onChange(of: isConnected, initial: true) { _, on in
             UIApplication.shared.isIdleTimerDisabled = on

@@ -136,6 +136,8 @@ final class EditorUI {
     var songTab = false {
         didSet { if songTab, page == .sequencer || page == .sound { page = .song } }
     }
+    /// The Song tab as a timeline or as pads (PadsPage.swift). -song-pads opens on the pads (screenshots).
+    var songView: SongView = ProcessInfo.processInfo.arguments.contains("-song-pads") ? .pads : .timeline
     /// The Song tab: the entry the editor is pinned to (a block tapped); nil follows what each track plays.
     var pinnedEntry: EntryRef?
     /// The Song tab: the pattern pool's drawer is open.

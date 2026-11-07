@@ -160,6 +160,7 @@ struct SkiffArrangePage: View {
 
     private var toolRow: some View {
         HStack(spacing: 12) {
+            if compact, store.performs { SongViewSwitch(ui: ui) }
             Text("Song").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
             Text("\(songBars) bar\(songBars == 1 ? "" : "s") · \(session.trackCount) tracks")
                 .foregroundStyle(Theme.textSecondary).lineLimit(1).fixedSize()
