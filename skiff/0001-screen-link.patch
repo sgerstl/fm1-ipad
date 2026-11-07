@@ -1,7 +1,7 @@
 From 2ebba0fd43900db095b86e123bcc45c82fb65f80 Mon Sep 17 00:00:00 2001
 From: Scott Gerstl <scottgerstl@gmail.com>
 Date: Thu, 5 Nov 2026 15:16:22 +0100
-Subject: [PATCH 1/3] Screen link: SCREEN (90), SCREEN_GOTO (91), WATCH bit 2,
+Subject: [PATCH 1/4] Screen link: SCREEN (90), SCREEN_GOTO (91), WATCH bit 2,
  INFO 56 01 1
 
 An editor can follow the FM-1's screen and open its pages, as the same patch
@@ -379,7 +379,7 @@ index bbb9991..40a5541 100644
 From b0cf6fa9f9b822aa9405ef308f91a7327e1e4301 Mon Sep 17 00:00:00 2001
 From: Scott Gerstl <scottgerstl@gmail.com>
 Date: Thu, 5 Nov 2026 20:08:56 +0100
-Subject: [PATCH 2/3] Screen link: the page's cursor in SCREEN and SCREEN_GOTO
+Subject: [PATCH 2/4] Screen link: the page's cursor in SCREEN and SCREEN_GOTO
  (INFO 56 01 2)
 
 Two bytes after the flags: what KNOB 1 picks on a page instead of a value
@@ -689,7 +689,7 @@ index 40a5541..a9cc9e8 100644
 From 5a50b4b87dbad8d35af1f8193be8bdfc7727d836 Mon Sep 17 00:00:00 2001
 From: Scott Gerstl <scottgerstl@gmail.com>
 Date: Fri, 6 Nov 2026 00:18:00 +0100
-Subject: [PATCH 3/3] Screen link: METER (92), each track's level as the MIXER
+Subject: [PATCH 3/4] Screen link: METER (92), each track's level as the MIXER
  draws it (INFO 56 01 3)
 
 WATCH bit 3 asks for it: pushed after a 40 ms reading in which a level changed, once a
@@ -1072,6 +1072,464 @@ index a9cc9e8..f71b3bd 100644
  unchanged. `F0 7D 46 4C 5B 04 09 F7` (MOD, route 9: the screen's 10) answers `.. 5B 00 04 00 00 00 00 09 7F F7`.
 +`F0 7D 46 4C 16 0F F7` (`WATCH 15`) answers `.. 16 0F F7`; with track 1 playing at −6 dB the device pushes
 +`F0 7D 46 4C 5C 65 00 00 00 00 00 F7`, and after it stops, falling readings down to `.. 5C 00 00 00 00 00 00 F7`.
+-- 
+2.54.0 (Apple Git-157)
+
+
+From 4de83c69b979f05b3060042e4346b4229c8d8dde Mon Sep 17 00:00:00 2001
+From: Scott Gerstl <scottgerstl@gmail.com>
+Date: Sat, 7 Nov 2026 01:34:00 +0100
+Subject: [PATCH 4/4] Screen link: SCOPE (93), the output oscilloscope as
+ graph_scope draws it (INFO 56 01 4)
+
+WATCH bit 4 (16) pushes 120 points (1..127, 64 the centre line) at most every
+66 ms, only into an empty send queue (METER first when both are due). The
+reading (ring snapshot, peak floor 1500, first rising zero crossing) moves to
+ui_scope.c, shared by graph_scope and the editor; the screen draws as before
+(UI golden unchanged). 240 samples from the trigger halved by keeping the
+larger-magnitude sample of each pair. Host test in editor_test.c.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ firmware/src/editor.c   |  55 +++++++++++++++++---
+ firmware/src/ui_graph.c |  21 +++-----
+ firmware/src/ui_scope.c |  34 ++++++++++++
+ tests/editor_test.c     | 112 ++++++++++++++++++++++++++++++++++++++--
+ tools/size_fns.py       |   3 +-
+ web/EDITOR_PROTOCOL.md  |  23 +++++++--
+ 6 files changed, 216 insertions(+), 32 deletions(-)
+ create mode 100644 firmware/src/ui_scope.c
+
+diff --git a/firmware/src/editor.c b/firmware/src/editor.c
+index 675ebf2..60c45b6 100644
+--- a/firmware/src/editor.c
++++ b/firmware/src/editor.c
+@@ -75,8 +75,13 @@ static int32_t ed_rv(const uint8_t *p) { return (int32_t)(p[0] | p[1] << 7) - 81
+  *                      also pushed about 25 times a second while one changes (once a second while none does), while
+  *                      WATCH was sent with bit 3 (8); the lowest of the pushes: sent only into an empty queue, else
+  *                      dropped
+- * An editor that never sends bits 2 or 3, 90, 91 or 92 sees no difference */
+-enum { ED_SCREEN = 90, ED_SCREEN_GOTO, ED_METER };
++ *   93 SCOPE        -> (56 01 4) the output oscilloscope as graph_scope draws it (ui_scope.c scope_take): ED_OSC_N
++ *                      (120) bytes 1..127, 64 the centre line, high above it, the peak 1 / 127 (ed_osc_reply); pushed
++ *                      at most 15 times a second while WATCH was sent with bit 4 (16), with METER the lowest of the
++ *                      pushes: only into an empty queue, else later (METER first when both are due)
++ * An editor that never sends bits 2..4, 90, 91, 92 or 93 sees no difference. (ED_OSC: ED_SCOPE is a track
++ * parameter's scope byte, below) */
++enum { ED_SCREEN = 90, ED_SCREEN_GOTO, ED_METER, ED_OSC };
+ #define ED_SCR_N 8u
+ #define ED_NONE 127u
+ static uint8_t ed_scr_on, ed_scr_last[ED_SCR_N];
+@@ -173,6 +178,28 @@ static void ed_met_tick(uint32_t now)
+         ed_met[c] = (uint8_t)(m < 0 ? 0 : m);
+     }
+ }
++/* (56 01 4) SCOPE: the screen's oscilloscope (ui_graph.c graph_scope) for the editor: the same reading (ui_scope.c
++ * scope_take: the ring copied here in the main loop, its peak at least SCOPE_FLOOR, the first rising zero crossing),
++ * its SCOPE_SPAN samples from the trigger halved to ED_OSC_N points, of each pair the one farther from 0 (a peak or an
++ * edge falling between two points is kept, as the screen's 2 px line shows it), auto-scaled as the screen does: the
++ * peak to +-63 around 64, clamped to 1..127. Silence: 64 throughout. 126 bytes on the wire (42 USB-MIDI packets of the
++ * queue's 64), at most every ED_OSC_MS (~15 a second, 1.9 kB/s) */
++#define ED_OSC_N (SCOPE_SPAN / 2u)                       /* 120 */
++#define ED_OSC_MS 66u
++static uint8_t ed_osc_on;
++static uint32_t ed_osc_t;                                /* fm1_ms of the last push */
++static void ed_osc_reply(void)
++{
++    int32_t peak, s, t;
++    uint32_t i, trig = scope_take(&peak);
++    for (i = 0; i < ED_OSC_N; i++) {
++        s = scope_snap[trig + 2u * i];
++        t = scope_snap[trig + 2u * i + 1u];
++        if ((t < 0 ? -t : t) > (s < 0 ? -s : s))
++            s = t;
++        ed_b((uint32_t)clamp(64 + s * 63 / peak, 1, 127));
++    }
++}
+ 
+ /* ---- user sample slots (eng_sample.c): flash SMP_USER_BASE + k * SMP_USER_SIZE ----
+  * BEGIN erases the header sector (the slot is invalid from then on), WRITE fills the data
+@@ -428,6 +455,11 @@ static void ed_sync(void)                                /* main loop */
+         ed_begin(ED_METER);
+         ed_bs(ed_met, NTRK);
+         ed_send();
++    } else if (ed_osc_on && !n && so_w == so_r && now - ed_osc_t >= ED_OSC_MS) {   /* (56 01 4) SCOPE: the same; */
++        ed_osc_t = now;                                  /* not dropped: due, it goes in the first empty pass. METER's */
++        ed_begin(ED_OSC);                                /* pass skips it (the queue isn't empty after): the next goes */
++        ed_osc_reply();
++        ed_send();
+     }
+ }
+ 
+@@ -547,7 +579,7 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
+ {
+     switch (cmd) {
+     case ED_INFO: case ED_DUMP: case ED_SMP_INFO: case ED_PING:
+-    case ED_UI_STATE: case ED_UI_PALETTES: case ED_SCREEN: case ED_METER:
++    case ED_UI_STATE: case ED_UI_PALETTES: case ED_SCREEN: case ED_METER: case ED_OSC:
+         return !n;
+     case ED_GET: case ED_DESC: case ED_PRESET: case ED_PROJECT: case ED_UP_LIST:
+     case ED_TRACK_PARAM:
+@@ -659,6 +691,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+     case ED_METER:                                         /* (56 01 3) the levels as last pushed or ticked */
+         ed_bs(ed_met, NTRK);
+         break;
++    case ED_OSC:                                           /* (56 01 4) the scope now */
++        ed_osc_reply();
++        break;
+     case ED_SCREEN_GOTO:                                   /* (screen link) a page, as its button (or HOME) opens it */
+         if (ui.confirm || (a[0] != 127u && (a[0] >= NPAGES || !page_visible(a[0]))) ||
+             (na > 1u && (a[0] == 127u || ed_scr_cur(PAGES[a[0]].graph, &i) == ED_NONE)))
+@@ -722,9 +757,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+             0x58, 1, ED_SONG2,                          /* (2.0) the song's LIST2, NEW, COPY+, CHAIN, ONCE, the pool's
+                                                          * EMPTY, CLEAR UNUSED (editor_song.c; an editor before reads up
+                                                          * to 49 01 only) */
+-            0x56, 1, 3};                                /* (screen link) SCREEN, SCREEN_GOTO, WATCH bit 2; 2: the page's
+-                                                         * cursor too; 3: METER, WATCH bit 3; last: Skiff's own editor
+-                                                         * reads up to 58 01 only */
++            0x56, 1, 4};                                /* (screen link) SCREEN, SCREEN_GOTO, WATCH bit 2; 2: the page's
++                                                         * cursor too; 3: METER, WATCH bit 3; 4: SCOPE, WATCH bit 4;
++                                                         * last: Skiff's own editor reads up to 58 01 only */
+         ed_str("FELUCCA " FELUCCA_VERSION, 24);
+         ed_b(NENGINES);
+         ed_b(P_COUNT > 127u ? 127u : P_COUNT);            /* ((1.3) more: INFO 49 01) */
+@@ -1014,7 +1049,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+         ed_b(a[0] >= UP_SLOTS ? 1u : ed_flash_stop() || up_put(a[0], 0) ? 2u : 0u);
+         break;
+     case ED_WATCH: {                                       /* on -> on */
+-        uint32_t keep, v4was = ed_w.v4, scr, met;
++        uint32_t keep, v4was = ed_w.v4, scr, met, osc;
+         if (na < 1u)
+             return;
+         keep = ed_w.on && ed_w.resets == usb.resets && (a[0] & 1u);   /* already watching: the changes not yet */
+@@ -1034,13 +1069,17 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+         }
+         ed_met_on = (uint8_t)met;
+         ed_met_due &= ed_met_on;
++        osc = ed_w.on && (a[0] & 16u);                   /* (56 01 4) also SCOPE: newly asked, at once */
++        if (osc && !(keep && ed_osc_on))
++            ed_osc_t = fm1_ms - ED_OSC_MS;
++        ed_osc_on = (uint8_t)osc;
+         ed_w.resets = usb.resets;
+         if (ed_w.on && !keep)
+             ed_shadow();
+         else if (keep && ed_w.v4 && !v4was)
+             for (i = 0; i < ED_NT; i++)                    /* TRACK_CHANGED newly asked for: from the mix as it is */
+                 ed_w.tv[i] = trk[i / 3u].p[ED_TIDS[i % 3u]];
+-        ed_b(ed_w.on | ed_w.v4 << 1 | ed_scr_on << 2 | ed_met_on << 3);
++        ed_b(ed_w.on | ed_w.v4 << 1 | ed_scr_on << 2 | ed_met_on << 3 | ed_osc_on << 4);
+         break;
+     }
+     case ED_PING:
+diff --git a/firmware/src/ui_graph.c b/firmware/src/ui_graph.c
+index e3b7852..6426bd1 100644
+--- a/firmware/src/ui_graph.c
++++ b/firmware/src/ui_graph.c
+@@ -2480,29 +2480,20 @@ static void qk_detector(int32_t cx, int32_t cy)
+     qk_disc(cx, cy, newest < 150u ? 3 : 2, T_ACCENT);
+ }
+ 
++#include "ui_scope.c"                                /* (Skiff screen link) the reading, shared with the editor's SCOPE */
++
+ /* oscilloscope of the output, triggered on a rising zero crossing: a RAISE centre line, the trace 2 px (in silence
+  * a flat line on it; MENU > SCREEN OFF keeps it from staying on the panel for hours) */
+ static void graph_scope(uint16_t c)
+ {
+-    static int16_t snap[SCOPE_N];
+-    uint32_t w = scope_w, i, trig = 0;
+-    int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h >= H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
++    const int16_t *snap = scope_snap;
++    uint32_t trig;
++    int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak, a = cv_h >= H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
+     if (ux.quark && cv_h >= H_GRAPH) {
+         qk_detector(120, cy);
+         return;
+     }
+-    for (i = 0; i < SCOPE_N; i++) {
+-        snap[i] = scope_buf[(w + i) & (SCOPE_N - 1u)];
+-        if (snap[i] > peak)
+-            peak = snap[i];
+-        else if (-snap[i] > peak)
+-            peak = -snap[i];
+-    }
+-    for (i = 1; i < SCOPE_N - 240u; i++)
+-        if (snap[i - 1] < 0 && snap[i] >= 0) {
+-            trig = i;
+-            break;
+-        }
++    trig = scope_take(&peak);                        /* (ui_scope.c: the ring copied, its peak, the trigger) */
+     if (ux.crypt) {                                  /* (Skiff N8) CRYPT: the sound burns: fire up from the foot as tall
+                                                       * as the wave there (ember, amber, gold, its tips flame), flickering;
+                                                       * behind it a skull, its eyes as bright as the sound is loud */
+diff --git a/firmware/src/ui_scope.c b/firmware/src/ui_scope.c
+new file mode 100644
+index 0000000..1aaa6c8
+--- /dev/null
++++ b/firmware/src/ui_scope.c
+@@ -0,0 +1,34 @@
++/* SPDX-License-Identifier: GPL-3.0-only
++ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
++/* (Skiff screen link) the output oscilloscope's reading, one for the screen and the editor: graph_scope (ui_graph.c,
++ * HOME and the EDIT pages) draws it, SCOPE (editor.c, 93, INFO 56 01 4) sends it. audio.c fills scope_buf from the
++ * output every block whatever the page (every second frame, the left channel, before the click); this copies the
++ * ring in the main loop, as the screen always did, so the audio code knows nothing of who looks. Its own file so that
++ * the editor's host test (tests/editor_test.c, no drawing code) takes the same function the screen does.
++ *   scope_take(&peak) -> the trigger: scope_snap[] holds the ring from its oldest sample, *peak the largest |sample|
++ *   (at least SCOPE_FLOOR: quiet stays small instead of being blown up to full height, silence a flat line), and the
++ *   trace is the SCOPE_SPAN samples from the first rising zero crossing (none: from 0, a free-running picture)
++ * Main loop only: the screen and the editor share scope_snap (each takes it fresh and is done with it before the
++ * other runs: ed_service and ui_draw are turns of the same loop, main.c). */
++#define SCOPE_SPAN 240u                              /* the trace: one sample a pixel, the panel's width */
++#define SCOPE_FLOOR 1500                             /* the scale's least peak (Q15, about -27 dB) */
++static int16_t scope_snap[SCOPE_N];
++static uint32_t scope_take(int32_t *peak)
++{
++    uint32_t w = scope_w, i, trig = 0;
++    int32_t pk = SCOPE_FLOOR;
++    for (i = 0; i < SCOPE_N; i++) {
++        scope_snap[i] = scope_buf[(w + i) & (SCOPE_N - 1u)];
++        if (scope_snap[i] > pk)
++            pk = scope_snap[i];
++        else if (-scope_snap[i] > pk)
++            pk = -scope_snap[i];
++    }
++    for (i = 1; i < SCOPE_N - SCOPE_SPAN; i++)
++        if (scope_snap[i - 1] < 0 && scope_snap[i] >= 0) {
++            trig = i;
++            break;
++        }
++    *peak = pk;
++    return trig;
++}
+diff --git a/tests/editor_test.c b/tests/editor_test.c
+index 831b43a..cc26e77 100644
+--- a/tests/editor_test.c
++++ b/tests/editor_test.c
+@@ -83,6 +83,12 @@ static const sheet_t *sheet_of(uint32_t g)
+             return &host_sheets[i];
+     return 0;
+ }
++/* (screen link, 56 01 4) audio.c's oscilloscope ring (not built here: the tests write it) and the reading the screen
++ * and SCOPE share (ui_graph.c includes it in the firmware) */
++#define SCOPE_N 512u
++static int16_t scope_buf[SCOPE_N];
++static uint32_t scope_w;
++#include "../firmware/src/ui_scope.c"
+ #include "../firmware/src/editor.c"
+ 
+ static int check(const char *what, int ok)
+@@ -200,8 +206,8 @@ static int preferences(void)
+     uint8_t a[4] = {0, 3, 0, 0};                          /* (THEME: 3, CRYPT) */
+     reset();
+     uint32_t n = request(ED_INFO, a, 0);
+-    bad += check("INFO (screen link) its tag last: 56 01 03 (SCREEN, SCREEN_GOTO, WATCH bit 2, the cursor, METER)",
+-        host_wire[n - 4] == 0x56 && host_wire[n - 3] == 1 && host_wire[n - 2] == 3);
++    bad += check("INFO (screen link) its tag last: 56 01 04 (SCREEN, SCREEN_GOTO, WATCH bit 2, the cursor, METER, SCOPE)",
++        host_wire[n - 4] == 0x56 && host_wire[n - 3] == 1 && host_wire[n - 2] == 4);
+     n -= 3u;                                              /* (the tags before it, as they were) */
+     bad += check("INFO (2.0) the song's tag next: 58 01 01 (LIST2, NEW, COPY+, CHAIN, ONCE, EMPTY, CLEAR UNUSED)",
+         host_wire[n - 4] == 0x58 && host_wire[n - 3] == 1 && host_wire[n - 2] == ED_SONG2);
+@@ -1780,6 +1786,106 @@ static int meter(void)
+     bad += check("WATCH 7: no METER", !pushes);
+     return bad;
+ }
++/* (56 01 4) SCOPE (93), WATCH bit 4: the screen's oscilloscope, 120 points 0..127 around 64, lowest of the pushes */
++static void scope_sine(uint32_t w)                         /* a sine of 100 samples, 16000 high, rising through 0 at 30 */
++{
++    uint32_t i;
++    for (i = 0; i < SCOPE_N; i++)
++        scope_buf[(w + i) & (SCOPE_N - 1u)] = (int16_t)lround(16000.0 * sin(6.283185307179586 * ((double)i - 30.0) / 100.0));
++    scope_w = w;
++}
++static int osc_frame_is(const uint8_t *x, uint32_t trig, int32_t peak)   /* the frame from the ring, independently */
++{
++    uint32_t k;
++    for (k = 0; k < 120u; k++) {
++        int32_t s = scope_buf[(scope_w + trig + 2u * k) & (SCOPE_N - 1u)];
++        int32_t t = scope_buf[(scope_w + trig + 2u * k + 1u) & (SCOPE_N - 1u)];
++        int32_t v = 64 + (int32_t)trunc((double)(abs(t) > abs(s) ? t : s) * 63.0 / peak);
++        if (x[k] != (uint8_t)(v < 1 ? 1 : v > 127 ? 127 : v))
++            return 0;
++    }
++    return x[120] == 0xF7;
++}
++static int scope_stream(void)
++{
++    int bad = 0;
++    uint8_t a[2] = {31, 0};
++    const uint8_t *x = 0;
++    uint32_t i, k, pushes, meters, gap, last, ok;
++    reset();
++    usb.resets = 0;
++    memset(scope_buf, 0, sizeof scope_buf); scope_w = 77;
++    request(ED_WATCH, a, 1);
++    bad += check("WATCH 31: 31 (SCOPE known)", host_wire[5] == 31 && ed_osc_on);
++    for (i = 0, k = 0; i < 3u && !k; i++) {             /* (SCREEN at once, then METER, go first: the lower push waits) */
++        sync_pass();
++        k = wire_frames(ED_OSC, &x);
++    }
++    for (i = 0, ok = k == 1u; ok && i < 120u; i++)
++        ok &= x[i] == 64;
++    bad += check("SCOPE at once after SCREEN and METER; silence: 120 x 64, then F7 (126 bytes)", ok && x[120] == 0xF7 && x[-5] == 0xF0);
++    for (i = 0; i < SCOPE_N; i++)                         /* (under the floor: small, not blown up) */
++        scope_buf[i] = (int16_t)(i & 1u ? 700 : -700);
++    scope_w = 0;
++    request(ED_OSC, a, 0);
++    bad += check("quiet (+-700, the floor 1500): triggered at 1, of each equal pair the first: 64 + 29 throughout",
++        host_wire_n == 126u && host_wire[5] == 64 + 29 && host_wire[5 + 119] == 64 + 29 && host_wire[125] == 0xF7);
++    scope_sine(0);
++    request(ED_OSC, a, 0);
++    x = host_wire + 5;
++    bad += check("SCOPE asked: a sine, triggered at its rising zero (30), the peak 127, the trough 1",
++        host_wire_n == 126u && host_wire[4] == ED_OSC && x[0] == 67 && x[12] == 127 && x[37] == 1 && x[25] == 61 &&
++        x[62] == 127 && x[87] == 1 && x[112] == 127);
++    bad += check("   every point: the farther from 0 of each pair, peak to +-63", osc_frame_is(x, 30, 16000));
++    scope_sine(333);                                        /* (the ring's write position elsewhere: the same picture) */
++    request(ED_OSC, a, 0);
++    bad += check("   the ring read from scope_w (333): the same frame", osc_frame_is(host_wire + 5, 30, 16000) && host_wire[5 + 12] == 127);
++    for (i = 0; i < SCOPE_N; i++)                         /* (full scale both ways: nothing wraps) */
++        scope_buf[i] = (int16_t)(i < 20u ? -32768 : 32767);
++    scope_w = 0;
++    request(ED_OSC, a, 0);
++    bad += check("full scale: the trigger at 20; -32768 sets the peak, so +32767 is 126 throughout",
++        host_wire[5] == 126 && host_wire[5 + 119] == 126 && host_wire[125] == 0xF7);
++    scope_sine(0);
++    request(ED_PING, a, 0);
++    for (i = 0, pushes = 0, meters = 0, gap = 1000, last = 0; i < 200u; i++) {   /* 1 s of 5 ms passes, meters moving */
++        trk[2].peak = i >> 3 & 1u ? 30000 : 3000;         /* (each 40 ms reading another level) */
++        host_wire_n = 0; fm1_ms += 5u; ed_sync(); host_drain();
++        if (wire_frames(ED_OSC, 0)) {
++            if (last && fm1_ms - last < gap) gap = fm1_ms - last;
++            last = fm1_ms;
++            pushes++;
++        }
++        meters += wire_frames(ED_METER, 0);
++    }
++    bad += check("SCOPE with METER moving: 12..15 a second, never closer than 66 ms; METER 20..25", pushes >= 12u && pushes <= 15u &&
++        gap >= 66u && meters >= 20u && meters <= 25u);
++    request(ED_PING, a, 0);
++    TSEL->p[P_PAN] = 33;                                  /* (a value pushed in the same pass) */
++    fm1_ms += 70u; host_wire_n = 0; ed_sync(); host_drain();
++    bad += check("another push in the pass: SCOPE waits (CHANGED goes)", !wire_frames(ED_OSC, 0) && wire_frames(ED_CHANGED, 0) >= 1u);
++    for (i = 0, k = 0; i < 3u && !k; i++) {             /* (METER, held back too, may go first) */
++        host_wire_n = 0; fm1_ms += 5u; ed_sync(); host_drain();
++        k = wire_frames(ED_OSC, 0);
++    }
++    bad += check("   then goes in one of the next passes", k == 1u);
++    so_w = so_r + 1u;                                     /* (a packet not taken yet: the queue isn't empty) */
++    fm1_ms += 70u; host_wire_n = 0; ed_sync();
++    k = so_w - so_r;
++    so_w = so_r;
++    bad += check("a queue not empty: no SCOPE", k == 1u);
++    a[0] = 15; request(ED_WATCH, a, 1);
++    bad += check("WATCH 15: 15 (SCOPE off)", host_wire[5] == 15 && !ed_osc_on);
++    for (i = 0, pushes = 0; i < 40u; i++) { sync_pass(); pushes += wire_frames(ED_OSC, 0); }
++    bad += check("WATCH 15: no SCOPE", !pushes);
++    a[0] = 17; request(ED_WATCH, a, 1);
++    for (i = 0, pushes = 0; i < 120u; i++) { sync_pass(); pushes += wire_frames(ED_OSC, 0); }
++    bad += check("WATCH 17: SCOPE again, every third 30 ms pass, until WATCH lapses (3 s without a request)",
++        pushes >= 32u && pushes <= 34u && !ed_w.on);
++    for (i = 0, pushes = 0; i < 40u; i++) { sync_pass(); pushes += wire_frames(ED_OSC, 0); }
++    bad += check("   and none after", !pushes);
++    return bad;
++}
+ static int screen_link(void)
+ {
+     int bad = 0;
+@@ -1854,7 +1960,7 @@ static int screen_link(void)
+     ui.page = (uint8_t)fx;
+     a[0] = 0; request(ED_SCREEN_GOTO, a, 0);
+     bad += check("SCREEN_GOTO without its page: no reply", !host_wire_n);
+-    return bad + screen_cursor() + meter();
++    return bad + screen_cursor() + meter() + scope_stream();
+ }
+ 
+ int main(void)
+diff --git a/tools/size_fns.py b/tools/size_fns.py
+index 5903c29..fa52447 100644
+--- a/tools/size_fns.py
++++ b/tools/size_fns.py
+@@ -26,7 +26,8 @@ SIZE_FILES = ["ui.c", "favorites.c", "menu_items.c", "icons.c", "ui_graph.c", "u
+               # (Skiff) its own main-loop files: the cards, the page graphs, the themes, FM6 LAB, DRUM-X's pages, HOME,
+               # TAKES, SEQ TOOLS, the pool and its editor commands (what an interrupt reaches of them stays -Os)
+               "ui_blocks.c", "ui_pgraph.c", "ui_crypt.c", "ui_neon.c", "ui_quark.c", "ui_fm6.c", "ui_dx.c", "ui_home.c",
+-              "ui_take.c", "ui_tools.c", "bank.c", "take.c", "editor_project.c", "editor_song.c"]
++              "ui_take.c", "ui_tools.c", "bank.c", "take.c", "editor_project.c", "editor_song.c",
++              "ui_scope.c"]                     # (screen link) the scope's reading: graph_scope and the editor's SCOPE
+ ISR_ROOTS = ("fm1_alnk0_irq", "fm1_timer5_irq")      # hal/fm1_isr.S: the audio ISR, the key / LED scan (+ USB poll)
+ DEF = re.compile(r"^(?:static|void|int|uint\w*|int\w*|const)\b[^;=(]*?\b([A-Za-z_]\w*)\s*\(", re.M)
+ IR_DEF = re.compile(r"^(define [^\n]*?@\"?([\w.]+)\"?\([^\n]*\)(?: unnamed_addr| local_unnamed_addr)?)( #\d+[^\n]*\{)$",
+diff --git a/web/EDITOR_PROTOCOL.md b/web/EDITOR_PROTOCOL.md
+index f71b3bd..b3d946d 100644
+--- a/web/EDITOR_PROTOCOL.md
++++ b/web/EDITOR_PROTOCOL.md
+@@ -198,7 +198,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device
+ 
+ | cmd | Request args | Reply args |
+ | --- | --- | --- |
+-| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, (#21) bit 5 SMP_MIX, (2.0) bit 6 a step's ties, below) and (Skiff 1.3) `49 01 c0 c1 e0 e1` (wide ids: P_COUNT and P_E0, above) and (2.0) `58 01 caps` (bit 0: LIST2, NEW, COPY+, CHAIN, SONG ONCE, the pool's EMPTY and CLEAR UNUSED; (#30) bit 1: the entries' sounds, LIST2's op 9 and its reply's sound bytes; "Pool, lists, PERFORM" below) and (screen link, not in Skiff 2.2) `56 01 v` (SCREEN, SCREEN_GOTO, WATCH bit 2; v 2: the page's cursor; v 3: METER, WATCH bit 3; "Screen link" below) ; older firmware ends earlier |
++| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, (#21) bit 5 SMP_MIX, (2.0) bit 6 a step's ties, below) and (Skiff 1.3) `49 01 c0 c1 e0 e1` (wide ids: P_COUNT and P_E0, above) and (2.0) `58 01 caps` (bit 0: LIST2, NEW, COPY+, CHAIN, SONG ONCE, the pool's EMPTY and CLEAR UNUSED; (#30) bit 1: the entries' sounds, LIST2's op 9 and its reply's sound bytes; "Pool, lists, PERFORM" below) and (screen link, not in Skiff 2.2) `56 01 v` (SCREEN, SCREEN_GOTO, WATCH bit 2; v 2: the page's cursor; v 3: METER, WATCH bit 3; v 4: SCOPE, WATCH bit 4; "Screen link" below) ; older firmware ends earlier |
+ | 2 GET | scope, id | scope, id, v14 |
+ | 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine: its defaults, then its first preset (as on the device) |
+ | 4 DUMP | — | engine, preset, then P_COUNT × v14 (the selected track), then G_COUNT × v14 (globals) |
+@@ -219,7 +219,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device
+ | 19 UP_STORE | slot, name | slot, rc. Stores the current sound: engine, parameters, the first 16 sequencer steps as the pattern (TIE steps → flag 4) |
+ | 20 UP_LOAD | slot | slot, rc (0 ok, 1 empty/invalid). Applies its sound (not its pattern; the steps stay) |
+ | 21 UP_ERASE | slot | slot, rc |
+-| 22 WATCH | on (0/1; v4: 3 = also `TRACK_CHANGED`; screen link: bit 2 = also `SCREEN`, bit 3 = also `METER`) | on (0/1; v4 firmware: 3 when 3 was asked for; screen link: bits 2 and 3 set when asked for). While on, the device pushes cmds 23, 24, 26 (and 32 with bit 1, 90 with bit 2, 92 with bit 3) |
++| 22 WATCH | on (0/1; v4: 3 = also `TRACK_CHANGED`; screen link: bit 2 = also `SCREEN`, bit 3 = also `METER`, bit 4 = also `SCOPE`) | on (0/1; v4 firmware: 3 when 3 was asked for; screen link: bits 2..4 set when asked for). While on, the device pushes cmds 23, 24, 26 (and 32 with bit 1, 90 with bit 2, 92 with bit 3, 93 with bit 4) |
+ | 23 CHANGED (push) | — | scope, id, v14 |
+ | 24 RELOAD (push) | — | engine, preset, then (v3) the selected track |
+ | 25 PING | — | 0 |
+@@ -1134,20 +1134,21 @@ at ~0.6 s while the MIDI port was not seen to disappear at all (so do not wait f
+ a real change, wait ~1.5 s and open again). What the editor sends in that window is lost, `WATCH` ends with the
+ bus reset (send `INFO` and `WATCH` again after reconnecting), and a backup in progress answers rc 5 (stale).
+ 
+-## Screen link (90, 91, 92; the fm1-ipad patch, not in Skiff 2.2)
++## Screen link (90..93; the fm1-ipad patch, not in Skiff 2.2)
+ 
+ An editor that follows the FM-1's screen (Jib, the iPad app) and opens its pages. It is a patch on Skiff 2.2
+ (`skiff/0001-screen-link.patch` in the fm1-ipad repository); stock Skiff answers neither command and has no
+ `56 01` tag. The numbers and the first four bytes of the state are those of the same patch on SLOOP 2.8.4 (its
+ `UI`, `UI_GOTO`), with Skiff's own page and layer numbers. INFO advertises `56 01 1` after `58 01` (last: Skiff's own
+ editor reads up to `58 01` only). Its byte: 1, the six bytes below; 2, the page's cursor after them and
+-SCREEN_GOTO's cursor; 3, `METER` and `WATCH` bit 3 too. Read SCREEN's reply by its length: a later version only appends.
++SCREEN_GOTO's cursor; 3, `METER` and `WATCH` bit 3 too; 4, `SCOPE` and `WATCH` bit 4 too. Read SCREEN's reply by its length: a later version only appends.
+ 
+ | cmd | Request args | Reply args |
+ | --- | --- | --- |
+ | 90 SCREEN | none | home (0/1), page (index into `PAGES`, `params.c`), layer (0 none, 1 FX, 2 GLO, 3 SCL, 4 EDIT, 5 SEQ, 6 REC, 7 PERF: `LAYER_*`, `ui.c`), menu (0 off, 1 the list, 2 ABOUT), the selected track (0..NTRK−1), flags (bit 0 HOME shows the scope, bit 1 the layer is locked open, bit 2 HOME is held: SHIFT's map), then (`56 01 2`) the page's cursor and its second (127: none; table below) |
+ | 91 SCREEN_GOTO | page (0..NPAGES−1), or 127 (HOME) [, cursor (`56 01 2`)] | as SCREEN, after the change |
+ | 92 METER (`56 01 3`) | none | each track's output level, NTRK bytes (6), 0..127 (below); also pushed |
++| 93 SCOPE (`56 01 4`) | none | the output oscilloscope, 120 bytes, 0..127, 64 the centre line (below); also pushed |
+ 
+ - **Pushes.** While `WATCH` was sent with bit 2 (`WATCH 7`, or 5), the device pushes `SCREEN` whenever one of its
+   six bytes changes: a page or family button, SELECT walking the family, a layer button held (its map open) and let
+@@ -1204,7 +1205,17 @@ SCREEN_GOTO's cursor; 3, `METER` and `WATCH` bit 3 too. Read SCREEN's reply by i
+   second alongside). The screen's own meters are unaffected: they and `METER` each take the peak since their own
+   last reading (`ui.c` `peak_take`). `WATCH` with bit 3 newly asked for starts from silence (what built up before is
+   dropped) and pushes within a second. No master level: the firmware keeps none (the limiter's isn't the meter's).
+-- An editor that never sends bits 2 or 3, 90, 91 or 92 sees no difference: no new pushes, the replies to `WATCH` as
++- **SCOPE** (`56 01 4`): the oscilloscope the EDIT pages and HOME draw (`ui_graph.c` `graph_scope`), from the same
++  reading (`ui_scope.c` `scope_take`): the last 512 samples of the master output (every second frame, the left
++  channel, before the metronome), triggered on the first rising zero crossing (none in the first 271: from the oldest
++  sample), the 240 samples from there halved to 120 points, of each pair the one farther from 0 (the first when equal),
++  and auto-scaled as the screen is: the largest |sample| of the 512, at least 1500 (about −27 dB, so quiet stays small),
++  is ±63 around 64. Bytes 1..127, high above the line; silence is 120 × 64. The 120 points cover 240 samples, about
++  10 ms. While `WATCH` was sent with bit 4 (`WATCH 17`, or 31 with everything), the device pushes `SCOPE` at most
++  every 66 ms (15 a second), and like `METER` only into an empty send queue in a pass that pushed nothing else; one that
++  could not go waits for the next such pass (5 ms later) and is not dropped. When `METER` is due in the same pass it goes
++  first. 126 bytes on the wire, about 1.9 kB/s. `WATCH` with bit 4 newly asked for pushes within the next free pass.
++- An editor that never sends bits 2..4, 90, 91, 92 or 93 sees no difference: no new pushes, the replies to `WATCH` as
+   before (bits 0 and 1).
+ 
+ Example (bytes in hex): `F0 7D 46 4C 16 07 F7` (`WATCH 7`) answers `F0 7D 46 4C 16 07 F7`, then pushes
+@@ -1214,3 +1225,5 @@ F7`, let go: `.. 5A 00 05 00 00 00 00 7F 7F F7`. `F0 7D 46 4C 5B 1F F7` (`SCREEN
+ unchanged. `F0 7D 46 4C 5B 04 09 F7` (MOD, route 9: the screen's 10) answers `.. 5B 00 04 00 00 00 00 09 7F F7`.
+ `F0 7D 46 4C 16 0F F7` (`WATCH 15`) answers `.. 16 0F F7`; with track 1 playing at −6 dB the device pushes
+ `F0 7D 46 4C 5C 65 00 00 00 00 00 F7`, and after it stops, falling readings down to `.. 5C 00 00 00 00 00 00 F7`.
++`F0 7D 46 4C 16 11 F7` (`WATCH 17`) answers `.. 16 11 F7`; in silence the device pushes `F0 7D 46 4C 5D` then 120 × `40`
++and `F7`; a sine at its peak level reads `.. 5D 43 .. 7F .. 01 ..`, rising from just above `40`.
 -- 
 2.54.0 (Apple Git-157)
 

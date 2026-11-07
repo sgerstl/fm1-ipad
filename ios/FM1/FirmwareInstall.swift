@@ -103,9 +103,9 @@ final class FirmwareCentre {
                 case .wrongFirmware(let found, _): offer = .unsupported(found)
                 case .searching, .lost: await probe()
                 // stock Skiff 2.2 (no screen link tag in INFO), or an earlier screen-link build (56 01 01 no cursor,
-                // 56 01 02 no METER): the firmware Lupe carries is an update
+                // 56 01 02 no METER, 56 01 03 no SCOPE): the firmware Lupe carries is an update
                 case .connected:
-                    offer = session.dialect == .skiff && !session.screenMeter && !session.isDemo
+                    offer = session.dialect == .skiff && !session.screenScope && !session.isDemo
                         ? .update(session.screenLinked ? "Skiff 2.2 with the screen link" : "Skiff 2.2") : nil
                 case .connecting: break
                 }
