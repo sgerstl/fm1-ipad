@@ -287,7 +287,7 @@ struct RefusalLine: View {
             if refusal.needsStop, session.playing {
                 Button { session.setPlaying(false); store.dismissRefusal() } label: {
                     Label("Stop", systemImage: "stop.fill").font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 12).frame(minHeight: 44).raisedKey()
+                        .padding(.horizontal, 12).padding(.vertical, 8).frame(minHeight: 44).raisedKey()
                 }
                 .buttonStyle(PressSink())
             }
@@ -545,10 +545,16 @@ struct OfflineBar: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "cable.connector.slash").accessibilityHidden(true)
-            Text("FM-1 disconnected. This is the song as it was; editing is off until it's back.")
-            Spacer(minLength: 0)
+            // (Scott, 2026-11-07: say what to do, reconnect or switch it on)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("FM-1 disconnected").fontWeight(.semibold)
+                Text("Check the cable and that it's switched on. This is the song as it was; editing comes back with the FM-1.")
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            Spacer(minLength: 8)
+            LookingForFM1()
         }
-        .padding(.horizontal, 12).frame(minHeight: 44)
+        .padding(.horizontal, 12).padding(.vertical, 8).frame(minHeight: 44)
         .elevated(.panel, radius: 10)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)

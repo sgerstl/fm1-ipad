@@ -463,6 +463,7 @@ struct ConnectionState: View {
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 560)
+            if looking { LookingForFM1().padding(.top, 8) }
             if showDemoButton {
                 Button { useDemo = true } label: {
                     Text("Use the demo FM-1").fontWeight(.semibold).padding(.horizontal, 20).frame(height: 44).raisedKey()
@@ -490,14 +491,23 @@ struct ConnectionState: View {
     private var detail: String {
         switch status {
         case .searching:
-            "Connect it with a USB-C cable. It has to be running SLOOP 2.8.4 or Skiff 2.2."
+            "Connect it with a USB-C cable and switch it on. It has to be running SLOOP 2.8.4 or Skiff 2.2."
         case .connecting:
             "Reading every track. This takes about a second."
         case .connected: ""
         case .wrongFirmware(let found, let proto):
             "It reports “\(found)”, editor protocol \(proto). Lupe works with \(FirmwareDialect.known). Install one of those, then plug the FM-1 in again."
         case .lost(let why):
-            "\(why). Plug it back in and the app picks up where it was."
+            // (Scott, 2026-11-07: a state that says to reconnect or turn the FM-1 on)
+            "\(why). Check the USB-C cable and that the FM-1 is switched on. Lupe picks up where it was as soon as it's back; if it's plugged in and on, unplug it and plug it in again."
+        }
+    }
+
+    /// Lupe looks for the FM-1 every second (DeviceSession.run): said, so the wait doesn't read as stuck.
+    private var looking: Bool {
+        switch status {
+        case .searching, .lost: true
+        default: false
         }
     }
 
@@ -506,6 +516,17 @@ struct ConnectionState: View {
         case .connecting: false
         default: true
         }
+    }
+}
+
+/// "Looking for the FM-1…" with the system's spinner: the app is retrying, there's nothing to press.
+struct LookingForFM1: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView().tint(Theme.textSecondary)
+            Text("Looking for the FM-1…").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
