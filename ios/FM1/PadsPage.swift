@@ -234,8 +234,18 @@ struct PadsPage: View {
 
     private func openMenu(_ t: Int, _ i: Int, at: CGPoint) {
         guard !store.offline, let e = store.song?.tracks[safe: t]?.entries[safe: i] else { return }
-        let title = "T\(t + 1) · entry \(Entries.letter(i))" + (e.isEmpty ? " · empty" : "")
-        ui.menu = JibMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, i) : padMenu(t, i) }, at: at)
+        // an empty pad past the list's end fills the first empty one after the list instead, so the song has no
+        // silent gaps (Scott, 2026-11-07); the title says where it goes
+        let target = e.isEmpty ? Self.landing(store.song?.tracks[safe: t], i) : i
+        let title = "T\(t + 1) · entry \(Entries.letter(i))" + (e.isEmpty ? (target == i ? " · empty" : " · goes on \(Entries.letter(target))") : "")
+        ui.menu = JibMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at)
+    }
+
+    /// Where something put on empty pad `i` lands: there, or the first empty entry after the list's last filled one.
+    static func landing(_ list: SongList?, _ i: Int) -> Int {
+        guard let list else { return i }
+        let next = (list.entries.lastIndex { !$0.isEmpty } ?? -1) + 1
+        return min(i, next)
     }
 
     /// An empty pad: a new pattern (the editor on it), a copy of the one the track is on, one from the pool, a rest.
@@ -357,13 +367,10 @@ struct PadsPage: View {
 
     /// Through the pass (the counted clock), and below it the passes of its REPS: a second channel to the colour.
     private func passBar(_ t: Int, _ m: SongPlayback.Marks, ink: Color) -> some View {
-        let p = session.passProgress(t) ?? 0
-        let whole = m.loops ? p : (Double((m.pass ?? 1) - 1) + p) / Double(max(1, m.reps))
-        return GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Theme.onColour.opacity(0.3))
-                Capsule().fill(ink).frame(width: g.size.width * min(1, max(0, whole)))
-            }
+        let pass = Double((m.pass ?? 1) - 1), reps = Double(max(1, m.reps)), loops = m.loops
+        return SmoothBar(track: Theme.onColour.opacity(0.3), ink: ink) {
+            let p = session.passProgress(t) ?? 0
+            return loops ? p : (pass + p) / reps
         }
         .frame(height: 4)
         .accessibilityHidden(true)
@@ -374,8 +381,10 @@ struct PadsPage: View {
     private var sceneRow: some View {
         let perf = store.perform
         return HStack(spacing: 8) {
-            ToggleKey(name: storing ? "Store: tap a scene" : "Store", on: storing, enabled: !store.offline) { storing.toggle() }
-                .fixedSize()
+            // the same word either way, lit while armed: the scenes beside it never move (Scott, 2026-11-07)
+            ToggleKey(name: "Store", on: storing, enabled: !store.offline) { storing.toggle() }
+                .frame(width: 88)               // (its word turns semibold when lit: a fixed width, not its own)
+                .accessibilityValue(storing ? "on: tap a scene to store into it" : "")
                 .accessibilityHint("Then tap a scene: it keeps the entry each track is on now, and its mute")
             HStack(spacing: 4) {
                 ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf) }
@@ -467,13 +476,8 @@ struct TrackStripCard: View {
                         }
                         Text(lines.plays).font(.system(size: 13)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
                         if session.playing, m.playing != nil {
-                            GeometryReader { g in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Theme.well)
-                                    Capsule().fill(Theme.track[t]).frame(width: g.size.width * (session.passProgress(t) ?? 0))
-                                }
-                            }
-                            .frame(height: 4)
+                            SmoothBar(track: Theme.well, ink: Theme.track[t]) { session.passProgress(t) ?? 0 }
+                                .frame(height: 4)
                         }
                         if let p = preview {
                             // the scene held: an arrow line in full white, a second channel to the dashed outline
@@ -629,6 +633,27 @@ struct PadThumbView: View {
             }
         }
         .frame(height: 24)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A pass bar redrawn every frame (30 a second) from the counted clock, alone in its own view: the card's and the pads'
+/// slower refreshes (2 and 4 a second) made it step (Scott, 2026-11-07: "low frame rate"). Only this redraws.
+struct SmoothBar: View {
+    let track: Color
+    let ink: Color
+    let fraction: () -> Double
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+            let f = min(1, max(0, fraction()))
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(track)
+                    Capsule().fill(ink).frame(width: g.size.width * f)
+                }
+            }
+        }
         .accessibilityHidden(true)
     }
 }

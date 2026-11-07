@@ -162,9 +162,13 @@ struct SkiffArrangePage: View {
     private var toolRow: some View {
         HStack(spacing: 12) {
             if compact, store.performs { SongViewSwitch(ui: ui) }
-            Text("Song").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
-            Text("\(songBars) bar\(songBars == 1 ? "" : "s") · \(session.trackCount) tracks")
-                .foregroundStyle(Theme.textSecondary).lineLimit(1).fixedSize()
+            // the Song tab: the Timeline / Pads switch alone, no "Song · N bars · N tracks" beside it to blur into
+            // (Scott, 2026-11-07); the Arrange page keeps it
+            if !compact || !store.performs {
+                Text("Song").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                Text("\(songBars) bar\(songBars == 1 ? "" : "s") · \(session.trackCount) tracks")
+                    .foregroundStyle(Theme.textSecondary).lineLimit(1).fixedSize()
+            }
             // (the playback mode moved to the top bar, beside play and stop: SongModeKeys, 2026-11-06)
             Spacer(minLength: 8)
             if !store.undoStack.isEmpty {
@@ -292,7 +296,9 @@ struct SkiffArrangePage: View {
             let top = 24 + Self.laneGap + CGFloat(t) * (laneHeight + Self.laneGap)
             let total = 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap)
             let below = top + laneHeight + 4
-            let down = below + TrackKnobBox.height <= total
+            // under the row unless that runs well past the last lane (over the divider is fine): above it, it rose
+            // over the ruler on short lanes (Scott, 2026-11-07, Clarinet on T3)
+            let down = below + TrackKnobBox.height <= total + 24
             // a sound panel over the page: the box steps left of it, so it stays in view (2026-11-06), and hangs free
             let panel = ui.soundPanel != nil
             // a tab of the selected row's own colour, hanging from its right end (above it on the last rows): the knobs
