@@ -19,7 +19,7 @@ struct TrackKnobBox: View {
     private let look = Look()
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
-    static let height: CGFloat = 116
+    static let height: CGFloat = 124        // two rows of 56 pt boxes, their 4 pt gap, 4 pt above and below (116 crushed them onto the row, 2026-11-07)
     /// KnobSpec.all's LEVEL, STEPS, PAN (0 is SWING, global).
     static let knobs = 1..<4
 
