@@ -1676,22 +1676,27 @@ enum SelectionTint {
     }
 }
 
-/// The knobs' tab under (or over) the selected row: its body the box's rect, run 8 pt into the row past its rounded
-/// corner, with a concave 8 pt fillet where it leaves the row's edge (both sides when it hangs free, beside a panel).
+/// The knobs' tab under (or over) the selected row: its body the box's rect, a point into the row (no seam), with a
+/// concave 8 pt fillet where it leaves the row's edge (both sides when it hangs free, beside a panel). Flush with the
+/// row's right end it also fills the row's rounded corner there; nowhere else does it reach into the row, where the
+/// playing block, drawn larger, comes within 8 pt of the edge (2026-11-07: an 8 pt overlap clipped it).
 struct RowTab: Shape {
     var down: Bool
     var flushRight: Bool
-    static let fillet: CGFloat = 8, radius: CGFloat = 12
+    static let fillet: CGFloat = 8, radius: CGFloat = 12, corner: CGFloat = 8
 
     func path(in rect: CGRect) -> Path {
-        let f = Self.fillet, r = Self.radius, x0 = rect.minX, x1 = rect.maxX, h = rect.height
+        let f = Self.fillet, r = Self.radius, c = Self.corner, x0 = rect.minX, x1 = rect.maxX, h = rect.height
         var p = Path()
         // drawn hanging down from y = 0 (the row's edge), then flipped for a tab above the row
-        p.move(to: CGPoint(x: x0 - f, y: -f))
-        p.addLine(to: CGPoint(x: flushRight ? x1 : x1 + f, y: -f))
+        p.move(to: CGPoint(x: x0 - f, y: -1))
         if flushRight {
+            p.addLine(to: CGPoint(x: x1 - c, y: -1))
+            p.addLine(to: CGPoint(x: x1 - c, y: -c))
+            p.addLine(to: CGPoint(x: x1, y: -c))
             p.addLine(to: CGPoint(x: x1, y: h - r))
         } else {
+            p.addLine(to: CGPoint(x: x1 + f, y: -1))
             p.addLine(to: CGPoint(x: x1 + f, y: 0))
             p.addQuadCurve(to: CGPoint(x: x1, y: f), control: CGPoint(x: x1, y: 0))
             p.addLine(to: CGPoint(x: x1, y: h - r))

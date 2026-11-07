@@ -269,8 +269,15 @@ public final class SkiffSongStore {
         busy = true
         defer { busy = false }
         do {
-            let r = try await d.list(op)
+            var r = try await d.list(op)
+            if case .play = op {
+                r = try await retryWhileSaving(d, r, full: { $0.rc == .patternsFull }) { try await d.list(op) }
+            }
             song = r.song
+            if r.rc == .patternsFull, case .play = op, (pool?.free ?? 0) > 0 {
+                refusal = Refusal(track: op.track, entry: op.entry, text: Self.stillSaving)
+                return false
+            }
             if !r.rc.isDone {
                 refusal = Refusal(track: op.track, entry: op.entry, text: r.rc.reason, needsStop: r.rc == .playing)
                 return false
@@ -381,11 +388,14 @@ public final class SkiffSongStore {
         busy = true
         defer { busy = false }
         do {
-            let r = try await d.perform(op)
+            var r = try await d.perform(op)
+            if case .recall = op {
+                r = try await retryWhileSaving(d, r, full: { $0.rc == .patternsFull }) { try await d.perform(op) }
+            }
             perform = r.state
             if let s = try? await d.songLists() { song = s }
             guard r.rc.isDone else {
-                refusal = Refusal(track: nil, entry: nil, text: r.rc.reason)
+                refusal = Refusal(track: nil, entry: nil, text: r.rc == .patternsFull && (pool?.free ?? 0) > 0 ? Self.stillSaving : r.rc.reason)
                 return false
             }
             refusal = nil
@@ -396,6 +406,24 @@ public final class SkiffSongStore {
             return false
         }
     }
+
+    /// Skiff answers PATTERNS FULL for two things (bank.c stage_entry): the pool truly full (a track's unsaved steps
+    /// need a number to keep them), or the track's last swap still being written to flash, its numbers held meanwhile.
+    /// Scott hit the second with 41 free (2026-11-07), told "all 64 taken". With numbers free it's the second: wait and
+    /// ask again, about 1.5 s in all, before saying anything; still refused, `stillSaving` says what it is.
+    private func retryWhileSaving<R>(_ d: SkiffDriver, _ first: R, full: (R) -> Bool, ask: () async throws -> R) async throws -> R {
+        var r = first
+        for _ in 0..<6 {
+            guard full(r) else { return r }
+            pool = try? await d.pool()
+            guard (pool?.free ?? 0) > 0 else { return r }
+            try await Task.sleep(for: Self.savingRetry)
+            r = try await ask()
+        }
+        return r
+    }
+    static let savingRetry: Duration = .milliseconds(250)
+    static let stillSaving = "The FM-1 is still saving the last change. Try again in a moment"
 
     public func dismissRefusal() { refusal = nil }
     /// A refusal the app decides itself (before sending anything).

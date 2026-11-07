@@ -68,7 +68,7 @@ public enum PerformRC: Int, Sendable {
         case .done: "Done"
         case .empty: "That scene is empty: store one there first"
         case .withoutAutomation: "Recalled, without some automation (no room for it)"
-        case .patternsFull: "All 64 patterns are taken, so the scene couldn't load. Clear unused ones to free a number"
+        case .patternsFull: "All 64 patterns are taken, so a track couldn't switch. Clear unused patterns to free a number"
         case .failed: "Skiff couldn't do it"
         }
     }

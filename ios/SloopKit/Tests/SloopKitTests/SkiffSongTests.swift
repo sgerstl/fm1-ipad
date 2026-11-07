@@ -134,6 +134,14 @@ import Testing
         #expect(await s.performOp(.recall(scene: 2)))
         #expect(s.song?.tracks[1].entryOn == 1 && s.perform?.muted == [false, false, false, true, false, true])
         #expect(s.perform?.lastScene == 2)
+        // PATTERNS FULL with numbers free (the FM-1 still saving the last swap): asked again, it goes, nothing said
+        fake.recallsStillSaving = 2
+        #expect(await s.performOp(.recall(scene: 0)) && s.refusal == nil && fake.recallsStillSaving == 0)
+        // still saving after every retry: said as that, not "all 64 taken"
+        fake.recallsStillSaving = 99
+        #expect(await s.performOp(.recall(scene: 2)) == false && s.refusal?.text == SkiffSongStore.stillSaving)
+        fake.recallsStillSaving = 0
+        #expect(await s.performOp(.recall(scene: 2)))           // (back to the breakdown for what follows)
         // an empty scene says so
         #expect(await s.performOp(.recall(scene: 9)) == false)
         #expect(s.refusal?.text.contains("empty") == true)

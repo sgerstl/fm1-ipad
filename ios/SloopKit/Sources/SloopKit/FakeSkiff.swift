@@ -53,6 +53,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// LAUNCH, each track's mute and a mute staged (1 to unmute, 2 to mute; it lands 2 s on, the fake's launch point).
     var scenes: [[(entry: Int, mute: Bool)]?] = Array(repeating: nil, count: 16)
     var lastScene = 127
+    /// RECALLs answered PATTERNS FULL (rc 4) before one goes: the real FM-1 still writing a track's last swap.
+    var recallsStillSaving = 0
     var launch = 1
     var muted: [Bool] = []
     var stagedMute: [Int] = []
@@ -242,6 +244,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             lastScene = Int(a[1])
         case 2 where a[1] < 16:
             guard let s = scenes[Int(a[1])] else { return performReply(2, 1) }
+            if recallsStillSaving > 0 { recallsStillSaving -= 1; return performReply(2, 4) }
             for (t, x) in s.enumerated() where t < lists.count {
                 if lists[t][x.entry].p != 0 { entryOn[t] = x.entry }
                 if muted[t] != x.mute { stage(t) }
