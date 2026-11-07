@@ -132,6 +132,7 @@ struct StepEdits {
 /// still floats over the grid's foot. Every key is 44 pt to touch (36 pt drawn), named for VoiceOver and the pointer.
 struct SelectionBar: View {
     let edits: StepEdits
+    @State private var pasteAt: CGPoint = .zero   // the Paste key's foot (global), where its held menu opens
     var notes = true                      // the drum grid: steps only (no transpose)
     var inline = false                    // the Song tab's pattern header: no floating panel of its own
 
@@ -185,10 +186,15 @@ struct SelectionBar: View {
     /// clip's notes to what's there (Scott, 2026-11-06), and VoiceOver gets it as an action.
     private var pasteKey: some View {
         icon("doc.on.clipboard", "Paste at the selected step") { edits.paste() }
-            .contextMenu {
-                Button { edits.paste() } label: { Label("Paste", systemImage: "doc.on.clipboard") }
-                Button { edits.paste(keep: true) } label: { Label("Paste and keep", systemImage: "square.on.square") }
-            }
+            // held: the pad press menu's look, at the key (Scott, 2026-11-08: every long-press menu alike)
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                let e = edits
+                e.ui.menu = JibMenu(title: "Paste", groups: {
+                    [[MenuItem(title: "Paste", icon: "doc.on.clipboard") { e.paste() },
+                      MenuItem(title: "Paste and keep", icon: "square.on.square") { e.paste(keep: true) }]]
+                }, at: pasteAt)
+            })
+            .onGeometryChange(for: CGPoint.self) { CGPoint(x: $0.frame(in: .global).minX, y: $0.frame(in: .global).maxY) } action: { pasteAt = $0 }
             .accessibilityHint("Replaces the notes on the steps it covers")
             .accessibilityAction(named: "Paste and keep the notes already there") { edits.paste(keep: true) }
     }

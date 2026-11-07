@@ -252,7 +252,10 @@ struct MenuPanel: View {
             more.append(MenuItem(title: "Chain into next", icon: "link", enabled: can && idle) { edits.chainIntoNext(t, b) })
         }
         if b.kind == .pattern, store.sounds {
-            more.append(MenuItem(title: "Set sound…", icon: "waveform", enabled: idle, children: { sound(t, b) }))
+            // the sound panel for this entry (Scott, 2026-11-08), not a submenu
+            more.append(MenuItem(title: "Select sound", icon: "waveform", enabled: idle) {
+                ui.chooseSound(session, track: t, entry: SoundEntryTarget(ref: EntryRef(track: t, entry: b.entries.lowerBound), pad: false))
+            })
         }
         g.append(more)
         g.append([MenuItem(title: b.isChain ? "Delete entries" : "Delete entry", icon: "trash", enabled: idle) { edits.delete(t, b) }])

@@ -181,9 +181,9 @@ struct EntryInspector: View {
                         } else {
                             key("Chain to next", enabled: canChain) { edits.chainIntoNext(track, block) }
                         }
-                        // the sounds open in Jib's own menu, as everywhere on this page
-                        key("Set sound…", enabled: block.kind == .pattern && store.sounds) {
-                            openMenu(.sound(EntryRef(track: track, entry: block.entries.lowerBound)), CGPoint(x: soundKey.minX, y: soundKey.minY))
+                        // the sound panel for this entry, as from its menu (Scott, 2026-11-08)
+                        key("Select sound", enabled: block.kind == .pattern && store.sounds) {
+                            ui.chooseSound(session, track: track, entry: SoundEntryTarget(ref: EntryRef(track: track, entry: block.entries.lowerBound), pad: false))
                         }
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { soundKey = $0 }
                     }

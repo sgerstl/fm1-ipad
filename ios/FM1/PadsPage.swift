@@ -418,9 +418,11 @@ struct PadsPage: View {
             })
         }
         if !copy.isEmpty { g.append(copy) }
-        if e.poolIndex != nil, store.sounds, let b = store.blocks(t).first(where: { $0.entries.contains(i) }) {
-            let menus = ArrangeMenus(session: session, store: store, ui: ui) { _ in }
-            g.append([MenuItem(title: "Sound…", icon: "waveform", enabled: idle, children: { menus.sound(t, b) })])
+        if e.poolIndex != nil, store.sounds {
+            // the sound panel, its header naming the pad (Scott, 2026-11-08), not a submenu
+            g.append([MenuItem(title: "Select sound", icon: "waveform", enabled: idle) {
+                ui.chooseSound(session, track: t, entry: SoundEntryTarget(ref: EntryRef(track: t, entry: i), pad: true))
+            }])
         }
         g.append([MenuItem(title: "Clear entry", icon: "trash", enabled: idle) { clear(t, i, e) }])
         return g

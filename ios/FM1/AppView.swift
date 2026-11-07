@@ -238,66 +238,13 @@ extension AppView {
                     .contentShape(Rectangle())
                     .onTapGesture { ui.sectionMenu = nil }
                     .accessibilityHidden(true)
-                let name = DeviceSession.sectionName(m.section)
-                let inSong = session.songOrder?.steps.contains { $0.section == m.section } ?? false
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Text(name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.onColour)
-                            .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[m.section]))
-                        Text("Section \(name)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    }
-                    if m.mode == .confirmLoad {
-                        Text("Load \(name) over the tracks?").font(.system(size: 13, weight: .semibold))
-                            .frame(width: 240, alignment: .leading)
-                        Text("They have changes that aren't in a section. Loading \(name) replaces them, and the FM-1 keeps no copy.")
-                            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                            .frame(width: 240, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-                        if let e = (0..<4).first(where: { !session.song.stored($0) }) {
-                            menuItem("Save them to \(DeviceSession.sectionName(e)) first", icon: "square.and.arrow.down") {
-                                session.storeLoop(in: e)
-                                session.playSection(m.section)
-                                ui.sectionMenu = nil
-                            }
-                        }
-                        menuItem("Load it, replacing them", icon: "arrow.uturn.down", destructive: true) {
-                            session.playSection(m.section)
-                            ui.sectionMenu = nil
-                        }
-                        menuItem("Keep my tracks", icon: "xmark") { ui.sectionMenu = nil }
-                    } else if m.mode == .confirmClear {
-                        Text("Clear \(name)? The FM-1 keeps no copy.")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(width: 220, alignment: .leading)
-                        if inSong {
-                            Text("It's in the song, which won't play until \(name) holds tracks again.")
-                                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                                .frame(width: 220, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-                        }
-                        menuItem("Clear \(name)", icon: "trash", destructive: true) {
-                            session.clearSection(m.section)
-                            ui.sectionMenu = nil
-                        }
-                        menuItem("Keep it", icon: "xmark") { ui.sectionMenu = nil }
-                    } else {
-                        menuItem("Replace with the sequence", icon: "square.and.arrow.down") {
-                            session.storeLoop(in: m.section)
-                            ui.sectionMenu = nil
-                        }
-                        .accessibilityHint("The FM-1 has no undo for this")
-                        menuItem(session.playing ? "Clear (stop first)" : "Clear section", icon: "trash", destructive: true,
-                                 enabled: !session.playing) {
-                            ui.sectionMenu?.mode = .confirmClear
-                        }
-                        .accessibilityHint(session.playing ? "SLOOP clears a section only when stopped" : "Asks before clearing")
-                        Text("Neither has an undo on the FM-1.")
-                            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    }
-                }
-                .padding(10)
-                .elevated(.held)
-                // beside the finger (to its right, centred on it), kept on screen
-                .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 290), y: min(max(m.at.y - 60, 12), Theme.canvas.height - 300))
+                // the pad press menu's look (Scott, 2026-11-08): MenuPanel, its asks as notes in it
+                let groups = sectionGroups(m)
+                MenuPanel(title: "Section \(DeviceSession.sectionName(m.section))", groups: groups, close: { ui.sectionMenu = nil })
+                    .id("\(m.section)-\(String(describing: m.mode))")
+                    .fixedSize()
+                    // beside the finger (to its right, centred on it), kept on screen
+                    .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 312), y: min(max(m.at.y - 60, 12), Theme.canvas.height - 360))
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
                 .accessibilityAddTraits(.isModal)
             }
@@ -306,19 +253,33 @@ extension AppView {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.sectionMenu)
     }
 
-    private func menuItem(_ title: String, icon: String, destructive: Bool = false, enabled: Bool = true,
-                          _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(!enabled ? Theme.textTertiary : destructive ? Color(hex: 0xFF6B6B) : Theme.text)
-                .padding(.horizontal, 14).frame(minWidth: 220, minHeight: 44, alignment: .leading)
-                .raisedKey()
+    /// A held section's items: replace or clear it; Clear asks again, here, with what clearing costs.
+    private func sectionGroups(_ m: SectionMenu) -> [[MenuItem]] {
+        let name = DeviceSession.sectionName(m.section)
+        let inSong = session.songOrder?.steps.contains { $0.section == m.section } ?? false
+        switch m.mode {
+        case .confirmLoad:
+            var items: [MenuItem] = [.note("Load \(name) over the tracks? They have changes that aren't in a section. Loading \(name) replaces them, and the FM-1 keeps no copy.")]
+            if let e = (0..<4).first(where: { !session.song.stored($0) }) {
+                items.append(MenuItem(title: "Save them to \(DeviceSession.sectionName(e)) first", icon: "square.and.arrow.down") {
+                    session.storeLoop(in: e)
+                    session.playSection(m.section)
+                })
+            }
+            items.append(MenuItem(title: "Load it, replacing them", icon: "arrow.uturn.down") { session.playSection(m.section) })
+            return [items, [MenuItem(title: "Keep my tracks", icon: "xmark") {}]]
+        case .confirmClear:
+            var items: [MenuItem] = [.note("Clear \(name)? The FM-1 keeps no copy." + (inSong ? " It's in the song, which won't play until \(name) holds tracks again." : ""))]
+            items.append(MenuItem(title: "Clear \(name)", icon: "trash") { session.clearSection(m.section) })
+            return [items, [MenuItem(title: "Keep it", icon: "xmark") {}]]
+        default:
+            return [[MenuItem(title: "Replace with the sequence", icon: "square.and.arrow.down") { session.storeLoop(in: m.section) },
+                     MenuItem(title: session.playing ? "Clear (stop first)" : "Clear section", icon: "trash", enabled: !session.playing) {
+                         var ask = m; ask.mode = .confirmClear; ui.sectionMenu = ask     // (the panel closed: open again, asking)
+                     }],
+                    [.note("Neither has an undo on the FM-1.")]]
         }
-        .buttonStyle(PressSink())
-        .disabled(!enabled)
     }
-
 
     /// After Clear all: what happened and a way back, for 8 seconds.
     @ViewBuilder var undoToast: some View {
@@ -577,88 +538,55 @@ struct TrackMenuLayer: View {
                     .contentShape(Rectangle())
                     .onTapGesture { ui.trackMenu = nil }
                     .accessibilityHidden(true)
-                let empty = session.stepIndices.allSatisfy { !session.tracks[m.track].isOn($0) }
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        TrackChip(track: m.track, size: 24)
-                        Text("Track \(m.track + 1)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    }
-                    // the sound, from here: the Presets panel slides out over the page. On Skiff it's "Sounds…", and
-                    // not on the Sounds tab, where the browser is the page itself (Scott, 2026-11-06)
-                    if !(ui.songTab && ui.page == .library) {
-                    Button {
-                        session.select(track: m.track)
-                        ui.timelineOpen = false            // the open timeline would run under the panel
-                        ui.presetsPanel = true
-                        ui.trackMenu = nil
-                    } label: {
-                        Label(session.isDrums(m.track) ? "Kits…" : ui.songTab ? "Sounds…" : "Presets…", systemImage: "square.grid.2x2")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
-                            .raisedKey()
-                    }
-                    .buttonStyle(PressSink())
-                    .accessibilityHint("Pick this track's sound without leaving the page")
-                    }
-                    if !session.isDrums(m.track), session.capabilities.contains(.samples) {
-                        // the grid turns over to the sampler; Use on track puts the take on this track
-                        Button {
-                            session.select(track: m.track)
-                            ui.presetsPanel = false
-                            ui.timelineOpen = false
-                            ui.page = .sequencer
-                            ui.sampler = SamplerRequest(track: m.track)
-                            ui.trackMenu = nil
-                        } label: {
-                            Label("Record sample…", systemImage: "mic")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Theme.text)
-                                .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
-                                .raisedKey()
-                        }
-                        .buttonStyle(PressSink())
-                        .accessibilityHint("Records the \(UIDevice.current.model)'s microphone into a sample slot for this track")
-                    }
-                    if let mo = session.motion[m.track], !mo.events.isEmpty {
-                        // Skiff's motion: knob moves recorded into the steps (and steps' locks)
-                        Button {
-                            session.clearMotion(track: m.track)
-                            ui.trackMenu = nil
-                        } label: {
-                            Label("Clear motion (\(mo.steps.count) step\(mo.steps.count == 1 ? "" : "s"))", systemImage: "waveform.path.badge.minus")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Theme.text)
-                                .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
-                                .raisedKey()
-                        }
-                        .buttonStyle(PressSink())
-                        .accessibilityHint("Drops the knob moves recorded on this track. On the FM-1, SAVE held undoes it")
-                    }
-                    Button {
-                        ui.lastClear = session.clearAll(track: m.track)
-                        ui.trackMenu = nil
-                    } label: {
-                        Label("Clear all steps", systemImage: "trash")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(empty ? Theme.textTertiary : Color(hex: 0xFF6B6B))
-                            .padding(.horizontal, 14).frame(minWidth: 200, minHeight: 44, alignment: .leading)
-                            .raisedKey()
-                    }
-                    .buttonStyle(PressSink())
-                    .disabled(empty)
-                    .accessibilityHint(empty ? "The track has no steps" : "Clears all \(session.stepCount) steps; Undo appears for a few seconds")
-                }
-                .padding(10)
-                .elevated(.held)
-                // beside the finger (to its right, centred on it), kept on screen
-                .offset(x: min(max(m.at.x + 28, 12), canvas.width - 260), y: min(max(m.at.y - 50, 12), canvas.height - 180))
+                // the pad press menu's look, as every long-press menu (Scott, 2026-11-08): MenuPanel's rows and title
+                let groups = Self.groups(session, ui, track: m.track)
+                let rows = groups.reduce(0) { $0 + $1.count }
+                let tall = 44 + CGFloat(rows) * MenuPanel.rowHeight + CGFloat(max(0, groups.count - 1)) * 9
+                MenuPanel(title: "Track \(m.track + 1) · \(Entries.trackName(m.track, session: session))", groups: groups,
+                          close: { ui.trackMenu = nil })
+                    .id(m.track)
+                    .fixedSize()
+                    // beside the finger (to its right, centred on it), kept on screen
+                    .offset(x: min(max(m.at.x + 28, 12), canvas.width - 312), y: min(max(m.at.y - 50, 12), canvas.height - tall - 12))
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
                 .accessibilityAddTraits(.isModal)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackMenu)
+    }
+
+    /// Its items: Select sound (the sound panel, for the track), a sample, its motion, its steps.
+    @MainActor static func groups(_ session: DeviceSession, _ ui: EditorUI, track t: Int) -> [[MenuItem]] {
+        var g: [[MenuItem]] = []
+        // the sound, from here: the sound panel slides out over the page (Scott, 2026-11-08: "Select sound"), not on the
+        // Sounds tab, where the browser is the page itself
+        if !(ui.songTab && ui.page == .library) {
+            g.append([MenuItem(title: "Select sound", icon: "square.grid.2x2") { ui.chooseSound(session, track: t) }])
+        }
+        var more: [MenuItem] = []
+        if !session.isDrums(t), session.capabilities.contains(.samples) {
+            // the grid turns over to the sampler; Use on track puts the take on this track
+            more.append(MenuItem(title: "Record sample…", icon: "mic") {
+                session.select(track: t)
+                ui.presetsPanel = false
+                ui.timelineOpen = false
+                ui.page = .sequencer
+                ui.sampler = SamplerRequest(track: t)
+            })
+        }
+        if let mo = session.motion[t], !mo.events.isEmpty {
+            // Skiff's motion: knob moves recorded into the steps (and steps' locks)
+            more.append(MenuItem(title: "Clear motion (\(mo.steps.count) step\(mo.steps.count == 1 ? "" : "s"))", icon: "waveform.path.badge.minus") {
+                session.clearMotion(track: t)
+            })
+        }
+        if !more.isEmpty { g.append(more) }
+        let empty = session.stepIndices.allSatisfy { !session.tracks[t].isOn($0) }
+        g.append([MenuItem(title: empty ? "Clear all steps: none yet" : "Clear all steps", icon: "trash", enabled: !empty) {
+            ui.lastClear = session.clearAll(track: t)
+        }])
+        return g
     }
 }
 

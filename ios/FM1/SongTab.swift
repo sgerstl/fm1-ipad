@@ -354,27 +354,9 @@ struct PatternPane: View {
     /// The six tracks in a menu (Max on Pads): pick one, see what it plays, mute it. A long press on a track elsewhere
     /// keeps its own menu (Sounds…, clear).
     private func tracksMenu(_ t: Int) -> some View {
-        let perf = store.perform
-        return Menu {
-            Section("Tracks") {
-                ForEach(Array(session.trackIndices), id: \.self) { k in
-                    let list = store.song?.tracks[safe: k]
-                    let plays = list?.entryOn.flatMap { e in list?.entries[safe: e].map { $0.isEmpty ? "" : $0.isRest ? "\(Entries.letter(e)) · rest" : "\(Entries.letter(e)) · \(Entries.number($0.pattern))" } } ?? ""
-                    Button { session.select(track: k) } label: {
-                        Label("\(k + 1) \(Entries.trackName(k, session: session))" + (plays.isEmpty ? "" : "  ·  \(plays)"),
-                              systemImage: k == t ? "checkmark" : "")
-                    }
-                }
-            }
-            Section("Mute") {
-                ForEach(Array(session.trackIndices), id: \.self) { k in
-                    let muted = perf?.muted[safe: k] ?? session.tracks[k].mute
-                    Button { Task { await store.performOp(.mute(track: k)) } } label: {
-                        Label("\(muted ? "Unmute" : "Mute") \(k + 1) \(Entries.trackName(k, session: session))",
-                              systemImage: muted ? "speaker.slash.fill" : "speaker.wave.2")
-                    }
-                }
-            }
+        // the pad press menu's look, as every menu (Scott, 2026-11-08), opened under the key
+        Button {
+            ui.menu = JibMenu(title: "Tracks", groups: { tracksGroups(t) }, at: CGPoint(x: headerFrame.minX, y: headerFrame.maxY - 4))
         } label: {
             HStack(spacing: 8) {
                 TrackChip(track: t, selected: true).frame(width: 28, height: 28)
@@ -384,8 +366,25 @@ struct PatternPane: View {
             .foregroundStyle(Theme.text)
             .padding(.leading, 4).padding(.trailing, 10).frame(height: 40).raisedKey()
         }
+        .buttonStyle(PressSink())
         .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
         .accessibilityHint("Pick a track or mute one")
+    }
+
+    private func tracksGroups(_ t: Int) -> [[MenuItem]] {
+        let perf = store.perform
+        let pick = session.trackIndices.map { k -> MenuItem in
+            let list = store.song?.tracks[safe: k]
+            let plays = list?.entryOn.flatMap { e in list?.entries[safe: e].map { $0.isEmpty ? "" : $0.isRest ? "\(Entries.letter(e)) · rest" : "\(Entries.letter(e)) · \(Entries.number($0.pattern))" } } ?? ""
+            return MenuItem(title: "\(k + 1) \(Entries.trackName(k, session: session))" + (plays.isEmpty ? "" : "  ·  \(plays)"),
+                            chip: ("\(k + 1)", Theme.track[k]), checked: k == t) { session.select(track: k) }
+        }
+        let mute = session.trackIndices.map { k -> MenuItem in
+            let muted = perf?.muted[safe: k] ?? session.tracks[k].mute
+            return MenuItem(title: "\(muted ? "Unmute" : "Mute") \(Entries.trackName(k, session: session))",
+                            icon: muted ? "speaker.slash.fill" : "speaker.wave.2") { Task { await store.performOp(.mute(track: k)) } }
+        }
+        return [pick, mute]
     }
 
     /// Follow, one toggle (Scott, 2026-11-06: "Following the song" was a pill that looked like a button, beside a real

@@ -193,8 +193,19 @@ final class EditorUI {
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: DeviceSession.ClearedTrack?   // offered for undo for a few seconds
     var librarySection: LibrarySection = ProcessInfo.processInfo.arguments.contains("-library-user") ? .user : .engine(0)
-    /// The Presets panel is up on the Sequencer, in place of the step panel and knobs.
-    var presetsPanel = false
+    /// The Presets panel is up on the Sequencer, in place of the step panel and knobs. Closed, it chooses for the track
+    /// again next time.
+    var presetsPanel = false { didSet { if !presetsPanel { soundEntry = nil } } }
+    /// The sound panel choosing an entry's own sound (a pad's, a Timeline block's) instead of the track's (Scott,
+    /// 2026-11-08: "Select sound" opens the panel; its header says what it's choosing for). Nil: the track.
+    var soundEntry: SoundEntryTarget?
+    /// The panel for a track (entry nil) or an entry's own sound, the track selected.
+    func chooseSound(_ session: DeviceSession, track: Int, entry: SoundEntryTarget? = nil) {
+        session.select(track: track)
+        timelineOpen = false                     // the open timeline would run under the panel
+        soundEntry = entry
+        presetsPanel = true
+    }
     /// The sampler is open: flipped in place of the grid (from a track's menu) or up from the bottom (Browse).
     var sampler: SamplerRequest?
     /// The last page change came from the FM-1 (its button pressed), not from a tab or pad here.
@@ -257,4 +268,10 @@ struct PatternUndo: Equatable {
     var steps: [SynthStep]
     var length: Int
     var said: String
+}
+
+/// An entry whose own sound the panel is choosing: from a pad (Pads) or a block (the Timeline), which the header names.
+struct SoundEntryTarget: Equatable {
+    var ref: EntryRef
+    var pad: Bool
 }

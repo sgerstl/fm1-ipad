@@ -8,6 +8,9 @@ struct LibraryPage: View {
     let session: DeviceSession
     let ui: EditorUI
     var columns = 4                 // 2 in the Presets panel on the Sequencer
+    /// The sound panel choosing an entry's own sound (a pad's, a block's): the keys show and set that, not the track's.
+    var entry: SoundEntryTarget? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var clearing: Int?
     /// A user slot waiting on its erase confirm (Skiff's SAVE > USER).
     @State private var erasing: UserPreset?
@@ -20,8 +23,12 @@ struct LibraryPage: View {
         .padding(.trailing, panelRoom)       // the panel's room: the grid beside it, never under it
         .task(id: session.selectedTrack) {
             session.refreshLibrary()
-            // the track's engine; the user slots stay (SAVE > USER lands here, and they aren't an engine's)
-            if !session.selectedIsDrums, ui.librarySection != .user { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
+            // the entry's own sound's engine (or user slots); else the track's engine; the user slots stay (SAVE > USER
+            // lands here, and they aren't an engine's)
+            if entry != nil {
+                if entryNow?.isUser == true { ui.librarySection = .user }
+                else { ui.librarySection = .engine(entryNow?.engine ?? session.tracks[session.selectedTrack].engine) }
+            } else if !session.selectedIsDrums, ui.librarySection != .user { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
         }
     }
 
@@ -40,9 +47,10 @@ struct LibraryPage: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             if let r = session.soundRefusal { SoundRefusalNote(session: session, refusal: r) }
+            ScrollViewReader { proxy in
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 8) {
-                    if session.isDrums(t) {
+                    if session.isDrums(t) && entry == nil {
                         // ids unique across the three lists, or the grid reuses another list's keys
                         ForEach(Array(session.kitNames.enumerated()), id: \.offset) { k, name in
                             presetKey(name, detail: nil, current: track.preset == k) { session.loadKit(k) }
@@ -50,10 +58,18 @@ struct LibraryPage: View {
                         }
                     } else if case .engine(let e) = ui.librarySection {
                         ForEach(Array((session.namesCache[e] ?? []).enumerated()), id: \.offset) { i, name in
-                            presetKey(name, detail: nil, current: track.engine == e && track.preset == i) {
-                                session.loadPreset(engine: e, index: i)
+                            presetKey(name, detail: nil, current: entry != nil ? entryNow?.engine == e && entryNow?.s1 == i : track.engine == e && track.preset == i) {
+                                if entry != nil { setEntry(EntrySound(s0: e + 1, s1: i)) } else { session.loadPreset(engine: e, index: i) }
                             }
                             .id("preset-\(e)-\(i)")
+                        }
+                    } else if skiff, entry != nil {
+                        // an entry's own sound from the saved slots: only the kept ones (saving belongs to the track's panel)
+                        ForEach(session.userPresets) { p in
+                            presetKey(p.name, detail: "\(SaveSound.slotName(p.slot)) · \(engineName(p.engine))", current: entryNow?.userSlot == p.slot) {
+                                setEntry(EntrySound(s0: 64 + p.slot, s1: 0))
+                            }
+                            .id("user-\(p.slot)")
                         }
                     } else if skiff {
                         // all 32 of Skiff's slots: a sound loads at a tap (its ⋯ replaces or erases it); an empty one saves
@@ -69,9 +85,18 @@ struct LibraryPage: View {
                     }
                 }
                 .padding(4)
-                if !session.isDrums(t), session.capabilities.contains(.samples), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
+                if entry == nil, !session.isDrums(t), session.capabilities.contains(.samples), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
             }
             .scrollIndicators(.hidden)
+            // the sound it has always in view: the FM-1's knob stepping through sounds took the lit key off below the
+            // scroll (Scott, 2026-11-08, batch list 1); scrolled only as far as it takes, so a tap on a visible key
+            // moves nothing
+            .onChange(of: currentKey) { _, k in
+                guard let k else { return }
+                if reduceMotion { proxy.scrollTo(k) } else { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(k) } }
+            }
+            .onAppear { if let k = currentKey { proxy.scrollTo(k) } }
+            }
             if session.isDrums(t) && session.kitNames.isEmpty { emptyNote("Reading the kits from the FM-1…") }
             if !session.isDrums(t) && ui.librarySection == .user && session.userPresets.isEmpty && !skiff {
                 emptyNote("No user presets yet. Save one on the FM-1: SAVE, then the USER page.")
@@ -90,6 +115,29 @@ struct LibraryPage: View {
     }
 
     private var skiff: Bool { session.dialect == .skiff }
+
+    /// The entry's own sound now (nil: none, the track's carries on).
+    private var entryNow: EntrySound? {
+        guard let entry else { return nil }
+        return session.skiffSong?.song?.tracks[safe: entry.ref.track]?.entries[safe: entry.ref.entry]?.sound
+    }
+    private func setEntry(_ s: EntrySound) {
+        guard let entry, let store = session.skiffSong,
+              let b = store.blocks(entry.ref.track).first(where: { $0.entries.contains(entry.ref.entry) }) else { return }
+        ArrangeEdits(session: session, store: store).setSound(entry.ref.track, b, s)
+    }
+    /// The lit key's id in the grid (what the target has now), for keeping it in view.
+    private var currentKey: String? {
+        let t = session.selectedTrack, track = session.tracks[t]
+        if let _ = entry {
+            guard let s = entryNow else { return nil }
+            if let u = s.userSlot { return "user-\(u)" }
+            return s.engine.map { "preset-\($0)-\(s.s1)" }
+        }
+        if session.isDrums(t) { return "kit-\(track.preset)" }
+        if case .engine = ui.librarySection { return "preset-\(track.engine)-\(track.preset)" }
+        return session.userPresets.first { $0.name.uppercased() == track.presetName.uppercased() && $0.engine == track.engine }.map { "user-\($0.slot)" }
+    }
 
     /// One of Skiff's 32 user slots. A sound: loads at a tap, its ⋯ menu replaces it with the track's sound or erases
     /// it. Empty: a dashed key that saves the track's sound there (its name asked).
