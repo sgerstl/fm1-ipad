@@ -13,6 +13,9 @@ struct TrackKnobBox: View {
     let ui: EditorUI
     /// On the selected row's tab (the Song tab): no card of its own, the tab is its surface.
     var embedded = false
+    /// The knob last turned on the FM-1, lit as the sound panel lights it (Scott, 2026-11-07: "work exactly like the
+    /// ones in the panel").
+    @State private var marks = ShapeMarks()
     private let look = Look()
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
@@ -55,23 +58,27 @@ struct TrackKnobBox: View {
             if !home.isEmpty {
                 HStack(spacing: 4) {
                     ForEach(Array(home.enumerated()), id: \.offset) { k, id in
-                        KnobControl(ui: ui, column: (number: k + 1, tint: Theme.track[t], hot: false)) {
+                        KnobControl(ui: ui, column: (number: k + 1, tint: Theme.track[t], hot: marks.key == "s0.\(id)")) {
                             KnobSpec.param(session, scope: 0, id: id, slot: k)
                         }
                         .frame(width: 92, height: 56)
                     }
                 }
             }
+            // LEVEL, STEPS, PAN as boxes like the four, without a knob number (Scott, 2026-11-07: the dials "aren't
+            // working as dials anymore")
             HStack(spacing: 4) {
                 ForEach(Self.knobs, id: \.self) { k in
-                    SlideKnob(ui: ui) { KnobSpec.all(session)[k] }
+                    KnobControl(ui: ui, column: (number: 0, tint: Theme.track[t], hot: false)) { KnobSpec.all(session)[k] }
+                        .frame(width: 92, height: 56)
                 }
             }
         }
         .padding(.horizontal, embedded ? 8 : 6)
         .padding(.vertical, 4)
-        .frame(height: Self.homeIDs(session).isEmpty ? 52 : Self.height)
+        .frame(height: Self.homeIDs(session).isEmpty ? 64 : Self.height)
         .background { if !embedded { RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look) } }
+        .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .flashRing(ui, .trackPanel)
         // the SEQ pad's TRACK page still asks for the popover by name (SoundPanel): light the box instead
         .onChange(of: ui.trackControlsOpen) { _, open in

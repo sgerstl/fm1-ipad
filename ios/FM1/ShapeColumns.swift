@@ -43,6 +43,12 @@ struct ColumnFace: View {
                         .foregroundStyle(hot ? Theme.text : Theme.textSecondary)
                         .frame(width: 18, height: 18)
                         .background(Circle().fill(Theme.control))
+                        // turning (here or on the FM-1): a ring glows round the number (Scott, 2026-11-07)
+                        .overlay {
+                            Circle().strokeBorder(tint, lineWidth: 2).padding(-3)
+                                .shadow(color: tint.opacity(0.9), radius: 4)
+                                .opacity(hot ? 1 : 0)
+                        }
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 2) {
