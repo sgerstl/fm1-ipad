@@ -1,7 +1,7 @@
 From 2ebba0fd43900db095b86e123bcc45c82fb65f80 Mon Sep 17 00:00:00 2001
 From: Scott Gerstl <scottgerstl@gmail.com>
 Date: Thu, 5 Nov 2026 15:16:22 +0100
-Subject: [PATCH 1/4] Screen link: SCREEN (90), SCREEN_GOTO (91), WATCH bit 2,
+Subject: [PATCH 1/5] Screen link: SCREEN (90), SCREEN_GOTO (91), WATCH bit 2,
  INFO 56 01 1
 
 An editor can follow the FM-1's screen and open its pages, as the same patch
@@ -379,7 +379,7 @@ index bbb9991..40a5541 100644
 From b0cf6fa9f9b822aa9405ef308f91a7327e1e4301 Mon Sep 17 00:00:00 2001
 From: Scott Gerstl <scottgerstl@gmail.com>
 Date: Thu, 5 Nov 2026 20:08:56 +0100
-Subject: [PATCH 2/4] Screen link: the page's cursor in SCREEN and SCREEN_GOTO
+Subject: [PATCH 2/5] Screen link: the page's cursor in SCREEN and SCREEN_GOTO
  (INFO 56 01 2)
 
 Two bytes after the flags: what KNOB 1 picks on a page instead of a value
@@ -689,7 +689,7 @@ index 40a5541..a9cc9e8 100644
 From 5a50b4b87dbad8d35af1f8193be8bdfc7727d836 Mon Sep 17 00:00:00 2001
 From: Scott Gerstl <scottgerstl@gmail.com>
 Date: Fri, 6 Nov 2026 00:18:00 +0100
-Subject: [PATCH 3/4] Screen link: METER (92), each track's level as the MIXER
+Subject: [PATCH 3/5] Screen link: METER (92), each track's level as the MIXER
  draws it (INFO 56 01 3)
 
 WATCH bit 3 asks for it: pushed after a 40 ms reading in which a level changed, once a
@@ -1079,7 +1079,7 @@ index a9cc9e8..f71b3bd 100644
 From 4de83c69b979f05b3060042e4346b4229c8d8dde Mon Sep 17 00:00:00 2001
 From: Scott Gerstl <scottgerstl@gmail.com>
 Date: Sat, 7 Nov 2026 01:34:00 +0100
-Subject: [PATCH 4/4] Screen link: SCOPE (93), the output oscilloscope as
+Subject: [PATCH 4/5] Screen link: SCOPE (93), the output oscilloscope as
  graph_scope draws it (INFO 56 01 4)
 
 WATCH bit 4 (16) pushes 120 points (1..127, 64 the centre line) at most every
@@ -1530,6 +1530,111 @@ index f71b3bd..b3d946d 100644
  `F0 7D 46 4C 5C 65 00 00 00 00 00 F7`, and after it stops, falling readings down to `.. 5C 00 00 00 00 00 00 F7`.
 +`F0 7D 46 4C 16 11 F7` (`WATCH 17`) answers `.. 16 11 F7`; in silence the device pushes `F0 7D 46 4C 5D` then 120 × `40`
 +and `F7`; a sine at its peak level reads `.. 5D 43 .. 7F .. 01 ..`, rising from just above `40`.
+-- 
+2.54.0 (Apple Git-157)
+
+
+From 28ebfc5654a86c687c1b2133a275ab5466e54e90 Mon Sep 17 00:00:00 2001
+From: Scott Gerstl <scottgerstl@gmail.com>
+Date: Sat, 7 Nov 2026 10:24:48 +0100
+Subject: [PATCH 5/5] screen link: SCOPE 30 a second (INFO 56 01 5)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ firmware/src/editor.c  |  9 +++++----
+ tests/editor_test.c    | 12 ++++++------
+ web/EDITOR_PROTOCOL.md |  4 ++--
+ 3 files changed, 13 insertions(+), 12 deletions(-)
+
+diff --git a/firmware/src/editor.c b/firmware/src/editor.c
+index 60c45b6..e5712a9 100644
+--- a/firmware/src/editor.c
++++ b/firmware/src/editor.c
+@@ -77,7 +77,7 @@ static int32_t ed_rv(const uint8_t *p) { return (int32_t)(p[0] | p[1] << 7) - 81
+  *                      dropped
+  *   93 SCOPE        -> (56 01 4) the output oscilloscope as graph_scope draws it (ui_scope.c scope_take): ED_OSC_N
+  *                      (120) bytes 1..127, 64 the centre line, high above it, the peak 1 / 127 (ed_osc_reply); pushed
+- *                      at most 15 times a second while WATCH was sent with bit 4 (16), with METER the lowest of the
++ *                      at most 30 times a second (56 01 5; 15 at 56 01 4) while WATCH was sent with bit 4 (16), with METER the lowest of the
+  *                      pushes: only into an empty queue, else later (METER first when both are due)
+  * An editor that never sends bits 2..4, 90, 91, 92 or 93 sees no difference. (ED_OSC: ED_SCOPE is a track
+  * parameter's scope byte, below) */
+@@ -183,9 +183,9 @@ static void ed_met_tick(uint32_t now)
+  * its SCOPE_SPAN samples from the trigger halved to ED_OSC_N points, of each pair the one farther from 0 (a peak or an
+  * edge falling between two points is kept, as the screen's 2 px line shows it), auto-scaled as the screen does: the
+  * peak to +-63 around 64, clamped to 1..127. Silence: 64 throughout. 126 bytes on the wire (42 USB-MIDI packets of the
+- * queue's 64), at most every ED_OSC_MS (~15 a second, 1.9 kB/s) */
++ * queue's 64), at most every ED_OSC_MS (~30 a second, 3.8 kB/s; 56 01 5, Scott 2026-11-07: 15 looked steppy) */
+ #define ED_OSC_N (SCOPE_SPAN / 2u)                       /* 120 */
+-#define ED_OSC_MS 66u
++#define ED_OSC_MS 33u
+ static uint8_t ed_osc_on;
+ static uint32_t ed_osc_t;                                /* fm1_ms of the last push */
+ static void ed_osc_reply(void)
+@@ -757,8 +757,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+             0x58, 1, ED_SONG2,                          /* (2.0) the song's LIST2, NEW, COPY+, CHAIN, ONCE, the pool's
+                                                          * EMPTY, CLEAR UNUSED (editor_song.c; an editor before reads up
+                                                          * to 49 01 only) */
+-            0x56, 1, 4};                                /* (screen link) SCREEN, SCREEN_GOTO, WATCH bit 2; 2: the page's
++            0x56, 1, 5};                                /* (screen link) SCREEN, SCREEN_GOTO, WATCH bit 2; 2: the page's
+                                                          * cursor too; 3: METER, WATCH bit 3; 4: SCOPE, WATCH bit 4;
++                                                         * 5: SCOPE 30 a second, not 15;
+                                                          * last: Skiff's own editor reads up to 58 01 only */
+         ed_str("FELUCCA " FELUCCA_VERSION, 24);
+         ed_b(NENGINES);
+diff --git a/tests/editor_test.c b/tests/editor_test.c
+index cc26e77..e0124ac 100644
+--- a/tests/editor_test.c
++++ b/tests/editor_test.c
+@@ -206,8 +206,8 @@ static int preferences(void)
+     uint8_t a[4] = {0, 3, 0, 0};                          /* (THEME: 3, CRYPT) */
+     reset();
+     uint32_t n = request(ED_INFO, a, 0);
+-    bad += check("INFO (screen link) its tag last: 56 01 04 (SCREEN, SCREEN_GOTO, WATCH bit 2, the cursor, METER, SCOPE)",
+-        host_wire[n - 4] == 0x56 && host_wire[n - 3] == 1 && host_wire[n - 2] == 4);
++    bad += check("INFO (screen link) its tag last: 56 01 05 (SCREEN, SCREEN_GOTO, WATCH bit 2, the cursor, METER, SCOPE at 30 a second)",
++        host_wire[n - 4] == 0x56 && host_wire[n - 3] == 1 && host_wire[n - 2] == 5);
+     n -= 3u;                                              /* (the tags before it, as they were) */
+     bad += check("INFO (2.0) the song's tag next: 58 01 01 (LIST2, NEW, COPY+, CHAIN, ONCE, EMPTY, CLEAR UNUSED)",
+         host_wire[n - 4] == 0x58 && host_wire[n - 3] == 1 && host_wire[n - 2] == ED_SONG2);
+@@ -1858,8 +1858,8 @@ static int scope_stream(void)
+         }
+         meters += wire_frames(ED_METER, 0);
+     }
+-    bad += check("SCOPE with METER moving: 12..15 a second, never closer than 66 ms; METER 20..25", pushes >= 12u && pushes <= 15u &&
+-        gap >= 66u && meters >= 20u && meters <= 25u);
++    bad += check("SCOPE with METER moving: 24..30 a second, never closer than 33 ms; METER 20..25", pushes >= 24u && pushes <= 30u &&
++        gap >= 33u && meters >= 20u && meters <= 25u);
+     request(ED_PING, a, 0);
+     TSEL->p[P_PAN] = 33;                                  /* (a value pushed in the same pass) */
+     fm1_ms += 70u; host_wire_n = 0; ed_sync(); host_drain();
+@@ -1880,8 +1880,8 @@ static int scope_stream(void)
+     bad += check("WATCH 15: no SCOPE", !pushes);
+     a[0] = 17; request(ED_WATCH, a, 1);
+     for (i = 0, pushes = 0; i < 120u; i++) { sync_pass(); pushes += wire_frames(ED_OSC, 0); }
+-    bad += check("WATCH 17: SCOPE again, every third 30 ms pass, until WATCH lapses (3 s without a request)",
+-        pushes >= 32u && pushes <= 34u && !ed_w.on);
++    bad += check("WATCH 17: SCOPE again, every second 30 ms pass, until WATCH lapses (3 s without a request)",
++        pushes >= 49u && pushes <= 51u && !ed_w.on);
+     for (i = 0, pushes = 0; i < 40u; i++) { sync_pass(); pushes += wire_frames(ED_OSC, 0); }
+     bad += check("   and none after", !pushes);
+     return bad;
+diff --git a/web/EDITOR_PROTOCOL.md b/web/EDITOR_PROTOCOL.md
+index b3d946d..1bb4337 100644
+--- a/web/EDITOR_PROTOCOL.md
++++ b/web/EDITOR_PROTOCOL.md
+@@ -1212,9 +1212,9 @@ SCREEN_GOTO's cursor; 3, `METER` and `WATCH` bit 3 too; 4, `SCOPE` and `WATCH` b
+   and auto-scaled as the screen is: the largest |sample| of the 512, at least 1500 (about −27 dB, so quiet stays small),
+   is ±63 around 64. Bytes 1..127, high above the line; silence is 120 × 64. The 120 points cover 240 samples, about
+   10 ms. While `WATCH` was sent with bit 4 (`WATCH 17`, or 31 with everything), the device pushes `SCOPE` at most
+-  every 66 ms (15 a second), and like `METER` only into an empty send queue in a pass that pushed nothing else; one that
++  every 33 ms (30 a second; at `56 01 4`, the first build with it, every 66 ms), and like `METER` only into an empty send queue in a pass that pushed nothing else; one that
+   could not go waits for the next such pass (5 ms later) and is not dropped. When `METER` is due in the same pass it goes
+-  first. 126 bytes on the wire, about 1.9 kB/s. `WATCH` with bit 4 newly asked for pushes within the next free pass.
++  first. 126 bytes on the wire, about 3.8 kB/s. `WATCH` with bit 4 newly asked for pushes within the next free pass.
+ - An editor that never sends bits 2..4, 90, 91, 92 or 93 sees no difference: no new pushes, the replies to `WATCH` as
+   before (bits 0 and 1).
+ 
 -- 
 2.54.0 (Apple Git-157)
 

@@ -103,9 +103,10 @@ final class FirmwareCentre {
                 case .wrongFirmware(let found, _): offer = .unsupported(found)
                 case .searching, .lost: await probe()
                 // stock Skiff 2.2 (no screen link tag in INFO), or an earlier screen-link build (56 01 01 no cursor,
-                // 56 01 02 no METER, 56 01 03 no SCOPE): the firmware Lupe carries is an update
+                // 56 01 02 no METER, 56 01 03 no SCOPE, 56 01 04 the scope at 15 a second): the firmware Lupe carries
+                // is an update
                 case .connected:
-                    offer = session.dialect == .skiff && !session.screenScope && !session.isDemo
+                    offer = session.dialect == .skiff && !session.screenCurrent && !session.isDemo
                         ? .update(session.screenLinked ? "Skiff 2.2 with the screen link" : "Skiff 2.2") : nil
                 case .connecting: break
                 }
@@ -352,7 +353,7 @@ struct FirmwareOfferCard: View {
         case .update(let found):
             FirmwareCard(title: "An update for \(found)") {
                 Text(found.hasSuffix("screen link")
-                     ? "This FM-1 runs an earlier build of the screen link. The newer one follows the FM-1’s cursor (turn KNOB 1 on MOD and Lupe picks the same route) and sends each track’s level, so the Mixer’s lines show what the FM-1’s own meters show. Everything else stays as it is, your projects included, and they’re backed up first. Installing takes about a minute."
+                     ? "This FM-1 runs an earlier build of the screen link. The newer one sends the FM-1’s oscilloscope to the EDIT cards, 30 times a second, along with its cursor (turn KNOB 1 on MOD and Lupe picks the same route) and each track’s level for the Mixer. Everything else stays as it is, your projects included, and they’re backed up first. Installing takes about a minute."
                      : "Lupe carries \(found) with the screen link: press a button on the FM-1 and Lupe shows that page, pick a tab in Lupe and the FM-1 goes there too. Everything else stays as it is, your projects included, and they're backed up first. Installing takes about a minute.")
                     .bodyText()
             } actions: {

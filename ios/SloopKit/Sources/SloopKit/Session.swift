@@ -259,6 +259,8 @@ public final class DeviceSession {
     public private(set) var screenMeter = false
     /// The fourth (`56 01 04`): SCOPE, the FM-1's output for the EDIT pages' scope. False on the builds before.
     public private(set) var screenScope = false
+    /// The fifth (`56 01 05`): the scope at 30 a second, the build Lupe carries. False before: Lupe offers it.
+    public private(set) var screenCurrent = false
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
     /// Device changes in the last 250 ms, and when a sound last loaded: a burst of several parameters at once (a
@@ -399,6 +401,7 @@ public final class DeviceSession {
             screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
             screenMeter = screenLinked && (c as? SkiffDriver)?.skiff.hasMeter == true
             screenScope = screenLinked && (c as? SkiffDriver)?.skiff.hasScope == true
+            screenCurrent = screenLinked && (c as? SkiffDriver)?.skiff.hasFastScope == true
             try await c.watch(screenLink: screenLinked, scope: !scopeViewers.isEmpty)
             if let s = c as? SkiffDriver {
                 if let store = skiffEdit { store.attach(s) } else {
