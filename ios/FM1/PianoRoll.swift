@@ -1,8 +1,8 @@
 import SloopKit
 import SwiftUI
 
-/// The selected synth track as a piano roll folded to its scale: one bar in view, two fingers pan (it
-/// settles on a bar), or move the view box on the track's timeline row.
+/// The selected synth track as a piano roll folded to its scale: one bar in view, a finger pans (it settles on a
+/// bar), or move the view box on the track's timeline row.
 struct PianoRoll: View {
     @Environment(\.grid) private var grid
     let session: DeviceSession
@@ -63,7 +63,8 @@ struct PianoRoll: View {
                 ZStack(alignment: .topLeading) {
                     TwoFingerScrollView(contentSize: contentSize, offset: $offset, request: request,
                                         rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth,
-                                        holdRing: PianoRollContent.holdTime) {
+                                        holdRing: PianoRollContent.holdTime,
+                                        panFrom: { PianoRollContent.grip(at: $0, session.tracks[track].steps, rows, grid) == nil }) {
                         PianoRollContent(grid: grid, session: session, ui: ui, track: track, rows: rows)
                     }
                     EditorPlayhead(session: session, track: track, offsetX: offset.x, height: gridHeight)
@@ -268,10 +269,8 @@ struct PianoRollContent: View {
     let ui: EditorUI
     let track: Int
     let rows: [Int]
-    /// What a one-finger slide does, decided where it starts.
-    enum Slide { case length(start: Int), paint(note: Int, on: Bool) }
-    @State private var slide: Slide?
-    @State private var painted: Set<Int> = []  // the steps a paint slide has already passed
+    /// A drag from a note's grip: that note's start (any other drag pans the grid).
+    @State private var sizing: Int?
     /// A hold, then a drag: the picked notes carried (by steps and rows), or a box drawn on empty grid.
     enum Held: Equatable { case move(refs: Set<NoteRef>, from: CGPoint, to: CGPoint), lasso(from: CGPoint, to: CGPoint) }
     @State private var held: Held?
@@ -293,17 +292,16 @@ struct PianoRollContent: View {
         ZStack(alignment: .topLeading) {
             WideCanvas(width: CGFloat(session.stepCount) * grid.stepWidth, height: height, barWidth: grid.barWidth) { ctx, size in draw(ctx, size, t, selected) }
                 .contentShape(Rectangle())
-                // one finger edits: drag a note's grip (its right end) to set its length; slide along a row
-                // to paint, adding from an empty cell, erasing from a note; a tap turns a note on or off
-                // a hold first (0.35 s without moving): carry the notes under it, or draw a box on empty grid; a
-                // drag that starts at once: a note's grip sets its length, a slide paints; a tap adds, picks or
-                // (on the note already picked) deletes
+                // a hold first (0.35 s without moving, the ring): carry the notes under it, or draw a box on empty
+                // grid; a drag that starts at once: from a note's grip its length, anywhere else a pan (the scroll
+                // view's: no paint slide since one finger pans, Scott 2026-11-07); a tap adds, picks or (on the
+                // note already picked) deletes
                 .gesture(lengthGesture.exclusively(before: SpatialTapGesture().onEnded { e in tap(e.location) }))
                 // (alongside, not before: a long press first in an exclusive chain kept the tap from ever firing)
                 .simultaneousGesture(holdGesture)
-                // a second finger cancelled the gesture (the grid pans): a slide or hold starts over
-                .onReceive(NotificationCenter.default.publisher(for: .gridTwoFingers)) { _ in
-                    slide = nil; painted = []; held = nil; holdTook = false
+                // a pan took the touch: a grip drag or hold starts over
+                .onReceive(NotificationCenter.default.publisher(for: .gridPanned)) { _ in
+                    sizing = nil; held = nil; holdTook = false
                 }
                 .sensoryFeedback(.impact(weight: .light), trigger: lifted)
                 .accessibilityHidden(true)
@@ -428,60 +426,41 @@ struct PianoRollContent: View {
         return out
     }
 
-    /// From a note's grip (its right end, see gripInside): the drag's end step becomes the note's last step.
-    /// Anywhere else, a slide along the row it began in: from an empty cell it adds that note on every
-    /// step it passes, from a note it removes it, and never the other way (an adding slide leaves notes
-    /// that are there alone). Held parts of other notes and full four-note steps are skipped.
+    /// From a note's grip (its right end, see gripInside): the drag's end step becomes the note's last step. (The
+    /// slide that painted along a row went when one finger began to pan, 2026-11-07.)
     private var lengthGesture: some Gesture {
         DragGesture(minimumDistance: 6)
             .onChanged { e in
-                if holdTook || held != nil { return }      // a hold's carry or box, not a slide
-                if slide == nil { slide = slideKind(at: e.startLocation) }
-                switch slide {
-                case .length(let start):
-                    let end = max(start, min(63, Int(e.location.x / grid.stepWidth)))
-                    session.setLength(track: track, start: start, steps: end - start + 1)
-                    ui.selectedStep[track] = start
-                case .paint(let note, let on):
-                    let a = max(0, min(63, Int(e.startLocation.x / grid.stepWidth)))
-                    let b = max(0, min(63, Int(e.location.x / grid.stepWidth)))
-                    for i in min(a, b)...max(a, b) where !painted.contains(i) {
-                        painted.insert(i)
-                        let st = session.tracks[track].steps[i]
-                        guard st.time == .note || (on && st.time == .rest) else { continue }
-                        guard (st.time == .note && st.notes.contains(note)) != on else { continue }
-                        // removing a step's only note: its held steps go with it
-                        if !on, st.notes.count == 1, i < 63, session.tracks[track].steps[i + 1].time == .tie {
-                            session.setLength(track: track, start: i, steps: 1)
-                        }
-                        session.toggle(track: track, index: i, note: note)
-                    }
-                    ui.selectedStep[track] = b
-                case nil: break
-                }
+                if holdTook || held != nil { return }      // a hold's carry or box
+                if sizing == nil { sizing = Self.grip(at: e.startLocation, session.tracks[track].steps, rows, grid) }
+                guard let start = sizing else { return }
+                let end = max(start, min(63, Int(e.location.x / grid.stepWidth)))
+                session.setLength(track: track, start: start, steps: end - start + 1)
+                ui.selectedStep[track] = start
             }
-            .onEnded { _ in slide = nil; painted = [] }
+            .onEnded { _ in sizing = nil }
     }
 
     /// A note's grip reaches 24 pt into it and 16 pt past its end (2026-11-03: the 14 pt inside alone
     /// was hard to hit). A tap there still toggles; only a drag takes the length.
     static let gripInside: CGFloat = 24, gripOutside: CGFloat = 16
 
-    private func slideKind(at p: CGPoint) -> Slide? {
-        let r = Int(p.y / grid.rowHeight)
-        guard r >= 0, r < rows.count else { return nil }
-        if let start = noteStart(at: p) {
-            return p.x >= noteEnd(start) - Self.gripInside ? .length(start: start) : .paint(note: rows[r], on: false)
+    /// The note whose grip a point is on (its start step), if any: there a drag sizes the note instead of panning.
+    static func grip(at p: CGPoint, _ steps: [SynthStep], _ rows: [Int], _ grid: GridMetrics) -> Int? {
+        if let start = noteStart(at: p, steps, rows, grid) {
+            return p.x >= noteEnd(start, steps, grid) - gripInside ? start : nil
         }
         // just past a note's end, in the empty cell after it: still that note's grip
-        let back = CGPoint(x: p.x - Self.gripOutside, y: p.y)
-        if back.x >= 0, let start = noteStart(at: back), p.x - noteEnd(start) <= Self.gripOutside { return .length(start: start) }
-        return .paint(note: rows[r], on: true)
+        let back = CGPoint(x: p.x - gripOutside, y: p.y)
+        if back.x >= 0, let start = noteStart(at: back, steps, rows, grid), p.x - noteEnd(start, steps, grid) <= gripOutside { return start }
+        return nil
     }
 
+    private func noteEnd(_ start: Int) -> CGFloat { Self.noteEnd(start, session.tracks[track].steps, grid) }
+    private func noteStart(at p: CGPoint) -> Int? { Self.noteStart(at: p, session.tracks[track].steps, rows, grid) }
+
     /// Where a note's pad ends on screen, held steps included.
-    private func noteEnd(_ start: Int) -> CGFloat {
-        let steps = session.tracks[track].steps
+    private static func noteEnd(_ start: Int, _ steps: [SynthStep], _ grid: GridMetrics) -> CGFloat {
         var len = 1
         while start + len < steps.count, steps[start + len].time == .tie { len += 1 }
         return CGFloat(start + len) * grid.stepWidth - 2
@@ -489,8 +468,7 @@ struct PianoRollContent: View {
 
     /// The NOTE step a touch is on: that step, or the one a held (TIE) step belongs to, if the touched
     /// row is one of its notes.
-    private func noteStart(at p: CGPoint) -> Int? {
-        let steps = session.tracks[track].steps
+    private static func noteStart(at p: CGPoint, _ steps: [SynthStep], _ rows: [Int], _ grid: GridMetrics) -> Int? {
         var i = max(0, min(63, Int(p.x / grid.stepWidth)))
         let r = Int(p.y / grid.rowHeight)
         guard r >= 0, r < rows.count else { return nil }

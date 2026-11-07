@@ -385,7 +385,7 @@ struct PhoneSequence: View {
     }
 }
 
-/// The piano roll for the phone: the iPad's rows, cells, playhead and two-finger pan, without the
+/// The piano roll for the phone: the iPad's rows, cells, playhead and pan, without the
 /// header and step numbers (the ruler above says where you are); the velocity lane on a toggle.
 struct PhonePianoRoll: View {
     @Environment(\.grid) private var grid
@@ -419,7 +419,8 @@ struct PhonePianoRoll: View {
                         TwoFingerScrollView(contentSize: CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
                                             offset: $offset, request: request,
                                             rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth,
-                                            holdRing: PianoRollContent.holdTime) {
+                                            holdRing: PianoRollContent.holdTime,
+                                            panFrom: { PianoRollContent.grip(at: $0, session.tracks[track].steps, rows, inner) == nil }) {
                             PianoRollContent(grid: inner, session: session, ui: ui, track: track, rows: rows)
                         }
                         EditorPlayhead(session: session, track: track, offsetX: offset.x, height: h)
@@ -449,7 +450,7 @@ struct PhonePianoRoll: View {
     }
 }
 
-/// The drum grid for the phone: as many lanes as fit, the rest scroll with two fingers (no pinned lane,
+/// The drum grid for the phone: as many lanes as fit, the rest scroll (no pinned lane,
 /// Scott 2026-11-04). Lane names play the sound and pick the lane, as on the iPad.
 struct PhoneDrumGrid: View {
     @Environment(\.grid) private var grid
@@ -473,7 +474,8 @@ struct PhoneDrumGrid: View {
                 .frame(width: grid.labelWidth, height: h, alignment: .top)
                 .clipped()
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth) {
+                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth,
+                                        holdRing: DrumGridContent.holdTime) {
                         DrumGridContent(grid: grid, session: session, ui: ui)
                     }
                     EditorPlayhead(session: session, track: session.kitTrack ?? 0, offsetX: offset.x, height: h)

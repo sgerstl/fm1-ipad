@@ -334,7 +334,7 @@ extension AppView {
     /// Matches the track strip's accordion, so the page and the strip move as one.
     var pageAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.3) }
 
-    /// The keyboard comes up from the bottom over the step panel; two fingers still pan the grid above it.
+    /// The keyboard comes up from the bottom over the step panel; the grid above it still pans.
     @ViewBuilder var keyboard: some View {
         ZStack(alignment: .bottom) {
             if ui.keyboardOpen, case .connected = session.status {

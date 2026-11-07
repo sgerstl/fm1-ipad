@@ -2,9 +2,10 @@ import SwiftUI
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-/// A scroll view that pans with two fingers only, so one finger always reaches the cells
-/// (design brief, "Grid gestures"). A trackpad's two-finger scroll pans it too. Reports its offset
-/// so headers and the playhead can follow, and scrolls to `request` when it changes.
+/// The grids' scroll view. One finger pans it, two too (Scott, 2026-11-07: two fingers alone missed too often, "not
+/// having reliable pan is super annoying"); the grid's edits begin with a hold (its ring) or a tap instead. A drag
+/// from where `panFrom` says no (a note's grip) or after the hold took is the grid's, not a pan. A trackpad's scroll
+/// pans it too. Reports its offset so headers and the playhead can follow, and scrolls to `request` when it changes.
 struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     var contentSize: CGSize
     @Binding var offset: CGPoint
@@ -19,6 +20,8 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     /// The grid's hold (seconds) before a one-finger drag carries or boxes notes: a ring fills around the finger
     /// over that time, so you can see when it's ready (Scott, 2026-11-06). Nil: no hold on this grid.
     var holdRing: Double? = nil
+    /// Where (in the grid's points) one finger may start a pan; nil: anywhere. The piano roll's note grips say no.
+    var panFrom: ((CGPoint) -> Bool)? = nil
     @ViewBuilder var content: () -> Content
 
     struct ScrollRequest: Equatable {
@@ -30,7 +33,7 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UIScrollView {
         let sv = GridScrollView()
-        sv.panGestureRecognizer.minimumNumberOfTouches = 2
+        sv.shouldPan = { [unowned c = context.coordinator] in c.shouldPan($0) }
         sv.panGestureRecognizer.allowedScrollTypesMask = .all
         sv.delaysContentTouches = false
         sv.showsHorizontalScrollIndicator = false
@@ -62,6 +65,7 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     func updateUIView(_ sv: UIScrollView, context: Context) {
         let c = context.coordinator
         c.holdRing = holdRing
+        c.panFrom = panFrom
         // the hosted grid joins the view-controller tree once it's on screen: outside it, on a landscape
         // iPhone, it laid out and drew but never showed (2026-11-04)
         c.host?.rootView = content()
@@ -95,8 +99,11 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         var host: UIHostingController<Content>?
         var holdRing: Double?
+        var panFrom: ((CGPoint) -> Bool)?
         private let ring = HoldRing()
         private var downAt: CGPoint?
+        /// The first finger's landing, in the grid's points, and when.
+        private var landed: (p: CGPoint, t: TimeInterval)?
         var offset: Binding<CGPoint>
         var lastRequest: ScrollRequest?
         var lastRowKeys: [Int]?
@@ -106,8 +113,10 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
 
         func watch(_ w: TouchWatch) {
             w.down = { [unowned self] t in
-                guard let v = host?.view, let hold = holdRing else { return }
+                guard let v = host?.view else { return }
                 let p = t.location(in: v)
+                landed = (p, t.timestamp)
+                guard let hold = holdRing else { return }
                 downAt = p
                 ring.start(at: p, in: v.layer, duration: hold)
             }
@@ -116,16 +125,24 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
                 let p = t.location(in: v)
                 if hypot(p.x - a.x, p.y - a.y) > 8 { ring.cancel(); downAt = nil }   // the hold's own 8 pt: no hold now
             }
-            w.up = { [unowned self] in ring.cancel(); downAt = nil }
-            // Two fingers: a pan. The grid's one-finger gesture (a paint, a hold) began on the first finger as it
-            // drifted, a few milliseconds before the second landed, and iOS then refused the pan for the whole
-            // touch: horizontal and vertical both, unless the grid was already moving (2026-11-06). Cancel it.
-            w.second = { [unowned self] in
-                ring.cancel(); downAt = nil
-                guard let v = host?.view else { return }
-                for g in Self.recognizers(in: v) where g.isEnabled { g.isEnabled = false; g.isEnabled = true }
-                NotificationCenter.default.post(name: .gridTwoFingers, object: nil)
-            }
+            w.up = { [unowned self] in ring.cancel(); downAt = nil; landed = nil }
+            // Two fingers: a pan. A gesture the grid began on the first finger, a few milliseconds before the second
+            // landed, made iOS refuse the pan for the whole touch (2026-11-06). Cancel it.
+            w.second = { [unowned self] in cancelGrid() }
+        }
+        /// One finger pans unless it began on a grip, or stayed still through the hold (the ring filled: the drag is
+        /// the hold's paint, carry or box). Two fingers always pan.
+        func shouldPan(_ g: UIPanGestureRecognizer) -> Bool {
+            guard g.numberOfTouches < 2, let (p, t) = landed else { return true }
+            if let hold = holdRing, ProcessInfo.processInfo.systemUptime - t >= hold { return false }
+            return panFrom?(p) ?? true
+        }
+        /// A pan took the touch: the grid's one-finger gesture (a tap about to land, a hold not yet taken) stops.
+        private func cancelGrid() {
+            ring.cancel(); downAt = nil
+            guard let v = host?.view else { return }
+            for g in Self.recognizers(in: v) where g.isEnabled { g.isEnabled = false; g.isEnabled = true }
+            NotificationCenter.default.post(name: .gridPanned, object: nil)
         }
         private static func recognizers(in v: UIView) -> [UIGestureRecognizer] {
             (v.gestureRecognizers ?? []) + v.subviews.flatMap { recognizers(in: $0) }
@@ -138,6 +155,7 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
             if o != offset.wrappedValue { offset.wrappedValue = o }
         }
         func scrollViewWillBeginDragging(_ sv: UIScrollView) {
+            cancelGrid()
             NotificationCenter.default.post(name: .gridPannedByHand, object: nil)
         }
         /// A pan ends on the nearest bar in the direction it was thrown.
@@ -153,13 +171,18 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
 
 extension Notification.Name {
     static let gridPannedByHand = Notification.Name("gridPannedByHand")
-    /// A second finger landed on a grid: its one-finger gesture was cancelled, so a slide's state starts over.
-    static let gridTwoFingers = Notification.Name("gridTwoFingers")
+    /// A pan took a grid's touch: its own gesture was cancelled, so a slide's or a hold's state starts over.
+    static let gridPanned = Notification.Name("gridPanned")
 }
 
-/// The grid's scroll view: its two-finger pan runs alongside the grid's own gestures instead of losing to one that
-/// began first (the touch watch then cancels that one).
+/// The grid's scroll view: its pan runs alongside the grid's own gestures instead of losing to one that began first
+/// (it then cancels that one), and asks `shouldPan` before it starts.
 final class GridScrollView: UIScrollView {
+    var shouldPan: ((UIPanGestureRecognizer) -> Bool)?
+    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if g === panGestureRecognizer, let ask = shouldPan, !ask(panGestureRecognizer) { return false }
+        return super.gestureRecognizerShouldBegin(g)
+    }
     @objc func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith o: UIGestureRecognizer) -> Bool {
         g === panGestureRecognizer && o.view !== self && o.view?.isDescendant(of: self) == true
     }

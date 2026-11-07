@@ -198,7 +198,7 @@ struct TopBar: View {
         }
     }
 
-    // MARK: Tabs: tap only (two fingers pan the grid on this page)
+    // MARK: Tabs: tap only (the grid pans on this page)
 
     // MARK: Tabs (three raised keys were tried 2026-11-01 and didn't work: back to the tabs)
 

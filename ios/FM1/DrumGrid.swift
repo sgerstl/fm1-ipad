@@ -1,7 +1,7 @@
 import SloopKit
 import SwiftUI
 
-/// The drum track: 16 lanes (Skiff: 8) by 64 steps, 12 lanes and one bar in view, two fingers pan
+/// The drum track: 16 lanes (Skiff: 8) by 64 steps, 12 lanes and one bar in view, a finger pans (hold to paint)
 /// (settling on a bar), or move the view box on the timeline. On Skiff it's any track on a kit engine,
 /// its lanes the hits each step carries.
 struct DrumGrid: View {
@@ -51,7 +51,8 @@ struct DrumGrid: View {
                 .clipped()
 
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(lanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth) {
+                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(lanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth,
+                                        holdRing: DrumGridContent.holdTime) {
                         DrumGridContent(grid: grid, session: session, ui: ui)
                     }
                     EditorPlayhead(session: session, track: dt, offsetX: offset.x, height: gridHeight)
@@ -63,8 +64,8 @@ struct DrumGrid: View {
                 .accessibilityLabel("Drum steps")
             }
 
-            Text(below > 0 ? "\(below) more \(below == 1 ? "lane" : "lanes") below · pan with two fingers"
-                 : topLane > 0 ? "\(topLane) \(topLane == 1 ? "lane" : "lanes") above · pan with two fingers" : " ")
+            Text(below > 0 ? "\(below) more \(below == 1 ? "lane" : "lanes") below · drag to pan"
+                 : topLane > 0 ? "\(topLane) \(topLane == 1 ? "lane" : "lanes") above · drag to pan" : " ")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(height: 16)
@@ -91,6 +92,11 @@ struct DrumGridContent: View {
     private var contentHeight: CGFloat { CGFloat(lanes.count) * grid.rowHeight }
     @State private var paintOn: Bool?          // a slide: lighting (true) or clearing (false) its lane
     @State private var painted: Set<Int> = []
+    @State private var lifted = 0              // a light haptic as the hold takes
+    /// The hold took: the lift that ends it isn't a tap.
+    @State private var holdTook = false
+    /// The hold before a slide paints (one finger pans, Scott 2026-11-07); the grid's ring fills over it.
+    static let holdTime = PianoRollContent.holdTime
 
     var body: some View {
         let t = session.tracks[dt]
@@ -101,7 +107,8 @@ struct DrumGridContent: View {
                 draw(ctx, size, t, selected, ui.selectedLane)
             }
                 .contentShape(Rectangle())
-                .gesture(paint.exclusively(before: SpatialTapGesture().onEnded { e in
+                .gesture(SpatialTapGesture().onEnded { e in
+                    if holdTook { holdTook = false; return }
                     // Scott's tap rules: an empty cell gets a hit, picked; the picked hit tapped again goes; a hit
                     // that isn't picked is picked, not cleared
                     let i = max(0, min(session.stepCount - 1, Int(e.location.x / grid.stepWidth)))
@@ -112,9 +119,12 @@ struct DrumGridContent: View {
                     ui.selectedStep[dt] = i
                     ui.selectedLane = l
                     if !has || picked { session.toggle(drumIndex: i, lane: l) }
-                }))
-                // a second finger cancelled the slide (the grid pans): it starts over
-                .onReceive(NotificationCenter.default.publisher(for: .gridTwoFingers)) { _ in paintOn = nil; painted = [] }
+                })
+                // (alongside, not before: a long press first in an exclusive chain kept the tap from firing)
+                .simultaneousGesture(paint)
+                .sensoryFeedback(.impact(weight: .light), trigger: lifted)
+                // a pan took the touch: the slide starts over
+                .onReceive(NotificationCenter.default.publisher(for: .gridPanned)) { _ in paintOn = nil; painted = []; holdTook = false }
                 .accessibilityHidden(true)
             HStack(spacing: 0) {
                 ForEach(session.stepIndices, id: \.self) { i in
@@ -138,14 +148,18 @@ struct DrumGridContent: View {
         }
     }
 
-    /// A slide along a lane: from an empty step it lights every step the finger passes, from a lit one
-    /// it clears them. The lane is the one the slide began in.
+    /// Hold, then slide along a lane: from an empty step it lights every step the finger passes, from a lit one
+    /// it clears them, the held step first as the hold takes. The lane is the one the hold began in.
     private var paint: some Gesture {
-        DragGesture(minimumDistance: 6)
-            .onChanged { e in
-                let l = max(0, min(lanes.count - 1, Int(e.startLocation.y / grid.rowHeight)))
-                let a = max(0, min(63, Int(e.startLocation.x / grid.stepWidth)))
-                let b = max(0, min(63, Int(e.location.x / grid.stepWidth)))
+        LongPressGesture(minimumDuration: Self.holdTime, maximumDistance: 8)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { v in
+                guard case .second(true, let drag) = v else { return }
+                if !holdTook { holdTook = true; lifted += 1 }   // (taken, still: its lift is no tap)
+                guard let d = drag else { return }
+                let l = max(0, min(lanes.count - 1, Int(d.startLocation.y / grid.rowHeight)))
+                let a = max(0, min(63, Int(d.startLocation.x / grid.stepWidth)))
+                let b = max(0, min(63, Int(d.location.x / grid.stepWidth)))
                 if paintOn == nil { paintOn = !session.tracks[dt].gridSteps[a].has(l) }
                 guard let on = paintOn else { return }
                 for i in min(a, b)...max(a, b) where !painted.contains(i) {
@@ -155,7 +169,10 @@ struct DrumGridContent: View {
                 ui.selectedStep[dt] = b
                 ui.selectedLane = l
             }
-            .onEnded { _ in paintOn = nil; painted = [] }
+            .onEnded { _ in
+                paintOn = nil; painted = []
+                Task { @MainActor in try? await Task.sleep(for: .milliseconds(80)); holdTook = false }
+            }
     }
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize, _ t: TrackState, _ selected: Int, _ lane: Int) {
