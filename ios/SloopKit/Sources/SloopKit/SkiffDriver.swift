@@ -69,8 +69,9 @@ public struct SkiffInfo: Equatable, Sendable {
     public var hasMeter: Bool { (tags[0x56]?.first ?? 0) >= 3 }
     /// The fourth (`56 01 04`): SCOPE, the FM-1's output as its EDIT pages' scope draws it, pushed with WATCH bit 4.
     public var hasScope: Bool { (tags[0x56]?.first ?? 0) >= 4 }
-    /// The fifth (`56 01 05`): SCOPE 30 times a second, not 15. The build Lupe carries.
-    public var hasFastScope: Bool { (tags[0x56]?.first ?? 0) >= 5 }
+    /// The sixth (`56 01 06`): SCOPE 30 times a second (fifth), read before MASTER under USB LEVEL FIXED, so
+    /// listening on the iPad with MASTER down no longer flattens it. The build Lupe carries.
+    public var isCurrentLink: Bool { (tags[0x56]?.first ?? 0) >= 6 }
 
     public var deviceInfo: DeviceInfo {
         DeviceInfo(version: version, engines: engines, paramCount: paramCount, globalCount: globalCount, stepCount: stepCount,
