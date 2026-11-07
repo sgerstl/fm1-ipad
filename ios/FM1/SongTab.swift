@@ -10,75 +10,90 @@ struct SkiffSongPage: View {
     let session: DeviceSession
     let store: SkiffSongStore
     let ui: EditorUI
-    /// The top half's share of the height, kept across launches; 1, the editor closed (the lanes or the pads full size).
-    /// One split for both views (Scott, 2026-11-07: Timeline and Pads "should just toggle the top and leave the bottom,
-    /// since they are the same").
-    @AppStorage("songSplit") private var split = 0.40
-    @State private var dragFrom: CGFloat?
-    /// Past where the editor still fits, the editor slides down under the fold and the top half grows into the room,
-    /// the finger dragging it against some give; let go, it springs shut or back (Scott: "an elastic snap, not too
-    /// intense, but enough to make it feel physical"). How far it has slid, in points.
-    @State private var slide: CGFloat = 0
-    /// This drag began with the editor shut: it follows the finger one to one, and stays once a third of the way up.
-    @State private var fromShut = false
-    /// The pads' full-size layout, set inside the divider's spring so pads and track rows morph with it (Scott,
-    /// 2026-11-07: "animate in size, shape and position"); nil: as the split says.
-    @State private var full: Bool?
+    /// Where the editor sits (Scott, 2026-11-07, boards 32–34): No grid (shut: the pads or lanes full size), Half (the
+    /// default: on Pads the pads as tall as the track strip) or Max (the editor largest). Three places, not a free drag:
+    /// a drag snaps to the nearest on the spring. One for both views, which share the editor ("should just toggle the
+    /// top and leave the bottom, since they are the same"). Kept across launches.
+    @AppStorage(SongPosition.key) private var positionRaw = SongPosition.half.rawValue
+    private var position: SongPosition { SongPosition(rawValue: positionRaw) ?? .half }
+    /// A drag in progress: the top half's height under the finger (with some give past the ends); nil, at rest.
+    @State private var dragTop: CGFloat?
+    @State private var dragFrom: CGFloat = 0
+    /// The pads' layout, set inside the spring so pads and track rows morph with it (Scott, 2026-11-07: "animate in
+    /// size, shape and position"); while dragging, the nearest position's.
+    @State private var layout: PadsLayout?
     @State private var allPatterns = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// (420: the step inspector's short layout fits whole at the divider's lowest, never scrolling; 2026-11-06)
-    static let editorMin: CGFloat = 420, dividerHeight: CGFloat = 16
+    /// (420: the step inspector's short layout fits whole at the editor's least, never scrolling; 2026-11-06)
+    static let editorMin: CGFloat = 420
+    /// The panel's lip under the tab when the editor is shut, and its padding round the editor.
+    static let lip: CGFloat = 12, inset: CGFloat = 12
     /// The song's least: the tool row, the ruler and every lane at its least (28 pt and its gap), so it never spills.
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
-    /// The give past the editor's least: the slide follows the finger at this rate.
-    static let give: CGFloat = 0.6
+    /// The give past either end: the drag follows the finger at this rate there.
+    static let give: CGFloat = 0.3
     private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.72) }
+
+    /// The top half's height at each position. Half: the pads as tall as the strip (PadsPage.halfTop), the Timeline the
+    /// same so the editor doesn't move between views; the editor's least wins on a short screen. Max: the pads' one row,
+    /// or the lanes at their least.
+    private func tops(_ total: CGFloat, pads: Bool) -> [SongPosition: CGFloat] {
+        let lanes = Self.songMin(session.trackCount) + PadsPage.tabHeight + 8
+        let maxTop = pads ? PadsPage.rowTop : lanes
+        let half = max(maxTop, min(PadsPage.halfTop(session.trackCount), total - Self.editorMin))
+        return [.none: total - Self.lip, .half: max(half, pads ? 0 : lanes), .max: min(maxTop, half)]
+    }
 
     var body: some View {
         let _ = BodyCounter.tick("SkiffSongPage")
         let pads = ui.songView == .pads && store.performs && store.song != nil
         GeometryReader { g in
             let total = g.size.height
-            let least = pads ? PadsPage.compactMin(session.trackCount) : Self.songMin(session.trackCount)
-            // a motion lane open in its editor lifts the divider (MotionLanes, approach A); Done puts it back
-            let lift: CGFloat = MotionLanes.openID(session, ui, track: session.selectedTrack) != nil ? 120 : 0
-            let open = max(least, total - Self.editorMin - Self.dividerHeight)        // the top's most, the editor showing
-            let closed = split >= 0.999 && slide == 0
-            let base = closed ? total - Self.dividerHeight : max(least, min(total * split, open) - lift)
-            let top = base + slide
-            let bottom = total - base - Self.dividerHeight
+            let tops = tops(total, pads: pads)
+            let rest = tops[position] ?? total
+            let top = dragTop ?? rest
+            let shown = layout ?? position.layout
+            let editorShown = dragTop != nil || position != .none
+            // the editor keeps its height while it slides under the fold, the page clipping it
+            let bottom = max(Self.editorMin, total - top)
             VStack(spacing: 0) {
                 Group {
                     if pads {
-                        PadsPage(session: session, store: store, ui: ui, compact: !(full ?? closed))
+                        PadsPage(session: session, store: store, ui: ui, layout: shown)
                     } else {
                         SkiffArrangePage(session: session, store: store, ui: ui)
                             .environment(\.arrangeCompact, true)
-                            .environment(\.arrangeLaneHeight, Self.laneHeight(top, tracks: session.trackCount))
+                            .environment(\.arrangeLaneHeight, Self.laneHeight(top - PadsPage.tabHeight - 8, tracks: session.trackCount))
+                            .padding(.bottom, PadsPage.tabHeight + 8)        // the panel's tab under the lane heads
                     }
                 }
                 .frame(height: top)
                 .clipped()
+                // shut, a swipe up from the foot of the page brings the editor back (beside the scene keys' taps)
                 .simultaneousGesture(DragGesture(minimumDistance: 12, coordinateSpace: .local)
                     .onChanged { v in
-                        guard dragFrom != nil || (v.startLocation.y > top - Self.pullZone && v.translation.height < 0) else { return }
+                        guard dragTop != nil || (v.startLocation.y > top - Self.pullZone && v.translation.height < 0) else { return }
                         ui.pulledAt = Date()
-                        dragged(v.translation.height, total, least: least, open: open)
+                        dragged(v.translation.height, tops: tops, pads: pads)
                     }
-                    .onEnded { _ in if dragFrom != nil { ui.pulledAt = Date(); released(total, open: open) } },
-                    including: closed || dragFrom != nil ? .all : .subviews)
-                divider(total, least: least, open: open, bottom: bottom)
-                if !closed {
-                    PatternPane(session: session, store: store, ui: ui, height: bottom)
-                        .frame(height: bottom)
+                    .onEnded { _ in if dragTop != nil { ui.pulledAt = Date(); released(tops: tops, pads: pads) } },
+                    including: position == .none || dragTop != nil ? .all : .subviews)
+                ZStack(alignment: .top) {
+                    EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: 16)
+                        .fill(SelectionTint.fill(session.selectedTrack, selectionTint))
+                    if editorShown {
+                        PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
+                            .padding(Self.inset)
+                    }
                 }
+                .frame(height: bottom, alignment: .top)
             }
             .frame(height: total, alignment: .top)
             .clipped()
+            .overlay(alignment: .topLeading) { tab(top: top, tops: tops, pads: pads) }
             .overlay { drawer }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.openLane)
         }
         // each pattern a track is on, drawn for its pads (PadThumb): in both views, so the pads have them on arrival
         .task {
@@ -87,7 +102,78 @@ struct SkiffSongPage: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+        .onAppear { SongPosition.migrate() }
+        // Edit pattern from a pad with the editor shut: it opens (PadsPage asks through ui.openEditor)
+        .onChange(of: ui.openEditor) { _, v in
+            guard v > 0 else { return }
+            if position == .none { withAnimation(spring) { positionRaw = SongPosition.half.rawValue; layout = nil } }
+        }
     }
+
+    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
+
+    /// The panel's tab, in the scene row's line (Scott's own alignment on board 31): Open at No grid, Close at Half,
+    /// Less at Max. Tapped, the next place; dragged, the divider.
+    private func tab(top: CGFloat, tops: [SongPosition: CGFloat], pads: Bool) -> some View {
+        let label: (String, String) = switch position {
+        case .none: ("Open", "chevron.up")
+        case .half: ("Close", "chevron.down")
+        case .max: ("Less", "chevron.down")
+        }
+        return Button {
+            guard !ui.justPulled else { return }          // (the lift that ends a drag of the tab isn't a tap)
+            let next: SongPosition = switch position { case .none: .half; case .half: .none; case .max: .half }
+            withAnimation(spring) { positionRaw = next.rawValue; layout = nil }
+        } label: {
+            HStack(spacing: 8) {
+                Text(label.0).font(.system(size: 15, weight: .semibold))
+                Image(systemName: label.1).font(.system(size: 12, weight: .bold))
+            }
+            .foregroundStyle(Theme.text)
+            .frame(width: PadsPage.compactStrip, height: PadsPage.tabHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { v in ui.pulledAt = Date(); dragged(v.translation.height, tops: tops, pads: pads) }
+            .onEnded { _ in ui.pulledAt = Date(); released(tops: tops, pads: pads) })
+        .offset(x: 16, y: top - PadsPage.tabHeight)
+        .accessibilityLabel("Pattern editor")
+        .accessibilityValue(position == .none ? "closed" : position == .half ? "half" : "largest")
+        .accessibilityHint(position == .none ? "Opens the pattern editor" : position == .half ? "Closes the pattern editor" : "Makes the pattern editor smaller")
+        .accessibilityAdjustableAction { d in
+            let order: [SongPosition] = [.max, .half, .none]
+            let i = order.firstIndex(of: position) ?? 1
+            let j = d == .increment ? min(2, i + 1) : max(0, i - 1)
+            withAnimation(spring) { positionRaw = order[j].rawValue; layout = nil }
+        }
+    }
+
+    /// The nearest place to a top half this tall.
+    private func nearest(_ top: CGFloat, _ tops: [SongPosition: CGFloat]) -> SongPosition {
+        tops.min { abs($0.value - top) < abs($1.value - top) }?.key ?? .half
+    }
+
+    /// A drag of the tab (or, shut, of the foot of the page) `dy` points from where it began.
+    private func dragged(_ dy: CGFloat, tops: [SongPosition: CGFloat], pads: Bool) {
+        if dragTop == nil { dragFrom = tops[position] ?? 0 }
+        let lo = tops[.max] ?? 0, hi = tops[.none] ?? 0
+        let at = dragFrom + dy
+        dragTop = at < lo ? lo - (lo - at) * Self.give : at > hi ? hi + (at - hi) * Self.give : at
+        // the pads take the nearest place's layout as the finger passes, morphing on the spring
+        let l = nearest(dragTop ?? at, tops).layout
+        if l != (layout ?? position.layout) { withAnimation(spring) { layout = l } }
+    }
+
+    private func released(tops: [SongPosition: CGFloat], pads: Bool) {
+        guard let at = dragTop else { return }
+        let p = nearest(at, tops)
+        withAnimation(spring) { positionRaw = p.rawValue; dragTop = nil; layout = p.layout } completion: { layout = nil }
+    }
+
+    /// Shut, a swipe up from the foot of the page brings the editor back: the strip over the tab (the scene row and a
+    /// little above) takes it too, beside its keys' taps, so the tab needn't be found (Scott, 2026-11-07).
+    static let pullZone: CGFloat = 120
 
     /// The pattern pool (Scott: "Full height"): a level-3 drawer down the page's right edge, over both halves, the
     /// source a pattern is dragged from onto a lane. A tap outside, Escape or Patterns closes it. While a pattern is
@@ -122,68 +208,45 @@ struct SkiffSongPage: View {
         return max(28, min(SkiffArrangePage.fullLaneHeight, lanes / CGFloat(max(1, tracks)) - SkiffArrangePage.laneGap))
     }
 
-    /// The handle: dragged, the top's share; past where the editor fits, the editor slides off below with some give,
-    /// and let go it springs shut (past a third of the way) or back. From shut, the editor slides back up the same way.
-    /// From the editor's least to shut.
-    private func travel(_ total: CGFloat, open: CGFloat) -> CGFloat { max(1, total - Self.dividerHeight - open) }
+}
 
-    /// A drag of the divider (or, shut, of the strip above it) `dy` points from where it began.
-    private func dragged(_ dy: CGFloat, _ total: CGFloat, least: CGFloat, open: CGFloat) {
-        let travel = travel(total, open: open)
-        if dragFrom == nil {
-            fromShut = split >= 0.999
-            if fromShut {                         // from shut: open, the editor all the way down
-                // the full layout held first, then shrunk on the spring: set after the split, the pads jumped
-                // to their small layout for a frame on the way up (Scott, 2026-11-07)
-                full = true
-                split = Double(open / total)
-                slide = travel
-                dragFrom = open + travel
-                withAnimation(spring) { full = false }      // the pads and rows shrink as it comes
-            } else {
-                dragFrom = min(total * split, open)
-            }
-        }
-        let at = (dragFrom ?? open) + dy
-        if at <= open {
-            slide = 0
-            split = Double(max(least, at) / total)
-        } else {
-            split = Double(open / total)
-            slide = min(travel, (at - open) * (fromShut ? 1 : Self.give))
-        }
+/// Where the Song tab's editor sits (SkiffSongPage).
+enum SongPosition: Int {
+    case none = 0, half = 1, max = 2
+    static let key = "songPosition"
+    /// The pads' layout here: full size, two rows of 8 over the editor, a row of 16 over the largest editor.
+    var layout: PadsLayout { switch self { case .none: .full; case .half: .compact; case .max: .row } }
+    /// The free drag's stored split before the three places: shut stays shut, anything else is Half.
+    static func migrate() {
+        let d = UserDefaults.standard
+        guard d.object(forKey: key) == nil else { return }
+        d.set((d.object(forKey: "songSplit") as? Double ?? 0.4) >= 0.999 ? SongPosition.none.rawValue : SongPosition.half.rawValue, forKey: key)
     }
+}
 
-    private func released(_ total: CGFloat, open: CGFloat) {
-        let travel = travel(total, open: open)
-        dragFrom = nil
-        guard slide > 0 else { full = nil; return }
-        if slide > travel * (fromShut ? 2.0 / 3 : 1.0 / 3) {
-            // shut: the editor slides away and the pads grow to full size on the same spring
-            withAnimation(spring) { slide = travel; full = true } completion: { split = 1; slide = 0; full = nil }
-        } else {
-            withAnimation(spring) { slide = 0; full = false } completion: { full = nil }
-        }
-    }
+/// The editor's panel in the selected track's tint with its tab: the tab (`tab`, at `inset` from the left) rising
+/// from the panel's top-left, a concave fillet where it meets the panel's top edge, the panel's other corners round.
+struct EditorPanelShape: Shape {
+    var tab: CGSize
+    var inset: CGFloat
+    static let r: CGFloat = 12, f: CGFloat = 10
 
-    /// Shut, a swipe up from the foot of the page brings the editor back: the strip over the divider (the scene row and
-    /// a little above) takes it too, beside its keys' taps, so the handle needn't be found (Scott, 2026-11-07).
-    static let pullZone: CGFloat = 120
-
-    private func divider(_ total: CGFloat, least: CGFloat, open: CGFloat, bottom: CGFloat) -> some View {
-        Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
-            .frame(maxWidth: .infinity).frame(height: Self.dividerHeight)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .global)
-                .onChanged { v in dragged(v.translation.height, total, least: least, open: open) }
-                .onEnded { _ in released(total, open: open) })
-            .accessibilityElement()
-            .accessibilityLabel("Divider between the song and the pattern")
-            .accessibilityValue(split >= 0.999 ? "pattern editor closed" : "song \(Int((split * 100).rounded())) percent")
-            .accessibilityAdjustableAction { d in
-                if d == .increment { split = split >= Double(open / total) - 0.001 ? 1 : min(split + 0.05, Double(open / total)) }
-                else { split = split >= 0.999 ? Double(open / total) : max(split - 0.05, Double(least / total)) }
-            }
+    func path(in rect: CGRect) -> Path {
+        let r = Self.r, f = Self.f, x0 = rect.minX + inset, x1 = x0 + tab.width, y = rect.minY, ty = y - tab.height
+        let right = rect.maxX - inset
+        var p = Path()
+        p.move(to: CGPoint(x: x0, y: ty + r))
+        p.addArc(tangent1End: CGPoint(x: x0, y: ty), tangent2End: CGPoint(x: x0 + r, y: ty), radius: r)
+        p.addLine(to: CGPoint(x: x1 - r, y: ty))
+        p.addArc(tangent1End: CGPoint(x: x1, y: ty), tangent2End: CGPoint(x: x1, y: ty + r), radius: r)
+        p.addLine(to: CGPoint(x: x1, y: y - f))
+        p.addQuadCurve(to: CGPoint(x: x1 + f, y: y), control: CGPoint(x: x1, y: y))
+        p.addLine(to: CGPoint(x: right - r, y: y))
+        p.addArc(tangent1End: CGPoint(x: right, y: y), tangent2End: CGPoint(x: right, y: y + r), radius: r)
+        p.addLine(to: CGPoint(x: right, y: rect.maxY))
+        p.addLine(to: CGPoint(x: x0, y: rect.maxY))
+        p.closeSubpath()
+        return p
     }
 }
 
@@ -193,6 +256,8 @@ struct PatternPane: View {
     let store: SkiffSongStore
     let ui: EditorUI
     let height: CGFloat
+    /// Max on Pads: the track strip folded away, the track's name is its menu (Scott, 2026-11-07, board 34).
+    var trackMenu = false
     @State private var headerFrame: CGRect = .zero
 
     static let headerHeight: CGFloat = 44
@@ -241,8 +306,12 @@ struct PatternPane: View {
         let pattern = e.flatMap { $0.isRest || $0.isEmpty ? nil : $0.pattern } ?? list?.patternOn
         let shared = entry.map { list?.sharing($0) ?? [] } ?? []
         return HStack(spacing: 10) {
-            TrackChip(track: t, selected: true).frame(width: 28, height: 28)
-            Text(Entries.trackName(t, session: session)).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+            if trackMenu {
+                tracksMenu(t)
+            } else {
+                TrackChip(track: t, selected: true).frame(width: 28, height: 28)
+                Text(Entries.trackName(t, session: session)).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+            }
             Button { openPicker(t, entry: entry) } label: {
                 HStack(spacing: 4) {
                     Text("pattern").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
@@ -256,7 +325,7 @@ struct PatternPane: View {
             .disabled(entry == nil || store.offline)
             .accessibilityLabel("Pattern \(pattern.map(Entries.number) ?? "none")")
             .accessibilityHint("Pick another pattern for this entry, or a new empty one")
-            if let entry { Text("entry \(Entries.letter(entry))").font(.system(size: 13)).foregroundStyle(Theme.textSecondary) }
+            // (no "entry B" here: Scott, 2026-11-07)
             if !session.isKit(t) { MotionChip(session: session, ui: ui, track: t) }
             if !shared.isEmpty, let entry {
                 Text("also on entr\(shared.count == 1 ? "y" : "ies") \(shared.map(Entries.letter).joined(separator: ", "))")
@@ -280,6 +349,43 @@ struct PatternPane: View {
         }
         .frame(height: Self.headerHeight)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { headerFrame = $0 }
+    }
+
+    /// The six tracks in a menu (Max on Pads): pick one, see what it plays, mute it. A long press on a track elsewhere
+    /// keeps its own menu (Sounds…, clear).
+    private func tracksMenu(_ t: Int) -> some View {
+        let perf = store.perform
+        return Menu {
+            Section("Tracks") {
+                ForEach(Array(session.trackIndices), id: \.self) { k in
+                    let list = store.song?.tracks[safe: k]
+                    let plays = list?.entryOn.flatMap { e in list?.entries[safe: e].map { $0.isEmpty ? "" : $0.isRest ? "\(Entries.letter(e)) · rest" : "\(Entries.letter(e)) · \(Entries.number($0.pattern))" } } ?? ""
+                    Button { session.select(track: k) } label: {
+                        Label("\(k + 1) \(Entries.trackName(k, session: session))" + (plays.isEmpty ? "" : "  ·  \(plays)"),
+                              systemImage: k == t ? "checkmark" : "")
+                    }
+                }
+            }
+            Section("Mute") {
+                ForEach(Array(session.trackIndices), id: \.self) { k in
+                    let muted = perf?.muted[safe: k] ?? session.tracks[k].mute
+                    Button { Task { await store.performOp(.mute(track: k)) } } label: {
+                        Label("\(muted ? "Unmute" : "Mute") \(k + 1) \(Entries.trackName(k, session: session))",
+                              systemImage: muted ? "speaker.slash.fill" : "speaker.wave.2")
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                TrackChip(track: t, selected: true).frame(width: 28, height: 28)
+                Text(Entries.trackName(t, session: session)).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.leading, 4).padding(.trailing, 10).frame(height: 40).raisedKey()
+        }
+        .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
+        .accessibilityHint("Pick a track or mute one")
     }
 
     /// Follow, one toggle (Scott, 2026-11-06: "Following the song" was a pill that looked like a button, beside a real

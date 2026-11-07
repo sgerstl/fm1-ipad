@@ -230,6 +230,8 @@ final class EditorUI {
     /// When a swipe up from the foot of the Song tab last moved the divider: the pad or scene key the swipe began on
     /// drops the tap its lift makes (Scott, 2026-11-07: the zone is the scene row's own keys).
     var pulledAt = Date.distantPast
+    /// Bumped to ask the Song tab to open its editor when it's shut (Edit pattern on a pad).
+    var openEditor = 0
     var justPulled: Bool { Date().timeIntervalSince(pulledAt) < 0.4 }
     /// A place the FM-1 sent Jib to, lit for a moment (the whole-track controls for PATTERN, and so on).
     var flash: Flash?
