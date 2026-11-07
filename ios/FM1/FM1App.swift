@@ -227,6 +227,10 @@ final class EditorUI {
         return SoundPanelState(family: f)
     }()
     var projectsOpen = false
+    /// When a swipe up from the foot of the Song tab last moved the divider: the pad or scene key the swipe began on
+    /// drops the tap its lift makes (Scott, 2026-11-07: the zone is the scene row's own keys).
+    var pulledAt = Date.distantPast
+    var justPulled: Bool { Date().timeIntervalSince(pulledAt) < 0.4 }
     /// A place the FM-1 sent Jib to, lit for a moment (the whole-track controls for PATTERN, and so on).
     var flash: Flash?
 }

@@ -60,6 +60,14 @@ struct SkiffSongPage: View {
                 }
                 .frame(height: top)
                 .clipped()
+                .simultaneousGesture(DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                    .onChanged { v in
+                        guard dragFrom != nil || (v.startLocation.y > top - Self.pullZone && v.translation.height < 0) else { return }
+                        ui.pulledAt = Date()
+                        dragged(v.translation.height, total, least: least, open: open)
+                    }
+                    .onEnded { _ in if dragFrom != nil { ui.pulledAt = Date(); released(total, open: open) } },
+                    including: closed || dragFrom != nil ? .all : .subviews)
                 divider(total, least: least, open: open, bottom: bottom)
                 if !closed {
                     PatternPane(session: session, store: store, ui: ui, height: bottom)
@@ -116,43 +124,59 @@ struct SkiffSongPage: View {
 
     /// The handle: dragged, the top's share; past where the editor fits, the editor slides off below with some give,
     /// and let go it springs shut (past a third of the way) or back. From shut, the editor slides back up the same way.
+    /// From the editor's least to shut.
+    private func travel(_ total: CGFloat, open: CGFloat) -> CGFloat { max(1, total - Self.dividerHeight - open) }
+
+    /// A drag of the divider (or, shut, of the strip above it) `dy` points from where it began.
+    private func dragged(_ dy: CGFloat, _ total: CGFloat, least: CGFloat, open: CGFloat) {
+        let travel = travel(total, open: open)
+        if dragFrom == nil {
+            fromShut = split >= 0.999
+            if fromShut {                         // from shut: open, the editor all the way down
+                // the full layout held first, then shrunk on the spring: set after the split, the pads jumped
+                // to their small layout for a frame on the way up (Scott, 2026-11-07)
+                full = true
+                split = Double(open / total)
+                slide = travel
+                dragFrom = open + travel
+                withAnimation(spring) { full = false }      // the pads and rows shrink as it comes
+            } else {
+                dragFrom = min(total * split, open)
+            }
+        }
+        let at = (dragFrom ?? open) + dy
+        if at <= open {
+            slide = 0
+            split = Double(max(least, at) / total)
+        } else {
+            split = Double(open / total)
+            slide = min(travel, (at - open) * (fromShut ? 1 : Self.give))
+        }
+    }
+
+    private func released(_ total: CGFloat, open: CGFloat) {
+        let travel = travel(total, open: open)
+        dragFrom = nil
+        guard slide > 0 else { full = nil; return }
+        if slide > travel * (fromShut ? 2.0 / 3 : 1.0 / 3) {
+            // shut: the editor slides away and the pads grow to full size on the same spring
+            withAnimation(spring) { slide = travel; full = true } completion: { split = 1; slide = 0; full = nil }
+        } else {
+            withAnimation(spring) { slide = 0; full = false } completion: { full = nil }
+        }
+    }
+
+    /// Shut, a swipe up from the foot of the page brings the editor back: the strip over the divider (the scene row and
+    /// a little above) takes it too, beside its keys' taps, so the handle needn't be found (Scott, 2026-11-07).
+    static let pullZone: CGFloat = 120
+
     private func divider(_ total: CGFloat, least: CGFloat, open: CGFloat, bottom: CGFloat) -> some View {
-        let travel = max(1, total - Self.dividerHeight - open)        // from the editor's least to shut
-        return Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
+        Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
             .frame(maxWidth: .infinity).frame(height: Self.dividerHeight)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .global)
-                .onChanged { v in
-                    if dragFrom == nil {
-                        fromShut = split >= 0.999
-                        if fromShut {                         // from shut: open, the editor all the way down
-                            split = Double(open / total)
-                            slide = travel
-                            dragFrom = open + travel
-                            withAnimation(spring) { full = false }      // the pads and rows shrink as it comes
-                        } else {
-                            dragFrom = min(total * split, open)
-                        }
-                    }
-                    let at = (dragFrom ?? open) + v.translation.height
-                    if at <= open {
-                        slide = 0
-                        split = Double(max(least, at) / total)
-                    } else {
-                        split = Double(open / total)
-                        slide = min(travel, (at - open) * (fromShut ? 1 : Self.give))
-                    }
-                }
-                .onEnded { _ in
-                    dragFrom = nil
-                    guard slide > 0 else { full = nil; return }
-                    if slide > travel * (fromShut ? 2.0 / 3 : 1.0 / 3) {
-                        // shut: the editor slides away and the pads grow to full size on the same spring
-                        withAnimation(spring) { slide = travel; full = true } completion: { split = 1; slide = 0; full = nil }
-                    } else {
-                        withAnimation(spring) { slide = 0; full = false } completion: { full = nil }
-                    }
-                })
+                .onChanged { v in dragged(v.translation.height, total, least: least, open: open) }
+                .onEnded { _ in released(total, open: open) })
             .accessibilityElement()
             .accessibilityLabel("Divider between the song and the pattern")
             .accessibilityValue(split >= 0.999 ? "pattern editor closed" : "song \(Int((split * 100).rounded())) percent")

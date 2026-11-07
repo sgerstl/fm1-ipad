@@ -187,6 +187,7 @@ struct PadsPage: View {
             // an empty pad: what to put there, beside it (Scott, 2026-11-07: "you want to create a new pattern when you
             // tap an empty pad", a menu so a stray tap mid-jam makes nothing)
             if heldKey == "p\(i)" { heldKey = nil; return }       // (the release of a hold: its menu is open)
+            if ui.justPulled { return }                          // (the lift that ends a pull of the editor)
             if e.isEmpty { openMenu(t, i, at: padFrames[i].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero); return }
             guard list?.entryOn != i || !session.playing else { return }
             launched += 1
@@ -416,7 +417,7 @@ struct PadsPage: View {
         let perf = store.perform
         return HStack(spacing: 8) {
             // the same word either way, lit while armed: the scenes beside it never move (Scott, 2026-11-07)
-            ToggleKey(name: "Store", on: storing, enabled: !store.offline) { storing.toggle() }
+            ToggleKey(name: "Store", on: storing, enabled: !store.offline) { if !ui.justPulled { storing.toggle() } }
                 .frame(width: 88)               // (its word turns semibold when lit: a fixed width, not its own)
                 .accessibilityValue(storing ? "on: tap a scene to store into it" : "")
                 .accessibilityHint("Then tap a scene: it keeps the entry each track is on now, and its mute")
@@ -433,6 +434,7 @@ struct PadsPage: View {
         let word = last ? "last" : kept ? "" : "empty"
         return Button {
             if heldKey == "s\(s)" { heldKey = nil; return }       // (a hold's release: it previewed, it doesn't recall)
+            if ui.justPulled { return }                          // (the lift that ends a pull of the editor)
             if storing {
                 storing = false
                 launched += 1
