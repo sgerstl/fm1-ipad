@@ -409,7 +409,12 @@ private struct MixerStrip: View, Equatable {
 enum SkiffNavigator {
     /// The FM-1 changed screen: go where its button lands in Jib (linked only; on stock Skiff nothing moves).
     @MainActor static func follow(_ s: UIState, session: DeviceSession, ui: EditorUI) {
-        guard ui.followDevice, session.screenLinked, let place = SkiffButtonMap.place(for: s) else { return }
+        guard ui.followDevice, session.screenLinked else { return }
+        // the FM-1 left SAVE > PROJECT (the next SAVE page, DONE, any other button): the Projects sheet goes with it
+        // (Scott, 2026-11-07: "as it is the modal just sits there"). Not for a menu or a held layer: PROJECT's own
+        // load and save menus open over page 38.
+        if ui.projectsOpen, s.menu == 0, s.layer == 0, s.home || s.page != 38 { ui.projectsOpen = false }
+        guard let place = SkiffButtonMap.place(for: s) else { return }
         if case .mixer(let t) = place { if ui.mixerSection != t { ui.mixerSection = t }; go(.mixer, ui); return }
         switch place {
         case .home: go(.sequencer, ui)
@@ -450,6 +455,7 @@ enum SkiffNavigator {
         let next = now.map { $0 == 38 ? 35 : $0 + 1 } ?? 35
         if session.screenLinked, ui.followDevice { session.showOnDevice(page: next) }
         if next != 37 { ui.poolOpen = false }
+        if next != 38 { ui.projectsOpen = false }
         switch next {
         case 35, 36: browse(user: next == 36, session: session, ui: ui)
         case 37: go(.song, ui); ui.poolOpen = true
