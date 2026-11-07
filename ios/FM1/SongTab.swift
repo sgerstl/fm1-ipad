@@ -21,6 +21,9 @@ struct SkiffSongPage: View {
     @State private var slide: CGFloat = 0
     /// This drag began with the editor shut: it follows the finger one to one, and stays once a third of the way up.
     @State private var fromShut = false
+    /// The pads' full-size layout, set inside the divider's spring so pads and track rows morph with it (Scott,
+    /// 2026-11-07: "animate in size, shape and position"); nil: as the split says.
+    @State private var full: Bool?
     @State private var allPatterns = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -48,7 +51,7 @@ struct SkiffSongPage: View {
             VStack(spacing: 0) {
                 Group {
                     if pads {
-                        PadsPage(session: session, store: store, ui: ui, compact: !closed)
+                        PadsPage(session: session, store: store, ui: ui, compact: !(full ?? closed))
                     } else {
                         SkiffArrangePage(session: session, store: store, ui: ui)
                             .environment(\.arrangeCompact, true)
@@ -126,6 +129,7 @@ struct SkiffSongPage: View {
                             split = Double(open / total)
                             slide = travel
                             dragFrom = open + travel
+                            withAnimation(spring) { full = false }      // the pads and rows shrink as it comes
                         } else {
                             dragFrom = min(total * split, open)
                         }
@@ -141,11 +145,12 @@ struct SkiffSongPage: View {
                 }
                 .onEnded { _ in
                     dragFrom = nil
-                    guard slide > 0 else { return }
+                    guard slide > 0 else { full = nil; return }
                     if slide > travel * (fromShut ? 2.0 / 3 : 1.0 / 3) {
-                        withAnimation(spring) { slide = travel } completion: { split = 1; slide = 0 }
+                        // shut: the editor slides away and the pads grow to full size on the same spring
+                        withAnimation(spring) { slide = travel; full = true } completion: { split = 1; slide = 0; full = nil }
                     } else {
-                        withAnimation(spring) { slide = 0 }
+                        withAnimation(spring) { slide = 0; full = false } completion: { full = nil }
                     }
                 })
             .accessibilityElement()

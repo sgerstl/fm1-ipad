@@ -48,6 +48,8 @@ struct PadsPage: View {
 
     static let stripWidth: CGFloat = 248, gap: CGFloat = 12, sceneHeight: CGFloat = 56
     static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 40, rowHeight: CGFloat = 46
+    /// A full card's height, fixed so the change from a lane head can be animated (its content needs about 93).
+    static let cardHeight: CGFloat = 108
     /// The compact pads' least: the tool row, six lane heads, the scene row (the strip sets the height; the pads fill it).
     static func compactMin(_ tracks: Int) -> CGFloat { 44 + 10 + CGFloat(tracks) * (rowHeight + 4) + 8 }
 
@@ -60,11 +62,18 @@ struct PadsPage: View {
                 SongViewSwitch(ui: ui).frame(height: 44).padding(.bottom, compact ? 6 : 0)
                 ForEach(Array(session.trackIndices), id: \.self) { k in
                     let preview = previewScene.flatMap { store.scenesSeen[$0]?[safe: k] }
-                    if compact {
-                        TrackStripRow(session: session, store: store, track: k, preview: preview)
-                    } else {
-                        TrackStripCard(session: session, store: store, track: k, preview: preview)
+                    // one place per track whose height moves between the lane head and the card, the two crossfading
+                    // in it, so the change rides the divider's spring instead of jumping (Scott, 2026-11-07)
+                    ZStack(alignment: .topLeading) {
+                        if compact {
+                            TrackStripRow(session: session, store: store, track: k, preview: preview).transition(.opacity)
+                        } else {
+                            TrackStripCard(session: session, store: store, track: k, preview: preview)
+                                .frame(maxHeight: .infinity, alignment: .top).transition(.opacity)
+                        }
                     }
+                    .frame(height: compact ? Self.rowHeight : Self.cardHeight, alignment: .top)
+                    .clipped()
                 }
                 Spacer(minLength: 0)
             }
@@ -78,7 +87,9 @@ struct PadsPage: View {
                     let size = compact ? CGSize(width: max(44, w), height: max(44, h)) : { let s = max(64, min(w, h)); return CGSize(width: s, height: s) }()
                     TimelineView(.periodic(from: .now, by: 0.25)) { tl in
                         let m = store.marks(t, launchIn: session.ticksToLaunch(t))
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(size.width), spacing: gap), count: cols), spacing: gap) {
+                        // a layout of its own, not a lazy grid: from 4 × 4 to 2 × 8 each pad keeps its identity and glides
+                        // to its new place and size on the divider's spring
+                        PadGrid(columns: cols, cell: size, gap: gap) {
                             ForEach(0..<16, id: \.self) { i in pad(t, i, m, size: size, date: tl.date) }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .top : .center)
@@ -203,7 +214,7 @@ struct PadsPage: View {
                 if playing { passBar(t, m, ink: ink) }
             }
             .padding(small ? 10 : 14)
-            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: 16))
@@ -744,6 +755,28 @@ struct TrackStripRow: View {
             .frame(height: PadsPage.rowHeight)
             .background(RoundedRectangle(cornerRadius: 10).fill(selected ? SelectionTint.fill(t, selectionTint) : .clear))
             .overlay { if preview != nil { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
+        }
+    }
+}
+
+/// The pads in `columns` columns of `cell`-sized places with `gap` between, the block centred in what it's given.
+/// A Layout, so a change of columns or size inside an animation moves each pad from its old frame to its new one.
+struct PadGrid: Layout {
+    var columns: Int
+    var cell: CGSize
+    var gap: CGFloat
+
+    private func block(_ n: Int) -> CGSize {
+        let rows = (n + columns - 1) / max(1, columns)
+        return CGSize(width: CGFloat(columns) * cell.width + CGFloat(columns - 1) * gap,
+                      height: CGFloat(rows) * cell.height + CGFloat(max(0, rows - 1)) * gap)
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize { block(subviews.count) }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (i, v) in subviews.enumerated() {
+            let c = i % columns, r = i / columns
+            v.place(at: CGPoint(x: bounds.minX + CGFloat(c) * (cell.width + gap), y: bounds.minY + CGFloat(r) * (cell.height + gap)),
+                    proposal: ProposedViewSize(cell))
         }
     }
 }
