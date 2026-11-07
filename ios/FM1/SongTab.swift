@@ -12,6 +12,9 @@ struct SkiffSongPage: View {
     let ui: EditorUI
     /// The song's share of the height, kept across launches.
     @AppStorage("songSplit") private var split = 0.40
+    /// The Pads view's own divider (Scott, 2026-11-07: "the bottom half of the timeline page just came up as a panel on
+    /// the pads page"): its share of the height; 1, the editor closed and the pads full size for jamming.
+    @AppStorage("padsSplit") private var padsSplit = 0.42
     @State private var dragFrom: Double?
     @State private var allPatterns = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -25,7 +28,7 @@ struct SkiffSongPage: View {
         let _ = BodyCounter.tick("SkiffSongPage")
         Group {
             if ui.songView == .pads, store.performs, store.song != nil {
-                PadsPage(session: session, store: store, ui: ui)
+                pads
             } else {
                 timeline
             }
@@ -61,6 +64,55 @@ struct SkiffSongPage: View {
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.openLane)
         }
+    }
+
+    /// Pads over the editor, the Timeline's divider between (board 28): compact pads in two rows of 8 above the pattern
+    /// pane; dragged to the foot, the editor closes and the pads go full size; dragged up again, it comes back.
+    private var pads: some View {
+        GeometryReader { g in
+            let total = g.size.height
+            let least = PadsPage.compactMin(session.trackCount)
+            let open = total - Self.editorMin - Self.dividerHeight           // the pads' most with the editor showing
+            let closed = padsSplit >= 0.999
+            let top = closed ? total - Self.dividerHeight : max(least, min(total * padsSplit, open))
+            let bottom = total - top - Self.dividerHeight
+            VStack(spacing: 0) {
+                PadsPage(session: session, store: store, ui: ui, compact: !closed)
+                    .frame(height: top)
+                    .clipped()
+                padsDivider(total, least: least, open: open)
+                if !closed {
+                    PatternPane(session: session, store: store, ui: ui, height: bottom)
+                        .frame(height: bottom)
+                }
+            }
+            .overlay { drawer }
+            // (no animation on closing or opening: the pads change layout, 4 × 4 to 2 × 8, and animated they flew
+            // across each other; the switch is instant)
+        }
+    }
+
+    private func padsDivider(_ total: CGFloat, least: CGFloat, open: CGFloat) -> some View {
+        Capsule().fill(Theme.disabledOutline).frame(width: 56, height: 5)
+            .frame(maxWidth: .infinity).frame(height: Self.dividerHeight)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                .onChanged { v in
+                    if dragFrom == nil { dragFrom = padsSplit >= 0.999 ? Double(open / total) : padsSplit }
+                    padsSplit = min(max((dragFrom ?? padsSplit) + v.translation.height / total, least / total), 1)
+                }
+                .onEnded { _ in
+                    // past where the editor still fits: halfway to the foot closes it, short of that it stays open
+                    let o = Double(open / total)
+                    if padsSplit > o { padsSplit = padsSplit > (o + 1) / 2 ? 1 : o }
+                    dragFrom = nil
+                })
+            .accessibilityElement()
+            .accessibilityLabel("Divider between the pads and the pattern")
+            .accessibilityValue(padsSplit >= 0.999 ? "pattern editor closed" : "pads \(Int((padsSplit * 100).rounded())) percent")
+            .accessibilityAdjustableAction { d in
+                padsSplit = d == .increment ? 1 : min(Double(open / total), 0.42)
+            }
     }
 
     /// The pattern pool (Scott: "Full height"): a level-3 drawer down the page's right edge, over both halves, the

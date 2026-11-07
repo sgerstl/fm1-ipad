@@ -40,32 +40,46 @@ struct PadsPage: View {
     @State private var pressAt: CGPoint = .zero
     @State private var heldKey: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Over the pattern editor (the Song tab's split, Scott 2026-11-07, board 28): the strip as lane heads, the pads
+    /// in two rows of 8, a shorter scene row.
+    var compact = false
 
     static let stripWidth: CGFloat = 248, gap: CGFloat = 12, sceneHeight: CGFloat = 56
+    static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 40, rowHeight: CGFloat = 46
+    /// The compact pads' least: the tool row, six lane heads, the scene row (the strip sets the height; the pads fill it).
+    static func compactMin(_ tracks: Int) -> CGFloat { 44 + 10 + CGFloat(tracks) * (rowHeight + 4) }
 
     var body: some View {
         let _ = BodyCounter.tick("PadsPage")
         let t = session.selectedTrack
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                SongViewSwitch(ui: ui).frame(height: 44)
+        let cols = compact ? 8 : 4, rows = compact ? 2 : 4, gap = compact ? Self.compactGap : Self.gap
+        HStack(alignment: .top, spacing: compact ? 12 : 16) {
+            VStack(alignment: .leading, spacing: compact ? 4 : 8) {
+                SongViewSwitch(ui: ui).frame(height: 44).padding(.bottom, compact ? 6 : 0)
                 ForEach(Array(session.trackIndices), id: \.self) { k in
-                    TrackStripCard(session: session, store: store, track: k,
-                                   preview: previewScene.flatMap { store.scenesSeen[$0]?[safe: k] })
+                    let preview = previewScene.flatMap { store.scenesSeen[$0]?[safe: k] }
+                    if compact {
+                        TrackStripRow(session: session, store: store, track: k, preview: preview)
+                    } else {
+                        TrackStripCard(session: session, store: store, track: k, preview: preview)
+                    }
                 }
                 Spacer(minLength: 0)
             }
-            .frame(width: Self.stripWidth)
-            VStack(spacing: Self.gap) {
+            .frame(width: compact ? Self.compactStrip : Self.stripWidth)
+            VStack(spacing: compact ? 8 : Self.gap) {
                 toolbar(t)
                 GeometryReader { g in
-                    let side = max(64, min((g.size.width - 3 * Self.gap) / 4, (g.size.height - 3 * Self.gap) / 4))
+                    // the full page: square pads; over the editor: two rows of 8 as wide and tall as the room allows
+                    let w = (g.size.width - CGFloat(cols - 1) * gap) / CGFloat(cols)
+                    let h = (g.size.height - CGFloat(rows - 1) * gap) / CGFloat(rows)
+                    let size = compact ? CGSize(width: max(44, w), height: max(44, h)) : { let s = max(64, min(w, h)); return CGSize(width: s, height: s) }()
                     TimelineView(.periodic(from: .now, by: 0.25)) { tl in
                         let m = store.marks(t, launchIn: session.ticksToLaunch(t))
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(side), spacing: Self.gap), count: 4), spacing: Self.gap) {
-                            ForEach(0..<16, id: \.self) { i in pad(t, i, m, side: side, date: tl.date) }
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(size.width), spacing: gap), count: cols), spacing: gap) {
+                            ForEach(0..<16, id: \.self) { i in pad(t, i, m, size: size, date: tl.date) }
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .top : .center)
                     }
                 }
                 sceneRow
@@ -129,7 +143,8 @@ struct PadsPage: View {
 
     // MARK: Pads
 
-    private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, side: CGFloat, date: Date) -> some View {
+    private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date) -> some View {
+        let side = min(size.width, size.height), small = size.height < 120
         let list = store.song?.tracks[safe: t]
         let e = list?.entries[safe: i] ?? .empty
         let blocks = store.blocks(t)
@@ -144,7 +159,10 @@ struct PadsPage: View {
         let title = e.isEmpty ? "" : e.isRest ? "REST" : String(format: "%02d", e.pattern)
         let state: String = {
             if e.isEmpty { return "Empty" }
-            if playing { return m.loops ? "Playing · looping" : m.pass.map { "Playing · pass \($0) of \(m.reps)" } ?? "Playing" }
+            if playing {
+                if small { return m.loops ? "Looping" : m.pass.map { "Pass \($0)/\(m.reps)" } ?? "Playing" }
+                return m.loops ? "Playing · looping" : m.pass.map { "Playing · pass \($0) of \(m.reps)" } ?? "Playing"
+            }
             if waiting { return "Waiting · " + LaneMarks.countdown(m.launchIn, session.launchMode) }
             if on { return "On it" }
             if next { return "Next" }
@@ -161,7 +179,7 @@ struct PadsPage: View {
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(letter).font(.system(size: 15, weight: .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
+                    Text(letter).font(.system(size: small ? 13 : 15, weight: .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
                     Spacer(minLength: 4)
                     if waiting {
                         Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.system(size: 13, weight: .semibold)).monospacedDigit()
@@ -170,18 +188,18 @@ struct PadsPage: View {
                     }
                 }
                 if !title.isEmpty {
-                    Text(title).font(.system(size: side > 150 ? 34 : 24, weight: .bold)).monospacedDigit()
+                    Text(title).font(.system(size: side > 150 ? 34 : small ? 20 : 24, weight: .bold)).monospacedDigit()
                         .foregroundStyle(e.isRest ? Theme.textSecondary : ink)
                 }
-                Text(state).font(.system(size: 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
+                Text(state).font(.system(size: small ? 12 : 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
-                if let p = e.poolIndex, let th = ui.padThumbs[p], th.length == store.pool?.patterns[safe: p]?.length {
+                if size.height >= 96, let p = e.poolIndex, let th = ui.padThumbs[p], th.length == store.pool?.patterns[safe: p]?.length {
                     PadThumbView(thumb: th, ink: playing ? Theme.onColour.opacity(0.6) : Theme.textSecondary)
                 }
                 if playing { passBar(t, m, ink: ink) }
             }
-            .padding(14)
-            .frame(width: side, height: side, alignment: .topLeading)
+            .padding(small ? 10 : 14)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
             .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: 16))
@@ -390,7 +408,7 @@ struct PadsPage: View {
                 ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf) }
             }
         }
-        .frame(height: Self.sceneHeight)
+        .frame(height: compact ? Self.compactScenes : Self.sceneHeight)
     }
 
     private func sceneKey(_ s: Int, _ perf: PerformState?) -> some View {
@@ -655,5 +673,72 @@ struct SmoothBar: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// A track in the compact strip (over the editor): as the Timeline's lane heads, its chip, name, what it plays and a
+/// smooth pass bar, M to mute (PERFORM's, staged at the launch point while playing). The selected row lit in its colour,
+/// as on the Timeline. Tap selects it; a scene held shows where that scene would send it.
+struct TrackStripRow: View {
+    let session: DeviceSession
+    let store: SkiffSongStore
+    let track: Int
+    let preview: SkiffSongStore.SceneTrack?
+    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
+
+    var body: some View {
+        let t = track
+        let selected = session.selectedTrack == t
+        let list = store.song?.tracks[safe: t]
+        let perf = store.perform
+        let muted = perf?.muted[safe: t] ?? session.tracks[t].mute
+        let staged = perf?.staged[safe: t] ?? PerformState.Staged.none
+        return TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            let m = store.marks(t, launchIn: session.ticksToLaunch(t))
+            let lines = TrackStripCard.lines(list, m, playing: session.playing, launch: session.launchMode)
+            HStack(spacing: 8) {
+                Button { session.select(track: t) } label: {
+                    HStack(spacing: 8) {
+                        TrackChip(track: t, size: 26, muted: muted)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text(Entries.trackName(t, session: session)).font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                    .foregroundStyle(selected ? Theme.text : Theme.textSecondaryRaised).lineLimit(1)
+                                Spacer(minLength: 4)
+                                // (what it's on; the bar under it is the pass)
+                                Text(preview.map { "→ " + TrackStripCard.previewText($0, list) } ?? lines.plays.components(separatedBy: "  ").first ?? lines.plays)
+                                    .font(.system(size: 12, weight: preview == nil ? .regular : .semibold))
+                                    .foregroundStyle(preview == nil ? Theme.textSecondaryRaised : Theme.text).lineLimit(1)
+                            }
+                            if session.playing, m.playing != nil {
+                                SmoothBar(track: Theme.well, ink: Theme.track[t]) { session.passProgress(t) ?? 0 }.frame(height: 3)
+                            } else {
+                                Color.clear.frame(height: 3)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
+                .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+                Button { Task { await store.performOp(.mute(track: t)) } } label: {
+                    Text("M").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(muted ? Theme.onColour : Theme.textSecondaryRaised)
+                        .frame(width: 36, height: 36)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(muted ? Theme.text : Theme.control))
+                        .overlay { if staged != .none { RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [4, 3])) } }
+                }
+                .buttonStyle(PressSink())
+                .disabled(store.offline)
+                .accessibilityLabel(muted ? "Unmute" : "Mute")
+                .accessibilityValue(staged == .none ? "" : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
+            }
+            .padding(.horizontal, 8)
+            .frame(height: PadsPage.rowHeight)
+            .background(RoundedRectangle(cornerRadius: 10).fill(selected ? SelectionTint.fill(t, selectionTint) : .clear))
+            .overlay { if preview != nil { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
+        }
     }
 }
