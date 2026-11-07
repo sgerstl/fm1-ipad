@@ -134,6 +134,10 @@ import Testing
         #expect(await s.performOp(.recall(scene: 2)))
         #expect(s.song?.tracks[1].entryOn == 1 && s.perform?.muted == [false, false, false, true, false, true])
         #expect(s.perform?.lastScene == 2)
+        // what scene 3 holds, learned from the recall (PERFORM itself doesn't say): T2 on B, drums muted
+        #expect(s.scenesSeen[2]?[1] == SkiffSongStore.SceneTrack(entry: 1, muted: false))
+        #expect(s.scenesSeen[2]?.map(\.muted) == [false, false, false, true, false, true])
+        #expect(s.scenesSeen[5] == nil)
         // PATTERNS FULL with numbers free (the FM-1 still saving the last swap): asked again, it goes, nothing said
         fake.recallsStillSaving = 2
         #expect(await s.performOp(.recall(scene: 0)) && s.refusal == nil && fake.recallsStillSaving == 0)
@@ -150,6 +154,7 @@ import Testing
         s.confirmation = nil
         #expect(await s.performOp(.store(scene: 4)))
         #expect(s.perform?.kept[4] == true && fake.scenes[4]?[3].mute == true)
+        #expect(s.scenesSeen[4]?[3].muted == true && s.scenesSeen[4]?.map(\.entry) == s.song?.tracks.map(\.entryOn))
         // playing: a mute is staged, and CANCEL takes it back
         session.setPlaying(true)
         try await waitFor(5) { fake.playing }
@@ -160,6 +165,24 @@ import Testing
         // LAUNCH set, and the session's countdowns take it
         #expect(await s.performOp(.launch(.beat)))
         #expect(s.perform?.launch == .beat && fake.launch == 2)
+        run.cancel()
+    }
+
+    /// The Pads view's empty-pad menu (2026-11-07): "Copy of what's playing" is SET to the track's pattern, then COPY,
+    /// so the pad gets a pattern of its own; Rest is SET 65; a filled pad's repeats and CLEAR (stopped).
+    @Test func padMenuOpsThroughTheFake() async throws {
+        let (_, _, s, run) = try await store()
+        try await waitFor(5) { s.song != nil && s.pool != nil }
+        let l = try #require(s.song?.tracks[0])
+        let on = try #require(l.entryOn), p = try #require(l.entries[on].poolIndex)
+        let empty = try #require(l.entries.indices.first { l.entries[$0].isEmpty })
+        #expect(await s.send(.set(track: 0, entry: empty, pattern: p + 1)))
+        #expect(await s.send(.copy(track: 0, entry: empty)))
+        let copied = try #require(s.song?.tracks[0].entries[empty].poolIndex)
+        #expect(copied != p)
+        #expect(await s.send(.reps(track: 0, entry: empty, reps: 3)) && s.song?.tracks[0].entries[empty].reps == 3)
+        #expect(await s.send(.clear(track: 0, entry: empty)) && s.song?.tracks[0].entries[empty].isEmpty == true)
+        #expect(await s.send(.set(track: 0, entry: empty, pattern: SongEntry.rest)) && s.song?.tracks[0].entries[empty].isRest == true)
         run.cancel()
     }
 

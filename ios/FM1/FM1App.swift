@@ -140,6 +140,8 @@ final class EditorUI {
     var songView: SongView = ProcessInfo.processInfo.arguments.contains("-song-pads") ? .pads : .timeline
     /// The Song tab: the entry the editor is pinned to (a block tapped); nil follows what each track plays.
     var pinnedEntry: EntryRef?
+    /// Each pattern's drawing for the pads (PadThumb), as seen while a track was on it: kept for the session.
+    var padThumbs: [Int: PadThumb] = [:]
     /// The Song tab: the pattern pool's drawer is open.
     var poolOpen = false
     /// A pattern being dragged from the pool (set as the drag starts), shared by the drawer and the lanes.

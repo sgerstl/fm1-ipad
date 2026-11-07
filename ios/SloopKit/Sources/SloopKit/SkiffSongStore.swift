@@ -73,7 +73,8 @@ public final class SkiffSongStore {
         self.offline = false
     }
 
-    func attach(_ d: SkiffDriver) { driver = d; offline = false }
+    /// (A reconnect may be another project or another FM-1: the scenes seen are forgotten.)
+    func attach(_ d: SkiffDriver) { driver = d; offline = false; scenesSeen = [:] }
     func detach() { driver = nil; offline = true; busy = false }
 
     // MARK: Reading
@@ -147,6 +148,10 @@ public final class SkiffSongStore {
         public var action: @MainActor () async -> Void
     }
     public var confirmation: Confirmation?
+    /// Asks before a change that can't be taken back (the Pads view's Clear): the same dialog as a scene stored over.
+    public func ask(_ title: String, _ message: String, confirm: String, action: @escaping @MainActor () async -> Void) {
+        confirmation = Confirmation(title: title, message: message, confirmLabel: confirm, action: action)
+    }
 
     /// Why a change to a track's list can't be sent now, before anything is sent (nil: it can).
     public func blocked(track t: Int, to entries: [SongEntry]) -> String? {
@@ -398,12 +403,42 @@ public final class SkiffSongStore {
                 refusal = Refusal(track: nil, entry: nil, text: r.rc == .patternsFull && (pool?.free ?? 0) > 0 ? Self.stillSaving : r.rc.reason)
                 return false
             }
+            switch op {
+            case .store(let s), .recall(let s): learnScene(s)
+            default: break
+            }
             refusal = nil
             return true
         } catch {
             refusal = Refusal(track: nil, entry: nil, text: "The FM-1 didn't answer; the scenes are as it says now")
             if let p = try? await d.perform().state { perform = p }
             return false
+        }
+    }
+
+    /// What each scene holds, as Lupe last saw it: PERFORM says only which scenes are kept, not what's in them, and
+    /// no read gives a scene's entries (EDITOR_PROTOCOL.md; a project's music holds them but the editor can't read it).
+    /// Learned when a scene is stored or recalled from Lupe (the lists and mutes just after); for the Pads view's preview
+    /// (Scott, 2026-11-07: hold a scene to see what it would do). Forgotten with the FM-1 (another project, another unit).
+    public private(set) var scenesSeen: [Int: [SceneTrack]] = [:]
+    public struct SceneTrack: Equatable, Sendable {
+        /// The entry the track goes to (nil: on none).
+        public var entry: Int?
+        public var muted: Bool
+        public init(entry: Int?, muted: Bool) { self.entry = entry; self.muted = muted }
+    }
+
+    /// Just after a STORE or RECALL: each track's entry (a launch waiting for it, playing; else the one it's on) and
+    /// its mute (a staged change counted as made).
+    private func learnScene(_ s: Int) {
+        guard let song, let perf = perform else { return }
+        scenesSeen[s] = song.tracks.indices.map { t in
+            let l = song.tracks[t]
+            let staged = perf.staged[safe: t] ?? .none
+            let muted = staged == .mute ? true : staged == .unmute ? false : perf.muted[safe: t] ?? false
+            // (staged is also the song's own next in Play song: only a launch waiting is the scene's)
+            let launching = marks(t, launchIn: nil).queued != nil
+            return SceneTrack(entry: (launching ? l.staged : nil) ?? l.entryOn, muted: muted)
         }
     }
 

@@ -30,9 +30,15 @@ struct PadsPage: View {
     let ui: EditorUI
     /// Store is latched: the next scene tapped is stored into.
     @State private var storing = false
-    /// Each pattern's rhythm, as seen while a track played it (Lupe only has the steps a track is on): 16 columns.
-    @State private var thumbs: [Int: [Double]] = [:]
     @State private var launched = 0               // a light haptic as a pad or scene is sent
+    /// Each pad's frame (global): where its menu opens when it's tapped (an empty pad) rather than held.
+    @State private var padFrames: [Int: CGRect] = [:]
+    /// A scene held: the strip shows what it would do (Scott, 2026-11-07); let go, it's gone.
+    @State private var previewScene: Int?
+    /// Where the finger is (global), for a hold's menu; and the key a hold took, so the tap its release makes is
+    /// dropped (the pads redraw four times a second, which resets UIKit's long press: SwiftUI's, beside the button)
+    @State private var pressAt: CGPoint = .zero
+    @State private var heldKey: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let stripWidth: CGFloat = 248, gap: CGFloat = 12, sceneHeight: CGFloat = 56
@@ -43,7 +49,10 @@ struct PadsPage: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 SongViewSwitch(ui: ui).frame(height: 44)
-                ForEach(Array(session.trackIndices), id: \.self) { k in TrackStripCard(session: session, store: store, track: k) }
+                ForEach(Array(session.trackIndices), id: \.self) { k in
+                    TrackStripCard(session: session, store: store, track: k,
+                                   preview: previewScene.flatMap { store.scenesSeen[$0]?[safe: k] })
+                }
                 Spacer(minLength: 0)
             }
             .frame(width: Self.stripWidth)
@@ -65,13 +74,6 @@ struct PadsPage: View {
         }
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
         .task(id: store.offline) { if !store.offline { await store.follow() } }
-        // the rhythms seen: once a second, each track's pattern (the drawing a pad shows)
-        .task {
-            while !Task.isCancelled {
-                learnThumbs()
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
             get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
                             presenting: store.confirmation) { c in
@@ -93,7 +95,11 @@ struct PadsPage: View {
             Text("\(Entries.trackName(t, session: session))'s entries").font(.system(size: 15, weight: .semibold))
                 .lineLimit(1).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
-            if let r = store.refusal {
+            if let s = previewScene, store.scenesSeen[s] == nil {
+                // (PERFORM says a scene is kept, not what's in it: Lupe knows the ones it stored or recalled)
+                Text("Scene \(s + 1): not seen yet. Recall it once and holding it shows what it does")
+                    .font(.system(size: 13)).foregroundStyle(Theme.text).lineLimit(2).layoutPriority(-1)
+            } else if let r = store.refusal {
                 RefusalLine(refusal: r, session: session, store: store).layoutPriority(-1)
             }
             Text("Launch at").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
@@ -145,7 +151,11 @@ struct PadsPage: View {
             return e.chained ? "Chained on" : "×\(e.reps)"
         }()
         return Button {
-            guard !e.isEmpty, list?.entryOn != i || !session.playing else { return }
+            // an empty pad: what to put there, beside it (Scott, 2026-11-07: "you want to create a new pattern when you
+            // tap an empty pad", a menu so a stray tap mid-jam makes nothing)
+            if heldKey == "p\(i)" { heldKey = nil; return }       // (the release of a hold: its menu is open)
+            if e.isEmpty { openMenu(t, i, at: padFrames[i].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero); return }
+            guard list?.entryOn != i || !session.playing else { return }
             launched += 1
             Task { await store.send(.play(track: t, entry: i)) }
         } label: {
@@ -165,12 +175,16 @@ struct PadsPage: View {
                 }
                 Text(state).font(.system(size: 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
-                if let p = e.poolIndex, let th = thumbs[p] { Thumb(heights: th, ink: playing ? Theme.onColour.opacity(0.6) : Theme.textSecondary) }
+                if let p = e.poolIndex, let th = ui.padThumbs[p], th.length == store.pool?.patterns[safe: p]?.length {
+                    PadThumbView(thumb: th, ink: playing ? Theme.onColour.opacity(0.6) : Theme.textSecondary)
+                }
                 if playing { passBar(t, m, ink: ink) }
             }
             .padding(14)
             .frame(width: side, height: side, alignment: .topLeading)
             .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour) }
+            // (an empty pad is only an outline: the whole of it takes the tap and the hold)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
             .overlay {
                 if waiting {
                     let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(date.timeIntervalSinceReferenceDate * .pi))
@@ -181,10 +195,150 @@ struct PadsPage: View {
             }
         }
         .buttonStyle(PressSink())
-        .disabled(e.isEmpty || store.offline)
+        .disabled(store.offline)
+        // held: its menu at the finger
+        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .onChanged { pressAt = $0.location }
+            .onEnded { _ in releaseHold("p\(i)") })
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            guard !store.offline else { return }
+            heldKey = "p\(i)"
+            launched += 1
+            openMenu(t, i, at: pressAt)
+        })
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { padFrames[i] = $0 }
         .accessibilityLabel("Entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
         .accessibilityValue(e.isEmpty ? "" : state)
-        .accessibilityHint(e.isEmpty ? "" : session.playing ? "Launches it at the launch point" : "Moves the track to it")
+        .accessibilityHint(e.isEmpty ? "Opens a menu: a new pattern, a copy, one from the pool, or a rest"
+                           : session.playing ? "Launches it at the launch point. Actions: its menu" : "Moves the track to it. Actions: its menu")
+        .accessibilityActions {
+            if !e.isEmpty {
+                Button("Entry menu") { openMenu(t, i, at: padFrames[i].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero) }
+            }
+        }
+    }
+
+    /// The finger lifted: a hold's flag outlives the tap it drops by a moment, then goes (a hold that made no tap
+    /// mustn't swallow the next one).
+    private func releaseHold(_ key: String) {
+        guard heldKey == key else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            if heldKey == key { heldKey = nil }
+        }
+    }
+
+    // MARK: Pad menus (Scott, 2026-11-07), at the finger as every Lupe menu (MenuPanel)
+
+    private var idle: Bool { !store.busy && !store.offline }
+
+    private func openMenu(_ t: Int, _ i: Int, at: CGPoint) {
+        guard !store.offline, let e = store.song?.tracks[safe: t]?.entries[safe: i] else { return }
+        let title = "T\(t + 1) · entry \(Entries.letter(i))" + (e.isEmpty ? " · empty" : "")
+        ui.menu = JibMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, i) : padMenu(t, i) }, at: at)
+    }
+
+    /// An empty pad: a new pattern (the editor on it), a copy of the one the track is on, one from the pool, a rest.
+    private func emptyMenu(_ t: Int, _ i: Int) -> [[MenuItem]] {
+        guard let list = store.song?.tracks[safe: t] else { return [] }
+        let free = (store.pool?.free ?? 0) > 0
+        var first = [MenuItem(title: free ? "New pattern" : "New pattern: all 64 taken", icon: "plus", enabled: free && idle) {
+            Task { if await store.send(.new(track: t, entry: i)) { edit(t, i) } }
+        }]
+        if let on = list.entryOn, let p = list.entries[safe: on]?.poolIndex {
+            first.append(MenuItem(title: free ? "Copy of \(Entries.letter(on)) · \(Entries.number(p + 1))" : "Copy of \(Entries.number(p + 1)): all 64 taken",
+                                  icon: "square.on.square", enabled: free && idle) {
+                // the same pattern into the entry, then a copy of its own (LIST SET, then COPY)
+                Task { if await store.send(.set(track: t, entry: i, pattern: p + 1)) { await store.send(.copy(track: t, entry: i)) } }
+            })
+        }
+        first.append(MenuItem(title: "Rest", icon: "pause", enabled: idle) {
+            Task { await store.send(.set(track: t, entry: i, pattern: SongEntry.rest)) }
+        })
+        let kept = (0..<64).filter { (store.pool?.patterns[$0].length ?? 0) > 0 }
+        let owners = Self.owners(store.song)
+        let pick = MenuItem(title: "Pick a pattern…", icon: "square.grid.2x2", enabled: idle && !kept.isEmpty, children: {
+            [kept.map { p in
+                let tracks = owners[p] ?? []
+                let colour = tracks.count == 1 ? Theme.track[tracks[0]] : Entries.tone(p + 1)
+                let name = tracks.count == 1 ? "T\(tracks[0] + 1) \(Entries.trackName(tracks[0], session: session))"
+                    : tracks.isEmpty ? "Not in this song" : tracks.map { "T\($0 + 1)" }.joined(separator: ", ")
+                return MenuItem(title: name, chip: (Entries.number(p + 1), colour)) {
+                    Task { await store.send(.set(track: t, entry: i, pattern: p + 1)) }
+                }
+            }]
+        })
+        return [first, [pick]]
+    }
+
+    /// A filled pad, held: edit it, its repeats, a copy of its own or beside it, its sound, clear it.
+    private func padMenu(_ t: Int, _ i: Int) -> [[MenuItem]] {
+        guard let list = store.song?.tracks[safe: t], let e = list.entries[safe: i] else { return [] }
+        var g: [[MenuItem]] = []
+        if e.poolIndex != nil { g.append([MenuItem(title: "Edit pattern", icon: "pencil", enabled: idle) { edit(t, i) }]) }
+        if !e.chained {
+            g.append([
+                MenuItem(title: "Play once more (×\(min(16, e.reps + 1)))", icon: "plus", enabled: idle && e.reps < 16) {
+                    Task { await store.send(.reps(track: t, entry: i, reps: e.reps + 1)) }
+                },
+                MenuItem(title: "Play once less (×\(max(1, e.reps - 1)))", icon: "minus", enabled: idle && e.reps > 1) {
+                    Task { await store.send(.reps(track: t, entry: i, reps: e.reps - 1)) }
+                },
+            ])
+        } else {
+            g.append([.note("Chained on into the next entry: its repeats are the chain's last entry's")])
+        }
+        var copy: [MenuItem] = []
+        if let p = e.poolIndex {
+            let free = (store.pool?.free ?? 0) > 0
+            let n = free ? ArrangeEdits(session: session, store: store).copyNumber(after: p).map { " (becomes \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+            copy.append(MenuItem(title: "Make unique\(n)", icon: "square.on.square.dashed", enabled: free && idle) {
+                Task { await store.send(.copy(track: t, entry: i)) }
+            })
+            let room = list.entries.indices.contains { $0 > i && list.entries[$0].isEmpty }
+            copy.append(MenuItem(title: room ? "Duplicate to next empty pad" : "Duplicate: no empty pad after it", icon: "plus.square.on.square",
+                                 enabled: free && room && idle) {
+                Task { await store.send(.copyPlus(track: t, entry: i)) }
+            })
+        }
+        if !copy.isEmpty { g.append(copy) }
+        if e.poolIndex != nil, store.sounds, let b = store.blocks(t).first(where: { $0.entries.contains(i) }) {
+            let menus = ArrangeMenus(session: session, store: store, ui: ui) { _ in }
+            g.append([MenuItem(title: "Sound…", icon: "waveform", enabled: idle, children: { menus.sound(t, b) })])
+        }
+        g.append([MenuItem(title: "Clear entry", icon: "trash", enabled: idle) { clear(t, i, e) }])
+        return g
+    }
+
+    /// The pattern in the editor: pinned on the Song tab's timeline, whose bottom half edits it (the pads have none).
+    /// Stopped, the track goes to the entry first, as a block tapped does (SkiffArrangePage.pin).
+    private func edit(_ t: Int, _ i: Int) {
+        session.select(track: t)
+        let l = store.song?.tracks[safe: t]
+        if l?.entryOn != i, !session.playing { Task { await store.send(.play(track: t, entry: i)) } }
+        ui.pinnedEntry = EntryRef(track: t, entry: i)
+        ui.songView = .timeline
+    }
+
+    /// CLEAR (stopped only: playing, the store says "Stop to…" with a Stop key). A pattern nothing else names goes with
+    /// the entry and can't be undone: asked first.
+    private func clear(_ t: Int, _ i: Int, _ e: SongEntry) {
+        let alone = e.poolIndex.map { (store.pool?.patterns[safe: $0]?.uses ?? 0) <= 1 } ?? false
+        if alone, let p = e.poolIndex, !session.playing {
+            store.ask("Clear entry \(Entries.letter(i))?", "Pattern \(Entries.number(p + 1)) is used nowhere else, so it's erased with the entry. This can't be undone.",
+                      confirm: "Clear entry \(Entries.letter(i))") { await store.send(.clear(track: t, entry: i)) }
+        } else {
+            Task { await store.send(.clear(track: t, entry: i)) }
+        }
+    }
+
+    /// Pattern (0...63) → the tracks whose lists name it.
+    static func owners(_ song: SkiffSong?) -> [Int: [Int]] {
+        var m: [Int: [Int]] = [:]
+        for (t, l) in (song?.tracks ?? []).enumerated() {
+            for e in l.entries { if let p = e.poolIndex, !(m[p]?.contains(t) ?? false) { m[p, default: []].append(t) } }
+        }
+        return m
     }
 
     @ViewBuilder private func padSurface(playing: Bool, on: Bool, empty: Bool, rest: Bool, colour: Color) -> some View {
@@ -215,14 +369,6 @@ struct PadsPage: View {
         .accessibilityHidden(true)
     }
 
-    private func learnThumbs() {
-        for k in session.trackIndices {
-            guard let p = store.song?.tracks[safe: k]?.patternOn else { continue }
-            let th = Thumb.heights(session.tracks[k])
-            if thumbs[p] != th { thumbs[p] = th }
-        }
-    }
-
     // MARK: Scenes
 
     private var sceneRow: some View {
@@ -243,6 +389,7 @@ struct PadsPage: View {
         let last = perf?.lastScene == s
         let word = last ? "last" : kept ? "" : "empty"
         return Button {
+            if heldKey == "s\(s)" { heldKey = nil; return }       // (a hold's release: it previewed, it doesn't recall)
             if storing {
                 storing = false
                 launched += 1
@@ -268,8 +415,27 @@ struct PadsPage: View {
         }
         .buttonStyle(PressSink())
         .disabled(store.offline)
+        // held (a kept scene, not storing): the strip shows what it would do, nothing sent; let go, it's gone
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onEnded { _ in
+            if previewScene == s { previewScene = nil }
+            releaseHold("s\(s)")
+        })
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            guard kept, !storing else { return }
+            heldKey = "s\(s)"
+            previewScene = s
+        })
         .accessibilityLabel("Scene \(s + 1)" + (kept ? "" : ", empty") + (last ? ", recalled or stored last" : ""))
+        .accessibilityValue(kept ? sceneSpoken(s) : "")
         .accessibilityHint(storing ? "Stores what plays now here" : kept ? (session.playing ? "Recalls it at the launch point" : "Recalls it") : "Empty: store into it first")
+    }
+
+    /// What a scene holds, said (VoiceOver's version of holding it): each track's entry, then the muted ones.
+    private func sceneSpoken(_ s: Int) -> String {
+        guard let seen = store.scenesSeen[s] else { return "contents not seen yet" }
+        let entries = seen.enumerated().map { t, x in "track \(t + 1) \(x.entry.map(Entries.letter) ?? "none")" }
+        let muted = seen.indices.filter { seen[$0].muted }.map { "\($0 + 1)" }
+        return entries.joined(separator: ", ") + (muted.isEmpty ? "" : "; muted: tracks " + muted.joined(separator: ", "))
     }
 }
 
@@ -279,6 +445,8 @@ struct TrackStripCard: View {
     let session: DeviceSession
     let store: SkiffSongStore
     let track: Int
+    /// A scene held: where this track would go and its mute (nil: no scene held, or one not seen yet).
+    var preview: SkiffSongStore.SceneTrack? = nil
 
     var body: some View {
         let t = track
@@ -307,7 +475,16 @@ struct TrackStripCard: View {
                             }
                             .frame(height: 4)
                         }
-                        if !lines.next.isEmpty { Text(lines.next).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1) }
+                        if let p = preview {
+                            // the scene held: an arrow line in full white, a second channel to the dashed outline
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold))
+                                Text(Self.previewText(p, list)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                            }
+                            .foregroundStyle(Theme.text)
+                        } else if !lines.next.isEmpty {
+                            Text(lines.next).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
@@ -327,6 +504,12 @@ struct TrackStripCard: View {
                         .elevationShadow(.selected, Look())
                 } else {
                     RoundedRectangle(cornerRadius: 12).fill(Theme.panel)
+                }
+            }
+            .overlay {
+                if preview != nil {
+                    RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.text.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                        .padding(selected ? 4 : 0)
                 }
             }
         }
@@ -354,6 +537,15 @@ struct TrackStripCard: View {
         .accessibilityHint(staged != .none ? "Takes the waiting change back" : session.playing ? "At the launch point" : "")
     }
 
+    /// A held scene's line: "B · 05 · muted", "stays on B", "unmutes".
+    static func previewText(_ p: SkiffSongStore.SceneTrack, _ l: SongList?) -> String {
+        guard let e = p.entry else { return p.muted ? "no entry · muted" : "no entry" }
+        let x = l?.entries[safe: e] ?? .empty
+        let name = "\(Entries.letter(e)) · " + (x.isRest ? "REST" : x.isEmpty ? "empty" : String(format: "%02d", x.pattern))
+        let stays = l?.entryOn == e ? "stays on " : ""
+        return stays + name + (p.muted ? " · muted" : "")
+    }
+
     /// What the card says: what it plays (entry, pattern, pass), and what comes (a launch waiting, the song's next).
     static func lines(_ l: SongList?, _ m: SongPlayback.Marks, playing: Bool, launch: SongPlayback.Launch) -> (plays: String, next: String) {
         guard let l else { return ("—", "") }
@@ -372,32 +564,71 @@ struct TrackStripCard: View {
     }
 }
 
-/// A pattern's rhythm in 16 columns: a step with a note or hit is tall, a held one half, a rest a dot.
-struct Thumb: View {
-    let heights: [Double]
+/// A pattern's drawing for its pads (Scott, 2026-11-07: "every pad shows its music"), in 16 columns: a drum
+/// track's hits, a synth track's notes as a contour (the highest note of each column, scaled to the pattern's range).
+/// Lupe reads a pattern only while a track is on it (no read gives a pattern's steps otherwise), so these are kept as
+/// they're seen, for the session, keyed by pattern number with its LEN (a pattern whose LEN changed is drawn again).
+struct PadThumb: Equatable {
+    var length: Int
+    var drums: Bool
+    /// 0...1 a column's height (drums) or pitch (synth); nil: nothing there.
+    var columns: [Double?]
+
+    @MainActor static func of(_ tr: TrackState, drums: Bool) -> PadThumb {
+        let n = max(1, min(tr.length, tr.steps.count))
+        func range(_ c: Int) -> Range<Int> { (c * n / 16)..<max(c * n / 16 + 1, (c + 1) * n / 16) }
+        if drums {
+            let cols: [Double?] = (0..<16).map { c in
+                let hits = range(c).filter { $0 < tr.steps.count && tr.isOn($0) }.map { tr.gridSteps[$0].lanes.count }
+                return hits.max().map { min(1, 0.35 + 0.2 * Double($0)) }
+            }
+            return PadThumb(length: tr.length, drums: true, columns: cols)
+        }
+        let tops: [Int?] = (0..<16).map { c in
+            range(c).compactMap { i -> Int? in
+                guard i < tr.steps.count, tr.steps[i].time == .note else { return nil }
+                return tr.steps[i].notes.max()
+            }.max()
+        }
+        let present = tops.compactMap { $0 }
+        guard let lo = present.min(), let hi = present.max() else { return PadThumb(length: tr.length, drums: false, columns: Array(repeating: nil, count: 16)) }
+        let span = Double(max(1, hi - lo))
+        return PadThumb(length: tr.length, drums: false, columns: tops.map { $0.map { hi == lo ? 0.5 : 0.1 + 0.9 * Double($0 - lo) / span } })
+    }
+
+    /// Each track's pattern as it is now, into the session's drawings (the Song tab, both views, once a second).
+    @MainActor static func learn(_ session: DeviceSession, _ store: SkiffSongStore, _ ui: EditorUI) {
+        for k in session.trackIndices {
+            guard let p = store.song?.tracks[safe: k]?.patternOn, k < session.tracks.count else { continue }
+            let th = of(session.tracks[k], drums: session.isKit(k))
+            if ui.padThumbs[p] != th { ui.padThumbs[p] = th }
+        }
+    }
+}
+
+struct PadThumbView: View {
+    let thumb: PadThumb
     let ink: Color
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 2) {
-            ForEach(heights.indices, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1).fill(heights[i] > 0.1 ? ink : ink.opacity(0.35))
-                    .frame(height: max(3, 24 * heights[i]))
+        Canvas { ctx, sz in
+            let n = thumb.columns.count, w = sz.width / CGFloat(n)
+            for (c, v) in thumb.columns.enumerated() {
+                let x = CGFloat(c) * w
+                if thumb.drums {
+                    let h = max(3, sz.height * CGFloat(v ?? 0))
+                    ctx.fill(Path(roundedRect: CGRect(x: x + 1, y: sz.height - h, width: w - 2, height: h), cornerRadius: 1),
+                             with: .color(v == nil ? ink.opacity(0.3) : ink))
+                } else if let v {
+                    // a note: a short bar at its pitch
+                    let y = (sz.height - 4) * (1 - CGFloat(v))
+                    ctx.fill(Path(roundedRect: CGRect(x: x + 1, y: y, width: w - 2, height: 4), cornerRadius: 2), with: .color(ink))
+                } else {
+                    ctx.fill(Path(ellipseIn: CGRect(x: x + w / 2 - 1, y: sz.height - 2, width: 2, height: 2)), with: .color(ink.opacity(0.35)))
+                }
             }
         }
-        .frame(height: 24, alignment: .bottom)
+        .frame(height: 24)
         .accessibilityHidden(true)
-    }
-
-    /// The track's pattern (its LENGTH folded into 16 columns, the loudest of each).
-    @MainActor static func heights(_ tr: TrackState) -> [Double] {
-        let n = max(1, min(tr.length, tr.steps.count))
-        return (0..<16).map { c in
-            let range = (c * n / 16)..<max(c * n / 16 + 1, (c + 1) * n / 16)
-            return range.map { i -> Double in
-                guard i < tr.steps.count else { return 0 }
-                if tr.isOn(i) { return tr.steps[i].time == .tie ? 0.5 : 1 }
-                return 0
-            }.max() ?? 0
-        }
     }
 }

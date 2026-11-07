@@ -23,10 +23,19 @@ struct SkiffSongPage: View {
 
     var body: some View {
         let _ = BodyCounter.tick("SkiffSongPage")
-        if ui.songView == .pads, store.performs, store.song != nil {
-            PadsPage(session: session, store: store, ui: ui)
-        } else {
-            timeline
+        Group {
+            if ui.songView == .pads, store.performs, store.song != nil {
+                PadsPage(session: session, store: store, ui: ui)
+            } else {
+                timeline
+            }
+        }
+        // each pattern a track is on, drawn for its pads (PadThumb): in both views, so the pads have them on arrival
+        .task {
+            while !Task.isCancelled {
+                PadThumb.learn(session, store, ui)
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
     }
 
