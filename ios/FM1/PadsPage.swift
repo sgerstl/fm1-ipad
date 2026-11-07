@@ -51,9 +51,14 @@ struct PadsPage: View {
     private var row: Bool { layout == .row }
 
     static let stripWidth: CGFloat = 248, gap: CGFloat = 12, sceneHeight: CGFloat = 56
-    static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 40, rowHeight: CGFloat = 46
+    /// (2026-11-08, Scott: "shrink some of the containers… the scene buttons smaller": the scene row 32, the lane heads
+    /// 42, so the editor at Half has the room its grid needs)
+    static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 32, rowHeight: CGFloat = 42
     /// A full card's height, fixed so the change from a lane head can be animated (its content needs about 93).
     static let cardHeight: CGFloat = 108
+    /// A row and a card swapping as the slot resizes: a quick crossfade, so the two aren't seen over each other for the
+    /// whole spring (2026-11-08)
+    static let swap = AnyTransition.opacity.animation(.easeOut(duration: 0.12))
     /// The compact pads' least: the tool row, six lane heads, the scene row (the strip sets the height; the pads fill it).
     static func compactMin(_ tracks: Int) -> CGFloat { 44 + 10 + CGFloat(tracks) * (rowHeight + 4) + 8 }
     /// The editor panel's tab (SkiffSongPage), in the scene row's line under the strip: the scene row and the room
@@ -83,10 +88,10 @@ struct PadsPage: View {
                     // in it, so the change rides the divider's spring instead of jumping (Scott, 2026-11-07)
                     ZStack(alignment: .topLeading) {
                         if compact {
-                            TrackStripRow(session: session, store: store, ui: ui, track: k, preview: preview).transition(.opacity)
+                            TrackStripRow(session: session, store: store, ui: ui, track: k, preview: preview).transition(Self.swap)
                         } else {
                             TrackStripCard(session: session, store: store, ui: ui, track: k, preview: preview)
-                                .frame(maxHeight: .infinity, alignment: .top).transition(.opacity)
+                                .frame(maxHeight: .infinity, alignment: .top).transition(Self.swap)
                         }
                     }
                     .frame(height: compact ? Self.rowHeight : Self.cardHeight, alignment: .top)
@@ -522,10 +527,10 @@ struct PadsPage: View {
         } label: {
             VStack(spacing: 0) {
                 Text("\(s + 1)").font(.system(size: 15, weight: kept ? .semibold : .regular)).monospacedDigit()
-                if !word.isEmpty { Text(word).font(.system(size: 10)) }
+                if !word.isEmpty, !compact { Text(word).font(.system(size: 10)) }   // (compact: the fill says it)
             }
             .foregroundStyle(last ? Theme.onColour : kept ? Theme.text : Theme.textSecondary)
-            .frame(maxWidth: .infinity).frame(height: Self.sceneHeight)
+            .frame(maxWidth: .infinity).frame(height: compact ? Self.compactScenes : Self.sceneHeight)
             .background {
                 if last { RoundedRectangle(cornerRadius: 8).fill(Theme.text).elevationShadow(.selected, Look()) }
                 else if kept { Chiclet(radius: 8, down: false, edge: true) }
@@ -891,6 +896,13 @@ struct PadTabShape: Shape {
     var up: Bool
     var right: Bool
     static let r: CGFloat = 12, f: CGFloat = 10
+
+    /// The pad's place and size animate, so the tint travels with the pad and its knobs on the spring: drawn from the
+    /// final place at once, it jumped while they glided (Scott, 2026-11-08: "separate motion from their background").
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+        get { AnimatablePair(AnimatablePair(cell.minX, cell.minY), AnimatablePair(cell.width, cell.height)) }
+        set { cell = CGRect(x: newValue.first.first, y: newValue.first.second, width: newValue.second.first, height: newValue.second.second) }
+    }
 
     func path(in rect: CGRect) -> Path {
         let r = Self.r, f = Self.f, w = cell.width, h = cell.height, W = max(tab.width, w + f), H = tab.height

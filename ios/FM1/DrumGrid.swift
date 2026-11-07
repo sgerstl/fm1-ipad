@@ -18,7 +18,12 @@ struct DrumGrid: View {
     static let gridHeight: CGFloat = 568        // one bar wide (grid.barWidth)
     @Environment(\.editorHeight) private var editorHeight
     @Environment(\.arrangeCompact) private var inSongTab
-    private var gridHeight: CGFloat { max(120, Self.gridHeight - (PianoRoll.panelHeight - editorHeight) + (inSongTab ? 40 : 0)) }
+    /// The room the editor gives it, in whole lanes: a lane half shown at the foot looked cut off (Scott, 2026-11-08);
+    /// the rest scroll.
+    private var gridHeight: CGFloat {
+        let room = max(120, Self.gridHeight - (PianoRoll.panelHeight - editorHeight) + (inSongTab ? 40 : 0))
+        return max(grid.rowHeight * 2, (room / grid.rowHeight).rounded(.down) * grid.rowHeight)
+    }
 
     var body: some View {
         let t = session.tracks[dt]

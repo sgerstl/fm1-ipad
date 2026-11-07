@@ -14,8 +14,15 @@ struct SkiffSongPage: View {
     /// default: on Pads the pads as tall as the track strip) or Max (the editor largest). Three places, not a free drag:
     /// a drag snaps to the nearest on the spring. One for both views, which share the editor ("should just toggle the
     /// top and leave the bottom, since they are the same"). Kept across launches.
-    @AppStorage(SongPosition.key) private var positionRaw = SongPosition.half.rawValue
-    private var position: SongPosition { SongPosition(rawValue: positionRaw) ?? .half }
+    @AppStorage(SongPosition.key) private var storedPosition = SongPosition.half.rawValue
+    /// The position the layout follows: plain state, set inside the spring, so a tap of the tab animates (a change to
+    /// the stored setting carried no animation, and Open and Close jumped; Scott, 2026-11-08). Saved as it changes.
+    @State private var placed: SongPosition?
+    private var position: SongPosition { placed ?? SongPosition(rawValue: storedPosition) ?? .half }
+    private var positionRaw: Int {
+        get { position.rawValue }
+        nonmutating set { placed = SongPosition(rawValue: newValue); storedPosition = newValue }
+    }
     /// A drag in progress: the top half's height under the finger (with some give past the ends); nil, at rest.
     @State private var dragTop: CGFloat?
     @State private var dragFrom: CGFloat = 0
@@ -33,7 +40,9 @@ struct SkiffSongPage: View {
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
     /// The give past either end: the drag follows the finger at this rate there.
     static let give: CGFloat = 0.3
-    private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.72) }
+    private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38 * Self.slow, dampingFraction: 0.72) }
+    /// -slow-motion: the spring eight times slower, to watch a transition frame by frame (screen recordings, checks).
+    static let slow: Double = ProcessInfo.processInfo.arguments.contains("-slow-motion") ? 8 : 1
 
     /// The top half's height at each position. Half: the pads as tall as the strip (PadsPage.halfTop), the Timeline the
     /// same so the editor doesn't move between views; the editor's least wins on a short screen. Max: the pads' one row,
