@@ -80,7 +80,6 @@ struct JibMenuLayer: View {
 /// Which menu is open on the Arrange page, and where (global).
 enum ArrangeMenu: Hashable {
     case block(EntryRef)
-    case sound(EntryRef)
     case add(Int)
 }
 
@@ -279,33 +278,6 @@ struct MenuPanel: View {
         }
         g.append(more)
         g.append([MenuItem(title: b.isChain ? "Delete entries" : "Delete entry", icon: "trash", enabled: idle) { edits.delete(t, b) }])
-        return g
-    }
-
-    /// The sounds an entry can take: none, the user presets, each engine's presets the track may play.
-    func sound(_ t: Int, _ b: SongBlock) -> [[MenuItem]] {
-        let current = store.song?.tracks[safe: t]?.entries[safe: b.entries.lowerBound]?.sound
-        var g: [[MenuItem]] = [[MenuItem(title: "No sound: keep the track's", icon: "speaker.slash", checked: current == nil) {
-            edits.setSound(t, b, nil)
-        }]]
-        if !session.userPresets.isEmpty {
-            let users = session.userPresets
-            g.append([MenuItem.submenu(title: "User presets", icon: "person", checked: current?.isUser == true, children: {
-                [users.map { u in
-                    MenuItem(title: u.name, checked: current?.userSlot == u.slot) { edits.setSound(t, b, EntrySound(s0: 64 + u.slot, s1: 0)) }
-                }]
-            })])
-        }
-        var engines: [MenuItem] = []
-        for (e, name) in (session.info?.engines ?? []).enumerated() {
-            guard session.shape.canPlay(track: t, engine: e), let presets = session.namesCache[e], !presets.isEmpty else { continue }
-            engines.append(MenuItem.submenu(title: name.capitalized, icon: "waveform", checked: current?.engine == e, children: {
-                [presets.enumerated().map { k, p in
-                    MenuItem(title: p.capitalized, checked: current?.engine == e && current?.s1 == k) { edits.setSound(t, b, EntrySound(s0: e + 1, s1: k)) }
-                }]
-            }))
-        }
-        if !engines.isEmpty { g.append(engines) }
         return g
     }
 

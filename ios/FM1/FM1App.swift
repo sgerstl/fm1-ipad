@@ -150,7 +150,6 @@ final class EditorUI {
     /// track; what was copied; the last change that can be undone, and what it said.
     var noteSel: Set<NoteRef> = []
     var stepSel: Set<Int> = []
-    var selTrack = 0
     var clip: [SynthStep]?
     var patternUndo: PatternUndo?
     var selectedStep = Array(repeating: 0, count: 8)      // per track: room for every firmware's tracks

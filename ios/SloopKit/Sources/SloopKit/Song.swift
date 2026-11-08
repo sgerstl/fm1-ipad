@@ -96,7 +96,6 @@ public struct SongOrder: Equatable, Sendable {
         return s
     }
 
-    public var totalBars: Int { steps.reduce(0) { $0 + $1.bars } }
 }
 
 /// What LIVE says about the song (firmware editor_live.c), beyond the transport.

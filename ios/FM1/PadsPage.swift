@@ -64,8 +64,6 @@ struct PadsPage: View {
     /// A row and a card swapping as the slot resizes: a quick crossfade, so the two aren't seen over each other for the
     /// whole spring (2026-11-08)
     static let swap = AnyTransition.opacity.animation(.easeOut(duration: 0.12))
-    /// The compact pads' least: the tool row, six lane heads, the scene row (the strip sets the height; the pads fill it).
-    static func compactMin(_ tracks: Int) -> CGFloat { 44 + 10 + CGFloat(tracks) * (rowHeight + 4) + 8 }
     /// The editor panel's tab (SkiffSongPage), in the scene row's line under the strip: the scene row and the room
     /// under it.
     static let tabHeight: CGFloat = compactScenes + 8

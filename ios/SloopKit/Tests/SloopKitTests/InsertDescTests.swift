@@ -8,7 +8,7 @@ import Testing
     @Test func insertKnobsFollowTheType() async throws {
         let fake = FakeSloop(autoEdits: false)
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
         #expect(session.trackDescs[54]?.label == "INS A")                                 // the wire, as the device sends it

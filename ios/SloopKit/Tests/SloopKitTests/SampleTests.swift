@@ -36,10 +36,10 @@ import Testing
     @Test func limits() throws {
         #expect(UserSample.maxData == 81408 && UserSample.maxSamples == 162_816)
         #expect(abs(UserSample.maxSeconds - 7.384) < 0.001)
-        #expect(throws: SloopSession.SampleError.tooLong) {
+        #expect(throws: DeviceSession.SampleError.tooLong) {
             try UserSample.slot(name: "LONG", samples: Array(repeating: 0, count: UserSample.maxSamples + 1))
         }
-        #expect(throws: SloopSession.SampleError.empty) { try UserSample.slot(name: "NONE", samples: []) }
+        #expect(throws: DeviceSession.SampleError.empty) { try UserSample.slot(name: "NONE", samples: []) }
         _ = try UserSample.slot(name: "FULL", samples: Array(repeating: 0, count: UserSample.maxSamples))
     }
 }
@@ -50,7 +50,7 @@ import Testing
         fake.manualClock = true
         fake.sampleWriteDelay = 0.002
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
@@ -70,7 +70,7 @@ import Testing
         #expect(fake.sampleSlots[1].data == UserSample.imaEncode(UserSample.toInt16(x)))
         #expect(edits == 0)                                  // samples are the FM-1's, not the project's
 
-        await #expect(throws: SloopSession.SampleError.tooLong) {
+        await #expect(throws: DeviceSession.SampleError.tooLong) {
             try await session.uploadSample(slot: 2, name: "LONG", samples: Array(repeating: 1, count: UserSample.maxSamples + 2)) { _ in }
         }
         #expect(session.sampleSlots[2].isEmpty)

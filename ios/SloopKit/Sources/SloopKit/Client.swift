@@ -41,9 +41,6 @@ public actor SloopClient {
     public nonisolated let pushes: AsyncStream<Push>
     private let pushSink: AsyncStream<Push>.Continuation
 
-    /// Round trips of the last requests, for the connection readout.
-    public private(set) var lastRoundTrip: Duration = .zero
-    private var sentAt: ContinuousClock.Instant = .now
 
     public init(transport: SysExTransport) {
         self.transport = transport
@@ -88,7 +85,6 @@ public actor SloopClient {
         var p = queue.removeFirst()
         p.attemptsLeft -= 1
         inFlight = p
-        sentAt = .now
         transport.send(p.request.bytes)
         let id = p.id, attempts = p.attemptsLeft, timeout = p.timeout
         Task { [weak self] in
@@ -114,7 +110,6 @@ public actor SloopClient {
         // UI (fm1-ipad firmware) is both a reply and a push: every one updates the screen state
         if cmd == Cmd.ui, let push = try? Push(cmd: cmd, body: body) { pushSink.yield(push) }
         guard let p = inFlight, p.request.cmd == cmd, p.request.matches(body) else { return }
-        lastRoundTrip = ContinuousClock.now - sentAt
         inFlight = nil
         p.continuation.resume(returning: body)
         pump()

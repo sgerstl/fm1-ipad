@@ -74,7 +74,6 @@ final class FirmwareCentre {
     }
 
     var isActive: Bool { phase != .idle }
-    var demoState: String? { demo }
 
     // MARK: Watching for an FM-1 Jib can't use
 

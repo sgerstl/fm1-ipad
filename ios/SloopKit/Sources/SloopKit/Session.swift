@@ -130,18 +130,12 @@ public final class DeviceSession {
     public private(set) var isDemo = false
     /// The demo pretends to be Skiff (FakeSkiff) rather than SLOOP; false for a real FM-1.
     public private(set) var demoSkiff = false
-    /// Counted on every poll, and no view reads it: kept out of observation so a poll doesn't count
-    /// as a change.
+    /// Counted on every poll (the tests check the polling rate), and no view reads it: kept out of observation so a
+    /// poll doesn't count as a change.
     @ObservationIgnored public private(set) var stats = Stats()
 
     public struct Stats: Equatable, Sendable {
         public var polls = 0
-        public var pushes = 0
-        public var stepPushes = 0
-        public var resyncFixes = 0         // steps a re-sync found out of date: a push that never came
-        public var timeouts = 0
-        public var connectedAt = Date()
-        public var pollsPerSecond: Double { Double(polls) / max(1, Date().timeIntervalSince(connectedAt)) }
     }
 
     /// When each track's current step began (for interpolating the playhead between polls).
@@ -201,7 +195,6 @@ public final class DeviceSession {
     private var driver: FirmwareDriver?
     /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
     private var sloop: SloopClient? { (driver as? SloopDriver)?.client }
-    private var tasks: [Task<Void, Never>] = []
     /// Factory preset names per engine (NAMES), all read at connect: the library's lists.
     public private(set) var namesCache: [Int: [String]] = [:]
     public private(set) var userPresets: [UserPreset] = []
@@ -258,8 +251,6 @@ public final class DeviceSession {
     /// Skiff's second screen link build (`56 01 02`): the screen carries the page's cursor (MOD's route, …) and
     /// Lupe can set it. False on the first build (`56 01 01`), which Lupe offers to update.
     public private(set) var screenCursor = false
-    /// The third (`56 01 03`): METER, each track's level. False on the builds before, which Lupe offers to update.
-    public private(set) var screenMeter = false
     /// The fourth (`56 01 04`): SCOPE, the FM-1's output for the EDIT pages' scope. False on the builds before.
     public private(set) var screenScope = false
     /// The build Lupe carries (`56 01 06`: the scope at 30 a second, before MASTER). False before: Lupe offers it.
@@ -402,7 +393,6 @@ public final class DeviceSession {
             else { screenLinked = false; deviceScreen = nil }
             if screenLinked { capabilities.insert(.screenLink) }
             screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
-            screenMeter = screenLinked && (c as? SkiffDriver)?.skiff.hasMeter == true
             screenScope = screenLinked && (c as? SkiffDriver)?.skiff.hasScope == true
             screenCurrent = screenLinked && (c as? SkiffDriver)?.skiff.isCurrentLink == true
             try await c.watch(screenLink: screenLinked, scope: !scopeViewers.isEmpty)
@@ -971,7 +961,7 @@ public final class DeviceSession {
                 let s = try await c.synthStep(track: t, index: i)
                 if !recentlyWritten("s\(key)"), tracks[t].steps[i] != s { tracks[t].steps[i] = s }
             }
-        } catch { stats.timeouts += 1 }
+        } catch {}
     }
 
     // MARK: Applying values
@@ -1026,11 +1016,9 @@ public final class DeviceSession {
 
     private func pushLoop(_ c: FirmwareDriver) async {
         for await p in c.pushes {
-            stats.pushes += 1
             switch p { case .ui, .meter, .scope: break; default: onEdit?() }     // (levels and the scope aren't edits)
             switch p {
             case .stepChanged(let i, let t):
-                stats.stepPushes += 1
                 guard trackIndices.contains(t), stepIndices.contains(i) else { break }
                 Task { await self.readStep(t, i) }
             case .reload(_, _, let t):
@@ -1170,7 +1158,7 @@ public final class DeviceSession {
             do {
                 try await c.ping()
                 if n % 10 == 0 { try await c.watch(screenLink: screenLinked, scope: !scopeViewers.isEmpty) }   // watching ends on a USB reset: renew it
-            } catch ClientError.closed { return } catch { stats.timeouts += 1 }
+            } catch ClientError.closed { return } catch {}
         }
     }
 
@@ -1185,7 +1173,6 @@ public final class DeviceSession {
                 return
             } catch {
                 misses += 1
-                stats.timeouts += 1
                 if misses > 40 { return }     // about 6 s with no answer: treat it as gone
             }
             // stopped, there is no playhead to keep smooth: a slower poll still catches a track switch or
@@ -1205,7 +1192,6 @@ public final class DeviceSession {
                 return
             } catch {
                 misses += 1
-                stats.timeouts += 1
                 if misses > 30 { return }     // several seconds with no answer: treat it as gone
             }
             try? await Task.sleep(for: playing ? .milliseconds(150) : .milliseconds(250))
@@ -1262,16 +1248,16 @@ public final class DeviceSession {
                 let sel = selectedTrack
                 // Skiff pushes its step changes (WATCH bit 0): the full read is a backstop, every fourth pass (64
                 // requests each time); SLOOP's every pass
-                if !(c is SkiffDriver) || pass % 4 == 0 { stats.resyncFixes += try await readSteps(sel) }
+                if !(c is SkiffDriver) || pass % 4 == 0 { _ = try await readSteps(sel) }
                 if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
                     let n = trackCount
                     let other = (sel + 1 + (pass / 3) % max(1, n - 1)) % n
                     if other == 0 { try await readTrackList(); try await readGlobals() }
                     try await readParams(sel)
                     try await readParams(other)
-                    stats.resyncFixes += try await readSteps(other)
+                    _ = try await readSteps(other)
                 }
-            } catch ClientError.closed { return } catch { stats.timeouts += 1 }
+            } catch ClientError.closed { return } catch {}
             pass += 1
         }
     }
@@ -1521,7 +1507,7 @@ public final class DeviceSession {
                 do {
                     let stored = try await c.setSynthStep(track: t, index: i, next)
                     if self.stepWrites[key] == nil { self.tracks[t].steps[i] = stored }
-                } catch { self.stats.timeouts += 1 }
+                } catch {}
                 self.recentWrites["s\(key)"] = Date()
             }
             self.stepSending.remove(key)
@@ -1548,7 +1534,7 @@ public final class DeviceSession {
                 do {
                     let stored = try await c.setDrumStep(index: i, next)
                     if self.drumWrites[i] == nil { self.tracks[dt].drumSteps[i] = stored }
-                } catch { self.stats.timeouts += 1 }
+                } catch {}
                 self.recentWrites["s\(self.stepKey(dt, i))"] = Date()
             }
             self.drumSending.remove(i)
@@ -2033,6 +2019,3 @@ extension DeviceSession {
         recentWrites["p\(t).\(set)"] = Date(); recentWrites["p\(t).\(loop)"] = Date()
     }
 }
-
-/// The session's name from before the firmware seam (SLOOP only).
-public typealias SloopSession = DeviceSession

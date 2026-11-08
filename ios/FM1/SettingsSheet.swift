@@ -34,7 +34,6 @@ enum Handedness: String, CaseIterable, Identifiable {
     static let key = "handedness"
     var id: String { rawValue }
     var title: String { self == .right ? "Right-handed" : "Left-handed" }
-    static var current: Handedness { UserDefaults.standard.string(forKey: key).flatMap(Handedness.init) ?? .right }
 
     /// A menu's left edge beside a touch at `x` (both in the layer's space `width` wide): on the side away from the
     /// hand, the other side where it wouldn't fit, then kept on screen.

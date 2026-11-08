@@ -47,7 +47,7 @@ import Testing
         let fake = FakeSloop(autoEdits: false)
         fake.manualClock = true                                 // no bar ticks mid-test
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }

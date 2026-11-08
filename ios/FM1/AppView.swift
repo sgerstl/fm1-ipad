@@ -510,19 +510,6 @@ struct LookingForFM1: View {
     }
 }
 
-struct ComingLater: View {
-    var title: String
-    var detail: String
-    var body: some View {
-        VStack(spacing: 12) {
-            Text(title).font(.system(size: 28, weight: .semibold))
-            Text(detail).font(.system(size: 17)).foregroundStyle(Theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .panel()
-    }
-}
-
 /// A track's menu, beside the finger (long-press a track): its sound, a sample, clearing its steps.
 /// Shared by the iPad's track box and the phone's track chips; kept inside `canvasSize`.
 struct TrackMenuLayer: View {

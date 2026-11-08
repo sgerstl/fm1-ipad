@@ -7,11 +7,11 @@ import Testing
 @MainActor @Suite(.serialized) struct WorkflowTests {
 
     /// A connected session on a quiet demo FM-1 (no random edits), stopped.
-    private func connected() async throws -> (SloopSession, FakeSloop, Task<Void, Never>) {
+    private func connected() async throws -> (DeviceSession, FakeSloop, Task<Void, Never>) {
         let fake = FakeSloop(autoEdits: false)
         fake.manualClock = true
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
@@ -21,7 +21,7 @@ import Testing
         return (session, fake, run)
     }
 
-    private func has(_ s: SloopSession, track t: Int, step i: Int, note n: Int) -> Bool {
+    private func has(_ s: DeviceSession, track t: Int, step i: Int, note n: Int) -> Bool {
         let st = s.tracks[t].steps[i]
         return st.time == .note && st.notes.contains(n)
     }
@@ -233,7 +233,7 @@ import Testing
         let fake = FakeSloop(autoEdits: false)
         fake.manualClock = true
         var once = false
-        let s = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         s.resyncInterval = .seconds(60)
         let run = Task { await s.run() }
         defer { run.cancel() }

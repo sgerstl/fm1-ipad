@@ -17,7 +17,7 @@ import Testing
     }
 
     @Test func refusesOtherFirmware() async throws {
-        let session = SloopSession(transport: {
+        let session = DeviceSession(transport: {
             let f = FakeSloop(autoEdits: false); f.version = "FELUCCA SLOOP 2.9.0"; return f
         })
         let run = Task { await session.run() }
@@ -29,7 +29,7 @@ import Testing
     @Test func readsAllTracksAndFollowsPushes() async throws {
         let fake = FakeSloop(autoEdits: false)
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
@@ -50,7 +50,7 @@ import Testing
     @Test func editsFromTheIPadReachTheDeviceAndStick() async throws {
         let fake = FakeSloop(autoEdits: false)
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .milliseconds(200)        // re-reads race the writes on purpose
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
@@ -80,7 +80,7 @@ import Testing
     @Test func libraryLoadsPresetsUserPresetsAndKits() async throws {
         let fake = FakeSloop(autoEdits: false)
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
@@ -122,7 +122,7 @@ import Testing
     @Test func everyParameterAndFollowingTheKnobs() async throws {
         let fake = FakeSloop(autoEdits: false)
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
@@ -143,7 +143,7 @@ import Testing
     @Test func screenLinkWithTheModifiedFirmware() async throws {
         let fake = FakeSloop(autoEdits: false)
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
@@ -158,7 +158,7 @@ import Testing
     @Test func stockFirmwareHasNoScreenLink() async throws {
         let fake = FakeSloop(autoEdits: false); fake.hasUIPush = false
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
         #expect(!session.screenLinked && session.deviceScreen == nil)
@@ -166,7 +166,7 @@ import Testing
     }
 
     @Test func playheadInterpolatesBetweenPolls() {
-        let session = SloopSession(transport: { nil })
+        let session = DeviceSession(transport: { nil })
         let t0 = Date()
         func live(_ step: Int) -> LiveState {
             LiveState(playing: true, bpm: 120, selected: 0, tracks: (0..<4).map { _ in .init(step: step, length: 16, meter: 0) })

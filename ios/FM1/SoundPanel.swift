@@ -135,8 +135,6 @@ struct SoundPanel: View {
     @State private var marks = ShapeMarks()
     @State private var settled = false          // slid in: the cards' graphs draw from then (not while it moves)
     static let width: CGFloat = 430
-    /// The Song tab's step while the panel is open (SoundPanelHost).
-    static let openStep: CGFloat = 24
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The button's pages as chips: tap one to bring it forward (and onto the FM-1), as pressing the key again steps

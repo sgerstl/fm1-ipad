@@ -6,7 +6,7 @@ import Testing
     @Test func recTogglesWhilePolling() async throws {
         let fake = FakeSloop(autoEdits: false)
         var once = false
-        let session = SloopSession(transport: { if once { return nil }; once = true; return fake })
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
         try await waitFor { session.stats.polls > 5 }

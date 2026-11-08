@@ -132,9 +132,6 @@ struct EntryInspector: View {
     let track: Int
     let block: SongBlock
     let list: SongList
-    @Binding var selection: EntryRef?
-    let openMenu: (ArrangeMenu, CGPoint) -> Void
-    @State private var soundKey: CGRect = .zero
 
     private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
     private var first: SongEntry { list.entries[block.entries.lowerBound] }
@@ -185,7 +182,6 @@ struct EntryInspector: View {
                         key("Select sound", enabled: block.kind == .pattern && store.sounds) {
                             ui.chooseSound(session, track: track, entry: SoundEntryTarget(ref: EntryRef(track: track, entry: block.entries.lowerBound), pad: false))
                         }
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { soundKey = $0 }
                     }
                 }
                 // last, apart: out of the list. Undo puts it back; one that would erase a pattern asks first

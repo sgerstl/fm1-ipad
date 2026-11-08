@@ -93,13 +93,6 @@ public struct SkiffProjectData: Codable, Equatable, Sendable {
     public var project: SKF4? { SKF4(Array(record)) }
     /// How many patterns its tracks play.
     public var patternCount: Int { patterns.count }
-    /// The tracks with at least one pattern in their list.
-    public var tracksUsed: Int {
-        guard let p = project else { return 0 }
-        return (0..<SKF4.tracks).filter { t in
-            (0..<SKF4.entries).contains { e in let b = p.bytes[SKF4.entriesAt + 4 * (t * SKF4.entries + e)]; return b >= 1 && b < SKF4.rest }
-        }.count
-    }
 
     /// Equal when the music is: the record without its name and checksum, each pattern by content (not by id, so a
     /// project opened into other ids is still the same project).

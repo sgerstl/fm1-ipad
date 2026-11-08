@@ -86,7 +86,6 @@ struct SkiffArrangePage: View {
         // a menu on an entry that's gone (the song changed under it) closes; leaving the page drops every hold
         .onChange(of: store.song) { if let m = menu, !menuStillThere(m) { menu = nil } }
         // an entry's sounds belong to the selected entry: another one selected, they close
-        .onChange(of: selection) { _, now in if case .sound(let r) = menu?.kind, r != now { menu = nil } }
         .onDisappear { menu = nil; lifted = nil; moveAt = nil; dropAt = nil }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         // a change that would erase a pattern asks first (CLEAR erases one nothing else uses)
@@ -114,7 +113,7 @@ struct SkiffArrangePage: View {
 
     private func menuStillThere(_ m: OpenMenu) -> Bool {
         switch m.kind {
-        case .block(let r), .sound(let r): block(r) != nil
+        case .block(let r): block(r) != nil
         case .add(let t): store.song?.tracks[safe: t] != nil
         }
     }
@@ -127,9 +126,6 @@ struct SkiffArrangePage: View {
                     let b = block(r)!
                     return ("T\(r.track + 1) · entr\(b.isChain ? "ies" : "y") \(Entries.letters(b.entries))", menus.block(r.track, b),
                             { menu = nil; selection = r; blockFocus = r })        // focus goes back to the block
-                case .sound(let r):
-                    let b = block(r)!
-                    return ("T\(r.track + 1) · sound on entry \(Entries.letter(r.entry))", menus.sound(r.track, b), { menu = nil })
                 case .add(let t):
                     return ("T\(t + 1) · after the last entry", menus.add(t), { menu = nil })
                 }
@@ -429,7 +425,7 @@ struct SkiffArrangePage: View {
         if let sel = selection, let song = store.song, sel.track < song.tracks.count,
            let block = store.blocks(sel.track).first(where: { $0.entries.contains(sel.entry) }) {
             EntryInspector(session: session, store: store, ui: ui, track: sel.track, block: block,
-                           list: song.tracks[sel.track], selection: $selection, openMenu: openMenu)
+                           list: song.tracks[sel.track])
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 Text("No entry selected").font(.system(size: 15, weight: .semibold))
