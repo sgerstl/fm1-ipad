@@ -11,6 +11,8 @@ struct LibraryPage: View {
     /// The sound panel choosing an entry's own sound (a pad's, a block's): the keys show and set that, not the track's.
     var entry: SoundEntryTarget? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// When the user last scrolled the list themselves: the knob's follow leaves them be for a moment.
+    @State private var scrolledByHand: Date = .distantPast
     @State private var clearing: Int?
     /// A user slot waiting on its erase confirm (Skiff's SAVE > USER).
     @State private var erasing: UserPreset?
@@ -88,11 +90,12 @@ struct LibraryPage: View {
                 if entry == nil, !session.isDrums(t), session.capabilities.contains(.samples), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
             }
             .scrollIndicators(.hidden)
+            .onScrollPhaseChange { _, phase in if phase.isScrolling { scrolledByHand = Date() } }
             // the sound it has always in view: the FM-1's knob stepping through sounds took the lit key off below the
             // scroll (Scott, 2026-11-08, batch list 1); scrolled only as far as it takes, so a tap on a visible key
-            // moves nothing
+            // moves nothing, and never against a scroll of the user's in the last two seconds
             .onChange(of: currentKey) { _, k in
-                guard let k else { return }
+                guard let k, Date().timeIntervalSince(scrolledByHand) > 2 else { return }
                 if reduceMotion { proxy.scrollTo(k) } else { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(k) } }
             }
             .onAppear { if let k = currentKey { proxy.scrollTo(k) } }
