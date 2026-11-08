@@ -157,8 +157,8 @@ struct SkiffSongPage: View {
     /// The panel's tab, in the scene row's line (Scott's own alignment on board 31): Open at No grid, Close at Half,
     /// Less at Max. Tapped, the next place; dragged, the divider.
     private func tab(top: CGFloat, tops: [SongPosition: CGFloat], pads: Bool) -> some View {
-        // which way it can go, as three stacked chevrons (Scott, 2026-11-09: words don't say the possibilities): shut, all
-        // up; half, one up over two down; largest, all down
+        // which way it can go, as three chevrons in a row (Scott, 2026-11-09: words don't say the possibilities): shut, all
+        // up; half, one up then two down; largest, all down
         let ups: [Bool] = switch position {
         case .none: [true, true, true]
         case .half: [true, false, false]
@@ -169,7 +169,7 @@ struct SkiffSongPage: View {
             let next: SongPosition = switch position { case .none: .half; case .half: .none; case .max: .half }
             withAnimation(spring) { positionRaw = next.rawValue; layout = nil }
         } label: {
-            VStack(spacing: 1) {
+            HStack(spacing: 2) {
                 ForEach(0..<3, id: \.self) { k in
                     Image(systemName: ups[k] ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold))
                 }
