@@ -27,6 +27,30 @@ enum SlideToTurn: String, CaseIterable, Identifiable {
     }
 }
 
+/// Which hand plays (Scott, 2026-11-08): menus open beside the touch on the side away from it, so the hand doesn't
+/// cover them, and the sound buttons' rail sits on its side. Right by default.
+enum Handedness: String, CaseIterable, Identifiable {
+    case right, left
+    static let key = "handedness"
+    var id: String { rawValue }
+    var title: String { self == .right ? "Right-handed" : "Left-handed" }
+    static var current: Handedness { UserDefaults.standard.string(forKey: key).flatMap(Handedness.init) ?? .right }
+
+    /// A menu's left edge beside a touch at `x` (both in the layer's space `width` wide): on the side away from the
+    /// hand, the other side where it wouldn't fit, then kept on screen.
+    func menuX(touch x: CGFloat, menuWidth w: CGFloat, in width: CGFloat, margin: CGFloat = 12, gap: CGFloat = 16) -> CGFloat {
+        let left = x - gap - w, right = x + gap
+        let fitsLeft = left >= margin, fitsRight = right + w <= width - margin
+        let pick = self == .right ? (fitsLeft || !fitsRight ? left : right) : (fitsRight || !fitsLeft ? right : left)
+        return min(max(margin, pick), max(margin, width - w - margin))
+    }
+
+    /// Its top: level with the touch, its first rows by the finger, kept on screen.
+    static func menuY(touch y: CGFloat, menuHeight h: CGFloat, in height: CGFloat, margin: CGFloat = 12) -> CGFloat {
+        min(max(margin, y - 28), max(margin, height - h - margin))
+    }
+}
+
 /// The value loupe's switch (ValueLoupe.swift). On by default; off, LoupeState.show does nothing.
 enum Magnifier {
     static let key = "magnifier"
@@ -40,6 +64,7 @@ struct SettingsSheet: View {
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
     @AppStorage(SoundButtons.key) private var soundButtons = true
+    @AppStorage(Handedness.key) private var handedness = Handedness.right
     @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
 
     var body: some View {
@@ -69,6 +94,19 @@ struct SettingsSheet: View {
                     Text("Selected track (trial)")
                 } footer: {
                     Text("How strongly the selected track's row and its knobs are lit on the Song tab.")
+                }
+
+                Section {
+                    Picker("Handedness", selection: $handedness) {
+                        ForEach(Handedness.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Handedness")
+                } footer: {
+                    Text(handedness == .right
+                         ? "Menus open to the left of your finger, so your hand doesn't cover them. The sound buttons sit on the right."
+                         : "Menus open to the right of your finger, so your hand doesn't cover them. The sound buttons sit on the left.")
                 }
 
                 Section {

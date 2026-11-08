@@ -34,6 +34,7 @@ struct JibMenu: Identifiable {
 struct JibMenuLayer: View {
     @Binding var menu: JibMenu?
     @State private var frame: CGRect = .zero
+    @AppStorage(Handedness.key) private var hand = Handedness.right
 
     var body: some View {
         GeometryReader { g in
@@ -44,11 +45,9 @@ struct JibMenuLayer: View {
                         .id(m.id)
                         .fixedSize()
                         .closesOnOutsideTouch { menu = nil }
-                        .alignmentGuide(.leading) { d in -min(max(12, m.at.x - frame.minX), g.size.width - d.width - 12) }
-                        .alignmentGuide(.top) { d in
-                            let y = m.at.y - frame.minY
-                            return -(y + 8 + d.height <= g.size.height ? y + 8 : max(12, y - 8 - d.height))
-                        }
+                        // beside the finger, on the side away from the playing hand (Settings › Handedness)
+                        .alignmentGuide(.leading) { d in -hand.menuX(touch: m.at.x - frame.minX, menuWidth: d.width, in: g.size.width) }
+                        .alignmentGuide(.top) { d in -Handedness.menuY(touch: m.at.y - frame.minY, menuHeight: d.height, in: g.size.height) }
                 }
             }
         }

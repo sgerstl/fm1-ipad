@@ -129,6 +129,9 @@ struct SoundPanel: View {
     let session: DeviceSession
     let ui: EditorUI
     let state: SoundPanelState
+    /// Against the screen's edge (no rail on the right): square on that side (Scott, 2026-11-08: "anchored to the side
+    /// of the screen, no gap").
+    var flush = false
     @State private var marks = ShapeMarks()
     @State private var settled = false          // slid in: the cards' graphs draw from then (not while it moves)
     private let look = Look()
@@ -251,7 +254,9 @@ struct SoundPanel: View {
         .padding(16)
         .frame(width: Self.width)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
+        .background(UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12,
+                                           bottomTrailingRadius: flush ? 0 : 12, topTrailingRadius: flush ? 0 : 12)
+            .fill(look.surface(.held)).elevationShadow(.held, look))
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .onChange(of: session.deviceScreen) { _, s in SoundTab.adoptCursor(session, marks, s) }
         .environment(\.graphsDeferred, !settled)
@@ -281,6 +286,11 @@ struct SoundPanelHost<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.grid) private var grid
     @AppStorage(SoundButtons.key) private var showRail = true
+    @AppStorage(Handedness.key) private var hand = Handedness.right
+
+    /// The app's margin round the pages (AppView's padding): a flush panel runs over it to the screen's edge.
+    static var pageMargin: CGFloat { 24 }
+    private var flush: Bool { !showRail || hand == .left }
 
     /// The panel's slide, and on the Song tab the page's with it, so their edges stay together.
     static var slide: Animation { .easeOut(duration: 0.2) }
@@ -297,6 +307,8 @@ struct SoundPanelHost<Content: View>: View {
         // nothing under the panel is out of reach.
         let room: CGFloat = 0
         return HStack(alignment: .top, spacing: 12) {
+            // the rail on the playing hand's side (Settings › Handedness); the panel still comes in from the right
+            if showRail, hand == .left { SoundRail(session: session, ui: ui) }
             content()
                 .environment(\.grid, narrowed)
                 // the Mixer and Browse make their own room, at once (one layout), never animated: re-laying out the strips
@@ -307,11 +319,13 @@ struct SoundPanelHost<Content: View>: View {
                 .overlay(alignment: .topTrailing) {
                     ZStack(alignment: .topTrailing) {
                         if let s = ui.soundPanel {
-                            SoundPanel(session: session, ui: ui, state: s)
+                            SoundPanel(session: session, ui: ui, state: s, flush: flush)
                                 .id(s.family)
                                 .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                         }
                     }
+                    // no rail on the right: the panel out to the screen's edge, over the page's margin
+                    .padding(.trailing, flush ? -Self.pageMargin : 0)
                     .animation(reduceMotion ? nil : Self.slide, value: ui.soundPanel?.family)
                 }
                 // another track whose engine has none of the open button's pages: closed, never an empty panel
@@ -320,7 +334,7 @@ struct SoundPanelHost<Content: View>: View {
                 }
             // Settings › Sound buttons (Scott, 2026-11-08): off, the page takes the rail's width; the FM-1's own keys
             // still open every page, and the hold menus' Select sound the sounds
-            if showRail { SoundRail(session: session, ui: ui) }
+            if showRail, hand == .right { SoundRail(session: session, ui: ui) }
         }
     }
 }
