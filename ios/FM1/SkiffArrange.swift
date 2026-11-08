@@ -439,35 +439,6 @@ struct SkiffArrangePage: View {
     }
 }
 
-/// An entry on a track: what a block, the inspector and the menus act on.
-struct EntryRef: Equatable, Hashable {
-    var track: Int
-    var entry: Int
-}
-
-enum Entries {
-    static func letter(_ i: Int) -> String { String(UnicodeScalar(UInt8(65 + i))) }
-    static func letters(_ r: ClosedRange<Int>) -> String { r.count == 1 ? letter(r.lowerBound) : "\(letter(r.lowerBound))–\(letter(r.upperBound))" }
-    static func number(_ p: Int) -> String { String(format: "%02d", p) }
-    /// Blocks take their track's colour (Scott, 2026-11-05); a pattern no single track names is one of
-    /// four greys, by its number.
-    static func tone(_ p: Int) -> Color { Theme.blockTones[(p - 1) % Theme.blockTones.count] }
-
-    @MainActor static func soundName(_ s: EntrySound, session: DeviceSession) -> String {
-        if let slot = s.userSlot { return session.userPresets.first { $0.slot == slot }?.name ?? "USER \(slot + 1)" }
-        guard let e = s.engine else { return "" }
-        return session.namesCache[e]?[safe: s.s1] ?? session.info?.engines[safe: e] ?? "ENGINE \(e + 1)"
-    }
-
-    @MainActor static func trackName(_ t: Int, session: DeviceSession) -> String {
-        let tr = session.tracks[t]
-        return tr.presetName.isEmpty ? "Track \(t + 1)" : tr.presetName.capitalized
-    }
-
-    static func divisionName(_ d: Int) -> String { ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2 BAR", "4 BAR"][safe: d] ?? "1/16" }
-    static func directionName(_ d: Int) -> String { ["FWD", "RVRS", "PING", "RAND"][safe: d] ?? "FWD" }
-}
-
 // MARK: - Header and lane
 
 struct LaneHeader: View {
@@ -1559,7 +1530,6 @@ extension EnvironmentValues {
     }
 }
 
-
 /// The Song tab's playback marks over a lane, while playing (SongPlayback; Skiff's README: SONG OFF / ON / ONCE,
 /// LAUNCH): on the block playing, its pass of its REPS ("2/4"), or ↻ looping (Loop entry); a quiet outline on the
 /// block it goes to next (Play song, Play once), with a wrap mark when that's the first again; END on the last
@@ -1644,7 +1614,6 @@ struct LaneMarks: View {
     }
 }
 
-
 /// SONG OFF / ON / ONCE (LIST op 6) as what each does: Loop entry, Play song, Play once. In the top bar beside play and
 /// stop; the FM-1's own changes come back with the lists (polled), so the two stay in step.
 struct SongModeKeys: View {
@@ -1657,22 +1626,6 @@ struct SongModeKeys: View {
         }
         // (Scott, 2026-11-06: say it plainly)
         .accessibilityHint("Loop entry: each track repeats the block it's on. Play song: each track plays its blocks in order and starts over. Play once: plays through once and stops.")
-    }
-}
-
-/// The selected track's colour on the Song tab (its row and the knobs' tab): the track's colour mixed into the page,
-/// opaque, so the tab covers the lane under it cleanly. How much: a trial in Settings (Scott, 2026-11-07, to pick by
-/// eye on the iPad), 18, 24 or 30 %.
-enum SelectionTint {
-    static let key = "selectionTint"
-    static let standard = 24
-    static let choices = [18, 24, 30]
-    static func fill(_ t: Int, _ percent: Int) -> Color {
-        var a = (r: CGFloat(0), g: CGFloat(0), b: CGFloat(0), x: CGFloat(0)), p = a
-        UIColor(Theme.track[t]).getRed(&a.r, green: &a.g, blue: &a.b, alpha: &a.x)
-        UIColor(Theme.page).getRed(&p.r, green: &p.g, blue: &p.b, alpha: &p.x)
-        let k = CGFloat(percent) / 100
-        return Color(red: p.r + (a.r - p.r) * k, green: p.g + (a.g - p.g) * k, blue: p.b + (a.b - p.b) * k)
     }
 }
 

@@ -11,15 +11,6 @@ enum SoundFamily: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// Where the screen link points, per firmware: the pages Jib's tabs open on the FM-1, and the layer that
-/// is the keys' (SLOOP: SEL held, LY_SCALE; Skiff: SCL held). SLOOP's PAGES, or Skiff's (127: HOME).
-struct ScreenMap {
-    let home, presets, song, notes, pattern, selLayer: Int
-    static let sloop = ScreenMap(home: 37, presets: 28, song: 30, notes: 34, pattern: 35, selLayer: 5)
-    static let skiff = ScreenMap(home: 127, presets: 35, song: 45, notes: 41, pattern: 43, selLayer: 3)
-    @MainActor static func of(_ s: DeviceSession) -> ScreenMap { s.dialect == .skiff ? .skiff : .sloop }
-}
-
 /// One page of the FM-1 (firmware params.c PAGES): its title, button, and the parameter under each
 /// knob (nil: an empty knob). scope 0 = the track's P_*, 1 = global G_*.
 struct SoundPage: Identifiable {
@@ -825,4 +816,3 @@ struct KeyMapStrip: View {
         return oneVoice ? what + " (one voice: the root only)" : what
     }
 }
-

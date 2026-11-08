@@ -293,35 +293,3 @@ struct SkiffStepInspector: View {
         .accessibilityAddTraits(.isToggle)
     }
 }
-
-/// SEQ › NOTES and FEEL on the FM-1 (pages 1 and 2 of 5): KNOB 1 moves the step cursor there, and the screen link says
-/// where (SCREEN's cursor: the selection's first step, its second the last). The app's selected step follows it and the
-/// grid pages to keep it in view; a selection of several steps on the FM-1 is picked here too (Scott, 2026-11-08:
-/// "the app should highlight said steps and make sure that the selected one is always on screen").
-@MainActor
-enum SeqCursor {
-    static let pages: Set<Int> = [41, 42]               // NOTES, FEEL (Skiff 2.2 params.c)
-    /// The steps last picked from the FM-1's selection, so a later single-step cursor takes back only those.
-    private static var mirrored: Set<Int> = []
-
-    static func follow(_ s: UIState?, session: DeviceSession, ui: EditorUI) {
-        guard session.screenLinked, session.screenCursor, let s, !s.home, pages.contains(s.page), let c = s.cursor else { return }
-        let t = session.selectedTrack
-        let top = max(0, session.stepCount - 1)
-        let first = min(max(0, c), top), last = min(max(first, s.cursor2 ?? first), top)
-        if ui.selectedStep[t] != first { ui.selectedStep[t] = first }
-        if last > first {
-            let range = Set(first...last)
-            if ui.stepSel != range { ui.stepSel = range; ui.noteSel = [] }
-            mirrored = range
-        } else if !mirrored.isEmpty {
-            if ui.stepSel == mirrored { ui.stepSel = [] }
-            mirrored = []
-        }
-        // the step on screen: page the grid to its bar when it's off the bar in view
-        let bar = first / 16
-        if Int((ui.viewStep / 16).rounded()) != bar {
-            ui.viewJump = ViewJump(bar: bar, id: (ui.viewJump?.id ?? 0) + 1)
-        }
-    }
-}

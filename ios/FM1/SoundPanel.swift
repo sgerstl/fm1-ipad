@@ -336,12 +336,6 @@ struct SoundPanelHost<Content: View>: View {
     }
 }
 
-/// Settings' switch for the rail of FX…SEQ keys down the right edge. On by default.
-enum SoundButtons {
-    static let key = "soundRail"
-}
-
-
 /// SEQ on the rail (as the FM-1's): on the Song tab it steps SEQ's pages as the tab's own places, the same as an FM-1
 /// SEQ press: NOTES and FEEL the step inspector, PATTERN the whole-track popover, AUTOMATION the motion lanes, SONG the
 /// lanes. From Mix or Sounds it goes to the Song tab first, on NOTES. Linked, the FM-1 goes there too (and its screen
