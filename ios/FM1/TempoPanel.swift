@@ -1,10 +1,10 @@
 import SloopKit
 import SwiftUI
 
-// The tempo, from the top bar's BPM (Scott, 2026-11-05): a panel at the finger in Lupe's own menu style
-// (level 3, as the Arrange hold menu): the BPM large between − and + (hold to repeat, speeding up), Tap tempo,
-// a number typed in with its range. Following another clock (CLOCK / SYNC = USB or TRS) it's all off, and says
-// why. BPM LOCK doesn't stop it: that only makes the FM-1's SELECT knob need GLO held (Skiff ui_input.c).
+// The tempo, from the top bar's BPM: a panel at the readout in Lupe's own menu style (level 3). The BPM is a column like
+// every other value (Scott, 2026-11-09, option A): slide it to set, tap the number for a keypad in the panel; beside it
+// a big square Tap. Following another clock (CLOCK / SYNC = USB or TRS) it's all off, and says why. BPM LOCK doesn't stop
+// it: that only makes the FM-1's SELECT knob need GLO held (Skiff ui_input.c).
 
 /// Where the tempo panel opens (global): under the readout that was tapped. It grows out of the readout and shrinks
 /// back into it (Scott, 2026-11-06: it used to pop in): scale and opacity anchored at the readout, a short spring in
@@ -30,7 +30,7 @@ struct TempoOverlay: View {
                     let left = min(max(16, at.x - frame.minX), g.size.width - Self.width - 16)
                     // the readout's middle, over the panel's top edge
                     let anchor = UnitPoint(x: min(1, max(0, (at.x - frame.minX + Self.readoutHalf - left) / Self.width)), y: 0)
-                    TempoPanel(session: session) { ui.tempoAt = nil }
+                    TempoPanel(session: session, ui: ui) { ui.tempoAt = nil }
                         .fixedSize()
                         .closesOnOutsideTouch { ui.tempoAt = nil }
                         .alignmentGuide(.leading) { _ in -left }
@@ -48,71 +48,51 @@ struct TempoOverlay: View {
 
 struct TempoPanel: View {
     let session: DeviceSession
+    let ui: EditorUI
     let close: () -> Void
+    /// The keypad's open, and the digits typed so far.
+    @State private var typing = false
     @State private var typed = ""
     @State private var typedProblem: String?
     @State private var taps: [Date] = []
-    @FocusState private var fieldFocused: Bool
 
     private var range: ClosedRange<Int> { session.bpmRange }
     private var following: String? { session.externalClock }
+    static let tapSide: CGFloat = 76
 
     var body: some View {
         let off = following != nil
         VStack(alignment: .leading, spacing: 12) {
-            Text("Tempo").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                .accessibilityAddTraits(.isHeader)
-            HStack(spacing: 12) {
-                RepeatKey(symbol: "minus", label: "Slower", enabled: !off && session.bpm > range.lowerBound) { session.setBPM(session.bpm - 1) }
-                Text("\(session.bpm)").font(.system(size: 44, weight: .semibold)).monospacedDigit()
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(off ? Theme.textSecondary : Theme.text)
-                    .accessibilityElement()
-                    .accessibilityLabel("Tempo")
-                    .accessibilityValue("\(session.bpm) BPM")
-                    .accessibilityAdjustableAction { dir in
-                        guard !off else { return }
-                        session.setBPM(session.bpm + (dir == .increment ? 1 : -1))
-                    }
-                RepeatKey(symbol: "plus", label: "Faster", enabled: !off && session.bpm < range.upperBound) { session.setBPM(session.bpm + 1) }
+            // (no heading: the column says TEMPO)
+            HStack(spacing: 8) {
+                KnobControl(ui: ui, tapped: { if !off { openKeypad() } }, column: (number: 0, tint: Theme.text, hot: false)) { spec }
+                    .frame(height: Self.tapSide)
+                    .overlay { if typing { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, lineWidth: 2).allowsHitTesting(false) } }
+                    .disabled(off)
+                    .opacity(off ? 0.5 : 1)
+                    .accessibilityHint("Slide to set it. Tap to type a number")
+                Button(action: tap) {
+                    Text("Tap").font(.system(size: 17, weight: .semibold))
+                        .frame(width: Self.tapSide, height: Self.tapSide).raisedKey()
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .disabled(off || typing)
+                .accessibilityLabel("Tap tempo")
+                .accessibilityHint("Tap in time: the tempo follows the last few taps")
+            }
+            if typing { keypad }
+            if let p = typedProblem {
+                Label(p, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Theme.text)
             }
             if let f = following {
                 Label("Following \(f) clock: the tempo comes from the other device. Set CLOCK to INT on the FM-1 to set it here.",
                       systemImage: "metronome")
                     .font(.system(size: 13)).foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("\(range.lowerBound)–\(range.upperBound) BPM").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    .frame(maxWidth: .infinity)
-            }
-            Button(action: tap) {
-                Text(taps.count >= 2 ? "Tap tempo · \(taps.count) taps" : taps.count == 1 ? "Tap again…" : "Tap tempo")
-                    .font(.system(size: 17)).frame(maxWidth: .infinity, minHeight: 52).raisedKey()
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .disabled(off)
-            .accessibilityHint("Tap in time: the tempo follows the last few taps")
-            HStack(spacing: 8) {
-                TextField("Type a BPM", text: $typed)
-                    .keyboardType(.numberPad)
-                    .font(.system(size: 17)).monospacedDigit()
-                    .focused($fieldFocused)
-                    .onSubmit(setTyped)
-                    .padding(.horizontal, 12).frame(height: 44)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
-                    .accessibilityLabel("Tempo in BPM, \(range.lowerBound) to \(range.upperBound)")
-                Button(action: setTyped) {
-                    Text("Set").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 16).frame(minHeight: 44).raisedKey()
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-                .disabled(typed.isEmpty)
-                .accessibilityLabel("Set tempo")
-            }
-            .disabled(off)
-            if let p = typedProblem {
-                Label(p, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Theme.text)
+            } else if !typing {
+                Text("\(range.lowerBound)–\(range.upperBound) BPM · slide, or tap to type")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
         }
         .padding(16)
@@ -122,14 +102,56 @@ struct TempoPanel: View {
         .task { await session.refreshTempo() }
         .onKeyPress(.upArrow) { session.setBPM(session.bpm + 1); return .handled }
         .onKeyPress(.downArrow) { session.setBPM(session.bpm - 1); return .handled }
-        .onKeyPress(.escape) { close(); return .handled }
+        .onKeyPress(.escape) { if typing { typing = false } else { close() }; return .handled }
         .background {
             Button("Close tempo", action: close).keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(.isModal)
         .accessibilityLabel("Tempo")
         .accessibilityAction(.escape) { close() }
+    }
+
+    /// The tempo as a column (the sound panel's): what's typed while the keypad is open, else the BPM.
+    private var spec: KnobSpec {
+        let shown = typing ? (typed.isEmpty ? "–" : typed) : "\(session.bpm)"
+        return KnobSpec(id: "tempo", colour: Theme.text, label: "TEMPO", value: session.bpm, range: range, stepperStep: 1,
+                        shown: "\(shown) BPM", spoken: "\(session.bpm) BPM", bipolar: false, defaultValue: 120) { session.setBPM($0) }
+    }
+
+    /// The panel's own keypad (not the system keyboard, which would cover the page): digits, delete, Set.
+    private var keypad: some View {
+        let keys: [String] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "Set"]
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+            ForEach(keys, id: \.self) { k in
+                Button { press(k) } label: {
+                    Group {
+                        if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
+                    }
+                    .font(.system(size: k == "Set" ? 15 : 19, weight: .semibold)).monospacedDigit()
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .raisedKey(primary: k == "Set")
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .disabled(k == "Set" && typed.isEmpty)
+                .accessibilityLabel(k == "⌫" ? "Delete" : k == "Set" ? "Set tempo" : k)
+            }
+        }
+        .transition(.opacity)
+    }
+
+    private func openKeypad() {
+        typed = ""
+        typedProblem = nil
+        typing = true
+    }
+
+    private func press(_ k: String) {
+        switch k {
+        case "⌫": typed = String(typed.dropLast()); typedProblem = nil
+        case "Set": setTyped()
+        default: if typed.count < 3 { typed += k; typedProblem = nil }
+        }
     }
 
     /// Tap tempo: the average of the last few intervals (four at most); a pause of 2 s starts over.
@@ -143,59 +165,16 @@ struct TempoPanel: View {
         session.setBPM(Int((60 / avg).rounded()))
     }
 
-    /// The typed number, checked on Set (or Return): in range, or said what's wrong.
+    /// The typed number, checked on Set: in range, or said what's wrong (the keypad stays open to fix it).
     private func setTyped() {
-        guard let v = Int(typed.trimmingCharacters(in: .whitespaces)) else {
-            typedProblem = "Type a whole number, \(range.lowerBound) to \(range.upperBound)"
-            return
-        }
+        guard let v = Int(typed) else { return }
         guard range.contains(v) else {
             typedProblem = "\(v) is outside \(range.lowerBound)–\(range.upperBound) BPM"
             return
         }
         typedProblem = nil
         typed = ""
-        fieldFocused = false
+        typing = false
         session.setBPM(v)
-    }
-}
-
-/// − or +: a press steps once; held, it repeats, faster the longer it's held (0.4 s, then every 0.15 s, every
-/// 0.05 s after 1.5 s). A chiclet that sinks while pressed, as PressSink's do.
-struct RepeatKey: View {
-    let symbol: String
-    let label: String
-    var enabled = true
-    let step: () -> Void
-    @State private var pressed = false
-    @State private var repeating: Task<Void, Never>?
-
-    var body: some View {
-        Image(systemName: symbol).font(.system(size: 20, weight: .semibold))
-            .foregroundStyle(enabled ? Theme.text : Theme.textTertiary)
-            .frame(width: 52, height: 52)
-            .raisedKey()
-            .environment(\.keyPressed, pressed)
-            .contentShape(Rectangle())
-            .onLongPressGesture(minimumDuration: 30, maximumDistance: 44, perform: {}) { down in
-                guard enabled else { return }
-                pressed = down
-                repeating?.cancel()
-                guard down else { return }
-                step()
-                repeating = Task { @MainActor in
-                    let start = Date()
-                    try? await Task.sleep(for: .milliseconds(400))
-                    while !Task.isCancelled {
-                        step()
-                        try? await Task.sleep(for: .milliseconds(Date().timeIntervalSince(start) > 1.5 ? 50 : 150))
-                    }
-                }
-            }
-            .onDisappear { repeating?.cancel() }
-            .accessibilityElement()
-            .accessibilityLabel(label)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { if enabled { step() } }
     }
 }

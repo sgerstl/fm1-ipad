@@ -98,6 +98,8 @@ struct KnobControl: View {
     /// The page around it (Shape), told on any touch: touching a knob makes its page the active one (on the FM-1
     /// too when linked), and the knob works at once (a first tap that only activated looked dead, 2026-11-05).
     var activate: (() -> Bool)? = nil
+    /// A column's tap, when it does something of its own (the tempo's opens its keypad); nil: a tap only activates.
+    var tapped: (() -> Void)? = nil
     /// Shape's face (Skiff's column): its number, the track's colour, and whether it's the knob just turned.
     var column: (number: Int, tint: Color, hot: Bool)? = nil
     /// Another face altogether (the mixer's fader), given the knob and whether it's being dragged.
@@ -143,6 +145,7 @@ struct KnobControl: View {
             }
             .onTapGesture(coordinateSpace: .global) { at in
                 _ = activate?()
+                if let tapped { tapped(); return }
                 // a column (Shape, the sound panel, the Mixer's cards): the tap only focuses it, its page the active
                 // one (Scott, 2026-11-06); a slide turns it. A dial (the track popover) opens the big control.
                 guard column == nil else { return }
