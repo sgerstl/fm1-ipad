@@ -488,3 +488,20 @@ struct PatternPane: View {
         }
     }
 }
+
+/// Which way the Song tab shows the song. It follows the playback mode when that changes (Loop entry: Pads; Play song
+/// and Play once: Timeline) and holding ARP on the FM-1 (Skiff's PERFORM layer); in between, the switch is the user's.
+enum SongView: Equatable { case timeline, pads }
+
+/// Timeline / Pads, at the head of either view.
+struct SongViewSwitch: View {
+    let ui: EditorUI
+
+    var body: some View {
+        SegmentedKeys(label: "Song view", options: ["Timeline", "Pads"], selected: ui.songView == .pads ? 1 : 0) { k in
+            ui.songView = k == 1 ? .pads : .timeline
+        }
+        .fixedSize()
+        .accessibilityHint("Timeline: every track's entries along the bars. Pads: one track's entries as 16 pads to launch, the scenes under them.")
+    }
+}

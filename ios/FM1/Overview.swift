@@ -328,11 +328,6 @@ private struct OverviewPlayhead: View {
     }
 }
 
-struct TrackMenu: Equatable {
-    var track: Int
-    var at: CGPoint
-}
-
 /// A track's number (2026-11-05): as a key (`selected` given, the track box), a grey chiclet at rest and,
 /// on the selected track, its colour, lifted to elevation 2 with the ring; as a label (`selected` nil, a
 /// panel's heading), its colour, flat. Muted, it sits down on its edge, grey, with the underline.
