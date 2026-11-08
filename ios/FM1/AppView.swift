@@ -208,11 +208,10 @@ extension AppView {
                     PlacedMenu(title: "Section \(DeviceSession.sectionName(m.section))", groups: sectionGroups(m), at: m.at,
                                layer: g.size, close: { ui.sectionMenu = nil })
                         .id("\(m.section)-\(String(describing: m.mode))")
-                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                        .transition(PlacedMenu.transition(at: m.at, layer: g.size, reduceMotion: reduceMotion))
                 }
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.sectionMenu)
     }
 
     /// A held section's items: replace or clear it; Clear asks again, here, with what clearing costs.

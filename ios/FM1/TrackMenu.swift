@@ -29,11 +29,10 @@ struct TrackMenuLayer: View {
                                groups: Self.groups(session, ui, track: m.track), at: m.at, layer: g.size,
                                close: { ui.trackMenu = nil })
                         .id(m.track)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                        .transition(PlacedMenu.transition(at: m.at, layer: g.size, reduceMotion: reduceMotion))
                 }
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackMenu)
     }
 
     /// Its items: Select sound (the sound panel, for the track), a sample, its motion, its steps.

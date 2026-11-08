@@ -117,25 +117,28 @@ struct SkiffArrangePage: View {
         }
     }
 
-    @ViewBuilder private var menuOverlay: some View {
-        if let m = menu, menuStillThere(m) {
-            let (title, groups, close): (String, [[MenuItem]], () -> Void) = {
-                switch m.kind {
-                case .block(let r):
-                    let b = block(r)!
-                    return ("T\(r.track + 1) · entr\(b.isChain ? "ies" : "y") \(Entries.letters(b.entries))", menus.block(r.track, b),
-                            { menu = nil; selection = r; blockFocus = r })        // focus goes back to the block
-                case .add(let t):
-                    return ("T\(t + 1) · after the last entry", menus.add(t), { menu = nil })
-                }
-            }()
-            GeometryReader { g in
-                ZStack(alignment: .topLeading) {
-                    // a touch anywhere else closes it, and still reaches the page (OutsideTouch)
-                    Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
-                    PlacedMenu(title: title, groups: groups, at: CGPoint(x: m.at.x - pageFrame.minX, y: m.at.y - pageFrame.minY),
-                               layer: g.size, margin: 0, close: close)
+    /// An open menu's title, items, and what closing it does (a block's: focus back to the block).
+    private func menuContent(_ m: OpenMenu) -> (title: String, groups: [[MenuItem]], close: () -> Void) {
+        switch m.kind {
+        case .block(let r):
+            let b = block(r)!
+            return ("T\(r.track + 1) · entr\(b.isChain ? "ies" : "y") \(Entries.letters(b.entries))", menus.block(r.track, b),
+                    { menu = nil; selection = r; blockFocus = r })        // focus goes back to the block
+        case .add(let t):
+            return ("T\(t + 1) · after the last entry", menus.add(t), { menu = nil })
+        }
+    }
+
+    private var menuOverlay: some View {
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                // a touch anywhere else closes it, and still reaches the page (OutsideTouch)
+                Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
+                if let m = menu, menuStillThere(m) {
+                    let c = menuContent(m), at = CGPoint(x: m.at.x - pageFrame.minX, y: m.at.y - pageFrame.minY)
+                    PlacedMenu(title: c.title, groups: c.groups, at: at, layer: g.size, margin: 0, close: c.close)
                         .id(m)
+                        .transition(PlacedMenu.transition(at: at, layer: g.size, reduceMotion: reduceMotion))
                 }
             }
         }

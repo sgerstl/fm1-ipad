@@ -60,14 +60,17 @@ struct AppMenuLayer: View {
     @Binding var menu: AppMenu?
     @State private var frame: CGRect = .zero
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         GeometryReader { g in
-            if let m = menu {
-                ZStack(alignment: .topLeading) {
-                    Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
-                    PlacedMenu(title: m.title, groups: m.groups(), at: CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY),
-                               fromKey: m.fromKey, layer: g.size, close: { menu = nil })
+            ZStack(alignment: .topLeading) {
+                Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
+                if let m = menu {
+                    let at = CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY)
+                    PlacedMenu(title: m.title, groups: m.groups(), at: at, fromKey: m.fromKey, layer: g.size, close: { menu = nil })
                         .id(m.id)
+                        .transition(PlacedMenu.transition(at: at, layer: g.size, reduceMotion: reduceMotion))
                 }
             }
         }
@@ -90,17 +93,32 @@ struct PlacedMenu: View {
     @AppStorage(Handedness.key) private var hand = Handedness.right
 
     var body: some View {
-        MenuPanel(title: title, groups: groups, close: close, maxHeight: layer.height - 2 * margin)
-            .fixedSize()
-            .closesOnOutsideTouch(close)
-            .alignmentGuide(.leading) { d in
-                -(fromKey ? min(max(margin, at.x), layer.width - d.width - margin)
-                          : hand.menuX(touch: at.x, menuWidth: d.width, in: layer.width, margin: margin))
-            }
-            .alignmentGuide(.top) { d in
-                -(fromKey ? (at.y + 8 + d.height <= layer.height ? at.y + 8 : max(margin, at.y - 8 - d.height))
-                          : Handedness.menuY(touch: at.y, menuHeight: d.height, in: layer.height, margin: margin))
-            }
+        // the panel inside a layer-sized frame, so the open and close scale can centre on the finger itself
+        ZStack(alignment: .topLeading) {
+            Color.clear.allowsHitTesting(false)
+            MenuPanel(title: title, groups: groups, close: close, maxHeight: layer.height - 2 * margin)
+                .fixedSize()
+                .closesOnOutsideTouch(close)
+                .alignmentGuide(.leading) { d in
+                    -(fromKey ? min(max(margin, at.x), layer.width - d.width - margin)
+                              : hand.menuX(touch: at.x, menuWidth: d.width, in: layer.width, margin: margin))
+                }
+                .alignmentGuide(.top) { d in
+                    -(fromKey ? (at.y + 8 + d.height <= layer.height ? at.y + 8 : max(margin, at.y - 8 - d.height))
+                              : Handedness.menuY(touch: at.y, menuHeight: d.height, in: layer.height, margin: margin))
+                }
+        }
+        .frame(width: layer.width, height: layer.height, alignment: .topLeading)
+    }
+
+    /// Opening out of the finger (a key's menu: out of the key's corner), eased, and closing back into it, quicker
+    /// (Scott, 2026-11-09: "expand out from where you touch, slight easing, smooth"). Reduce Motion: a fade.
+    static func transition(at: CGPoint, layer: CGSize, reduceMotion: Bool) -> AnyTransition {
+        if reduceMotion { return AnyTransition.opacity.animation(.easeOut(duration: 0.15)) }
+        let from = UnitPoint(x: at.x / max(1, layer.width), y: at.y / max(1, layer.height))
+        let grow = AnyTransition.scale(scale: 0.2, anchor: from).combined(with: .opacity)
+        return .asymmetric(insertion: grow.animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.24)),
+                           removal: grow.animation(.easeIn(duration: 0.16)))
     }
 }
 
