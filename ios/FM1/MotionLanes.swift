@@ -179,7 +179,7 @@ struct MotionLanes: View {
             let ids = (p.ids.compactMap { $0 } + p.picks.flatMap { $0.compactMap { $0 } })
                 .filter { !have.contains($0) && recordable(session, $0) && seen.insert($0).inserted }
             guard !ids.isEmpty else { return nil }
-            return MenuItem(title: p.title(session), children: {
+            return MenuItem.submenu(title: p.title(session), children: {
                 [ids.map { id in
                     MenuItem(title: session.trackDesc(id)?.label ?? "\(id)") {
                         ui.addedLanes[track, default: []].append(id)
@@ -783,12 +783,12 @@ struct MotionChip: View {
         let stopped = !MotionLanes.songPlays(session)
         ui.menu = JibMenu(title: "Motion · T\(track + 1)", groups: {
             [[MenuItem(title: ui.motionHidden ? "Show the lanes" : "Hide the lanes", enabled: !lanes.isEmpty) { ui.motionHidden.toggle() },
-              MenuItem(title: "+ Lane", enabled: stopped, children: { MotionLanes.addLaneGroups(session, ui, track: track) }),
+              MenuItem.submenu(title: "+ Lane", enabled: stopped, children: { MotionLanes.addLaneGroups(session, ui, track: track) }),
               MenuItem(title: "Clear T\(track + 1)'s motion", enabled: n > 0 && stopped) {
                   session.clearMotion(track: track)
                   ui.addedLanes[track] = nil
               }],
-             [MenuItem(title: "What uses the 64", enabled: session.motionUsed > 0, children: { MotionLanes.usage(session) })],
+             [MenuItem.submenu(title: "What uses the 64", enabled: session.motionUsed > 0, children: { MotionLanes.usage(session) })],
              [.note("Line: a recorded change, held until the next one."), .note("Diamond: a lock, this step only.")]]
         }, at: CGPoint(x: frame.minX, y: frame.maxY))
     }

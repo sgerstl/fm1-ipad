@@ -31,7 +31,7 @@ enum SaveSound {
             }
             var g = [first]
             if !used.isEmpty {
-                g.append([MenuItem(title: "Replace a saved sound", icon: "arrow.triangle.2.circlepath", children: {
+                g.append([MenuItem.submenu(title: "Replace a saved sound", icon: "arrow.triangle.2.circlepath", children: {
                     [used.keys.sorted().map { k in
                         MenuItem(title: "\(slotName(k)) · \(used[k]!.capitalized)") { ui.saveSound = SaveSoundRequest(slot: k, replacing: used[k]) }
                     }]

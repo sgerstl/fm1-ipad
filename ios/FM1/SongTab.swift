@@ -448,8 +448,7 @@ struct PatternPane: View {
         ui.menu = JibMenu(title: "T\(t + 1) · entry \(Entries.letter(entry))", groups: {
             [[MenuItem(title: "New empty pattern", icon: "plus.square") { Task { await store.send(.new(track: t, entry: entry)) } }],
              used.map { i in
-                MenuItem(title: "Pattern \(Entries.number(i + 1)) · \(pool[i].length) steps", chip: (Entries.number(i + 1), Theme.track[t]),
-                         note: false) { Task { await store.send(.set(track: t, entry: entry, pattern: i + 1)) } }
+                MenuItem(title: "Pattern \(Entries.number(i + 1)) · \(pool[i].length) steps", chip: (Entries.number(i + 1), Theme.track[t])) { Task { await store.send(.set(track: t, entry: entry, pattern: i + 1)) } }
              },
              free.isEmpty ? [] : [MenuItem(title: "Free patterns: \(free.count)", enabled: false, note: true)],
              [MenuItem(title: "Show the pattern pool", icon: "square.grid.2x2") { ui.poolOpen = true }]].filter { !$0.isEmpty }

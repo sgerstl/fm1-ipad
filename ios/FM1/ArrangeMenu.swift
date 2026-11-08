@@ -14,8 +14,30 @@ struct MenuItem {
     var checked = false
     /// A line that says something (a status, a reason), not a choice: smaller, wraps, never focused.
     var note = false
-    var children: (() -> [[MenuItem]])? = nil
-    var action: (() -> Void)? = nil
+    var action: (() -> Void)?
+    var children: (() -> [[MenuItem]])?
+
+    /// A line with nothing to do: a note, or a choice shown but not offered.
+    init(title: String, icon: String? = nil, chip: (text: String, colour: Color)? = nil, enabled: Bool = true,
+         checked: Bool = false, note: Bool = false) {
+        self.title = title; self.icon = icon; self.chip = chip; self.enabled = enabled
+        self.checked = checked; self.note = note; self.action = nil; self.children = nil
+    }
+
+    /// A choice: its trailing closure is what it does.
+    init(title: String, icon: String? = nil, chip: (text: String, colour: Color)? = nil, enabled: Bool = true,
+         checked: Bool = false, action: @escaping () -> Void) {
+        self.title = title; self.icon = icon; self.chip = chip; self.enabled = enabled
+        self.checked = checked; self.note = false; self.action = action; self.children = nil
+    }
+
+    /// A submenu: its groups, built when it opens (a factory, so a trailing closure only ever means an action).
+    static func submenu(title: String, icon: String? = nil, enabled: Bool = true, checked: Bool = false,
+                        children: @escaping () -> [[MenuItem]]) -> MenuItem {
+        var m = MenuItem(title: title, icon: icon, enabled: enabled, checked: checked)
+        m.children = children
+        return m
+    }
 
     static func note(_ text: String) -> MenuItem { MenuItem(title: text, enabled: false, note: true) }
 }
@@ -269,7 +291,7 @@ struct MenuPanel: View {
         }]]
         if !session.userPresets.isEmpty {
             let users = session.userPresets
-            g.append([MenuItem(title: "User presets", icon: "person", checked: current?.isUser == true, children: {
+            g.append([MenuItem.submenu(title: "User presets", icon: "person", checked: current?.isUser == true, children: {
                 [users.map { u in
                     MenuItem(title: u.name, checked: current?.userSlot == u.slot) { edits.setSound(t, b, EntrySound(s0: 64 + u.slot, s1: 0)) }
                 }]
@@ -278,7 +300,7 @@ struct MenuPanel: View {
         var engines: [MenuItem] = []
         for (e, name) in (session.info?.engines ?? []).enumerated() {
             guard session.shape.canPlay(track: t, engine: e), let presets = session.namesCache[e], !presets.isEmpty else { continue }
-            engines.append(MenuItem(title: name.capitalized, icon: "waveform", checked: current?.engine == e, children: {
+            engines.append(MenuItem.submenu(title: name.capitalized, icon: "waveform", checked: current?.engine == e, children: {
                 [presets.enumerated().map { k, p in
                     MenuItem(title: p.capitalized, checked: current?.engine == e && current?.s1 == k) { edits.setSound(t, b, EntrySound(s0: e + 1, s1: k)) }
                 }]
@@ -305,7 +327,7 @@ struct MenuPanel: View {
         first.append(MenuItem(title: "Rest", icon: "pause", enabled: idle) { edits.appendAtEnd(t, SongEntry(pattern: SongEntry.rest, reps: 1)) })
         let kept = (0..<64).filter { (store.pool?.patterns[$0].length ?? 0) > 0 }
         let owner = owners()
-        let pick = MenuItem(title: "Pick a pattern…", icon: "square.grid.2x2", enabled: idle && !kept.isEmpty, children: {
+        let pick = MenuItem.submenu(title: "Pick a pattern…", icon: "square.grid.2x2", enabled: idle && !kept.isEmpty, children: {
             [kept.map { p in
                 let tracks = owner[p] ?? []
                 let colour = tracks.count == 1 ? Theme.track[tracks[0]] : Entries.tone(p + 1)

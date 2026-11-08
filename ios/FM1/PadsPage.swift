@@ -486,7 +486,7 @@ struct PadsPage: View {
         })
         let kept = (0..<64).filter { (store.pool?.patterns[$0].length ?? 0) > 0 }
         let owners = Self.owners(store.song)
-        let pick = MenuItem(title: "Pick a pattern…", icon: "square.grid.2x2", enabled: idle && !kept.isEmpty, children: {
+        let pick = MenuItem.submenu(title: "Pick a pattern…", icon: "square.grid.2x2", enabled: idle && !kept.isEmpty, children: {
             [kept.map { p in
                 let tracks = owners[p] ?? []
                 let colour = tracks.count == 1 ? Theme.track[tracks[0]] : Entries.tone(p + 1)
@@ -537,7 +537,7 @@ struct PadsPage: View {
                 ui.chooseSound(session, track: t, entry: SoundEntryTarget(ref: EntryRef(track: t, entry: i), pad: true))
             }])
         }
-        g.append([MenuItem(title: "Move to…", icon: "arrow.up.and.down.and.arrow.left.and.right",
+        g.append([MenuItem.submenu(title: "Move to…", icon: "arrow.up.and.down.and.arrow.left.and.right",
                            enabled: idle && !session.playing, children: { [moveTargets(t, i, list)] })])
         g.append([MenuItem(title: "Clear entry", icon: "trash", enabled: idle) { clear(t, i, e) }])
         return g

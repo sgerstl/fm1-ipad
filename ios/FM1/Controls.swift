@@ -165,7 +165,7 @@ struct PressSink: ButtonStyle {
 enum DeveloperItems {
     @MainActor static func item(firmware: FirmwareCentre) -> MenuItem? {
         #if DEBUG
-        return MenuItem(title: "Developer", icon: "hammer", children: {
+        return MenuItem.submenu(title: "Developer", icon: "hammer", children: {
             [
                 [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true }],
             ]
