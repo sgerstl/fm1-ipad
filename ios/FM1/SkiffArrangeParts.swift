@@ -213,7 +213,7 @@ struct EntryInspector: View {
 
     private var patternLine: String {
         if block.kind != .pattern { return "A rest: silence for \(block.reps) pass\(block.reps == 1 ? "" : "es")" }
-        if block.isChain { return "A chain: " + block.entries.map { list.entries[$0].isRest ? "REST" : Entries.number(list.entries[$0].pattern) }.joined(separator: " → ") }
+        if block.isChain { return "A chain: " + block.entries.map { list.entries[$0].label }.joined(separator: " → ") }
         let others = list.sharing(block.entries.lowerBound)
         let p = "Pattern \(Entries.number(first.pattern))"
         return others.isEmpty ? p + ", on this entry only" : p + ", also on entr\(others.count == 1 ? "y" : "ies") " + others.map(Entries.letter).joined(separator: ", ")

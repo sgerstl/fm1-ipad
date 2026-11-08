@@ -97,7 +97,7 @@ struct TrackStripCard: View {
     static func previewText(_ p: SkiffSongStore.SceneTrack, _ l: SongList?) -> String {
         guard let e = p.entry else { return p.muted ? "no entry · muted" : "no entry" }
         let x = l?.entries[safe: e] ?? .empty
-        let name = "\(Entries.letter(e)) · " + (x.isRest ? "REST" : x.isEmpty ? "empty" : String(format: "%02d", x.pattern))
+        let name = "\(Entries.letter(e)) · " + x.label
         let stays = l?.entryOn == e ? "stays on " : ""
         return stays + name + (p.muted ? " · muted" : "")
     }
@@ -107,7 +107,7 @@ struct TrackStripCard: View {
         guard let l else { return ("—", "") }
         func name(_ i: Int) -> String {
             let e = l.entries[safe: i] ?? .empty
-            return "\(Entries.letter(i)) · " + (e.isRest ? "REST" : e.isEmpty ? "empty" : String(format: "%02d", e.pattern))
+            return "\(Entries.letter(i)) · " + e.label
         }
         guard let on = l.entryOn else { return (playing ? "Quiet" : "On no entry", "") }
         var plays = name(on)

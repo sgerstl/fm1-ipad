@@ -272,7 +272,7 @@ struct PadsPage: View {
         let colour = Theme.track[t]
         let ink = playing ? Theme.onColour : Theme.text
         let letter = Entries.letter(i)
-        let title = e.isEmpty ? "" : e.isRest ? "REST" : String(format: "%02d", e.pattern)
+        let title = e.isEmpty ? "" : e.label
         let state: String = {
             if e.isEmpty { return "Empty" }
             if playing {
@@ -530,7 +530,7 @@ struct PadsPage: View {
             guard let r = PadMove.apply(list.entries, from: i, to: j) else { return nil }
             let other = list.entries[j]
             let what = other.isEmpty ? (r.landed == j ? "empty" : "lands on \(Entries.letter(r.landed))")
-                : "swap with \(other.isRest ? "REST" : Entries.number(other.pattern))"
+                : "swap with \(other.label)"
             return MenuItem(title: "Pad \(Entries.letter(j)) · \(what)") { move(t, from: i, to: j) }
         }
     }

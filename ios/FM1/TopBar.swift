@@ -262,7 +262,7 @@ struct TopBar: View {
         .fixedSize()            // the controls keep their size; the connection label gives way
     }
 
-    private var recording: Bool { session.recording || session.song.songRecording }
+    private var recording: Bool { session.isRecordingAnything }
 
     private var transportGroup: some View {
         HStack(spacing: 4) {

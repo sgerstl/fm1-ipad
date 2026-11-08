@@ -27,6 +27,10 @@ public struct SongEntry: Equatable, Sendable {
     public static let empty = SongEntry()
     public var isEmpty: Bool { pattern == 0 }
     public var isRest: Bool { pattern == Self.rest }
+    /// How the screen names it: its pattern number ("05"), REST, or "empty".
+    public var label: String { isEmpty ? "empty" : isRest ? "REST" : String(format: "%02d", pattern) }
+    /// An entry's letter: A for the first of a track's 16.
+    public static func letter(_ i: Int) -> String { String(UnicodeScalar(UInt8(65 + i))) }
     /// The pool index (0...63) it names, if it names a pattern.
     public var poolIndex: Int? { (1...64).contains(pattern) ? pattern - 1 : nil }
 }

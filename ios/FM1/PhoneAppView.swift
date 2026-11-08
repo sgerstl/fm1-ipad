@@ -119,7 +119,7 @@ struct PhoneTopBar: View {
     @Environment(FirmwareCentre.self) private var firmware
     @State private var moreFrame: CGRect = .zero
 
-    private var recording: Bool { session.recording || session.song.songRecording }
+    private var recording: Bool { session.isRecordingAnything }
     @State private var chipFrames: [Int: CGRect] = [:]
     @State private var pressAt = CGPoint(x: 40, y: 30)
     @State private var readoutFrame: CGRect = .zero

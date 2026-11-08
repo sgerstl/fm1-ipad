@@ -71,6 +71,8 @@ public enum ConnectionStatus: Equatable, Sendable {
 public final class DeviceSession {
     public private(set) var status: ConnectionStatus = .searching
     public var isConnected: Bool { if case .connected = status { true } else { false } }
+    /// Recording anything: a loop's notes or knobs, or SLOOP's song.
+    public var isRecordingAnything: Bool { recording || song.songRecording }
     public private(set) var info: DeviceInfo?
     /// The connected firmware (nil until one connects).
     public private(set) var dialect: FirmwareDialect?

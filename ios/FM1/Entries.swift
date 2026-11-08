@@ -10,7 +10,7 @@ struct EntryRef: Equatable, Hashable {
 }
 
 enum Entries {
-    static func letter(_ i: Int) -> String { String(UnicodeScalar(UInt8(65 + i))) }
+    static func letter(_ i: Int) -> String { SongEntry.letter(i) }
     static func letters(_ r: ClosedRange<Int>) -> String { r.count == 1 ? letter(r.lowerBound) : "\(letter(r.lowerBound))–\(letter(r.upperBound))" }
     static func number(_ p: Int) -> String { String(format: "%02d", p) }
     /// Blocks take their track's colour (Scott, 2026-11-05); a pattern no single track names is one of

@@ -120,7 +120,7 @@ public enum SongSections {
         // the entries the edges fall inside
         for k in [a, b] where k > 0 && k < us.count && us[k - 1].origin == us[k].origin {
             let pass = us[..<k].filter { $0.origin == us[k].origin }.count
-            let letter = String(UnicodeScalar(UInt8(65 + us[k].origin)))
+            let letter = SongEntry.letter(us[k].origin)
             none.splits.append("Splits \(letter) at its \(passWord(pass + 1)) pass")
         }
         // the section's units get their own origins, so they stay apart from what's around them
@@ -165,7 +165,7 @@ public enum SongSections {
         var split: String?
         if k > 0 && k < us.count && us[k - 1].origin == us[k].origin {
             let pass = us[..<k].filter { $0.origin == us[k].origin }.count
-            split = "splits \(String(UnicodeScalar(UInt8(65 + us[k].origin)))) after its \(passWord(pass)) pass"
+            split = "splits \(SongEntry.letter(us[k].origin)) after its \(passWord(pass)) pass"
         }
         var after = Array(us[k...])
         for i in after.indices { after[i].origin += 100 }       // the part after a split stays its own entry

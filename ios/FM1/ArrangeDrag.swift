@@ -133,7 +133,7 @@ struct MoveSpot: Equatable {
 
     static func label(_ b: SongBlock, _ list: SongList) -> String {
         if b.kind != .pattern { return "REST ×\(b.reps)" }
-        let parts = b.entries.map { list.entries[$0].isRest ? "REST" : Entries.number(list.entries[$0].pattern) }
+        let parts = b.entries.map { list.entries[$0].label }
         return parts.joined(separator: "→") + " ×\(b.reps)"
     }
 }

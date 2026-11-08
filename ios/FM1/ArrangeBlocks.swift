@@ -27,7 +27,7 @@ struct BlockView: View {
     private var label: String {
         if isRest { return "REST" }
         if block.isChain {
-            return block.entries.map { list.entries[$0].isRest ? "REST" : Entries.number(list.entries[$0].pattern) }.joined(separator: "→")
+            return block.entries.map { list.entries[$0].label }.joined(separator: "→")
         }
         return Entries.number(first.pattern)
     }
