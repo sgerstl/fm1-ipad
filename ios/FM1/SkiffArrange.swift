@@ -103,7 +103,7 @@ struct SkiffArrangePage: View {
     /// The block whose menu is open: it stays lifted, and holds still.
     private var menuRef: EntryRef? { if case .block(let r) = menu?.kind { r } else { nil } }
 
-    // MARK: Menus (canvas board 2): Jib's own, at the finger, one style across the page
+    // MARK: Menus (canvas board 2): Lupe's own, at the finger, one style across the page
 
     private var menus: ArrangeMenus { ArrangeMenus(session: session, store: store, ui: ui) { selection = $0 } }
 
@@ -167,7 +167,7 @@ struct SkiffArrangePage: View {
             // (the playback mode moved to the top bar, beside play and stop: SongModeKeys, 2026-11-06)
             Spacer(minLength: 8)
             if !store.undoStack.isEmpty {
-                // Jib's own undo: the lists before the last change (a delete, a move, a section)
+                // Lupe's own undo: the lists before the last change (a delete, a move, a section)
                 Button { Task { await store.undo() } } label: {
                     Label("Undo", systemImage: "arrow.uturn.backward").font(.system(size: 15))
                         .padding(.horizontal, 14).frame(height: 44).raisedKey()

@@ -1,7 +1,7 @@
 import SloopKit
 import SwiftUI
 
-// A knob tapped: a big control at the finger in Jib's own menu style (level 3), no stepper (Scott, 2026-11-05).
+// A knob tapped: a big control at the finger in Lupe's own menu style (level 3), no stepper (Scott, 2026-11-05).
 // An arc of about 200 pt, its dot dragged anywhere round it (the slider it was compared with went 2026-11-06).
 // A parameter of named choices opens a list instead. It puts the default back on a double-tap and from a key,
 // and takes a typed number where the value is a plain one.

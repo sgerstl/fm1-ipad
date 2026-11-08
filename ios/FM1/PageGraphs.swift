@@ -31,7 +31,7 @@ private let lineColour = Theme.stepEmpty          // T_LINE
 private let dimColour = Theme.textTertiary        // T_DIM
 private let midColour = Theme.textSecondary       // T_MID
 
-/// The page's graph, picked by its title (Skiff's PAGES); nil: a page Jib draws no graph for yet.
+/// The page's graph, picked by its title (Skiff's PAGES); nil: a page Lupe draws no graph for yet.
 struct PageGraph: View {
     let session: DeviceSession
     let page: SoundPage
@@ -323,7 +323,7 @@ struct LiveLFOGraph: View {
     let colour: Color
     @State private var visible = true                  // scrolled off: the wave stops drawing
 
-    /// When Shape first showed an LFO: the stand-in restart while Jib sees none, shared so every LFO graph shows
+    /// When Shape first showed an LFO: the stand-in restart while Lupe sees none, shared so every LFO graph shows
     /// the same moment.
     @MainActor static let opened = Date()
     private var opened: Date { Self.opened }
@@ -375,7 +375,7 @@ extension SkiffLFO {
 
 // MARK: LFO DEST: each destination moving as far as its depth
 
-/// Jib's LFO DEST (Skiff 2.2 has the depths on MOD): each destination's row carries the running LFO, as tall as
+/// Lupe's LFO DEST (Skiff 2.2 has the depths on MOD): each destination's row carries the running LFO, as tall as
 /// its depth (±64 = the whole swing), the one of the knob just turned in the track's colour.
 struct LFODestGraph: View {
     let session: DeviceSession

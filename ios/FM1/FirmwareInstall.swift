@@ -2,17 +2,17 @@ import SloopKit
 import SwiftUI
 import UIKit
 
-/// Installing the firmware Jib carries (Skiff 2.2, SLOOP 2.8.4 with the screen link) over USB-MIDI, 2026-11-05, and
+/// Installing the firmware Lupe carries (Skiff 2.2, SLOOP 2.8.4 with the screen link) over USB-MIDI, 2026-11-05, and
 /// putting M-VAVE's stock V15 back (its own update loader writes it).
-/// Offers it when the FM-1 runs something else or waits in an update loader; picks it from the Developer menu.
+/// Offers it when the FM-1 runs something else or waits in an update loader; picks it from the connection menu (the phone's Developer submenu).
 /// While it runs the session lets go of the FM-1, the screen stays awake, and a cover keeps the app on this.
 @Observable @MainActor
 final class FirmwareCentre {
     enum Offer: Equatable {
         case loader(String)                 // a Felucca-family update loader waits, or M-VAVE's: finish the write
         case foreignLoader(String)          // another firmware's update mode: not ours to finish
-        case unsupported(String)            // runs something Jib doesn't speak
-        case update(String)                 // runs stock Skiff 2.2: Jib carries it with the screen link
+        case unsupported(String)            // runs something Lupe doesn't speak
+        case update(String)                 // runs stock Skiff 2.2: Lupe carries it with the screen link
     }
 
     enum Phase: Equatable {
@@ -75,7 +75,7 @@ final class FirmwareCentre {
 
     var isActive: Bool { phase != .idle }
 
-    // MARK: Watching for an FM-1 Jib can't use
+    // MARK: Watching for an FM-1 Lupe can't use
 
     /// Follows the session: a firmware it refused is offered at once; when nothing connects, the update ports are
     /// asked who is there (a loader on "Felucca Update", a stock FM-1 on "FM-1"). Never while installing.
@@ -124,13 +124,13 @@ final class FirmwareCentre {
             offer = ours ? .loader(id.text) : .foreignLoader(id.text)
             if let f = BundledFirmware.matching(identity: id.text) { target = f }
         } else if BundledFirmware.matching(identity: id.text).map({ $0.isStock }) ?? true {
-            offer = .unsupported(id.text)               // (stock V15 is one Jib carries, not one it speaks)
+            offer = .unsupported(id.text)               // (stock V15 is one Lupe carries, not one it speaks)
         }
     }
 
     var visibleOffer: Offer? { offer == dismissedOffer ? nil : offer }
 
-    /// Why `f` can't go on the FM-1 Jib last saw, in a line for the picker, or nil.
+    /// Why `f` can't go on the FM-1 Lupe last saw, in a line for the picker, or nil.
     func refusal(_ f: BundledFirmware) -> String? {
         switch FirmwareInstaller.refusal(for: f, running: seen)?.code {
         case .flashChip?: "Not on this FM-1. It runs V16, so it most likely has the newer flash chip, which SLOOP 2.8.4 can’t install on."
@@ -139,7 +139,7 @@ final class FirmwareCentre {
         }
     }
 
-    /// The FM-1 Jib last saw runs stock V16 or later.
+    /// The FM-1 Lupe last saw runs stock V16 or later.
     var seesNewStock: Bool {
         guard let id = seen, !id.isLoader, id.text.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil else { return false }
         return id.version >= 16
@@ -376,7 +376,7 @@ struct FirmwareOfferCard: View {
     }
 }
 
-/// Skiff or SLOOP: the Developer menu's way in, and the offer's.
+/// Skiff or SLOOP: the connection menu's way in (the phone's Developer submenu), and the offer's.
 struct FirmwarePicker: View {
     @Bindable var centre: FirmwareCentre
     let session: DeviceSession

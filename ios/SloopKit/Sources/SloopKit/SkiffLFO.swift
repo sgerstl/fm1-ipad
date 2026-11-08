@@ -72,7 +72,7 @@ public struct SkiffLFO: Equatable, Sendable {
     }
 }
 
-/// When the selected track's LFO restarted and where the clock is, as Jib can know it: the track's notes from
+/// When the selected track's LFO restarted and where the clock is, as Lupe can know it: the track's notes from
 /// Skiff's NOTES OUT (a note while none is held is a fresh phrase, voice.c lfo_restart) and MIDI clock since Start.
 public struct LFOClock: Equatable, Sendable {
     public private(set) var startedAt: Date?            // Start seen (nil: stopped, or no Start seen)
@@ -123,7 +123,7 @@ public struct LFOClock: Equatable, Sendable {
     }
 
     /// The selected track's LFO now: its cycles and the seconds since its restart. `opened`: when the page
-    /// opened, standing in for a restart Jib didn't see. `exact`: the phase is the device's, not a guess.
+    /// opened, standing in for a restart Lupe didn't see. `exact`: the phase is the device's, not a guess.
     public func lfoNow(_ lfo: SkiffLFO, track: Int, bpm fallbackBPM: Double, opened: Date, at now: Date)
         -> (cycles: Double, since: Double, bpm: Double, exact: Bool) {
         let bpm = bpm ?? fallbackBPM

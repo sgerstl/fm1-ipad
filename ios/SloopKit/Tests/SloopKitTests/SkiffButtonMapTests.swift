@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SloopKit
 
-/// The FM-1's buttons in Jib (vault skiff-arrange-spec.md, "Lupe and the FM-1's buttons"): the table, then the fake's
+/// The FM-1's buttons in Lupe (vault skiff-arrange-spec.md, "Lupe and the FM-1's buttons"): the table, then the fake's
 /// screen link carrying it both ways.
 @Suite struct SkiffButtonMapTests {
     typealias M = SkiffButtonMap
@@ -39,7 +39,7 @@ import Testing
 
 extension SkiffScreenLinkTests {
     /// GLO on the FM-1 opens the mixer on its tab and steps through them; another button lands elsewhere; and a tab
-    /// picked in Jib (the page it maps to) goes to the FM-1.
+    /// picked in Lupe (the page it maps to) goes to the FM-1.
     @Test func theButtonMapBothWaysOnTheFake() async throws {
         let fake = FakeSkiff(try SkiffFixture.load())
         fake.screenLink = true

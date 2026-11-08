@@ -380,7 +380,7 @@ struct PatternPane: View {
     private func tracksMenu(_ t: Int) -> some View {
         // the pad press menu's look, as every menu (Scott, 2026-11-08), opened under the key
         Button {
-            ui.menu = JibMenu(title: "Tracks", groups: { tracksGroups(t) }, at: CGPoint(x: headerFrame.minX, y: headerFrame.maxY - 4))
+            ui.menu = AppMenu(title: "Tracks", groups: { tracksGroups(t) }, at: CGPoint(x: headerFrame.minX, y: headerFrame.maxY - 4))
         } label: {
             HStack(spacing: 8) {
                 TrackChip(track: t, selected: true).frame(width: 28, height: 28)
@@ -445,7 +445,7 @@ struct PatternPane: View {
         guard let entry else { return }
         let pool = store.pool?.patterns ?? []
         let used = pool.indices.filter { !pool[$0].isFree }, free = pool.indices.filter { pool[$0].isFree }
-        ui.menu = JibMenu(title: "T\(t + 1) · entry \(Entries.letter(entry))", groups: {
+        ui.menu = AppMenu(title: "T\(t + 1) · entry \(Entries.letter(entry))", groups: {
             [[MenuItem(title: "New empty pattern", icon: "plus.square") { Task { await store.send(.new(track: t, entry: entry)) } }],
              used.map { i in
                 MenuItem(title: "Pattern \(Entries.number(i + 1)) · \(pool[i].length) steps", chip: (Entries.number(i + 1), Theme.track[t])) { Task { await store.send(.set(track: t, entry: entry, pattern: i + 1)) } }

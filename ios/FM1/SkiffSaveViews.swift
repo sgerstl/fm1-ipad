@@ -1,7 +1,7 @@
 import SloopKit
 import SwiftUI
 
-// Skiff's SAVE pages in Jib (Scott, 2026-11-06, "as proposed"): PRESETS and USER on the Sounds tab, PATTERNS in the
+// Skiff's SAVE pages in Lupe (Scott, 2026-11-06, "as proposed"): PRESETS and USER on the Sounds tab, PATTERNS in the
 // Song tab's drawer, PROJECT in the Projects sheet. This file: the FM-1's 4 project slots in that sheet, and saving the
 // track's sound to a user slot (the sound panel's Save sound, the Sounds tab's USER slots). Every write is to the
 // FM-1's flash: a confirm scaled to what it loses, and nothing replaced without saying so.
@@ -17,8 +17,8 @@ struct SaveSoundRequest: Identifiable, Equatable {
 
 enum SaveSound {
     /// The menu behind Save sound: the next empty slot, or a used one replaced (a submenu, its names).
-    @MainActor static func menu(session: DeviceSession, ui: EditorUI, at: CGPoint) -> JibMenu {
-        JibMenu(title: "Save T\(session.selectedTrack + 1)'s sound", groups: {
+    @MainActor static func menu(session: DeviceSession, ui: EditorUI, at: CGPoint) -> AppMenu {
+        AppMenu(title: "Save T\(session.selectedTrack + 1)'s sound", groups: {
             let used = Dictionary(session.userPresets.map { ($0.slot, $0.name) }, uniquingKeysWith: { a, _ in a })
             let free = (0..<32).first { used[$0] == nil }
             var first: [MenuItem] = []

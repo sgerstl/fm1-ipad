@@ -175,7 +175,7 @@ import Testing
         }
         _ = try await d.transport(play: true)
         try await Task.sleep(for: .seconds(3))
-        _ = try await d.setGlobal(id: ids.bpm, value: 90)          // the shift: applied as Jib would, on sending
+        _ = try await d.setGlobal(id: ids.bpm, value: 90)          // the shift: applied as Lupe would, on sending
         let changeTick = history.count
         model.tempoChanged(from: 137, to: 90)
         try await Task.sleep(for: .seconds(2))
@@ -189,7 +189,7 @@ import Testing
         // a report can come before its step's (fractional) start: the sequencer runs an audio block (~0.4
         // tick) ahead of its MIDI, and the clock and the reports are read from two streams, up to a tick
         // apart. The model's step at that tick counts, or one starting within 1.5 ticks after it
-        // before the BPM change: exact. After it: the shift, which Jib can only time to a few ms (a track with
+        // before the BPM change: exact. After it: the shift, which Lupe can only time to a few ms (a track with
         // a step boundary inside that window can stay a step off), so a looser bar and the rate printed
         var checked = [0, 0], matched = [0, 0], misses: [String] = []
         for r in reports where r.tick >= 0 && r.tick + 2 < history.count {

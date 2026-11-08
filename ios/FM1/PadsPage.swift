@@ -438,7 +438,7 @@ struct PadsPage: View {
         // silent gaps (Scott, 2026-11-07); the title says where it goes
         let target = e.isEmpty ? Self.landing(store.song?.tracks[safe: t], i) : i
         let title = "T\(t + 1) · entry \(Entries.letter(i))" + (e.isEmpty ? (target == i ? " · empty" : " · goes on \(Entries.letter(target))") : "")
-        ui.menu = JibMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at)
+        ui.menu = AppMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at)
     }
 
     /// Where something put on empty pad `i` lands: there, or the first empty entry after the list's last filled one.

@@ -4,7 +4,7 @@ import Foundation
 // command numbers. Six tracks, any of which plays any engine (T5 and T6 not PHYS or GRAIN); no drum track,
 // a step's drum hits ride on every track. Parameter ids move between releases: P_COUNT and P_E0 come from
 // INFO's wide-ids tag, ids from 128 go out as scope 2, and the ids the session follows are found by DESC.
-// No step positions over SysEx (the playhead is counted from MIDI clock, SkiffPlayhead) and no screen link.
+// No step positions over SysEx (the playhead is counted from MIDI clock, CountedPlayhead) and no screen link.
 
 /// INFO's reply on Skiff: SLOOP's fields, then NTRK, CHAIN_ROWS and the tagged capability blocks.
 public struct SkiffInfo: Equatable, Sendable {

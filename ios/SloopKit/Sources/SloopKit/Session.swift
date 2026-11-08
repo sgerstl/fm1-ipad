@@ -104,8 +104,8 @@ public final class DeviceSession {
     /// The FM-1's HOME > AUDIO > USB AUDIO, from the settings object (nil until read): FULL sends a fixed
     /// level over USB whatever the MASTER, so the speaker can be muted while the iPad plays the sound.
     public private(set) var usbAudioFull: Bool?
-    /// Whether Jib can quiet the FM-1's speaker itself (SLOOP's MASTER over the protocol). Skiff's MASTER is
-    /// its knob alone: there Jib sets USB LEVEL = FIXED and the person turns MASTER down.
+    /// Whether Lupe can quiet the FM-1's speaker itself (SLOOP's MASTER over the protocol). Skiff's MASTER is
+    /// its knob alone: there Lupe sets USB LEVEL = FIXED and the person turns MASTER down.
     public var canQuietSpeaker: Bool { sloop != nil }
     /// Why the iPad's sound setting didn't take on the FM-1, if it didn't.
     public private(set) var usbAudioProblem: String?
@@ -1369,7 +1369,7 @@ public final class DeviceSession {
     public static let keyboardChannel: UInt8 = 15
     /// On Skiff, channel 16 is dropped: MENU > MIDI > MIDI IN is CH1-6 by default (channels 1..6 play tracks
     /// 1..6, 7..16 ignored; seq.c midi_slot, midi_control.c), and its AUTO CHANNEL is OFF. So the keyboard
-    /// plays on the selected track's own channel, track k on channel k + 1 (T1..T6 CHANNEL's default; Jib reads
+    /// plays on the selected track's own channel, track k on channel k + 1 (T1..T6 CHANNEL's default; Lupe reads
     /// Skiff's NOTES OUT the same way). With MIDI IN = SEL any channel plays the selected track: this one too.
     /// A track moved to another channel in MENU > MIDI isn't followed (the editor protocol doesn't report it).
     public static func keyChannel(_ dialect: FirmwareDialect?, track: Int) -> UInt8 {
@@ -1882,7 +1882,7 @@ public final class DeviceSession {
         Task { if let l = try? await c.rec() { self.applyLive(l) } }
     }
 
-    /// Jib's REC is on while any track is armed, as Skiff's LED is, and pressing it then stops recording. Skiff's
+    /// Lupe's REC is on while any track is armed, as Skiff's LED is, and pressing it then stops recording. Skiff's
     /// own REC toggles the selected track only (ui_input.c rec_tap): with another track armed, it arms this one
     /// too, so recording went on (Scott, the FM-1, 2026-11-05). Then REC goes twice: the second press, on an armed
     /// track, disarms them all. The extra arming leaves Skiff's undo as it was (rec_pass_undo takes the undo it

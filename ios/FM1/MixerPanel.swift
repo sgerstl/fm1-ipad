@@ -2,7 +2,7 @@ import SloopKit
 import SwiftUI
 
 // Skiff's GLO pages as the Mixer tab (Scott, 2026-11-05: "we might want a mixer tab"; it replaced the bottom panel
-// and the mixer key beside the tempo). Song · Shape · Mixer · Browse. The six tracks' strips (Skiff's MIXER, GR_TRK)
+// and the mixer key beside the tempo). Song · Mix · Sounds. The six tracks' strips (Skiff's MIXER, GR_TRK)
 // fill the top and don't scroll, so their faders take the finger at once; under them the shared Delay, Reverb,
 // Chorus and Global as Shape's cards (their columns over GR_DELAY, GR_REVERB, GR_CHORUS, GR_GLOBAL), side by side
 // in the phone Shape's carousel: a swipe snaps the next card into the middle with a little bounce. GLO on the
@@ -406,7 +406,7 @@ private struct MixerStrip: View, Equatable {
 
 // MARK: Where the FM-1's buttons land (SkiffButtonMap)
 
-/// A ring around the place the FM-1 just sent Jib to, fading after a moment.
+/// A ring around the place the FM-1 just sent Lupe to, fading after a moment.
 struct FlashRing: ViewModifier {
     let ui: EditorUI
     let target: FlashTarget

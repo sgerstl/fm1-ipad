@@ -99,7 +99,7 @@ public struct CountedPlayhead: Equatable, Sendable {
     /// BPM changed from `b1` to `b2` on the device's own clock. Skiff doesn't rescale a track's place inside
     /// the step that's playing (only an external clock gets that, midi_clock_pulse), so a step `e` ticks in
     /// ends `T − e × b2/b1` ticks after the change, and every track's grid stays that far off the clock's
-    /// from then on (skiffprobe's rule, measured on the sim). Jib knows when the change landed only to a few
+    /// from then on (skiffprobe's rule, measured on the sim). Lupe knows when the change landed only to a few
     /// milliseconds: a track whose step boundary falls inside that window can end up a step off the device
     /// and stay so (against --truth, 3 runs of 7: 96–99 % after the change), until re-anchoring (not built).
     public mutating func tempoChanged(from b1: Int, to b2: Int) {

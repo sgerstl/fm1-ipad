@@ -201,7 +201,7 @@ import Testing
         #expect(try await Self.installer(dev).install(Self.skiff) == "FM-1_722")
     }
 
-    /// Already in update mode when Jib starts (the cut came from somewhere else).
+    /// Already in update mode when Lupe starts (the cut came from somewhere else).
     @Test func startsInTheLoader() async throws {
         let dev = FakeFM1(inLoaderOf: Self.skiff, was: Self.sloop)
         dev.timeScale = 0.02

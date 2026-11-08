@@ -2,7 +2,7 @@ import Foundation
 
 // Skiff's song (EDITOR_PROTOCOL.md "Pool, lists, PERFORM"; DESIGN.md "Patterns, lists and the song"): each
 // track has 16 entries, A–P, and an entry names a pattern from the pool of 64 (or a REST) and how many passes
-// it plays. Entries play back to back: there is no free placement, a gap is a REST. Jib reads the lists with
+// it plays. Entries play back to back: there is no free placement, a gap is a REST. Lupe reads the lists with
 // LIST2 (82) and the pool with POOL (78), draws each entry as long as it plays, and rewrites entries to
 // insert, move or delete, as Skiff has no insert op.
 
@@ -128,7 +128,7 @@ public struct PatternPool: Equatable, Sendable {
     public var unused: Int { patterns.filter { $0.length > 0 && $0.uses == 0 }.count }
 }
 
-/// LIST2's and POOL's answer codes, and what Jib says for each.
+/// LIST2's and POOL's answer codes, and what Lupe says for each.
 public enum SongRC: Int, Sendable, Error {
     case done = 0, empty = 1, withoutAutomation = 2, playing = 3, patternsFull = 4, failed = 5
     /// POOL CLEAR of a pattern something uses (an entry, a track, a saved project).
@@ -259,7 +259,7 @@ public enum SongPlacement {
 
 // MARK: - Rewriting a list
 
-/// The LIST2 ops that turn one list into another: Skiff has no insert or move, so Jib rewrites the entries
+/// The LIST2 ops that turn one list into another: Skiff has no insert or move, so Lupe rewrites the entries
 /// that change. Entries that name a pattern or a REST first, from the last back (an entry goes on CHAIN only
 /// with one after it), then the clears, last, so a pattern that moved is named again before its old entry
 /// is cleared (CLEAR erases a pattern nothing else names).

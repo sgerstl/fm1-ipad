@@ -5,13 +5,13 @@ import Foundation
 // into the shared types (TrackList, SynthStep, ParamDesc, Push). Anything one firmware alone has (SLOOP's
 // sections, backups and sample slots) stays with that firmware's driver and is reached through it.
 
-/// A firmware Jib knows how to talk to, found from INFO.
+/// A firmware Lupe knows how to talk to, found from INFO.
 public enum FirmwareDialect: Equatable, Sendable {
     case sloop
     /// Skiff 2.2 (github.com/illuminus5/skiff): Felucca's command numbers, six tracks, INFO's tags.
     case skiff
 
-    /// The dialect INFO reports, or nil for firmware Jib doesn't know (it refuses to connect). `body` is
+    /// The dialect INFO reports, or nil for firmware Lupe doesn't know (it refuses to connect). `body` is
     /// INFO's whole reply, for the tags Skiff ends it with.
     public static func detect(_ info: DeviceInfo, body: [UInt8] = []) -> FirmwareDialect? {
         if info.version == DeviceInfo.expectedVersion, info.protocolVersion == DeviceInfo.expectedProtocol { return .sloop }
@@ -19,7 +19,7 @@ public enum FirmwareDialect: Equatable, Sendable {
         return nil
     }
 
-    /// Every firmware and version Jib speaks, for the "other firmware" message.
+    /// Every firmware and version Lupe speaks, for the "other firmware" message.
     public static let known = "FELUCCA SLOOP 2.8.4 (protocol 12) or Skiff 2.2 (FELUCCA v2.2)"
 }
 
@@ -101,7 +101,7 @@ public struct DeviceShape: Equatable, Sendable {
 
     /// SLOOP 2.8.4's track colours (its editor CSS and firmware gfx.c TE_COL).
     public static let sloopColours: [UInt32] = [0x287CFF, 0x1ECC70, 0xFFC618, 0xFF621A]
-    /// Skiff's SKIFF theme (build/gen ui_palettes.h, as picked for Jib in the Arrange spec, 2026-11-05):
+    /// Skiff's SKIFF theme (build/gen ui_palettes.h, as picked for Lupe in the Arrange spec, 2026-11-05):
     /// vermilion, teal, amber, violet, pink, lime.
     public static let skiffColours: [UInt32] = [0xFF5A36, 0x22C3B4, 0xFFBF00, 0x9580FF, 0xFF6FAE, 0xA3E635]
 
@@ -190,7 +190,7 @@ public protocol FirmwareDriver: AnyObject, Sendable {
 }
 
 /// Connects to whatever is on the transport: reads INFO and hands back the matching driver, or the
-/// INFO of firmware Jib doesn't know.
+/// INFO of firmware Lupe doesn't know.
 public enum FirmwareDetector {
     public enum Outcome: Sendable {
         case driver(FirmwareDriver)

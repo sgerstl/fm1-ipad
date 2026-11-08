@@ -164,7 +164,7 @@ public final class FirmwareInstaller: @unchecked Sendable {
         return m(a) == m(b)
     }
 
-    /// A loader Jib finishes a write with: Skiff's (7xx) or Felucca's and SLOOP's (9xx). M-VAVE's update mode and any
+    /// A loader Lupe finishes a write with: Skiff's (7xx) or Felucca's and SLOOP's (9xx). M-VAVE's update mode and any
     /// other firmware's are left to their own updater: their image layout may differ (SLOOP's rule, widened to Skiff).
     public static func isResumable(loader: DeviceIdentity) -> Bool {
         loader.text.range(of: #"^ota-FM-1_[79]\d\d$"#, options: [.regularExpression, .caseInsensitive]) != nil

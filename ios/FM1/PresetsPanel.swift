@@ -2,9 +2,9 @@ import SloopKit
 import SwiftUI
 
 /// Sound selection without leaving the page: opened from a track's long-press menu, it slides in from
-/// the right over the page, laid out as the Library tab (engines, then the presets as keys); the track
+/// the right over the page, laid out as the Sounds tab (engines, then the presets as keys); the track
 /// box stays in view beside it to show and switch the track. Done, or a tap on the page, closes it. Another way in to the
-/// same choice as the Library tab: SLOOP keeps the pattern, the mix and the key when a preset loads.
+/// same choice as the Sounds tab: SLOOP keeps the pattern, the mix and the key when a preset loads.
 struct PresetsPanel: View {
     let session: DeviceSession
     let ui: EditorUI

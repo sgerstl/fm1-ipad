@@ -222,7 +222,7 @@ struct SkiffStepInspector: View {
             Text("Nothing recorded or locked on T\(t + 1).").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
         } else if collapsed {
             Button {
-                ui.menu = JibMenu(title: "Sound at step \(i + 1)", groups: {
+                ui.menu = AppMenu(title: "Sound at step \(i + 1)", groups: {
                     [ids.map { id in
                         let r = m.value(of: id, at: i, base: session.cell(id).value)
                         let mark = r.source == .lock ? "◆ " : r.source == .recorded ? "— " : ""

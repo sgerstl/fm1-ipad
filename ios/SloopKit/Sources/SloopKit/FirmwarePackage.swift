@@ -3,10 +3,10 @@
 import CryptoKit
 import Foundation
 
-/// The firmware files Jib carries, exactly as tested. Each is pinned by its SHA-256: a file that doesn't
+/// The firmware files Lupe carries, exactly as tested. Each is pinned by its SHA-256: a file that doesn't
 /// match is never installed (docs: FIRMWARE.md).
 public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
-    /// Skiff 2.2 with Jib's screen link patch (skiff/README.md): what Jib offers for Skiff.
+    /// Skiff 2.2 with Lupe's screen link patch (skiff/README.md): what Lupe offers for Skiff.
     case skiff = "skiff-2.2-screen-link"
     case sloop = "sloop-2.8.4-screen-link"
     /// M-VAVE's own V15, unmodified: the way back to stock. Installed by M-VAVE's update loader, which it carries.

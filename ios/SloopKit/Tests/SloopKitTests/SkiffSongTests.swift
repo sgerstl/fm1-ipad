@@ -887,8 +887,8 @@ extension SkiffOnTheDeviceTests {
 }
 
 extension SkiffOnTheDeviceTests {
-    /// Skiff records knob moves (Jib's SET / TRACK_PARAM too) while the selected track is armed and playing: Scott
-    /// recorded edits by accident. Jib reads MOTION, says it's recording, and clears a track's motion.
+    /// Skiff records knob moves (Lupe's SET / TRACK_PARAM too) while the selected track is armed and playing: Scott
+    /// recorded edits by accident. Lupe reads MOTION, says it's recording, and clears a track's motion.
     @Test func motionIsReadFlaggedAndCleared() async throws {
         let fake = FakeSkiff(try SkiffFixture.load())
         var once = false

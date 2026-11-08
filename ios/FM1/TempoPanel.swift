@@ -1,7 +1,7 @@
 import SloopKit
 import SwiftUI
 
-// The tempo, from the top bar's BPM (Scott, 2026-11-05): a panel at the finger in Jib's own menu style
+// The tempo, from the top bar's BPM (Scott, 2026-11-05): a panel at the finger in Lupe's own menu style
 // (level 3, as the Arrange hold menu): the BPM large between − and + (hold to repeat, speeding up), Tap tempo,
 // a number typed in with its range. Following another clock (CLOCK / SYNC = USB or TRS) it's all off, and says
 // why. BPM LOCK doesn't stop it: that only makes the FM-1's SELECT knob need GLO held (Skiff ui_input.c).

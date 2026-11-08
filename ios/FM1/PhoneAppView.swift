@@ -254,10 +254,10 @@ struct PhoneTopBar: View {
         .opacity(session.isConnected ? 1 : 0.45)
     }
 
-    /// The ⋯ menu, Jib's own (2026-11-05): the phone's audio, the source, Developer.
+    /// The ⋯ menu, Lupe's own (2026-11-05): the phone's audio, the source, Developer.
     private var more: some View {
         Button {
-            ui.menu = JibMenu(title: "Lupe", groups: {
+            ui.menu = AppMenu(title: "Lupe", groups: {
                 var g: [[MenuItem]] = []
                 var audio = [MenuItem(title: "Play through the iPhone", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
                 if through.enabled { audio.append(.note(through.summary)) }

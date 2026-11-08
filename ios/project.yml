@@ -15,7 +15,7 @@ settings:
     ALWAYS_SEARCH_USER_PATHS: NO
   configs:
     Debug:
-      # the Developer menu (look switch, Install firmware…) is behind #if DEBUG
+      # the phone's Developer submenu (Install firmware…) and a few debug tools are behind #if DEBUG
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
 targets:
   FM1:

@@ -12,7 +12,7 @@ enum Page: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     /// The tabs on SLOOP (no Mixer: its GLO pages are Shape's).
     static let sloopTabs: [Page] = [.sequencer, .sound, .song, .library]
-    /// The tabs on Skiff: Song · Shape · Mixer · Browse.
+    /// The tabs on Skiff: Song · Mix · Sounds.
     static let skiffTabs: [Page] = [.song, .mixer, .library]
     /// A tab's name: Skiff's are Song · Mix · Sounds (2026-11-06).
     func title(skiff: Bool) -> String {
@@ -74,8 +74,8 @@ final class EditorUI {
     var selectedStep = Array(repeating: 0, count: 8)      // per track: room for every firmware's tracks
     /// The tempo panel, open under this point (global), from the top bar's BPM.
     var tempoAt: CGPoint?
-    /// A Jib menu open over the app (the connection menu, the phone's ⋯, Library's slots).
-    var menu: JibMenu?
+    /// A Lupe menu open over the app (the connection menu, the phone's ⋯, the sound slots).
+    var menu: AppMenu?
     /// A sound waiting on its name before it goes to a user slot (Skiff's SAVE > USER).
     var saveSound: SaveSoundRequest?
     var selectedLane = 0
@@ -162,7 +162,7 @@ final class EditorUI {
     /// Bumped to ask the Song tab to open its editor when it's shut (Edit pattern on a pad).
     var openEditor = 0
     var justPulled: Bool { Date().timeIntervalSince(pulledAt) < 0.4 }
-    /// A place the FM-1 sent Jib to, lit for a moment (the whole-track controls for PATTERN, and so on).
+    /// A place the FM-1 sent Lupe to, lit for a moment (the whole-track controls for PATTERN, and so on).
     var flash: Flash?
 }
 

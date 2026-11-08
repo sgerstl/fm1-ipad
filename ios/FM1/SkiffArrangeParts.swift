@@ -448,7 +448,7 @@ struct PatternBin: View {
     /// A pattern's menu: Empty (its steps), Clear (the number itself, when nothing uses it). Stopped only, as Skiff.
     private func openMenu(_ p: Int, at: CGPoint) {
         guard let ui else { return }
-        ui.menu = JibMenu(title: "Pattern \(Entries.number(p + 1))", groups: {
+        ui.menu = AppMenu(title: "Pattern \(Entries.number(p + 1))", groups: {
             let uses = store.pool?.patterns[p].uses ?? 0
             let playing = session.playing
             var notes: [MenuItem] = []

@@ -37,7 +37,7 @@ enum SeqCursor {
 }
 
 enum SkiffNavigator {
-    /// The FM-1 changed screen: go where its button lands in Jib (linked only; on stock Skiff nothing moves).
+    /// The FM-1 changed screen: go where its button lands in Lupe (linked only; on stock Skiff nothing moves).
     @MainActor static func follow(_ s: UIState, session: DeviceSession, ui: EditorUI) {
         guard ui.followDevice, session.screenLinked else { return }
         // the FM-1 left SAVE > PROJECT (the next SAVE page, DONE, any other button): the Projects sheet goes with it
@@ -76,7 +76,7 @@ enum SkiffNavigator {
     }
 
     /// The SAVE pad on Skiff: PRESETS, USER, PATTERNS, PROJECT in turn, as the FM-1's SAVE steps its pages. From the
-    /// FM-1's screen when linked; otherwise from where Jib is.
+    /// FM-1's screen when linked; otherwise from where Lupe is.
     @MainActor static func save(session: DeviceSession, ui: EditorUI) {
         let now: Int? = if session.screenLinked, let s = session.deviceScreen, !s.home, (35...38).contains(s.page) { s.page }
             else if ui.page == .song && ui.poolOpen { 37 }
@@ -101,7 +101,7 @@ enum SkiffNavigator {
     }
 }
 
-/// Where the screen link points, per firmware: the pages Jib's tabs open on the FM-1, and the layer that
+/// Where the screen link points, per firmware: the pages Lupe's tabs open on the FM-1, and the layer that
 /// is the keys' (SLOOP: SEL held, LY_SCALE; Skiff: SCL held). SLOOP's PAGES, or Skiff's (127: HOME).
 struct ScreenMap {
     let home, presets, song, notes, pattern, selLayer: Int

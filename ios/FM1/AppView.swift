@@ -396,7 +396,7 @@ struct SequencerPage: View {
     }
 }
 
-/// A tab whose feature the connected firmware doesn't have in Jib yet: what's missing, and what to do
+/// A tab whose feature the connected firmware doesn't have in Lupe yet: what's missing, and what to do
 /// meanwhile. Drawn as the connection states are.
 struct NotOnThisFirmware: View {
     let title: String

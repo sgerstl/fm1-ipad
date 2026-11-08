@@ -63,7 +63,7 @@ struct RootView: View {
         .background(Theme.page)
         .environment(firmware)
         .overlay { TempoOverlay(session: session, ui: ui) }
-        .overlay { JibMenuLayer(menu: $ui.menu) }
+        .overlay { AppMenuLayer(menu: $ui.menu) }
         .modifier(SaveSoundPrompt(session: session, ui: ui))
         .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
         // Lupe's intro on every cold launch, over the app, which starts (and connects) underneath it

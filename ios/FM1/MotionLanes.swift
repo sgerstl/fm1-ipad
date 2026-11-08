@@ -550,7 +550,7 @@ struct MotionLaneEditor: View {
 
     private func more() {
         let s = selected, r = motion.record(id, at: s)
-        ui.menu = JibMenu(title: "\(label) · step \(s + 1)", groups: {
+        ui.menu = AppMenu(title: "\(label) · step \(s + 1)", groups: {
             var first: [MenuItem] = []
             if let r {
                 first.append(r.lock
@@ -781,7 +781,7 @@ struct MotionChip: View {
         let lanes = MotionLanes.laneIDs(session, ui, track: track)
         let n = session.motion[track]?.events.count ?? 0
         let stopped = !MotionLanes.songPlays(session)
-        ui.menu = JibMenu(title: "Motion · T\(track + 1)", groups: {
+        ui.menu = AppMenu(title: "Motion · T\(track + 1)", groups: {
             [[MenuItem(title: ui.motionHidden ? "Show the lanes" : "Hide the lanes", enabled: !lanes.isEmpty) { ui.motionHidden.toggle() },
               MenuItem.submenu(title: "+ Lane", enabled: stopped, children: { MotionLanes.addLaneGroups(session, ui, track: track) }),
               MenuItem(title: "Clear T\(track + 1)'s motion", enabled: n > 0 && stopped) {

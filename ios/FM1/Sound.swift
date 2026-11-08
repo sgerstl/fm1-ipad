@@ -77,7 +77,7 @@ struct SoundPage: Identifiable {
         }
     }
 
-    /// Skiff 2.2's PAGES (fm1-ipad skiff/README.md) for the pages Jib lays out: title → index. MOD's four
+    /// Skiff 2.2's PAGES (fm1-ipad skiff/README.md) for the pages Lupe lays out: title → index. MOD's four
     /// PATTERN 2's knob is on PATTERN. The table belongs with the firmware version.
     static let skiffPages: [String: Int] = [
         "ENV": 0, "ENV 2": 1, "LFO": 2, "LFO 2": 3, "MOD": 4, "FX": 5, "DRIVE": 6, "INSERT": 7, "INSERT 2": 8,

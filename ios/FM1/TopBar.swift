@@ -65,7 +65,7 @@ struct TopBar: View {
 
     private var connection: some View {
         Button {
-            ui.menu = JibMenu(title: "FM-1", groups: { connectionGroups }, at: CGPoint(x: connectionFrame.minX, y: connectionFrame.maxY))
+            ui.menu = AppMenu(title: "FM-1", groups: { connectionGroups }, at: CGPoint(x: connectionFrame.minX, y: connectionFrame.maxY))
         } label: {
             HStack(spacing: 10) {
                 LED(on: session.isConnected, colour: Theme.text)
@@ -85,7 +85,7 @@ struct TopBar: View {
         .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
     }
 
-    /// The connection menu (Jib's own, 2026-11-05). Scott, 2026-11-06, cut to four things: one line of status, the
+    /// The connection menu (Lupe's own, 2026-11-05). Scott, 2026-11-06, cut to four things: one line of status, the
     /// source (the FM-1 over USB, or a demo FM-1 running Skiff or SLOOP), Install firmware… and Settings…. Gone: the
     /// "Follow the FM-1's screen" switch (it always follows now), the iPad's audio and its lines (Settings has them),
     /// the diagnostics line and the Developer submenu (its look switch with it).

@@ -213,7 +213,7 @@ import Testing
     }
 
     /// A new unit that already runs Skiff (so nothing says V16 any more): SLOOP 2.8.4's loader turns it down, the FM-1
-    /// comes back on Skiff, and Jib says so at once instead of waiting for a loader that won't return.
+    /// comes back on Skiff, and Lupe says so at once instead of waiting for a loader that won't return.
     @Test func sloopsLoaderTurnsTheNewChipDown() async throws {
         let dev = Self.newUnit(running: Self.skiff)
         let start = ContinuousClock.now

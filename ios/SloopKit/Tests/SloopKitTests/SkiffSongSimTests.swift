@@ -368,7 +368,7 @@ extension SkiffScreenLinkSimTests {
     /// A button pressed on the (sim's) FM-1 reaches the session as a SCREEN push. SKIFF_CONSOLE: the sim's
     /// console, a FIFO its stdin reads.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SKIFF_CONSOLE"] != nil))
-    func aButtonOnTheFM1MovesJib() async throws {
+    func aButtonOnTheFM1MovesLupe() async throws {
         let console = try #require(ProcessInfo.processInfo.environment["SKIFF_CONSOLE"])
         let session = DeviceSession(transport: { MIDITransport() })
         session.resyncInterval = .seconds(60)
@@ -399,7 +399,7 @@ extension SkiffSongSimTests {
         _ = try await d.clearMotion(track: 0)
         try await d.rec()                                               // T1 armed: playing
         try await Task.sleep(for: .milliseconds(300))
-        for v in [20, 60, 100] {                                        // CHO (34), as a knob turned from Jib
+        for v in [20, 60, 100] {                                        // CHO (34), as a knob turned from Lupe
             _ = try await d.setTrackParam(track: 0, id: 34, value: v)
             try await Task.sleep(for: .milliseconds(150))
         }
@@ -415,7 +415,7 @@ extension SkiffSongSimTests {
 }
 
 extension SkiffSongSimTests {
-    /// Leaves motion recorded on T1 and T2 for the app to show (SKIFF_SIM=1 SKIFF_KEEP_MOTION=1): Jib on the iPad
+    /// Leaves motion recorded on T1 and T2 for the app to show (SKIFF_SIM=1 SKIFF_KEEP_MOTION=1): Lupe on the iPad
     /// simulator, connected to the same skiff-sim, then reads it as it would a real FM-1's.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SKIFF_KEEP_MOTION"] == "1"))
     func leavesMotionForTheApp() async throws {
@@ -440,7 +440,7 @@ extension SkiffSongSimTests {
 }
 
 extension SkiffScreenLinkSimTests {
-    /// Every page the map uses, on the patched firmware: SCREEN_GOTO there, and the screen says where Jib lands.
+    /// Every page the map uses, on the patched firmware: SCREEN_GOTO there, and the screen says where Lupe lands.
     @Test func theButtonMapOnTheRealFirmware() async throws {
         let d = try await driver()
         _ = try await d.selectTrack(0)                                  // T1, ANALOG: no FM6, kit or sample pages

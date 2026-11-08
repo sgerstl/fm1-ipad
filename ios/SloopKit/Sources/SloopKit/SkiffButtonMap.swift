@@ -1,6 +1,6 @@
 import Foundation
 
-/// Where each FM-1 button and page lands in Jib, and back (vault skiff-arrange-spec.md, "Lupe and the FM-1's
+/// Where each FM-1 button and page lands in Lupe, and back (vault skiff-arrange-spec.md, "Lupe and the FM-1's
 /// buttons", decided 2026-11-05). Skiff 2.2's PAGES indices (firmware params.c), as the screen link reports and opens
 /// them. Pure, so the app, the fake and the patched skiff-sim are tested against one table.
 public enum SkiffButtonMap {
@@ -10,7 +10,7 @@ public enum SkiffButtonMap {
         public var id: Int { rawValue }
         public var page: Int { 30 + rawValue }
         public var title: String { ["Mixer", "Delay", "Reverb", "Chorus", "Global"][rawValue] }
-        /// Skiff's page title (PAGES), for the pages Jib lays out (SkiffPages).
+        /// Skiff's page title (PAGES), for the pages Lupe lays out (SkiffPages).
         public var pageTitle: String { ["MIXER", "DELAY", "REVERB", "CHORUS", "GLOBAL"][rawValue] }
     }
 
@@ -41,7 +41,7 @@ public enum SkiffButtonMap {
     /// ARP held: PERFORM, the list's entries or the scenes on the keys (Skiff LAYER_PERF); Lupe shows its Pads.
     public static let performLayer = 7
 
-    /// Where the FM-1's screen lands in Jib; nil for a screen with no place (a MENU, another layer held).
+    /// Where the FM-1's screen lands in Lupe; nil for a screen with no place (a MENU, another layer held).
     public static func place(for s: UIState) -> Place? {
         if s.menu != 0 { return nil }
         if s.layer == keysLayer { return .shape(page: 11) }           // SCL held: SCALE, the keys' map
@@ -62,7 +62,7 @@ public enum SkiffButtonMap {
         }
     }
 
-    /// The page Jib's navigation sends the FM-1 to (SCREEN_GOTO); 127 is HOME.
+    /// The page Lupe's navigation sends the FM-1 to (SCREEN_GOTO); 127 is HOME.
     public static func page(for place: Place) -> Int {
         switch place {
         case .home: return home

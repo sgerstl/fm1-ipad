@@ -461,7 +461,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
                 steps[t][i] = s
             }
         }
-        // T1 with recorded motion (CHORUS turned up across its first bar, as skiff-sim recorded it), so Jib's
+        // T1 with recorded motion (CHORUS turned up across its first bar, as skiff-sim recorded it), so Lupe's
         // motion marks show in the demo
         motion[0] = [(2, 34, 40, false), (5, 34, 96, false), (9, 34, 20, false), (12, 34, 70, false), (14, 34, 120, true),
                      (4, 36, 60, false), (10, 36, 10, false)]

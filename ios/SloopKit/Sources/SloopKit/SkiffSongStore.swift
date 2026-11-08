@@ -3,7 +3,7 @@ import Observation
 
 /// Skiff's song as the app shows it: the lists and the pool, read with LIST2 and POOL, edited optimistically
 /// (drawn at once, sent one request at a time, then read again) and put back with the reason when Skiff
-/// refuses. Undo is Jib's own: the lists before each change. The session makes one per Skiff connection
+/// refuses. Undo is Lupe's own: the lists before each change. The session makes one per Skiff connection
 /// that has the 2.0 song (INFO `58 01` bit 0) and keeps it, offline, when the device goes away.
 @MainActor @Observable
 public final class SkiffSongStore {
@@ -335,7 +335,7 @@ public final class SkiffSongStore {
         return refused
     }
 
-    /// Back to the lists before the last change (Jib's undo; Skiff's own covers the device's edits). A
+    /// Back to the lists before the last change (Lupe's undo; Skiff's own covers the device's edits). A
     /// pattern a change erased can't come back.
     public func undo() async {
         guard !busyRefusal(nil), let last = undoStack.last, let now = song else { return }

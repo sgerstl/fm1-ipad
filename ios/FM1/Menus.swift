@@ -1,7 +1,7 @@
 import SloopKit
 import SwiftUI
 
-// One menu style across Arrange (Scott, 2026-11-05): Jib's own at the finger (canvas board 2), not the
+// One menu style across Arrange (Scott, 2026-11-05): Lupe's own at the finger (canvas board 2), not the
 // system's. Rows 52 pt high, 8 pt between groups, a submenu opening in place with a Back row. A menu as the
 // APG has it: ↑ ↓ move between items, → opens a submenu, ← goes back, Return picks, Escape closes.
 
@@ -42,19 +42,19 @@ struct MenuItem {
     static func note(_ text: String) -> MenuItem { MenuItem(title: text, enabled: false, note: true) }
 }
 
-/// A Jib menu anywhere in the app (2026-11-05: every system menu becomes one): a title, its groups (built when it
+/// A Lupe menu anywhere in the app (2026-11-05: every system menu becomes one): a title, its groups (built when it
 /// opens, and again as it's shown, so values stay live), and where it opens (global).
-struct JibMenu: Identifiable {
+struct AppMenu: Identifiable {
     let id = UUID()
     var title: String
     var groups: () -> [[MenuItem]]
     var at: CGPoint
 }
 
-/// Draws an open JibMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
+/// Draws an open AppMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
 /// touch anywhere else (which still reaches the page: OutsideTouch) or Escape. The app's root has one; a sheet, which covers the root, has its own.
-struct JibMenuLayer: View {
-    @Binding var menu: JibMenu?
+struct AppMenuLayer: View {
+    @Binding var menu: AppMenu?
     @State private var frame: CGRect = .zero
     @AppStorage(Handedness.key) private var hand = Handedness.right
 

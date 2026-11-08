@@ -11,9 +11,9 @@ struct ProjectFile: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
     var saved = Date()
-    /// A copy Jib took by itself before opening something over it ("Before opening Night Drive").
+    /// A copy Lupe took by itself before opening something over it ("Before opening Night Drive").
     var isSafetyCopy = false
-    /// The FM-1's fingerprint right after this project was saved or opened: how Jib recognises it on
+    /// The FM-1's fingerprint right after this project was saved or opened: how Lupe recognises it on
     /// the FM-1 later (the device keeps a few values of its own, so it can differ from the data's).
     var baseline: String
     var objects: [StoredObject]
@@ -71,7 +71,7 @@ final class ProjectStore {
     private(set) var safetyCopies: [ProjectFile] = []
     /// The project the FM-1 holds, when it is one of ours.
     private(set) var currentID: UUID?
-    /// The FM-1's fingerprint when the current work was last saved or put there; nil: Jib doesn't know
+    /// The FM-1's fingerprint when the current work was last saved or put there; nil: Lupe doesn't know
     /// what the FM-1 holds (it came from somewhere else).
     private(set) var baseline: String?
     private(set) var edited = false
@@ -396,7 +396,7 @@ final class ProjectStore {
 }
 
 /// A project as SLOOP's song file, for the share sheet: written when shared (AirDrop, Files, Mail), so
-/// it opens in SLOOP's web editor (Song file › Load) as well as in Jib.
+/// it opens in SLOOP's web editor (Song file › Load) as well as in Lupe.
 struct SloopSongExport: Transferable {
     let project: ProjectFile
 

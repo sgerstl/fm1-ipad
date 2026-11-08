@@ -189,7 +189,7 @@ struct SelectionBar: View {
             // held: the pad press menu's look, at the key (Scott, 2026-11-08: every long-press menu alike)
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
                 let e = edits
-                e.ui.menu = JibMenu(title: "Paste", groups: {
+                e.ui.menu = AppMenu(title: "Paste", groups: {
                     [[MenuItem(title: "Paste", icon: "doc.on.clipboard") { e.paste() },
                       MenuItem(title: "Paste and keep", icon: "square.on.square") { e.paste(keep: true) }]]
                 }, at: pasteAt)

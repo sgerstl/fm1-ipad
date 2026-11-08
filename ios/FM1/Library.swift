@@ -151,7 +151,7 @@ struct LibraryPage: View {
                       current: track.presetName.uppercased() == p.name.uppercased() && track.engine == p.engine) { session.loadUserPreset(p) }
                 .overlay(alignment: .trailing) {
                     UserSlotMore(name: p.name) { at in
-                        ui.menu = JibMenu(title: "\(SaveSound.slotName(k)) · \(p.name.capitalized)", groups: {
+                        ui.menu = AppMenu(title: "\(SaveSound.slotName(k)) · \(p.name.capitalized)", groups: {
                             [[MenuItem(title: "Replace with T\(t + 1)'s sound…", icon: "arrow.triangle.2.circlepath") {
                                 ui.saveSound = SaveSoundRequest(slot: k, replacing: p.name)
                              }],
@@ -249,10 +249,10 @@ struct LibraryPage: View {
                         if full { Task { await session.useSample(slot: k, onTrack: t) } }
                         else { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }
                     }
-                    // a long press on a recorded slot: Jib's menu at the finger (it was the system's)
+                    // a long press on a recorded slot: Lupe's menu at the finger (it was the system's)
                     .gesture(HoldRecognizer(space: .named(AppView.space), began: { _, at in
                         guard full else { return }
-                        ui.menu = JibMenu(title: "SMPL\(k + 1) · \(s?.name ?? "")", groups: {
+                        ui.menu = AppMenu(title: "SMPL\(k + 1) · \(s?.name ?? "")", groups: {
                             [[MenuItem(title: "Record over", icon: "mic") { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }],
                              [MenuItem(title: "Clear", icon: "trash") { clearing = k }]]
                         }, at: at)

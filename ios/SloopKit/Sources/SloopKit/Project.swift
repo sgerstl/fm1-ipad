@@ -154,7 +154,7 @@ public struct Fun6: Equatable, Sendable {
         """
 }
 
-/// Everything a Jib project keeps of the FM-1: the working loop, sections A–D and the song order. The
+/// Everything a Lupe project keeps of the FM-1: the working loop, sections A–D and the song order. The
 /// sounds in the user presets, the SYN kits and the samples stay on the FM-1 (they belong to it, not
 /// to a song).
 public struct ProjectData: Codable, Equatable, Sendable {
@@ -184,7 +184,7 @@ public struct ProjectData: Codable, Equatable, Sendable {
 }
 
 /// SLOOP's own song file (`.sloopsong`, the web editor's Song file and LIVE playlist): the loop, the
-/// filled sections and the song order, each object with its length and CRC. A Jib project is the same
+/// filled sections and the song order, each object with its length and CRC. A Lupe project is the same
 /// thing, so an export opens in SLOOP's editor and an import takes what that editor saves.
 public enum SloopSong {
     public static let format = "sloop-song"

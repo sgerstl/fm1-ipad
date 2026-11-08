@@ -10,8 +10,8 @@ struct ProjectsSheet: View {
     @State private var naming: NamePrompt?
     @State private var deleting: ProjectFile?
     @State private var tab: Tab = .projects
-    /// A row's menu, Jib's own (the sheet covers the app's root, so it has its own layer).
-    @State private var menu: JibMenu?
+    /// A row's menu, Lupe's own (the sheet covers the app's root, so it has its own layer).
+    @State private var menu: AppMenu?
 
     enum Tab { case projects, safety }
 
@@ -85,7 +85,7 @@ struct ProjectsSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
-        .overlay { JibMenuLayer(menu: $menu) }
+        .overlay { AppMenuLayer(menu: $menu) }
         .interactiveDismissDisabled(store.busy != nil)
         .alert(openTitle, isPresented: Binding(get: { opening != nil }, set: { if !$0 { opening = nil } }),
                presenting: opening) { o in
@@ -136,9 +136,9 @@ struct ProjectsSheet: View {
         }
     }
 
-    /// A project's menu (Jib's own): rename, duplicate, export, delete.
+    /// A project's menu (Lupe's own): rename, duplicate, export, delete.
     private func openMenu(_ p: ProjectFile, _ at: CGPoint) {
-        menu = JibMenu(title: p.name, groups: {
+        menu = AppMenu(title: p.name, groups: {
             var g: [[MenuItem]] = [[MenuItem(title: "Rename", icon: "pencil") { naming = .rename(p) }]]
             if !p.isSafetyCopy { g[0].append(MenuItem(title: "Duplicate", icon: "plus.square.on.square") { store.duplicate(p) }) }
             // SLOOP's song file: opens in SLOOP's web editor too; the share sheet is the system's. (Skiff's project file
@@ -335,7 +335,7 @@ private struct RowMenuKey: View {
     }
 }
 
-/// The system's share sheet for a file, from wherever a Jib menu was (a sheet included).
+/// The system's share sheet for a file, from wherever a Lupe menu was (a sheet included).
 @MainActor enum ShareSheet {
     static func present(_ url: URL, at point: CGPoint) {
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
