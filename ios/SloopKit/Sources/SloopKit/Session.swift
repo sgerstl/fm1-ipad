@@ -462,7 +462,7 @@ public final class DeviceSession {
         if selectedTrack >= s.trackCount { selectedTrack = 0 }
     }
 
-    // MARK: Reading
+    // MARK: Reading: the first full read
 
     private func readEverything() async throws {
         try await readTrackList()
@@ -678,6 +678,8 @@ public final class DeviceSession {
 
     private let saveLayer = 7          // LIVE op 2's layer for SAVE held (ui_layers.c LY_SONG)
 
+    // MARK: Sections and song mode
+
     /// Plays a section from the next bar (playing) or loads it as the loop (stopped), as SAVE + key 1–4.
     public func playSection(_ k: Int) {
         guard let c = sloop else { return }
@@ -808,6 +810,8 @@ public final class DeviceSession {
     }
 
     public static func sectionName(_ k: Int) -> String { ["A", "B", "C", "D"][k & 3] }
+
+    // MARK: Reading: each part of the FM-1
 
     private func readSoundParams(descs all: Bool) async throws {
         guard let c = driver, let i = info else { return }
@@ -1786,6 +1790,8 @@ public final class DeviceSession {
         return try b.save(in: docs)
     }
 
+    // MARK: Track actions
+
     /// What a clear took away, so the iPad can put it back (SLOOP's own undo covers device edits only).
     public struct ClearedTrack: Equatable, Sendable {
         public let track: Int
@@ -1875,6 +1881,8 @@ public final class DeviceSession {
         guard let i = info, let dt = drumTrack else { return }
         set(track: dt, param: i.firstEngineParam, to: k)
     }
+
+    // MARK: Transport
 
     public func toggleRec() {
         if let s = driver as? SkiffDriver { Task { await skiffRec(s) }; return }
