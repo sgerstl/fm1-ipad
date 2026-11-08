@@ -7,24 +7,8 @@ struct AppView: View {
     let ui: EditorUI
     @Binding var useDemo: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
-    @Environment(AudioThrough.self) private var through
-    @Environment(ProjectStore.self) private var projects
-    @Environment(\.scenePhase) private var scenePhase
     /// The Song tab's view before ARP was held on the FM-1 (the Pads while it's held), to go back to.
     @State private var padsReturn: SongView?
-
-    /// The iPad is playing the FM-1's sound, in front: the FM-1's own speaker goes quiet. Anything else
-    /// (the switch off, no input, the app in the background) gives its MASTER knob back.
-    /// The iPad plays the FM-1's sound (whatever the scene): the app is Now Playing.
-    private var audioThrough: Bool {
-        guard session.isConnected, case .playing = through.state else { return false }
-        return true
-    }
-
-    private var speakerQuiet: Bool {
-        guard session.isConnected, scenePhase == .active, case .playing = through.state else { return false }
-        return true
-    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -52,9 +36,7 @@ struct AppView: View {
                 ConnectionState(status: session.status, useDemo: $useDemo)
             }
         }
-        // what the FM-1 holds: matched against the saved projects at connect, re-checked at each stop
-        .onChange(of: session.isConnected, initial: true) { _, on in if on { projects.connected() } }
-        .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
+        .sessionUpkeep(session)
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
         // the Song tab's view follows the playback mode as it changes (Loop entry: Pads; Play song, Play once: Timeline),
@@ -73,17 +55,6 @@ struct AppView: View {
                 ui.songView = r
                 padsReturn = nil
             }
-        }
-        // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
-        .onChange(of: session.isConnected, initial: true) { _, on in
-            UIApplication.shared.isIdleTimerDisabled = on
-            if on { through.recheck() }
-        }
-        .onChange(of: speakerQuiet, initial: true) { _, quiet in session.muteSpeaker(quiet) }
-        // iPad audio left on from last time: look again once the app is in front, as when the FM-1 connects
-        .onChange(of: scenePhase) { _, p in if p == .active { through.recheck() } }
-        .onChange(of: [audioThrough ? 1 : 0, session.playing ? 1 : 0, session.song.songMode ? 1 : 0], initial: true) { _, _ in
-            NowPlaying.shared.update(active: audioThrough, session: session)
         }
         .padding(24)
         .overlay(alignment: .bottom) { keyboard }

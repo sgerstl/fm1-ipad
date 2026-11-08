@@ -50,7 +50,7 @@ views. Grid sizes come from `GridMetrics` in the environment, and `Theme.swift` 
 
 | Area | Files |
 |---|---|
-| App and shared state | `FM1App`, `EditorUI` (the UI state every view shares), `AppView`, `PhoneAppView`, `TopBar`, `Overview` (the track selector), `Theme`, `Settings` (preference keys), `SettingsSheet` |
+| App and shared state | `FM1App`, `EditorUI` (the UI state every view shares), `AppView`, `PhoneAppView`, `SessionUpkeep` (what both keep doing for the session), `TopBar`, `Overview` (the track selector), `Theme`, `Settings` (preference keys), `SettingsSheet` |
 | Song tab (Skiff) | `SongTab` (the page and its editor panel), `PadsPage`, `PadGrid`, `PadsTrackStrip`, `PadThumb`, `SkiffArrange` plus `Arrange*.swift` (the timeline), `SkiffArrangeParts`, `Entries` |
 | Pattern editor | `PianoRoll`, `DrumGrid`, `StepInspector`, `StepSelection`, `MotionLanes`, `TwoFingerScrollView` |
 | Sounds and the mix | `SoundPanel`, `Sound`, `ShapeColumns`, `Knobs`, `KnobPanel`, `TrackControls`, `PageGraphs`, `Library`, `PresetsPanel`, `MixerPanel`, `SamplerPanel` |

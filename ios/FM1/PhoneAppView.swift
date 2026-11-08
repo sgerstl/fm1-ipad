@@ -8,20 +8,8 @@ struct PhoneAppView: View {
     let session: DeviceSession
     let ui: EditorUI
     @Binding var useDemo: Bool
-    @Environment(AudioThrough.self) private var through
-    @Environment(ProjectStore.self) private var projects
-    @Environment(\.scenePhase) private var scenePhase
     @State private var size = CGSize(width: 852, height: 393)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var audioThrough: Bool {
-        guard session.isConnected, case .playing = through.state else { return false }
-        return true
-    }
-    private var speakerQuiet: Bool {
-        guard session.isConnected, scenePhase == .active, case .playing = through.state else { return false }
-        return true
-    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -89,18 +77,7 @@ struct PhoneAppView: View {
         .overlay { KnobPanelLayer(ui: ui) }
         .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 12).padding(.horizontal, 12) }
         .coordinateSpace(name: AppView.space)
-        // the same upkeep as the iPad's AppView: projects, the screen staying on, audio, Now Playing
-        .onChange(of: session.isConnected, initial: true) { _, on in if on { projects.connected() } }
-        .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
-        .onChange(of: session.isConnected, initial: true) { _, on in
-            UIApplication.shared.isIdleTimerDisabled = on
-            if on { through.recheck() }
-        }
-        .onChange(of: speakerQuiet, initial: true) { _, quiet in session.muteSpeaker(quiet) }
-        .onChange(of: scenePhase) { _, p in if p == .active { through.recheck() } }
-        .onChange(of: [audioThrough ? 1 : 0, session.playing ? 1 : 0, session.song.songMode ? 1 : 0], initial: true) { _, _ in
-            NowPlaying.shared.update(active: audioThrough, session: session)
-        }
+        .sessionUpkeep(session)        // the same upkeep as the iPad's AppView
         .foregroundStyle(Theme.text)
         .font(.system(size: 15))
         .monospacedDigit()
