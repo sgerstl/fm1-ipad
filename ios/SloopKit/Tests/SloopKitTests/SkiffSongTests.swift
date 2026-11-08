@@ -106,6 +106,57 @@ import Testing
         return (session, fake, s, run)
     }
 
+    // MARK: Pad drag and drop (PadMove)
+
+    @Test func aPadDroppedOnAFilledOneSwaps() throws {
+        let es = list([e(1, 2), e(2, 3), e(3)]).entries
+        let r = try #require(PadMove.apply(es, from: 0, to: 2))
+        #expect(r.landed == 2)
+        #expect(r.entries.prefix(3) == [e(3), e(2, 3), e(1, 2)])
+    }
+
+    @Test func aPadDroppedPastTheEndLandsOnTheFirstEmptyAfterTheList() throws {
+        let es = list([e(1), e(2), e(3)]).entries
+        // A dropped on H: lifted out, the list ends at C, so it lands on D; A is left empty
+        let r = try #require(PadMove.apply(es, from: 0, to: 7))
+        #expect(r.landed == 3)
+        #expect(r.entries.prefix(5) == [.empty, e(2), e(3), e(1), .empty])
+        // the last pad dropped past the end lands where it was: nothing changes
+        #expect(PadMove.apply(es, from: 2, to: 9) == nil)
+        // an empty gap inside the list takes the pad where it's dropped
+        var gapped = es; gapped[1] = .empty
+        #expect(try #require(PadMove.apply(gapped, from: 2, to: 1)).landed == 1)
+    }
+
+    @Test func aMovedPadBreaksTheChainsItLeavesAndJoins() throws {
+        // A chained into B; B moved to the end: A has nothing after it, so it can't chain
+        let es = list([e(1, chain: true), e(2), e(3)]).entries
+        let r = try #require(PadMove.apply(es, from: 1, to: 10))
+        #expect(r.entries[0].chained == false && r.entries[r.landed] == e(2))
+        // a chained entry swapped away doesn't take its chain to the new place
+        let s = try #require(PadMove.apply(es, from: 0, to: 2))
+        #expect(s.entries[2].chained == false)
+        // nothing to drag from an empty pad, or onto itself
+        #expect(PadMove.apply(es, from: 5, to: 0) == nil && PadMove.apply(es, from: 1, to: 1) == nil)
+    }
+
+    @Test func padMovesGoThroughTheFake() async throws {
+        let (session, _, s, run) = try await store()
+        defer { run.cancel() }
+        _ = session
+        let before = try #require(s.song?.tracks[0].entries)
+        let filled = before.indices.filter { !before[$0].isEmpty }
+        try #require(filled.count >= 2)
+        // swap the first two
+        let swap = try #require(PadMove.apply(before, from: filled[0], to: filled[1]))
+        #expect(await s.rewrite(track: 0, to: swap.entries, focus: swap.landed))
+        try await waitFor(5) { s.song?.tracks[0].entries == swap.entries }
+        // and back
+        let back = try #require(PadMove.apply(swap.entries, from: filled[1], to: filled[0]))
+        #expect(await s.rewrite(track: 0, to: back.entries, focus: back.landed))
+        try await waitFor(5) { s.song?.tracks[0].entries == before }
+    }
+
     // MARK: PERFORM (the Pads view)
 
     @Test func performDecodes() throws {

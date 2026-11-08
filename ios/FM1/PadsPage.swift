@@ -42,6 +42,11 @@ struct PadsPage: View {
     /// dropped (the pads redraw four times a second, which resets UIKit's long press: SwiftUI's, beside the button)
     @State private var pressAt: CGPoint = .zero
     @State private var heldKey: String?
+    /// A pad being dragged to another (Scott, 2026-11-08): from the hold, as Timeline blocks; where the hold took, so
+    /// the drag starts only once the finger leaves it; and the grid's place (global), for the dragged copy.
+    @State private var drag: PadDrag?
+    @State private var holdAt: CGPoint = .zero
+    @State private var gridFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
     /// Full size (the editor shut), over the editor (the strip as lane heads, two rows of 8, a shorter scene row), or
@@ -120,12 +125,21 @@ struct PadsPage: View {
                                     // one piece on the spring: without it the box bounced and its words stood still
                                     // (Scott, 2026-11-08)
                                     .geometryGroup()
+                                    .opacity(drag.map { !$0.refused && $0.track == t && $0.from == i } == true ? 0.35 : 1)
+                                    .overlay {
+                                        if let d = drag, d.track == t, landing(of: d) == i {
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
+                                                .allowsHitTesting(false)
+                                        }
+                                    }
                                     // (left showing under the selected pad: its tint covers it, and as a new pad is
                                     // picked the grid's own pad is there while the tint fades in, no blank flash)
                                     .allowsHitTesting(i != framed)
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .top : .center)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { gridFrame = $0 }
                         .overlay(alignment: .topLeading) {
                             // another pad picked: the old tint and controls draw back into their pad as the new ones
                             // grow out of theirs, together, quick (Scott, 2026-11-08)
@@ -139,6 +153,7 @@ struct PadsPage: View {
                                         .id("face\(t).\(i)")
                                         .transition(.opacity)
                                 }
+                                if let d = drag, !d.refused, d.track == t { dragged(d, m, cell: size, date: tl.date) }
                             }
                             .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
                         }
@@ -262,7 +277,7 @@ struct PadsPage: View {
 
     // MARK: Pads
 
-    private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date) -> some View {
+    private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date, copy: Bool = false) -> some View {
         let side = min(size.width, size.height), small = size.height < 120 || size.width < 150
         let tiny = size.width < 90                // Max's row of 16: the letter and the number only
         let list = store.song?.tracks[safe: t]
@@ -339,15 +354,25 @@ struct PadsPage: View {
         .disabled(store.offline)
         // held: its menu at the finger
         .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
-            .onChanged { pressAt = $0.location }
-            .onEnded { _ in releaseHold("p\(i)") })
+            .onChanged { v in
+                pressAt = v.location
+                // held, then moved off the hold: the pad lifts and follows the finger (its menu goes)
+                guard heldKey == "p\(i)", !e.isEmpty else { return }
+                if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > 10 { beginDrag(t, i, at: v.location) }
+                drag?.at = v.location
+            }
+            .onEnded { v in
+                if drag != nil { endDrag(at: v.location) }
+                releaseHold("p\(i)")
+            })
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
             guard !store.offline else { return }
             heldKey = "p\(i)"
+            holdAt = pressAt
             launched += 1
             openMenu(t, i, at: pressAt)
         })
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { padFrames[i] = $0 }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[i] = $0 } }   // (the dragged copy isn't the pad's place)
         .accessibilityLabel("Entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
         .accessibilityValue(e.isEmpty ? "" : state)
         .accessibilityHint(e.isEmpty ? "Opens a menu: a new pattern, a copy, one from the pool, or a rest"
@@ -361,6 +386,59 @@ struct PadsPage: View {
 
     /// The finger lifted: a hold's flag outlives the tap it drops by a moment, then goes (a hold that made no tap
     /// mustn't swallow the next one).
+    // MARK: Drag and drop (Scott, 2026-11-08; batch list 2)
+
+    struct PadDrag: Equatable {
+        var track: Int, from: Int
+        var at: CGPoint                  // the finger, global
+        var refused = false              // playing: said so, nothing lifts
+    }
+
+    private func beginDrag(_ t: Int, _ i: Int, at: CGPoint) {
+        ui.menu = nil
+        // Skiff rewrites a list only while stopped: say so at the lift, not after the drop
+        if session.playing {
+            store.refuse(track: t, entry: i, "Stop to rearrange: the FM-1 moves pads only while stopped", needsStop: true)
+            drag = PadDrag(track: t, from: i, at: at, refused: true)
+            return
+        }
+        drag = PadDrag(track: t, from: i, at: at)
+        launched += 1
+    }
+
+    private func endDrag(at: CGPoint) {
+        guard let d = drag else { return }
+        drag = nil
+        guard !d.refused, let target = pad(at: at) else { return }
+        move(d.track, from: d.from, to: target)
+    }
+
+    /// The pad under a point (global).
+    private func pad(at p: CGPoint) -> Int? { padFrames.first { $0.value.contains(p) }?.key }
+
+    /// Where the dragged pad would land: the pad under the finger, or past the list's end the first empty one after it.
+    private func landing(of d: PadDrag) -> Int? {
+        guard !d.refused, let target = pad(at: d.at), target != d.from,
+              let es = store.song?.tracks[safe: d.track]?.entries else { return nil }
+        return PadMove.apply(es, from: d.from, to: target)?.landed
+    }
+
+    private func move(_ t: Int, from: Int, to target: Int) {
+        guard let es = store.song?.tracks[safe: t]?.entries, let r = PadMove.apply(es, from: from, to: target) else { return }
+        Task { await store.rewrite(track: t, to: r.entries, focus: r.landed) }
+    }
+
+    /// The lifted copy under the finger, a little larger, over the grid.
+    private func dragged(_ d: PadDrag, _ m: SongPlayback.Marks, cell: CGSize, date: Date) -> some View {
+        pad(d.track, d.from, m, size: cell, date: date, copy: true)
+            .frame(width: cell.width, height: cell.height)
+            .scaleEffect(reduceMotion ? 1 : 1.06)
+            .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
+            .position(x: d.at.x - gridFrame.minX, y: d.at.y - gridFrame.minY)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
     private func releaseHold(_ key: String) {
         guard heldKey == key else { return }
         Task { @MainActor in
@@ -459,8 +537,21 @@ struct PadsPage: View {
                 ui.chooseSound(session, track: t, entry: SoundEntryTarget(ref: EntryRef(track: t, entry: i), pad: true))
             }])
         }
+        g.append([MenuItem(title: "Move to…", icon: "arrow.up.and.down.and.arrow.left.and.right",
+                           enabled: idle && !session.playing, children: { [moveTargets(t, i, list)] })])
         g.append([MenuItem(title: "Clear entry", icon: "trash", enabled: idle) { clear(t, i, e) }])
         return g
+    }
+
+    /// "Move to…": every other pad, as a drag would treat it (a swap onto a filled one).
+    private func moveTargets(_ t: Int, _ i: Int, _ list: SongList) -> [MenuItem] {
+        list.entries.indices.filter { $0 != i }.compactMap { j in
+            guard let r = PadMove.apply(list.entries, from: i, to: j) else { return nil }
+            let other = list.entries[j]
+            let what = other.isEmpty ? (r.landed == j ? "empty" : "lands on \(Entries.letter(r.landed))")
+                : "swap with \(other.isRest ? "REST" : Entries.number(other.pattern))"
+            return MenuItem(title: "Pad \(Entries.letter(j)) · \(what)") { move(t, from: i, to: j) }
+        }
     }
 
     /// The pattern in the editor: pinned on the Song tab's timeline, whose bottom half edits it (the pads have none).

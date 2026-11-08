@@ -47,8 +47,10 @@ private struct OutsideTouchWatch: UIViewRepresentable {
             watcher = g
         }
 
+        /// Taken off the window once the touches going on end, never during them: a recognizer removed mid-touch
+        /// cancelled the touch for every gesture under it (a pad's drag, whose hold had opened the menu).
         func detach() {
-            if let g = watcher { g.view?.removeGestureRecognizer(g) }
+            watcher?.retire()
             watcher = nil
         }
 
@@ -75,9 +77,26 @@ private struct OutsideTouchWatch: UIViewRepresentable {
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith o: UIGestureRecognizer) -> Bool { true }
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy o: UIGestureRecognizer) -> Bool { false }
 
+        private var retired = false
+
+        func retire() {
+            host = nil
+            retired = true
+        }
+
         override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
             if let t = touches.first { host?.touched(at: t.location(in: nil)) }
             state = .failed
+        }
+
+        // UIKit resets a recognizer when the touches it saw have all ended: the safe moment to go
+        override func reset() {
+            super.reset()
+            guard retired else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.view?.removeGestureRecognizer(self)
+            }
         }
     }
 }
