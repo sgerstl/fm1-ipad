@@ -12,36 +12,27 @@ struct TrackMenu: Equatable {
     static func voiceOver(track: Int) -> TrackMenu { TrackMenu(track: track, at: CGPoint(x: 200, y: 160 + CGFloat(track) * 48)) }
 }
 
-/// A track's menu, beside the finger (long-press a track): its sound, a sample, clearing its steps.
-/// Shared by the iPad's track box and the phone's track chips; kept inside `canvasSize`.
+/// A track's menu, beside the finger (long-press a track): its sound, a sample, clearing its steps. Shared by the iPad's
+/// track box and the phone's track chips; placed as every menu is (PlacedMenu: away from the playing hand, the page
+/// still live under a touch that closes it). Its layer is the canvas, so `TrackMenu.at` (AppView.space) is local.
 struct TrackMenuLayer: View {
     let session: DeviceSession
     let ui: EditorUI
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.canvasSize) private var canvas
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            if let m = ui.trackMenu {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture { ui.trackMenu = nil }
-                    .accessibilityHidden(true)
-                // the pad press menu's look, as every long-press menu (Scott, 2026-11-08): MenuPanel's rows and title
-                let groups = Self.groups(session, ui, track: m.track)
-                let rows = groups.reduce(0) { $0 + $1.count }
-                let tall = 44 + CGFloat(rows) * MenuPanel.rowHeight + CGFloat(max(0, groups.count - 1)) * 9
-                MenuPanel(title: "Track \(m.track + 1) · \(Entries.trackName(m.track, session: session))", groups: groups,
-                          close: { ui.trackMenu = nil })
-                    .id(m.track)
-                    .fixedSize()
-                    // beside the finger (to its right, centred on it), kept on screen
-                    .offset(x: min(max(m.at.x + 28, 12), canvas.width - 312), y: min(max(m.at.y - 50, 12), canvas.height - tall - 12))
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
-                .accessibilityAddTraits(.isModal)
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
+                if let m = ui.trackMenu {
+                    PlacedMenu(title: "Track \(m.track + 1) · \(Entries.trackName(m.track, session: session))",
+                               groups: Self.groups(session, ui, track: m.track), at: m.at, layer: g.size,
+                               close: { ui.trackMenu = nil })
+                        .id(m.track)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackMenu)
     }
 
