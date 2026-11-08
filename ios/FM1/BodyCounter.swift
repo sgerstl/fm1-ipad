@@ -1,7 +1,7 @@
 import Foundation
 
 /// -count-bodies: how many times each counted view's body runs, printed once a second (the redraw volume, for
-/// before-and-after numbers where Instruments' SwiftUI tools need a device). Free when off.
+/// before-and-after numbers where Instruments' SwiftUI tools need a device). Free when off; compiled out of release builds.
 enum BodyCounter {
     static let on = ProcessInfo.processInfo.arguments.contains("-count-bodies")
     nonisolated(unsafe) private static var counts: [String: Int] = [:]
@@ -9,9 +9,11 @@ enum BodyCounter {
     private static let lock = NSLock()
 
     static func tick(_ name: String) {
+        #if DEBUG
         guard on else { return }
         lock.lock(); counts[name, default: 0] += 1; let first = !started; started = true; lock.unlock()
         if first { report() }
+        #endif
     }
 
     private static func report() {

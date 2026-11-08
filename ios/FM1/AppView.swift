@@ -17,16 +17,15 @@ struct AppView: View {
     /// (the switch off, no input, the app in the background) gives its MASTER knob back.
     /// The iPad plays the FM-1's sound (whatever the scene): the app is Now Playing.
     private var audioThrough: Bool {
-        guard isConnected, case .playing = through.state else { return false }
+        guard session.isConnected, case .playing = through.state else { return false }
         return true
     }
 
     private var speakerQuiet: Bool {
-        guard isConnected, scenePhase == .active, case .playing = through.state else { return false }
+        guard session.isConnected, scenePhase == .active, case .playing = through.state else { return false }
         return true
     }
 
-    private var isConnected: Bool { if case .connected = session.status { true } else { false } }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -55,7 +54,7 @@ struct AppView: View {
             }
         }
         // what the FM-1 holds: matched against the saved projects at connect, re-checked at each stop
-        .onChange(of: isConnected, initial: true) { _, on in if on { projects.connected() } }
+        .onChange(of: session.isConnected, initial: true) { _, on in if on { projects.connected() } }
         .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
@@ -77,7 +76,7 @@ struct AppView: View {
             }
         }
         // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
-        .onChange(of: isConnected, initial: true) { _, on in
+        .onChange(of: session.isConnected, initial: true) { _, on in
             UIApplication.shared.isIdleTimerDisabled = on
             if on { through.recheck() }
         }

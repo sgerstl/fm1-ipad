@@ -132,7 +132,7 @@ struct FunctionPads: View {
             }
         case .glo where session.dialect == .skiff:
             // the Mixer tab; pressed again, its next section, as GLO steps the FM-1's pages (MIXER … GLOBAL)
-            ui.mixerSection = ui.page == .mixer ? SkiffButtonMap.MixerTab(rawValue: (ui.mixerSection.rawValue + 1) % 5)! : .mixer
+            ui.mixerSection = ui.page == .mixer ? SkiffButtonMap.MixerTab(rawValue: (ui.mixerSection.rawValue + 1) % SkiffButtonMap.MixerTab.allCases.count)! : .mixer
             ui.page = .mixer
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: ui.mixerSection.page) }
         case .seq where ui.songTab:

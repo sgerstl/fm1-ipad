@@ -70,6 +70,7 @@ public enum ConnectionStatus: Equatable, Sendable {
 @MainActor @Observable
 public final class DeviceSession {
     public private(set) var status: ConnectionStatus = .searching
+    public var isConnected: Bool { if case .connected = status { true } else { false } }
     public private(set) var info: DeviceInfo?
     /// The connected firmware (nil until one connects).
     public private(set) var dialect: FirmwareDialect?
@@ -1927,7 +1928,6 @@ public final class DeviceSession {
         Task {
             // a request that went unanswered part way: plain PLAY at least, as a tap would
             do { try await s.playFromStart() } catch {
-                print("play from start: \(error)")
                 _ = try? await s.transport(play: true)
             }
             if let after = try? await s.transportState() { applyTransport(after) }

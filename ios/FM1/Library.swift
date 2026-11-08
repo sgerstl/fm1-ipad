@@ -132,7 +132,7 @@ struct LibraryPage: View {
     /// The lit key's id in the grid (what the target has now), for keeping it in view.
     private var currentKey: String? {
         let t = session.selectedTrack, track = session.tracks[t]
-        if let _ = entry {
+        if entry != nil {
             guard let s = entryNow else { return nil }
             if let u = s.userSlot { return "user-\(u)" }
             return s.engine.map { "preset-\($0)-\(s.s1)" }

@@ -14,20 +14,19 @@ struct PhoneAppView: View {
     @State private var size = CGSize(width: 852, height: 393)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var isConnected: Bool { if case .connected = session.status { true } else { false } }
     private var audioThrough: Bool {
-        guard isConnected, case .playing = through.state else { return false }
+        guard session.isConnected, case .playing = through.state else { return false }
         return true
     }
     private var speakerQuiet: Bool {
-        guard isConnected, scenePhase == .active, case .playing = through.state else { return false }
+        guard session.isConnected, scenePhase == .active, case .playing = through.state else { return false }
         return true
     }
 
     var body: some View {
         VStack(spacing: 8) {
             PhoneTopBar(session: session, ui: ui, useDemo: $useDemo)
-            if isConnected {
+            if session.isConnected {
                 Group {
                     switch ui.page {
                     case .sequencer: PhoneSequence(session: session, ui: ui)
@@ -91,9 +90,9 @@ struct PhoneAppView: View {
         .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 12).padding(.horizontal, 12) }
         .coordinateSpace(name: AppView.space)
         // the same upkeep as the iPad's AppView: projects, the screen staying on, audio, Now Playing
-        .onChange(of: isConnected, initial: true) { _, on in if on { projects.connected() } }
+        .onChange(of: session.isConnected, initial: true) { _, on in if on { projects.connected() } }
         .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
-        .onChange(of: isConnected, initial: true) { _, on in
+        .onChange(of: session.isConnected, initial: true) { _, on in
             UIApplication.shared.isIdleTimerDisabled = on
             if on { through.recheck() }
         }
@@ -120,7 +119,6 @@ struct PhoneTopBar: View {
     @Environment(FirmwareCentre.self) private var firmware
     @State private var moreFrame: CGRect = .zero
 
-    private var isConnected: Bool { if case .connected = session.status { true } else { false } }
     private var recording: Bool { session.recording || session.song.songRecording }
     @State private var chipFrames: [Int: CGRect] = [:]
     @State private var pressAt = CGPoint(x: 40, y: 30)
@@ -134,9 +132,9 @@ struct PhoneTopBar: View {
                 if session.trackCount > 4 { chip(session.selectedTrack, picker: true) }
                 else { ForEach(session.trackIndices, id: \.self) { chip($0) } }
             }
-                .disabled(!isConnected)
-                .opacity(isConnected ? 1 : 0.45)
-            if isConnected { tabs } else { Spacer() }
+                .disabled(!session.isConnected)
+                .opacity(session.isConnected ? 1 : 0.45)
+            if session.isConnected { tabs } else { Spacer() }
             transport
             more
         }
@@ -252,8 +250,8 @@ struct PhoneTopBar: View {
         .background {
             if recording { RoundedRectangle(cornerRadius: 10).fill(Theme.recWell) } else { Color.clear.recessed(10) }
         }
-        .disabled(!isConnected)
-        .opacity(isConnected ? 1 : 0.45)
+        .disabled(!session.isConnected)
+        .opacity(session.isConnected ? 1 : 0.45)
     }
 
     /// The ⋯ menu, Jib's own (2026-11-05): the phone's audio, the source, Developer.

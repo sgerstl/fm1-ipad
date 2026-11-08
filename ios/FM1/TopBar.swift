@@ -68,7 +68,7 @@ struct TopBar: View {
             ui.menu = JibMenu(title: "FM-1", groups: { connectionGroups }, at: CGPoint(x: connectionFrame.minX, y: connectionFrame.maxY))
         } label: {
             HStack(spacing: 10) {
-                LED(on: isConnected, colour: Theme.text)
+                LED(on: session.isConnected, colour: Theme.text)
                     .frame(width: 8, height: 8)
                 // a real FM-1 is just the dot; words for the demo and for trouble (the version is in the menu)
                 if let s = shortStatus {
@@ -101,7 +101,6 @@ struct TopBar: View {
         ]
     }
 
-    private var isConnected: Bool { if case .connected = session.status { true } else { false } }
 
     private var shortStatus: String? {
         switch session.status {
@@ -135,7 +134,7 @@ struct TopBar: View {
             .accessibilityHint("Opens your projects")
             // Save as an icon that stays put; the dot on it is the "edited" mark (2026-11-03: the word
             // "edited" and the Save text key took more room than the name)
-            if isConnected, projects.busy == nil {
+            if session.isConnected, projects.busy == nil {
                 let dirty = projects.needsSaving
                 Button {
                     if projects.canSaveInPlace { Task { await projects.save() } } else { naming = .saveAs(projects.nextName()) }
@@ -254,7 +253,7 @@ struct TopBar: View {
     private var transport: some View {
         HStack(spacing: 8) {
             AudioThroughKey(through: through)
-            IconKey(label: "Keys", symbol: "pianokeys", onSymbol: "pianokeys.inverse", on: ui.keyboardOpen, enabled: isConnected) {
+            IconKey(label: "Keys", symbol: "pianokeys", onSymbol: "pianokeys.inverse", on: ui.keyboardOpen, enabled: session.isConnected) {
                 ui.keyboardOpen.toggle()
             }
             .accessibilityHint("Shows the FM-1's keyboard")
@@ -288,8 +287,8 @@ struct TopBar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
-        .disabled(!isConnected)
-        .opacity(isConnected ? 1 : 0.4)
+        .disabled(!session.isConnected)
+        .opacity(session.isConnected ? 1 : 0.4)
         .accessibilityLabel("Record")
         .accessibilityValue(session.song.songRecording ? "song recording" : session.recording ? "recording" : "off")
         .accessibilityAddTraits(.isToggle)
@@ -306,7 +305,7 @@ struct TopBar: View {
     /// sometimes stopped what it had just started. Here a release is a tap only if the hold hadn't fired and the
     /// finger stayed on the key. The key sinks as PressSink's do.
     private var playKey: some View {
-        let canHold = session.canPlayFromStart && isConnected
+        let canHold = session.canPlayFromStart && session.isConnected
         return Image(systemName: session.playing ? "stop.fill" : "play.fill")
         .font(.system(size: 17, weight: .semibold))
         .foregroundStyle(Theme.text)
@@ -319,7 +318,7 @@ struct TopBar: View {
         .hoverEffect(.highlight)
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { v in
-                guard isConnected else { return }
+                guard session.isConnected else { return }
                 if !pressing {
                     pressing = true
                     holdFired = false
@@ -345,8 +344,8 @@ struct TopBar: View {
                 playDown = false
                 if tap { session.setPlaying(!session.playing) }
             })
-        .disabled(!isConnected)
-        .opacity(isConnected ? 1 : 0.4)
+        .disabled(!session.isConnected)
+        .opacity(session.isConnected ? 1 : 0.4)
         .sensoryFeedback(.impact(weight: .medium), trigger: fromStartCount)
         .overlay(alignment: .top) {
             if fromStartShown {
@@ -371,7 +370,7 @@ struct TopBar: View {
         .accessibilityElement()
         .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { if isConnected { session.setPlaying(!session.playing) } }
+        .accessibilityAction { if session.isConnected { session.setPlaying(!session.playing) } }
         .accessibilityHint(canHold ? "Hold to play from the start" : "")
         .accessibilityActions {
             if canHold { Button("Play from the start", action: playFromStart) }
@@ -388,7 +387,7 @@ struct TopBar: View {
     private let look = Look()
 
     private func playFromStart() {
-        guard session.canPlayFromStart, isConnected else { return }
+        guard session.canPlayFromStart, session.isConnected else { return }
         session.playFromStart()
         fromStartCount += 1
         AccessibilityNotification.Announcement("Playing from the start").post()

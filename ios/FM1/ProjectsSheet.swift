@@ -22,7 +22,6 @@ struct ProjectsSheet: View {
         var name: String { target?.name ?? "a new project" }
     }
 
-    private var connected: Bool { if case .connected = session.status { true } else { false } }
 
     var body: some View {
         NavigationStack {
@@ -42,15 +41,15 @@ struct ProjectsSheet: View {
                     if ipadProjects {
                         Section {
                             Button { request(nil) } label: { Label("New project", systemImage: "plus") }
-                                .disabled(!connected || store.busy != nil)
+                                .disabled(!session.isConnected || store.busy != nil)
                                 .accessibilityHint(skiff ? "Clears the music: each track's power-on sound, no patterns. The pattern pool keeps its patterns"
                                                          : "Clears the FM-1: empty tracks, no sections, the default sounds, 90 BPM")
                             Button { naming = .saveAs(store.nextName()) } label: { Label("Save as…", systemImage: "square.and.arrow.down") }
-                                .disabled(!connected || store.busy != nil)
+                                .disabled(!session.isConnected || store.busy != nil)
                         } header: {
                             if skiff { Text("On this iPad") }      // (beside the FM-1's own slots)
                         } footer: {
-                            if !connected { Text("Plug in the FM-1 to open or save a project. You can still rename and delete.") }
+                            if !session.isConnected { Text("Plug in the FM-1 to open or save a project. You can still rename and delete.") }
                             else if skiff { Text("Saving here or opening stops the FM-1. A project keeps its patterns with it; user sounds and samples stay on the FM-1.") }
                         }
                         Section {
@@ -155,7 +154,7 @@ struct ProjectsSheet: View {
     }
 
     private func openButton(_ p: ProjectFile) -> some View {
-        let onFM1 = p.id == store.currentID && connected
+        let onFM1 = p.id == store.currentID && session.isConnected
         return Button { request(p) } label: {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -177,10 +176,10 @@ struct ProjectsSheet: View {
             .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
-        .disabled(!connected || store.busy != nil)
+        .disabled(!session.isConnected || store.busy != nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(p, onFM1: onFM1))
-        .accessibilityHint(connected ? "Opens it on the FM-1" : "Plug in the FM-1 to open it")
+        .accessibilityHint(session.isConnected ? "Opens it on the FM-1" : "Plug in the FM-1 to open it")
     }
 
     private func busyRow(_ b: (label: String, progress: Double?)) -> some View {
