@@ -39,12 +39,8 @@ struct AppView: View {
         .sessionUpkeep(session)
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
-        // the Song tab's view follows the playback mode as it changes (Loop entry: Pads; Play song, Play once: Timeline),
-        // then it's the user's; ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07)
-        .onChange(of: session.skiffSong?.song?.mode) { old, new in
-            guard let old, let new, old != new, session.skiffSong?.performs == true else { return }
-            ui.songView = new == .off ? .pads : .timeline
-        }
+        // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
+        // follows the playback mode to the timeline: Pads are the default, the timeline is the user's to pick, 2026-11-09)
         .onChange(of: session.screenLinked && session.deviceScreen?.layer == SkiffButtonMap.performLayer) { _, held in
             guard session.skiffSong?.performs == true, ui.followDevice else { return }
             if held {

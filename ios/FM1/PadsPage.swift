@@ -28,10 +28,12 @@ struct PadsPage: View {
     /// A pad being dragged to another (Scott, 2026-11-08): from the hold, as Timeline blocks; where the hold took, so
     /// the drag starts only once the finger leaves it; and the grid's place (global), for the dragged copy.
     @State private var drag: PadDrag?
+    /// The selected pad tapped while stopped: it stays selected, its track controls roll away (Scott, 2026-11-09); a
+    /// tap again, or another pad, brings them back.
+    @State private var controlsHidden = false
     @State private var holdAt: CGPoint = .zero
     @State private var gridFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
     /// Full size (the editor shut), over the editor (the strip as lane heads, two rows of 8, a shorter scene row), or
     /// over the largest editor (a row of 16 small keys, no strip, no scenes) (Scott, 2026-11-07, boards 32–34).
     var layout: PadsLayout = .full
@@ -127,9 +129,10 @@ struct PadsPage: View {
                             ZStack(alignment: .topLeading) {
                                 if let i = framed {
                                     let s = selectedGeometry(i, area: g.size, cols: cols, rows: rows, cell: size, gap: gap)
-                                    selectedTint(t, s, area: g.size)
-                                        .id("tint\(t).\(i)")
-                                        .transition(reduceMotion ? .opacity : Emerge.transition(s, row: row))
+                                    let bare = row || controlsHidden
+                                    selectedTint(t, s, area: g.size, bare: bare)
+                                        .id("tint\(t).\(i).\(bare)")
+                                        .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare))
                                     selectedFace(t, i, m, s, date: tl.date, area: g.size)
                                         .id("face\(t).\(i)")
                                         .transition(.opacity)
@@ -147,6 +150,9 @@ struct PadsPage: View {
         // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
         .padding(.bottom, compact ? 8 : 0)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
+        // another pad, or another track: its controls back
+        .onChange(of: framedPad(session.selectedTrack)) { _, _ in controlsHidden = false }
+        .onChange(of: session.selectedTrack) { _, _ in controlsHidden = false }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
             get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
@@ -188,15 +194,15 @@ struct PadsPage: View {
 
     /// The selected pad's border of its track's tint and the track's controls hanging from it, as one shape, over the
     /// pads beneath (Scott, 2026-11-07, board 32). It grows out of its pad when picked.
-    private func selectedTint(_ t: Int, _ s: SelectedGeometry, area: CGSize) -> some View {
+    private func selectedTint(_ t: Int, _ s: SelectedGeometry, area: CGSize, bare: Bool) -> some View {
         ZStack(alignment: .topLeading) {
-            if row {
-                // Max: the border alone (no track controls there for now, Scott 2026-11-07)
-                RoundedRectangle(cornerRadius: 12).fill(SelectionTint.fill(t, selectionTint))
+            if bare {
+                // Max (no track controls there for now, Scott 2026-11-07), or the controls tapped away: the border alone
+                RoundedRectangle(cornerRadius: 12).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
                 PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right)
-                    .fill(SelectionTint.fill(t, selectionTint))
+                    .fill(SelectionTint.fill(t))
                 TrackKnobBox(session: session, ui: ui, embedded: true)
                     .frame(width: s.tab.width, height: s.tab.height, alignment: .topLeading)
                     .offset(x: s.tabAt.x, y: s.tabAt.y)
@@ -290,6 +296,7 @@ struct PadsPage: View {
             if heldKey == "p\(i)" { heldKey = nil; return }       // (the release of a hold: its menu is open)
             if ui.justPulled { return }                          // (the lift that ends a pull of the editor)
             if e.isEmpty { openMenu(t, i, at: padFrames[i].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero); return }
+            if !session.playing, framedPad(t) == i { controlsHidden.toggle(); return }
             guard list?.entryOn != i || !session.playing else { return }
             launched += 1
             Task { await store.send(.play(track: t, entry: i)) }

@@ -14,7 +14,6 @@ struct SettingsSheet: View {
     @AppStorage(Magnifier.key) private var magnifier = true
     @AppStorage(SoundButtons.key) private var soundButtons = true
     @AppStorage(Handedness.key) private var handedness = Handedness.right
-    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
 
     var body: some View {
         NavigationStack {
@@ -31,18 +30,6 @@ struct SettingsSheet: View {
                     Text(slideToTurn == .sideways
                          ? "Slide a column right to raise it, left to lower it. Up and down scrolls the panel."
                          : "With Up and down or Both, a slide on a column turns it, so panels scroll from the gaps between columns.")
-                }
-
-                // a trial (Scott, 2026-11-07): how bright the selected track's row and knobs' tab are, picked by eye
-                Section {
-                    Picker("Selected track", selection: $selectionTint) {
-                        ForEach(SelectionTint.choices, id: \.self) { Text("\($0) %").tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Selected track (trial)")
-                } footer: {
-                    Text("How strongly the selected track's row and its knobs are lit on the Song tab.")
                 }
 
                 Section {

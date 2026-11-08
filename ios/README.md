@@ -89,7 +89,7 @@ demo FM-1 answers as a real one would and makes small edits of its own.
 | `-demo-notes-walk`, `-demo-mod-walk` | The demo turns the FM-1's cursor through SEQ's steps or MOD's routes. |
 | `-demo-firmware NAME` | Shows the firmware installer as for that firmware, without a device. |
 | `-page song\|mixer\|library\|sound` | Opens on that tab. |
-| `-song-pads` | The Song tab opens on Pads rather than the timeline. |
+| `-song-timeline` | The Song tab opens on the timeline rather than Pads. |
 | `-no-intro` | Skips the launch animation. |
 | `-slow-motion` | The Song tab's divider spring runs eight times slower, to study a transition. |
 | `-show-touches` | Draws a circle under each finger and logs touches (screen recordings). |

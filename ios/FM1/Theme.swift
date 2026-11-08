@@ -276,3 +276,17 @@ struct LED: View {
             .accessibilityHidden(true)
     }
 }
+
+/// The selected track's colour on the Song tab (its row, the knobs' tab, the selected pad, the editor's panel): the
+/// track's colour mixed into the page, opaque, so a tab covers what's under it cleanly. 24 % (Scott, 2026-11-09, picked
+/// on the iPad from 18, 24 and 30 %).
+enum SelectionTint {
+    static let percent: CGFloat = 24
+    static func fill(_ t: Int) -> Color {
+        var a = (r: CGFloat(0), g: CGFloat(0), b: CGFloat(0), x: CGFloat(0)), p = a
+        UIColor(Theme.track[t]).getRed(&a.r, green: &a.g, blue: &a.b, alpha: &a.x)
+        UIColor(Theme.page).getRed(&p.r, green: &p.g, blue: &p.b, alpha: &p.x)
+        let k = percent / 100
+        return Color(red: p.r + (a.r - p.r) * k, green: p.g + (a.g - p.g) * k, blue: p.b + (a.b - p.b) * k)
+    }
+}

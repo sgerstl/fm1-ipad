@@ -1,8 +1,7 @@
 import SloopKit
 import SwiftUI
 
-// The preferences Settings sets (and a few it shows as trials), each with its UserDefaults key, read with @AppStorage
-// wherever they apply. SettingsSheet is the screen.
+// The preferences Settings sets, each with its UserDefaults key, read with @AppStorage wherever they apply. SettingsSheet is the screen.
 
 /// How a column turns (KnobControl with a column face: Shape, the sound panel, the Mix cards, HOME's four in the
 /// track box). Stored with @AppStorage under `key`.
@@ -57,20 +56,4 @@ enum Magnifier {
 /// Settings' switch for the rail of FX…SEQ keys down the right edge. On by default.
 enum SoundButtons {
     static let key = "soundRail"
-}
-
-/// The selected track's colour on the Song tab (its row and the knobs' tab): the track's colour mixed into the page,
-/// opaque, so the tab covers the lane under it cleanly. How much: a trial in Settings (Scott, 2026-11-07, to pick by
-/// eye on the iPad), 18, 24 or 30 %.
-enum SelectionTint {
-    static let key = "selectionTint"
-    static let standard = 24
-    static let choices = [18, 24, 30]
-    static func fill(_ t: Int, _ percent: Int) -> Color {
-        var a = (r: CGFloat(0), g: CGFloat(0), b: CGFloat(0), x: CGFloat(0)), p = a
-        UIColor(Theme.track[t]).getRed(&a.r, green: &a.g, blue: &a.b, alpha: &a.x)
-        UIColor(Theme.page).getRed(&p.r, green: &p.g, blue: &p.b, alpha: &p.x)
-        let k = CGFloat(percent) / 100
-        return Color(red: p.r + (a.r - p.r) * k, green: p.g + (a.g - p.g) * k, blue: p.b + (a.b - p.b) * k)
-    }
 }

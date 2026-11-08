@@ -9,7 +9,6 @@ import SwiftUI
 struct SkiffArrangePage: View {
     @Environment(\.arrangeLaneHeight) private var laneHeight
     @Environment(\.arrangeCompact) private var compact
-    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
     let session: DeviceSession
     let store: SkiffSongStore
     let ui: EditorUI
@@ -293,7 +292,7 @@ struct SkiffArrangePage: View {
             // a tab of the selected row's own colour, hanging from its right end (above it on the last rows): the knobs
             // part of the track, not floating over the next one (Scott, 2026-11-07)
             TrackKnobBox(session: session, ui: ui, embedded: true)
-                .background { RowTab(down: down, flushRight: !panel).fill(SelectionTint.fill(t, selectionTint)) }
+                .background { RowTab(down: down, flushRight: !panel).fill(SelectionTint.fill(t)) }
                 .offset(x: panel ? -(SoundPanel.width + 12) : 0,
                         y: down ? below : max(0, top - 4 - TrackKnobBox.height))
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
@@ -305,7 +304,7 @@ struct SkiffArrangePage: View {
     @ViewBuilder private var selectedRow: some View {
         if compact {
             let t = session.selectedTrack
-            RoundedRectangle(cornerRadius: 8).fill(SelectionTint.fill(t, selectionTint))
+            RoundedRectangle(cornerRadius: 8).fill(SelectionTint.fill(t))
                 .frame(height: laneHeight + Self.laneGap)
                 .offset(y: 24 + Self.laneGap / 2 + CGFloat(t) * (laneHeight + Self.laneGap))
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)

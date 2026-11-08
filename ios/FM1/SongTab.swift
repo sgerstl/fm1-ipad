@@ -96,7 +96,7 @@ struct SkiffSongPage: View {
                     including: position == .none || dragTop != nil ? .all : .subviews)
                 ZStack(alignment: .top) {
                     EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge)
-                        .fill(SelectionTint.fill(session.selectedTrack, selectionTint))
+                        .fill(SelectionTint.fill(session.selectedTrack))
                     if editorShown {
                         PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
                             // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
@@ -128,7 +128,6 @@ struct SkiffSongPage: View {
         }
     }
 
-    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
 
     private var inPanel: GridMetrics {
         var g = grid

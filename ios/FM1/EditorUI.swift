@@ -55,8 +55,9 @@ final class EditorUI {
     var songTab = false {
         didSet { if songTab, page == .sequencer || page == .sound { page = .song } }
     }
-    /// The Song tab as a timeline or as pads (PadsPage.swift). -song-pads opens on the pads (screenshots).
-    var songView: SongView = ProcessInfo.processInfo.arguments.contains("-song-pads") ? .pads : .timeline
+    /// The Song tab as pads (PadsPage.swift) or a timeline. Pads first (Scott, 2026-11-09: the pads are how a song is
+    /// built; the timeline is where it's cut). -song-timeline opens on the timeline (screenshots).
+    var songView: SongView = ProcessInfo.processInfo.arguments.contains("-song-timeline") ? .timeline : .pads
     /// The Song tab: the entry the editor is pinned to (a block tapped); nil follows what each track plays.
     var pinnedEntry: EntryRef?
     /// Each pattern's drawing for the pads (PadThumb), as seen while a track was on it: kept for the session.

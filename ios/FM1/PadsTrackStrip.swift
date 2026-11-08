@@ -10,7 +10,6 @@ struct TrackStripCard: View {
     let store: SkiffSongStore
     let ui: EditorUI
     let track: Int
-    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
     /// A scene held: where this track would go and its mute (nil: no scene held, or one not seen yet).
     var preview: SkiffSongStore.SceneTrack? = nil
 
@@ -61,7 +60,7 @@ struct TrackStripCard: View {
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
             // no background but the selected track's tint, as the lane heads (Scott, 2026-11-07: grey cards at full
             // size and nothing when compact was "one or the other")
-            .background { RoundedRectangle(cornerRadius: 12).fill(selected ? SelectionTint.fill(track, selectionTint) : .clear) }
+            .background { RoundedRectangle(cornerRadius: 12).fill(selected ? SelectionTint.fill(track) : .clear) }
             .overlay {
                 if preview != nil {
                     RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.text.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
@@ -129,7 +128,6 @@ struct TrackStripRow: View {
     let ui: EditorUI
     let track: Int
     let preview: SkiffSongStore.SceneTrack?
-    @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
 
     var body: some View {
         let t = track
@@ -183,7 +181,7 @@ struct TrackStripRow: View {
             }
             .padding(.horizontal, 8)
             .frame(height: PadsPage.rowHeight)
-            .background(RoundedRectangle(cornerRadius: 10).fill(selected ? SelectionTint.fill(t, selectionTint) : .clear))
+            .background(RoundedRectangle(cornerRadius: 10).fill(selected ? SelectionTint.fill(t) : .clear))
             .overlay { if preview != nil { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
         }
     }
