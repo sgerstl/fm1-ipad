@@ -32,6 +32,9 @@ struct SkiffSongPage: View {
     @State private var allPatterns = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.grid) private var grid
+    /// Pads ↔ Timeline: where the pads and blocks are, and the fold in progress (PadFold.swift).
+    @State private var frames = FoldFrames()
+    @State private var fold: FoldRun?
 
     /// (420: the step inspector's short layout fits whole at the editor's least, never scrolling; 2026-11-06)
     static let editorMin: CGFloat = 420
@@ -58,6 +61,33 @@ struct SkiffSongPage: View {
         return [.none: total - Self.lip, .half: max(half, pads ? 0 : lanes), .max: min(maxTop, half)]
     }
 
+    /// A view's opacity through a fold: the one going away fades as the one coming fades in.
+    private func foldOpacity(isPads: Bool, pads: Bool) -> Double {
+        guard let f = fold else { return isPads == pads ? 1 : 0 }
+        let coming = isPads == f.toPads
+        return coming == f.landed ? 1 : 0
+    }
+
+    /// The switch moved: the selected track's pads fold into its lane, or open back out of it (Scott, 2026-11-08).
+    /// Reduce Motion, or Labs' time at 0: a plain crossfade, or none.
+    private func startFold(toPads: Bool) {
+        let time = Labs.foldTime.value
+        guard time > 0 else { fold = nil; return }
+        let t = session.selectedTrack
+        fold = FoldRun(toPads: toPads)
+        Task { @MainActor in
+            // two frames: the view coming in lays out and reports where its pads or blocks are
+            try? await Task.sleep(for: .milliseconds(34))
+            guard fold?.toPads == toPads else { return }
+            if !reduceMotion { fold?.pieces = FoldRun.pieces(track: t, store: store, frames: frames) }
+            let d = reduceMotion ? 0.15 : toPads ? time * 0.85 : time
+            withAnimation(.easeOut(duration: d)) { fold?.landed = true }
+            try? await Task.sleep(for: .seconds(d))
+            guard fold?.toPads == toPads else { return }
+            withAnimation(.easeOut(duration: 0.08)) { fold = nil }
+        }
+    }
+
     var body: some View {
         let _ = BodyCounter.tick("SkiffSongPage")
         let pads = ui.songView == .pads && store.performs && store.song != nil
@@ -71,16 +101,28 @@ struct SkiffSongPage: View {
             // the editor keeps its height while it slides under the fold, the page clipping it
             let bottom = max(Self.editorMin, total - top)
             VStack(spacing: 0) {
-                Group {
-                    if pads {
+                // Pads and Timeline: during a fold both are drawn, crossfading, with the pieces flying over them
+                // (PadFold.swift); otherwise only the one shown
+                ZStack(alignment: .topLeading) {
+                    if pads || fold?.toPads == false {
                         PadsPage(session: session, store: store, ui: ui, layout: shown)
-                    } else {
+                            .opacity(foldOpacity(isPads: true, pads: pads))
+                            .allowsHitTesting(pads)
+                    }
+                    if !pads || fold?.toPads == true {
                         SkiffArrangePage(session: session, store: store, ui: ui)
                             .environment(\.arrangeCompact, true)
                             .environment(\.arrangeLaneHeight, Self.laneHeight(top - PadsPage.tabHeight - 8, tracks: session.trackCount))
                             .padding(.bottom, PadsPage.tabHeight + 8)        // the panel's tab under the lane heads
+                            .opacity(foldOpacity(isPads: false, pads: pads))
+                            .allowsHitTesting(!pads)
+                    }
+                    if let f = fold, !f.pieces.isEmpty {
+                        FoldLayer(run: f, track: session.selectedTrack).transition(.opacity)
                     }
                 }
+                .environment(\.foldFrames, frames)
+                .onChange(of: pads) { _, now in startFold(toPads: now) }
                 // both halves pinned to the page's width: left loose, swapping the panel's contents (the sampler for
                 // the editor) re-centred the top half 12 pt to the left (Scott, 2026-11-09)
                 .frame(width: g.size.width, height: top)

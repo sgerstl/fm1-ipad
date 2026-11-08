@@ -178,6 +178,7 @@ struct Lane: View {
     @State private var boxBar: Int?
     @State private var boxTapped: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.foldFrames) private var fold
 
     static let holdTime: Duration = .milliseconds(400)
     /// The lane's own coordinates: where a finger is along it, however far the lanes have scrolled.
@@ -372,6 +373,10 @@ struct Lane: View {
                       state: compact && session.playing ? LaneMarks.spoken(store.marks(track, launchIn: session.ticksToLaunch(track)), block: b, launch: session.launchMode) : nil,
                       loops: loops)
                 .frame(width: w, height: laneHeight - 12)
+                // where it is, for the fold from the pads (PadFold.swift): the selected track's lane only
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { r in
+                    if track == session.selectedTrack, b.kind != .gap { fold?.block(b, track: track, r) }
+                }
                 // carried: faint in its own place, or, once it would move, an empty dashed place where it lands
                 // (the block itself is under the finger). The view stays, so the finger's gesture does too
                 .opacity(landing ? 0 : finger != nil && lifted == ref ? 0.35 : 1)

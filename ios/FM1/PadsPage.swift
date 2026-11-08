@@ -34,6 +34,7 @@ struct PadsPage: View {
     @State private var holdAt: CGPoint = .zero
     @State private var gridFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.foldFrames) private var fold
     /// Full size (the editor shut), over the editor (the strip as lane heads, two rows of 8, a shorter scene row), or
     /// over the largest editor (a row of 16 small keys, no strip, no scenes) (Scott, 2026-11-07, boards 32–34).
     var layout: PadsLayout = .full
@@ -360,7 +361,7 @@ struct PadsPage: View {
             launched += 1
             openMenu(t, i, at: pressAt)
         })
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[i] = $0 } }   // (the dragged copy isn't the pad's place)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[i] = $0; fold?.pad(i, track: t, $0) } }   // (the dragged copy isn't the pad's place)
         .accessibilityLabel("Entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
         .accessibilityValue(e.isEmpty ? "" : state)
         .accessibilityHint(e.isEmpty ? "Opens a menu: a new pattern, a copy, one from the pool, or a rest"
