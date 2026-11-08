@@ -81,7 +81,9 @@ struct SkiffSongPage: View {
                             .padding(.bottom, PadsPage.tabHeight + 8)        // the panel's tab under the lane heads
                     }
                 }
-                .frame(height: top)
+                // both halves pinned to the page's width: left loose, swapping the panel's contents (the sampler for
+                // the editor) re-centred the top half 12 pt to the left (Scott, 2026-11-09)
+                .frame(width: g.size.width, height: top)
                 // clipped at the foot only: a key on the top row (Cancel waiting) draws its raised edge a point
                 // above the page and was cut (Scott, 2026-11-08)
                 .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
@@ -101,6 +103,8 @@ struct SkiffSongPage: View {
                     // it, the pads above staying put (Scott, 2026-11-09: a sample is made for the track you're on)
                     if editorShown, let r = ui.sampler, !r.fromBrowse {
                         SamplerPanel(session: session, ui: ui, request: r)
+                            // held to the panel's inside: a wider sampler pushed the page and shifted it all 12 pt left
+                            .frame(width: max(0, g.size.width - 2 * (Self.panelEdge + Self.inset)))
                             .padding(.vertical, Self.inset)
                             .padding(.horizontal, Self.panelEdge + Self.inset)
                             .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -113,7 +117,7 @@ struct SkiffSongPage: View {
                             .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                .frame(height: bottom, alignment: .top)
+                .frame(width: g.size.width, height: bottom, alignment: .top)
                 // (cut at the panel's foot only: its tab stands above it)
                 .mask(alignment: .bottom) { Rectangle().padding(.top, -(PadsPage.tabHeight + 24)) }
                 .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.88), value: ui.sampler)
@@ -153,23 +157,27 @@ struct SkiffSongPage: View {
     /// The panel's tab, in the scene row's line (Scott's own alignment on board 31): Open at No grid, Close at Half,
     /// Less at Max. Tapped, the next place; dragged, the divider.
     private func tab(top: CGFloat, tops: [SongPosition: CGFloat], pads: Bool) -> some View {
-        let label: (String, String) = switch position {
-        case .none: ("Open", "chevron.up")
-        case .half: ("Close", "chevron.down")
-        case .max: ("Less", "chevron.down")
+        // which way it can go, as three stacked chevrons (Scott, 2026-11-09: words don't say the possibilities): shut, all
+        // up; half, one up over two down; largest, all down
+        let ups: [Bool] = switch position {
+        case .none: [true, true, true]
+        case .half: [true, false, false]
+        case .max: [false, false, false]
         }
         return Button {
             guard !ui.justPulled else { return }          // (the lift that ends a drag of the tab isn't a tap)
             let next: SongPosition = switch position { case .none: .half; case .half: .none; case .max: .half }
             withAnimation(spring) { positionRaw = next.rawValue; layout = nil }
         } label: {
-            HStack(spacing: 8) {
-                Text(label.0).font(.system(size: 15, weight: .semibold))
-                Image(systemName: label.1).font(.system(size: 12, weight: .bold))
+            VStack(spacing: 1) {
+                ForEach(0..<3, id: \.self) { k in
+                    Image(systemName: ups[k] ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold))
+                }
             }
             .foregroundStyle(Theme.text)
             .frame(width: PadsPage.compactStrip, height: PadsPage.tabHeight)
             .contentShape(Rectangle())
+            .geometryGroup()                   // rides the tab's spring with it (the words used to lag behind)
         }
         .buttonStyle(.plain)
         .simultaneousGesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
