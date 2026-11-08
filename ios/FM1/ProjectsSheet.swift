@@ -125,10 +125,10 @@ struct ProjectsSheet: View {
         HStack(spacing: 8) {
             openButton(p)
             RowMenuKey(name: p.name, hint: p.skiff == nil ? "Rename, duplicate, export or delete" : "Rename, duplicate or delete",
-                       disabled: store.busy != nil) { at in openMenu(p, at) }
+                       disabled: store.busy != nil) { at in openMenu(p, at, fromKey: true) }
         }
         // a long press anywhere on the row: the same menu, at the finger
-        .gesture(HoldRecognizer(space: .named("projectRows"), began: { _, g in if store.busy == nil { openMenu(p, g) } },
+        .gesture(HoldRecognizer(space: .named("projectRows"), began: { _, g in if store.busy == nil { openMenu(p, g, fromKey: false) } },
                                 changed: { _, _ in }, ended: { _, _, _ in }))
         .swipeActions {
             Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
@@ -137,7 +137,7 @@ struct ProjectsSheet: View {
     }
 
     /// A project's menu (Lupe's own): rename, duplicate, export, delete.
-    private func openMenu(_ p: ProjectFile, _ at: CGPoint) {
+    private func openMenu(_ p: ProjectFile, _ at: CGPoint, fromKey: Bool) {
         menu = AppMenu(title: p.name, groups: {
             var g: [[MenuItem]] = [[MenuItem(title: "Rename", icon: "pencil") { naming = .rename(p) }]]
             if !p.isSafetyCopy { g[0].append(MenuItem(title: "Duplicate", icon: "plus.square.on.square") { store.duplicate(p) }) }
@@ -150,7 +150,7 @@ struct ProjectsSheet: View {
             }
             g.append([MenuItem(title: "Delete", icon: "trash") { deleting = p }])
             return g
-        }, at: at)
+        }, at: at, fromKey: fromKey)
     }
 
     private func openButton(_ p: ProjectFile) -> some View {
@@ -320,7 +320,7 @@ private struct RowMenuKey: View {
     @State private var frame: CGRect = .zero
 
     var body: some View {
-        Button { open(CGPoint(x: frame.maxX - 300, y: frame.maxY)) } label: {
+        Button { open(CGPoint(x: frame.maxX - MenuPanel.width, y: frame.maxY)) } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.system(size: 20, weight: .regular))
                 .foregroundStyle(Theme.textSecondary)
@@ -329,7 +329,7 @@ private struct RowMenuKey: View {
         }
         .buttonStyle(.borderless)           // its own target in the row, not part of the open button
         .disabled(disabled)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
         .accessibilityLabel("Manage \(name)")
         .accessibilityHint(hint)
     }

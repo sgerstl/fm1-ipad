@@ -240,7 +240,7 @@ struct PhoneTopBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { readoutFrame = $0 }
+            .globalFrame($readoutFrame)
             .accessibilityElement(children: .combine)
             .accessibilityHint("Opens the tempo")
             .accessibilityAddTraits(.isButton)
@@ -265,7 +265,7 @@ struct PhoneTopBar: View {
                 g.append([MenuItem(title: useDemo ? "Use the FM-1" : "Use the demo FM-1", icon: useDemo ? "cable.connector" : "play.rectangle") { useDemo.toggle() }])
                 if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
                 return g
-            }, at: CGPoint(x: moreFrame.maxX - 300, y: moreFrame.maxY))
+            }, at: CGPoint(x: moreFrame.maxX - MenuPanel.width, y: moreFrame.maxY), fromKey: true)
         } label: {
             Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
@@ -273,7 +273,7 @@ struct PhoneTopBar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { moreFrame = $0 }
+        .globalFrame($moreFrame)
         .accessibilityLabel("More")
     }
 }

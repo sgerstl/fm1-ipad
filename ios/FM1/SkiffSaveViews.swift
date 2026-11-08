@@ -38,7 +38,7 @@ enum SaveSound {
                 })])
             }
             return g
-        }, at: at)
+        }, at: at, fromKey: true)
     }
 
     static func slotName(_ k: Int) -> String { String(format: "U%02d", k + 1) }
@@ -94,14 +94,14 @@ struct SaveSoundKey: View {
     @State private var frame: CGRect = .zero
 
     var body: some View {
-        Button { ui.menu = SaveSound.menu(session: session, ui: ui, at: CGPoint(x: frame.maxX - 300, y: frame.maxY)) } label: {
+        Button { ui.menu = SaveSound.menu(session: session, ui: ui, at: CGPoint(x: frame.maxX - MenuPanel.width, y: frame.maxY)) } label: {
             Label("Save sound", systemImage: "square.and.arrow.down").labelStyle(.iconOnly)
                 .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
                 .frame(width: 44, height: 44).raisedKey(8).contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
         .disabled(session.selectedIsDrums || !session.capabilities.contains(.userPresets))
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
         .accessibilityHint("Saves this track's sound to a user slot on the FM-1")
     }
 }

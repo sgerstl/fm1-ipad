@@ -42,7 +42,7 @@ struct TempoOverlay: View {
         }
         .animation(reduceMotion ? .easeOut(duration: open ? 0.15 : 0.1)
                                 : open ? .spring(duration: 0.25, bounce: 0.12) : .easeIn(duration: 0.15), value: open)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
     }
 }
 

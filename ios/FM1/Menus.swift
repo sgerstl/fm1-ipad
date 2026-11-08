@@ -49,6 +49,9 @@ struct AppMenu: Identifiable {
     var title: String
     var groups: () -> [[MenuItem]]
     var at: CGPoint
+    /// Opened from a key (a ⋯, a header, the connection readout): `at` is the menu's top-left, below the key. Otherwise
+    /// `at` is the finger, and the menu opens beside it on the side away from the playing hand (Settings › Handedness).
+    var fromKey = false
 }
 
 /// Draws an open AppMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
@@ -68,12 +71,20 @@ struct AppMenuLayer: View {
                         .fixedSize()
                         .closesOnOutsideTouch { menu = nil }
                         // beside the finger, on the side away from the playing hand (Settings › Handedness)
-                        .alignmentGuide(.leading) { d in -hand.menuX(touch: m.at.x - frame.minX, menuWidth: d.width, in: g.size.width) }
-                        .alignmentGuide(.top) { d in -Handedness.menuY(touch: m.at.y - frame.minY, menuHeight: d.height, in: g.size.height) }
+                        .alignmentGuide(.leading) { d in
+                            let x = m.at.x - frame.minX
+                            return -(m.fromKey ? min(max(12, x), g.size.width - d.width - 12)
+                                              : hand.menuX(touch: x, menuWidth: d.width, in: g.size.width))
+                        }
+                        .alignmentGuide(.top) { d in
+                            let y = m.at.y - frame.minY
+                            return -(m.fromKey ? (y + 8 + d.height <= g.size.height ? y + 8 : max(12, y - 8 - d.height))
+                                              : Handedness.menuY(touch: y, menuHeight: d.height, in: g.size.height))
+                        }
                 }
             }
         }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
     }
 }
 
@@ -86,6 +97,7 @@ struct MenuPanel: View {
     @FocusState private var focus: Int?
 
     static let rowHeight: CGFloat = 52
+    static let width: CGFloat = 300
     static let maxRows = 9
 
     var body: some View {
@@ -127,7 +139,7 @@ struct MenuPanel: View {
             .frame(height: min(max(contentHeight, Self.rowHeight), CGFloat(Self.maxRows) * Self.rowHeight))
         }
         .padding(.vertical, 4)
-        .frame(width: 300)
+        .frame(width: Self.width)
         // the one level-3 shadow, the panel's: on its shape, not the stack (which would shade every row and key)
         .elevated(.held, radius: 12)
         .focusable()

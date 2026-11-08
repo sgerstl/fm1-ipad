@@ -82,7 +82,7 @@ struct SkiffArrangePage: View {
         .onChange(of: ui.pinnedEntry) { _, r in if compact, r != selection { selection = r } }
         .overlay(alignment: .top) { if store.offline { OfflineBar(session: session) } }
         .overlay { menuOverlay }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pageFrame = $0 }
+        .globalFrame($pageFrame)
         // a menu on an entry that's gone (the song changed under it) closes; leaving the page drops every hold
         .onChange(of: store.song) { if let m = menu, !menuStillThere(m) { menu = nil } }
         // an entry's sounds belong to the selected entry: another one selected, they close

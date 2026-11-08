@@ -60,7 +60,7 @@ struct ValueLoupeLayer: View {
         .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.9), value: loupe.on)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
     }
 }
 

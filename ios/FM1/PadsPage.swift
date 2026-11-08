@@ -120,7 +120,7 @@ struct PadsPage: View {
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .top : .center)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { gridFrame = $0 }
+                        .globalFrame($gridFrame)
                         .overlay(alignment: .topLeading) {
                             // another pad picked: the old tint and controls draw back into their pad as the new ones
                             // grow out of theirs, together, quick (Scott, 2026-11-08)

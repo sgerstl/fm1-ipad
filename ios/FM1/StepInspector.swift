@@ -228,7 +228,7 @@ struct SkiffStepInspector: View {
                         let mark = r.source == .lock ? "◆ " : r.source == .recorded ? "— " : ""
                         return MenuItem.note("\(mark)\(session.trackDesc(id)?.label ?? "\(id)")  \(formatValue(session.trackDesc(id), r.value).shown)")
                     }]
-                }, at: CGPoint(x: soundFrame.minX, y: soundFrame.maxY))
+                }, at: CGPoint(x: soundFrame.minX, y: soundFrame.maxY), fromKey: true)
             } label: {
                 HStack(spacing: 4) {
                     Text("Sound at this step").font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
@@ -238,7 +238,7 @@ struct SkiffStepInspector: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { soundFrame = $0 }
+            .globalFrame($soundFrame)
             .accessibilityHint("Lists what each recorded parameter is at this step")
         } else {
             rows(ids, m, i, tint)

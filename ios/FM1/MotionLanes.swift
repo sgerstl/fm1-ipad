@@ -475,7 +475,7 @@ struct MotionLaneEditor: View {
                     Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).frame(width: 48, height: 44).raisedKey()
                 }
                 .buttonStyle(PressSink())
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { moreFrame = $0 }
+                .globalFrame($moreFrame)
                 .accessibilityLabel("More: lock or hold, delete this change, clear the lane")
             }
             Button { close() } label: {
@@ -565,7 +565,7 @@ struct MotionLaneEditor: View {
                 ui.addedLanes[track]?.removeAll { $0 == id }
                 ui.openLane = nil
             }]]
-        }, at: CGPoint(x: moreFrame.minX, y: moreFrame.maxY))
+        }, at: CGPoint(x: moreFrame.minX, y: moreFrame.maxY), fromKey: true)
     }
 
     // MARK: Axis and hints
@@ -772,7 +772,7 @@ struct MotionChip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
         .accessibilityLabel("Motion, \(used) of 64 records used by all tracks" + (low ? ", \(free) free" : ""))
         .accessibilityHint("Shows or hides the lanes, adds a lane, clears the track's motion")
     }
@@ -790,6 +790,6 @@ struct MotionChip: View {
               }],
              [MenuItem.submenu(title: "What uses the 64", enabled: session.motionUsed > 0, children: { MotionLanes.usage(session) })],
              [.note("Line: a recorded change, held until the next one."), .note("Diamond: a lock, this step only.")]]
-        }, at: CGPoint(x: frame.minX, y: frame.maxY))
+        }, at: CGPoint(x: frame.minX, y: frame.maxY), fromKey: true)
     }
 }

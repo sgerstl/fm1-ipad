@@ -241,6 +241,11 @@ struct Elevated: ViewModifier {
 }
 
 extension View {
+    /// Keeps `frame` at this view's place on screen (global): for a menu or panel opened beside it.
+    func globalFrame(_ frame: Binding<CGRect>) -> some View {
+        onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame.wrappedValue = $0 }
+    }
+
     func panel() -> some View { modifier(PanelBackground()) }
     func recessed(_ radius: CGFloat = 8) -> some View { modifier(Recessed(radius: radius)) }
     func raisedKey(_ radius: CGFloat = 9, primary: Bool = false) -> some View { modifier(RaisedKey(radius: radius, primary: primary)) }

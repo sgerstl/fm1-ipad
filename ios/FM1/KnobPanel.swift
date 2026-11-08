@@ -35,7 +35,7 @@ struct KnobPanelLayer: View {
                 }
             }
         }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
     }
 }
 

@@ -308,7 +308,7 @@ struct Lane: View {
         .animation(motion, value: list.entries)
         .animation(motion, value: spot)
         .coordinateSpace(laneSpace)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { laneFrame = $0 }
+        .globalFrame($laneFrame)
         .onChange(of: press) { _, now in
             if let now { startHold(now) } else { endPress() }
         }

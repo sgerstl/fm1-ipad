@@ -65,7 +65,7 @@ struct TopBar: View {
 
     private var connection: some View {
         Button {
-            ui.menu = AppMenu(title: "FM-1", groups: { connectionGroups }, at: CGPoint(x: connectionFrame.minX, y: connectionFrame.maxY))
+            ui.menu = AppMenu(title: "FM-1", groups: { connectionGroups }, at: CGPoint(x: connectionFrame.minX, y: connectionFrame.maxY), fromKey: true)
         } label: {
             HStack(spacing: 10) {
                 LED(on: session.isConnected, colour: Theme.text)
@@ -79,7 +79,7 @@ struct TopBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { connectionFrame = $0 }
+        .globalFrame($connectionFrame)
         .accessibilityLabel("\(statusLine), \(versionLine)")
         .accessibilityHint("Choose the FM-1 or a demo, install firmware, or open Settings")
         .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
@@ -410,7 +410,7 @@ struct TopBar: View {
             ReadoutLabel(session: session, recording: recording)
         }
         .buttonStyle(.plain)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { readoutFrame = $0 }
+        .globalFrame($readoutFrame)
         .accessibilityHint("Opens the tempo")
         .accessibilityAddTraits(.isButton)
     }

@@ -372,7 +372,7 @@ struct PatternPane: View {
             followToggle(t, entry: entry, pinned: pinned)
         }
         .frame(height: Self.headerHeight)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { headerFrame = $0 }
+        .globalFrame($headerFrame)
     }
 
     /// The six tracks in a menu (Max on Pads): pick one, see what it plays, mute it. A long press on a track elsewhere
@@ -380,7 +380,7 @@ struct PatternPane: View {
     private func tracksMenu(_ t: Int) -> some View {
         // the pad press menu's look, as every menu (Scott, 2026-11-08), opened under the key
         Button {
-            ui.menu = AppMenu(title: "Tracks", groups: { tracksGroups(t) }, at: CGPoint(x: headerFrame.minX, y: headerFrame.maxY - 4))
+            ui.menu = AppMenu(title: "Tracks", groups: { tracksGroups(t) }, at: CGPoint(x: headerFrame.minX, y: headerFrame.maxY - 4), fromKey: true)
         } label: {
             HStack(spacing: 8) {
                 TrackChip(track: t, selected: true).frame(width: 28, height: 28)
@@ -452,7 +452,7 @@ struct PatternPane: View {
              },
              free.isEmpty ? [] : [MenuItem(title: "Free patterns: \(free.count)", enabled: false, note: true)],
              [MenuItem(title: "Show the pattern pool", icon: "square.grid.2x2") { ui.poolOpen = true }]].filter { !$0.isEmpty }
-        }, at: CGPoint(x: headerFrame.minX + 200, y: headerFrame.maxY))
+        }, at: CGPoint(x: headerFrame.minX + 200, y: headerFrame.maxY), fromKey: true)
     }
 
     /// Pinned to an entry that isn't what the track plays: Skiff edits the pattern a track has, and sending the

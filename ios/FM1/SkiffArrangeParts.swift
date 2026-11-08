@@ -457,7 +457,7 @@ struct PatternBin: View {
             return [[MenuItem(title: "Empty its steps…", icon: "square.dashed", enabled: !playing) { ask(2, p) },
                      MenuItem(title: "Clear pattern…", icon: "trash", enabled: !playing && uses == 0) { ask(1, p) }]]
                 + (notes.isEmpty ? [] : [notes])
-        }, at: at)
+        }, at: at, fromKey: true)
     }
 
     private func ask(_ op: Int, _ p: Int) {
@@ -485,7 +485,7 @@ private struct PatternMore: View {
                 .frame(width: 44, height: 40).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
         .accessibilityLabel("Pattern \(Entries.number(number)) options")
     }
 }

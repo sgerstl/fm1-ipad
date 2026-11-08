@@ -156,7 +156,7 @@ struct LibraryPage: View {
                                 ui.saveSound = SaveSoundRequest(slot: k, replacing: p.name)
                              }],
                              [MenuItem(title: "Erase…", icon: "trash") { erasing = p }]]
-                        }, at: at)
+                        }, at: at, fromKey: true)
                     }
                 }
         } else {
@@ -372,12 +372,12 @@ private struct UserSlotMore: View {
     @State private var frame: CGRect = .zero
 
     var body: some View {
-        Button { open(CGPoint(x: frame.maxX - 300, y: frame.maxY)) } label: {
+        Button { open(CGPoint(x: frame.maxX - MenuPanel.width, y: frame.maxY)) } label: {
             Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                 .frame(width: 44, height: 56).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .globalFrame($frame)
         .accessibilityLabel("Manage \(name.capitalized)")
         .accessibilityHint("Replace or erase this saved sound")
     }
