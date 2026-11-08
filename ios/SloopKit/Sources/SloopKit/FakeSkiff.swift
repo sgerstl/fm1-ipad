@@ -509,8 +509,58 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         return b
     }
 
+    /// User sample slots USR1..USR3 (Skiff 2.2: three, eng_sample.c SMP_SLOTS), cmds 11–15 as editor.c handles them.
+    /// USR1 holds a sample so the demo has a full slot to show.
+    var sampleSlots: [FakeSloop.SampleSlotState] = [.init(zones: 1, name: "KALIMBA", dataLength: 30_000), .init(), .init()]
+
+    /// SMP_BEGIN / WRITE / END / ERASE / INFO (Skiff editor.c 896–951): as SLOOP's, but END has no rc 6 (a slot not
+    /// open is rc 5, failed). Nil: not a sample command.
+    private func sampleAnswer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
+        switch cmd {
+        case Cmd.smpBegin, Cmd.smpErase:
+            guard let k = a.first.map(Int.init), k < sampleSlots.count else { return [a.first ?? 0, 1] }
+            sampleSlots[k] = FakeSloop.SampleSlotState(open: cmd == Cmd.smpBegin)
+            return [a[0], 0]
+        case Cmd.smpWrite:
+            guard a.count >= 5, Int(a[0]) < sampleSlots.count else { return nil }
+            let k = Int(a[0]), off = Int(a[1]) | Int(a[2]) << 7 | Int(a[3]) << 14
+            let d = Array(Pack7.decode(Array(a[4...])).prefix(256))
+            var rc: UInt8 = 0
+            if off < UserSample.dataOffset || off & 0xFF != 0 || d.isEmpty || off + d.count > UserSample.slotSize
+                || off != UserSample.dataOffset + sampleSlots[k].data.count { rc = 1 }
+            else if sampleSlots[k].zones != 0 || !sampleSlots[k].open { rc = 4 }
+            else { sampleSlots[k].data += d }
+            return Array(a[0..<4]) + [rc]
+        case Cmd.smpEnd:
+            guard a.count >= 2, Int(a[0]) < sampleSlots.count else { return nil }
+            let k = Int(a[0]), h = Pack7.decode(Array(a[1...]))
+            func u32(_ o: Int) -> Int { Int(h[o]) | Int(h[o + 1]) << 8 | Int(h[o + 2]) << 16 | Int(h[o + 3]) << 24 }
+            var rc: UInt8 = 0
+            if !sampleSlots[k].open || sampleSlots[k].zones != 0 { rc = 5 }
+            else if h.count < UserSample.headerLength { rc = 1 }
+            else if UInt32(u32(0)) != UserSample.magic || h[4] != 1 || h[5] != 0 || !(1...16).contains(h[6]) || u32(16) > UserSample.maxData { rc = 2 }
+            else {
+                sampleSlots[k].open = false
+                let len = u32(16), data = sampleSlots[k].data
+                if data.count < len || CRC32.of(Array(data.prefix(len))) != UInt32(u32(20)) { rc = 3 }
+                else {
+                    sampleSlots[k].zones = Int(h[6]); sampleSlots[k].dataLength = len
+                    sampleSlots[k].name = String(decoding: h[8..<16].prefix { $0 != 0 }, as: UTF8.self)
+                }
+            }
+            return [a[0], rc]
+        case Cmd.smpInfo:
+            var b: [UInt8] = [UInt8(sampleSlots.count), UInt8(UserSample.slotSize / 1024)]
+            for s in sampleSlots { b += [UInt8(s.zones)] + Array((s.zones != 0 ? s.name : "").utf8) + [0, UInt8(s.zones != 0 ? (s.dataLength + 1023) / 1024 : 0)] }
+            return b
+        default:
+            return nil
+        }
+    }
+
     // Called with the lock held.
     private func answer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
+        if (Cmd.smpBegin...Cmd.smpInfo).contains(cmd) { return sampleAnswer(cmd, a) }
         switch (cmd, a.count) {
         case (1, 0): return screenLink ? fx.info + [0x56, 1, UInt8(screenLinkVersion)] : fx.info
         case (90, 0) where screenLink: return screenBytes()

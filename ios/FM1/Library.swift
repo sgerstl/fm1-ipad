@@ -231,7 +231,7 @@ struct LibraryPage: View {
 
     private var sampleEngine: Int? { session.info?.engines.firstIndex(of: "SAMPLE") }
 
-    /// USR1–4, as sections work: an empty slot records (the sampler slides up), a full one plays on the
+    /// The user sample slots (SLOOP SMPL1–4, Skiff USR1–3), as sections work: an empty slot records (the sampler slides up), a full one plays on the
     /// track at a tap, and a long press offers Record over and Clear.
     private func userSamples(_ columns: [GridItem]) -> some View {
         let t = session.selectedTrack
@@ -241,18 +241,18 @@ struct LibraryPage: View {
                 .padding(.leading, 4).padding(.top, 16)
                 .accessibilityAddTraits(.isHeader)
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(0..<max(4, slots.count), id: \.self) { k in
+                ForEach(0..<session.sampleSlotCount, id: \.self) { k in
                     let s = k < slots.count ? slots[k] : nil
                     let full = s.map { !$0.isEmpty } ?? false
-                    let current = full && session.tracks[t].engine == sampleEngine && session.tracks[t].presetName == "SMPL\(k + 1)"
-                    presetKey(full ? s!.name : "Empty", detail: full ? "SMPL\(k + 1) · \(s!.kib) KB" : "SMPL\(k + 1) · Tap to record", current: current) {
+                    let current = full && session.tracks[t].engine == sampleEngine && session.tracks[t].presetName == session.sampleSlotName(k)
+                    presetKey(full ? s!.name : "Empty", detail: full ? "\(session.sampleSlotName(k)) · \(s!.kib) KB" : "\(session.sampleSlotName(k)) · Tap to record", current: current) {
                         if full { Task { await session.useSample(slot: k, onTrack: t) } }
                         else { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }
                     }
                     // a long press on a recorded slot: Lupe's menu at the finger (it was the system's)
                     .gesture(HoldRecognizer(space: .named(AppView.space), began: { _, at in
                         guard full else { return }
-                        ui.menu = AppMenu(title: "SMPL\(k + 1) · \(s?.name ?? "")", groups: {
+                        ui.menu = AppMenu(title: "\(session.sampleSlotName(k)) · \(s?.name ?? "")", groups: {
                             [[MenuItem(title: "Record over", icon: "mic") { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }],
                              [MenuItem(title: "Clear", icon: "trash") { clearing = k }]]
                         }, at: at)
@@ -265,8 +265,8 @@ struct LibraryPage: View {
             .padding(4)
         }
         .task { await session.refreshSampleSlots() }
-        .alert("Clear SMPL\((clearing ?? 0) + 1)?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
-            Button("Clear SMPL\((clearing ?? 0) + 1)", role: .destructive) {
+        .alert("Clear \(session.sampleSlotName(clearing ?? 0))?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
+            Button("Clear \(session.sampleSlotName(clearing ?? 0))", role: .destructive) {
                 if let k = clearing { Task { try? await session.eraseSample(slot: k) } }
             }
             Button("Cancel", role: .cancel) {}

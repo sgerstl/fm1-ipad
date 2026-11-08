@@ -45,8 +45,8 @@ public struct TrackState: Equatable, Sendable {
     public var displayName: String {
         if isDrums { return presetName.isEmpty ? "Drums" : "Drums · \(presetName.capitalized)" }
         let e = engineName.capitalized
-        // a user sample slot keeps its upper-case name: SMPL2, not Smpl2
-        let p = presetName.hasPrefix("SMPL") ? presetName : presetName.capitalized
+        // a user sample slot keeps its upper-case name: SMPL2 or USR2, not Smpl2
+        let p = presetName.hasPrefix("SMPL") || presetName.range(of: #"^USR\d$"#, options: .regularExpression) != nil ? presetName : presetName.capitalized
         return presetName.isEmpty ? e : "\(e) · \(p)"
     }
 }
@@ -197,6 +197,8 @@ public final class DeviceSession {
     private var driver: FirmwareDriver?
     /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
     private var sloop: SloopClient? { (driver as? SloopDriver)?.client }
+    /// The client that carries the user-sample commands (11–15): SLOOP's and Skiff's take the same bytes.
+    var sampleClient: SloopClient? { (driver as? SloopDriver)?.client ?? (driver as? SkiffDriver)?.client }
     /// Factory preset names per engine (NAMES), all read at connect: the library's lists.
     public private(set) var namesCache: [Int: [String]] = [:]
     public private(set) var userPresets: [UserPreset] = []
@@ -205,6 +207,9 @@ public final class DeviceSession {
     /// The FM-1's user sample slots USR1..USR4 (SMP_INFO): [] until read; read on connect, after an
     /// upload and after an erase. They belong to the FM-1, not to a project.
     public private(set) var sampleSlots: [SampleSlot] = []
+    /// Skiff: SAMPLE's SET value for USR1, learned from SET's DESC names (the factory sets before it vary by build:
+    /// five with the CC0 library, fewer without). Nil until read.
+    @ObservationIgnored var userSetBase: Int?
 
     // Every parameter, for the Sound tab (step 4).
     /// The selected track's P_* values (DUMP), kept current from CHANGED pushes and the iPad's writes.
@@ -876,7 +881,7 @@ public final class DeviceSession {
                     // SET on a user slot (USR1..USR4) names the sound better than the preset it started from
                     let set = i.firstEngineParam
                     if recentlyWritten("p\(k).\(set)") { name = tracks[k].presetName }
-                    else if let v = try? await c.trackParam(track: k, id: set), let u = Self.sampleSlot(forSet: v) { name = "SMPL\(u + 1)" }
+                    else if let v = try? await c.trackParam(track: k, id: set), let u = sampleSlot(forSet: v) { name = sampleSlotName(u) }
                 }
                 if tracks[k].presetName != name { tracks[k].presetName = name }
             } else {
@@ -1946,13 +1951,18 @@ extension DeviceSession {
         case refused(stage: String, rc: Int)   // "begin", "write", "end" or "erase", and the device's rc
     }
 
-    /// SAMPLE's SET: eight factory sets, then USR1..USR4.
-    static let firstUserSet = 8
-    static func sampleSlot(forSet v: Int) -> Int? { (firstUserSet..<(firstUserSet + 4)).contains(v) ? v - firstUserSet : nil }
+    /// SAMPLE's SET: the factory sets, then the user slots. SLOOP: eight, then USR1..USR4. Skiff 2.2: five (SMP_NSETS),
+    /// then USR1..USR3 (core.h, EDITOR_PROTOCOL.md).
+    public var firstUserSet: Int { dialect == .skiff ? (userSetBase ?? 5) : 8 }
+    /// How many user slots this firmware has: what SMP_INFO said, else the dialect's.
+    public var sampleSlotCount: Int { sampleSlots.isEmpty ? (dialect == .skiff ? 3 : 4) : sampleSlots.count }
+    /// A user slot's name as the FM-1 shows it: SLOOP's SMPL1…4, Skiff's USR1…3.
+    public func sampleSlotName(_ k: Int) -> String { (dialect == .skiff ? "USR" : "SMPL") + "\(k + 1)" }
+    public func sampleSlot(forSet v: Int) -> Int? { (firstUserSet..<(firstUserSet + sampleSlotCount)).contains(v) ? v - firstUserSet : nil }
 
     /// Reads the slots again (SMP_INFO). A failed read leaves what was there.
     public func refreshSampleSlots() async {
-        guard let c = sloop, let s = try? await c.sampleSlots() else { return }
+        guard let c = sampleClient, let s = try? await c.sampleSlots() else { return }
         if s != sampleSlots { sampleSlots = s }
     }
 
@@ -1964,9 +1974,8 @@ extension DeviceSession {
     public func uploadSample(slot: Int, name: String, samples: [Int16], root: Int = 60,
                              progress: @escaping @MainActor (Double) -> Void) async throws {
         let (header, data) = try UserSample.slot(name: name, samples: samples, root: root)
-        guard let c = sloop else { throw SampleError.notConnected }
-        let slots = sampleSlots.isEmpty ? 4 : sampleSlots.count
-        guard (0..<slots).contains(slot) else { throw SampleError.refused(stage: "begin", rc: 1) }
+        guard let c = sampleClient else { throw SampleError.notConnected }
+        guard (0..<sampleSlotCount).contains(slot) else { throw SampleError.refused(stage: "begin", rc: 1) }
         do {
             // a backup operation's turn: neither interleaves its frames with the other's
             try await backupTurn {
@@ -1995,7 +2004,7 @@ extension DeviceSession {
 
     /// Empties a slot (SMP_ERASE, about a second of flash erasing).
     public func eraseSample(slot: Int) async throws {
-        guard let c = sloop else { throw SampleError.notConnected }
+        guard let c = sampleClient else { throw SampleError.notConnected }
         let rc: Int
         do { rc = try await backupTurn { try await c.sampleErase(slot: slot) } }
         catch ClientError.closed { throw SampleError.notConnected }
@@ -2009,7 +2018,8 @@ extension DeviceSession {
     /// PRESET loads onto the selected track, so the track is selected first; SAMPLE's preset 0 switches the
     /// engine (keeping the pattern, mix and key), then SET and LOOP are written. A project edit (onEdit).
     public func useSample(slot: Int, onTrack t: Int) async {
-        guard trackIndices.contains(t), !isDrums(t), (0..<4).contains(slot), let c = sloop, let info,
+        // through the driver, so Skiff's wide parameter ids go in its own encoding
+        guard trackIndices.contains(t), !isDrums(t), (0..<sampleSlotCount).contains(slot), let c = driver, let info,
               let e = info.engines.firstIndex(of: "SAMPLE") else { return }
         let set = info.firstEngineParam, loop = info.firstEngineParam + 3
         if selectedTrack != t {
@@ -2019,12 +2029,14 @@ extension DeviceSession {
         // RELOAD (after PRESET) re-reads the track: these two are the iPad's for a moment
         recentWrites["p\(t).\(set)"] = Date(); recentWrites["p\(t).\(loop)"] = Date()
         tracks[t].engine = e; tracks[t].engineName = info.engines[e]
-        tracks[t].preset = 0; tracks[t].presetName = "SMPL\(slot + 1)"
+        tracks[t].preset = 0; tracks[t].presetName = sampleSlotName(slot)
         onEdit?()
         _ = try? await c.preset(engine: e, index: 0)
-        apply(track: t, id: set, value: Self.firstUserSet + slot)
+        // Skiff: where USR1 sits in SET, from SET's own names now the track is on SAMPLE
+        if dialect == .skiff, let d = try? await c.desc(scope: 0, id: set), let u = d.names.firstIndex(of: "USR1") { userSetBase = d.min + u }
+        apply(track: t, id: set, value: firstUserSet + slot)
         apply(track: t, id: loop, value: 0)
-        _ = try? await c.setTrackParam(track: t, id: set, value: Self.firstUserSet + slot)
+        _ = try? await c.setTrackParam(track: t, id: set, value: firstUserSet + slot)
         _ = try? await c.setTrackParam(track: t, id: loop, value: 0)
         recentWrites["p\(t).\(set)"] = Date(); recentWrites["p\(t).\(loop)"] = Date()
     }

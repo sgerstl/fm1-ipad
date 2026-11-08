@@ -92,6 +92,38 @@ import Testing
         run.cancel()
     }
 
+    @Test func skiffTakesSamplesInItsThreeSlots() async throws {
+        // Skiff 2.2: the same cmds 11–15 as SLOOP, three slots, and SET's USR1 found from SET's own names
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        defer { run.cancel() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        #expect(session.dialect == .skiff && session.capabilities.contains(.samples))
+        try await waitFor { session.sampleSlots.count == 3 }
+        #expect(session.sampleSlots[0] == SampleSlot(zones: 1, name: "KALIMBA", kib: 30))
+        #expect(session.sampleSlotName(2) == "USR3")
+
+        let x = UserSample.resample(UserSampleTests.signal(48000), from: 48000, to: UserSample.rate)
+        try await session.uploadSample(slot: 2, name: "Tape 2", samples: UserSample.toInt16(x)) { _ in }
+        #expect(session.sampleSlots[2] == SampleSlot(zones: 1, name: "TAPE 2", kib: 6))
+        #expect(fake.sampleSlots[2].data == UserSample.imaEncode(UserSample.toInt16(x)))
+        // no fourth slot on Skiff
+        await #expect(throws: DeviceSession.SampleError.refused(stage: "begin", rc: 1)) {
+            try await session.uploadSample(slot: 3, name: "NOPE", samples: UserSample.toInt16(x)) { _ in }
+        }
+
+        // USR3 on track 0: SAMPLE, SET at USR3 as SET's names place it, LOOP off
+        let info = try #require(session.info)
+        let e = try #require(info.engines.firstIndex(of: "SAMPLE"))
+        await session.useSample(slot: 2, onTrack: 0)
+        #expect(session.tracks[0].engine == e && session.tracks[0].presetName == "USR3")
+        let base = try #require(session.userSetBase)
+        try await waitFor { fake.params[0][info.firstEngineParam] == base + 2 && fake.params[0][info.firstEngineParam + 3] == 0 }
+    }
+
     @Test func endRefusesBadData() async throws {
         // the firmware's checks, on the demo: END without BEGIN, writes out of order, a CRC that doesn't match
         let fake = FakeSloop(autoEdits: false)

@@ -97,15 +97,26 @@ struct SkiffSongPage: View {
                 ZStack(alignment: .top) {
                     EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge)
                         .fill(SelectionTint.fill(session.selectedTrack))
-                    if editorShown {
+                    // a sample being made for the track: the editor slides down out of the panel and the sampler up into
+                    // it, the pads above staying put (Scott, 2026-11-09: a sample is made for the track you're on)
+                    if editorShown, let r = ui.sampler, !r.fromBrowse {
+                        SamplerPanel(session: session, ui: ui, request: r)
+                            .padding(.vertical, Self.inset)
+                            .padding(.horizontal, Self.panelEdge + Self.inset)
+                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    } else if editorShown {
                         PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
                             // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
                             .environment(\.grid, inPanel)
                             .padding(.vertical, Self.inset)
                             .padding(.horizontal, Self.panelEdge + Self.inset)
+                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     }
                 }
                 .frame(height: bottom, alignment: .top)
+                // (cut at the panel's foot only: its tab stands above it)
+                .mask(alignment: .bottom) { Rectangle().padding(.top, -(PadsPage.tabHeight + 24)) }
+                .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.88), value: ui.sampler)
             }
             .frame(height: total, alignment: .top)
             .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
@@ -125,6 +136,10 @@ struct SkiffSongPage: View {
         .onChange(of: ui.openEditor) { _, v in
             guard v > 0 else { return }
             if position == .none { withAnimation(spring) { positionRaw = SongPosition.half.rawValue; layout = nil } }
+        }
+        // the sampler asked for with the editor shut: it opens to Half to hold it
+        .onChange(of: ui.sampler) { _, r in
+            if let r, !r.fromBrowse, position == .none { withAnimation(spring) { positionRaw = SongPosition.half.rawValue; layout = nil } }
         }
     }
 

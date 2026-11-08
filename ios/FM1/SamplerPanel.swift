@@ -27,7 +27,7 @@ struct SamplerPanel: View {
     private var t: Int { request.track }
     private var colour: Color { Theme.track[t] }
     private var slots: [SampleSlot] { session.sampleSlots }
-    private var name: String { "SMPL\((slot ?? 0) + 1)" }
+    private var name: String { "\(session.sampleSlotName(slot ?? 0))" }
     private var hasTake: Bool { rec.end > rec.start && rec.state != .recording }
     private var busy: Bool { progress != nil }
 
@@ -49,7 +49,7 @@ struct SamplerPanel: View {
             through.suspended = false
         }
         .task { if slots.isEmpty { await session.refreshSampleSlots(); if slot == nil { slot = request.slot ?? slots.firstIndex(where: \.isEmpty) } } }
-        .alert("Replace SMPL\((slot ?? 0) + 1)?", isPresented: $replacing) {
+        .alert("Replace \(session.sampleSlotName(slot ?? 0))?", isPresented: $replacing) {
             Button("Replace \(slotName(slot ?? 0))", role: .destructive) { upload() }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -84,7 +84,7 @@ struct SamplerPanel: View {
             }
             .buttonStyle(PressSink())
             .disabled(!canUse)
-            .accessibilityHint(slot == nil ? "Pick a slot first" : "Puts the sample in SMPL\((slot ?? 0) + 1) and plays it on track \(t + 1)")
+            .accessibilityHint(slot == nil ? "Pick a slot first" : "Puts the sample in \(session.sampleSlotName(slot ?? 0)) and plays it on track \(t + 1)")
         }
     }
 
@@ -296,11 +296,11 @@ struct SamplerPanel: View {
         HStack(spacing: 6) {
             Text(slot == nil && !slots.isEmpty ? "Pick a slot to replace" : "Slot")
                 .font(.system(size: 12)).foregroundStyle(slot == nil ? Theme.text : Theme.textSecondary)
-            ForEach(0..<max(4, slots.count), id: \.self) { k in
+            ForEach(0..<session.sampleSlotCount, id: \.self) { k in
                 let picked = slot == k
                 Button { slot = k } label: {
                     VStack(spacing: 2) {
-                        Text("SMPL\(k + 1)").font(.system(size: 13, weight: .semibold))
+                        Text(session.sampleSlotName(k)).font(.system(size: 13, weight: .semibold))
                         Text(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")
                             .font(.system(size: 10)).lineLimit(1)
                             .foregroundStyle(Theme.textSecondary)
@@ -312,7 +312,7 @@ struct SamplerPanel: View {
                 }
                 .buttonStyle(PressSink())
                 .disabled(busy)
-                .accessibilityLabel("SMPL\(k + 1), \(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")")
+                .accessibilityLabel("\(session.sampleSlotName(k)), \(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")")
                 .accessibilityAddTraits(picked ? .isSelected : [])
             }
         }

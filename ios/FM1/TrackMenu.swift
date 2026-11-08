@@ -45,10 +45,12 @@ struct TrackMenuLayer: View {
         }
         var more: [MenuItem] = []
         if !session.isDrums(t), session.capabilities.contains(.samples) {
-            // the grid turns over to the sampler; Use on track puts the take on this track
+            // SLOOP: the grid turns over to the sampler. Skiff: the Song tab's editor slides down and the sampler up into
+            // its panel (SongTab). Use on track puts the take on this track.
             more.append(MenuItem(title: "Record sample…", icon: "mic") {
                 session.select(track: t)
                 ui.presetsPanel = false
+                ui.soundPanel = nil
                 ui.timelineOpen = false
                 ui.page = .sequencer
                 ui.sampler = SamplerRequest(track: t)

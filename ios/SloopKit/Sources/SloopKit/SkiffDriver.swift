@@ -158,7 +158,8 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     public let info: DeviceInfo
     public var dialect: FirmwareDialect { .skiff }
     public let shape: DeviceShape
-    public var capabilities: FirmwareCapabilities { [.userPresets, .recording] }
+    /// Samples too (cmds 11–15, byte for byte SLOOP's; three slots, SET's USR1..USR3 at 5..7).
+    public var capabilities: FirmwareCapabilities { [.userPresets, .recording, .samples] }
     public let pushes: AsyncStream<Push>
     private let pushSink: AsyncStream<Push>.Continuation
     private var pushTask: Task<Void, Never>?
