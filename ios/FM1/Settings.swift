@@ -53,7 +53,10 @@ enum Magnifier {
     static var on: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
 }
 
-/// Settings' switch for the rail of FX…SEQ keys down the right edge. On by default.
+/// Settings' switch for the rail of FX…SEQ keys down the side. Off by default (Scott, 2026-11-08): the page gets the
+/// whole width, and an open sound panel carries the FM-1's twelve buttons along its foot instead. A new key, so the
+/// old default (on) doesn't carry over.
 enum SoundButtons {
-    static let key = "soundRail"
+    static let key = "soundRail.v2"
+    static let standard = false
 }

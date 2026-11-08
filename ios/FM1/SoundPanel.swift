@@ -132,6 +132,10 @@ struct SoundPanel: View {
     /// Against the screen's edge (no rail on the right): square on that side (Scott, 2026-11-08: "anchored to the side
     /// of the screen, no gap").
     var flush = false
+    /// No rail (Settings › Sound buttons off): the FM-1's twelve buttons in two rows at the foot, in its own order, to
+    /// move between the shaping pages while the panel's open (Scott, 2026-11-08: "you're really only working one card
+    /// at a time").
+    var keys = false
     @State private var marks = ShapeMarks()
     @State private var settled = false          // slid in: the cards' graphs draw from then (not while it moves)
     static let width: CGFloat = 430
@@ -247,6 +251,7 @@ struct SoundPanel: View {
             .onChange(of: ui.focusedPage) { _, f in reveal(f, proxy, animated: true) }
             .onAppear { reveal(ui.focusedPage, proxy, animated: false) }
             }
+            if keys { FunctionPads(session: session, ui: ui) }
         }
         .padding(16)
         .frame(width: Self.width)
@@ -282,7 +287,7 @@ struct SoundPanelHost<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.grid) private var grid
-    @AppStorage(SoundButtons.key) private var showRail = true
+    @AppStorage(SoundButtons.key) private var showRail = SoundButtons.standard
     @AppStorage(Handedness.key) private var hand = Handedness.right
 
     /// The app's margin round the pages (AppView's padding): a flush panel runs over it to the screen's edge.
@@ -316,7 +321,7 @@ struct SoundPanelHost<Content: View>: View {
                 .overlay(alignment: .topTrailing) {
                     ZStack(alignment: .topTrailing) {
                         if let s = ui.soundPanel {
-                            SoundPanel(session: session, ui: ui, state: s, flush: flush)
+                            SoundPanel(session: session, ui: ui, state: s, flush: flush, keys: !showRail)
                                 .id(s.family)
                                 .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                         }

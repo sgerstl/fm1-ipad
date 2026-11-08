@@ -12,7 +12,7 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
-    @AppStorage(SoundButtons.key) private var soundButtons = true
+    @AppStorage(SoundButtons.key) private var soundButtons = SoundButtons.standard
     @AppStorage(Handedness.key) private var handedness = Handedness.right
 
     var body: some View {
@@ -48,7 +48,7 @@ struct SettingsSheet: View {
                 Section {
                     Toggle("Sound buttons", isOn: $soundButtons)
                 } footer: {
-                    Text("The FX to SEQ buttons down the right edge. Off gives the page their width. The FM-1's own buttons still open the same pages, and Select sound in a hold menu opens the sounds.")
+                    Text("Off, pages open from the FM-1's own buttons, and an open panel shows all twelve along its foot, laid out as on the FM-1. On, the FX to SEQ buttons stay down the side so you can open a page from the screen, and the panel leaves them out.")
                 }
 
                 Section {

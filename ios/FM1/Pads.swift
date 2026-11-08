@@ -86,7 +86,7 @@ struct FunctionPads: View {
         switch pad {
         case .play: return session.playing
         case .rec: return session.recording
-        case .home: return ui.page == .sequencer
+        case .home: return ui.songTab ? ui.soundPanel == nil && session.deviceScreen?.home == true : ui.page == .sequencer
         case .save: return ui.page == .library || ui.page == .song
         case .glo where session.dialect == .skiff: return ui.page == .mixer
         case .seq:
@@ -119,6 +119,9 @@ struct FunctionPads: View {
         switch pad {
         case .play: session.setPlaying(!session.playing)
         case .rec: session.toggleRec()
+        case .home where ui.songTab:
+            // Skiff: HOME closes the sound panel and takes the FM-1 home (the panel is where these keys live now)
+            SoundPanelControl.dismiss(ui, session: session)
         case .home:
             ui.page = .sequencer
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).home) }
