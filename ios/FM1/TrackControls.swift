@@ -20,7 +20,9 @@ struct TrackKnobBox: View {
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
     /// Its width on a tab: HOME's four 92 pt columns, their gaps, 8 pt each side.
     static let width: CGFloat = 4 * 92 + 3 * 4 + 16
-    static let height: CGFloat = 124        // two rows of 56 pt boxes, their 4 pt gap, 4 pt above and below (116 crushed them onto the row, 2026-11-07)
+    /// Two rows of 56 pt boxes, their 4 pt gap, and 8 pt above and below: the same border as its sides on the tint (Scott,
+    /// 2026-11-09: 4 pt top and bottom read as no border; 116 had crushed the rows, 2026-11-07).
+    static let height: CGFloat = 132
     /// KnobSpec.all's LEVEL, STEPS, PAN (0 is SWING, global).
     static let knobs = 1..<4
 
@@ -77,8 +79,8 @@ struct TrackKnobBox: View {
         }
         .environment(\.compactColumns, true)
         .padding(.horizontal, embedded ? 8 : 6)
-        .padding(.vertical, 4)
-        .frame(height: Self.homeIDs(session).isEmpty ? 64 : Self.height)
+        .padding(.vertical, 8)
+        .frame(height: Self.homeIDs(session).isEmpty ? 72 : Self.height)
         .background { if !embedded { RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held) } }
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .flashRing(ui, .trackPanel)

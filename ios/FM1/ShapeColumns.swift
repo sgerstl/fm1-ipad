@@ -39,8 +39,9 @@ struct ColumnFace: View {
         let label = Theme.textSecondary
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
-                Text(spec.label).font(.system(size: 11)).tracking(compact ? 0.2 : 0.5).foregroundStyle(label).lineLimit(1)
-                    .minimumScaleFactor(compact ? 1 : 0.8)
+                // (compact: no spacing and tightened, so MOD ENV fits beside its knob number; per label, never per value)
+                Text(spec.label).font(.system(size: 11)).tracking(compact ? 0 : 0.5).allowsTightening(compact).foregroundStyle(label)
+                    .lineLimit(1).minimumScaleFactor(compact ? 1 : 0.8)
                 Spacer(minLength: 0)
                 if number > 0 {       // 0: not one of the FM-1's four knobs
                     Text("\(number)").font(.system(size: 11, weight: .bold))
