@@ -67,7 +67,7 @@ struct LibraryPage: View {
                         }
                     } else if skiff, entry != nil {
                         // an entry's own sound from the saved slots: only the kept ones (saving belongs to the track's panel)
-                        ForEach(session.userPresets) { p in
+                        ForEach(session.userPresets.filter { LibraryEngines.offered(session, $0.engine) }) { p in
                             presetKey(p.name, detail: "\(SaveSound.slotName(p.slot)) · \(engineName(p.engine))", current: entryNow?.userSlot == p.slot) {
                                 setEntry(EntrySound(s0: 64 + p.slot, s1: 0))
                             }
@@ -285,12 +285,23 @@ struct LibraryPage: View {
 struct LibraryEngines: View {
     let session: DeviceSession
     let ui: EditorUI
+    /// Choosing a pad's or block's own sound: only what that track can take (Scott, 2026-11-09: "contextually
+    /// relevant"), a drum track's drum engines, a synth track's synth engines it may play; the rest left out, not greyed.
+    var entry = false
     /// How much of the list is past each edge: there it fades out, so a cut list reads as one that scrolls (Scott,
     /// 2026-11-06: the engines ran past the box with no hint). Nothing past an edge, no fade.
     @State private var past = (above: false, below: false)
     private static let fade: CGFloat = 56            // past a row: the cut one shows faintly, the one above it starts to go
 
     var body: some View { engineList }
+
+    /// An engine an entry on the selected track may take as its own sound: the track's kind (drum or synth), and one
+    /// the track may play (op 9 refuses the rest).
+    @MainActor static func offered(_ session: DeviceSession, _ e: Int) -> Bool {
+        let t = session.selectedTrack
+        guard let name = session.info?.engines[safe: e], name != "-" else { return false }     // ("-": a retired engine)
+        return name.hasPrefix("DRUM") == session.isDrums(t) && session.shape.canPlay(track: t, engine: e)
+    }
 
     // MARK: Engines (synth tracks), then user presets
 
@@ -302,7 +313,7 @@ struct LibraryEngines: View {
                 Text("Engines").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     .padding(.leading, 8).padding(.bottom, 6)
                     .accessibilityAddTraits(.isHeader)
-                ForEach(Array(engines.enumerated()), id: \.offset) { e, name in
+                ForEach(Array(engines.enumerated()).filter { !entry || Self.offered(session, $0.offset) }, id: \.offset) { e, name in
                     // Skiff's light tracks (5 and 6) can't play GRAIN or PHYS: there they show, greyed, and say why
                     let plays = session.shape.canPlay(track: session.selectedTrack, engine: e)
                     row(name.capitalized, count: session.namesCache[e]?.count ?? 0,

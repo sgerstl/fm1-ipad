@@ -1,3 +1,4 @@
+import SloopKit
 import SwiftUI
 
 // Lupe's launch intro (Scott: "Build it", 2026-11-05), ported from the approved prototype on refs/heads/lupe-icon,
@@ -22,7 +23,7 @@ struct LaunchIntro: View {
     @State private var finished = false
     /// -intro-at T: the intro held at T seconds (comparing frames with the prototype).
     private let frozen: Double? = {
-        let a = ProcessInfo.processInfo.arguments
+        let a = LaunchArgs.all
         return a.firstIndex(of: "-intro-at").flatMap { a.indices.contains($0 + 1) ? Double(a[$0 + 1]) : nil }
     }()
 

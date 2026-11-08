@@ -48,7 +48,7 @@ final class FirmwareCentre {
         // -demo-firmware loader | stock | foreign | picker | installing | failed | done, and for the way back to stock
         // picker-stock | restoring | restored | stock-loader | v16, and a new unit on stock V16 v16-new | v16-picker:
         // a fake FM-1 for screenshots
-        let a = ProcessInfo.processInfo.arguments
+        let a = LaunchArgs.all
         demo = a.firstIndex(of: "-demo-firmware").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
         if let demo {
             let sloop = try? BundledFirmware.sloop.load(), skiff = try? BundledFirmware.skiff.load()

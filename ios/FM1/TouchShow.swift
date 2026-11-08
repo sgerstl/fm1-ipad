@@ -1,3 +1,4 @@
+import SloopKit
 import UIKit
 
 /// -show-touches (screen recordings only): a circle under each finger, drawn in a window above the
@@ -8,7 +9,7 @@ enum TouchShow {
     private static var overlay: UIWindow?
 
     static func installIfAsked() {
-        guard ProcessInfo.processInfo.arguments.contains("-show-touches"), overlay == nil,
+        guard LaunchArgs.all.contains("-show-touches"), overlay == nil,
               let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
               let main = scene.windows.first else { return }
         let w = UIWindow(windowScene: scene)

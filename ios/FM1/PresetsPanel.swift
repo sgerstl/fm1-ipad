@@ -8,6 +8,8 @@ import SwiftUI
 struct PresetsPanel: View {
     let session: DeviceSession
     let ui: EditorUI
+    /// A pad or block without a sound of its own, its check just cleared: the browser opens to pick one.
+    @State private var choosing = false
 
     static let width: CGFloat = 780
 
@@ -27,11 +29,16 @@ struct PresetsPanel: View {
                 .buttonStyle(PressSink())
                 .accessibilityHint("Closes the sound panel")
             }
-            if let entry { EntrySoundNone(session: session, entry: entry) }
+            if let entry { EntrySoundNone(session: session, entry: entry, choosing: $choosing) }
+            // an entry that keeps the sound playing, unchecked to choose: the browser waits until then (Scott, 2026-11-09)
+            let resting = entry != nil && !choosing && entryHasNoSound(entry)
             HStack(alignment: .top, spacing: 16) {
-                if !session.isDrums(t) || entry != nil { LibraryEngines(session: session, ui: ui).frame(width: 260) }
+                if !session.isDrums(t) || entry != nil { LibraryEngines(session: session, ui: ui, entry: entry != nil).frame(width: 260) }
                 LibraryPage(session: session, ui: ui, columns: 2, entry: entry)
             }
+            .disabled(resting)
+            .opacity(resting ? 0.4 : 1)
+            .accessibilityHint(resting ? "Uncheck Uses the sound already playing to choose one" : "")
         }
         .padding(16)
         .frame(width: Self.width)
@@ -40,6 +47,12 @@ struct PresetsPanel: View {
             .shadow(color: .black.opacity(0.5), radius: 14, x: -6))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Self.header(session, track: t, entry: ui.soundEntry.flatMap { $0.ref.track == t ? $0 : nil }))
+        .onChange(of: ui.soundEntry) { _, _ in choosing = false }
+    }
+
+    private func entryHasNoSound(_ entry: SoundEntryTarget?) -> Bool {
+        guard let entry else { return false }
+        return session.skiffSong?.song?.tracks[safe: entry.ref.track]?.entries[safe: entry.ref.entry]?.sound == nil
     }
 
     /// What the panel chooses for, in plain words (Scott, 2026-11-08): "Choose a sound for Track 5", "Choose a sound for
@@ -53,63 +66,68 @@ struct PresetsPanel: View {
     }
 }
 
-/// An entry's panel: first, whether starting it changes the sound (Scott, 2026-11-09: the banner stays, with a check
-/// mark at its end that's tapped to change it, disabled when the change can't be made). Checked: the entry has no sound
-/// of its own, so the sound playing carries on when it starts (the track's, or an earlier entry's). Unchecked: it brings
-/// its own, named here. Checking it drops that sound; unchecking puts back the one it just dropped (a sound picked
-/// below unchecks it too).
+/// An entry's panel: first, whether starting it changes the sound (Scott, 2026-11-09: the banner, a check mark at its
+/// end, the wording accurate). An entry with no sound of its own doesn't change the track's sound when it starts: the
+/// track keeps the sound it has, its own or one an earlier entry switched to (an entry's sound carries on after it).
+/// Checked: that, and the browser below waits. Unchecked: the browser opens to pick one; with one picked it says what
+/// the entry switches to, and checking drops it. The check is disabled when the change can't be made now.
 private struct EntrySoundNone: View {
     let session: DeviceSession
     let entry: SoundEntryTarget
-    /// The sound the check last dropped, so unchecking can bring it back.
-    @State private var dropped: EntrySound?
+    @Binding var choosing: Bool
 
     var body: some View {
         let store = session.skiffSong
         let t = entry.ref.track, e = entry.ref.entry
         let current = store?.song?.tracks[safe: t]?.entries[safe: e]?.sound
-        let keeps = current == nil
+        let checked = current == nil && !choosing
         let what = entry.pad ? "pad" : "entry"
-        // what checking or unchecking would do, and whether the FM-1 would take it now
-        let target: EntrySound?? = keeps ? (dropped.map { .some($0) }) : .some(nil)
+        // dropping a sound goes to the FM-1 and may be refused; unchecking only opens the browser
         let why: String? = {
             guard let store else { return "No song yet" }
-            if store.busy || store.offline { return store.offline ? "The FM-1 is disconnected" : nil }
-            guard let next = target, var es = store.song?.tracks[safe: t]?.entries else { return nil }
-            es[e].sound = next
+            if store.offline { return "The FM-1 is disconnected" }
+            guard current != nil, var es = store.song?.tracks[safe: t]?.entries else { return nil }
+            es[e].sound = nil
             return store.blocked(track: t, to: es)
         }()
-        let canTap = target != nil && why == nil && !(store?.busy ?? true)
+        let canTap = why == nil && !(store?.busy ?? true)
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Keep the current sound").fontWeight(keeps ? .semibold : .regular)
-                Text(keeps ? "Starting this \(what) doesn't change the sound." + (dropped == nil ? "" : " Uncheck to bring back \(Entries.soundName(dropped!, session: session).capitalized).")
-                           : "This \(what) brings its own sound: \(Entries.soundName(current!, session: session).capitalized).")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let why, target != nil {
-                    Text(why).font(.system(size: 12)).foregroundStyle(Theme.text)
+                Text("Uses the sound already playing").fontWeight(checked ? .semibold : .regular)
+                Group {
+                    if let s = current {
+                        Text("This \(what) switches the track to \(Entries.soundName(s, session: session).capitalized) when it starts. Check to drop it.")
+                    } else if choosing {
+                        Text("Pick a sound below for this \(what).")
+                    } else {
+                        Text("Starting this \(what) doesn't change the track's sound: the track keeps the one it has, its own or an earlier \(what)'s. Uncheck to give it a sound.")
+                    }
                 }
+                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                if let why { Text(why).font(.system(size: 12)).foregroundStyle(Theme.text) }
             }
             Spacer(minLength: 0)
             Button {
-                guard let store, let b = store.blocks(t).first(where: { $0.entries.contains(e) }), let next = target else { return }
-                if next == nil { dropped = current }
-                ArrangeEdits(session: session, store: store).setSound(t, b, next)
+                if current != nil, let store, let b = store.blocks(t).first(where: { $0.entries.contains(e) }) {
+                    choosing = false
+                    ArrangeEdits(session: session, store: store).setSound(t, b, nil)
+                } else {
+                    choosing.toggle()
+                }
             } label: {
-                Image(systemName: keeps ? "checkmark.square.fill" : "square")
+                Image(systemName: checked ? "checkmark.square.fill" : "square")
                     .font(.system(size: 26, weight: .regular))
-                    .foregroundStyle(canTap || keeps ? Theme.track[t] : Theme.textTertiary)
+                    .foregroundStyle(canTap ? Theme.track[t] : Theme.textTertiary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressSink())
             .disabled(!canTap)
-            .accessibilityLabel("Keep the current sound")
-            .accessibilityValue(keeps ? "on" : "off")
+            .accessibilityLabel("Uses the sound already playing")
+            .accessibilityValue(checked ? "on" : "off")
             .accessibilityAddTraits(.isToggle)
-            .accessibilityHint(keeps ? (dropped == nil ? "Pick a sound below to give the \(what) its own" : "Brings its sound back")
-                                     : "Drops the \(what)'s own sound")
+            .accessibilityHint(current != nil ? "Drops the \(what)'s own sound" : checked ? "Opens the sounds to give the \(what) one" : "Closes the sounds")
         }
         .padding(.leading, 14).padding(.trailing, 4)
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)

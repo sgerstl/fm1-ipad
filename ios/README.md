@@ -77,8 +77,10 @@ and the device answers one request at a time.
 
 ### Without an FM-1
 
-Pass `-demo` as a launch argument, or pick "Skiff demo" or "SLOOP demo" from the connection menu (top left). The
+In a Debug build, pass `-demo` as a launch argument, or pick "Skiff demo" or "SLOOP demo" from the connection menu (top left). The
 demo FM-1 answers as a real one would and makes small edits of its own.
+
+Launch arguments only work in Debug builds (`LaunchArgs`); a Release build ignores them.
 
 | Launch argument | Does |
 |---|---|

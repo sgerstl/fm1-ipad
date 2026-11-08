@@ -36,7 +36,7 @@ struct ViewJump: Equatable {
 final class EditorUI {
     /// -page sound|song|library|sequencer opens on that page (screenshots and layout checks, 2026-11-04)
     var page: Page = {
-        let a = ProcessInfo.processInfo.arguments
+        let a = LaunchArgs.all
         guard let i = a.firstIndex(of: "-page"), i + 1 < a.count else { return .sequencer }
         return ["sound": .sound, "song": .song, "library": .library, "mixer": .mixer][a[i + 1]] ?? .sequencer
     }() {
@@ -57,7 +57,7 @@ final class EditorUI {
     }
     /// The Song tab as pads (PadsPage.swift) or a timeline. Pads first (Scott, 2026-11-09: the pads are how a song is
     /// built; the timeline is where it's cut). -song-timeline opens on the timeline (screenshots).
-    var songView: SongView = ProcessInfo.processInfo.arguments.contains("-song-timeline") ? .timeline : .pads
+    var songView: SongView = LaunchArgs.all.contains("-song-timeline") ? .timeline : .pads
     /// The Song tab: the entry the editor is pinned to (a block tapped); nil follows what each track plays.
     var pinnedEntry: EntryRef?
     /// Each pattern's drawing for the pads (PadThumb), as seen while a track was on it: kept for the session.
@@ -89,7 +89,7 @@ final class EditorUI {
     @ObservationIgnored var knobPanelSpec: (() -> KnobSpec)?
     /// -family EDIT (a button's name) opens Shape on that button (screenshots)
     var soundFamily: SoundFamily = {
-        let a = ProcessInfo.processInfo.arguments
+        let a = LaunchArgs.all
         guard let i = a.firstIndex(of: "-family"), i + 1 < a.count else { return .fx }
         return SoundFamily(rawValue: a[i + 1]) ?? .fx
     }()
@@ -111,7 +111,7 @@ final class EditorUI {
     var trackPicker: CGPoint?                    // the phone's one chip tapped (more than four tracks): the tracks, there
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: DeviceSession.ClearedTrack?   // offered for undo for a few seconds
-    var librarySection: LibrarySection = ProcessInfo.processInfo.arguments.contains("-library-user") ? .user : .engine(0)
+    var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user : .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs. Closed, it chooses for the track
     /// again next time.
     var presetsPanel = false { didSet { if !presetsPanel { soundEntry = nil } } }
@@ -140,7 +140,7 @@ final class EditorUI {
     /// The motion lane opened into its editor (one at a time): its track and parameter. -motion-lane 36 opens that
     /// lane on the selected track (screenshots).
     var openLane: OpenLane? = {
-        let a = ProcessInfo.processInfo.arguments
+        let a = LaunchArgs.all
         guard let i = a.firstIndex(of: "-motion-lane"), i + 1 < a.count, let id = Int(a[i + 1]) else { return nil }
         return OpenLane(track: 0, id: id)
     }()
@@ -152,7 +152,7 @@ final class EditorUI {
     func focus(_ p: SoundPage) { focusedPage = FocusedPage(id: p.id, n: (focusedPage?.n ?? 0) + 1) }
     /// The Song tab's sound panel (a button's Shape cards from the right); nil: closed. -sound-panel LFO opens it.
     var soundPanel: SoundPanelState? = {
-        let a = ProcessInfo.processInfo.arguments
+        let a = LaunchArgs.all
         guard let i = a.firstIndex(of: "-sound-panel"), i + 1 < a.count, let f = SoundFamily(rawValue: a[i + 1]) else { return nil }
         return SoundPanelState(family: f)
     }()

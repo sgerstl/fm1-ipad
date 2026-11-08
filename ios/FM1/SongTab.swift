@@ -46,7 +46,7 @@ struct SkiffSongPage: View {
     static let give: CGFloat = 0.3
     private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: Labs.dividerResponse.value * Self.slow, dampingFraction: Labs.dividerDamping.value) }
     /// -slow-motion: the spring eight times slower, to watch a transition frame by frame (screen recordings, checks).
-    static let slow: Double = ProcessInfo.processInfo.arguments.contains("-slow-motion") ? 8 : 1
+    static let slow: Double = LaunchArgs.all.contains("-slow-motion") ? 8 : 1
 
     /// The top half's height at each position. Half: the pads as tall as the strip (PadsPage.halfTop), the Timeline the
     /// same so the editor doesn't move between views; the editor's least wins on a short screen. Max: the pads' one row,

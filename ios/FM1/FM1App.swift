@@ -15,7 +15,7 @@ struct FM1App: App {
 
 /// Owns the session. Switching between the FM-1 and the demo makes a new one.
 struct RootView: View {
-    @State private var useDemo = ProcessInfo.processInfo.arguments.contains("-demo")
+    @State private var useDemo = LaunchArgs.all.contains("-demo")
     @State private var session: DeviceSession
     @State private var ui = EditorUI()
     @State private var through = AudioThrough()
@@ -23,7 +23,7 @@ struct RootView: View {
     @State private var firmware = FirmwareCentre()
 
     init() {
-        let demo = ProcessInfo.processInfo.arguments.contains("-demo")
+        let demo = LaunchArgs.all.contains("-demo")
         let s = DeviceSession(demo: demo, skiff: DeviceSession.launchedSkiffDemo)
         _session = State(initialValue: s)
         TrackColours.session = s
@@ -37,7 +37,7 @@ struct RootView: View {
     private var compact: Bool { heightClass == .compact || widthClass == .compact }
 
     /// -no-intro: straight to the app (layout checks and screenshots).
-    @State private var introOver = ProcessInfo.processInfo.arguments.contains("-no-intro")
+    @State private var introOver = LaunchArgs.all.contains("-no-intro")
 
     var body: some View {
         Group {

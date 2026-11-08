@@ -124,7 +124,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         if demo {
             seedDemo()
             // -demo-song empty | full: the Arrange states (no song; T5's 16 entries and the pool full)
-            let a = ProcessInfo.processInfo.arguments
+            let a = LaunchArgs.all
             screenLink = a.contains("-demo-link")       // the screen link patch, so the button map can be seen
             if a.contains("-demo-link-v1") { screenLinkVersion = 1 }   // the first build: no cursor
             if a.contains("-demo-meter") { screenLinkVersion = 3 }     // the third: METER
@@ -465,7 +465,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         // motion marks show in the demo
         motion[0] = [(2, 34, 40, false), (5, 34, 96, false), (9, 34, 20, false), (12, 34, 70, false), (14, 34, 120, true),
                      (4, 36, 60, false), (10, 36, 10, false)]
-        if !ProcessInfo.processInfo.arguments.contains("-demo-stopped") { setPlaying(true) }   // -demo-stopped: idle (CPU)
+        if !LaunchArgs.all.contains("-demo-stopped") { setPlaying(true) }   // -demo-stopped: idle (CPU)
     }
 
     /// PLAY / STOP: Start and 24 pulses a beat at the BPM while playing, Stop after.

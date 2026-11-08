@@ -423,7 +423,7 @@ struct MotionLaneEditor: View {
         #if DEBUG
         // -motion-paint 1:20,2:28,…: a stroke held mid-draw, for screenshots (nothing is written); -motion-locks: Lock
         .onAppear {
-            let a = ProcessInfo.processInfo.arguments
+            let a = LaunchArgs.all
             if a.contains("-motion-locks") { ui.motionWritesLocks = true }
             guard let i = a.firstIndex(of: "-motion-paint"), i + 1 < a.count else { return }
             for pair in a[i + 1].split(separator: ",") {

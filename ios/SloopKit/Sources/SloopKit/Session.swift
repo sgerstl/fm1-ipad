@@ -331,7 +331,7 @@ public final class DeviceSession {
     public init(demo: Bool = false, skiff: Bool? = nil) {
         isDemo = demo
         // -demo-still: the demo FM-1 makes no edits of its own (screen recordings, screenshots)
-        let still = ProcessInfo.processInfo.arguments.contains("-demo-still")
+        let still = LaunchArgs.all.contains("-demo-still")
         // -demo-skiff: a pretend Skiff 2.2 answering as skiff-sim did (FakeSkiff), instead of SLOOP
         let skiff = skiff ?? Self.launchedSkiffDemo
         demoSkiff = demo && skiff
@@ -339,7 +339,7 @@ public final class DeviceSession {
     }
 
     /// The launch asked for the Skiff demo (-demo-skiff: screenshots and tests).
-    public static var launchedSkiffDemo: Bool { ProcessInfo.processInfo.arguments.contains("-demo-skiff") }
+    public static var launchedSkiffDemo: Bool { LaunchArgs.all.contains("-demo-skiff") }
 
     public init(transport: @escaping () -> SysExTransport?) {
         makeTransport = transport
