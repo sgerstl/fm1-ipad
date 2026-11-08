@@ -53,33 +53,66 @@ struct PresetsPanel: View {
     }
 }
 
-/// An entry's panel: its first choice, no sound of its own (the track's carries on), lit while that's what it has.
+/// An entry's panel: first, whether starting it changes the sound (Scott, 2026-11-09: the banner stays, with a check
+/// mark at its end that's tapped to change it, disabled when the change can't be made). Checked: the entry has no sound
+/// of its own, so the sound playing carries on when it starts (the track's, or an earlier entry's). Unchecked: it brings
+/// its own, named here. Checking it drops that sound; unchecking puts back the one it just dropped (a sound picked
+/// below unchecks it too).
 private struct EntrySoundNone: View {
     let session: DeviceSession
     let entry: SoundEntryTarget
+    /// The sound the check last dropped, so unchecking can bring it back.
+    @State private var dropped: EntrySound?
 
     var body: some View {
         let store = session.skiffSong
-        let current = store?.song?.tracks[safe: entry.ref.track]?.entries[safe: entry.ref.entry]?.sound
-        Button {
-            guard let store, let b = store.blocks(entry.ref.track).first(where: { $0.entries.contains(entry.ref.entry) }) else { return }
-            ArrangeEdits(session: session, store: store).setSound(entry.ref.track, b, nil)
-        } label: {
-            HStack(spacing: 10) {
-                LED(on: current == nil, colour: Theme.track[entry.ref.track])
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Use the track's sound").fontWeight(current == nil ? .semibold : .regular)
-                    Text(current == nil ? "This \(entry.pad ? "pad" : "entry") plays whatever the track has"
-                         : "Drops \(entry.pad ? "the pad" : "the entry")'s own sound: the track's carries on").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+        let t = entry.ref.track, e = entry.ref.entry
+        let current = store?.song?.tracks[safe: t]?.entries[safe: e]?.sound
+        let keeps = current == nil
+        let what = entry.pad ? "pad" : "entry"
+        // what checking or unchecking would do, and whether the FM-1 would take it now
+        let target: EntrySound?? = keeps ? (dropped.map { .some($0) }) : .some(nil)
+        let why: String? = {
+            guard let store else { return "No song yet" }
+            if store.busy || store.offline { return store.offline ? "The FM-1 is disconnected" : nil }
+            guard let next = target, var es = store.song?.tracks[safe: t]?.entries else { return nil }
+            es[e].sound = next
+            return store.blocked(track: t, to: es)
+        }()
+        let canTap = target != nil && why == nil && !(store?.busy ?? true)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Keep the current sound").fontWeight(keeps ? .semibold : .regular)
+                Text(keeps ? "Starting this \(what) doesn't change the sound." + (dropped == nil ? "" : " Uncheck to bring back \(Entries.soundName(dropped!, session: session).capitalized).")
+                           : "This \(what) brings its own sound: \(Entries.soundName(current!, session: session).capitalized).")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let why, target != nil {
+                    Text(why).font(.system(size: 12)).foregroundStyle(Theme.text)
                 }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .latchedKey(current == nil, 10)
+            Spacer(minLength: 0)
+            Button {
+                guard let store, let b = store.blocks(t).first(where: { $0.entries.contains(e) }), let next = target else { return }
+                if next == nil { dropped = current }
+                ArrangeEdits(session: session, store: store).setSound(t, b, next)
+            } label: {
+                Image(systemName: keeps ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 26, weight: .regular))
+                    .foregroundStyle(canTap || keeps ? Theme.track[t] : Theme.textTertiary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSink())
+            .disabled(!canTap)
+            .accessibilityLabel("Keep the current sound")
+            .accessibilityValue(keeps ? "on" : "off")
+            .accessibilityAddTraits(.isToggle)
+            .accessibilityHint(keeps ? (dropped == nil ? "Pick a sound below to give the \(what) its own" : "Brings its sound back")
+                                     : "Drops the \(what)'s own sound")
         }
-        .buttonStyle(PressSink(latched: current == nil))
-        .disabled(store?.busy ?? true)
-        .accessibilityAddTraits(current == nil ? .isSelected : [])
+        .padding(.leading, 14).padding(.trailing, 4)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.tones[2]))       // a raised surface, as the keys below
     }
 }
