@@ -18,10 +18,9 @@ struct KnobPanelLayer: View {
             if let at = ui.knobPanelAt, let make = ui.knobPanelSpec {
                 let close = { ui.knobPanelAt = nil }
                 ZStack(alignment: .topLeading) {
-                    Color.clear.contentShape(Rectangle()).onTapGesture { close() }
-                        .accessibilityHidden(true)
                     KnobPanel(make: make, close: close)
                         .fixedSize()
+                        .closesOnOutsideTouch(close)
                         .alignmentGuide(.leading) { d in
                             let x = at == .zero ? (g.size.width - d.width) / 2 : at.x - frame.minX - d.width / 2
                             return -min(max(16, x), g.size.width - d.width - 16)

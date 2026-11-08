@@ -228,7 +228,7 @@ struct PhoneTopBar: View {
             .buttonStyle(PressSink())
             .accessibilityLabel(session.playing ? "Stop" : "Play")
             // a tap opens the tempo under it
-            Button { ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY) } label: {
+            Button { if !OutsideTouch.justClosed { ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY) } } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.playing ? "\(pos.step / 16 + 1).\(pos.step % 16 / 4 + 1).\(pos.step % 4 + 1)" : "–")
                         .font(.system(size: 13, weight: .semibold))

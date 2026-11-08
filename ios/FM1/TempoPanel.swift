@@ -25,16 +25,13 @@ struct TempoOverlay: View {
         GeometryReader { g in
             // the panel conditional on its own (not inside the catcher's stack), so its transition is the one that runs
             ZStack(alignment: .topLeading) {
-                if open {
-                    Color.clear.contentShape(Rectangle()).onTapGesture { ui.tempoAt = nil }
-                        .accessibilityHidden(true)
-                }
                 if let at = ui.tempoAt {
                     let left = min(max(16, at.x - frame.minX), g.size.width - Self.width - 16)
                     // the readout's middle, over the panel's top edge
                     let anchor = UnitPoint(x: min(1, max(0, (at.x - frame.minX + Self.readoutHalf - left) / Self.width)), y: 0)
                     TempoPanel(session: session) { ui.tempoAt = nil }
                         .fixedSize()
+                        .closesOnOutsideTouch { ui.tempoAt = nil }
                         .alignmentGuide(.leading) { _ in -left }
                         .alignmentGuide(.top) { _ in -(at.y - frame.minY + 8) }
                         .transition(reduceMotion ? .opacity : .scale(scale: 0.2, anchor: anchor).combined(with: .opacity))

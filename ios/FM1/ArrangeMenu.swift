@@ -30,7 +30,7 @@ struct JibMenu: Identifiable {
 }
 
 /// Draws an open JibMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
-/// tap anywhere else or Escape. The app's root has one; a sheet, which covers the root, has its own.
+/// touch anywhere else (which still reaches the page: OutsideTouch) or Escape. The app's root has one; a sheet, which covers the root, has its own.
 struct JibMenuLayer: View {
     @Binding var menu: JibMenu?
     @State private var frame: CGRect = .zero
@@ -39,11 +39,10 @@ struct JibMenuLayer: View {
         GeometryReader { g in
             if let m = menu {
                 ZStack(alignment: .topLeading) {
-                    Color.clear.contentShape(Rectangle()).onTapGesture { menu = nil }
-                        .accessibilityHidden(true)
                     MenuPanel(title: m.title, groups: m.groups(), close: { menu = nil })
                         .id(m.id)
                         .fixedSize()
+                        .closesOnOutsideTouch { menu = nil }
                         .alignmentGuide(.leading) { d in -min(max(12, m.at.x - frame.minX), g.size.width - d.width - 12) }
                         .alignmentGuide(.top) { d in
                             let y = m.at.y - frame.minY

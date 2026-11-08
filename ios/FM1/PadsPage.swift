@@ -96,6 +96,7 @@ struct PadsPage: View {
                     }
                     .frame(height: compact ? Self.rowHeight : Self.cardHeight, alignment: .top)
                     .clipped()
+                    .geometryGroup()
                 }
                 Spacer(minLength: Self.tabHeight)          // the editor panel's tab, in the scene row's line
             }
@@ -116,6 +117,9 @@ struct PadsPage: View {
                         PadGrid(columns: cols, cell: size, gap: gap) {
                             ForEach(0..<16, id: \.self) { i in
                                 pad(t, i, m, size: size, date: tl.date)
+                                    // one piece on the spring: without it the box bounced and its words stood still
+                                    // (Scott, 2026-11-08)
+                                    .geometryGroup()
                                     .opacity(i == framed ? 0 : 1).allowsHitTesting(i != framed)
                             }
                         }
@@ -178,6 +182,7 @@ struct PadsPage: View {
             }
             pad(t, i, m, size: inner, date: date)
                 .frame(width: inner.width, height: inner.height)
+                .geometryGroup()
                 .offset(x: frame.minX + b, y: frame.minY + b)
             if !row {
                 TrackKnobBox(session: session, ui: ui, embedded: true)
@@ -496,12 +501,12 @@ struct PadsPage: View {
         let perf = store.perform
         return HStack(spacing: 8) {
             // the same word either way, lit while armed: the scenes beside it never move (Scott, 2026-11-07)
-            ToggleKey(name: "Store", on: storing, enabled: !store.offline) { if !ui.justPulled { storing.toggle() } }
+            ToggleKey(name: "Store", on: storing, enabled: !store.offline, height: compact ? Self.compactScenes : Self.sceneHeight) { if !ui.justPulled { storing.toggle() } }
                 .frame(width: 88)               // (its word turns semibold when lit: a fixed width, not its own)
                 .accessibilityValue(storing ? "on: tap a scene to store into it" : "")
                 .accessibilityHint("Then tap a scene: it keeps the entry each track is on now, and its mute")
             HStack(spacing: 4) {
-                ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf) }
+                ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf).geometryGroup() }
             }
         }
         .frame(height: compact ? Self.compactScenes : Self.sceneHeight)

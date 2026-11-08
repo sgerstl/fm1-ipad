@@ -135,12 +135,11 @@ struct SkiffArrangePage: View {
             }()
             GeometryReader { g in
                 ZStack(alignment: .topLeading) {
-                    // a tap anywhere else closes it
-                    Color.clear.contentShape(Rectangle()).onTapGesture { close() }
-                        .accessibilityHidden(true)
+                    // a touch anywhere else closes it, and still reaches the page (OutsideTouch)
                     MenuPanel(title: title, groups: groups, close: close)
                         .id(m)
                         .fixedSize()
+                        .closesOnOutsideTouch(close)
                         .alignmentGuide(.leading) { d in
                             let x = m.at.x - pageFrame.minX - 24
                             return -min(max(0, x), g.size.width - d.width)

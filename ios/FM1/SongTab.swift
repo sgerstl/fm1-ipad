@@ -31,11 +31,15 @@ struct SkiffSongPage: View {
     @State private var layout: PadsLayout?
     @State private var allPatterns = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.grid) private var grid
 
     /// (420: the step inspector's short layout fits whole at the editor's least, never scrolling; 2026-11-06)
     static let editorMin: CGFloat = 420
     /// The panel's lip under the tab when the editor is shut, and its padding round the editor.
     static let lip: CGFloat = 12, inset: CGFloat = 12
+    /// The panel's tint stands this far in from the page's edges (its tab over the lane heads); the editor sits a
+    /// further `inset` inside it, so nothing spills past the tint (Scott, 2026-11-08).
+    static let panelEdge: CGFloat = 16
     /// The song's least: the tool row, the ruler and every lane at its least (28 pt and its gap), so it never spills.
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
     /// The give past either end: the drag follows the finger at this rate there.
@@ -89,11 +93,14 @@ struct SkiffSongPage: View {
                     .onEnded { _ in if dragTop != nil { ui.pulledAt = Date(); released(tops: tops, pads: pads) } },
                     including: position == .none || dragTop != nil ? .all : .subviews)
                 ZStack(alignment: .top) {
-                    EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: 16)
+                    EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge)
                         .fill(SelectionTint.fill(session.selectedTrack, selectionTint))
                     if editorShown {
                         PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
-                            .padding(Self.inset)
+                            // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
+                            .environment(\.grid, inPanel)
+                            .padding(.vertical, Self.inset)
+                            .padding(.horizontal, Self.panelEdge + Self.inset)
                     }
                 }
                 .frame(height: bottom, alignment: .top)
@@ -120,6 +127,12 @@ struct SkiffSongPage: View {
     }
 
     @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
+
+    private var inPanel: GridMetrics {
+        var g = grid
+        g.stepWidth = grid.stepWidth - 2 * Self.panelEdge / 16
+        return g
+    }
 
     /// The panel's tab, in the scene row's line (Scott's own alignment on board 31): Open at No grid, Close at Half,
     /// Less at Max. Tapped, the next place; dragged, the divider.

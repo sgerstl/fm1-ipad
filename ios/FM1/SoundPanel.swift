@@ -280,6 +280,7 @@ struct SoundPanelHost<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.grid) private var grid
+    @AppStorage(SoundButtons.key) private var showRail = true
 
     /// The panel's slide, and on the Song tab the page's with it, so their edges stay together.
     static var slide: Animation { .easeOut(duration: 0.2) }
@@ -287,7 +288,7 @@ struct SoundPanelHost<Content: View>: View {
     var body: some View {
         // the page gives the rail its width: a step narrower, so a bar of the grid still fits across
         var narrowed = grid
-        narrowed.stepWidth = grid.stepWidth - (SoundRail.width + 12) / 16
+        if showRail { narrowed.stepWidth = grid.stepWidth - (SoundRail.width + 12) / 16 }
         // the Song tab with the panel open: the editor's bar (its viewport is one bar, paged by bar) narrows to steps
         // of 24 pt, WCAG 2.5.8's least, and the page gives up just what that frees (about 428 pt). The panel is 430, so
         // the pattern's card meets the panel's edge, no gap; at the full 442 the steps would be 23.1 pt.
@@ -317,9 +318,16 @@ struct SoundPanelHost<Content: View>: View {
                 .onChange(of: session.selectedTrack) { _, _ in
                     if let f = ui.soundPanel?.family, SoundPage.shown(session, f).isEmpty { ui.soundPanel = nil }
                 }
-            SoundRail(session: session, ui: ui)
+            // Settings › Sound buttons (Scott, 2026-11-08): off, the page takes the rail's width; the FM-1's own keys
+            // still open every page, and the hold menus' Select sound the sounds
+            if showRail { SoundRail(session: session, ui: ui) }
         }
     }
+}
+
+/// Settings' switch for the rail of FX…SEQ keys down the right edge. On by default.
+enum SoundButtons {
+    static let key = "soundRail"
 }
 
 

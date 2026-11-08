@@ -39,6 +39,7 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
+    @AppStorage(SoundButtons.key) private var soundButtons = true
     @AppStorage(SelectionTint.key) private var selectionTint = SelectionTint.standard
 
     var body: some View {
@@ -68,6 +69,12 @@ struct SettingsSheet: View {
                     Text("Selected track (trial)")
                 } footer: {
                     Text("How strongly the selected track's row and its knobs are lit on the Song tab.")
+                }
+
+                Section {
+                    Toggle("Sound buttons", isOn: $soundButtons)
+                } footer: {
+                    Text("The FX to SEQ buttons down the right edge. Off gives the page their width. The FM-1's own buttons still open the same pages, and Select sound in a hold menu opens the sounds.")
                 }
 
                 Section {

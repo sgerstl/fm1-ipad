@@ -406,7 +406,8 @@ struct TopBar: View {
     private var readout: some View {
         // a tap opens the tempo under it (2026-11-05; it used to open Arrange in song mode, a tab away)
         Button {
-            ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY)
+            // (a tap on it while the tempo is open is the one that closed it: it stays shut)
+            if !OutsideTouch.justClosed { ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY) }
         } label: {
             ReadoutLabel(session: session, recording: recording)
         }

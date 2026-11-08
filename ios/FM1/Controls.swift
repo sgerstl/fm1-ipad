@@ -43,6 +43,8 @@ struct ToggleKey: View {
     let name: String
     let on: Bool
     var enabled = true
+    /// nil: at least 44. A row of shorter keys passes theirs, so it lines up (the scene row at Half, 32)
+    var height: CGFloat? = nil
     let toggle: () -> Void
 
     var body: some View {
@@ -53,7 +55,7 @@ struct ToggleKey: View {
             }
             .foregroundStyle(enabled ? Theme.text : Theme.textTertiary)
             .padding(.horizontal, 14)
-            .frame(minHeight: 44)
+            .frame(minHeight: height ?? 44, maxHeight: height)
             .latchedKey(on)
             .contentShape(Rectangle())
         }
