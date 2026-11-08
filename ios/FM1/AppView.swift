@@ -227,28 +227,20 @@ extension AppView {
         .frame(width: Overview.boxWidth)
     }
 
-    /// A long-pressed track's menu, by the finger. A tap anywhere else closes it.
-    /// A held stored section: replace it with the tracks, or clear it (asked again, with what clearing
-    /// costs). Beside the finger, as the track menu; a tap anywhere else closes it.
-    @ViewBuilder var sectionMenuLayer: some View {
-        ZStack(alignment: .topLeading) {
-            if let m = ui.sectionMenu {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture { ui.sectionMenu = nil }
-                    .accessibilityHidden(true)
-                // the pad press menu's look (Scott, 2026-11-08): MenuPanel, its asks as notes in it
-                let groups = sectionGroups(m)
-                MenuPanel(title: "Section \(DeviceSession.sectionName(m.section))", groups: groups, close: { ui.sectionMenu = nil })
-                    .id("\(m.section)-\(String(describing: m.mode))")
-                    .fixedSize()
-                    // beside the finger (to its right, centred on it), kept on screen
-                    .offset(x: min(max(m.at.x + 28, 12), Theme.canvas.width - 312), y: min(max(m.at.y - 60, 12), Theme.canvas.height - 360))
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
-                .accessibilityAddTraits(.isModal)
+    /// A held stored section (SLOOP): replace it with the tracks, or clear it (asked again, with what clearing
+    /// costs). Placed as every menu is (PlacedMenu), its asks as notes in it.
+    var sectionMenuLayer: some View {
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
+                if let m = ui.sectionMenu {
+                    PlacedMenu(title: "Section \(DeviceSession.sectionName(m.section))", groups: sectionGroups(m), at: m.at,
+                               layer: g.size, close: { ui.sectionMenu = nil })
+                        .id("\(m.section)-\(String(describing: m.mode))")
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.sectionMenu)
     }
 

@@ -146,7 +146,8 @@ struct PhoneTopBar: View {
     private func chip(_ t: Int, picker: Bool = false) -> some View {
         let on = session.selectedTrack == t
         return Button {
-            if picker { ui.trackPicker = ui.trackPicker == nil ? pressAt : nil } else { session.select(track: t) }
+            // (a tap on the chip while the picker is open is the touch that closed it: it stays shut)
+            if picker { ui.trackPicker = ui.trackPicker == nil && !OutsideTouch.justClosed ? pressAt : nil } else { session.select(track: t) }
         } label: {
             VStack(spacing: 5) {
                 Text("\(t + 1)").font(.system(size: 15, weight: .semibold))
@@ -501,10 +502,6 @@ struct TrackPickerLayer: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             if let at = ui.trackPicker {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture { ui.trackPicker = nil }
-                    .accessibilityHidden(true)
                 let width = CGFloat(session.trackCount) * 48 + 12
                 HStack(spacing: 4) {
                     ForEach(session.trackIndices, id: \.self) { t in
@@ -523,12 +520,12 @@ struct TrackPickerLayer: View {
                 }
                 .padding(6)
                 .elevated(.held, radius: 12)
+                .closesOnOutsideTouch { ui.trackPicker = nil }       // (and the touch still reaches the page)
                 // beside the finger: just under it, starting at it, inside the screen
                 .offset(x: min(max(at.x - 24, 8), canvas.width - width - 8), y: min(at.y + 28, canvas.height - 64))
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Tracks")
-                .accessibilityAddTraits(.isModal)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
