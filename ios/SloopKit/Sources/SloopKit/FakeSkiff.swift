@@ -511,7 +511,20 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     /// User sample slots USR1..USR3 (Skiff 2.2: three, eng_sample.c SMP_SLOTS), cmds 11–15 as editor.c handles them.
     /// USR1 holds a sample so the demo has a full slot to show.
-    var sampleSlots: [FakeSloop.SampleSlotState] = [.init(zones: 1, name: "KALIMBA", dataLength: 30_000), .init(), .init()]
+    var sampleSlots: [FakeSloop.SampleSlotState] = [FakeSkiff.kalimba.state, .init(), .init()]
+    /// Each full slot's header as SMP_END wrote it (the backup's object 32 + slot is the header, then the data).
+    var slotHeaders: [Int: [UInt8]] = [0: FakeSkiff.kalimba.header]
+
+    /// USR1's demo sample: a decaying 660 Hz tone, about a second, so it can be heard back.
+    static let kalimba: (state: FakeSloop.SampleSlotState, header: [UInt8]) = {
+        let n = UserSample.rate
+        let s = (0..<n).map { i -> Int16 in
+            let t = Double(i) / Double(UserSample.rate)
+            return Int16(20000 * exp(-4 * t) * sin(2 * .pi * 660 * t))
+        }
+        let (h, d) = (try? UserSample.slot(name: "KALIMBA", samples: s)) ?? ([], [])
+        return (FakeSloop.SampleSlotState(zones: 1, name: "KALIMBA", dataLength: d.count, data: d), h)
+    }()
 
     /// SMP_BEGIN / WRITE / END / ERASE / INFO (Skiff editor.c 896–951): as SLOOP's, but END has no rc 6 (a slot not
     /// open is rc 5, failed). Nil: not a sample command.
@@ -520,6 +533,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case Cmd.smpBegin, Cmd.smpErase:
             guard let k = a.first.map(Int.init), k < sampleSlots.count else { return [a.first ?? 0, 1] }
             sampleSlots[k] = FakeSloop.SampleSlotState(open: cmd == Cmd.smpBegin)
+            slotHeaders[k] = nil
             return [a[0], 0]
         case Cmd.smpWrite:
             guard a.count >= 5, Int(a[0]) < sampleSlots.count else { return nil }
@@ -546,6 +560,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
                 else {
                     sampleSlots[k].zones = Int(h[6]); sampleSlots[k].dataLength = len
                     sampleSlots[k].name = String(decoding: h[8..<16].prefix { $0 != 0 }, as: UTF8.self)
+                    slotHeaders[k] = Array(h.prefix(UserSample.headerLength))
                 }
             }
             return [a[0], rc]
@@ -558,9 +573,35 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         }
     }
 
+    /// BACKUP_LIST / BACKUP_GET (65, 66) for the user sample slots only (objects 32..34: the header padded to 512,
+    /// then the data). LIST stops the transport, as the firmware's does.
+    private func sampleObject(_ k: Int) -> [UInt8] {
+        guard k < sampleSlots.count, sampleSlots[k].zones != 0, let h = slotHeaders[k] else { return [] }
+        return h + [UInt8](repeating: 0, count: UserSample.dataOffset - h.count) + sampleSlots[k].data.prefix(sampleSlots[k].dataLength)
+    }
+
+    private func backupAnswer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
+        switch cmd {
+        case 65:
+            playing = false
+            let objs = sampleSlots.indices.map { (32 + $0, sampleObject($0)) }
+            var b: [UInt8] = [1, 0, UInt8(objs.count)]
+            for (id, o) in objs { b += [UInt8(id)] + Pack7.u35(UInt32(o.count)) + Pack7.u35(CRC32.of(o)) }
+            return b
+        case 66:
+            guard a.count >= 8, (32..<(32 + sampleSlots.count)).contains(Int(a[0])) else { return a.isEmpty ? nil : [a[0], 1] }
+            let o = sampleObject(Int(a[0]) - 32), off = Int(Pack7.readU35(a[1...])), n = Int(a[6]) | Int(a[7]) << 7
+            let chunk = Array(o[min(off, o.count)..<min(off + n, o.count)])
+            return [a[0], 0] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)] + Pack7.encode(chunk)
+        default:
+            return nil
+        }
+    }
+
     // Called with the lock held.
     private func answer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
         if (Cmd.smpBegin...Cmd.smpInfo).contains(cmd) { return sampleAnswer(cmd, a) }
+        if cmd == 65 || cmd == 66 { return backupAnswer(cmd, a) }
         switch (cmd, a.count) {
         case (1, 0): return screenLink ? fx.info + [0x56, 1, UInt8(screenLinkVersion)] : fx.info
         case (90, 0) where screenLink: return screenBytes()

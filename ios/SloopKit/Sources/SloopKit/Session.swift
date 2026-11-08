@@ -2002,6 +2002,14 @@ extension DeviceSession {
         await refreshSampleSlots()
     }
 
+    /// What a slot holds, to hear before it's replaced: read back through the backup (Skiff's objects 32..34; the
+    /// sample commands only write). The read stops the transport. Nil: empty, or this firmware can't read it back.
+    public func storedSample(slot: Int) async throws -> (samples: [Int16], rate: Double)? {
+        guard dialect == .skiff, let d = driver else { return nil }
+        let obj = try await backupTurn { try await BackupCapture.object(32 + slot, driver: d) }
+        return obj.flatMap(UserSample.stored)
+    }
+
     /// Empties a slot (SMP_ERASE, about a second of flash erasing).
     public func eraseSample(slot: Int) async throws {
         guard let c = sampleClient else { throw SampleError.notConnected }

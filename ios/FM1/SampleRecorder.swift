@@ -27,9 +27,14 @@ final class SampleRecorder {
         let p = trimmedPeak
         return p > 0 ? 20 * log10(Double(p)) : -.infinity
     }
+    /// The trimmed part, kept inside the take (a silent take could leave the handles past its end, which crashed).
+    private var trimmed: Range<Int> {
+        let e = min(max(0, end), take.count), b = min(max(0, start), e)
+        return b..<e
+    }
     private var trimmedPeak: Float {
-        guard end > start else { return 0 }
-        return take[start..<end].reduce(Float(0)) { max($0, abs($1)) }
+        guard !trimmed.isEmpty else { return 0 }
+        return take[trimmed].reduce(Float(0)) { max($0, abs($1)) }
     }
     /// How far normalising raises the trimmed take, in dB.
     var raiseDB: Double { peakDB.isFinite ? -peakDB : 0 }
@@ -57,7 +62,7 @@ final class SampleRecorder {
     func shaped() -> [Float] {
         guard end > start else { return [] }
         let g = normGain
-        return take[start..<end].map { shape($0, gain: g) }
+        return take[trimmed].map { shape($0, gain: g) }
     }
 
     /// The k where tanh(kx)/tanh(k) has a small-signal gain of g (k/tanh(k) = g): 0 for no drive.
@@ -140,17 +145,26 @@ final class SampleRecorder {
 
     // MARK: Playing the take back
 
+    /// Plays samples that aren't the take (a slot's, read back from the FM-1) at their own rate.
+    func play(_ samples: [Int16], rate hz: Double) {
+        play(floats: samples.map { Float($0) / 32768 }, rate: hz)
+    }
+
     func play() {
         stop()
         guard end > start else { return }
+        play(floats: shaped(), rate: rate)
+    }
+
+    private func play(floats x: [Float], rate hz: Double) {
+        stop()
+        guard !x.isEmpty else { return }
         do {
             let s = AVAudioSession.sharedInstance()
             try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try s.setActive(true)
             let e = AVAudioEngine(), p = AVAudioPlayerNode()
-            // the take as the FM-1 will have it: normalised and driven, not the raw recording
-            let x = shaped()
-            guard let fmt = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1),
+            guard let fmt = AVAudioFormat(standardFormatWithSampleRate: hz, channels: 1),
                   let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(x.count)) else { return }
             buf.frameLength = AVAudioFrameCount(x.count)
             x.withUnsafeBufferPointer { src in buf.floatChannelData![0].update(from: src.baseAddress!, count: x.count) }

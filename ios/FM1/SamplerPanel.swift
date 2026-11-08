@@ -20,7 +20,13 @@ struct SamplerPanel: View {
     @Environment(AudioThrough.self) private var through
     @State private var rec = SampleRecorder()
     @State private var slot: Int?
-    @State private var replacing = false
+    /// A full slot tapped after a take: the dialog that asks before replacing it, and what it holds once read back.
+    @State private var asking: Int?
+    @State private var held: [Int: (samples: [Int16], rate: Double)] = [:]
+    @State private var reading = false
+    @State private var heldProblem: String?
+    @State private var glow = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var progress: Double?
     @State private var message: String?
 
@@ -49,12 +55,8 @@ struct SamplerPanel: View {
             through.suspended = false
         }
         .task { if slots.isEmpty { await session.refreshSampleSlots(); if slot == nil { slot = request.slot ?? slots.firstIndex(where: \.isEmpty) } } }
-        .alert("Replace \(session.sampleSlotName(slot ?? 0))?", isPresented: $replacing) {
-            Button("Replace \(slotName(slot ?? 0))", role: .destructive) { upload() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("“\(slotName(slot ?? 0))” is in that slot. The FM-1 keeps no copy of it.")
-        }
+        .overlay { if let k = asking { replaceDialog(k) } }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: asking)
     }
 
     // MARK: Header: what this is, Cancel, Use on track
@@ -75,16 +77,6 @@ struct SamplerPanel: View {
             }
             .buttonStyle(PressSink())
             .disabled(busy)
-            Button { done() } label: {
-                Text("Use on track \(t + 1)").font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(canUse ? Theme.onColour : Theme.textTertiary)
-                    .padding(.horizontal, 16).frame(height: 44)
-                    .raisedKey(9, primary: true)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .disabled(!canUse)
-            .accessibilityHint(slot == nil ? "Pick a slot first" : "Puts the sample in \(session.sampleSlotName(slot ?? 0)) and plays it on track \(t + 1)")
         }
     }
 
@@ -98,7 +90,7 @@ struct SamplerPanel: View {
     private var screen: some View {
         VStack(spacing: 10) {
             HStack {
-                Text(slot == nil ? "PICK A SLOT" : name)
+                Text(busy ? "SAVING TO \(name)" : hasTake ? "TAKE · SAVE IT TO A SLOT" : "TAKE")
                 Spacer()
                 Text(rec.state == .recording ? String(format: "%.1fs / %.1fs", rec.seconds, rec.maxSeconds)
                                              : hasTake ? String(format: "%.1fs", rec.trimmedSeconds) : "")
@@ -292,28 +284,115 @@ struct SamplerPanel: View {
         .accessibilityLabel(on ? "Stop" : "Play the take")
     }
 
+    /// The slots: what each holds; after a take they glow, the next step (Scott, 2026-11-09), and a tap saves there.
     private var slotPicker: some View {
-        HStack(spacing: 6) {
-            Text(slot == nil && !slots.isEmpty ? "Pick a slot to replace" : "Slot")
-                .font(.system(size: 12)).foregroundStyle(slot == nil ? Theme.text : Theme.textSecondary)
+        let saving = hasTake && !busy
+        return HStack(spacing: 6) {
+            Text(saving ? "Save to" : "Slots")
+                .font(.system(size: 12, weight: saving ? .semibold : .regular)).foregroundStyle(saving ? Theme.text : Theme.textSecondary)
             ForEach(0..<session.sampleSlotCount, id: \.self) { k in
-                let picked = slot == k
-                Button { slot = k } label: {
+                let picked = slot == k && busy
+                Button { save(to: k) } label: {
                     VStack(spacing: 2) {
                         Text(session.sampleSlotName(k)).font(.system(size: 13, weight: .semibold))
                         Text(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")
                             .font(.system(size: 10)).lineLimit(1)
                             .foregroundStyle(Theme.textSecondary)
                     }
-                    .foregroundStyle(picked ? Theme.text : Theme.textSecondary)
+                    .foregroundStyle(picked || saving ? Theme.text : Theme.textSecondary)
                     .frame(width: 64, height: 48)
-                    .background { if picked { Color.clear.raisedKey() } }
+                    .background { if picked || saving { Color.clear.raisedKey() } }
+                    .overlay {
+                        if saving {
+                            RoundedRectangle(cornerRadius: 9).strokeBorder(colour, lineWidth: 2)
+                                .shadow(color: colour.opacity(glow ? 0.9 : 0.3), radius: glow ? 8 : 2)
+                                .opacity(reduceMotion ? 1 : (glow ? 1 : 0.55))
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink())
-                .disabled(busy)
+                .disabled(!saving)
                 .accessibilityLabel("\(session.sampleSlotName(k)), \(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")")
-                .accessibilityAddTraits(picked ? .isSelected : [])
+                .accessibilityHint(saving ? (slotName(k) == "empty" ? "Saves the take here and plays it on track \(t + 1)" : "Asks before replacing what's here") : "")
+            }
+        }
+        .onChange(of: saving, initial: true) { _, on in
+            guard on, !reduceMotion else { glow = false; return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { glow = true }
+        }
+    }
+
+    /// A tap on a slot after a take: an empty one saves at once; a full one asks first.
+    private func save(to k: Int) {
+        rec.stop()
+        if k < slots.count, !slots[k].isEmpty { heldProblem = nil; asking = k } else { slot = k; upload() }
+    }
+
+    /// Before a full slot is replaced: what's there, a way to hear it, keep it or replace it.
+    private func replaceDialog(_ k: Int) -> some View {
+        let name = slotName(k), playingHeld = rec.state == .playing && held[k] != nil
+        return ZStack {
+            Color.black.opacity(0.45).onTapGesture { asking = nil }.accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 14) {
+                Text("\(session.sampleSlotName(k)) holds “\(name.capitalized)”").font(.system(size: 17, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Text("Replacing it erases it from the FM-1, which keeps no other copy.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                HStack(spacing: 12) {
+                    Button { hear(k) } label: {
+                        ZStack {
+                            if reading { ProgressView().tint(Theme.text) }
+                            else { Image(systemName: playingHeld ? "stop.fill" : "play.fill").font(.system(size: 18, weight: .semibold)) }
+                        }
+                        .frame(width: 52, height: 52).background { Color.clear.raisedKey(12) }.contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressSink())
+                    .disabled(reading)
+                    .accessibilityLabel(playingHeld ? "Stop" : "Hear \(name.capitalized)")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(reading ? "Reading it from the FM-1…" : playingHeld ? "Playing" : "Hear what's there")
+                            .font(.system(size: 15))
+                        Text(heldProblem ?? (session.playing ? "Reading it stops the song." : "Read from the FM-1, played here."))
+                            .font(.system(size: 12)).foregroundStyle(heldProblem == nil ? Theme.textSecondary : Theme.text)
+                    }
+                }
+                HStack(spacing: 10) {
+                    Spacer()
+                    Button { rec.stop(); asking = nil } label: {
+                        Text("Keep it").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 16).frame(height: 44)
+                            .background { Color.clear.raisedKey() }.contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressSink())
+                    Button { rec.stop(); asking = nil; slot = k; upload() } label: {
+                        Text("Replace with your take").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
+                            .padding(.horizontal, 16).frame(height: 44).raisedKey(9, primary: true).contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressSink())
+                }
+            }
+            .padding(20)
+            .frame(width: 420)
+            .elevated(.held, radius: 14)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
+        }
+        .transition(.opacity)
+    }
+
+    /// Plays what a slot holds (read back once, then kept), or stops it.
+    private func hear(_ k: Int) {
+        if rec.state == .playing { rec.stop(); return }
+        if let h = held[k] { rec.play(h.samples, rate: h.rate); return }
+        reading = true; heldProblem = nil
+        Task {
+            defer { reading = false }
+            do {
+                guard let h = try await session.storedSample(slot: k) else { heldProblem = "This FM-1 can't send it back."; return }
+                held[k] = h
+                if asking == k { rec.play(h.samples, rate: h.rate) }
+            } catch {
+                heldProblem = "The FM-1 didn't send it. Try again."
             }
         }
     }
@@ -322,11 +401,6 @@ struct SamplerPanel: View {
 
     // MARK: Done and cancel
 
-    private func done() {
-        guard let k = slot else { return }
-        rec.stop()
-        if k < slots.count, !slots[k].isEmpty { replacing = true } else { upload() }
-    }
 
     private func upload() {
         guard let k = slot else { return }

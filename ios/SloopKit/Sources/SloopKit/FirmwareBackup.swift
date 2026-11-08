@@ -74,43 +74,12 @@ public enum BackupCapture {
     /// Every object the running firmware lists. `skiff`: Felucca's commands and file; else SLOOP's.
     public static func capture(skiff: Bool, firmware: String, request: BackupRequest,
                                progress: @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> DeviceBackup {
-        let list = try await request(skiff ? feluccaList : sloopList, [], 0)
-        // SLOOP: rc, count, items. Felucca: 1, rc, count, items. Each item: id, size (5 × 7 bit), CRC-32 (5 × 7 bit)
-        let head = skiff ? 1 : 0
-        guard list.count >= head + 2 else { throw BackupError.unreadable("a short list") }
-        if skiff, list[0] != 1 { throw BackupError.unreadable("archive protocol \(list[0])") }
-        if list[head] != 0 { throw BackupError.refused(Int(list[head])) }
-        let count = Int(list[head + 1])
-        guard list.count >= head + 2 + count * 11 else { throw BackupError.unreadable("an incomplete list") }
-        var items: [(id: Int, size: Int, crc: UInt32)] = []
-        for k in 0..<count {
-            let p = head + 2 + k * 11
-            items.append((Int(list[p]), Int(Pack7.readU35(list[(p + 1)...])), Pack7.readU35(list[(p + 6)...])))
-        }
-        guard items.allSatisfy({ $0.size <= 0x14000 }) else { throw BackupError.unreadable("an object too large") }
+        let items = try await list(skiff: skiff, request: request)
         let total = items.reduce(0) { $0 + $1.size }
         var done = 0
         var objects: [(id: Int, crc: UInt32, data: [UInt8])] = []
         for it in items {
-            var data: [UInt8] = []
-            data.reserveCapacity(it.size)
-            while data.count < it.size {
-                let n = min(chunk, it.size - data.count)
-                let args = [UInt8(it.id)] + Pack7.u35(UInt32(data.count)) + [UInt8(n & 127), UInt8(n >> 7)]
-                let b = try await request(skiff ? feluccaGet : sloopGet, args, 1)
-                guard b.count >= 9, Int(b[0]) == it.id else { throw BackupError.unreadable("an unexpected reply") }
-                if b[1] == 5 { throw BackupError.changed }
-                if b[1] != 0 { throw BackupError.refused(Int(b[1])) }
-                guard Int(Pack7.readU35(b[2...])) == data.count, Int(b[7]) | Int(b[8]) << 7 == n else {
-                    throw BackupError.unreadable("a reply for another piece")
-                }
-                let piece = Pack7.decode(Array(b[9...]))
-                guard piece.count >= n else { throw BackupError.unreadable("a short piece") }
-                data += piece.prefix(n)
-                done += n
-                progress(done, total)
-            }
-            guard CRC32.of(data) == it.crc else { throw BackupError.changed }
+            let data = try await read(it, skiff: skiff, request: request) { n in done += n; progress(done, total) }
             objects.append((it.id, it.crc, data))
         }
         let created = Date()
@@ -126,18 +95,73 @@ public enum BackupCapture {
                             objects: objects, json: json)
     }
 
-    /// The backup through a connected driver.
-    public static func capture(driver: FirmwareDriver, progress: @escaping @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> DeviceBackup {
-        let skiff = driver is SkiffDriver
-        let client: SloopClient
-        if let d = driver as? SkiffDriver { client = d.client } else if let d = driver as? SloopDriver { client = d.client } else {
-            throw BackupError.notSupported
+    typealias Item = (id: Int, size: Int, crc: UInt32)
+
+    /// LIST: every object the firmware keeps, with its size and CRC-32 (and a snapshot for the GETs). It stops the
+    /// transport. SLOOP: rc, count, items. Felucca: 1, rc, count, items. Each item: id, size (5 × 7 bit), CRC (5 × 7 bit).
+    static func list(skiff: Bool, request: BackupRequest) async throws -> [Item] {
+        let list = try await request(skiff ? feluccaList : sloopList, [], 0)
+        let head = skiff ? 1 : 0
+        guard list.count >= head + 2 else { throw BackupError.unreadable("a short list") }
+        if skiff, list[0] != 1 { throw BackupError.unreadable("archive protocol \(list[0])") }
+        if list[head] != 0 { throw BackupError.refused(Int(list[head])) }
+        let count = Int(list[head + 1])
+        guard list.count >= head + 2 + count * 11 else { throw BackupError.unreadable("an incomplete list") }
+        var items: [Item] = []
+        for k in 0..<count {
+            let p = head + 2 + k * 11
+            items.append((Int(list[p]), Int(Pack7.readU35(list[(p + 1)...])), Pack7.readU35(list[(p + 6)...])))
         }
-        return try await capture(skiff: skiff, firmware: driver.info.version, request: { cmd, args, match in
-            // LIST stops the transport and snapshots: give it time, and never send it twice
+        guard items.allSatisfy({ $0.size <= 0x14000 }) else { throw BackupError.unreadable("an object too large") }
+        return items
+    }
+
+    /// One object's bytes, 256 at a time, checked against its CRC.
+    static func read(_ it: Item, skiff: Bool, request: BackupRequest, got: (Int) -> Void = { _ in }) async throws -> [UInt8] {
+        var data: [UInt8] = []
+        data.reserveCapacity(it.size)
+        while data.count < it.size {
+            let n = min(chunk, it.size - data.count)
+            let args = [UInt8(it.id)] + Pack7.u35(UInt32(data.count)) + [UInt8(n & 127), UInt8(n >> 7)]
+            let b = try await request(skiff ? feluccaGet : sloopGet, args, 1)
+            guard b.count >= 9, Int(b[0]) == it.id else { throw BackupError.unreadable("an unexpected reply") }
+            if b[1] == 5 { throw BackupError.changed }
+            if b[1] != 0 { throw BackupError.refused(Int(b[1])) }
+            guard Int(Pack7.readU35(b[2...])) == data.count, Int(b[7]) | Int(b[8]) << 7 == n else {
+                throw BackupError.unreadable("a reply for another piece")
+            }
+            let piece = Pack7.decode(Array(b[9...]))
+            guard piece.count >= n else { throw BackupError.unreadable("a short piece") }
+            data += piece.prefix(n)
+            got(n)
+        }
+        guard CRC32.of(data) == it.crc else { throw BackupError.changed }
+        return data
+    }
+
+    /// One object by id (nil: the firmware keeps none, or it's empty), through a connected driver: Skiff's user
+    /// sample slots are objects 32..34 (EDITOR_PROTOCOL.md v7), the header then the ADPCM data.
+    public static func object(_ id: Int, driver: FirmwareDriver) async throws -> [UInt8]? {
+        guard let (skiff, request) = route(driver) else { throw BackupError.notSupported }
+        guard let it = try await list(skiff: skiff, request: request).first(where: { $0.id == id }), it.size > 0 else { return nil }
+        return try await read(it, skiff: skiff, request: request)
+    }
+
+    /// The driver's client as a backup request: LIST stops the transport and snapshots, so it gets time and is never
+    /// sent twice.
+    static func route(_ driver: FirmwareDriver) -> (skiff: Bool, request: BackupRequest)? {
+        let client: SloopClient
+        if let d = driver as? SkiffDriver { client = d.client } else if let d = driver as? SloopDriver { client = d.client } else { return nil }
+        return (driver is SkiffDriver, { cmd, args, match in
             let list = cmd == sloopList || cmd == feluccaList
             return try await client.send(.raw(cmd: cmd, args: args, match: match, name: list ? "BACKUP_LIST" : "BACKUP_GET"),
                                          timeout: .milliseconds(list ? 5000 : 1500), retries: list ? 0 : 2)
-        }, progress: progress)
+        })
+    }
+
+    /// The backup through a connected driver.
+    public static func capture(driver: FirmwareDriver, progress: @escaping @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> DeviceBackup {
+        guard let (skiff, request) = route(driver) else { throw BackupError.notSupported }
+        return try await capture(skiff: skiff, firmware: driver.info.version, request: request, progress: progress)
     }
 }

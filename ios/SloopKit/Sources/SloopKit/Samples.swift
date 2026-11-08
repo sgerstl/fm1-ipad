@@ -87,6 +87,41 @@ public enum UserSample {
         return stride(from: 0, to: nib.count, by: 2).map { nib[$0] | nib[$0 + 1] << 4 }
     }
 
+    /// sampleio's inverse: IMA ADPCM, low nibble first, from predictor `pred` / index `idx`, `count` samples.
+    public static func imaDecode(_ data: [UInt8], count: Int, pred p0: Int = 0, index i0: Int = 0) -> [Int16] {
+        var pred = p0, idx = min(88, max(0, i0))
+        var out = [Int16](); out.reserveCapacity(count)
+        for byte in data {
+            for code in [Int(byte & 0x0F), Int(byte >> 4)] {
+                guard out.count < count else { return out }
+                let step = imaStep[idx]
+                var vd = step >> 3
+                if code & 4 != 0 { vd += step }
+                if code & 2 != 0 { vd += step >> 1 }
+                if code & 1 != 0 { vd += step >> 2 }
+                pred = min(32767, max(-32768, code & 8 != 0 ? pred - vd : pred + vd))
+                idx = min(88, max(0, idx + imaIndex[code & 7]))
+                out.append(Int16(pred))
+            }
+        }
+        return out
+    }
+
+    /// A stored slot (the backup object: the 512-byte header, then the data) as samples to play and their rate:
+    /// the first zone's (one-shot uploads have one). Nil: not a slot.
+    public static func stored(_ object: [UInt8]) -> (samples: [Int16], rate: Double)? {
+        guard object.count >= dataOffset + 1 else { return nil }
+        func u32(_ o: Int) -> Int { Int(object[o]) | Int(object[o + 1]) << 8 | Int(object[o + 2]) << 16 | Int(object[o + 3]) << 24 }
+        guard UInt32(u32(0)) == magic, object[6] >= 1 else { return nil }
+        let len = min(u32(16), object.count - dataOffset)
+        let z = 32, off = u32(z), n = u32(z + 4), rateQ16 = u32(z + 16)
+        let pred = Int(Int16(truncatingIfNeeded: Int(object[z + 22]) | Int(object[z + 23]) << 8)), idx = Int(object[z + 24])
+        guard off >= 0, off < len, n > 0 else { return nil }
+        let data = Array(object[(dataOffset + off)..<(dataOffset + len)])
+        let hz = Double(rateQ16) * 44100 / 65536
+        return (imaDecode(data, count: n, pred: pred, index: idx), hz > 0 ? hz : Double(rate))
+    }
+
     /// One zone covering the whole keyboard (lo 0, hi 127), one-shot (looped 0), root MIDI note.
     /// sampleio.user_slot(name, [(samples, root, None, None)]).
     public static func slot(name: String, samples: [Int16], root: Int = 60) throws -> (header: [UInt8], data: [UInt8]) {

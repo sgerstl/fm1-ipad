@@ -103,7 +103,7 @@ import Testing
         try await waitFor(10) { if case .connected = session.status { true } else { false } }
         #expect(session.dialect == .skiff && session.capabilities.contains(.samples))
         try await waitFor { session.sampleSlots.count == 3 }
-        #expect(session.sampleSlots[0] == SampleSlot(zones: 1, name: "KALIMBA", kib: 30))
+        #expect(session.sampleSlots[0] == SampleSlot(zones: 1, name: "KALIMBA", kib: (FakeSkiff.kalimba.state.dataLength + 1023) / 1024))
         #expect(session.sampleSlotName(2) == "USR3")
 
         let x = UserSample.resample(UserSampleTests.signal(48000), from: 48000, to: UserSample.rate)
@@ -115,6 +115,14 @@ import Testing
             try await session.uploadSample(slot: 3, name: "NOPE", samples: UserSample.toInt16(x)) { _ in }
         }
 
+        // what a slot holds, read back to hear it: the demo's tone in USR1, the take just sent in USR3
+        let held = try #require(try await session.storedSample(slot: 0))
+        #expect(held.samples.count == UserSample.rate && abs(held.rate - Double(UserSample.rate)) < 1)
+        let back = try #require(try await session.storedSample(slot: 2))
+        let sent = UserSample.toInt16(x)
+        #expect(back.samples == UserSample.imaDecode(UserSample.imaEncode(sent), count: sent.count))
+        #expect(try await session.storedSample(slot: 1) == nil)          // empty
+
         // USR3 on track 0: SAMPLE, SET at USR3 as SET's names place it, LOOP off
         let info = try #require(session.info)
         let e = try #require(info.engines.firstIndex(of: "SAMPLE"))
@@ -122,6 +130,15 @@ import Testing
         #expect(session.tracks[0].engine == e && session.tracks[0].presetName == "USR3")
         let base = try #require(session.userSetBase)
         try await waitFor { fake.params[0][info.firstEngineParam] == base + 2 && fake.params[0][info.firstEngineParam + 3] == 0 }
+    }
+
+    @Test func adpcmDecodesWhatItEncodes() {
+        // the round trip stays close to the signal (4-bit ADPCM: within a few percent of full scale once settled)
+        let x = UserSample.toInt16(UserSample.resample(UserSampleTests.signal(48000), from: 48000, to: UserSample.rate))
+        let y = UserSample.imaDecode(UserSample.imaEncode(x), count: x.count)
+        #expect(y.count == x.count)
+        let err = zip(x.dropFirst(200), y.dropFirst(200)).map { abs(Int($0) - Int($1)) }.max() ?? 0
+        #expect(err < 3000)
     }
 
     @Test func endRefusesBadData() async throws {
