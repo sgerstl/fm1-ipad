@@ -24,14 +24,14 @@ The app writes to the FM-1's flash: sections, the song order, user presets and s
 
 The app needs SLOOP 2.8.4 exactly (protocol 12). It refuses other versions on connect.
 
-`sloop/sloop-2.8.4-screen-link.fwsc` is stock SLOOP 2.8.4 plus a 47-line patch (`sloop/0001-screen-link.patch`) that lets the app and the FM-1 follow each other's screen. With stock 2.8.4 the app still works, but the tabs no longer follow the FM-1's buttons. `sloop/README.md` covers what the patch adds to the protocol and how to rebuild the package from source.
+`firmware/releases/SLOOP-Lupe-2.8.4.fwsc` (was `sloop/sloop-2.8.4-screen-link.fwsc`) is stock SLOOP 2.8.4 plus a 47-line patch (`sloop/0001-screen-link.patch`) that lets the app and the FM-1 follow each other's screen. With stock 2.8.4 the app still works, but the tabs no longer follow the FM-1's buttons. `sloop/README.md` covers what the patch adds to the protocol and how to rebuild the package from source.
 
 SLOOP's installer is a web page that pins the package it installs, so you generate it locally around this file:
 
 ```sh
 git clone --branch v2.8.4 https://github.com/isod89/sloop-fm1.git sloop-src
 cd sloop-src
-python3 web/make_site.py ../fm1-ipad/sloop/sloop-2.8.4-screen-link.fwsc 2.8.4-screen-link OUT
+python3 web/make_site.py ../fm1-ipad/firmware/releases/SLOOP-Lupe-2.8.4.fwsc 2.8.4-screen-link OUT
 cd OUT && python3 -m http.server 8766 --bind 127.0.0.1
 ```
 

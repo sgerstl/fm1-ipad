@@ -5,8 +5,8 @@ import Testing
 /// The firmware installer against a fake FM-1 (FakeLoader.swift) that plays both update steps as Skiff's ota.c and
 /// ldr_core.c do: the bundled packages, full installs, cut-offs at many points and the resume, refusals. Offline.
 @Suite(.serialized) struct FirmwareInstallTests {
-    static let skiff = try! BundledFirmware.skiff.load()
-    static let sloop = try! BundledFirmware.sloop.load()
+    static let skiff = try! LupeFirmware.skiff.load()
+    static let sloop = try! LupeFirmware.sloop.load()
 
     /// fm1_install.py's test delays, about. `patient`: for a test that counts drops, idle limits no busy moment
     /// reaches. With 400 ms, a pause in the test process (other work on the Mac) read as the loader gone: a second
@@ -40,22 +40,22 @@ import Testing
 
     // MARK: The files
 
-    @Test func bundledFilesMatchTheirPins() throws {
-        for f in BundledFirmware.allCases {
+    @Test func firmwareFilesMatchTheirPins() throws {
+        for f in LupeFirmware.allCases {
             let p = try f.load()
             #expect(p.product == f.product)
             #expect(p.sha256 == f.sha256)
             #expect(p.flashSpan?.size == 0x93000)
             #expect(p.isOfficial == f.isStock)
             #expect(p.image.count == f.size - 20)
-            #expect(BundledFirmware.matching(identity: f.product) == f)
-            #expect(BundledFirmware.matching(identity: "ota-" + f.product) == f)
+            #expect(LupeFirmware.matching(identity: f.product) == f)
+            #expect(LupeFirmware.matching(identity: "ota-" + f.product) == f)
         }
-        #expect(BundledFirmware.matching(identity: "FM-1_016") == nil)
+        #expect(LupeFirmware.matching(identity: "FM-1_016") == nil)
     }
 
     @Test func aChangedByteIsRefused() throws {
-        var raw = [UInt8](try Data(contentsOf: BundledFirmware.skiff.url!))
+        var raw = [UInt8](try Data(contentsOf: LupeFirmware.skiff.localCopy!))
         raw[200_000] ^= 0x01
         #expect(throws: PackageError.self) { try FirmwarePackage(data: raw, pinned: .skiff) }
         do { _ = try FirmwarePackage(data: raw, pinned: .skiff) } catch let e as PackageError {
@@ -66,7 +66,7 @@ import Testing
     }
 
     @Test func theWrongFileIsRefused() throws {
-        let sloopRaw = [UInt8](try Data(contentsOf: BundledFirmware.sloop.url!))
+        let sloopRaw = [UInt8](try Data(contentsOf: LupeFirmware.sloop.localCopy!))
         // SLOOP's file offered as Skiff's: its hash isn't Skiff's
         #expect(throws: PackageError.self) { try FirmwarePackage(data: sloopRaw, pinned: .skiff) }
         // not a package at all

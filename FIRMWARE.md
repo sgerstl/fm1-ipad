@@ -1,17 +1,19 @@
-# The firmware Lupe carries
+# The firmware Lupe installs
 
-Lupe installs the FM-1 firmware it speaks, so testers don't need a computer, and puts M-VAVE's stock firmware back. It carries exactly the files that were tested with the app, and refuses any file whose SHA-256 differs (`BundledFirmware` in `ios/SloopKit/Sources/SloopKit/FirmwarePackage.swift`). The files live in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
+Lupe installs the FM-1 firmware it speaks, so testers don't need a computer, and puts M-VAVE's stock firmware back. It installs exactly the files that were tested with the app, and refuses any file whose SHA-256 differs (`LupeFirmware` in `ios/SloopKit/Sources/SloopKit/FirmwarePackage.swift`).
 
-| | Skiff 2.2 with the screen link | SLOOP 2.8.4 with the screen link | Stock V15 |
+**Since 2026-11-08 the two GPL builds are named Skiff-Lupe and SLOOP-Lupe and aren't in the app.** Lupe downloads the chosen one from its GitHub release (`lupe-firmware-1`), checks the SHA-256 before anything else sees it, and keeps it in Application Support (`FirmwareStore.swift`). So an App Store or TestFlight build carries no GPL firmware. The files and their release notes live in `firmware/releases/`. Stock V15 (Apache-2.0) stays in the app, in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
+
+| | Skiff-Lupe 2.2 (Skiff 2.2 + screen link) | SLOOP-Lupe 2.8.4 (SLOOP 2.8.4 + screen link) | Stock V15 |
 |---|---|---|---|
-| File | `skiff-2.2-screen-link.fwsc` | `sloop-2.8.4-screen-link.fwsc` | `FM-1_015.fwsc` |
+| File | `firmware/releases/Skiff-Lupe-2.2.fwsc` (downloaded) | `firmware/releases/SLOOP-Lupe-2.8.4.fwsc` (downloaded) | `FM-1_015.fwsc` (in the app) |
 | Size | 610,429 bytes | 610,052 bytes | 699,956 bytes |
-| SHA-256 | `0c0972ab0dc9b8a259b02d6a93b4ee48564290903dcd09217cc49eb853324679` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
+| SHA-256 | `77d4bdff4b4452b4891b4a4fcbfd918e5b1c623a79c6cb399511fdb05d1c06e6` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
 | Identity it reports | `FM-1_722` (its update loader: `ota-FM-1_722`) | `FM-1_900` (loader: `ota-FM-1_900`) | `FM-1_015` (M-VAVE's loader: `ota-FM-1_015`) |
-| INFO version | `FELUCCA v2.2`, and `56 01 03` at the end of INFO (the screen link with the page's cursor and METER) | `FELUCCA SLOOP 2.8.4`, protocol 12 | (none: Lupe doesn't speak to it) |
+| INFO version | `FELUCCA v2.2`, and `56 01 06` at the end of INFO (the screen link with the cursor, METER and SCOPE) | `FELUCCA SLOOP 2.8.4`, protocol 12 | (none: Lupe doesn't speak to it) |
 | Update loader in the package | Skiff's (`FELUCCA-LOADER-1`) | SLOOP's (`FELUCCA-LOADER-1`) | M-VAVE's `usb_hid_ota.bin` (header CRC 0xEBAA, body CRC 0x5881, 0x4DE1 bytes) |
-| Source | [illuminus5/skiff](https://github.com/illuminus5/skiff), tag `v2.2`, plus `skiff/0001-screen-link.patch` | [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), tag `v2.8.4`, plus `sloop/0001-screen-link.patch` | [m-vave/fm1_open](https://github.com/m-vave/fm1_open) `sdk/firmware/FM-1_015.fwsc`, commit `4c7496d` (added in `3be7fbd`) |
-| Built | 2026-11-05 from `~/code/skiff-src` branch `screen-link` (`2ebba0f` on `v2.2`), see `skiff/README.md` | 2026-11-01, see `sloop/README.md` | Not built: M-VAVE's binary, unchanged, downloaded 2026-11-05 |
+| Source | [sgerstl/skiff](https://github.com/sgerstl/skiff), tag `lupe-skiff-2.2-screen-link.6` ([illuminus5/skiff](https://github.com/illuminus5/skiff) `v2.2` plus `skiff/0001-screen-link.patch`) | [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), tag `v2.8.4`, plus `sloop/0001-screen-link.patch` | [m-vave/fm1_open](https://github.com/m-vave/fm1_open) `sdk/firmware/FM-1_015.fwsc`, commit `4c7496d` (added in `3be7fbd`) |
+| Built | 2026-11-07 from `~/code/skiff-src` branch `screen-link` (`2ebba0f` on `v2.2`), see `skiff/README.md` | 2026-11-01, see `sloop/README.md` | Not built: M-VAVE's binary, unchanged, downloaded 2026-11-05 |
 | Licence | GPL-3.0 | GPL-3.0 | Apache-2.0 (see below) |
 
 Notes:
@@ -25,7 +27,7 @@ Notes:
 
 ## Licence and source
 
-Skiff and SLOOP are GPL-3.0. Lupe is private and goes to Scott and testers only (Xcode, TestFlight). Shipping the binaries inside the app counts as distributing them, so the source is offered: the picker names each source above, and this file links it. Before any public release, the App Store and GPL question in the vault's `firmware-install-from-app.md` still needs an informed read.
+Skiff and SLOOP are GPL-3.0. Since 2026-11-08 Lupe doesn't ship them inside the app: the GitHub release distributes them, with their source named in each release's notes (`firmware/releases/*.md`) and in the picker. The app only downloads the file the user chose. Whether that settles the App Store question is still worth an informed read (vault: `firmware-install-from-app.md`).
 
 V15 is **not** GPL, and the fm1_open repository as a whole isn't Apache-2.0 either. Its own code is GPL-3.0 with an SDK linking exception, and its engine is a proprietary binary SDK. `THIRD_PARTY.md` there says the recovery image `sdk/firmware/FM-1_015.fwsc` (with `uboot.boot`, `ota.bin`, `cfg_tool.bin`, `boot-config.bin`) is distributed by M-VAVE under the Apache License 2.0, binary redistribution included. Apache-2.0 asks for the licence text and the notices to travel with the file. `FM-1_015.LICENSE.txt` sits beside it in the bundle, with the copyright line, the source commit and the full licence. The picker says "Apache-2.0, unchanged" and names the source. There is no source code to offer for it.
 

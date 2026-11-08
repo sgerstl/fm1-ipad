@@ -3,12 +3,15 @@
 import CryptoKit
 import Foundation
 
-/// The firmware files Lupe carries, exactly as tested. Each is pinned by its SHA-256: a file that doesn't
-/// match is never installed (docs: FIRMWARE.md).
-public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
-    /// Skiff 2.2 with Lupe's screen link patch (skiff/README.md): what Lupe offers for Skiff.
-    case skiff = "skiff-2.2-screen-link"
-    case sloop = "sloop-2.8.4-screen-link"
+/// The firmware Lupe installs, each pinned by its SHA-256: a file that doesn't match is never installed (FIRMWARE.md).
+/// Since 2026-11-08 the two GPL builds with Lupe's screen link are named Skiff-Lupe and SLOOP-Lupe and aren't in the
+/// app: they're downloaded from Lupe's GitHub releases when chosen (FirmwareStore), so an App Store or TestFlight build
+/// carries no GPL firmware. M-VAVE's stock V15 (Apache-2.0) stays in the app, the way back that needs no internet.
+public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
+    /// Skiff 2.2 with Lupe's screen link patch (skiff/README.md).
+    case skiff = "Skiff-Lupe-2.2"
+    /// SLOOP 2.8.4 with Lupe's screen link patch (sloop/README.md).
+    case sloop = "SLOOP-Lupe-2.8.4"
     /// M-VAVE's own V15, unmodified: the way back to stock. Installed by M-VAVE's update loader, which it carries.
     case stock = "FM-1_015"
 
@@ -16,18 +19,27 @@ public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
     /// What the app shows.
     public var title: String {
         switch self {
-        case .skiff: "Skiff 2.2"
-        case .sloop: "SLOOP 2.8.4"
+        case .skiff: "Skiff-Lupe 2.2"
+        case .sloop: "SLOOP-Lupe 2.8.4"
         case .stock: "Stock V15"
         }
     }
     public var detail: String {
         switch self {
-        case .skiff: "Six tracks, songs and Arrange, with Lupe's screen link. Skiff v2.2 plus a 73-line patch."
-        case .sloop: "Three tracks and drums, with Lupe's screen link. SLOOP 2.8.4 plus a 47-line patch."
+        case .skiff: "Skiff 2.2 with Lupe's screen link: six tracks, songs and Arrange. Skiff v2.2 plus a 73-line patch."
+        case .sloop: "SLOOP 2.8.4 with Lupe's screen link: three tracks and drums. SLOOP 2.8.4 plus a 47-line patch."
         case .stock: "M-VAVE's own firmware, as the FM-1 shipped. Lupe can't read or show it."
         }
     }
+    /// Whose work it is (the picker says it under the choice).
+    public var credit: String {
+        switch self {
+        case .skiff: "Skiff is by illuminus5, a fork of Felucca by Leo Kuroshita (Hügelton Instruments). Lupe adds only the screen link."
+        case .sloop: "SLOOP is a Felucca fork (isod89/sloop-fm1). Lupe adds only the screen link."
+        case .stock: "M-VAVE's firmware, unchanged."
+        }
+    }
+    public var licence: String { isStock ? "Apache-2.0" : "GPL-3.0" }
     /// The package's identity, as the device reports it once installed (and the loader's, with "ota-").
     public var product: String {
         switch self {
@@ -53,25 +65,46 @@ public enum BundledFirmware: String, CaseIterable, Identifiable, Sendable {
     /// Where its source is offered (GPL-3.0), or where the file comes from (V15: Apache-2.0, no source).
     public var source: String {
         switch self {
-        case .skiff: "github.com/illuminus5/skiff, tag v2.2, plus skiff/0001-screen-link.patch in Lupe's repository"
+        case .skiff: "github.com/sgerstl/skiff, tag lupe-skiff-2.2-screen-link.6 (Skiff v2.2 plus skiff/0001-screen-link.patch in Lupe's repository)"
         case .sloop: "github.com/isod89/sloop-fm1, tag v2.8.4, plus sloop/0001-screen-link.patch in Lupe's repository"
         case .stock: "github.com/m-vave/fm1_open, sdk/firmware/FM-1_015.fwsc (Apache-2.0)"
         }
     }
     /// M-VAVE's own package: no Felucca loader, its own instead.
     public var isStock: Bool { self == .stock }
+    /// In the app itself (only stock V15); the others are downloaded.
+    public var isBundled: Bool { isStock }
+
+    /// The GitHub release the downloads come from. A new build gets a new tag, a new pin and a new app build.
+    public static let releaseTag = "lupe-firmware-1"
+    public var fileName: String { "\(rawValue).fwsc" }
+    /// Where it's downloaded from (nil: it's in the app).
+    public var downloadURL: URL? {
+        isBundled ? nil : URL(string: "https://github.com/sgerstl/fm1-ipad/releases/download/\(Self.releaseTag)/\(fileName)")
+    }
 
     /// The firmware a running FM-1 or its update loader reports, when it's one of these.
-    public static func matching(identity text: String) -> BundledFirmware? {
+    public static func matching(identity text: String) -> LupeFirmware? {
         let t = text.hasPrefix("ota-") ? String(text.dropFirst(4)) : text
         return allCases.first { $0.product == t }
     }
 
-    public var url: URL? { Bundle.module.url(forResource: rawValue, withExtension: "fwsc", subdirectory: "Firmware") }
+    /// The file on this device without a download: stock V15 in the app; in a Debug build, the repository's copy of a
+    /// release (firmware/releases/, found from this source file's path: the tests, and the simulator's demos).
+    public var localCopy: URL? {
+        if isBundled { return Bundle.module.url(forResource: rawValue, withExtension: "fwsc", subdirectory: "Firmware") }
+        #if DEBUG
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent()      // …/ios/SloopKit/Sources/SloopKit
+            .appending(path: "../../../../firmware/releases/\(fileName)").standardizedFileURL
+        return FileManager.default.fileExists(atPath: repo.path) ? repo : nil
+        #else
+        return nil
+        #endif
+    }
 
-    /// The bundled file, checked against its pin and parsed.
+    /// The local file, checked against its pin and parsed. Downloaded files go through FirmwareStore.package.
     public func load() throws -> FirmwarePackage {
-        guard let url, let data = try? Data(contentsOf: url) else { throw PackageError.missing(rawValue) }
+        guard let url = localCopy, let data = try? Data(contentsOf: url) else { throw PackageError.missing(rawValue) }
         return try FirmwarePackage(data: [UInt8](data), pinned: self)
     }
 }
@@ -87,7 +120,7 @@ public enum PackageError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .missing(let n): "The firmware file \(n) is missing from the app."
+        case .missing(let n): "The firmware file \(n) isn't on this device yet. Lupe downloads it before installing."
         case .hashMismatch: "The firmware file isn't the one Lupe was tested with (its SHA-256 differs). Nothing was sent."
         case .wrongIdentity(let e, let f): "The firmware file says it is \(f), not \(e). Nothing was sent."
         case .notFM1(let p): "This isn't an FM-1 firmware package (identity “\(p)”)."
@@ -118,7 +151,7 @@ public struct FirmwarePackage: Sendable {
     /// file list and files. With `pinned`, the bytes must also be exactly that file. The pinned stock V15 has
     /// M-VAVE's loader instead, and its packer stores other CRCs in the extra entries: only flash.bin and the loader
     /// are checked there (Skiff's files_ok).
-    public init(data: [UInt8], pinned: BundledFirmware? = nil) throws {
+    public init(data: [UInt8], pinned: LupeFirmware? = nil) throws {
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         if let p = pinned, digest != p.sha256 { throw PackageError.hashMismatch(expected: p.sha256, found: digest) }
         let product = try Self.productOf(data)

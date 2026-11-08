@@ -5,7 +5,7 @@ A small addition to [SLOOP](https://github.com/isod89/sloop-fm1) 2.8.4 (GPL-3.0,
 | File | What |
 |---|---|
 | `0001-screen-link.patch` | The change: 47 lines in `firmware/src/editor.c` |
-| `sloop-2.8.4-screen-link.fwsc` | The built package, SHA-256 `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110`. Installed on my FM-1 on 2026-11-01 |
+| `../firmware/releases/SLOOP-Lupe-2.8.4.fwsc` | SLOOP-Lupe 2.8.4 (named 2026-11-08; was `sloop-2.8.4-screen-link.fwsc`, now downloaded by the app, not bundled): the built package, SHA-256 `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110`. Installed on my FM-1 on 2026-11-01 |
 
 ## What it adds to the editor protocol
 

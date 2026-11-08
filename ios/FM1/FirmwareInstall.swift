@@ -2,8 +2,10 @@ import SloopKit
 import SwiftUI
 import UIKit
 
-/// Installing the firmware Lupe carries (Skiff 2.2, SLOOP 2.8.4 with the screen link) over USB-MIDI, 2026-11-05, and
-/// putting M-VAVE's stock V15 back (its own update loader writes it).
+/// Installing the firmware Lupe offers (Skiff-Lupe 2.2, SLOOP-Lupe 2.8.4: Skiff and SLOOP with the screen link) over
+/// USB-MIDI, 2026-11-05, and putting M-VAVE's stock V15 back (its own update loader writes it). Since 2026-11-08 the two
+/// GPL builds aren't in the app: the chosen one is downloaded from Lupe's GitHub release first (FirmwareStore), checked
+/// against its pin, and kept for next time. Stock V15 stays in the app.
 /// Offers it when the FM-1 runs something else or waits in an update loader; picks it from the connection menu (the phone's Developer submenu).
 /// While it runs the session lets go of the FM-1, the screen stays awake, and a cover keeps the app on this.
 @Observable @MainActor
@@ -12,11 +14,14 @@ final class FirmwareCentre {
         case loader(String)                 // a Felucca-family update loader waits, or M-VAVE's: finish the write
         case foreignLoader(String)          // another firmware's update mode: not ours to finish
         case unsupported(String)            // runs something Lupe doesn't speak
-        case update(String)                 // runs stock Skiff 2.2: Lupe carries it with the screen link
+        case update(String)                 // runs stock Skiff 2.2: Lupe offers Skiff-Lupe, the same with the screen link
     }
 
     enum Phase: Equatable {
         case idle
+        case downloading(Double)
+        /// The download didn't finish: nothing reached the FM-1.
+        case downloadFailed(String)
         case backingUp(Double)
         case installing(InstallStep)
         case done(String, backup: String?)
@@ -26,7 +31,11 @@ final class FirmwareCentre {
     var offer: Offer?
     var dismissedOffer: Offer?
     var phase: Phase = .idle
-    var target: BundledFirmware = .skiff
+    var target: LupeFirmware = .skiff
+    /// Skiff-Lupe and SLOOP-Lupe, downloaded when chosen and kept (Application Support).
+    let store = FirmwareStore()
+    /// This install starts with a download (the file wasn't on the device yet).
+    private(set) var downloads = false
     var showPicker = false
     /// Why the picker can't start (the battery, a backup that failed).
     var pickerNote: String?
@@ -51,8 +60,8 @@ final class FirmwareCentre {
         let a = LaunchArgs.all
         demo = a.firstIndex(of: "-demo-firmware").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
         if let demo {
-            let sloop = try? BundledFirmware.sloop.load(), skiff = try? BundledFirmware.skiff.load()
-            let stock = try? BundledFirmware.stock.load()
+            let sloop = try? LupeFirmware.sloop.load(), skiff = try? LupeFirmware.skiff.load()
+            let stock = try? LupeFirmware.stock.load()
             let fake: FakeFM1
             switch demo {
             case "loader": fake = FakeFM1(inLoaderOf: skiff!, was: sloop)
@@ -118,12 +127,12 @@ final class FirmwareCentre {
         let i = FirmwareInstaller(ports: ports)
         guard let id = await i.probe() else { if case .unsupported = offer {} else { offer = nil }; return }
         seen = id
-        if refusal(target) != nil, let ok = BundledFirmware.allCases.first(where: { refusal($0) == nil }) { target = ok }
+        if refusal(target) != nil, let ok = LupeFirmware.allCases.first(where: { refusal($0) == nil }) { target = ok }
         if id.isLoader {
             let ours = FirmwareInstaller.isResumable(loader: id) || id.text == FirmwareInstaller.officialLoader
             offer = ours ? .loader(id.text) : .foreignLoader(id.text)
-            if let f = BundledFirmware.matching(identity: id.text) { target = f }
-        } else if BundledFirmware.matching(identity: id.text).map({ $0.isStock }) ?? true {
+            if let f = LupeFirmware.matching(identity: id.text) { target = f }
+        } else if LupeFirmware.matching(identity: id.text).map({ $0.isStock }) ?? true {
             offer = .unsupported(id.text)               // (stock V15 is one Lupe carries, not one it speaks)
         }
     }
@@ -131,7 +140,7 @@ final class FirmwareCentre {
     var visibleOffer: Offer? { offer == dismissedOffer ? nil : offer }
 
     /// Why `f` can't go on the FM-1 Lupe last saw, in a line for the picker, or nil.
-    func refusal(_ f: BundledFirmware) -> String? {
+    func refusal(_ f: LupeFirmware) -> String? {
         switch FirmwareInstaller.refusal(for: f, running: seen)?.code {
         case .flashChip?: "Not on this FM-1. It runs V16, so it most likely has the newer flash chip, which SLOOP 2.8.4 can’t install on."
         case .otherStock?: "Not on this FM-1. It started out on a newer official version, so V15 can’t go back on."
@@ -157,7 +166,7 @@ final class FirmwareCentre {
         return "Charge the \(device) first: it's at \(Int(level * 100))%. The \(device) powers the FM-1 while it writes, so Lupe installs below 30% only while charging."
     }
 
-    func start(_ firmware: BundledFirmware, session: DeviceSession) {
+    func start(_ firmware: LupeFirmware, session: DeviceSession) {
         if demo == nil, let why = batteryRefusal() { pickerNote = why; showPicker = true; return }
         target = firmware
         pickerNote = nil
@@ -166,9 +175,23 @@ final class FirmwareCentre {
         Task { await run(session: session) }
     }
 
+    /// Installable now, without a download first (the demos use the repository's copies in a Debug build).
+    func isReady(_ f: LupeFirmware) -> Bool { demo != nil ? f.localCopy != nil : store.isReady(f) }
+
     private func run(session: DeviceSession) async {
+        // the file first: downloaded from Lupe's release and checked against its pin, before a backup or anything else
+        downloads = !isReady(target)
+        if downloads {
+            phase = .downloading(0)
+            do {
+                try await store.fetch(target) { f in Task { @MainActor in if case .downloading = self.phase { self.phase = .downloading(f) } } }
+            } catch {
+                phase = .downloadFailed("\(error)")
+                return
+            }
+        }
         let pkg: FirmwarePackage
-        do { pkg = try target.load() } catch {
+        do { pkg = try demo != nil ? target.load() : store.package(target) } catch {
             phase = .failed(message: "\(error)", inUpdateMode: false, backup: nil)
             return
         }
@@ -222,7 +245,7 @@ final class FirmwareCentre {
 
     func close() { phase = .idle }
 
-    /// "Installing Skiff 2.2", "Restoring stock V15".
+    /// "Installing Skiff-Lupe 2.2", "Restoring stock V15".
     var doing: String { target.isStock ? "Restoring stock V15" : "Installing \(target.title)" }
 }
 
@@ -353,7 +376,7 @@ struct FirmwareOfferCard: View {
             FirmwareCard(title: "An update for \(found)") {
                 Text(found.hasSuffix("screen link")
                      ? "This FM-1 runs an earlier build of the screen link. The newer one sends the FM-1’s oscilloscope to the EDIT cards, 30 times a second, along with its cursor (turn KNOB 1 on MOD and Lupe picks the same route) and each track’s level for the Mixer. Everything else stays as it is, your projects included, and they’re backed up first. Installing takes about a minute."
-                     : "Lupe carries \(found) with the screen link: press a button on the FM-1 and Lupe shows that page, pick a tab in Lupe and the FM-1 goes there too. Everything else stays as it is, your projects included, and they're backed up first. Installing takes about a minute.")
+                     : "Lupe can install Skiff-Lupe, which is \(found) with Lupe’s screen link: press a button on the FM-1 and Lupe shows that page, pick a tab in Lupe and the FM-1 goes there too. Everything else stays as it is, your projects included, and they're backed up first. Installing takes about a minute.")
                     .bodyText()
             } actions: {
                 CardKey(title: "Not now") { centre.dismissedOffer = offer }
@@ -362,10 +385,10 @@ struct FirmwareOfferCard: View {
         case .unsupported(let found):
             FirmwareCard(title: "Lupe needs other firmware") {
                 if centre.seesNewStock {
-                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and on this FM-1 it can install Skiff 2.2. SLOOP 2.8.4 can’t install on the flash chip that FM-1s with V16 most likely have. Installing takes about a minute.")
+                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and on this FM-1 it can install Skiff-Lupe 2.2 (Skiff with Lupe’s screen link). SLOOP 2.8.4 can’t install on the flash chip that FM-1s with V16 most likely have. Installing takes about a minute.")
                         .bodyText()
                 } else {
-                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and carries both. Installing takes about a minute; your projects are backed up first when the firmware allows it.")
+                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and can install either with its screen link added (Skiff-Lupe or SLOOP-Lupe, downloaded when you choose one). Installing takes about a minute; your projects are backed up first when the firmware allows it.")
                         .bodyText()
                 }
             } actions: {
@@ -384,7 +407,7 @@ struct FirmwarePicker: View {
     var body: some View {
         FirmwareCard(title: "Install firmware") {
             VStack(spacing: 8) {
-                ForEach(BundledFirmware.allCases.filter { !$0.isStock }) { f in row(f) }
+                ForEach(LupeFirmware.allCases.filter { !$0.isStock }) { f in row(f) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Back to stock").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
@@ -397,21 +420,23 @@ struct FirmwarePicker: View {
             } else {
                 Text(backupLine).bodyText()
             }
-            Text(centre.target.isStock ? "Apache-2.0, unchanged. From \(centre.target.source.replacingOccurrences(of: " (Apache-2.0)", with: ""))."
-                                       : "GPL-3.0. Source: \(centre.target.source).")
+            Text(centre.target.isStock ? "Apache-2.0, unchanged. From \(centre.target.source.replacingOccurrences(of: " (Apache-2.0)", with: "")). In the app, no download."
+                                       : "\(centre.target.credit) GPL-3.0. Source: \(centre.target.source)."
+                                         + (centre.isReady(centre.target) ? " Downloaded already." : " Lupe downloads it from its GitHub release first (about 600 KB)."))
                 .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } actions: {
             CardKey(title: "Cancel") { centre.showPicker = false; centre.pickerNote = nil; centre.skipBackup = false }
             CardKey(title: centre.skipBackup ? (centre.target.isStock ? "Restore without a backup" : "Install without a backup")
-                                             : centre.target.isStock ? "Restore stock V15" : "Install \(centre.target.title)", primary: true,
+                                             : centre.target.isStock ? "Restore stock V15"
+                                             : centre.isReady(centre.target) ? "Install \(centre.target.title)" : "Download and install", primary: true,
                     enabled: centre.refusal(centre.target) == nil) {
                 centre.start(centre.target, session: session)
             }
         }
     }
 
-    private func row(_ f: BundledFirmware) -> some View {
+    private func row(_ f: LupeFirmware) -> some View {
         Button { centre.target = f } label: {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: centre.target == f ? "largecircle.fill.circle" : "circle")
@@ -444,7 +469,7 @@ struct FirmwarePicker: View {
         .accessibilityAddTraits(centre.target == f ? [.isSelected] : [])
     }
 
-    private var running: BundledFirmware? {
+    private var running: LupeFirmware? {
         guard case .connected = session.status, !centre.seesNewStock else { return nil }
         return session.dialect == .skiff ? .skiff : .sloop
     }
@@ -474,6 +499,7 @@ struct FirmwareInstallCover: View {
                     switch centre.phase {
                     case .done(let id, let backup): done(id, backup)
                     case .failed(let message, let inUpdate, let backup, let refused): failed(message, inUpdate, backup, refused)
+                    case .downloadFailed(let message): downloadFailed(message)
                     default: working
                     }
                 }
@@ -522,44 +548,51 @@ struct FirmwareInstallCover: View {
     }
 
     private var stages: [String] {
-        (centre.backsUp ? ["Back up the projects"] : []) + ["Check the firmware file", "Write", "Restart the FM-1"]
+        (centre.downloads ? ["Download \(centre.target.title)"] : []) + (centre.backsUp ? ["Back up the projects"] : [])
+            + ["Check the firmware file", "Write", "Restart the FM-1"]
     }
 
-    private var stage: Int { rawStage - (centre.backsUp ? 0 : 1) }
-
-    private var rawStage: Int {
+    private var stage: Int {
+        let d = centre.downloads ? 1 : 0, b = centre.backsUp ? 1 : 0
         switch centre.phase {
-        case .backingUp: 0
+        case .downloading: return 0
+        case .backingUp: return d
         case .installing(let s):
             switch s {
-            case .start, .check, .loader: 1
-            case .write, .dropped, .resume: 2
-            case .reboot: 3
-            case .done: 4
+            case .start, .check, .loader: return d + b
+            case .write, .dropped, .resume: return d + b + 1
+            case .reboot: return d + b + 2
+            case .done: return d + b + 3
             }
-        default: 0
+        default: return 0
         }
     }
 
+    /// The download takes the first 6 % when there is one; the rest as before.
     private var overall: Double {
+        let d = centre.downloads ? 0.06 : 0
+        let rest: Double
         switch centre.phase {
-        case .backingUp(let f): 0.08 * f
+        case .downloading(let f): return 0.06 * f
+        case .backingUp(let f): rest = 0.08 * f
         case .installing(let s):
             switch s {
-            case .start: 0.08
-            case .check(let n): 0.08 + 0.04 * min(1, Double(n) / 20)
-            case .loader: 0.12
-            case .write(let p): 0.14 + 0.80 * Double(p) / 100
-            case .dropped, .resume: 0.14
-            case .reboot: 0.96
-            case .done: 1
+            case .start: rest = 0.08
+            case .check(let n): rest = 0.08 + 0.04 * min(1, Double(n) / 20)
+            case .loader: rest = 0.12
+            case .write(let p): rest = 0.14 + 0.80 * Double(p) / 100
+            case .dropped, .resume: rest = 0.14
+            case .reboot: rest = 0.96
+            case .done: rest = 1
             }
-        default: 0
+        default: rest = 0
         }
+        return d + (1 - d) * rest
     }
 
     private var status: String {
         switch centre.phase {
+        case .downloading: "Downloading \(centre.target.title) from GitHub"
         case .backingUp: "Backing up"
         case .installing(let s):
             switch s {
@@ -586,13 +619,29 @@ struct FirmwareInstallCover: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("The FM-1 restarted and reports \(id), as it should.").bodyText(primary: true)
                 if centre.target.isStock {
-                    Text("Lupe can’t connect to the stock firmware. When you want Lupe back, plug the FM-1 in and choose Skiff or SLOOP.").bodyText(primary: true)
+                    Text("Lupe can’t connect to the stock firmware. When you want Lupe back, plug the FM-1 in and choose Skiff-Lupe or SLOOP-Lupe.").bodyText(primary: true)
                 }
                 if let backup {
                     Text("The backup is in Files: On My \(deviceWord) › Lupe › \(backup)." + (centre.target.isStock ? " Restore it with that firmware’s editor once it’s back on." : "")).bodyText()
                 }
             }
             HStack { Spacer(); CardKey(title: "Done", primary: true) { centre.close() } }
+        }
+    }
+
+    /// The download stopped: nothing was sent, so it's a retry, not a recovery.
+    private func downloadFailed(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Label { Text("The download didn’t finish").font(.system(size: 28, weight: .semibold)) }
+                icon: { Image(systemName: "exclamationmark.triangle").font(.system(size: 28)) }
+                .accessibilityAddTraits(.isHeader)
+            Text(message).bodyText(primary: true)
+            Text("The FM-1 still runs its firmware. Once \(centre.target.title) is downloaded, Lupe keeps it, so the next install needs no internet.").bodyText()
+            HStack(spacing: 8) {
+                Spacer()
+                CardKey(title: "Close") { centre.close() }
+                CardKey(title: "Try again", primary: true) { centre.close(); centre.start(centre.target, session: session) }
+            }
         }
     }
 

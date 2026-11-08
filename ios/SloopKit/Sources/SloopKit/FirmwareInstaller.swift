@@ -337,18 +337,18 @@ public final class FirmwareInstaller: @unchecked Sendable {
     }
 
     static let otherStockMessage = "Nothing was written. This FM-1 started out on a different official version (V16, probably), so V15 can't go on it. Its way back is that version, with M-VAVE's own updater."
-    static let v16SloopMessage = "This FM-1 runs M-VAVE's V16, so it's most likely a newer unit with the UC25HQ80 flash chip, which SLOOP 2.8.4's update loader doesn't know: it would stop before writing anything. Install Skiff 2.2, which knows both chips. (SLOOP 2.8.5 knows it too; Lupe doesn't carry it yet.)"
+    static let v16SloopMessage = "This FM-1 runs M-VAVE's V16, so it's most likely a newer unit with the UC25HQ80 flash chip, which SLOOP 2.8.4's update loader doesn't know: it would stop before writing anything. Install Skiff-Lupe 2.2: Skiff knows both chips. (SLOOP 2.8.5 knows it too; Lupe doesn't offer it yet.)"
     static func loaderRefusedMessage(_ pkg: FirmwarePackage, running: String) -> String {
-        let sloop = pkg.product == BundledFirmware.sloop.product
+        let sloop = pkg.product == LupeFirmware.sloop.product
         return "Nothing was written. \(sloop ? "SLOOP 2.8.4's" : "The") update loader turned this FM-1 down after 3 reads and it restarted on its own firmware (\(running))."
-            + (sloop ? " The likely cause is the newer UC25HQ80 flash chip, which that loader doesn't know. Install Skiff 2.2, which knows both chips." : "")
+            + (sloop ? " The likely cause is the newer UC25HQ80 flash chip, which that loader doesn't know. Install Skiff-Lupe 2.2: Skiff knows both chips." : "")
     }
 
     /// What can't go on this FM-1, from what it runs, before anything is sent beyond the handshake (nil: go ahead).
     /// Stock V15 needs a unit that never ran a newer stock version (its 16 KiB head); SLOOP 2.8.4's loader knows only
     /// the older flash chip, and a unit on stock V16 is most likely a newer one with the UC25HQ80 (SLOOP #239, #228).
     /// Skiff 2.2 knows both chips and installs over V16 (Skiff #64).
-    public static func refusal(for firmware: BundledFirmware, running id: DeviceIdentity?) -> InstallError? {
+    public static func refusal(for firmware: LupeFirmware, running id: DeviceIdentity?) -> InstallError? {
         guard let id, !id.isLoader, id.text.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil else { return nil }
         if firmware.isStock, id.version > 15 { return InstallError(code: .otherStock, message: otherStockMessage) }
         if firmware == .sloop, id.version >= 16 { return InstallError(code: .flashChip, message: v16SloopMessage) }
@@ -366,13 +366,13 @@ public final class FirmwareInstaller: @unchecked Sendable {
         }
         if dev.id.isLoader, !Self.writes(pkg, loader: dev.id) {
             dev.link.close()
-            let which = BundledFirmware.matching(identity: dev.id.text).map { "\($0.title)'s" } ?? "another firmware's"
+            let which = LupeFirmware.matching(identity: dev.id.text).map { "\($0.title)'s" } ?? "another firmware's"
             let finish = Self.isResumable(loader: dev.id) || dev.id.text == Self.officialLoader
                 ? "Finish that install first, then choose this one." : "Finish that update with its own updater first."
             throw InstallError(code: .foreignLoader,
                                message: "The FM-1 is in \(which) update mode (\(dev.id.text)). \(finish)", inUpdateMode: true)
         }
-        if let f = BundledFirmware.matching(identity: pkg.product), let no = Self.refusal(for: f, running: dev.id) {
+        if let f = LupeFirmware.matching(identity: pkg.product), let no = Self.refusal(for: f, running: dev.id) {
             dev.link.close()
             throw no
         }

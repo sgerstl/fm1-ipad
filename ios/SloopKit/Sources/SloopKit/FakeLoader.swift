@@ -36,7 +36,7 @@ public final class FakeFM1: UpdatePorts, @unchecked Sendable {
 
     /// V15's 16 KiB head, as an FM-1 that shipped with V15 has it (no firmware but M-VAVE's ever writes it).
     static let v15Head: [UInt8] = {
-        guard let p = try? BundledFirmware.stock.load(), let s = p.flashSpan else { return [UInt8](repeating: 0x5A, count: 0x4000) }
+        guard let p = try? LupeFirmware.stock.load(), let s = p.flashSpan else { return [UInt8](repeating: 0x5A, count: 0x4000) }
         return Array(p.image[s.off..<(s.off + 0x4000)])
     }()
 

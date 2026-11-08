@@ -8,7 +8,7 @@ import Testing
 @Suite(.serialized) struct FirmwareStockTests {
     static let skiff = FirmwareInstallTests.skiff
     static let sloop = FirmwareInstallTests.sloop
-    static let stock = try! BundledFirmware.stock.load()
+    static let stock = try! LupeFirmware.stock.load()
     typealias Steps = FirmwareInstallTests.Steps
 
     static func device(running: FirmwarePackage?, startedOn: Int = 15, patient: Bool = false) -> FakeFM1 {
@@ -33,7 +33,7 @@ import Testing
     }
 
     @Test func onlyThePinnedFileTakesTheOfficialPath() throws {
-        let raw = [UInt8](try Data(contentsOf: BundledFirmware.stock.url!))
+        let raw = [UInt8](try Data(contentsOf: LupeFirmware.stock.localCopy!))
         // unpinned it's refused: no Felucca loader (nothing but the pinned V15 is installed with M-VAVE's loader)
         #expect(throws: PackageError.noLoader) { try FirmwarePackage(data: raw) }
         var bad = raw
@@ -137,7 +137,7 @@ import Testing
         let dev = FakeFM1(inLoaderOf: Self.skiff, was: Self.sloop)
         dev.timeScale = 0.02
         do { try await Self.installer(dev).install(Self.stock); Issue.record("no error") } catch let e as InstallError {
-            #expect(e.code == .foreignLoader && e.message.contains("Skiff 2.2"))
+            #expect(e.code == .foreignLoader && e.message.contains("Skiff-Lupe 2.2"))
         }
         #expect(dev.received.allSatisfy { $0.frame == FirmwareInstaller.hsQuery })
     }
@@ -206,7 +206,7 @@ import Testing
         do { try await Self.installer(dev).install(what == "sloop" ? Self.sloop : Self.stock); Issue.record("no error") }
         catch let e as InstallError {
             #expect(e.code == (what == "sloop" ? .flashChip : .otherStock) && !e.inUpdateMode)
-            if what == "sloop" { #expect(e.message.contains("Install Skiff 2.2")) }
+            if what == "sloop" { #expect(e.message.contains("Install Skiff-Lupe 2.2")) }
         }
         #expect(dev.received.allSatisfy { $0.frame == FirmwareInstaller.hsQuery })
         #expect(dev.identity == "FM-1_016")
