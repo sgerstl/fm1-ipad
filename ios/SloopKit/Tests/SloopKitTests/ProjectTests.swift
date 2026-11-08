@@ -96,6 +96,7 @@ import Testing
         #expect(fake.stored == 0b0111)
         #expect(try await session.deviceFingerprint() == saved.fingerprint)
         #expect(try await session.readProject().fingerprint == saved.fingerprint)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }

@@ -28,7 +28,7 @@ import Testing
 
     @Test func aLoopSavedToASectionComesBack() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
 
         // make a loop: a note on track 1, step 2
         #expect(s.toggle(track: 0, index: 1, note: 60))
@@ -50,7 +50,7 @@ import Testing
 
     @Test func unsavedEditsAreReplacedWhenASectionLoads() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
 
         // an edit that is never stored, then section B (track 1 empty) is picked
         #expect(s.toggle(track: 0, index: 2, note: 62))
@@ -62,7 +62,7 @@ import Testing
 
     @Test func aSongPlaysItsSectionsInOrder() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
 
         // D: the loop with a marker note; then an order D (1 bar), B (2 bars), looping
         #expect(s.toggle(track: 0, index: 40, note: 65))
@@ -99,7 +99,7 @@ import Testing
 
     @Test func songRecWritesWhatWasPlayed() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
 
         s.toggleSongRec()
         try await waitFor { fake.songRec }
@@ -123,7 +123,7 @@ import Testing
 
     @Test func songModeKeepsTheLoopAndStopBringsItBack() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
 
         // a loop edit that is never stored, then the song plays section B over it
         #expect(s.toggle(track: 0, index: 50, note: 70))
@@ -141,7 +141,7 @@ import Testing
 
     @Test func editsMarkTheTracksUntilStoredOrReplaced() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
         #expect(!s.tracksEdited)
         #expect(s.toggle(track: 0, index: 3, note: 61))
         #expect(s.tracksEdited)
@@ -156,7 +156,7 @@ import Testing
 
     @Test func aFastDialSendsTheLastValue() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
 
         var st = s.tracks[0].steps[0]
         #expect(st.isOn)
@@ -171,7 +171,7 @@ import Testing
 
     @Test func aSectionClearsOnlyWhenStopped() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
         #expect(s.song.stored(2))
 
         // playing: SLOOP refuses, and the app says why without sending
@@ -197,7 +197,7 @@ import Testing
 
     @Test func theSpeakerGoesQuietOnlyWithUSBAudioFull() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
         #expect(s.usbAudioFull == false)
 
         // quiet: USB AUDIO becomes FULL first (one settings write), then the master goes to 0
@@ -216,7 +216,7 @@ import Testing
 
     @Test func aBadSettingsWriteIsRefusedAndTheOrderRollsBack() async throws {
         let (s, fake, run) = try await connected()
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
 
         let before = s.songOrder
         fake.corruptNextPut = true                              // the FM-1 sees a CRC mismatch
@@ -236,7 +236,7 @@ import Testing
         let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         s.resyncInterval = .seconds(60)
         let run = Task { await s.run() }
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
         try await waitFor { if case .connected = s.status { true } else { false } }
 
         fake.inject(Cmd.reload, [1, 1, 9])                       // track 9

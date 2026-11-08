@@ -89,6 +89,7 @@ import Testing
         try await Task.sleep(for: .milliseconds(300))
         #expect(session.tracks[0].presetName == "SMPL3")
         #expect(session.params[info.firstEngineParam] == 10)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -99,7 +100,7 @@ import Testing
         let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
         try await waitFor(10) { if case .connected = session.status { true } else { false } }
         #expect(session.dialect == .skiff && session.capabilities.contains(.samples))
         try await waitFor { session.sampleSlots.count == 3 }

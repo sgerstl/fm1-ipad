@@ -63,6 +63,7 @@ extension SkiffScreenLinkTests {
             try await waitFor(5) { fake.screen.page == p && s.deviceScreen?.page == p }
             #expect(SkiffButtonMap.place(for: s.deviceScreen!) == place)
         }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
@@ -109,6 +110,7 @@ extension SkiffScreenLinkTests {
         try await waitFor(5) { s.motion[s.selectedTrack]?.record(34, at: 3)?.lock == true }
         #expect(s.params.count <= 34 || s.params[34] == before)
         s.lockStep = nil
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
@@ -137,6 +139,7 @@ extension SkiffScreenLinkTests {
         let env = try #require(pages.first { $0.title == "ENV" }?.ids), sync = try #require(pages.first { $0.title == "LFO 2" }?.ids[3])
         s.set(track: s.selectedTrack, param: sync, to: 1)
         #expect(DeviceDisplay.value(s.trackDesc(env[0]!)!, 127)?.text == "4BAR")
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 

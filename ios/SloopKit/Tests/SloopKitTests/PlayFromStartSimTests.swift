@@ -106,7 +106,7 @@ import Testing
         let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         s.resyncInterval = .seconds(60)
         let run = Task { await s.run() }
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
         try await waitFor(10) { if case .connected = s.status { true } else { false } }
         #expect(s.canPlayFromStart)
         s.setPlaying(false)

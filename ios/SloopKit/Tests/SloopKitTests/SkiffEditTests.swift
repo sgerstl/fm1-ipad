@@ -96,6 +96,7 @@ import Testing
         try await waitFor(5) { s.deviceScreen?.page == 43 }
         try await Task.sleep(for: .milliseconds(500))
         #expect(!fake.requests[before...].contains(91))
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 

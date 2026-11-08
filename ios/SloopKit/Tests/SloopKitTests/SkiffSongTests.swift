@@ -298,7 +298,7 @@ import Testing
         let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
-        defer { run.cancel() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
         try await waitFor(10) { if case .connected = session.status { true } else { false } }
         // the recorded sim: T4 and T6 on DRUM
         #expect(session.isKit(3) && session.isKit(5) && !session.isKit(0))
@@ -624,6 +624,7 @@ extension SkiffSongTests {
         session.muteSpeaker(true)
         try await waitFor(5) { session.usbAudioFull == true }
         #expect(fake.usbLevel == 1 && session.usbAudioProblem == nil)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
@@ -646,6 +647,7 @@ extension SkiffOnTheDeviceTests {
         session.toggleRec()                                          // and REC on T2 arms T2 alone
         try await waitFor(5) { session.recording }
         #expect(fake.armed == 0b10)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
@@ -674,6 +676,7 @@ extension SkiffOnTheDeviceTests {
         session.setBPM(100)
         try await Task.sleep(for: .milliseconds(200))
         #expect(fake.globals[0] == 240 && session.bpm == 240)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
@@ -769,6 +772,7 @@ extension SkiffOnTheDeviceTests {
         fake.push(92, [100, 0, 64, 0, 0, 0])
         try await waitFor(5) { s.meters.measured }
         #expect(abs(s.meters.level(track: 0) - 100.0 / 127) < 0.1 && s.meters.level(track: 1) == 0)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -803,6 +807,7 @@ extension SkiffOnTheDeviceTests {
         s.showScope(b, false)
         try await waitFor(5) { !fake.scopeWatched }
         #expect(s.scope.frame.isEmpty && fake.meterWatched)              // (METER carries on)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -818,6 +823,7 @@ extension SkiffOnTheDeviceTests {
         s.showScope(UUID(), true)
         try await Task.sleep(for: .milliseconds(300))
         #expect(!s.screenScope && !s.scopeWatching && !fake.scopeWatched)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -853,6 +859,7 @@ extension SkiffOnTheDeviceTests {
         s.showOnDevice(page: 4, cursor: 6)                               // the cursor left out: MOD opens
         try await waitFor(5) { fake.screen.page == 4 && s.deviceScreen?.page == 4 }
         #expect(fake.cursor == 0 && s.deviceScreen?.cursor == nil)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
@@ -882,6 +889,7 @@ extension SkiffOnTheDeviceTests {
         try await Task.sleep(for: .milliseconds(400))
         changed(34, 70); changed(34, 72)
         try await waitFor(5) { session.lastTouched?.id == 34 }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
@@ -907,6 +915,7 @@ extension SkiffOnTheDeviceTests {
         #expect(fake.motion[0].isEmpty)
         session.toggleRec()                                           // stop recording
         try await waitFor(5) { !session.recordingKnobs }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }

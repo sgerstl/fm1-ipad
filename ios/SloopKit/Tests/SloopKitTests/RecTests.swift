@@ -14,6 +14,7 @@ import Testing
         try await waitFor { session.recording }
         session.toggleRec()
         try await waitFor { !session.recording }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }

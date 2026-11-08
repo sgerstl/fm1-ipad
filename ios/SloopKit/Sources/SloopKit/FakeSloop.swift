@@ -16,6 +16,11 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
     public var autoEdits: Bool
     public var switchesTracks = false
     public var replyDelay: TimeInterval = 0.002
+    /// Requests this fake doesn't model, as (command, arguments). The real device ignores them too, so nothing
+    /// is answered, but a test can see that the app sent something the fake was never taught: tests expect this
+    /// empty. Teach the fake from a capture or the firmware's source, never from what the app happens to send.
+    public private(set) var unanswered: [(cmd: UInt8, args: [UInt8])] = []
+    public var unansweredCommands: [UInt8] { queue.sync { unanswered.map(\.cmd) } }
 
     static let engines = ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "FM6", "PHYS", "NOISE"]
     static let presetNames = ["ANALOG": ["808 BOOM", "SUB BASS", "ACID 303", "REESE", "WARM PAD"],
@@ -497,7 +502,7 @@ public final class FakeSloop: SysExTransport, @unchecked Sendable {
             for t in 0..<4 { b += [UInt8(stepAt(t)), UInt8(params[t][Param.length]), playing ? 72 : 0] }
             emit(cmd, b + [0, 0] + Array(repeating: 0x48, count: 16))
         default:
-            break     // the real device ignores what it doesn't know
+            unanswered.append((cmd, a))     // the real device ignores what it doesn't know
         }
     }
 

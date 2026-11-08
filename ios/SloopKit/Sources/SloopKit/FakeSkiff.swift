@@ -43,6 +43,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var busy = false
     var dropped = 0
     var requests: [UInt8] = []               // commands received, in order
+    /// Requests this fake doesn't model, as (command, arguments): no reply, as the device, but tests expect this
+    /// empty. Teach the fake from skiff-sim, a capture or Skiff's source, never from what the app happens to send.
+    public private(set) var unanswered: [(cmd: UInt8, args: [UInt8])] = []
+    public var unansweredCommands: [UInt8] { lock.lock(); defer { lock.unlock() }; return unanswered.map(\.cmd) }
     var replyDelay: TimeInterval = 0.002
     /// The song: each track's 16 entries (pattern 0 empty, 1...64, 65 REST; REPS byte REPS − 1, 16 on CHAIN;
     /// the entry's sound), the entry each track is on, SONG, and the pool's LENs.
@@ -773,7 +777,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
                 if armed & bit != 0, !playing { setPlaying(true) }
             }
             return [0, playing ? 1 : 0, 0, 0, UInt8(armed & 127), UInt8(selected)]
-        default: return nil                                  // as the device: no reply
+        default:
+            unanswered.append((cmd, a))
+            return nil                                       // as the device: no reply
         }
     }
 }

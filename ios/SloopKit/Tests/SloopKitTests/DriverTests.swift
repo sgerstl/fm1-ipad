@@ -44,6 +44,7 @@ import Testing
         #expect(session.tracks.count == 4 && session.tracks.allSatisfy { $0.steps.count == 64 })
         #expect(session.tracks.map(\.isDrums) == [false, false, false, true])
         #expect(session.capabilities.contains(.screenLink))      // the fake answers UI
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 

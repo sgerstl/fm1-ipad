@@ -86,6 +86,7 @@ import Testing
         try await waitFor { fake.songMode }
         session.toggleSongMode()
         try await waitFor { !fake.songMode }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }

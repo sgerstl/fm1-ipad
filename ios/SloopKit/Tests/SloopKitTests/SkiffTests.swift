@@ -64,6 +64,7 @@ import Testing
         for i in 0..<16 { s.toggle(track: 0, index: i, note: 48 + i) }
         try await waitFor { fake.params[2][140] == 39 && fake.steps[0][15].prefix(2) == [1, 63] }
         #expect(fake.dropped == 0)                                  // nothing sent while a request was in flight
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -76,6 +77,7 @@ import Testing
         try await waitFor(3) { !s.playing }
         fake.selected = 3                                           // a track picked on the device
         try await waitFor(3) { s.selectedTrack == 3 }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 

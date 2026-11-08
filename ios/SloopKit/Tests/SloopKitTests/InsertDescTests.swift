@@ -18,6 +18,7 @@ import Testing
         #expect(session.trackDesc(54)?.label == "BITS" && session.trackDesc(56)?.label == "LPF")
         session.set(track: session.selectedTrack, param: Param.insertType, to: 0)          // OFF: SLOOP's own
         #expect(session.trackDesc(54)?.label == "INS A")
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 

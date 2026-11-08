@@ -44,6 +44,7 @@ import Testing
         try await waitFor { session.tracks[0].steps[1].notes == [48] }
         try await waitFor { session.stats.polls > 5 }
         #expect(session.playing)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -74,6 +75,7 @@ import Testing
 
         session.toggle(track: 0, index: 2, note: 72)            // off again: an empty REST
         try await waitFor { session.tracks[0].steps[2].time == .rest }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -116,6 +118,7 @@ import Testing
         session.loadKit(6)
         try await waitFor { fake.params[3][63] == 6 }
         #expect(session.tracks[3].displayName == "Drums · 808")
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -137,6 +140,7 @@ import Testing
         session.set(track: 0, param: 35, to: 80)                      // DLY from the iPad
         try await waitFor { fake.params[0][35] == 80 }
         #expect(session.params[35] == 80)
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -152,6 +156,7 @@ import Testing
         try await waitFor { session.deviceScreen?.page == 12 }
         session.showOnDevice(page: 10)                                 // the iPad opens DLY on the device
         try await waitFor { fake.uiPage == 10 }
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 
@@ -162,6 +167,7 @@ import Testing
         let run = Task { await session.run() }
         try await waitFor { if case .connected = session.status { true } else { false } }
         #expect(!session.screenLinked && session.deviceScreen == nil)
+        #expect(fake.unansweredCommands == [Cmd.ui])     // the app asks for the screen link; stock SLOOP ignores it
         run.cancel()
     }
 

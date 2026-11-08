@@ -122,6 +122,7 @@ extension SkiffScreenLinkTests {
         // what the device keeps: read again
         await s.rereadSteps(track: t)
         #expect(s.tracks[t].steps[8].notes == [60, 64])
+        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
 }
