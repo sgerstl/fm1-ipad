@@ -595,7 +595,6 @@ struct TrackMenuLayer: View {
 /// happens, with a way to stop. Floats at the foot of the screen, so nothing moves when it comes and goes.
 struct RecordingKnobsBar: View {
     let session: DeviceSession
-    private let look = Look()
 
     var body: some View {
         if session.recordingKnobs {
@@ -613,7 +612,7 @@ struct RecordingKnobsBar: View {
             .foregroundStyle(Theme.text)
             .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 4)
             .frame(maxWidth: 640)
-            .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
+            .elevated(.held, radius: 12)
             .accessibilityElement(children: .contain)
         }
     }

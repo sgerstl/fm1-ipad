@@ -53,7 +53,6 @@ struct TempoPanel: View {
     @State private var typedProblem: String?
     @State private var taps: [Date] = []
     @FocusState private var fieldFocused: Bool
-    private let look = Look()
 
     private var range: ClosedRange<Int> { session.bpmRange }
     private var following: String? { session.externalClock }
@@ -119,7 +118,7 @@ struct TempoPanel: View {
         .padding(16)
         .frame(width: 300)
         // the one level-3 shadow, the panel's: on its shape, not the stack (which would shade every row and key)
-        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
+        .elevated(.held, radius: 12)
         .task { await session.refreshTempo() }
         .onKeyPress(.upArrow) { session.setBPM(session.bpm + 1); return .handled }
         .onKeyPress(.downArrow) { session.setBPM(session.bpm - 1); return .handled }

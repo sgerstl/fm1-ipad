@@ -96,7 +96,6 @@ struct MenuPanel: View {
     @State private var stack: [(title: String, groups: [[MenuItem]])] = []
     @State private var contentHeight: CGFloat = 0
     @FocusState private var focus: Int?
-    private let look = Look()
 
     static let rowHeight: CGFloat = 52
     static let maxRows = 9
@@ -142,7 +141,7 @@ struct MenuPanel: View {
         .padding(.vertical, 4)
         .frame(width: 300)
         // the one level-3 shadow, the panel's: on its shape, not the stack (which would shade every row and key)
-        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
+        .elevated(.held, radius: 12)
         .focusable()
         .onKeyPress(.downArrow) { focus = next(from: focus, by: 1, flat); return .handled }
         .onKeyPress(.upArrow) { focus = next(from: focus, by: -1, flat); return .handled }
@@ -224,7 +223,7 @@ struct MenuPanel: View {
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, minHeight: Self.rowHeight)
             .background {
-                if focus == index { RoundedRectangle(cornerRadius: 8).fill(look.surface(.selected)).padding(.horizontal, 4) }
+                if focus == index { RoundedRectangle(cornerRadius: 8).fill(Elevation.selected.surface).padding(.horizontal, 4) }
             }
             .contentShape(Rectangle())
         }

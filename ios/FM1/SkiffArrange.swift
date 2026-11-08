@@ -753,7 +753,7 @@ struct Lane: View {
                           selected: false, linked: false, playing: false, loops: loops)
                     .frame(width: w, height: laneHeight - 12)
                     .scaleEffect(reduceMotion ? 1 : 1.03)
-                    .elevationShadow(.held, Look())
+                    .elevationShadow(.held)
                     .offset(x: finger - grab, y: 6)
                     .allowsHitTesting(false)
                     .transaction { $0.animation = nil }
@@ -765,7 +765,7 @@ struct Lane: View {
                 Text(Entries.number(spot.pattern)).font(.system(size: 15, weight: .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .frame(width: max(44, x(spot.ticks) - 4), height: laneHeight - 12, alignment: .topLeading)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[track]).elevationShadow(.held, Look()))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[track]).elevationShadow(.held))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.text, lineWidth: 2))
                     .opacity(0.9)
                     .offset(x: x(spot.at) + 2, y: 0)
@@ -859,8 +859,8 @@ struct Lane: View {
                     }
                 }
                 .scaleEffect(isHeld && !reduceMotion ? 1.03 : 1)
-                .shadow(color: .black.opacity(isHeld ? Look().shadow(.held).opacity : 0),
-                        radius: Look().shadow(.held).radius, y: isHeld ? Look().shadow(.held).y : 0)
+                .shadow(color: .black.opacity(isHeld ? Elevation.held.shadow.opacity : 0),
+                        radius: Elevation.held.shadow.radius, y: isHeld ? Elevation.held.shadow.y : 0)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHeld)
                 .onTapGesture(count: 2) { open(b) }
                 .onTapGesture { selection = ref }
@@ -1298,7 +1298,6 @@ struct BlockView: View {
     var state: String? = nil
     /// Loop entry (SONG OFF): every entry loops and REPS doesn't apply, so the block says ↻, not ×N.
     var loops = false
-    private let look = Look()
     @Environment(\.arrangeCompact) private var compact
     @Environment(\.arrangeLaneHeight) private var laneHeight
 
@@ -1386,8 +1385,8 @@ struct BlockView: View {
         .compositingGroup()
         // the Song tab while playing: what isn't playing dimmed, so each track's playing block stands out
         .opacity(compact && session.playing && !playing && !selected ? 0.5 : 1)
-        .shadow(color: .black.opacity(selected ? look.shadow(.selected).opacity : 0),
-                radius: look.shadow(.selected).radius, y: selected ? look.shadow(.selected).y : 0)
+        .shadow(color: .black.opacity(selected ? Elevation.selected.shadow.opacity : 0),
+                radius: Elevation.selected.shadow.radius, y: selected ? Elevation.selected.shadow.y : 0)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)

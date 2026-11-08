@@ -177,7 +177,7 @@ struct SelectionBar: View {
             }
         }
         .padding(.horizontal, inline ? 0 : 4)
-        .background { if !inline && (picking || undo != nil) { RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.selected, Look()) } }
+        .background { if !inline && (picking || undo != nil) { RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.selected) } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Selection")
     }

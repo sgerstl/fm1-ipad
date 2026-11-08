@@ -249,7 +249,6 @@ struct SongPage: View {
     /// and no flick-to-delete (too easy to set off on a phone; Delete is in the block's menu).
     var compact = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let look = Look()
 
     /// A step in the order, with an identity that survives moves (two blocks can hold the same step).
     struct Slot: Identifiable, Equatable {
@@ -524,9 +523,9 @@ struct SongPage: View {
         // the lift itself springs even while the block follows the finger (elevation 3's scale and shadow)
         .animation(motion) {
             $0.scaleEffect(lifted ? (reduceMotion ? 1 : 1.03) : 1)
-                .shadow(color: .black.opacity(lifted ? look.shadow(.held).opacity : 0),
-                        radius: lifted ? look.shadow(.held).radius : 0,
-                        y: lifted ? look.shadow(.held).y : 0)
+                .shadow(color: .black.opacity(lifted ? Elevation.held.shadow.opacity : 0),
+                        radius: lifted ? Elevation.held.shadow.radius : 0,
+                        y: lifted ? Elevation.held.shadow.y : 0)
         }
         .contentShape(Rectangle())
     }

@@ -353,7 +353,7 @@ struct TopBar: View {
                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
                     .fixedSize()
                     .padding(.horizontal, 12).frame(height: 32)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(look.surface(.held)).elevationShadow(.held, look))
+                    .elevated(.held, radius: 8)
                     .offset(y: 52)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -4)))
                     .allowsHitTesting(false)
@@ -384,7 +384,6 @@ struct TopBar: View {
     @State private var fromStartShown = false
     @State private var fromStartCount = 0
     @State private var fromStartHide: Task<Void, Never>?
-    private let look = Look()
 
     private func playFromStart() {
         guard session.canPlayFromStart, session.isConnected else { return }

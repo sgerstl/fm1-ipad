@@ -159,7 +159,7 @@ struct PhoneTopBar: View {
                     // lit in its colour and lifted (elevation 2, with the ring), so it reads as selected
                     RoundedRectangle(cornerRadius: 8).fill(Theme.track[t])
                         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2))
-                        .elevationShadow(.selected, Look())
+                        .elevationShadow(.selected)
                 } else { Color.clear.raisedKey() }
             }
             .contentShape(Rectangle())

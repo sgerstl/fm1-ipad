@@ -317,7 +317,6 @@ struct PatternBin: View {
     @State private var confirmClear = false
     /// A one-pattern change waiting on its confirm: POOL op 1 (Clear) or 2 (Empty), and the pattern 0…63.
     @State private var pending: (op: Int, p: Int)?
-    private let look = Look()
 
     /// Pattern (0...63) → the tracks whose lists name it.
     private var tracksOf: [Int: [Int]] {
@@ -394,7 +393,7 @@ struct PatternBin: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background {
             // the drawer stands over the page (level 3), its one shadow on its shape; the bin sits in it (level 1)
-            if drawer { RoundedRectangle(cornerRadius: 16).fill(look.surface(.held)).elevationShadow(.held, look) }
+            if drawer { RoundedRectangle(cornerRadius: 16).fill(Elevation.held.surface).elevationShadow(.held) }
         }
         .modifier(BinPanel(on: !drawer))
     }

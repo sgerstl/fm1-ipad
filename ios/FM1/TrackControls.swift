@@ -16,7 +16,6 @@ struct TrackKnobBox: View {
     /// The knob last turned on the FM-1, lit as the sound panel lights it (Scott, 2026-11-07: "work exactly like the
     /// ones in the panel").
     @State private var marks = ShapeMarks()
-    private let look = Look()
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
     /// Its width on a tab: HOME's four 92 pt columns, their gaps, 8 pt each side.
@@ -80,7 +79,7 @@ struct TrackKnobBox: View {
         .padding(.horizontal, embedded ? 8 : 6)
         .padding(.vertical, 4)
         .frame(height: Self.homeIDs(session).isEmpty ? 64 : Self.height)
-        .background { if !embedded { RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look) } }
+        .background { if !embedded { RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held) } }
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .flashRing(ui, .trackPanel)
         // the SEQ pad's TRACK page still asks for the popover by name (SoundPanel): light the box instead

@@ -592,7 +592,7 @@ struct PadsPage: View {
         } else if rest {
             RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.disabledOutline, lineWidth: 1.5)
         } else if playing {
-            RoundedRectangle(cornerRadius: 16).fill(colour).elevationShadow(.selected, Look())
+            RoundedRectangle(cornerRadius: 16).fill(colour).elevationShadow(.selected)
         } else {
             // (Chiclet keeps its radius at 8 or less: a pad's own 16, the same base edge under it)
             RoundedRectangle(cornerRadius: 16).fill(Theme.control)
@@ -653,7 +653,7 @@ struct PadsPage: View {
             .foregroundStyle(last ? Theme.onColour : kept ? Theme.text : Theme.textSecondary)
             .frame(maxWidth: .infinity).frame(height: compact ? Self.compactScenes : Self.sceneHeight)
             .background {
-                if last { RoundedRectangle(cornerRadius: 8).fill(Theme.text).elevationShadow(.selected, Look()) }
+                if last { RoundedRectangle(cornerRadius: 8).fill(Theme.text).elevationShadow(.selected) }
                 else if kept { Chiclet(radius: 8, down: false, edge: true) }
                 else { RoundedRectangle(cornerRadius: 8).strokeBorder(storing ? Theme.text.opacity(0.7) : Theme.stepEmpty, lineWidth: storing ? 1.5 : 1) }
             }

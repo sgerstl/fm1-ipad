@@ -68,7 +68,6 @@ struct ValueLoupeLayer: View {
 private struct LoupeFace: View {
     let spec: KnobSpec
     let face: LoupeState.Face
-    private let look = Look()
 
     var body: some View {
         Group {
@@ -93,6 +92,6 @@ private struct LoupeFace: View {
             }
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: 10).fill(look.surface(.held)).elevationShadow(.held, look))
+        .elevated(.held, radius: 10)
     }
 }

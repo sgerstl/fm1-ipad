@@ -356,7 +356,7 @@ struct TrackChip: View {
                 } else if selected == true {
                     RoundedRectangle(cornerRadius: 7).fill(Theme.track[track])
                         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.text, lineWidth: 2))
-                        .elevationShadow(.selected, Look())
+                        .elevationShadow(.selected)
                 } else if selected == false {
                     Chiclet(radius: 7, down: pressed, edge: !pressed)
                 } else {

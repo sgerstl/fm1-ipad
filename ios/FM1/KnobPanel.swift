@@ -47,7 +47,6 @@ struct KnobPanel: View {
     @State private var tick = 0
     @State private var lastTap: Date?
     @State private var opened: Int?              // the value when it opened, for Cancel
-    private let look = Look()
 
     var body: some View {
         let spec = make()
@@ -86,7 +85,7 @@ struct KnobPanel: View {
         .padding(16)
         .frame(width: spec.choices == nil ? 280 : 260)
         // the one level-3 shadow, on the panel's shape
-        .background(RoundedRectangle(cornerRadius: 12).fill(look.surface(.held)).elevationShadow(.held, look))
+        .elevated(.held, radius: 12)
         .sensoryFeedback(.impact(weight: .light), trigger: tick)
         .onKeyPress(.escape) { cancel(spec); return .handled }
         .background {

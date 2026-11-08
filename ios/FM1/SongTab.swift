@@ -480,7 +480,7 @@ struct PatternPane: View {
         }
         .padding(20)
         .frame(maxWidth: 440)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.panel, Look()))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.panel))
         // stopped, the track goes there (the pin's LIST op 3), and the pattern opens
         .onChange(of: session.playing) { _, on in
             guard !on, list?.entryOn != p.entry else { return }

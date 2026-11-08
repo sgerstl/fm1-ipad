@@ -58,10 +58,10 @@ enum Elevation {
     case held           // 3: a dragged thing, menus and popovers at the finger
 }
 
-/// The elevation levels' surfaces and shadows.
-struct Look: Equatable {
-    func surface(_ level: Elevation) -> Color {
-        switch level {
+extension Elevation {
+    /// The level's surface.
+    var surface: Color {
+        switch self {
         case .panel: Theme.panel
         case .selected: Theme.tones[2]
         case .held: Theme.tones[3]
@@ -69,13 +69,12 @@ struct Look: Equatable {
     }
 
     /// (opacity, radius, y): the spec's CSS blur halved, as SwiftUI's radius is about half a CSS blur.
-    func shadow(_ level: Elevation) -> (opacity: Double, radius: CGFloat, y: CGFloat) {
-        let base: (Double, CGFloat, CGFloat) = switch level {
+    var shadow: (opacity: Double, radius: CGFloat, y: CGFloat) {
+        switch self {
         case .panel: (0.35, 8, 6)
         case .selected: (0.45, 6, 4)
         case .held: (0.60, 14, 12)
         }
-        return base
     }
 }
 
@@ -152,7 +151,7 @@ extension Color {
 struct PanelBackground: ViewModifier {
     func body(content: Content) -> some View {
         content.background {
-            RoundedRectangle(cornerRadius: 14).fill(Theme.panel).elevationShadow(.panel, Look())
+            RoundedRectangle(cornerRadius: 14).fill(Theme.panel).elevationShadow(.panel)
         }
     }
 }
@@ -233,11 +232,10 @@ struct Elevated: ViewModifier {
     var radius: CGFloat = 14
     var ring: Bool? = nil                       // nil: a ring on .selected only
     func body(content: Content) -> some View {
-        let look = Look()
         content.background {
-            RoundedRectangle(cornerRadius: radius).fill(look.surface(level))
+            RoundedRectangle(cornerRadius: radius).fill(level.surface)
                 .overlay { if ring ?? (level == .selected) { RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.text, lineWidth: 2) } }
-                .elevationShadow(level, look)
+                .elevationShadow(level)
         }
     }
 }
@@ -254,8 +252,8 @@ extension View {
         modifier(Elevated(level: level, radius: radius, ring: ring))
     }
     /// A level's soft shadow. Only for the few elevated things.
-    func elevationShadow(_ level: Elevation, _ look: Look) -> some View {
-        let s = look.shadow(level)
+    func elevationShadow(_ level: Elevation) -> some View {
+        let s = level.shadow
         return shadow(color: .black.opacity(s.opacity), radius: s.radius, y: s.y)
     }
 }

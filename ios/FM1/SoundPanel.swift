@@ -134,7 +134,6 @@ struct SoundPanel: View {
     var flush = false
     @State private var marks = ShapeMarks()
     @State private var settled = false          // slid in: the cards' graphs draw from then (not while it moves)
-    private let look = Look()
     static let width: CGFloat = 430
     /// The Song tab's step while the panel is open (SoundPanelHost).
     static let openStep: CGFloat = 24
@@ -256,7 +255,7 @@ struct SoundPanel: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12,
                                            bottomTrailingRadius: flush ? 0 : 12, topTrailingRadius: flush ? 0 : 12)
-            .fill(look.surface(.held)).elevationShadow(.held, look))
+            .fill(Elevation.held.surface).elevationShadow(.held))
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .onChange(of: session.deviceScreen) { _, s in SoundTab.adoptCursor(session, marks, s) }
         .environment(\.graphsDeferred, !settled)
