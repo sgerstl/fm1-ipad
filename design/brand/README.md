@@ -1,6 +1,6 @@
 # Lupe's icon
 
-An FM Lissajous figure traced on a scope screen in P1 green phosphor: the carrier against its modulator, drawn as a
+An FM Lissajous figure traced on a scope screen, flat and white since 2026-11-08 (it was P1 green phosphor): the carrier against its modulator, drawn as a
 scope in XY mode draws it. A white-hot beam at the head, the trace behind it brightest and fading as it cools, a
 soft bloom, the faint full figure, and the scope's graticule. Scott's pick, 2026-11-05; the round (Orbit, Swell, real
 FM waveforms, XY, Phosphor, then the phosphor colours) is in the vault's `Projects/Dev/fm1-ipad/index.md`, "Mark".

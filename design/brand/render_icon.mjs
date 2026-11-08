@@ -1,6 +1,9 @@
 // Renders lupe-icon.svg to lupe-icon-1024.png with the installed Chrome (the SVG's blur needs a real browser).
 // Needs playwright-core: NODE_PATH=~/.claude/skills/design-standards/node_modules node render_icon.mjs
-import { chromium } from 'playwright-core'
+import { createRequire } from 'node:module'
+// ES modules ignore NODE_PATH, so playwright-core is found through it by hand (2026-11-08)
+const require = createRequire(import.meta.url)
+const { chromium } = require(process.env.NODE_PATH ? `${process.env.NODE_PATH}/playwright-core` : 'playwright-core')
 import { readFileSync } from 'node:fs'
 const svg = readFileSync(new URL('./lupe-icon.svg', import.meta.url), 'utf8')
 const browser = await chromium.launch({ channel: 'chrome' })
