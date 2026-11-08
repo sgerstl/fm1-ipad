@@ -645,6 +645,9 @@ struct PadsPage: View {
                 else if kept { Chiclet(radius: 8, down: false, edge: true) }
                 else { RoundedRectangle(cornerRadius: 8).strokeBorder(storing ? Theme.text.opacity(0.7) : Theme.stepEmpty, lineWidth: storing ? 1.5 : 1) }
             }
+            // the whole key takes the touch, and the gaps round it: an empty scene is only an outline, and only drawn
+            // pixels are hit, so its inside missed (Scott, 2026-11-09: "hard to hit"), as the empty pads once did
+            .contentShape(Rectangle().inset(by: -4))
         }
         .buttonStyle(PressSink())
         .disabled(store.offline)

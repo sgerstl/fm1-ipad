@@ -68,8 +68,8 @@ struct TopBar: View {
             ui.menu = AppMenu(title: "FM-1", groups: { connectionGroups }, at: CGPoint(x: connectionFrame.minX, y: connectionFrame.maxY), fromKey: true)
         } label: {
             HStack(spacing: 10) {
-                LED(on: session.isConnected, colour: Theme.text)
-                    .frame(width: 8, height: 8)
+                // waiting on the FM-1 (a song edit going in) for more than a moment: the dot turns into a spinner
+                WaitingDot(on: session.isConnected, waiting: session.skiffSong?.busy == true)
                 // a real FM-1 is just the dot; words for the demo and for trouble (the version is in the menu)
                 if let s = shortStatus {
                     Text(s).font(.system(size: 15, weight: .semibold)).lineLimit(1)
@@ -447,5 +447,30 @@ private struct ReadoutLabel: View {
         .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
                              session.playing ? "bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "stopped",
                              "\(session.bpm) BPM"].compactMap { $0 }.joined(separator: ", "))
+    }
+}
+
+/// The connection dot, or a small spinner while the app waits on the FM-1 (Scott, 2026-11-09: "things pause for a second"):
+/// shown only after 0.3 s, so a quick edit never flickers it.
+struct WaitingDot: View {
+    let on: Bool
+    let waiting: Bool
+    @State private var shown = false
+
+    var body: some View {
+        ZStack {
+            if shown {
+                ProgressView().controlSize(.mini).tint(Theme.text)
+                    .accessibilityLabel("Waiting for the FM-1")
+            } else {
+                LED(on: on, colour: Theme.text).frame(width: 8, height: 8)
+            }
+        }
+        .frame(width: 14, height: 14)
+        .task(id: waiting) {
+            guard waiting else { shown = false; return }
+            try? await Task.sleep(for: .milliseconds(300))
+            if !Task.isCancelled { shown = true }
+        }
     }
 }
