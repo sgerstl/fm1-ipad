@@ -87,22 +87,11 @@ struct ColumnFace: View {
     }
 }
 
-/// Skiff is recording knob moves into these columns' parameters (REC armed, playing, the selected track's own).
-private struct KnobsRecordingKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues {
-    var knobsRecording: Bool {
-        get { self[KnobsRecordingKey.self] }
-        set { self[KnobsRecordingKey.self] = newValue }
-    }
-}
-
-/// Columns in a narrow box (the track controls): ColumnFace's fixed, smaller sizes.
-private struct CompactColumnsKey: EnvironmentKey { static let defaultValue = false }
-extension EnvironmentValues {
-    var compactColumns: Bool {
-        get { self[CompactColumnsKey.self] }
-        set { self[CompactColumnsKey.self] = newValue }
-    }
+    /// Skiff is recording knob moves into these columns' parameters (REC armed, playing, the selected track's own).
+    @Entry var knobsRecording = false
+    /// Columns in a narrow box (the track controls): ColumnFace's fixed, smaller sizes.
+    @Entry var compactColumns = false
 }
 
 /// An empty column: a slot the page doesn't use.

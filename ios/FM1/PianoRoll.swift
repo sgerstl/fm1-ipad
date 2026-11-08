@@ -617,11 +617,7 @@ enum StepLabels {
     }
 }
 
-private struct EditorHeightKey: EnvironmentKey { static let defaultValue: CGFloat = PianoRoll.panelHeight }
 extension EnvironmentValues {
     /// How tall the pattern editor's panels are (the piano roll, the drum grid, the left column).
-    var editorHeight: CGFloat {
-        get { self[EditorHeightKey.self] }
-        set { self[EditorHeightKey.self] = newValue }
-    }
+    @Entry var editorHeight: CGFloat = PianoRoll.panelHeight
 }

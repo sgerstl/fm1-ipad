@@ -4,22 +4,12 @@ import SwiftUI
 // The timeline's compact form (the Song tab's top half): its environment values, the lane marks, the mode keys and the
 // selected row's tab.
 
-private struct ArrangeLaneHeightKey: EnvironmentKey { static let defaultValue: CGFloat = SkiffArrangePage.fullLaneHeight }
-
-private struct ArrangeCompactKey: EnvironmentKey { static let defaultValue = false }
-
 extension EnvironmentValues {
     /// A lane's height: 80 on the Arrange page, less in the Song tab's top half (its divider sets it).
-    var arrangeLaneHeight: CGFloat {
-        get { self[ArrangeLaneHeightKey.self] }
-        set { self[ArrangeLaneHeightKey.self] = newValue }
-    }
+    @Entry var arrangeLaneHeight: CGFloat = SkiffArrangePage.fullLaneHeight
     /// The Song tab's top half: no inspector, the pattern pool a drawer, a block tapped pins the editor below,
     /// and while playing each track's playing block bright and outlined, the others dimmed.
-    var arrangeCompact: Bool {
-        get { self[ArrangeCompactKey.self] }
-        set { self[ArrangeCompactKey.self] = newValue }
-    }
+    @Entry var arrangeCompact = false
 }
 
 /// The Song tab's playback marks over a lane, while playing (SongPlayback; Skiff's README: SONG OFF / ON / ONCE,
