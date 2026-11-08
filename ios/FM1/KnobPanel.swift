@@ -18,6 +18,7 @@ struct KnobPanelLayer: View {
             if let at = ui.knobPanelAt, let make = ui.knobPanelSpec {
                 let close = { ui.knobPanelAt = nil }
                 ZStack(alignment: .topLeading) {
+                    Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                     KnobPanel(make: make, close: close)
                         .fixedSize()
                         .closesOnOutsideTouch(close)

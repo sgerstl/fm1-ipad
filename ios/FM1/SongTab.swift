@@ -82,7 +82,9 @@ struct SkiffSongPage: View {
                     }
                 }
                 .frame(height: top)
-                .clipped()
+                // clipped at the foot only: a key on the top row (Cancel waiting) draws its raised edge a point
+                // above the page and was cut (Scott, 2026-11-08)
+                .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
                 // shut, a swipe up from the foot of the page brings the editor back (beside the scene keys' taps)
                 .simultaneousGesture(DragGesture(minimumDistance: 12, coordinateSpace: .local)
                     .onChanged { v in
@@ -106,7 +108,7 @@ struct SkiffSongPage: View {
                 .frame(height: bottom, alignment: .top)
             }
             .frame(height: total, alignment: .top)
-            .clipped()
+            .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
             .overlay(alignment: .topLeading) { tab(top: top, tops: tops, pads: pads) }
             .overlay { drawer }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)

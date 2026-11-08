@@ -120,14 +120,27 @@ struct PadsPage: View {
                                     // one piece on the spring: without it the box bounced and its words stood still
                                     // (Scott, 2026-11-08)
                                     .geometryGroup()
-                                    .opacity(i == framed ? 0 : 1).allowsHitTesting(i != framed)
+                                    // (left showing under the selected pad: its tint covers it, and as a new pad is
+                                    // picked the grid's own pad is there while the tint fades in, no blank flash)
+                                    .allowsHitTesting(i != framed)
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .top : .center)
                         .overlay(alignment: .topLeading) {
-                            if let i = framed {
-                                selectedPad(t, i, m, date: tl.date, area: g.size, cols: cols, rows: rows, cell: size, gap: gap)
+                            // another pad picked: the old tint and controls draw back into their pad as the new ones
+                            // grow out of theirs, together, quick (Scott, 2026-11-08)
+                            ZStack(alignment: .topLeading) {
+                                if let i = framed {
+                                    let s = selectedGeometry(i, area: g.size, cols: cols, rows: rows, cell: size, gap: gap)
+                                    selectedTint(t, s, area: g.size)
+                                        .id("tint\(t).\(i)")
+                                        .transition(reduceMotion ? .opacity : Emerge.transition(s, row: row))
+                                    selectedFace(t, i, m, s, date: tl.date, area: g.size)
+                                        .id("face\(t).\(i)")
+                                        .transition(.opacity)
+                                }
                             }
+                            .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
                         }
                     }
                 }
@@ -158,39 +171,51 @@ struct PadsPage: View {
         return store.song?.tracks[safe: t]?.entryOn
     }
 
-    /// The selected pad shrunk inside a border of its track's tint, the track's controls hanging from it as one shape,
-    /// left-aligned (right-aligned where they'd run off the grid), over the pads beneath; from a bottom-row pad, upward.
-    private func selectedPad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, date: Date, area: CGSize, cols: Int, rows: Int,
-                             cell: CGSize, gap: CGFloat) -> some View {
+    /// Where the selected pad and its controls go: the pad's cell, the controls' tab hanging from it, left-aligned
+    /// (right-aligned where they'd run off the grid); from a bottom-row pad, upward.
+    struct SelectedGeometry {
+        var frame: CGRect, tab: CGSize, up: Bool, right: Bool, tabAt: CGPoint, border: CGFloat, inner: CGSize
+    }
+
+    private func selectedGeometry(_ i: Int, area: CGSize, cols: Int, rows: Int, cell: CGSize, gap: CGFloat) -> SelectedGeometry {
         let bw = CGFloat(cols) * cell.width + CGFloat(cols - 1) * gap, bh = CGFloat(rows) * cell.height + CGFloat(rows - 1) * gap
         let x0 = (area.width - bw) / 2, y0 = compact ? 0 : (area.height - bh) / 2
         let c = i % cols, r = i / cols
         let frame = CGRect(x: x0 + CGFloat(c) * (cell.width + gap), y: y0 + CGFloat(r) * (cell.height + gap), width: cell.width, height: cell.height)
         let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
         let up = r == rows - 1, right = frame.minX + tab.width > area.width
-        let tx = right ? frame.maxX - tab.width : frame.minX, ty = up ? frame.minY - tab.height : frame.maxY
+        let tabAt = CGPoint(x: right ? frame.maxX - tab.width : frame.minX, y: up ? frame.minY - tab.height : frame.maxY)
         let b: CGFloat = row ? 4 : 6                       // the border: thinner round Max's small keys
-        let inner = CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b)
-        return ZStack(alignment: .topLeading) {
+        return SelectedGeometry(frame: frame, tab: tab, up: up, right: right, tabAt: tabAt, border: b,
+                                inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b))
+    }
+
+    /// The selected pad's border of its track's tint and the track's controls hanging from it, as one shape, over the
+    /// pads beneath (Scott, 2026-11-07, board 32). It grows out of its pad when picked.
+    private func selectedTint(_ t: Int, _ s: SelectedGeometry, area: CGSize) -> some View {
+        ZStack(alignment: .topLeading) {
             if row {
                 // Max: the border alone (no track controls there for now, Scott 2026-11-07)
                 RoundedRectangle(cornerRadius: 12).fill(SelectionTint.fill(t, selectionTint))
-                    .frame(width: frame.width, height: frame.height).offset(x: frame.minX, y: frame.minY)
+                    .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
-                PadTabShape(cell: frame, tab: tab, up: up, right: right)
+                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right)
                     .fill(SelectionTint.fill(t, selectionTint))
-            }
-            pad(t, i, m, size: inner, date: date)
-                .frame(width: inner.width, height: inner.height)
-                .geometryGroup()
-                .offset(x: frame.minX + b, y: frame.minY + b)
-            if !row {
                 TrackKnobBox(session: session, ui: ui, embedded: true)
-                    .frame(width: tab.width, height: tab.height, alignment: .topLeading)
-                    .offset(x: tx, y: ty)
+                    .frame(width: s.tab.width, height: s.tab.height, alignment: .topLeading)
+                    .offset(x: s.tabAt.x, y: s.tabAt.y)
             }
         }
         .frame(width: area.width, height: area.height, alignment: .topLeading)
+    }
+
+    /// The selected pad itself, shrunk inside the border.
+    private func selectedFace(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, _ s: SelectedGeometry, date: Date, area: CGSize) -> some View {
+        pad(t, i, m, size: s.inner, date: date)
+            .frame(width: s.inner.width, height: s.inner.height)
+            .geometryGroup()
+            .offset(x: s.frame.minX + s.border, y: s.frame.minY + s.border)
+            .frame(width: area.width, height: area.height, alignment: .topLeading)
     }
 
     // MARK: Toolbar
@@ -863,6 +888,42 @@ struct PadGrid: Layout {
             v.place(at: CGPoint(x: bounds.minX + CGFloat(c) * (cell.width + gap), y: bounds.minY + CGFloat(r) * (cell.height + gap)),
                     proposal: ProposedViewSize(cell))
         }
+    }
+}
+
+/// The selected pad's controls unrolling out of its edge as it's picked (and rolling back in as another is), the
+/// border fading with them: a reveal, not a scale, so nothing floats half-size over the grid (Scott, 2026-11-08).
+struct Emerge: ViewModifier, Animatable {
+    var p: CGFloat
+    let pad: CGRect, tab: CGRect, up: Bool
+
+    var animatableData: CGFloat {
+        get { p }
+        set { p = newValue }
+    }
+
+    static func transition(_ s: PadsPage.SelectedGeometry, row: Bool) -> AnyTransition {
+        let tab = row ? .zero : CGRect(origin: s.tabAt, size: s.tab)
+        return .modifier(active: Emerge(p: 0, pad: s.frame, tab: tab, up: s.up),
+                         identity: Emerge(p: 1, pad: s.frame, tab: tab, up: s.up))
+    }
+
+    func body(content: Content) -> some View {
+        let h = tab.height * p
+        content
+            .mask(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    Color.clear
+                    // the pad and its border, wide enough for the fillets where the tab meets it
+                    Rectangle().frame(width: pad.width + 2 * PadTabShape.f + 2, height: pad.height + 2)
+                        .offset(x: pad.minX - PadTabShape.f - 1, y: pad.minY - 1)
+                    // the tab, revealed from the pad's edge
+                    Rectangle().frame(width: tab.width, height: h)
+                        .offset(x: tab.minX, y: up ? tab.maxY - h : tab.minY)
+                }
+            }
+            // in step with the pad's own face fading (a faster tint left the old pad blank for a beat)
+            .opacity(Double(p))
     }
 }
 

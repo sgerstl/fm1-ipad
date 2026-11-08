@@ -95,7 +95,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// The page's cursor, where the page has one (`cursorRange`); reset as a page opens.
     var cursor = 0
     /// The pages with a cursor and its top (skiff/README.md): MOD's routes, the lanes, the samples, USER's slots.
-    static let cursorRange: [Int: Int] = [4: 10, 16: 5, 18: 7, 19: 7, 20: 7, 22: 15, 36: 31, 37: 63]
+    static let cursorRange: [Int: Int] = [4: 10, 16: 5, 18: 7, 19: 7, 20: 7, 22: 15, 36: 31, 37: 63, 41: 63, 42: 63]
     var screenWatched = false
     /// METER (the screen link's third build, `screenLinkVersion` 3): asked with WATCH bit 3, pushed while playing.
     var meterWatched = false
@@ -146,6 +146,15 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
                     self?.pressOnDevice(page: 4)
                     for k in 1...10 {
                         DispatchQueue.global().asyncAfter(deadline: .now() + 1.5 * Double(k)) { self?.turnCursorOnDevice(to: k) }
+                    }
+                }
+            }
+            // -demo-notes-walk: SEQ › NOTES opened on the FM-1, then KNOB 1 walks the step cursor across the bars
+            if a.contains("-demo-notes-walk") {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in
+                    self?.pressOnDevice(page: 41)
+                    for (k, c) in [2, 5, 9, 14, 17, 21, 30, 6].enumerated() {
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 1.2 * Double(k + 1)) { self?.turnCursorOnDevice(to: c) }
                     }
                 }
             }
@@ -373,7 +382,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         let b: [UInt8] = [screen.home ? 1 : 0, UInt8(screen.page), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
         guard screenLinkVersion >= 2 else { return b }
         let c: UInt8 = !screen.home && Self.cursorRange[screen.page] != nil ? UInt8(cursor) : 127
-        return b + [c, 127]
+        // NOTES and FEEL: the second is the selection's last step (one step here, so the same)
+        return b + [c, c != 127 && [41, 42].contains(screen.page) ? c : 127]
     }
 
     /// A button pressed on the FM-1: its screen changes and, watched with bit 2, it says so (cmd 90).

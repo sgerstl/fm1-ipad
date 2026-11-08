@@ -25,6 +25,7 @@ struct TempoOverlay: View {
         GeometryReader { g in
             // the panel conditional on its own (not inside the catcher's stack), so its transition is the one that runs
             ZStack(alignment: .topLeading) {
+                Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                 if let at = ui.tempoAt {
                     let left = min(max(16, at.x - frame.minX), g.size.width - Self.width - 16)
                     // the readout's middle, over the panel's top edge

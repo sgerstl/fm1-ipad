@@ -27,16 +27,20 @@ struct ColumnFace: View {
     var dim = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.knobsRecording) private var recording
+    @Environment(\.compactColumns) private var compact
 
     var body: some View {
         let _ = BodyCounter.tick("ColumnFace")
+        // compact (the track controls' 92 pt boxes): sizes fixed so they fit, never shrunk to fit, so a value or the
+        // light changing never resizes the words (Scott, 2026-11-08: "no jumpy size changes")
+        let inset: CGFloat = compact ? 8 : 10
         let (value, unit) = splitUnit(spec.shown)
         let ink = dim ? Theme.textTertiary : Theme.text
         let label = Theme.textSecondary
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
-                Text(spec.label).font(.system(size: 11)).tracking(0.5).foregroundStyle(label).lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                Text(spec.label).font(.system(size: 11)).tracking(compact ? 0.2 : 0.5).foregroundStyle(label).lineLimit(1)
+                    .minimumScaleFactor(compact ? 1 : 0.8)
                 Spacer(minLength: 0)
                 if number > 0 {       // 0: not one of the FM-1's four knobs
                     Text("\(number)").font(.system(size: 11, weight: .bold))
@@ -46,18 +50,18 @@ struct ColumnFace: View {
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                RollingText(text: value, size: 22).id(spec.id)
+                RollingText(text: value, size: compact ? 20 : 22).id(spec.id)
                 if !unit.isEmpty { Text(unit).font(.system(size: 11, weight: .medium)).foregroundStyle(label) }
             }
             .foregroundStyle(ink)
             .lineLimit(1)
-            .minimumScaleFactor(0.6)
+            .minimumScaleFactor(compact ? 1 : 0.6)
             Gauge(fraction: dim ? 0 : spec.fraction, bipolar: spec.bipolar, tint: tint, track: Theme.stepEmpty)
                 .frame(height: 3)
-                .padding(.horizontal, -10)
+                .padding(.horizontal, -inset)
                 .padding(.top, 6)
         }
-        .padding(.top, 8).padding(.horizontal, 10)
+        .padding(.top, 8).padding(.horizontal, inset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.well))
         // the knob turning (here or on the FM-1, held 600 ms): a white bar along the top, the column as it is
@@ -89,6 +93,15 @@ extension EnvironmentValues {
     var knobsRecording: Bool {
         get { self[KnobsRecordingKey.self] }
         set { self[KnobsRecordingKey.self] = newValue }
+    }
+}
+
+/// Columns in a narrow box (the track controls): ColumnFace's fixed, smaller sizes.
+private struct CompactColumnsKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var compactColumns: Bool {
+        get { self[CompactColumnsKey.self] }
+        set { self[CompactColumnsKey.self] = newValue }
     }
 }
 

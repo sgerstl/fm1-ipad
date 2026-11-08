@@ -136,6 +136,7 @@ struct SkiffArrangePage: View {
             GeometryReader { g in
                 ZStack(alignment: .topLeading) {
                     // a touch anywhere else closes it, and still reaches the page (OutsideTouch)
+                    Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                     MenuPanel(title: title, groups: groups, close: close)
                         .id(m)
                         .fixedSize()

@@ -39,6 +39,7 @@ struct JibMenuLayer: View {
         GeometryReader { g in
             if let m = menu {
                 ZStack(alignment: .topLeading) {
+                    Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                     MenuPanel(title: m.title, groups: m.groups(), close: { menu = nil })
                         .id(m.id)
                         .fixedSize()

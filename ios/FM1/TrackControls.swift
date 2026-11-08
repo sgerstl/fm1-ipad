@@ -76,6 +76,7 @@ struct TrackKnobBox: View {
                 }
             }
         }
+        .environment(\.compactColumns, true)
         .padding(.horizontal, embedded ? 8 : 6)
         .padding(.vertical, 4)
         .frame(height: Self.homeIDs(session).isEmpty ? 64 : Self.height)
