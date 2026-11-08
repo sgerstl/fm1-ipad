@@ -241,7 +241,7 @@ struct Elevated: ViewModifier {
 }
 
 /// How long a press is held before it opens a menu (every long-press menu alike).
-let holdToMenu: Double = 0.45
+var holdToMenu: Double { Labs.holdToMenu.value }     // 0.45 s; Settings › Labs while it's tried
 
 extension View {
     /// Keeps `frame` at this view's place on screen (global): for a menu or panel opened beside it.

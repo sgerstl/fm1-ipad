@@ -278,7 +278,7 @@ struct PianoRollContent: View {
     /// A hold took during this touch: the tap and the slide that come with it are the hold's, not their own.
     @State private var holdTook = false
     /// The hold before a drag carries or boxes notes (the grid's ring fills over it).
-    static let holdTime = 0.35
+    static var holdTime: Double { Labs.holdToPaint.value }     // 0.35 s; Settings › Labs while it's tried
 
     private var edits: StepEdits { StepEdits(session: session, ui: ui, track: track, rows: rows) }
 

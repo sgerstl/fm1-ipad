@@ -117,8 +117,8 @@ struct PlacedMenu: View {
         if reduceMotion { return AnyTransition.opacity.animation(.easeOut(duration: 0.15)) }
         let from = UnitPoint(x: at.x / max(1, layer.width), y: at.y / max(1, layer.height))
         let grow = AnyTransition.scale(scale: 0.2, anchor: from).combined(with: .opacity)
-        return .asymmetric(insertion: grow.animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.24)),
-                           removal: grow.animation(.easeIn(duration: 0.16)))
+        return .asymmetric(insertion: grow.animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: Labs.menuOpen.value)),
+                           removal: grow.animation(.easeIn(duration: Labs.menuClose.value)))
     }
 }
 

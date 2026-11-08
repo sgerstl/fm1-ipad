@@ -134,7 +134,7 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
                 // after the hold, stays the grid's.
                 let w = t.location(in: nil)
                 if let d = drag { follow(d, w, t.timestamp); return }
-                guard let (l, at) = landed, hypot(p.x - l.x, p.y - l.y) > 10 else { return }
+                guard let (l, at) = landed, hypot(p.x - l.x, p.y - l.y) > Labs.panStart.value else { return }
                 if let hold = holdRing, t.timestamp - at >= hold { return }
                 guard panFrom?(l) ?? true, let sv = v.superview as? UIScrollView, !sv.isDragging, !sv.isDecelerating else { return }
                 drag = HandPan(from: w, offset: sv.contentOffset, last: w, at: t.timestamp)

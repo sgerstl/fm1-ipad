@@ -120,7 +120,7 @@ struct KnobControl: View {
     /// Points of travel for the whole range, straight up.
     static let travel = 200.0
     /// A column's: across.
-    static let columnTravel = 240.0
+    static var columnTravel: Double { Labs.columnTravel.value }     // 240 pt; Settings › Labs while it's tried
     /// A column's, up and down (Slide to turn: Up and down, or Both): the dial's.
     static let columnTravelUp = 200.0
 

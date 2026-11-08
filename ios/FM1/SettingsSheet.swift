@@ -67,6 +67,7 @@ struct SettingsSheet: View {
                 } footer: {
                     Text("Plays the FM-1's sound on the iPad's speakers or headphones.")
                 }
+                LabsSection()
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

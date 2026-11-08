@@ -44,7 +44,7 @@ struct SkiffSongPage: View {
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
     /// The give past either end: the drag follows the finger at this rate there.
     static let give: CGFloat = 0.3
-    private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38 * Self.slow, dampingFraction: 0.72) }
+    private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: Labs.dividerResponse.value * Self.slow, dampingFraction: Labs.dividerDamping.value) }
     /// -slow-motion: the spring eight times slower, to watch a transition frame by frame (screen recordings, checks).
     static let slow: Double = ProcessInfo.processInfo.arguments.contains("-slow-motion") ? 8 : 1
 

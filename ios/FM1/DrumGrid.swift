@@ -101,7 +101,7 @@ struct DrumGridContent: View {
     /// The hold took: the lift that ends it isn't a tap.
     @State private var holdTook = false
     /// The hold before a slide paints (one finger pans, Scott 2026-11-07); the grid's ring fills over it.
-    static let holdTime = PianoRollContent.holdTime
+    static var holdTime: Double { PianoRollContent.holdTime }
 
     var body: some View {
         let t = session.tracks[dt]

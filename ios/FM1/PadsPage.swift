@@ -346,7 +346,7 @@ struct PadsPage: View {
                 pressAt = v.location
                 // held, then moved off the hold: the pad lifts and follows the finger (its menu goes)
                 guard heldKey == "p\(i)", !e.isEmpty else { return }
-                if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > 10 { beginDrag(t, i, at: v.location) }
+                if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padDragStart.value { beginDrag(t, i, at: v.location) }
                 drag?.at = v.location
             }
             .onEnded { v in
