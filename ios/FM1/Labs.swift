@@ -61,12 +61,12 @@ enum Labs {
         key: "labs.columnTravel", title: "Column slide: full range in", detail: "How far a slide on a value column goes from its lowest to its highest.",
         range: 120...480, step: 10, standard: 240, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
 
-    static let foldTime = LabItem(
-        key: "labs.foldTime", title: "Pads to Timeline: fold", detail: "How long the pads take to fold into their lane (back is a little quicker). 0 switches at once.",
-        range: 0...0.6, step: 0.02, standard: 0.28, format: "%.2f s", added: "2026-11-08", review: "2026-11-23")
+    static let songSlide = LabItem(
+        key: "labs.songSlide", title: "Pads and Timeline: slide", detail: "How long the Timeline takes to slide down behind the editor as the pads come in from above, and back. 0 switches at once.",
+        range: 0...0.6, step: 0.02, standard: 0.3, format: "%.2f s", added: "2026-11-08", review: "2026-11-23")
 
     static let sections: [(title: String, items: [LabItem])] = [
-        ("Motion", [dividerResponse, dividerDamping, menuOpen, menuClose, foldTime]),
+        ("Motion", [dividerResponse, dividerDamping, menuOpen, menuClose, songSlide]),
         ("Gestures", [holdToMenu, holdToPaint, panStart, padDragStart, columnTravel]),
     ]
     static var all: [LabItem] { sections.flatMap(\.items) }

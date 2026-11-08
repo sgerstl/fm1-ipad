@@ -16,6 +16,8 @@ Any session that changes app or firmware behaviour, and every overnight session,
 
 **The branch merges to `main` only after Scott has run that check.** Failures go back on the batch list. Never merge to `main` or push it yourself; ask.
 
+**One worktree per active build session, removed when its branch merges into the trunk** (`git worktree remove`, then `git branch -d`). Added 2026-11-08 after a cleanup of 16 stale worktrees.
+
 ## 3. Feel goes into Labs first
 
 When Scott comments on a timing, spring, delay, threshold, distance or offset ("a bit slower", "too easy to trigger"), add it to Labs (`ios/FM1/Labs.swift`, Settings › Labs) **before** a second round of tweaking: current value as the default, a sensible range, today's date, review in two weeks. Scott tunes it by hand on the iPad. Don't keep re-guessing the number through prompts.
