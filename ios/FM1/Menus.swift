@@ -59,28 +59,15 @@ struct AppMenu: Identifiable {
 struct AppMenuLayer: View {
     @Binding var menu: AppMenu?
     @State private var frame: CGRect = .zero
-    @AppStorage(Handedness.key) private var hand = Handedness.right
 
     var body: some View {
         GeometryReader { g in
             if let m = menu {
                 ZStack(alignment: .topLeading) {
                     Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
-                    MenuPanel(title: m.title, groups: m.groups(), close: { menu = nil })
+                    PlacedMenu(title: m.title, groups: m.groups(), at: CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY),
+                               fromKey: m.fromKey, layer: g.size, close: { menu = nil })
                         .id(m.id)
-                        .fixedSize()
-                        .closesOnOutsideTouch { menu = nil }
-                        // beside the finger, on the side away from the playing hand (Settings › Handedness)
-                        .alignmentGuide(.leading) { d in
-                            let x = m.at.x - frame.minX
-                            return -(m.fromKey ? min(max(12, x), g.size.width - d.width - 12)
-                                              : hand.menuX(touch: x, menuWidth: d.width, in: g.size.width))
-                        }
-                        .alignmentGuide(.top) { d in
-                            let y = m.at.y - frame.minY
-                            return -(m.fromKey ? (y + 8 + d.height <= g.size.height ? y + 8 : max(12, y - 8 - d.height))
-                                              : Handedness.menuY(touch: y, menuHeight: d.height, in: g.size.height))
-                        }
                 }
             }
         }
@@ -88,10 +75,41 @@ struct AppMenuLayer: View {
     }
 }
 
+/// A menu panel placed in its layer (a ZStack aligned top-leading, `layer` its size): beside the finger on the side away
+/// from the playing hand (Settings › Handedness), or from a key, under it (above where it wouldn't fit); kept `margin`
+/// inside the layer. Closed by a touch anywhere else, which still reaches the page (OutsideTouch).
+struct PlacedMenu: View {
+    let title: String
+    let groups: [[MenuItem]]
+    /// The finger, or the key's corner, in the layer's space.
+    let at: CGPoint
+    var fromKey = false
+    let layer: CGSize
+    var margin: CGFloat = 12
+    let close: () -> Void
+    @AppStorage(Handedness.key) private var hand = Handedness.right
+
+    var body: some View {
+        MenuPanel(title: title, groups: groups, close: close, maxHeight: layer.height - 2 * margin)
+            .fixedSize()
+            .closesOnOutsideTouch(close)
+            .alignmentGuide(.leading) { d in
+                -(fromKey ? min(max(margin, at.x), layer.width - d.width - margin)
+                          : hand.menuX(touch: at.x, menuWidth: d.width, in: layer.width, margin: margin))
+            }
+            .alignmentGuide(.top) { d in
+                -(fromKey ? (at.y + 8 + d.height <= layer.height ? at.y + 8 : max(margin, at.y - 8 - d.height))
+                          : Handedness.menuY(touch: at.y, menuHeight: d.height, in: layer.height, margin: margin))
+            }
+    }
+}
+
 struct MenuPanel: View {
     let title: String
     let groups: [[MenuItem]]
     let close: () -> Void
+    /// The tallest the panel may be (its layer's room): past it the rows scroll, nothing is cut off.
+    var maxHeight: CGFloat = .infinity
     @State private var stack: [(title: String, groups: [[MenuItem]])] = []
     @State private var contentHeight: CGFloat = 0
     @FocusState private var focus: Int?
@@ -136,7 +154,8 @@ struct MenuPanel: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
             .scrollIndicators(.automatic)
-            .frame(height: min(max(contentHeight, Self.rowHeight), CGFloat(Self.maxRows) * Self.rowHeight))
+            // (the title or Back row and the panel's padding take 60 of maxHeight)
+            .frame(height: min(max(contentHeight, Self.rowHeight), CGFloat(Self.maxRows) * Self.rowHeight, max(Self.rowHeight, maxHeight - 60)))
         }
         .padding(.vertical, 4)
         .frame(width: Self.width)

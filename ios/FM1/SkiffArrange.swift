@@ -27,7 +27,6 @@ struct SkiffArrangePage: View {
     @State private var moveAt: MoveSpot?
     @State private var menu: OpenMenu?
     @State private var pageFrame: CGRect = .zero
-    @AppStorage(Handedness.key) private var hand = Handedness.right
     @AccessibilityFocusState private var blockFocus: EntryRef?
     /// A bar range across the lanes (board 3): its first bar and the bar after its last, 0-based.
     @State private var section: SectionRange?
@@ -134,17 +133,9 @@ struct SkiffArrangePage: View {
                 ZStack(alignment: .topLeading) {
                     // a touch anywhere else closes it, and still reaches the page (OutsideTouch)
                     Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
-                    MenuPanel(title: title, groups: groups, close: close)
+                    PlacedMenu(title: title, groups: groups, at: CGPoint(x: m.at.x - pageFrame.minX, y: m.at.y - pageFrame.minY),
+                               layer: g.size, margin: 0, close: close)
                         .id(m)
-                        .fixedSize()
-                        .closesOnOutsideTouch(close)
-                        // beside the finger, on the side away from the playing hand (Settings › Handedness)
-                        .alignmentGuide(.leading) { d in
-                            -hand.menuX(touch: m.at.x - pageFrame.minX, menuWidth: d.width, in: g.size.width, margin: 0)
-                        }
-                        .alignmentGuide(.top) { d in
-                            -Handedness.menuY(touch: m.at.y - pageFrame.minY, menuHeight: d.height, in: g.size.height, margin: 0)
-                        }
                 }
             }
         }
