@@ -187,7 +187,7 @@ struct SelectionBar: View {
     private var pasteKey: some View {
         icon("doc.on.clipboard", "Paste at the selected step") { edits.paste() }
             // held: the pad press menu's look, at the key (Scott, 2026-11-08: every long-press menu alike)
-            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
                 let e = edits
                 e.ui.menu = AppMenu(title: "Paste", groups: {
                     [[MenuItem(title: "Paste", icon: "doc.on.clipboard") { e.paste() },

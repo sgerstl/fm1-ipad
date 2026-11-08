@@ -346,7 +346,7 @@ struct PadsPage: View {
                 if drag != nil { endDrag(at: v.location) }
                 releaseHold("p\(i)")
             })
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+        .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             guard !store.offline else { return }
             heldKey = "p\(i)"
             holdAt = pressAt
@@ -646,7 +646,7 @@ struct PadsPage: View {
             if previewScene == s { previewScene = nil }
             releaseHold("s\(s)")
         })
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+        .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             guard kept, !storing else { return }
             heldKey = "s\(s)"
             previewScene = s

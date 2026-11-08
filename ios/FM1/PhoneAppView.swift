@@ -168,7 +168,7 @@ struct PhoneTopBar: View {
         .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space)).onChanged { pressAt = $0.location })
         .accessibilityHint(picker ? "Shows all \(session.trackCount) tracks to pick another" : "")
         // held: the track's menu (its sound, a sample, clearing), beside the chip
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+        .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             let f = chipFrames[t] ?? .zero
             ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: f.midX, y: f.maxY + 50))
         })

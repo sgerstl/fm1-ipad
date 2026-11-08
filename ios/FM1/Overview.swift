@@ -129,7 +129,7 @@ struct Overview: View {
             // slow drag of the view box would open it)
             .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
                 .onChanged { pressAt = $0.location })
-            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
                 held = t
                 ui.trackMenu = TrackMenu(track: t, at: pressAt)
             })
@@ -146,7 +146,7 @@ struct Overview: View {
         }
         .animation(.easeOut(duration: 0.15), value: ui.trackMenu?.track)
         .onChange(of: ui.trackMenu?.track) { _, open in if open == nil { held = nil } }   // (a press that slid off)
-        .accessibilityAction(named: "Track menu") { ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: 200, y: 160 + CGFloat(t) * 48)) }
+        .accessibilityAction(named: "Track menu") { ui.trackMenu = .voiceOver(track: t) }
     }
 
     private func nameBody(_ t: Int, track: TrackState, selected: Bool) -> some View {

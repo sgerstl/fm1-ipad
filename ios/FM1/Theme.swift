@@ -240,6 +240,9 @@ struct Elevated: ViewModifier {
     }
 }
 
+/// How long a press is held before it opens a menu (every long-press menu alike).
+let holdToMenu: Double = 0.45
+
 extension View {
     /// Keeps `frame` at this view's place on screen (global): for a menu or panel opened beside it.
     func globalFrame(_ frame: Binding<CGRect>) -> some View {

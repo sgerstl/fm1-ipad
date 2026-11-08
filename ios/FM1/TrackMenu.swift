@@ -7,6 +7,9 @@ import SwiftUI
 struct TrackMenu: Equatable {
     var track: Int
     var at: CGPoint
+
+    /// Opened by VoiceOver's action, which has no finger: a place beside the track list.
+    static func voiceOver(track: Int) -> TrackMenu { TrackMenu(track: track, at: CGPoint(x: 200, y: 160 + CGFloat(track) * 48)) }
 }
 
 /// A track's menu, beside the finger (long-press a track): its sound, a sample, clearing its steps.
@@ -80,7 +83,7 @@ struct TrackMenuLayer: View {
 /// selected, as the Timeline's track names have it (Scott, 2026-11-07: the Pads strip had none).
 struct TrackMenuPress: ViewModifier {
     let session: DeviceSession
-    let ui: EditorUI
+    let ui: EditorUI?
     let track: Int
     @State private var pressAt: CGPoint = .zero
 
@@ -88,16 +91,16 @@ struct TrackMenuPress: ViewModifier {
         content
             .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
                 .onChanged { pressAt = $0.location })
-            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
                 session.select(track: track)
-                ui.trackMenu = TrackMenu(track: track, at: pressAt)
+                ui?.trackMenu = TrackMenu(track: track, at: pressAt)
             })
-            .accessibilityAction(named: "Track menu") { ui.trackMenu = TrackMenu(track: track, at: CGPoint(x: 200, y: 160 + CGFloat(track) * 48)) }
+            .accessibilityAction(named: "Track menu") { ui?.trackMenu = .voiceOver(track: track) }
     }
 }
 
 extension View {
-    func trackMenuPress(session: DeviceSession, ui: EditorUI, track: Int) -> some View {
+    func trackMenuPress(session: DeviceSession, ui: EditorUI?, track: Int) -> some View {
         modifier(TrackMenuPress(session: session, ui: ui, track: track))
     }
 }
