@@ -35,7 +35,7 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
     public var credit: String {
         switch self {
         case .skiff: "Skiff is by illuminus5, a fork of Felucca by Leo Kuroshita (Hügelton Instruments). Lupe adds only the screen link."
-        case .sloop: "SLOOP is a Felucca fork (isod89/sloop-fm1). Lupe adds only the screen link."
+        case .sloop: "SLOOP is by isod89, a fork of Felucca by Leo Kuroshita (Hügelton Instruments). Lupe adds only the screen link."
         case .stock: "M-VAVE's firmware, unchanged."
         }
     }

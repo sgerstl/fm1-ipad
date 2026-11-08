@@ -1,6 +1,6 @@
 # SLOOP 2.8.4 + screen link
 
-A small addition to [SLOOP](https://github.com/isod89/sloop-fm1) 2.8.4 (GPL-3.0, by Leo Kuroshita) so the iPad app and the FM-1 can follow each other's screen. Everything else is stock 2.8.4.
+A small addition to [SLOOP](https://github.com/isod89/sloop-fm1) 2.8.4 (GPL-3.0, by isod89, a fork of Leo Kuroshita's Felucca) so the iPad app and the FM-1 can follow each other's screen. Everything else is stock 2.8.4.
 
 | File | What |
 |---|---|
