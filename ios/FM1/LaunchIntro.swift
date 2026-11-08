@@ -1,6 +1,8 @@
 import SloopKit
 import SwiftUI
 
+// 2026-11-08 (Scott): flat and white in place of the green phosphor, the name in Michroma with the e's bar tilted;
+// the timings below are unchanged.
 // Lupe's launch intro (Scott: "Build it", 2026-11-05), ported from the approved prototype on refs/heads/lupe-icon,
 // design/brand/intro-prototype.html (PLANS.full), its timings and drawing:
 //   zoom 0.42 s: the icon grows from home-screen size past the screen, its corners straightening, the scope off with
@@ -76,7 +78,8 @@ struct IntroScene {
     static let reducedEnd = 1.6 + 0.34
 
     static let beamAt = 0.31
-    static let old = (14.0, 107.0, 30.0), fresh = (200.0, 255.0, 176.0)
+    /// The trail cools from the app's white to a dim grey (2026-11-08: flat and white, in place of the green phosphor).
+    static let old = (70.0, 70.0, 76.0), fresh = (244.0, 244.0, 246.0)
     static let glass = Color(red: 10 / 255, green: 10 / 255, blue: 11 / 255)
 
     let size: CGSize
@@ -103,7 +106,7 @@ struct IntroScene {
     func Y(_ v: Double) -> Double { oy + v / 100 * S }
     func P(_ u: Double) -> CGPoint { let f = Self.fig(u); return CGPoint(x: X(f.0), y: Y(f.1)) }
     static func ease(_ x: Double) -> Double { 1 - pow(1 - min(1, max(0, x)), 3) }
-    static func green(_ a: Double) -> Color { Color(red: 85 / 255, green: 1, blue: 136 / 255).opacity(a) }
+    static func green(_ a: Double) -> Color { Color(red: 244 / 255, green: 244 / 255, blue: 246 / 255).opacity(a) }   // (named for the old phosphor: now the app's white)
     static func rgb(_ c: (Double, Double, Double), _ a: Double = 1) -> Color { Color(red: c.0 / 255, green: c.1 / 255, blue: c.2 / 255).opacity(a) }
 
     // MARK: The frame
@@ -117,11 +120,9 @@ struct IntroScene {
         } else if t < p.tf {
             graticule(&ctx, 1)
             let e = (t - p.tz) / p.flash, h = S * pow(e, 2.2), a = 1 - e * 0.85
-            var c = ctx
-            c.addFilter(.shadow(color: Self.rgb((200, 255, 176)), radius: S * 0.04))
+            // flat: a white line opening, no bloom and no flash
             let rect = CGRect(x: ox - S * 0.15 * (1 - e), y: oy + S / 2 - max(2, h / 2), width: S * (1 + 0.3 * (1 - e)), height: max(2, h))
-            c.fill(Path(rect), with: .color(Self.rgb((220, 255, 210), a)))
-            ctx.fill(Path(full), with: .color(Color(red: 51 / 255, green: 1, blue: 102 / 255).opacity(0.10 * (1 - e))))
+            ctx.fill(Path(rect), with: .color(Self.rgb(Self.fresh, a * 0.6)))
         } else if t < p.th {
             scope(&ctx, t: t)
         } else {
@@ -200,15 +201,6 @@ struct IntroScene {
             var path = Path(); path.move(to: P(u0)); path.addLine(to: P(u1))
             segs.append((path, age))
         }
-        // the glow the prototype's shadow left in the phosphor, cooling with it
-        ctx.drawLayer { g in
-            g.addFilter(.blur(radius: S * 0.015))
-            for (path, age) in segs {
-                let k = pow(0.9, age), a = 0.9 * pow(0.945, age)
-                g.stroke(path, with: .color(Self.rgb(Self.mix(Self.old, (51, 255, 102), k), a)),
-                         style: StrokeStyle(lineWidth: S * 0.028 * 1.6, lineCap: .round))
-            }
-        }
         for (path, age) in segs {
             let k = pow(0.9, age), a = pow(0.945, age)
             ctx.stroke(path, with: .color(Self.rgb(Self.mix(Self.old, Self.fresh, k), a)),
@@ -226,7 +218,7 @@ struct IntroScene {
             var p = Path()
             p.move(to: CGPoint(x: X(v), y: Y(14))); p.addLine(to: CGPoint(x: X(v), y: Y(86)))
             p.move(to: CGPoint(x: X(14), y: Y(v))); p.addLine(to: CGPoint(x: X(86), y: Y(v)))
-            ctx.stroke(p, with: .color(Self.green(0.10 * a)), lineWidth: lw)
+            ctx.stroke(p, with: .color(Self.green(0.07 * a)), lineWidth: lw)
             v += 12
         }
         var ticks = Path()
@@ -235,37 +227,37 @@ struct IntroScene {
             ticks.move(to: CGPoint(x: X(v), y: Y(48.8))); ticks.addLine(to: CGPoint(x: X(v), y: Y(51.2)))
             ticks.move(to: CGPoint(x: X(48.8), y: Y(v))); ticks.addLine(to: CGPoint(x: X(51.2), y: Y(v)))
         }
-        ctx.stroke(ticks, with: .color(Self.green(0.16 * a)), lineWidth: lw)
+        ctx.stroke(ticks, with: .color(Self.green(0.12 * a)), lineWidth: lw)
     }
 
     /// The faint full figure still lit.
     private func floorFigure(_ ctx: inout GraphicsContext, _ a: Double) {
         var p = Path()
         for i in 0...600 { let pt = P(Double(i) / 600); i == 0 ? p.move(to: pt) : p.addLine(to: pt) }
-        ctx.stroke(p, with: .color(Color(red: 51 / 255, green: 1, blue: 102 / 255).opacity(0.2 * a)),
+        ctx.stroke(p, with: .color(Self.green(0.10 * a)),
                    style: StrokeStyle(lineWidth: S * 0.022, lineJoin: .round))
     }
 
+    /// The beam: a flat white dot and a faint ring round it (no halo).
     private func beam(_ ctx: inout GraphicsContext, u: Double, a: Double) {
-        let c = P(u), r = S * 0.11
-        let g = Gradient(stops: [.init(color: .white.opacity(a), location: 0), .init(color: .white.opacity(0.95 * a), location: 0.18),
-                                 .init(color: Self.green(0.85 * a), location: 0.38), .init(color: Self.green(0), location: 1)])
-        ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
-                 with: .radialGradient(g, center: c, startRadius: 0, endRadius: r))
-        let d = S * 0.024
+        let c = P(u), d = S * 0.026, r = S * 0.05
+        ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
+                   with: .color(Self.green(0.18 * a)), lineWidth: max(1, S / 300))
         ctx.fill(Path(ellipseIn: CGRect(x: c.x - d, y: c.y - d, width: d * 2, height: d * 2)), with: .color(.white.opacity(a)))
     }
 
-    /// The name, in the app's white with a soft white glow. The typeface is a placeholder (the prototype's Josefin
-    /// Sans Light) until the wordmark is chosen: the system's light face here.
+    /// The name: the wordmark (Michroma, the e's bar tilted; design/brand/wordmark.py), flat white, no glow.
     private func name(_ ctx: inout GraphicsContext, _ a: Double) {
         var c = ctx
         c.opacity = a
-        c.addFilter(.shadow(color: .white.opacity(0.45), radius: S * 0.015))
-        let text = Text("lupe").font(.system(size: S * 0.16, weight: .light)).tracking(S * 0.02)
-            .foregroundColor(Color(red: 0xF4 / 255, green: 0xF4 / 255, blue: 0xF6 / 255))
-        c.draw(text, at: CGPoint(x: W / 2, y: oy + S * 1.3), anchor: UnitPoint(x: 0.5, y: 0.78))   // its baseline there
+        let w = S * 0.62, h = w * Self.wordmarkAspect
+        c.draw(Image("LupeWordmark"), in: CGRect(x: W / 2 - w / 2, y: oy + S * 1.3 - h * 0.78, width: w, height: h))
     }
+    /// The wordmark image's height over its width.
+    static let wordmarkAspect: Double = {
+        guard let i = UIImage(named: "LupeWordmark"), i.size.width > 0 else { return 0.35 }
+        return Double(i.size.height / i.size.width)
+    }()
 
     /// 6. The switch-off: the picture squashes to a line, the line pinches to a dot, the dot blips out over the app.
     private mutating func off(_ ctx: inout GraphicsContext, dt: Double) {
@@ -278,24 +270,19 @@ struct IntroScene {
             c.translateBy(x: 0, y: cy); c.scaleBy(x: 1, y: sy); c.translateBy(x: 0, y: -cy)
             c.fill(Path(full), with: .color(Self.glass))
             scope(&c, t: p.th)                                // the held frame
-            ctx.fill(Path(CGRect(x: 0, y: cy - H * sy / 2, width: W, height: H * sy)), with: .color(Self.rgb((200, 255, 190), 0.5 * e)))
+            ctx.fill(Path(CGRect(x: 0, y: cy - H * sy / 2, width: W, height: H * sy)), with: .color(Self.rgb(Self.fresh, 0.35 * e)))
         } else if dt < p.squash + p.pinch {
             ctx.fill(Path(full), with: .color(.black))
             let e = Self.ease((dt - p.squash) / p.pinch), w = W * 0.9 * (1 - e) + S * 0.03
-            var c = ctx
-            c.addFilter(.shadow(color: Self.rgb((200, 255, 190)), radius: S * 0.03))
-            c.fill(Path(CGRect(x: cx - w / 2, y: cy - S * 0.006, width: w, height: S * 0.012)), with: .color(Self.rgb((242, 255, 240))))
+            ctx.fill(Path(CGRect(x: cx - w / 2, y: cy - S * 0.006, width: w, height: S * 0.012)), with: .color(Self.rgb(Self.fresh)))
         } else {
             // the app comes up behind: this view's black goes as the dot blips out
             let e = min(1, (dt - p.squash - p.pinch) / p.blip)
             ctx.blendMode = .copy
             ctx.fill(Path(full), with: .color(.black.opacity(1 - Self.ease(e))))
             ctx.blendMode = .normal
-            let r = S * (0.03 + 0.05 * sin(min(1, e * 1.6) * .pi)), a = 1 - e
-            let g = Gradient(stops: [.init(color: .white.opacity(a), location: 0), .init(color: Self.rgb((200, 255, 190), 0.8 * a), location: 0.3),
-                                     .init(color: Self.green(0), location: 1)])
-            ctx.fill(Path(ellipseIn: CGRect(x: cx - r * 3, y: cy - r * 3, width: r * 6, height: r * 6)),
-                     with: .radialGradient(g, center: CGPoint(x: cx, y: cy), startRadius: 0, endRadius: r * 3))
+            let r = S * (0.012 + 0.02 * sin(min(1, e * 1.6) * .pi)), a = 1 - e
+            ctx.fill(Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)), with: .color(Self.rgb(Self.fresh, a)))
         }
     }
 
