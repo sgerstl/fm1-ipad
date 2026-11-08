@@ -99,28 +99,32 @@ struct SkiffSongPage: View {
                 ZStack(alignment: .top) {
                     EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge)
                         .fill(SelectionTint.fill(session.selectedTrack))
-                    // a sample being made for the track: the editor slides down out of the panel and the sampler up into
-                    // it, the pads above staying put (Scott, 2026-11-09: a sample is made for the track you're on)
+                    // a sample being made for the track: the sampler comes in from the right and pushes the editor off to the
+                    // left, and back the other way on Cancel or a save (Scott, 2026-11-09); the pads above stay put
                     if editorShown, let r = ui.sampler, !r.fromBrowse {
                         SamplerPanel(session: session, ui: ui, request: r)
                             // held to the panel's inside: a wider sampler pushed the page and shifted it all 12 pt left
                             .frame(width: max(0, g.size.width - 2 * (Self.panelEdge + Self.inset)))
                             .padding(.vertical, Self.inset)
                             .padding(.horizontal, Self.panelEdge + Self.inset)
-                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                            .geometryGroup()    // one piece: its keys' highlights don't trail it
+                            .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                            .zIndex(1)          // above the tint while it leaves too, or it drops behind it and vanishes
                     } else if editorShown {
                         PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
                             // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
                             .environment(\.grid, inPanel)
                             .padding(.vertical, Self.inset)
                             .padding(.horizontal, Self.panelEdge + Self.inset)
-                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                            .geometryGroup()
+                            .transition(reduceMotion ? .opacity : .move(edge: .leading))
+                            .zIndex(1)
                     }
                 }
                 .frame(width: g.size.width, height: bottom, alignment: .top)
-                // (cut at the panel's foot only: its tab stands above it)
-                .mask(alignment: .bottom) { Rectangle().padding(.top, -(PadsPage.tabHeight + 24)) }
-                .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.88), value: ui.sampler)
+                // cut to the panel's own shape (its tab included): what slides in and out shows only on the tint
+                .mask { EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge) }
+                .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9), value: ui.sampler)
             }
             .frame(height: total, alignment: .top)
             .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
