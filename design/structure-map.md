@@ -44,7 +44,7 @@ The FM-1's buttons: none of them opens Live. Whether FX…ARP open the sound pan
 |---|---|
 | **Tool row** | Launch at (LOOP, BAR, BEAT, NOW), Cancel (everything staged, shown only while something waits), the transport as on Song. |
 | **Row heads** (left, one a track) | Track name and colour, its mute, which is also the row's stop (PERFORM op 3: staged to the launch point while playing; the track keeps its place and comes back in time). The selected track is marked. Tapping the head selects the track; this is the only thing on the grid that changes the selection. |
-| **Pads** (6 rows × the entries) | One pad an entry. Tap: launch it (PLAY: at once stopped, at the launch point playing). |
+| **Pads** (6 rows × the entries) | One pad an entry. Tap: launch it (PLAY: at once stopped, at the launch point playing). Tap a waiting pad: take the launch back. Tap the playing pad: restart it at the launch point (decided 2026-11-10; restart pending a device check). |
 | **Scene row** (under the grid) | The 16 scenes, as Pads has them: tap to recall, Store latched then tap to store. Held, the grid shows the scene's pads (below). |
 
 There's no track strip: the row heads replace it.
@@ -73,11 +73,11 @@ Not always 16. The grid shows entries A to the last one any track uses, plus one
 
 ### On the phone (landscape)
 
-A fifth tab, Live. Six rows of pads at 44 pt; 8 columns in view, two-finger pan for the rest; the row heads narrow to the track number and mute. **The scene row doesn't fit under the grid** at phone height: open question 4 for where it goes.
+A fifth tab, Live. Six rows of pads at 44 pt; 8 columns in view, two-finger pan for the rest; the row heads narrow to the track number and mute. The scenes fit under the grid at 34 pt with rows at 40 (board 37, kept 2026-11-10): under the 44 aim, over the 24 floor.
 
 ### What it leaves out on purpose
 
-- No column launch ("launch all of column C") in the first version: Skiff's scenes aren't columns, and two kinds of row-across launch would be confusing. Open question 3.
+- No column launch ("launch all of column C"): Skiff's scenes aren't columns, and two kinds of row-across launch would be confusing (decided 2026-11-10).
 - No editing on the grid: no hold menus, no drag, no editor. A row head's hold could offer "Edit in Pads" (select the track, go to Song).
 - No per-pad launch settings: LAUNCH is one setting for the whole FM-1.
 
