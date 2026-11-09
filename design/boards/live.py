@@ -44,7 +44,6 @@ a{color:#A1A1AA}a:hover{color:#EDEDF0}
         <span style="{{r.chip}}">{{r.n}}</span>
         <sc-if value="{{r.showName}}" hint-placeholder-val="{{ true }}"><span style="{{r.nameStyle}}">{{r.name}}</span></sc-if>
         <button aria-pressed="{{r.muted}}" aria-label="{{r.muteAria}}" style="{{r.mute}}">{{r.muteLabel}}</button>
-        <button aria-label="{{r.tkAria}}" style="{{r.tk}}">Track ▾</button>
       </div></sc-if>
       <sc-for list="{{r.pads}}" as="p" hint-placeholder-count="9">
         <button aria-label="{{p.aria}}" style="{{p.style}}">
@@ -58,6 +57,11 @@ a{color:#A1A1AA}a:hover{color:#EDEDF0}
     </div>
   </sc-for>
 
+  <sc-if value="{{hasSel}}" hint-placeholder-val="{{ false }}"><div role="group" aria-label="{{sl.aria}}">
+    <sc-for list="{{sl.tint}}" as="q" hint-placeholder-count="2"><div aria-hidden="true" style="{{q}}"></div></sc-for>
+    <button aria-label="{{sl.faceAria}}" style="{{sl.face}}"><span style="font-size: 22px; font-weight: 600; color: #101012; line-height: 1;">12</span><span style="font-size: 12px; color: #101012;">×4</span><span style="{{sl.trk}}"><span style="{{sl.fill}}"></span></span></button>
+    <sc-for list="{{sl.knobs}}" as="k" hint-placeholder-count="7"><div style="{{k.box}}"><span style="font-size: 11px; letter-spacing: 0.04em; color: #C4C4CC;">{{k.label}}</span><span style="font-size: 17px; font-weight: 600;">{{k.v}}</span><span style="{{k.track}}"><span style="{{k.fill}}"></span></span></div></sc-for>
+  </div></sc-if>
   <sc-if value="{{panHint}}" hint-placeholder-val="{{ false }}"><div aria-hidden="true" style="{{panStyle}}"><span style="font-size: 11px; font-weight: 600; color: #A1A1AA;">I ›</span></div></sc-if>
 
   <div role="group" aria-label="Scenes" style="{{sceneBox}}">
@@ -188,12 +192,12 @@ class Component extends DCLogic {
         i += span;
       }
       var y = rowY(k), sel = r === V.sel;
-      var mw = V.trackKey && sel ? (L.headW - 32) / 2 : L.muteW;
+      var mw = L.muteW;
       var mute = abs(L.muteX - L.x0, L.compactHead ? (L.rh - L.muteH) / 2 : L.rh - L.muteH - 12, mw, L.muteH) + 'border: 0; border-radius: 8px; font: inherit; font-size: 13px; ';
       mute += muted ? 'background: #EDEDF0; color: #101012; font-weight: 600;' : staged ? 'background: #26262B; color: #EDEDF0; box-shadow: inset 0 0 0 2px #EDEDF0;' : 'background: #26262B; color: #C4C4CC;';
       return {
         n: r + 1, name: NAMES[r], showName: L.showName, pads: pads, showHead: L.headW > 0,
-        tkAria: 'Track controls for ' + NAMES[r], tk: (V.trackKey && sel ? '' : 'display: none; ') + abs(L.headW - 12 - (L.headW - 32) / 2, L.rh - L.muteH - 12, (L.headW - 32) / 2, L.muteH) + 'border: 0; border-radius: 8px; background: #34343B; color: #EDEDF0; font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #EDEDF0;', muted: muted ? 'true' : 'false',
+        muted: muted ? 'true' : 'false',
         aria: 'Track ' + (r + 1) + ', ' + NAMES[r] + (sel ? ', selected' : ''),
         muteAria: (muted ? 'Unmute ' : 'Mute ') + NAMES[r] + (staged ? ', mutes at bar 11' : ''),
         muteLabel: L.short ? (muted ? 'M' : staged ? 'M·' : 'M') : (muted ? 'Muted' : staged ? 'Mutes at 11' : 'Mute'),
@@ -249,6 +253,27 @@ class Component extends DCLogic {
         cells: [abs(ex, E.y + 40, ew, E.h - 40) + 'border-radius: 0 12px 12px 12px; background: #2A1F27;'].concat(cells),
         lab: abs(ex + ew - 300, E.y + 12, 284, 20) + 'text-align: right; font-size: 12px; color: #C4C4CC;' };
     }
+    var sl = null;
+    if (V.selPad != null) {
+      var sr = V.sel, sk = idx.indexOf(sr), fx = colX(V.selPad), fy = rowY(sk), B = 6, tw = 4 * 92 + 3 * 4 + 16, th = 132, tint = V.tint;
+      var kb = [];
+      var labs = [['TONE', '64', 0.5], ['FOLD', '22', 0.17], ['ATK', '8 ms', 0.1], ['REL', '320 ms', 0.45], ['LEVEL', '96', 0.75], ['STEPS', '16', 1], ['PAN', 'C', 0.5]];
+      labs.forEach(function (q, n) {
+        var row2 = n >= 4, w2 = (tw - 16 - 2 * 4) / 3;
+        var x = fx + 8 + (row2 ? (n - 4) * (w2 + 4) : n * 96), y = fy + L.rh + 8 + (row2 ? 60 : 0), w = row2 ? w2 : 92;
+        kb.push({ label: q[0], v: q[1], box: abs(x, y, w, 56) + 'overflow: hidden; padding: 6px 10px 0; border-radius: 6px; background: #111114; display: flex; flex-direction: column; gap: 1px;',
+          track: 'position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #2A2A30;',
+          fill: 'position: absolute; left: 0; top: 0; bottom: 0; width: ' + Math.round(q[2] * 100) + '%; background: ' + COL[sr] + ';' });
+      });
+      sl = { aria: NAMES[sr] + ' entry B selected, its track controls under it',
+        tint: [abs(fx, fy, L.pw, L.rh + 2) + 'border-radius: 12px 12px 0 0; background: ' + tint + ';',
+               abs(fx, fy + L.rh, tw, th) + 'border-radius: 0 12px 12px 12px; background: ' + tint + '; box-shadow: 0 10px 24px rgba(0,0,0,0.5);'],
+        faceAria: NAMES[sr] + ', entry B, pattern 12, playing, selected',
+        face: abs(fx + B, fy + B, L.pw - 2 * B, L.rh - 2 * B) + 'border: 0; font: inherit; text-align: left; border-radius: 8px; background: ' + COL[sr] + '; display: flex; flex-direction: column; gap: 2px; padding: ' + (L.pad - 2) + 'px;',
+        trk: 'position: absolute; left: ' + (L.pad - 2) + 'px; right: ' + (L.pad - 2) + 'px; bottom: ' + (L.pad - 2) + 'px; height: 4px; border-radius: 2px; background: rgba(16,16,18,0.3);',
+        fill: 'position: absolute; left: 0; top: 0; bottom: 0; width: 50%; border-radius: 2px; background: #101012;',
+        knobs: kb };
+    }
     var notes = V.notes.map(function (n, i) {
       return { n: String(i + 1), text: n[4],
         box: abs(n[0], n[1], n[2], n[3]) + 'border: 2px dashed #5AC8FA; border-radius: 10px; pointer-events: none;',
@@ -270,7 +295,7 @@ class Component extends DCLogic {
       storeStyle: abs(0, 0, L.storeW, L.sceneH) + 'border: 0; border-radius: 10px; background: #26262B; color: #EDEDF0; font: inherit; font-size: 14px;',
       scenes: scenes,
       hint: V.hint, hintStyle: abs(L.x0, L.hintY, L.W - 2 * L.x0, 40) + 'margin: 0; font-size: 13px; line-height: 1.4; color: #A1A1AA;',
-      hasPanel: !!pn, pn: pn || {}, hasEd: !!ed, ed: ed || {},
+      hasSel: !!sl, sl: sl || {}, hasPanel: !!pn, pn: pn || {}, hasEd: !!ed, ed: ed || {},
       sw: !!V.sw, swOn: 'height: ' + L.segH + 'px; padding: 0 14px; border: 0; border-radius: 10px; background: #26262B; color: #EDEDF0; font: inherit; font-size: ' + L.tabSize + 'px; font-weight: 600;', swOff: 'height: ' + L.segH + 'px; padding: 0 14px; border: 0; border-radius: 10px; background: transparent; color: #A1A1AA; font: inherit; font-size: ' + L.tabSize + 'px;',
       openKey: !!V.openKey, openStyle: abs(L.sceneW - openW, 0, openW, L.sceneH) + 'border: 0; border-radius: 10px; background: #26262B; color: #EDEDF0; font: inherit; font-size: 14px; font-weight: 600;',
       notes: notes, title: V.title, gist: V.gist,
@@ -323,7 +348,7 @@ COMMON = dict(sel=4, held=None, tabs=SONG_TABS, cur='Song', sw=True, status='2 w
 
 boards = []
 L = IP
-boards.append(('PadsGrid.dc.html', 'Lupe Pads grid, No grid', IP, dict(COMMON, L=IP, song=SONG_JAM, trackKey=True, openKey=True,
+boards.append(('PadsGrid.dc.html', 'Lupe Pads grid, No grid', IP, dict(COMMON, L=IP, song=SONG_JAM, selPad=1, tint='#472535', openKey=True,
   hint='Tap a pad: it plays at the launch point (now, when stopped). On Lead’s row (selected) a tap also picks the pad for the editor; on another row it only launches. Tap a row’s number to select that track.',
   title='35 · Pads as a grid: No grid (the editor shut)',
   gist='Song › Pads, rebuilt: one row a track, one column an entry, as many columns as the song uses (A–H, plus I empty). The track strip is gone; its rows are the row heads. Play song is off: every track loops its entry.',
@@ -331,7 +356,8 @@ boards.append(('PadsGrid.dc.html', 'Lupe Pads grid, No grid', IP, dict(COMMON, L
     [gx(L,1)-6, gy(L,0)-6, IP['pw']+12, IP['rh']+12, 'Playing: the track colour, a pass bar, the pass ("2/4") when REPS is over 1.'],
     [gx(L,4)-6, gy(L,0)-6, IP['pw']+12, IP['rh']+12, 'Waiting for the launch point: dashed, and when it lands. Tap it again to take it back.'],
     [gx(L,2)-6, gy(L,1)-6, 2*IP['pw']+IP['pg']+12, IP['rh']+12, 'A chain is one pad across its entries; a tap starts it from its first.'],
-    [10, gy(L,3)-6, 180, 3*IP['rh']+2*IP['rg']+12, 'Row heads: number (tap to select), name, Mute (the row’s stop). Lead is selected, with its Track key: the track controls that used to hang under the selected pad (proposed, question 9). Perc is muted.'],
+    [10, gy(L,3)-6, 180, 3*IP['rh']+2*IP['rg']+12, 'Row heads: number (tap to select), name, Mute (the row’s stop). Lead is selected. Perc is muted.'],
+    [gx(L,1)-6, gy(L,4)-6, 4*92+3*4+16+12, IP['rh']+132+12, 'The selected pad (Lead · B) keeps its track controls hanging under it, as today (board 32): HOME’s four, LEVEL, STEPS, PAN. Here it covers Perc’s B–D; tap the pad again to roll it away. Border only at Half and Max (2026-11-10, question 9).'],
     [gx(L,8)-6, IP['gridY']-30, IP['pw']+12, 6*IP['rh']+5*IP['rg']+36, 'One empty column after the last used entry, so there’s always room to add; further columns pan with two fingers.'],
     [10, IP['sceneY']-6, 1356, IP['sceneH']+12, 'Store, the 16 scenes, and Open for the editor at the end (as board 33).'],
   ])))

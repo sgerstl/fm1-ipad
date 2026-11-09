@@ -29,7 +29,7 @@ If you want the grid to look different from the 4 × 4 pads (a "stage mode", say
 
 ## New with Pads as the grid (2026-11-10)
 
-9. **The selected pad's track controls.** They hang under the selected pad today and would cover rows. Proposed: a Track key on the selected row's head opens them over the grid. Or keep them under the pad at No grid only?
+9. ~~**The selected pad's track controls.**~~ Answered 2026-11-10: they keep hanging under the selected pad, as today (board 35 draws it). The box is track-level, and the selected pad is always on the selected track's row, so the rule carries over. At No grid it covers about three of the next track's pads (tap the pad again to roll it away; on the bottom row it opens upward); at Half (42 pt rows) and Max, the border alone. The Track key on the row head is dropped.
 10. **A tap on another track's row.** Proposed: launches only; the number selects. Or should it also select that track (the editor and the FM-1's knobs follow)?
 11. **Board 39's panel placement** (between the tool row and the scene row at No grid). OK?
 

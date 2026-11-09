@@ -55,7 +55,8 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 
 - **Hold menus** stay on every pad (any row): they act on that track's entry, without selecting it.
 - **Drag to rearrange** within a row (that track's list), as now. Across rows (copying an entry to another track, which the shared pool allows) is left out for now.
-- **The selected pad's track controls** (the tab hanging under the pad today) would cover the rows below. Proposed: they move to the selected row's head (a Track key that opens them over the grid). Open question 9.
+- **The selected pad's track controls** keep hanging under the selected pad, as today (Scott, 2026-11-10; board 35). At No grid the box (396 × 132) covers about three of the next track's pads; tapping the pad again rolls it away, and on the bottom row it opens upward. At Half and Max, the border alone.
+  - **Build note (Scott, 2026-11-10):** the box sits slightly too high today. The gap the selected pad's highlight keeps from the next pad has to carry through: the same gap between the top of the box and the bottom of the next pad. Check on the iPad at each row, the bottom row (box opening upward) included.
 - **The editor** follows the selected pad, as now.
 
 ### The FM-1's buttons
