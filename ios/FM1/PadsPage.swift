@@ -286,6 +286,8 @@ struct PadsPage: View {
             } else {
                 PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, r: s.radius)
                     .fill(SelectionTint.fill(t))
+                    // it floats over the pads and the page under it: the shadow of things at the finger (Scott, 2026-11-09)
+                    .elevationShadow(.held)
                 TrackKnobBox(session: session, ui: ui, embedded: true)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)

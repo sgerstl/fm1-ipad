@@ -101,9 +101,10 @@ struct Emerge: ViewModifier, Animatable {
                     // the pad and its border, wide enough for the fillets where the tab meets it
                     Rectangle().frame(width: pad.width + 2 * PadTabShape.f + 2, height: pad.height + 2)
                         .offset(x: pad.minX - PadTabShape.f - 1, y: pad.minY - 1)
-                    // the tab, revealed from the pad's edge
-                    Rectangle().frame(width: tab.width, height: h)
-                        .offset(x: tab.minX, y: up ? tab.maxY - h : tab.minY)
+                    // the tab, revealed from the pad's edge, with room round it for its shadow (the mask cut it off)
+                    let m: CGFloat = tab.width > 0 ? 32 : 0
+                    Rectangle().frame(width: tab.width + 2 * m, height: h + m)
+                        .offset(x: tab.minX - m, y: up ? tab.maxY - h - m : tab.minY)
                 }
             }
             // in step with the pad's own face fading (a faster tint left the old pad blank for a beat)
