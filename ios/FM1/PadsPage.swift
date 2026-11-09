@@ -234,7 +234,8 @@ struct PadsPage: View {
                             // controls open it shrinks a border's width inside its tint. Picking another, the old grows
                             // back as the new one shrinks, together (Scott, 2026-11-09: not a crossfade)
                             let sel = k == t && i == framed
-                            let inset = sel && controlsShown ? Self.selectedBorder(cell) : 0
+                            // (no shrink with the controls open any more: the box is part of the lane now, Scott 2026-11-09)
+                            let inset: CGFloat = 0
                             // (shrunk inside its tint: only its surface and outline come in, its words stay in line with
                             // the pads beside it. Scott, 2026-11-09)
                             pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date, selected: sel, inset: inset)
