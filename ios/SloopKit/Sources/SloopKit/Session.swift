@@ -1166,6 +1166,7 @@ public final class DeviceSession {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             n += 1
+            if onBluetooth, n % 5 == 0 { await writeLinkLog(c) }
             // Skiff's motion isn't pushed: the selected track every second while it records, else every 2 s, and
             // every track every 6 s, as Skiff's web editor polls it
             if let k = c as? SkiffDriver {
@@ -1212,7 +1213,10 @@ public final class DeviceSession {
                 misses += 1
                 if misses > 30 { return }     // several seconds with no answer: treat it as gone
             }
-            try? await Task.sleep(for: playing ? .milliseconds(150) : .milliseconds(250))
+            // (bluetooth-poc) over Bluetooth 400 / 600 ms: each poll is a round trip of tens of ms there, and edits
+            // wait behind it in the one-at-a-time queue
+            try? await Task.sleep(for: onBluetooth ? (playing ? .milliseconds(400) : .milliseconds(600))
+                                                   : (playing ? .milliseconds(150) : .milliseconds(250)))
         }
     }
 
@@ -1378,6 +1382,16 @@ public final class DeviceSession {
             if self.isDrums(t), self.kitNames.isEmpty { try? await self.readKits() }
             try? await self.readSoundParams(descs: false)
         }
+    }
+
+    /// (bluetooth-poc) Documents/bluetooth-link-log.csv: every request's cost on the Bluetooth link (SloopClient
+    /// LinkEntry), rewritten every 5 s while on Bluetooth, for measuring what makes edits slow there.
+    private func writeLinkLog(_ c: FirmwareDriver) async {
+        let client: SloopClient? = (c as? SkiffDriver)?.client ?? (c as? SloopDriver)?.client
+        guard let client else { return }
+        let csv = await client.linkLogCSV()
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        try? csv.write(to: docs.appendingPathComponent("bluetooth-link-log.csv"), atomically: true, encoding: .utf8)
     }
 
     // MARK: Playing from the iPad's keyboard

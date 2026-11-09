@@ -48,4 +48,21 @@ import Testing
         #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
     }
+
+    /// The link log keeps each request's cost over Bluetooth, and nothing over USB.
+    @Test func theLinkLogRecordsRequestsOnlyOverBluetooth() async throws {
+        let bt = FakeSkiff(try SkiffFixture.load())
+        bt.useBluetooth(dropEvery: 0)
+        let c = SloopClient(transport: bt)
+        await c.start()
+        _ = try await c.info()
+        _ = try await c.tracks()
+        let csv = await c.linkLogCSV().split(separator: "\n")
+        #expect(csv.count == 3 && csv[0].hasPrefix("at,request") && csv[1].contains("INFO") && csv[1].hasSuffix(",1,0"))
+        let usb = FakeSkiff(try SkiffFixture.load())
+        let u = SloopClient(transport: usb)
+        await u.start()
+        _ = try await u.info()
+        #expect(await u.linkLogCSV().split(separator: "\n").count == 1)
+    }
 }

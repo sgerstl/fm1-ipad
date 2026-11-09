@@ -48,6 +48,41 @@ public actor SloopClient {
         let timeout: Duration
         var attemptsLeft: Int
         let continuation: CheckedContinuation<[UInt8], Error>
+        var queued = ContinuousClock.now          // (the link log: when it was asked for, when last sent, how often)
+        var sent = ContinuousClock.now
+        var tries = 0
+    }
+
+    /// (bluetooth-poc) What each request cost on a Bluetooth link: its wait in the queue, the round trip of the try
+    /// that was answered, the tries, the queue behind it; and each push. Kept only over Bluetooth, the last 5,000.
+    public struct LinkEntry: Sendable {
+        public let at: Date
+        public let name: String
+        public let queuedMs: Int, rttMs: Int, tries: Int
+        public let ok: Bool
+        public let behind: Int
+    }
+    private var linkLog: [LinkEntry] = []
+    private func logLink(_ p: Pending, ok: Bool) {
+        guard transport.link == .bluetooth else { return }
+        let now = ContinuousClock.now
+        func ms(_ d: Duration) -> Int { Int(d.components.seconds * 1000 + d.components.attoseconds / 1_000_000_000_000_000) }
+        linkLog.append(LinkEntry(at: Date(), name: p.request.description, queuedMs: ms(p.sent - p.queued), rttMs: ms(now - p.sent),
+                                 tries: p.tries, ok: ok, behind: queue.count))
+        if linkLog.count > 5000 { linkLog.removeFirst(linkLog.count - 5000) }
+    }
+    private func logPush(_ cmd: UInt8) {
+        guard transport.link == .bluetooth else { return }
+        linkLog.append(LinkEntry(at: Date(), name: "push \(cmd)", queuedMs: 0, rttMs: 0, tries: 0, ok: true, behind: queue.count))
+        if linkLog.count > 5000 { linkLog.removeFirst(linkLog.count - 5000) }
+    }
+    /// The link log as CSV: time, request, ms queued, ms round trip, tries, answered, requests behind it.
+    public func linkLogCSV() -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return "at,request,queued_ms,rtt_ms,tries,ok,behind\n" + linkLog.map {
+            "\(f.string(from: $0.at)),\"\($0.name)\",\($0.queuedMs),\($0.rttMs),\($0.tries),\($0.ok ? 1 : 0),\($0.behind)"
+        }.joined(separator: "\n") + "\n"
     }
 
     private let transport: SysExTransport
@@ -107,6 +142,8 @@ public actor SloopClient {
         guard inFlight == nil, !queue.isEmpty else { return }
         var p = queue.removeFirst()
         p.attemptsLeft -= 1
+        p.sent = ContinuousClock.now
+        p.tries += 1
         inFlight = p
         transport.send(p.request.bytes)
         let id = p.id, attempts = p.attemptsLeft, timeout = p.timeout
@@ -120,13 +157,14 @@ public actor SloopClient {
         guard let p = inFlight, p.id == id, p.attemptsLeft == attemptsLeft else { return }
         inFlight = nil
         if p.attemptsLeft > 0 { queue.insert(p, at: 0) }
-        else { p.continuation.resume(throwing: ClientError.timeout(p.request.description)) }
+        else { logLink(p, ok: false); p.continuation.resume(throwing: ClientError.timeout(p.request.description)) }
         pump()
     }
 
     func receive(_ bytes: [UInt8]) {
         guard let (cmd, body) = Frame.decode(bytes) else { return }
         if Cmd.pushes.contains(cmd) {
+            logPush(cmd)
             if let push = try? Push(cmd: cmd, body: body) { pushSink.yield(push) }
             return
         }
@@ -134,6 +172,7 @@ public actor SloopClient {
         if cmd == Cmd.ui, let push = try? Push(cmd: cmd, body: body) { pushSink.yield(push) }
         guard let p = inFlight, p.request.cmd == cmd, p.request.matches(body) else { return }
         inFlight = nil
+        logLink(p, ok: true)
         p.continuation.resume(returning: body)
         pump()
     }
