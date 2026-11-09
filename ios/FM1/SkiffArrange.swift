@@ -31,6 +31,8 @@ struct SkiffArrangePage: View {
     @State private var section: SectionRange?
     @State private var leftOut: Set<Int> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The track controls open (the Pads' choice, shared: one switch for both views).
+    @AppStorage("padControlsOpen") private var controlsOpen = true
 
     static let headerWidth: CGFloat = 152
     /// The Song tab's Timeline: the Pads' heads and their width (Scott, 2026-11-09: one set of track heads for both),
@@ -264,13 +266,13 @@ struct SkiffArrangePage: View {
                         SongPlayhead(session: session, store: store, barWidth: barWidth,
                                      height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap))
                     }
+                    .overlay(alignment: .topLeading) { laneControls(barWidth: barWidth, contentWidth: contentWidth) }
                     .frame(width: contentWidth, alignment: .leading)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDisabled(lifted != nil)
             }
             .background(alignment: .topLeading) { selectedRow }
-            .overlay(alignment: .topTrailing) { knobBox }
             .opacity(store.offline ? 0.5 : 1)
         }
         .frame(height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap))
@@ -280,6 +282,48 @@ struct SkiffArrangePage: View {
         .background { keyboardShortcuts }
     }
 
+    /// The Song tab: the selected track's controls as on the Pads (Scott, 2026-11-09: "match them"): hanging straight
+    /// off its lane at the block the editor shows (above where there's room), one strip with the lane, sliding out of
+    /// it; they scroll with the blocks. Open or shut is the Pads' choice too.
+    @ViewBuilder private func laneControls(barWidth: CGFloat, contentWidth: CGFloat) -> some View {
+        let t = session.selectedTrack
+        let list = store.song?.tracks[safe: t]
+        let entry = ui.pinnedEntry.flatMap { $0.track == t ? $0.entry : nil } ?? list?.entryOn
+        let block = entry.flatMap { e in store.blocks(t).first { $0.entries.contains(e) } }
+        let total = 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap)
+        ZStack(alignment: .topLeading) {
+            if compact, controlsOpen, dragPattern == nil, lifted == nil, let b = block {
+                let h = laneHeight, gap = Self.laneGap
+                let laneTop = 24 + gap + CGFloat(t) * (h + gap)
+                let bx = CGFloat(b.start / SongPlacement.ticksPerBar) * barWidth + 2
+                let bw = max(8, CGFloat(b.length / SongPlacement.ticksPerBar) * barWidth - 4)
+                let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
+                let up = laneTop - tab.height >= 0
+                let right = bx + tab.width > contentWidth
+                let x = right ? max(0, bx + bw - tab.width) : bx
+                let y = up ? laneTop - tab.height : laneTop + h
+                let s = PadsPage.SelectedGeometry(frame: CGRect(x: bx, y: laneTop, width: bw, height: h), tab: tab, drop: 0, up: up, right: right,
+                                                  tabAt: CGPoint(x: x, y: y), knobsAt: CGPoint(x: x, y: y), border: 0, inner: .zero,
+                                                  padRadius: 8, earL: gap, earR: gap, col: 1)
+                ZStack(alignment: .topLeading) {
+                    LaneTabShape(box: CGRect(origin: s.knobsAt, size: tab), earL: gap, earR: gap, r: TrackKnobBox.outerRadius, up: up)
+                        .fill(SelectionTint.fill(t))
+                    TrackKnobBox(session: session, ui: ui, embedded: true)
+                        .frame(width: tab.width, height: tab.height, alignment: .topLeading)
+                        .offset(x: x, y: y)
+                }
+                .frame(width: contentWidth, height: total, alignment: .topLeading)
+                .id("lanebox\(t).\(b.id)")
+                .transition(reduceMotion ? .opacity : Emerge.transition(s, row: false, slide: true))
+            }
+        }
+        .frame(width: contentWidth, height: total, alignment: .topLeading)
+        .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: block?.id)
+        .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: t)
+        .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: controlsOpen)
+    }
+
+    /// (The old box at the timeline's right end, before the Pads' was shared; kept for the Arrange page's look.)
     /// The Song tab: the selected track's LEVEL, STEPS and PAN at the timeline's right end, just under its lane, or
     /// just above it where it would run past the last lane (Scott, 2026-11-06). Over the lanes, outside their
     /// horizontal scroll; out of the way while a pattern or a block is carried, so the drop reaches the lane.

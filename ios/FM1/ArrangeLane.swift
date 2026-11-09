@@ -13,6 +13,7 @@ struct LaneHeader: View {
     var ui: EditorUI? = nil
     @Environment(\.arrangeLaneHeight) private var laneHeight
     @Environment(\.arrangeCompact) private var compact
+    @AppStorage("padControlsOpen") private var controlsOpen = true
 
     var body: some View {
         let _ = BodyCounter.tick("LaneHeader")
@@ -37,6 +38,8 @@ struct LaneHeader: View {
                 }
             }
             .frame(width: SkiffArrangePage.headWidth(compact: true) - 12, height: laneHeight, alignment: .topLeading)
+            // double-tapped: the track controls in or out, as on the Pads
+            .simultaneousGesture(TapGesture(count: 2).onEnded { session.select(track: track); controlsOpen.toggle() })
         } else {
             legacyCompactBody
         }

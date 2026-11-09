@@ -310,7 +310,9 @@ struct SkiffSongPage: View {
     /// The lanes share what's left under the tool row and the ruler.
     static func laneHeight(_ top: CGFloat, tracks: Int) -> CGFloat {
         let lanes = top - 44 - 8 - 24 - 8
-        return max(28, min(SkiffArrangePage.fullLaneHeight, lanes / CGFloat(max(1, tracks)) - SkiffArrangePage.laneGap))
+        // no cap: the lanes share all the room, as the pads' rows do, so at full size they're tall enough for the Pads'
+        // full heads (Scott, 2026-11-09: "doesn't use all the vertical space")
+        return max(28, lanes / CGFloat(max(1, tracks)) - SkiffArrangePage.laneGap)
     }
 
 }
