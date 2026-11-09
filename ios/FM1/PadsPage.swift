@@ -276,7 +276,7 @@ struct PadsPage: View {
                             let bare = !controlsShown
                             selectedTint(t, s, area: g.size, bare: bare)
                                 .id("tint\(t).\(i).\(bare)")
-                                .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare))
+                                .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare, slide: !bare))
                         }
                         if let d = drag, !d.refused, let m = marks[d.track] { dragged(d, m, cell: cell, date: tl.date) }
                     }

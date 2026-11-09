@@ -89,37 +89,53 @@ struct Emerge: ViewModifier, Animatable {
     static let fillet: CGFloat = 40
     var p: CGFloat
     let pad: CGRect, tab: CGRect, up: Bool
+    /// The track controls: they slide out from behind the lane's edge, as if out of the row's colour, and back in
+    /// (Scott, 2026-11-09: revealed in place they looked as if they'd been sitting there). Off: the tint under the pad,
+    /// revealed.
+    var slide = false
 
     var animatableData: CGFloat {
         get { p }
         set { p = newValue }
     }
 
-    static func transition(_ s: PadsPage.SelectedGeometry, row: Bool) -> AnyTransition {
+    static func transition(_ s: PadsPage.SelectedGeometry, row: Bool, slide: Bool = false) -> AnyTransition {
         let tab = row ? .zero : CGRect(origin: s.tabAt, size: CGSize(width: s.tab.width, height: s.tab.height + s.drop))
-        return .modifier(active: Emerge(p: 0, pad: s.frame, tab: tab, up: s.up),
-                         identity: Emerge(p: 1, pad: s.frame, tab: tab, up: s.up))
+        return .modifier(active: Emerge(p: 0, pad: s.frame, tab: tab, up: s.up, slide: slide),
+                         identity: Emerge(p: 1, pad: s.frame, tab: tab, up: s.up, slide: slide))
     }
 
     func body(content: Content) -> some View {
-        let h = tab.height * p
-        content
-            .mask(alignment: .topLeading) {
-                // room round both for the tab's shadow on every side (Scott, 2026-11-09: it was cut off in a hard-edged
-                // band on the pad beside the selected one, where only the pad's strip let it through)
-                let m: CGFloat = tab.width > 0 ? 32 : 0
-                ZStack(alignment: .topLeading) {
-                    Color.clear
-                    // the pad and its border, wide enough for the fillets where the tab meets it
-                    Rectangle().frame(width: pad.width + 2 * Self.fillet + 2 + 2 * m, height: pad.height + 2 + 2 * m)
-                        .offset(x: pad.minX - Self.fillet - 1 - m, y: pad.minY - 1 - m)
-                    // the tab, revealed from the pad's edge
-                    // (its far edge's room grows with the reveal, so no more of the tab shows early)
-                    Rectangle().frame(width: tab.width + 2 * m, height: h + m + m * p)
-                        .offset(x: tab.minX - m, y: up ? tab.maxY - h - m * p : tab.minY - m)
+        let m: CGFloat = tab.width > 0 ? 32 : 0          // room for the tab's shadow, beside it and at its far edge
+        if slide {
+            // the box moves its own height from behind the lane's edge; the mask stops at that edge, so it comes out
+            // of the row's colour and goes back into it
+            content
+                .offset(y: (up ? 1 : -1) * (1 - p) * tab.height)
+                .mask(alignment: .topLeading) {
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                        Rectangle().frame(width: tab.width + 2 * m, height: tab.height + m)
+                            .offset(x: tab.minX - m, y: up ? tab.minY - m : tab.minY)
+                    }
                 }
-            }
-            // (no fade: the controls roll out of their pad and back in, Scott 2026-11-09: "not a crossfade")
+        } else {
+            let h = tab.height * p
+            content
+                .mask(alignment: .topLeading) {
+                    // room round both for the tab's shadow on every side (Scott, 2026-11-09: it was cut off in a
+                    // hard-edged band on the pad beside the selected one, where only the pad's strip let it through)
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                        // the pad and its border, wide enough for the fillets where the tab meets it
+                        Rectangle().frame(width: pad.width + 2 * Self.fillet + 2 + 2 * m, height: pad.height + 2 + 2 * m)
+                            .offset(x: pad.minX - Self.fillet - 1 - m, y: pad.minY - 1 - m)
+                        // the tab, revealed from the pad's edge (its far edge's room grows with the reveal)
+                        Rectangle().frame(width: tab.width + 2 * m, height: h + m + m * p)
+                            .offset(x: tab.minX - m, y: up ? tab.maxY - h - m * p : tab.minY - m)
+                    }
+                }
+        }
     }
 }
 
