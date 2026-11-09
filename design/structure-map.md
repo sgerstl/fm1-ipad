@@ -29,7 +29,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 
 ## The Live tab: the performance grid (decided 2026-11-10, mock before building)
 
-*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. Decided the same day: **its own tab, called Live** (Song · Live · Mix · Sounds); **Pads stays** as the one-track view that edits and launches; **a row's stop is its mute**. Mocked on the canvas, boards 35–37 (generator `design/boards/live.py`); no SwiftUI until Scott OKs the mock. Open questions and the protocol check: `design/perform-grid-questions.md`.*
+*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. Decided the same day: **its own tab, called Live** (Song · Live · Mix · Sounds); **Pads stays** as the one-track view that edits and launches; **a row's stop is its mute**. Mocked on the canvas, boards 35–38 (generator `design/boards/live.py`); no SwiftUI until Scott OKs the mock. Open questions and the protocol check: `design/perform-grid-questions.md`.*
 
 **What it's for.** Pads already shows all six tracks in its strip (what each plays, what's waiting, its mute), but launches only the selected track's entries. Live covers the gap: launching on any track from one screen. The firmware already allows it: LIST op 3 PLAY takes any track and entry, and nothing on the FM-1 changes the selected track when it's sent.
 
@@ -40,7 +40,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 **The FM-1's buttons on Live** (Scott, 2026-11-10):
 - **ARP held (Skiff's PERFORM layer) brings up Live.** This replaces the rule of 2026-11-07, where ARP held showed Pads. Lupe sees it through the screen link (SCREEN's layer 7, pushed when the layer opens and closes). Live while ARP is held or its layer is locked, then back to the tab you were on when you let go (Scott, 2026-11-10, as the Pads rule did). Lupe doesn't change tab when you're on Live already.
 - **The sound keys work during a performance.** ENV, LFO, FX, SEL, EDIT and ARP (tapped) bring the sound panel in over Live, as over Song and Mix, for the selected track. The panel covers the right-hand columns; the row heads and the columns left of it stay live, so you can still launch, mute and select a track while shaping. HOME closes it. On the phone the panel covers the pads and leaves the row heads (number and mute) live, as round 4's sound panel leaves the strip.
-- Neither is in the mock yet (boards 35–37 show Live with the panel shut).
+- Board 38 shows the panel over Live, between the tool row and the scene row so neither is covered (proposed).
 
 ### What's on it
 

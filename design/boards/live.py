@@ -1,5 +1,5 @@
 import json, os
-OUT = os.environ.get('OUT', 'canvas/project')  # the canvas's project folder (boards 35–37)
+OUT = os.environ.get('OUT', 'canvas/project')  # the canvas's project folder (boards 35–38)
 
 TEMPLATE = r'''<!doctype html>
 <html lang="en">
@@ -62,6 +62,44 @@ a{color:#A1A1AA}a:hover{color:#EDEDF0}
     <button style="{{storeStyle}}">Store</button>
     <sc-for list="{{scenes}}" as="s" hint-placeholder-count="16"><button aria-label="{{s.aria}}" style="{{s.style}}">{{s.label}}</button></sc-for>
   </div>
+
+  <sc-if value="{{hasPanel}}" hint-placeholder-val="{{ false }}">
+    <aside aria-label="FX pages for T5 Lead" style="{{pn.box}}">
+      <div style="display: flex; align-items: center; gap: 10px; height: 44px;">
+        <h2 style="margin: 0; font-size: 20px; font-weight: 600;">FX</h2>
+        <span style="font-size: 12px; color: #C4C4CC;">T5 Lead · 6 pages</span>
+        <span style="flex-grow: 1;"></span>
+        <button style="{{pn.key}}">Save sound</button>
+        <button aria-label="Close the FX pages" style="{{pn.close}}"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="#EDEDF0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+      </div>
+      <div style="display: flex; height: 44px; margin-left: -12px;">
+        <sc-for list="{{pn.chips}}" as="c" hint-placeholder-count="6"><button aria-pressed="{{c.on}}" style="{{c.style}}"><span style="{{c.line}}"></span>{{c.label}}</button></sc-for>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: #111114;">
+        <span style="width: 26px; height: 26px; border-radius: 7px; background: #FF6FAE; color: #101012; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center;">5</span>
+        <span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;"><span style="font-size: 15px; font-weight: 600;">[PRESET NAME]</span><span style="font-size: 12px; color: #C4C4CC;">[ENGINE]</span></span>
+        <button style="{{pn.key}}">Sounds ▾</button>
+      </div>
+      <sc-for list="{{pn.cards}}" as="cd" hint-placeholder-count="2">
+        <section aria-label="{{cd.title}} page" style="display: flex; flex-direction: column; gap: 8px;">
+          <h3 style="{{cd.h}}">{{cd.title}}</h3>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;">
+            <sc-for list="{{cd.cols}}" as="k" hint-placeholder-count="4">
+              <div style="{{k.box}}">
+                <span style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; letter-spacing: 0.04em; color: #A1A1AA;">{{k.label}}<span style="{{k.badge}}">{{k.n}}</span></span>
+                <span style="font-size: 22px; font-weight: 600;">{{k.v}}<span style="font-size: 11px; color: #A1A1AA; margin-left: 2px;">{{k.u}}</span></span>
+                <span style="{{k.track}}"><span style="{{k.fill}}"></span></span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </sc-for>
+      <span style="flex-grow: 1;"></span>
+      <div role="group" aria-label="The FM-1's buttons" style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;">
+        <sc-for list="{{pn.keys}}" as="b" hint-placeholder-count="12"><button aria-pressed="{{b.on}}" style="{{b.style}}">{{b.label}}</button></sc-for>
+      </div>
+    </aside>
+  </sc-if>
   <sc-if value="{{hint}}" hint-placeholder-val="{{ true }}"><p style="{{hintStyle}}">{{hint}}</p></sc-if>
 </div>
 
@@ -163,6 +201,27 @@ class Component extends DCLogic {
       scenes.push({ label: String(s + 1), aria: 'Scene ' + (s + 1) + (kept ? '' : ', empty') + (rec ? ', recalled last' : '') + (held ? ', held' : ''),
         style: abs(L.x0 + L.storeW + 6 + s * (sw + L.sg) - L.x0, 0, sw, L.sceneH) + 'border: 0; border-radius: 8px; font: inherit; font-size: 14px; ' + (held ? 'background: #3E3E46; color: #EDEDF0; font-weight: 700; box-shadow: 0 0 0 2px #EDEDF0, 0 12px 28px rgba(0,0,0,0.6);' : rec ? 'background: #EDEDF0; color: #101012; font-weight: 700;' : kept ? 'background: #26262B; color: #EDEDF0; font-weight: 600;' : 'background: transparent; color: #A1A1AA; box-shadow: inset 0 0 0 1px #2A2A30;') });
     }
+
+    var pn = null;
+    if (V.panel) {
+      var P = V.panel;
+      var key = 'height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: #26262B; color: #EDEDF0; font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 2px 0 #0A0A0C;';
+      pn = {
+        box: abs(P.x, P.y, 430, P.h) + 'padding: 16px; border-radius: 12px; background: #1A1A1E; box-shadow: 0 6px 16px rgba(0,0,0,0.35), -1px 0 0 #26262B; display: flex; flex-direction: column; gap: 12px;',
+        key: key, close: 'width: 44px; height: 44px; border: 0; border-radius: 8px; background: #26262B; box-shadow: 0 2px 0 #0A0A0C; display: flex; align-items: center; justify-content: center;',
+        chips: ['FX', 'DRIVE', 'INSERT', 'INSERT 2', 'SLICER', 'DUCK'].map(function (c, i) { var on = i === 0; return { label: c, on: on ? 'true' : 'false',
+          style: 'position: relative; height: 44px; padding: 0 12px; border: 0; background: transparent; font: inherit; font-size: 13px; letter-spacing: 0.03em; ' + (on ? 'color: #EDEDF0; font-weight: 600; text-shadow: 0 0 6px rgba(237,237,240,0.55);' : 'color: #C4C4CC;'),
+          line: on ? 'position: absolute; left: 12px; right: 12px; top: 8px; height: 3px; border-radius: 1.5px; background: #EDEDF0;' : 'display: none;' }; }),
+        cards: P.cards.map(function (cd, ci) { return { title: cd[0], h: 'margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: ' + (ci === 0 ? '#EDEDF0' : '#A1A1AA') + ';', cols: cd[1].map(function (k, ki) {
+          var hot = ci === 0 && ki === 3;
+          return { label: k[0], n: k[0] ? String(ki + 1) : '', v: k[1], u: k[2], box: 'position: relative; overflow: hidden; height: 76px; box-sizing: border-box; padding: 8px 10px 0; border-radius: 6px; background: #111114; display: flex; flex-direction: column; gap: 1px;' + (k[0] ? '' : ' visibility: hidden;'),
+            badge: 'width: 18px; height: 18px; border-radius: 9px; background: #26262B; color: ' + (hot ? '#EDEDF0' : '#A1A1AA') + '; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;',
+            track: 'position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #2A2A30;' + (hot ? ' box-shadow: 0 -73px 0 0 #EDEDF0;' : ''),
+            fill: 'position: absolute; left: 0; top: 0; bottom: 0; width: ' + Math.round(k[3] * 100) + '%; background: #FF6FAE;' }; }) }; }),
+        keys: ['FX', 'SEL', 'ENV', 'LFO', 'EDIT', 'GLO', 'HOME', 'SAVE', 'ARP', 'SEQ', 'PLAY', 'REC'].map(function (b) { var on = b === 'FX'; return { label: b, on: on ? 'true' : 'false',
+          style: 'height: 44px; border: 0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; ' + (on ? 'background: #EDEDF0; color: #101012;' : 'background: #26262B; color: #C4C4CC; box-shadow: 0 2px 0 #0A0A0C;') }; })
+      };
+    }
     var notes = V.notes.map(function (n, i) {
       return { n: String(i + 1), text: n[4],
         box: abs(n[0], n[1], n[2], n[3]) + 'border: 2px dashed #5AC8FA; border-radius: 10px; pointer-events: none;',
@@ -184,6 +243,7 @@ class Component extends DCLogic {
       storeStyle: abs(0, 0, L.storeW, L.sceneH) + 'border: 0; border-radius: 10px; background: #26262B; color: #EDEDF0; font: inherit; font-size: 14px;',
       scenes: scenes,
       hint: V.hint, hintStyle: abs(L.x0, L.hintY, L.W - 2 * L.x0, 40) + 'margin: 0; font-size: 13px; line-height: 1.4; color: #A1A1AA;',
+      hasPanel: !!pn, pn: pn || {},
       notes: notes, title: V.title, gist: V.gist,
       ann: abs(0, L.H, L.W, L.TH - L.H) + 'padding: 20px 24px; background: #EDEDF0; color: #101012; display: flex; flex-direction: ' + (L.short ? 'column' : 'row') + '; gap: ' + (L.short ? 12 : 32) + 'px;',
       annLeft: 'width: ' + (L.short ? 'auto' : '380px') + '; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;',
@@ -254,6 +314,24 @@ boards.append(('LiveGridScene.dc.html', 'Lupe Live, a scene held', IP, dict(
     [gx(L,3)-8, gy(L,0)-8, IP['pw']+16, IP['rh']+16, 'Scene 3 held: a white outline and "S3" on the pad each track goes to.'],
     [10, IP['sceneY']-6, 380, IP['sceneH']+12, 'Scenes: Store, then the 16. 2 was recalled last (white); 3 is held.'],
     [gx(L,0)-6, gy(L,2)-6, IP['pw']+12, IP['rh']+12, 'A pad with a sound has its top right corner cut, as on the FM-1.'],
+  ])))
+
+L = IP
+PX, PY, PHh = 1376-16-430, 128, 908-128-12
+boards.insert(2, ('LiveGridPanel.dc.html', 'Lupe Live, FX panel open', IP, dict(
+  L=IP, song=SONG_JAM, sel=4, held=None, tabs=['Song', 'Live', 'Mix', 'Sounds'], status='2 waiting · bar 11',
+  panel=dict(x=PX, y=PY, h=PHh, cards=[
+    ['FX', [['DIST', '18', '%', 0.18], ['CHORUS', '0', '%', 0.0], ['DELAY', '35', '%', 0.35], ['REVERB', '42', '%', 0.42]]],
+    ['DRIVE', [['DIST', '18', '%', 0.18], ['TYPE', 'SOFT', '', 0.0], ['TONE', '0', '', 0.5], ['', '', '', 0]]],
+  ]),
+  hint='FX pressed on the FM-1 (or its key here): the panel comes in over Live for the selected track. Rows A–E, the row heads, Launch at and every scene stay live.',
+  title='38 · Live with FX pressed: the sound panel over the grid',
+  gist='The sound keys work mid-set (Scott, 2026-11-10). The panel is the Song tab’s, 430 pt, for the selected track (Lead). Here it sits between the tool row and the scene row so neither is covered; the right-hand columns go under it.',
+  notes=[
+    [PX-6, PY-6, 442, PHh+12, 'The sound panel as on Song: FX’s pages as words (FX lit), the track’s sound, the pages as cards, the FM-1’s 12 keys at the foot. REVERB is being turned (lit top).'],
+    [10, gy(L,4)-6, 180, IP['rh']+12, 'It edits the selected track. Tap another row’s number to shape that one instead; the panel follows.'],
+    [gx(L,0)-6, IP['gridY']-6, 5*IP['pw']+4*IP['pg']+12, 6*IP['rh']+5*IP['rg']+12, 'Columns A–E stay playable beside it. Columns under the panel can’t be reached until it closes (or a two-finger pan brings them left).'],
+    [10, IP['sceneY']-6, 1356, IP['sceneH']+12, 'Proposed: the panel stops above the scene row and below the tool row, so all 16 scenes, Launch at and Cancel waiting stay in reach. On Song it runs down the page.'],
   ])))
 L = PH
 boards.append(('LivePhone.dc.html', 'Lupe Live, phone', PH, dict(
