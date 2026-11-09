@@ -357,7 +357,7 @@ boards.append(('PadsGrid.dc.html', 'Lupe Pads grid, No grid', IP, dict(COMMON, L
     [gx(L,4)-6, gy(L,0)-6, IP['pw']+12, IP['rh']+12, 'Waiting for the launch point: dashed, and when it lands. Tap it again to take it back.'],
     [gx(L,2)-6, gy(L,1)-6, 2*IP['pw']+IP['pg']+12, IP['rh']+12, 'A chain is one pad across its entries; a tap starts it from its first.'],
     [10, gy(L,3)-6, 180, 3*IP['rh']+2*IP['rg']+12, 'Row heads: number (tap to select), name, Mute (the row’s stop). Lead is selected. Perc is muted.'],
-    [gx(L,1)-6, gy(L,4)-6, 4*92+3*4+16+12, IP['rh']+132+12, 'The selected pad (Lead · B) keeps its track controls hanging under it, as today (board 32): HOME’s four, LEVEL, STEPS, PAN. Here it covers Perc’s B–D; tap the pad again to roll it away. Border only at Half and Max (2026-11-10, question 9).'],
+    [gx(L,1)-6, gy(L,4)-6, 4*92+3*4+16+12, IP['rh']+132+12, 'The selected pad (Lead · B) keeps its track controls hanging under it, as today (board 32): HOME’s four, LEVEL, STEPS, PAN. Here it covers Perc’s B–D; tap the pad again to roll it away. Border only at Half and Max (2026-11-09, question 9).'],
     [gx(L,8)-6, IP['gridY']-30, IP['pw']+12, 6*IP['rh']+5*IP['rg']+36, 'One empty column after the last used entry, so there’s always room to add; further columns pan with two fingers.'],
     [10, IP['sceneY']-6, 1356, IP['sceneH']+12, 'Store, the 16 scenes, and Open for the editor at the end (as board 33).'],
   ])))
@@ -399,7 +399,7 @@ boards.append(('PadsGridPanel.dc.html', 'Lupe Pads grid, FX panel open', IP, dic
   ]),
   hint='FX pressed on the FM-1 (or its key here): the panel comes in over the grid for the selected track. Rows A–E, the row heads, Launch at and every scene stay live.',
   title='39 · Pads grid with FX pressed: the sound panel over it',
-  gist='The sound keys work mid-set (Scott, 2026-11-10). The panel is today’s, 430 pt, for the selected track (Lead). Proposed: at No grid it sits between the tool row and the scene row so neither is covered.',
+  gist='The sound keys work mid-set (Scott, 2026-11-09). The panel is today’s, 430 pt, for the selected track (Lead). Proposed: at No grid it sits between the tool row and the scene row so neither is covered.',
   notes=[
     [PX-6, PY-6, 442, PHh+12, 'The sound panel as now: FX’s pages as words (FX lit), the track’s sound, the pages as cards, the FM-1’s 12 keys at the foot. REVERB is being turned (lit top).'],
     [10, gy(L,4)-6, 180, IP['rh']+12, 'It edits the selected track. Tap another row’s number to shape that one; the panel follows.'],

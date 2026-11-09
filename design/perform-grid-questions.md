@@ -1,6 +1,6 @@
 # The performance grid: open questions and the protocol check
 
-*2026-11-10. Goes with "The performance grid" in `design/structure-map.md`. Answer these before any screen design.*
+*2026-11-09. Goes with "The performance grid" in `design/structure-map.md`. Answer these before any screen design.*
 
 ## Design intake
 
@@ -15,23 +15,23 @@ If you want the grid to look different from the 4 × 4 pads (a "stage mode", say
 
 ## Open questions for Scott
 
-**Answered 2026-11-10:** ~~its own tab called Live~~, then the same day **Pads itself becomes the grid** (1); Pads stays beside it; a row's stop is its mute (2); no column launch (3); keep board 37 on the phone (4); a staged pad tapped again takes the launch back (5); the playing pad tapped restarts it (6). Then 7 and 8: ARP held brings up Live; the sound keys bring the panel in over Live. **Before building 5 and 6:** a device check of whether relaunching the playing entry restarts its pattern from step 1; if not, restart needs a small firmware op.
+**Answered 2026-11-09:** ~~its own tab called Live~~, then the same day **Pads itself becomes the grid** (1); Pads stays beside it; a row's stop is its mute (2); no column launch (3); keep board 37 on the phone (4); a staged pad tapped again takes the launch back (5); the playing pad tapped restarts it (6). Then 7 and 8: ARP held brings up Live; the sound keys bring the panel in over Live. **Before building 5 and 6:** a device check of whether relaunching the playing entry restarts its pattern from step 1; if not, restart needs a small firmware op.
 
 1. ~~**Where it lives.**~~ Pads becomes the grid (was: its own tab, Live).
 2. ~~**Stopping a track.**~~ The mute. A real stop would need a firmware op (below).
 3. ~~**Column launch.**~~ Left out. A launch button at the top of each column ("everything to entry C") the way a clip launcher's scenes work? It's not the same as Skiff's scenes, which hold any entry per track. Lupe could send six PLAYs, and at BAR or BEAT they land together; at LOOP each track lands at its own pass end; tracks with nothing in that column keep playing. Leave it out for now, or add it?
 4. ~~**The phone.**~~ Board 40: the Pads tab becomes the grid (four tabs), rows 40, scenes 34. Live makes five tabs (Pads · Timeline · Live · Mix · Sounds), and the scene row doesn't fit under six rows of pads at phone height. Options: a 2 × 8 scene sheet from a Scenes button in the tool row; the grid drops to the tracks in use; or the phone's All tracks has no scenes (One track keeps them). Which?
 5. ~~**Tapping a staged pad again.**~~ Takes it back. Take the launch back (Lupe would relaunch what's playing, replacing the staged one; see 6 for what that does), or nothing? The FM-1 has no per-track cancel; Cancel takes back everything.
-6. ~~**Tapping a playing pad.**~~ Queues it as the next to play, like any other pad (Scott, 2026-11-10: while playing, every pad tap queues; it starts again at the launch point, pending the device check). On a clip launcher it restarts the clip. On Skiff it stages the same entry again at the launch point, keeping the track's edits (`same` in `stage_entry`). I haven't confirmed from the source whether the swap restarts the pattern from step 1; a device check settles it. Which do you want: a restart, or nothing?
+6. ~~**Tapping a playing pad.**~~ Queues it as the next to play, like any other pad (Scott, 2026-11-09: while playing, every pad tap queues; it starts again at the launch point, pending the device check). On a clip launcher it restarts the clip. On Skiff it stages the same entry again at the launch point, keeping the track's edits (`same` in `stage_entry`). I haven't confirmed from the source whether the swap restarts the pattern from step 1; a device check settles it. Which do you want: a restart, or nothing?
 7. ~~**The FM-1's own PERFORM layer.**~~ ARP held shows Song › Pads, as since 2026-11-07. The 4 × 4 mirrors its white keys. The grid has no hardware twin. Is that fine, or should All tracks follow when you hold ARP on the FM-1 (it switches to the PERFORM layer)?
 8. ~~**The FM-1's sound keys on Live.**~~ They work: the sound panel over Pads. FX…ARP open the sound panel over Song and Mix. Over Live too (shape a sound mid-set), or leave Live alone while you play?
 
 
-## New with Pads as the grid (2026-11-10)
+## New with Pads as the grid (2026-11-09)
 
-9. ~~**The selected pad's track controls.**~~ Answered 2026-11-10: they keep hanging under the selected pad, as today (board 35 draws it). The box is track-level, and the selected pad is always on the selected track's row, so the rule carries over. At No grid it covers about three of the next track's pads (tap the pad again to roll it away; on the bottom row it opens upward); at Half (42 pt rows) and Max, the border alone. The Track key on the row head is dropped.
-10. ~~**A tap on another track's row.**~~ Launches only; the row's number selects (Scott, 2026-11-10).
-11. ~~**Board 39's panel placement**~~ (between the tool row and the scene row at No grid). OK (Scott, 2026-11-10).
+9. ~~**The selected pad's track controls.**~~ Answered 2026-11-09: they keep hanging under the selected pad, as today (board 35 draws it). The box is track-level, and the selected pad is always on the selected track's row, so the rule carries over. At No grid it covers about three of the next track's pads (tap the pad again to roll it away; on the bottom row it opens upward); at Half (42 pt rows) and Max, the border alone. The Track key on the row head is dropped.
+10. ~~**A tap on another track's row.**~~ Launches only; the row's number selects (Scott, 2026-11-09).
+11. ~~**Board 39's panel placement**~~ (between the tool row and the scene row at No grid). OK (Scott, 2026-11-09).
 
 ## Protocol check: what the grid needs and what Skiff 2.2 + the screen link can do
 
