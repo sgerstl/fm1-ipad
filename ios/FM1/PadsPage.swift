@@ -366,7 +366,9 @@ struct PadsPage: View {
         let short = size.height < 56              // Half's rows, as tall as the lane heads: one line
         let rad = radius ?? Self.padRadius(size)
         // the selected pad outlined in its track's colour, not white (Scott, 2026-11-09: clearer on Half)
-        let mark: Color? = selected ? Theme.track[t] : nil
+        let key = PadKey(track: t, entry: i)
+        // ...and the empty pad whose menu is open, so you can see which one the choices are for (Scott, 2026-11-09)
+        let mark: Color? = selected || (menuPad == key && ui.menu != nil) ? Theme.track[t] : nil
         let list = store.song?.tracks[safe: t]
         let e = list?.entries[safe: i] ?? .empty
         let blocks = store.blocks(t)
@@ -390,7 +392,6 @@ struct PadsPage: View {
             if next { return "Next" }
             return e.chained ? "Chained on" : "×\(e.reps)"
         }()
-        let key = PadKey(track: t, entry: i)
         let held = previewScene.flatMap { store.scenesSeen[$0]?[safe: t] }?.entry == i
         return Button {
             // an empty pad: what to put there, beside it (Scott, 2026-11-07: "you want to create a new pattern when you

@@ -75,9 +75,14 @@ struct TrackStripCard: View {
 
     private func muteKey(muted: Bool, staged: PerformState.Staged) -> some View {
         let cd = LaneMarks.countdown(session.ticksToLaunch(track), session.launchMode)
-        let label = staged == .mute ? "Mutes\n\(cd)" : staged == .unmute ? "Unmutes\n\(cd)" : muted ? "Muted" : "Mute"
+        // an icon, not the word (Scott, 2026-11-09): the speaker struck through when muted; a change waiting shows
+        // what it becomes and when
         return Button { Task { await store.performOp(.mute(track: track)) } } label: {
-            Text(label).font(.system(size: 12, weight: muted || staged != .none ? .semibold : .regular)).multilineTextAlignment(.center)
+            VStack(spacing: 2) {
+                Image(systemName: (muted) != (staged != .none) ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                if staged != .none { Text(cd).font(.system(size: 11, weight: .semibold)).monospacedDigit().lineLimit(1) }
+            }
                 .foregroundStyle(muted && staged == .none ? Theme.onColour : Theme.text)
                 .frame(width: 72, height: 52)
                 .background {
@@ -171,7 +176,7 @@ struct TrackStripRow: View {
                 .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
                 Button { Task { await store.performOp(.mute(track: t)) } } label: {
-                    Text("M").font(.system(size: 13, weight: .semibold))
+                    Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(muted ? Theme.onColour : Theme.textSecondaryRaised)
                         .frame(width: 36, height: 36)
                         .background(RoundedRectangle(cornerRadius: 8).fill(muted ? Theme.text : Theme.control))
