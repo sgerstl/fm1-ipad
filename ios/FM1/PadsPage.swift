@@ -1,11 +1,12 @@
 import SloopKit
 import SwiftUI
 
-// The Song tab's Pads view (canvas board 25; Scott, 2026-11-07: "the most live playing friendly and the most ipad type
-// interface"): the selected track's 16 entries as a 4 × 4 grid of pads, as Skiff's PERFORM layer puts them on the FM-1's
-// white keys; all six tracks in a strip beside it (what each plays, what's waiting, its mute); the 16 scenes always in
-// view underneath (Scott: "agreed on showing the available scenes"), not behind a switch as the board had them. A pad
-// tapped launches its entry (LIST op 3: at once stopped, at the launch point playing); mutes and scenes are PERFORM's.
+// The Song tab's Pads view: every track's entries in rows, like a clip launcher (Scott, 2026-11-09, canvas boards
+// 35–39; design/structure-map.md › "Pads as a grid"). Each row is a track, each column an entry, so any track's pattern
+// launches without selecting it first. The track heads stay on the left (what each plays, its mute; tap one to select
+// it); the 16 scenes stay underneath. A pad tapped launches its entry (LIST op 3: at once stopped, at the launch point
+// playing); mutes and scenes are PERFORM's. Over the editor (Half) the rows shrink to the lane heads' height; over the
+// largest editor (Max) only the selected track's row of 16 is left (boards 37, 38).
 
 /// The Pads page's three layouts (SongPosition.layout).
 enum PadsLayout { case full, compact, row }
@@ -18,8 +19,8 @@ struct PadsPage: View {
     @State private var storing = false
     @State private var launched = 0               // a light haptic as a pad or scene is sent
     /// Each pad's frame (global): where its menu opens when it's tapped (an empty pad) rather than held.
-    @State private var padFrames: [Int: CGRect] = [:]
-    /// A scene held: the strip shows what it would do (Scott, 2026-11-07); let go, it's gone.
+    @State private var padFrames: [PadKey: CGRect] = [:]
+    /// A scene held: the heads and the pads show what it would do (Scott, 2026-11-07); let go, it's gone.
     @State private var previewScene: Int?
     /// Where the finger is (global), for a hold's menu; and the key a hold took, so the tap its release makes is
     /// dropped (the pads redraw four times a second, which resets UIKit's long press: SwiftUI's, beside the button)
@@ -34,118 +35,111 @@ struct PadsPage: View {
     @State private var holdAt: CGPoint = .zero
     @State private var gridFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Full size (the editor shut), over the editor (the strip as lane heads, two rows of 8, a shorter scene row), or
-    /// over the largest editor (a row of 16 small keys, no strip, no scenes) (Scott, 2026-11-07, boards 32–34).
+    /// Full size (the editor shut), over the editor (rows as tall as the lane heads, a shorter scene row), or over the
+    /// largest editor (the selected track's row of 16, no heads, no scenes) (boards 35, 37, 38).
     var layout: PadsLayout = .full
     private var compact: Bool { layout != .full }
     private var row: Bool { layout == .row }
+
+    /// A pad's place: its track and entry.
+    struct PadKey: Hashable { var track: Int, entry: Int }
 
     static let stripWidth: CGFloat = 248, gap: CGFloat = 12, sceneHeight: CGFloat = 56
     /// (2026-11-08, Scott: "shrink some of the containers… the scene buttons smaller": the scene row 32, the lane heads
     /// 42, so the editor at Half has the room its grid needs)
     static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 32, rowHeight: CGFloat = 42
-    /// A full card's height, fixed so the change from a lane head can be animated (its content needs about 93).
-    static let cardHeight: CGFloat = 108
+    /// The least a full head needs (its content is about 93).
+    static let cardHeight: CGFloat = 96
+    /// Between the rows at full size and over the editor.
+    static let fullRowGap: CGFloat = 8, compactRowGap: CGFloat = 4
     /// A row and a card swapping as the slot resizes: a quick crossfade, so the two aren't seen over each other for the
     /// whole spring (2026-11-08)
     static let swap = AnyTransition.opacity.animation(.easeOut(duration: 0.12))
     /// The editor panel's tab (SkiffSongPage), in the scene row's line under the strip: the scene row and the room
     /// under it.
     static let tabHeight: CGFloat = compactScenes + 8
-    /// Half: the pads exactly as tall as the track strip (the strip's rows; the tool row and switch over them; the
-    /// scene row and the tab's line under them).
+    /// Half: the rows as tall as the lane heads (the tool row and switch over them; the scene row and the tab's line
+    /// under them).
     static func halfTop(_ tracks: Int) -> CGFloat {
-        let strip = CGFloat(tracks) * rowHeight + CGFloat(max(0, tracks - 1)) * 4
+        let strip = CGFloat(tracks) * rowHeight + CGFloat(max(0, tracks - 1)) * compactRowGap
         return 44 + 10 + strip + 8 + compactScenes + 8
     }
     /// Max: the tool row and the row of 16 keys.
     static let rowHeight16: CGFloat = 64
     static let rowTop: CGFloat = 44 + 8 + rowHeight16 + 8
 
+    /// Where the rows go: from `top` (under the switch and the tool row), `rows` of `rowHeight` with `rowGap` between,
+    /// the heads on the left and the pads on the right on the same lines.
+    struct Rows {
+        var top: CGFloat, rowHeight: CGFloat, rowGap: CGFloat, sceneGap: CGFloat, count: Int
+        var height: CGFloat { CGFloat(count) * rowHeight + CGFloat(max(0, count - 1)) * rowGap }
+    }
+
+    private func rows(_ size: CGSize, tracks: Int) -> Rows {
+        switch layout {
+        case .full:
+            // the rows share what's left between the tool row and the scenes
+            let top: CGFloat = 52, n = max(1, tracks)
+            let room = size.height - top - Self.gap - Self.sceneHeight - CGFloat(n - 1) * Self.fullRowGap
+            return Rows(top: top, rowHeight: max(Self.cardHeight, floor(room / CGFloat(n))), rowGap: Self.fullRowGap, sceneGap: Self.gap, count: n)
+        case .compact:
+            return Rows(top: 54, rowHeight: Self.rowHeight, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
+        case .row:
+            return Rows(top: 52, rowHeight: Self.rowHeight16, rowGap: 0, sceneGap: 0, count: 1)
+        }
+    }
+
+    /// Entries A to the last any track uses, and one empty column after it so there's always room to add; at least 8.
+    /// They share the width (no sideways pan): at 16 a pad is still over 60 pt wide.
+    private var columns: Int {
+        if row { return 16 }
+        let used = (store.song?.tracks ?? []).map { ($0.entries.lastIndex { !$0.isEmpty } ?? -1) + 1 }.max() ?? 0
+        return min(16, max(8, used + 1))
+    }
+
     var body: some View {
         let _ = BodyCounter.tick("PadsPage")
         let t = session.selectedTrack
-        let cols = row ? 16 : compact ? 8 : 4, rows = row ? 1 : compact ? 2 : 4, gap = compact ? Self.compactGap : Self.gap
-        HStack(alignment: .top, spacing: compact ? 12 : 16) {
-            VStack(alignment: .leading, spacing: compact ? 4 : 8) {
-                SongViewSwitch(ui: ui).frame(height: 44).padding(.bottom, compact ? 6 : 0)
-                // Max: the strip folds into the editor header's track menu (PatternPane)
-                ForEach(row ? [] : Array(session.trackIndices), id: \.self) { k in
-                    let preview = previewScene.flatMap { store.scenesSeen[$0]?[safe: k] }
-                    // one place per track whose height moves between the lane head and the card, the two crossfading
-                    // in it, so the change rides the divider's spring instead of jumping (Scott, 2026-11-07)
-                    ZStack(alignment: .topLeading) {
-                        if compact {
-                            TrackStripRow(session: session, store: store, ui: ui, track: k, preview: preview).transition(Self.swap)
-                        } else {
-                            TrackStripCard(session: session, store: store, ui: ui, track: k, preview: preview)
-                                .frame(maxHeight: .infinity, alignment: .top).transition(Self.swap)
-                        }
-                    }
-                    .frame(height: compact ? Self.rowHeight : Self.cardHeight, alignment: .top)
-                    .clipped()
-                    .geometryGroup()
-                }
-                Spacer(minLength: Self.tabHeight)          // the editor panel's tab, in the scene row's line
-            }
-            .frame(width: compact ? Self.compactStrip : Self.stripWidth)
-            VStack(spacing: compact ? 8 : Self.gap) {
-                toolbar(t)
-                GeometryReader { g in
-                    // the full page: square pads; over the editor: two rows of 8 as wide and tall as the room allows
-                    let w = (g.size.width - CGFloat(cols - 1) * gap) / CGFloat(cols)
-                    let h = (g.size.height - CGFloat(rows - 1) * gap) / CGFloat(rows)
-                    let size = row ? CGSize(width: max(40, w), height: Self.rowHeight16)
-                        : compact ? CGSize(width: max(44, w), height: max(44, h)) : { let s = max(64, min(w, h)); return CGSize(width: s, height: s) }()
-                    let framed = framedPad(t)
-                    TimelineView(.periodic(from: .now, by: 0.25)) { tl in
-                        let m = store.marks(t, launchIn: session.ticksToLaunch(t))
-                        // a layout of its own, not a lazy grid: from 4 × 4 to 2 × 8 each pad keeps its identity and glides
-                        // to its new place and size on the divider's spring
-                        PadGrid(columns: cols, cell: size, gap: gap) {
-                            ForEach(0..<16, id: \.self) { i in
-                                pad(t, i, m, size: size, date: tl.date)
-                                    // one piece on the spring: without it the box bounced and its words stood still
-                                    // (Scott, 2026-11-08)
-                                    .geometryGroup()
-                                    .opacity(drag.map { !$0.refused && $0.track == t && $0.from == i } == true ? 0.35 : 1)
-                                    .overlay {
-                                        if let d = drag, d.track == t, landing(of: d) == i {
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
-                                                .allowsHitTesting(false)
-                                        }
-                                    }
-                                    // (left showing under the selected pad: its tint covers it, and as a new pad is
-                                    // picked the grid's own pad is there while the tint fades in, no blank flash)
-                                    .allowsHitTesting(i != framed)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .top : .center)
-                        .globalFrame($gridFrame)
-                        .overlay(alignment: .topLeading) {
-                            // another pad picked: the old tint and controls draw back into their pad as the new ones
-                            // grow out of theirs, together, quick (Scott, 2026-11-08)
+        let tracks = Array(session.trackIndices)
+        GeometryReader { root in
+            let r = rows(root.size, tracks: tracks.count)
+            HStack(alignment: .top, spacing: compact ? 12 : 16) {
+                VStack(alignment: .leading, spacing: 0) {
+                    SongViewSwitch(ui: ui).frame(height: 44)
+                    Color.clear.frame(height: r.top - 44)
+                    // Max: the heads fold into the editor header's track menu (PatternPane)
+                    VStack(alignment: .leading, spacing: r.rowGap) {
+                        ForEach(row ? [] : tracks, id: \.self) { k in
+                            let preview = previewScene.flatMap { store.scenesSeen[$0]?[safe: k] }
+                            // one place per track whose height moves between the lane head and the card, the two
+                            // crossfading in it, so the change rides the divider's spring instead of jumping
                             ZStack(alignment: .topLeading) {
-                                if let i = framed {
-                                    let s = selectedGeometry(i, area: g.size, cols: cols, rows: rows, cell: size, gap: gap)
-                                    let bare = row || controlsHidden
-                                    selectedTint(t, s, area: g.size, bare: bare)
-                                        .id("tint\(t).\(i).\(bare)")
-                                        .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare))
-                                    selectedFace(t, i, m, s, date: tl.date, area: g.size)
-                                        .id("face\(t).\(i)")
-                                        .transition(.opacity)
+                                if compact {
+                                    TrackStripRow(session: session, store: store, ui: ui, track: k, preview: preview).transition(Self.swap)
+                                } else {
+                                    TrackStripCard(session: session, store: store, ui: ui, track: k, preview: preview)
+                                        .frame(maxHeight: .infinity, alignment: .top).transition(Self.swap)
                                 }
-                                if let d = drag, !d.refused, d.track == t { dragged(d, m, cell: size, date: tl.date) }
                             }
-                            .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
+                            .frame(height: r.rowHeight, alignment: .top)
+                            .clipped()
+                            .geometryGroup()
                         }
                     }
+                    Spacer(minLength: Self.tabHeight)          // the editor panel's tab, in the scene row's line
                 }
-                if !row { sceneRow }
+                .frame(width: compact ? Self.compactStrip : Self.stripWidth)
+                VStack(spacing: 0) {
+                    toolbar(t)
+                    Color.clear.frame(height: r.top - 44)
+                    grid(t, row ? [t] : tracks, r)
+                        .frame(height: r.height)
+                        .zIndex(1)                              // (the track controls hang over the scene row's gap)
+                    if !row { sceneRow.padding(.top, r.sceneGap) }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
         .padding(.bottom, compact ? 8 : 0)
@@ -165,6 +159,63 @@ struct PadsPage: View {
         } message: { c in Text(c.message) }
     }
 
+    /// The pads: a row for each of `shown` (every track, or at Max the selected one), the columns sharing the width.
+    private func grid(_ t: Int, _ shown: [Int], _ r: Rows) -> some View {
+        GeometryReader { g in
+            let cols = columns, gap = compact ? Self.compactGap : Self.gap * 0.5
+            let w = (g.size.width - CGFloat(cols - 1) * gap) / CGFloat(cols)
+            let cell = CGSize(width: max(40, w), height: r.rowHeight)
+            let framed = framedPad(t)
+            TimelineView(.periodic(from: .now, by: 0.25)) { tl in
+                let marks = Dictionary(uniqueKeysWithValues: shown.map { ($0, store.marks($0, launchIn: session.ticksToLaunch($0))) })
+                // a layout of its own, not a lazy grid: between positions each pad keeps its identity and glides to its
+                // new place and size on the divider's spring
+                PadGrid(columns: cols, cell: cell, gap: gap, rowGap: r.rowGap) {
+                    ForEach(shown, id: \.self) { k in
+                        ForEach(Array(0..<cols), id: \.self) { i in
+                            pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date)
+                                // one piece on the spring: without it the box bounced and its words stood still
+                                .geometryGroup()
+                                .opacity(drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
+                                .overlay {
+                                    if let d = drag, d.track == k, landing(of: d) == i {
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
+                                            .allowsHitTesting(false)
+                                    }
+                                }
+                                // (left showing under the selected pad: its tint covers it, and as a new pad is picked
+                                // the grid's own pad is there while the tint fades in, no blank flash)
+                                .allowsHitTesting(!(k == t && i == framed))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .globalFrame($gridFrame)
+                .overlay(alignment: .topLeading) {
+                    // another pad picked: the old tint and controls draw back into their pad as the new ones grow out
+                    // of theirs, together, quick (Scott, 2026-11-08)
+                    ZStack(alignment: .topLeading) {
+                        if let i = framed, i < cols, let k = shown.firstIndex(of: t), let m = marks[t] {
+                            let s = selectedGeometry(row: k, col: i, rows: shown.count, area: g.size, cell: cell, gap: gap, rowGap: r.rowGap)
+                            // the track controls only at full size: over the editor the rows are too short to hang them
+                            // from (Scott, 2026-11-09), so the border alone
+                            let bare = compact || controlsHidden
+                            selectedTint(t, s, area: g.size, bare: bare)
+                                .id("tint\(t).\(i).\(bare)")
+                                .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare))
+                            selectedFace(t, i, m, s, date: tl.date, area: g.size)
+                                .id("face\(t).\(i)")
+                                .transition(.opacity)
+                        }
+                        if let d = drag, !d.refused, let m = marks[d.track] { dragged(d, m, cell: cell, date: tl.date) }
+                    }
+                    .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
+                }
+            }
+        }
+    }
+
     // MARK: The selected pad (Scott, 2026-11-07, board 32)
 
     /// The pad whose pattern the editor shows: the entry it's pinned to, else the one the track is on.
@@ -173,22 +224,24 @@ struct PadsPage: View {
         return store.song?.tracks[safe: t]?.entryOn
     }
 
-    /// Where the selected pad and its controls go: the pad's cell, the controls' tab hanging from it, left-aligned
-    /// (right-aligned where they'd run off the grid); from a bottom-row pad, upward.
+    /// Where the selected pad and its controls go: the pad's cell, the tint's tab hanging from it (left-aligned, or
+    /// right-aligned where it'd run off the grid; from the last row, upward), and the controls in that tab, a gap clear
+    /// of the pad (Scott, 2026-11-09: they sat too high).
     struct SelectedGeometry {
-        var frame: CGRect, tab: CGSize, up: Bool, right: Bool, tabAt: CGPoint, border: CGFloat, inner: CGSize
+        var frame: CGRect, tab: CGSize, up: Bool, right: Bool, tabAt: CGPoint, knobsAt: CGPoint, border: CGFloat, inner: CGSize
     }
 
-    private func selectedGeometry(_ i: Int, area: CGSize, cols: Int, rows: Int, cell: CGSize, gap: CGFloat) -> SelectedGeometry {
-        let bw = CGFloat(cols) * cell.width + CGFloat(cols - 1) * gap, bh = CGFloat(rows) * cell.height + CGFloat(rows - 1) * gap
-        let x0 = (area.width - bw) / 2, y0 = compact ? 0 : (area.height - bh) / 2
-        let c = i % cols, r = i / cols
-        let frame = CGRect(x: x0 + CGFloat(c) * (cell.width + gap), y: y0 + CGFloat(r) * (cell.height + gap), width: cell.width, height: cell.height)
-        let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
-        let up = r == rows - 1, right = frame.minX + tab.width > area.width
-        let tabAt = CGPoint(x: right ? frame.maxX - tab.width : frame.minX, y: up ? frame.minY - tab.height : frame.maxY)
-        let b: CGFloat = row ? 4 : 6                       // the border: thinner round Max's small keys
-        return SelectedGeometry(frame: frame, tab: tab, up: up, right: right, tabAt: tabAt, border: b,
+    private func selectedGeometry(row r: Int, col c: Int, rows: Int, area: CGSize, cell: CGSize, gap: CGFloat, rowGap: CGFloat) -> SelectedGeometry {
+        let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
+        let drop = Labs.padControlsGap.value
+        let knobs = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
+        let tab = CGSize(width: knobs.width, height: knobs.height + drop)
+        let up = rows > 1 && r == rows - 1, right = frame.minX + tab.width > area.width
+        let x = right ? frame.maxX - tab.width : frame.minX
+        let tabAt = CGPoint(x: x, y: up ? frame.minY - tab.height : frame.maxY)
+        let knobsAt = CGPoint(x: x, y: up ? frame.minY - tab.height : frame.maxY + drop)
+        let b: CGFloat = cell.height < 60 ? 4 : 6          // the border: thinner round short rows
+        return SelectedGeometry(frame: frame, tab: tab, up: up, right: right, tabAt: tabAt, knobsAt: knobsAt, border: b,
                                 inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b))
     }
 
@@ -197,15 +250,15 @@ struct PadsPage: View {
     private func selectedTint(_ t: Int, _ s: SelectedGeometry, area: CGSize, bare: Bool) -> some View {
         ZStack(alignment: .topLeading) {
             if bare {
-                // Max (no track controls there for now, Scott 2026-11-07), or the controls tapped away: the border alone
+                // over the editor, or the controls tapped away: the border alone
                 RoundedRectangle(cornerRadius: 12).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
                 PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right)
                     .fill(SelectionTint.fill(t))
                 TrackKnobBox(session: session, ui: ui, embedded: true)
-                    .frame(width: s.tab.width, height: s.tab.height, alignment: .topLeading)
-                    .offset(x: s.tabAt.x, y: s.tabAt.y)
+                    .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
+                    .offset(x: s.knobsAt.x, y: s.knobsAt.y)
             }
         }
         .frame(width: area.width, height: area.height, alignment: .topLeading)
@@ -226,9 +279,7 @@ struct PadsPage: View {
         let launch = store.perform?.launch ?? session.launchMode
         let waiting = waitingCount
         return HStack(spacing: 12) {
-            TrackChip(track: t, size: 28)
-            Text("\(Entries.trackName(t, session: session))'s entries").font(.system(size: 15, weight: .semibold))
-                .lineLimit(1).accessibilityAddTraits(.isHeader)
+            // (every track's on the grid now: Max alone shows one, named in the editor's header)
             Spacer(minLength: 8)
             if let s = previewScene, store.scenesSeen[s] == nil {
                 // (PERFORM says a scene is kept, not what's in it: Lupe knows the ones it stored or recalled)
@@ -290,15 +341,24 @@ struct PadsPage: View {
             if next { return "Next" }
             return e.chained ? "Chained on" : "×\(e.reps)"
         }()
+        let key = PadKey(track: t, entry: i)
+        let held = previewScene.flatMap { store.scenesSeen[$0]?[safe: t] }?.entry == i
         return Button {
             // an empty pad: what to put there, beside it (Scott, 2026-11-07: "you want to create a new pattern when you
             // tap an empty pad", a menu so a stray tap mid-jam makes nothing)
-            if heldKey == "p\(i)" { heldKey = nil; return }       // (the release of a hold: its menu is open)
+            if heldKey == "p\(t).\(i)" { heldKey = nil; return }  // (the release of a hold: its menu is open)
             if ui.justPulled { return }                          // (the lift that ends a pull of the editor)
-            if e.isEmpty { openMenu(t, i, at: padFrames[i].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero); return }
-            if !session.playing, framedPad(t) == i { controlsHidden.toggle(); return }
-            guard list?.entryOn != i || !session.playing else { return }
+            if e.isEmpty { openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero); return }
+            if !session.playing, t == session.selectedTrack, framedPad(t) == i { controlsHidden.toggle(); return }
             launched += 1
+            // a waiting pad tapped again takes its launch back: the entry playing is relaunched in its place, the
+            // FM-1 having no per-track cancel (Scott, 2026-11-09, question 5)
+            if waiting, session.playing, let on = list?.entryOn {
+                Task { await store.send(.play(track: t, entry: on)) }
+                return
+            }
+            // any other pad launches, on any row, without selecting its track (question 10); while playing, the one
+            // playing too: it's queued again and comes back in at the launch point (Scott, 2026-11-09)
             Task { await store.send(.play(track: t, entry: i)) }
         } label: {
             VStack(alignment: .leading, spacing: 2) {
@@ -330,7 +390,10 @@ struct PadsPage: View {
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .overlay {
-                if waiting {
+                if held {
+                    // a scene held: where it would send this track (Scott, 2026-11-09, board 36)
+                    RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.text, lineWidth: 3).padding(-3)
+                } else if waiting {
                     let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(date.timeIntervalSinceReferenceDate * .pi))
                     RoundedRectangle(cornerRadius: 16).strokeBorder(colour, style: StrokeStyle(lineWidth: 3, dash: [8, 5])).opacity(pulse)
                 } else if next || on {
@@ -345,29 +408,30 @@ struct PadsPage: View {
             .onChanged { v in
                 pressAt = v.location
                 // held, then moved off the hold: the pad lifts and follows the finger (its menu goes)
-                guard heldKey == "p\(i)", !e.isEmpty else { return }
+                guard heldKey == "p\(t).\(i)", !e.isEmpty else { return }
                 if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padDragStart.value { beginDrag(t, i, at: v.location) }
                 drag?.at = v.location
             }
             .onEnded { v in
                 if drag != nil { endDrag(at: v.location) }
-                releaseHold("p\(i)")
+                releaseHold("p\(t).\(i)")
             })
         .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             guard !store.offline else { return }
-            heldKey = "p\(i)"
+            heldKey = "p\(t).\(i)"
             holdAt = pressAt
             launched += 1
             openMenu(t, i, at: pressAt)
         })
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[i] = $0 } }   // (the dragged copy isn't the pad's place)
-        .accessibilityLabel("Entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
-        .accessibilityValue(e.isEmpty ? "" : state)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[key] = $0 } }   // (the dragged copy isn't the pad's place)
+        .accessibilityLabel("\(Entries.trackName(t, session: session)), entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
+        .accessibilityValue(e.isEmpty ? "" : state + (held ? ", the held scene goes here" : ""))
         .accessibilityHint(e.isEmpty ? "Opens a menu: a new pattern, a copy, one from the pool, or a rest"
+                           : waiting && session.playing ? "Takes the launch back. Actions: its menu"
                            : session.playing ? "Launches it at the launch point. Actions: its menu" : "Moves the track to it. Actions: its menu")
         .accessibilityActions {
             if !e.isEmpty {
-                Button("Entry menu") { openMenu(t, i, at: padFrames[i].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero) }
+                Button("Entry menu") { openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero) }
             }
         }
     }
@@ -397,16 +461,16 @@ struct PadsPage: View {
     private func endDrag(at: CGPoint) {
         guard let d = drag else { return }
         drag = nil
-        guard !d.refused, let target = pad(at: at) else { return }
+        guard !d.refused, let target = pad(at: at, track: d.track) else { return }
         move(d.track, from: d.from, to: target)
     }
 
-    /// The pad under a point (global).
-    private func pad(at p: CGPoint) -> Int? { padFrames.first { $0.value.contains(p) }?.key }
+    /// The pad under a point (global) in a track's row: a drag rearranges one track's list, never across rows.
+    private func pad(at p: CGPoint, track: Int) -> Int? { padFrames.first { $0.key.track == track && $0.value.contains(p) }?.key.entry }
 
     /// Where the dragged pad would land: the pad under the finger, or past the list's end the first empty one after it.
     private func landing(of d: PadDrag) -> Int? {
-        guard !d.refused, let target = pad(at: d.at), target != d.from,
+        guard !d.refused, let target = pad(at: d.at, track: d.track), target != d.from,
               let es = store.song?.tracks[safe: d.track]?.entries else { return nil }
         return PadMove.apply(es, from: d.from, to: target)?.landed
     }

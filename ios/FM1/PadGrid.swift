@@ -4,23 +4,26 @@ import SwiftUI
 // The Pads' layout and the selected pad: the grid every pad glides in between layouts, the selected pad's border with
 // the track controls hanging from it, and how those unroll when a pad is picked.
 
-/// The pads in `columns` columns of `cell`-sized places with `gap` between, the block centred in what it's given.
+/// The pads in `columns` columns of `cell`-sized places with `gap` between, row after row.
 /// A Layout, so a change of columns or size inside an animation moves each pad from its old frame to its new one.
 struct PadGrid: Layout {
     var columns: Int
     var cell: CGSize
     var gap: CGFloat
+    /// Between rows, when it differs from between columns (the grid's rows line up with the track heads beside them).
+    var rowGap: CGFloat? = nil
+    private var rg: CGFloat { rowGap ?? gap }
 
     private func block(_ n: Int) -> CGSize {
         let rows = (n + columns - 1) / max(1, columns)
         return CGSize(width: CGFloat(columns) * cell.width + CGFloat(columns - 1) * gap,
-                      height: CGFloat(rows) * cell.height + CGFloat(max(0, rows - 1)) * gap)
+                      height: CGFloat(rows) * cell.height + CGFloat(max(0, rows - 1)) * rg)
     }
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize { block(subviews.count) }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         for (i, v) in subviews.enumerated() {
             let c = i % columns, r = i / columns
-            v.place(at: CGPoint(x: bounds.minX + CGFloat(c) * (cell.width + gap), y: bounds.minY + CGFloat(r) * (cell.height + gap)),
+            v.place(at: CGPoint(x: bounds.minX + CGFloat(c) * (cell.width + gap), y: bounds.minY + CGFloat(r) * (cell.height + rg)),
                     proposal: ProposedViewSize(cell))
         }
     }

@@ -107,7 +107,7 @@ struct SkiffSongPage: View {
                         ui.pulledAt = Date()
                         dragged(v.translation.height, tops: tops, pads: pads)
                     }
-                    .onEnded { _ in if dragTop != nil { ui.pulledAt = Date(); released(tops: tops, pads: pads) } },
+                    .onEnded { v in if dragTop != nil { ui.pulledAt = Date(); released(tops: tops, pads: pads, speed: v.velocity.height) } },
                     including: position == .none || dragTop != nil ? .all : .subviews)
                 ZStack(alignment: .top) {
                     EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge)
@@ -199,7 +199,7 @@ struct SkiffSongPage: View {
         .buttonStyle(.plain)
         .simultaneousGesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
             .onChanged { v in ui.pulledAt = Date(); dragged(v.translation.height, tops: tops, pads: pads) }
-            .onEnded { _ in ui.pulledAt = Date(); released(tops: tops, pads: pads) })
+            .onEnded { v in ui.pulledAt = Date(); released(tops: tops, pads: pads, speed: v.velocity.height) })
         .offset(x: 16, y: top - PadsPage.tabHeight)
         .accessibilityLabel("Pattern editor")
         .accessibilityValue(position == .none ? "closed" : position == .half ? "half" : "largest")
@@ -228,9 +228,15 @@ struct SkiffSongPage: View {
         if l != (layout ?? position.layout) { withAnimation(spring) { layout = l } }
     }
 
-    private func released(tops: [SongPosition: CGFloat], pads: Bool) {
+    /// Let go: a flick (faster than Labs' speed) goes one place on in its direction from where the drag began, however
+    /// short it was (Scott, 2026-11-09); slower, the nearest place.
+    private func released(tops: [SongPosition: CGFloat], pads: Bool, speed: CGFloat = 0) {
         guard let at = dragTop else { return }
-        let p = nearest(at, tops)
+        let order = tops.sorted { $0.value < $1.value }.map(\.key)       // largest editor (top) to shut (bottom)
+        var p = nearest(at, tops)
+        if abs(speed) > Labs.flickSpeed.value, let i = order.firstIndex(of: position) {
+            p = order[speed < 0 ? max(0, i - 1) : min(order.count - 1, i + 1)]
+        }
         withAnimation(spring) { positionRaw = p.rawValue; dragTop = nil; layout = p.layout } completion: { layout = nil }
     }
 

@@ -54,6 +54,9 @@ enum Labs {
     static let panStart = LabItem(
         key: "labs.panStart", title: "Grid pan starts after", detail: "How far one finger moves on the grid before it pans.",
         range: 4...24, step: 1, standard: 10, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
+    static let flickSpeed = LabItem(
+        key: "labs.flickSpeed", title: "Editor divider: flick at", detail: "How fast a flick of the editor's tab has to be to move it one place on (up or down), however short the flick.",
+        range: 300...2000, step: 50, standard: 700, format: "%.0f pt/s", added: "2026-11-09", review: "2026-11-23")
     static let padDragStart = LabItem(
         key: "labs.padDragStart", title: "Pad drag starts after", detail: "How far a held pad moves before it lifts to be dragged.",
         range: 4...30, step: 1, standard: 10, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
@@ -61,13 +64,20 @@ enum Labs {
         key: "labs.columnTravel", title: "Column slide: full range in", detail: "How far a slide on a value column goes from its lowest to its highest.",
         range: 120...480, step: 10, standard: 240, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
 
+    // MARK: Layout
+
+    static let padControlsGap = LabItem(
+        key: "labs.padControlsGap", title: "Track controls: gap under the pad", detail: "Space between the selected pad and the track controls hanging from it, so the controls don't sit too high (Scott: the same gap the pads keep).",
+        range: 0...24, step: 1, standard: 8, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
+
     static let songSlide = LabItem(
         key: "labs.songSlide", title: "Pads and Timeline: slide", detail: "How long the Timeline takes to slide down behind the editor as the pads come in from above, and back. 0 switches at once.",
         range: 0...0.6, step: 0.02, standard: 0.3, format: "%.2f s", added: "2026-11-08", review: "2026-11-23")
 
     static let sections: [(title: String, items: [LabItem])] = [
         ("Motion", [dividerResponse, dividerDamping, menuOpen, menuClose, songSlide]),
-        ("Gestures", [holdToMenu, holdToPaint, panStart, padDragStart, columnTravel]),
+        ("Gestures", [holdToMenu, holdToPaint, panStart, padDragStart, columnTravel, flickSpeed]),
+        ("Layout", [padControlsGap]),
     ]
     static var all: [LabItem] { sections.flatMap(\.items) }
 }
