@@ -119,8 +119,7 @@ struct Emerge: ViewModifier, Animatable {
                         .offset(x: tab.minX - m, y: up ? tab.maxY - h - m * p : tab.minY - m)
                 }
             }
-            // in step with the pad's own face fading (a faster tint left the old pad blank for a beat)
-            .opacity(Double(p))
+            // (no fade: the controls roll out of their pad and back in, Scott 2026-11-09: "not a crossfade")
     }
 }
 

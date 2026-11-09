@@ -37,7 +37,9 @@ struct PadsPage: View {
     @State private var lastDouble: Int?
     /// The pad whose menu is open (or just closed by the touch now landing): tapped again, it only closes.
     @State private var menuPad: PadKey?
-    private var controlsShown: Bool { controlsOpen }
+    /// Shown where the user left them open, except over the largest editor (Max), where they close (Scott, 2026-11-09);
+    /// the choice is kept and comes back on leaving Max.
+    private var controlsShown: Bool { controlsOpen && layout != .row }
     private func showControls(_ v: Bool) { controlsOpen = v }
     @State private var holdAt: CGPoint = .zero
     /// When the pads came up: play landing in the first moments (Lupe connecting to an FM-1 already playing, the
@@ -227,14 +229,17 @@ struct PadsPage: View {
                 PadGrid(columns: cols, cell: cell, gap: gap, rowGap: r.rowGap) {
                     ForEach(shown, id: \.self) { k in
                         ForEach(Array(0..<cols), id: \.self) { i in
-                            pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date)
+                            // the selected pad is the grid's own, outlined in its track's colour; with its track
+                            // controls open it shrinks a border's width inside its tint. Picking another, the old grows
+                            // back as the new one shrinks, together (Scott, 2026-11-09: not a crossfade)
+                            let sel = k == t && i == framed
+                            let inset = sel && controlsShown ? Self.selectedBorder(cell) : 0
+                            pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date, selected: sel)
+                                .padding(inset)
+                                .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: inset)
                                 // one piece on the spring: without it the box bounced and its words stood still
                                 .geometryGroup()
-                                // the selected pad hidden under its tint: its outline and shadow showed round the
-                                // tint's edges (Scott, 2026-11-09: "white border bleeding"); a crossfade as the tint
-                                // moves, so switching pads still never leaves a blank
-                                .opacity(k == t && i == framed ? 0 : drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
-                                .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
+                                .opacity(drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
                                 .overlay {
                                     if let d = drag, d.track == k, landing(of: d) == i {
                                         RoundedRectangle(cornerRadius: 16)
@@ -242,17 +247,29 @@ struct PadsPage: View {
                                             .allowsHitTesting(false)
                                     }
                                 }
-                                .allowsHitTesting(!(k == t && i == framed))
                         }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .globalFrame($gridFrame)
+                // under the pads: the selected pad's tint (its lane's colour), and at Max its tab
+                .background(alignment: .topLeading) {
+                    ZStack(alignment: .topLeading) {
+                        if let i = framed, i < cols, let k = shown.firstIndex(of: t), controlsShown {
+                            let s = selectedGeometry(row: k, col: i, area: g.size, cell: cell, gap: gap, rowGap: r.rowGap, room: room(r))
+                            selectedGround(t, s, area: g.size)
+                                .id("ground\(t).\(i)")
+                                .transition(reduceMotion ? .opacity : Emerge.transition(s, row: false))
+                        }
+                    }
+                    .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
+                    .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: controlsShown)
+                }
                 .overlay(alignment: .topLeading) {
                     // another pad picked: the old tint and controls draw back into their pad as the new ones grow out
                     // of theirs, together, quick (Scott, 2026-11-08)
                     ZStack(alignment: .topLeading) {
-                        if let i = framed, i < cols, let k = shown.firstIndex(of: t), let m = marks[t] {
+                        if let i = framed, i < cols, let k = shown.firstIndex(of: t) {
                             let s = selectedGeometry(row: k, col: i, area: g.size, cell: cell, gap: gap, rowGap: r.rowGap, room: room(r))
                             // the track controls only at full size: over the editor the rows are too short to hang them
                             // from (Scott, 2026-11-09), so the border alone
@@ -260,9 +277,6 @@ struct PadsPage: View {
                             selectedTint(t, s, area: g.size, bare: bare)
                                 .id("tint\(t).\(i).\(bare)")
                                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare))
-                            selectedFace(t, i, m, s, date: tl.date, area: g.size, full: bare)
-                                .id("face\(t).\(i)")
-                                .transition(.opacity)
                         }
                         if let d = drag, !d.refused, let m = marks[d.track] { dragged(d, m, cell: cell, date: tl.date) }
                     }
@@ -335,31 +349,21 @@ struct PadsPage: View {
     private func selectedTint(_ t: Int, _ s: SelectedGeometry, area: CGSize, bare: Bool) -> some View {
         ZStack(alignment: .topLeading) {
             if bare {
-                // the controls shut: nothing round the pad (it's full size, outlined in its track's colour, on its lane)
-                Color.clear
+                Color.clear      // the controls shut: the pad is full size, outlined in its track's colour
             } else if !row {
-                // on a lane: the pad's tint (the lane's colour) and the box hanging straight off the lane's edge, one
-                // strip with it, no shadow (Scott, 2026-11-09); under pad A at full size the band's rounded end is
-                // squared, so the box carries it straight down
-                RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
-                    .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
-                if s.col == 0, layout == .full, !s.up {
-                    Rectangle().fill(SelectionTint.fill(t))
-                        .frame(width: s.padRadius, height: s.padRadius).offset(x: s.frame.minX, y: s.frame.maxY - s.padRadius)
-                }
+                // on a lane: the box hanging straight off the lane's edge, one strip with it, no shadow (Scott,
+                // 2026-11-09); the pad's tint is under the pads (selectedGround)
                 LaneTabShape(box: CGRect(origin: s.knobsAt, size: s.tab), earL: s.earL, earR: s.earR, r: TrackKnobBox.outerRadius, up: s.up)
                     .fill(SelectionTint.fill(t))
                 TrackKnobBox(session: session, ui: ui, embedded: true)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
             } else {
-                // Max: no lane, so the tab hangs from the pad as before, floating over the editor with its shadow
+                // Max: no lane, the tab floats over the editor with its shadow (its shape is under the pads)
                 RoundedRectangle(cornerRadius: TrackKnobBox.outerRadius).fill(SelectionTint.fill(t))
                     .frame(width: s.tab.width, height: s.tab.height)
                     .elevationShadow(.held)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
-                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, tabR: TrackKnobBox.outerRadius, turn: s.padRadius + s.drop, r: s.radius)
-                    .fill(SelectionTint.fill(t))
                 TrackKnobBox(session: session, ui: ui, embedded: true)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
@@ -368,18 +372,27 @@ struct PadsPage: View {
         .frame(width: area.width, height: area.height, alignment: .topLeading)
     }
 
-    /// The selected pad itself, shrunk inside the border.
-    /// Full size, its track-colour outline the mark, while its track controls are shut; inside the tint, a border's
-    /// width in, only with them open (Scott, 2026-11-09).
-    private func selectedFace(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, _ s: SelectedGeometry, date: Date, area: CGSize, full: Bool) -> some View {
-        let b = full ? 0 : s.border
-        let size = CGSize(width: s.frame.width - 2 * b, height: s.frame.height - 2 * b)
-        return pad(t, i, m, size: size, date: date, radius: full ? s.padRadius : s.innerRadius, selected: true)
-            .frame(width: size.width, height: size.height)
-            .geometryGroup()
-            .offset(x: s.frame.minX + b, y: s.frame.minY + b)
-            .frame(width: area.width, height: area.height, alignment: .topLeading)
+    /// Under the pads, with the controls open: the selected pad's tint (a border round it, the lane's colour), at
+    /// full size under pad A the band's rounded end squared, and at Max the whole tab shape.
+    private func selectedGround(_ t: Int, _ s: SelectedGeometry, area: CGSize) -> some View {
+        ZStack(alignment: .topLeading) {
+            if row {
+                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, tabR: TrackKnobBox.outerRadius, turn: s.padRadius + s.drop, r: s.radius)
+                    .fill(SelectionTint.fill(t))
+            } else {
+                RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
+                    .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
+                if s.col == 0, layout == .full, !s.up {
+                    Rectangle().fill(SelectionTint.fill(t))
+                        .frame(width: s.padRadius, height: s.padRadius).offset(x: s.frame.minX, y: s.frame.maxY - s.padRadius)
+                }
+            }
+        }
+        .frame(width: area.width, height: area.height, alignment: .topLeading)
     }
+
+    /// The border the selected pad shrinks by inside its tint, controls open: thinner round short rows and Max's keys.
+    static func selectedBorder(_ cell: CGSize) -> CGFloat { cell.height < 60 || cell.width < 90 ? 4 : 8 }
 
     // MARK: Toolbar
 
@@ -473,7 +486,7 @@ struct PadsPage: View {
                 menuPad = key
                 return
             }
-            if !session.playing, t == session.selectedTrack, framedPad(t) == i { controlsOpen.toggle(); return }
+            if !session.playing, t == session.selectedTrack, framedPad(t) == i { if !row { controlsOpen.toggle() }; return }
             launched += 1
             // a waiting pad tapped again takes its launch back: the entry playing is relaunched in its place, the
             // FM-1 having no per-track cancel (Scott, 2026-11-09, question 5)
