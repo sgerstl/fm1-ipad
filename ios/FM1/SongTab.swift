@@ -174,7 +174,7 @@ struct SkiffSongPage: View {
             .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
             .overlay(alignment: .topLeading) { tab(top: top, tops: tops, pads: pads) }
             .overlay { drawer }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ui.poolOpen)
+            .animation(reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.3), value: ui.poolOpen)
         }
         // each pattern a track is on, drawn for its pads (PadThumb): in both views, so the pads have them on arrival
         .task {
@@ -283,28 +283,34 @@ struct SkiffSongPage: View {
     /// The pattern pool (Scott: "Full height"): a level-3 drawer down the page's right edge, over both halves, the
     /// source a pattern is dragged from onto a lane. A tap outside, Escape or Patterns closes it. While a pattern is
     /// dragged the tap catcher steps aside, so the drop reaches the lanes (the editor takes none).
-    @ViewBuilder private var drawer: some View {
-        if ui.poolOpen {
-            ZStack(alignment: .trailing) {
+    /// (The container stays put and only its contents come and go, so the panel's own slide runs: inserted as a whole,
+    /// it had only faded. Scott, 2026-11-09: "make it slide in and out".)
+    private var drawer: some View {
+        ZStack(alignment: .trailing) {
+            if ui.poolOpen {
                 Color.clear.contentShape(Rectangle())
                     .onTapGesture { ui.poolOpen = false }
                     .allowsHitTesting(ui.dragPattern == nil)
                     .accessibilityHidden(true)
+                    .transition(.identity)
                 PatternBin(session: session, store: store, all: $allPatterns, selection: ui.pinnedEntry,
                            dragPattern: Binding(get: { ui.dragPattern }, set: { ui.dragPattern = $0 }), drawer: true, ui: ui)
                     .frame(width: 288)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
-                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                    // in from the right edge, out quicker (a panel: 300 ms in, ease-out; 220 ms out, ease-in)
+                    .transition(reduceMotion ? .opacity
+                                : .asymmetric(insertion: .move(edge: .trailing).animation(.easeOut(duration: 0.3)),
+                                              removal: .move(edge: .trailing).animation(.easeIn(duration: 0.22))))
+                    .background {
+                        Button("Close the patterns") { ui.poolOpen = false; ui.dragPattern = nil }
+                            .keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+                    }
+                    .accessibilityAddTraits(.isModal)
+                    .accessibilityAction(.escape) { ui.poolOpen = false }
             }
-            .background {
-                Button("Close the patterns") { ui.poolOpen = false; ui.dragPattern = nil }
-                    .keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(.isModal)
-            .accessibilityAction(.escape) { ui.poolOpen = false }
         }
+        .accessibilityElement(children: .contain)
     }
 
     /// The lanes share what's left under the tool row and the ruler.
