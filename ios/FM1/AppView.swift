@@ -9,12 +9,35 @@ struct AppView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     /// The Song tab's view before ARP was held on the FM-1 (the Pads while it's held), to go back to.
     @State private var padsReturn: SongView?
+    /// Connected at least once this launch: a loss then holds the page instead of swapping it (board 42, option A).
+    @State private var everConnected = false
+    /// The FM-1 lost (or found again and being read) after it was connected: the page stays where it was, faded back
+    /// and grey, read-only, with the card over it (Scott, 2026-11-09: "A").
+    private var held: Bool {
+        guard everConnected, !session.isConnected else { return false }
+        switch session.status { case .lost, .connecting: return true; default: return false }
+    }
 
     var body: some View {
         VStack(spacing: 16) {
             TopBar(session: session, ui: ui, useDemo: $useDemo)
-            if case .connected = session.status {
+            if session.isConnected || held {
                 pages.animation(pageAnimation, value: ui.page)
+                    // held: faded back and grey, touches off; back to itself when the FM-1 is read again
+                    .allowsHitTesting(!held)
+                    .grayscale(held ? 0.85 : 0)
+                    .opacity(held ? 0.45 : 1)
+                    .animation(.easeOut(duration: held ? 0.3 : 0.25), value: held)
+                    .overlay(alignment: .top) {
+                        if held {
+                            LostCard(status: session.status)
+                                .padding(.top, 8)
+                                .transition(reduceMotion ? .opacity.animation(.easeOut(duration: 0.15))
+                                            : .asymmetric(insertion: .move(edge: .top).combined(with: .opacity).animation(.easeOut(duration: 0.25)),
+                                                          removal: .move(edge: .top).combined(with: .opacity).animation(.easeIn(duration: 0.2))))
+                        }
+                    }
+                    .animation(.easeOut(duration: 0.25), value: held)
                     // a button pressed on the FM-1 brings up the tab that shows its screen
                     .onChange(of: session.deviceScreen) { _, s in
                         // Skiff: every button lands somewhere (SkiffButtonMap), GLO in the mixer panel
@@ -29,14 +52,13 @@ struct AppView: View {
                         ui.pageFromDevice = true
                         ui.page = tab
                     }
-            } else if ui.page == .song, let store = session.skiffSong, store.song != nil, store.offline {
-                // disconnected on Arrange: the last song stays, dimmed and read-only, under a status bar
-                SkiffArrangePage(session: session, store: store, ui: ui)
             } else {
                 ConnectionState(status: session.status, useDemo: $useDemo)
+                    .transition(.opacity.animation(.easeOut(duration: 0.3)))
             }
         }
         .sessionUpkeep(session)
+        .onChange(of: session.isConnected, initial: true) { _, on in if on { everConnected = true } }
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
         // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
@@ -457,6 +479,43 @@ struct ConnectionState: View {
 }
 
 /// "Looking for the FM-1…" with the system's spinner: the app is retrying, there's nothing to press.
+/// The FM-1 lost while it was in use: a card from under the top bar over the held page (board 42, option A). Lost:
+/// what happened, what to do, that Lupe is looking; found again: "Back", reading it. The two blend.
+struct LostCard: View {
+    let status: ConnectionStatus
+    private var back: Bool { if case .connecting = status { true } else { false } }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            Image(systemName: back ? "cable.connector" : "cable.connector.slash")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(back ? Theme.knob[1] : Theme.caution)
+                .frame(width: 48, height: 48)
+                .contentTransition(.symbolEffect(.replace))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(back ? "Back" : "FM-1 disconnected").font(.system(size: 22, weight: .semibold))
+                    .contentTransition(.opacity)
+                Text(back ? "Reading the FM-1. A second." : "Plug it back in, or check it’s switched on. Lupe picks up where you were: nothing here is lost.")
+                    .font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentTransition(.opacity)
+                if back {
+                    ProgressView().progressViewStyle(.linear).tint(Theme.text).padding(.top, 4)
+                        .transition(.opacity)
+                } else {
+                    LookingForFM1().transition(.opacity)
+                }
+            }
+        }
+        .padding(24)
+        .frame(width: 520, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Theme.control).elevationShadow(.held))
+        .animation(.easeOut(duration: 0.15), value: back)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
 struct LookingForFM1: View {
     var body: some View {
         HStack(spacing: 8) {
