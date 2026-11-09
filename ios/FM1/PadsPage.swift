@@ -212,8 +212,9 @@ struct PadsPage: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
-    /// The tag behind a full head: H1's head (board 43) fills its row, Mute over Solo, so the lane is one band.
-    static let laneTag: CGFloat = .infinity
+    /// The tag behind a full head (Scott's lane, board 41): H1's head kept to 100 pt (keys 40 each, no "Then" line),
+    /// so the band under the pads stands taller than it (Scott, 2026-11-09: the tag shape back).
+    static let laneTag: CGFloat = 100
 
     /// The pads: a row for each of `shown` (every track, or at Max the selected one), the columns sharing the width.
     private func grid(_ t: Int, _ shown: [Int], _ r: Rows) -> some View {
@@ -409,6 +410,13 @@ struct PadsPage: View {
             } else if let r = store.refusal {
                 RefusalLine(refusal: r, session: session, store: store).layoutPriority(-1)
             }
+            // the pattern pool, as on the Timeline (Scott, 2026-11-09): its panel slides in over the page
+            Button { ui.poolOpen.toggle() } label: {
+                Label("Patterns", systemImage: "square.grid.2x2").font(.system(size: 15))
+                    .padding(.horizontal, 14).frame(height: 44).raisedKey()
+            }
+            .buttonStyle(PressSink(latched: ui.poolOpen))
+            .accessibilityHint("The pattern pool: every pattern and which tracks use it")
             Text("Launch at").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
             SegmentedKeys(label: "Launch at", options: ["Loop", "Bar", "Beat", "Now"], selected: launch.rawValue,
                           enabled: Array(repeating: !store.offline, count: 4)) { k in
@@ -491,9 +499,13 @@ struct PadsPage: View {
             // a waiting pad tapped again takes its launch back: the entry playing is relaunched in its place, the
             // FM-1 having no per-track cancel (Scott, 2026-11-09, question 5)
             if waiting, session.playing, let on = list?.entryOn {
+                if t == session.selectedTrack, ui.pinnedEntry?.track == t { ui.pinnedEntry = EntryRef(track: t, entry: on) }
                 Task { await store.send(.play(track: t, entry: on)) }
                 return
             }
+            // on the selected track the selection goes with the tap, playing or not: a pin left from Edit pattern or
+            // New pattern held the highlight and the controls on the old pad (Scott, 2026-11-09, row 5)
+            if t == session.selectedTrack { ui.pinnedEntry = EntryRef(track: t, entry: i) }
             // any other pad launches, on any row, without selecting its track (question 10); while playing, the one
             // playing too: it's queued again and comes back in at the launch point (Scott, 2026-11-09)
             Task { await store.send(.play(track: t, entry: i)) }
@@ -667,9 +679,8 @@ struct PadsPage: View {
         // silent gaps (Scott, 2026-11-07); the title says where it goes
         let target = e.isEmpty ? Self.landing(store.song?.tracks[safe: t], i) : i
         let title = "T\(t + 1) · entry \(Entries.letter(i))" + (e.isEmpty ? (target == i ? " · empty" : " · goes on \(Entries.letter(target))") : "")
-        // an empty pad's choices fan out of the finger as big separate buttons (Scott, 2026-11-09); a filled pad's
-        // hold keeps the ordinary menu
-        ui.menu = AppMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at, fan: e.isEmpty, tint: t)
+        // every pad's choices fan out of the finger as big separate buttons in its track's tint (Scott, 2026-11-09)
+        ui.menu = AppMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at, fan: true, tint: t)
     }
 
     /// Where something put on empty pad `i` lands: there, or the first empty entry after the list's last filled one.
@@ -715,7 +726,7 @@ struct PadsPage: View {
                 }
             }]
         })
-        return [first, [pick]]
+        return [first, [pick, MenuItem(title: "Patterns", icon: "square.grid.2x2.fill") { ui.poolOpen = true }]]
     }
 
     /// A filled pad, held: edit it, its repeats, a copy of its own or beside it, its sound, clear it.
@@ -757,6 +768,7 @@ struct PadsPage: View {
         }
         g.append([MenuItem.submenu(title: "Move to…", icon: "arrow.up.and.down.and.arrow.left.and.right",
                            enabled: idle && !session.playing, children: { [moveTargets(t, i, list)] })])
+        g.append([MenuItem(title: "Patterns", icon: "square.grid.2x2.fill") { ui.poolOpen = true }])
         g.append([MenuItem(title: "Clear entry", icon: "trash", enabled: idle) { clear(t, i, e) }])
         return g
     }

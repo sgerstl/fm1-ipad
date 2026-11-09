@@ -39,8 +39,8 @@ struct TrackStripCard: View {
                                 }
                             }
                         }
-                        Spacer(minLength: 6)
                         Text(Entries.trackName(t, session: session)).font(.system(size: 17, weight: .semibold))
+                            .padding(.top, 8)
                             .foregroundStyle(muted ? Theme.textSecondary : Theme.text).lineLimit(1)
                         if session.playing, m.playing != nil {
                             SmoothBar(track: Theme.well, ink: Theme.track[t]) { session.passProgress(t) ?? 0 }
@@ -52,9 +52,8 @@ struct TrackStripCard: View {
                                 Text(Self.previewText(p, list)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
                             }
                             .foregroundStyle(Theme.text).padding(.top, 4)
-                        } else if !lines.next.isEmpty {
-                            Text(lines.next).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1).padding(.top, 4)
                         }
+                        // (no "Then B" line: the head stops at the tag's 100 pt, and the pads mark the next entry)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .contentShape(Rectangle())
@@ -65,8 +64,8 @@ struct TrackStripCard: View {
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
                 VStack(spacing: 6) {
-                    muteKey(muted: muted, staged: staged)
-                    SoloKey(store: store, track: t)
+                    muteKey(muted: muted, staged: staged).frame(height: 40)
+                    SoloKey(store: store, track: t).frame(height: 40)
                 }
                 .frame(width: 64)
             }
