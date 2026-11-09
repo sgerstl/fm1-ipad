@@ -40,6 +40,8 @@ struct PadTabShape: Shape {
     /// How far the tint comes straight down out of the pad before the tab widens: the grid's gap, so the tab's top
     /// stands that far below the pads beside it (Scott, 2026-11-09).
     var drop: CGFloat = 0
+    /// The tab's own corners (the pad's are `r`): nested round the knobs' tiles, not round the pad.
+    var tabR: CGFloat = 12
     static let f: CGFloat = 10
     /// The corners: the pad's own radius in that row, so the tint lines up with the pads beside it.
     var r: CGFloat = 12
@@ -55,19 +57,19 @@ struct PadTabShape: Shape {
         // the inner turn from the pad into the tab: a true arc, the corner radius plus the gap, so it runs parallel to
         // the next pad's corner across the gap (Scott, 2026-11-09: the 10 pt bend didn't match the corners)
         let r = r, f = drop > 0 ? r + drop : Self.f
-        let w = cell.width, h = cell.height + drop, W = max(tab.width, w + f + r), H = tab.height
+        let w = cell.width, h = cell.height + drop, W = max(tab.width, w + f + tabR), H = tab.height
         var p = Path()          // drawn with the tab under the pad, flush left, from (0, 0); then mirrored into place
         p.move(to: CGPoint(x: r, y: 0))
         p.addLine(to: CGPoint(x: w - r, y: 0))
         p.addArc(tangent1End: CGPoint(x: w, y: 0), tangent2End: CGPoint(x: w, y: r), radius: r)
         p.addLine(to: CGPoint(x: w, y: h - f))
         p.addArc(tangent1End: CGPoint(x: w, y: h), tangent2End: CGPoint(x: w + f, y: h), radius: f)
-        p.addLine(to: CGPoint(x: W - r, y: h))
-        p.addArc(tangent1End: CGPoint(x: W, y: h), tangent2End: CGPoint(x: W, y: h + r), radius: r)
-        p.addLine(to: CGPoint(x: W, y: h + H - r))
-        p.addArc(tangent1End: CGPoint(x: W, y: h + H), tangent2End: CGPoint(x: W - r, y: h + H), radius: r)
-        p.addLine(to: CGPoint(x: r, y: h + H))
-        p.addArc(tangent1End: CGPoint(x: 0, y: h + H), tangent2End: CGPoint(x: 0, y: h + H - r), radius: r)
+        p.addLine(to: CGPoint(x: W - tabR, y: h))
+        p.addArc(tangent1End: CGPoint(x: W, y: h), tangent2End: CGPoint(x: W, y: h + tabR), radius: tabR)
+        p.addLine(to: CGPoint(x: W, y: h + H - tabR))
+        p.addArc(tangent1End: CGPoint(x: W, y: h + H), tangent2End: CGPoint(x: W - tabR, y: h + H), radius: tabR)
+        p.addLine(to: CGPoint(x: tabR, y: h + H))
+        p.addArc(tangent1End: CGPoint(x: 0, y: h + H), tangent2End: CGPoint(x: 0, y: h + H - tabR), radius: tabR)
         p.addLine(to: CGPoint(x: 0, y: r))
         p.addArc(tangent1End: CGPoint(x: 0, y: 0), tangent2End: CGPoint(x: r, y: 0), radius: r)
         p.closeSubpath()

@@ -111,7 +111,7 @@ struct SkiffSongPage: View {
                     .onEnded { v in if dragTop != nil { ui.pulledAt = Date(); released(tops: tops, pads: pads, speed: v.velocity.height) } },
                     including: position == .none || dragTop != nil ? .all : .subviews)
                 ZStack(alignment: .top) {
-                    EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge)
+                    EditorPanelShape(tab: CGSize(width: PadsPage.panelTabWidth, height: PadsPage.tabHeight), inset: Self.panelEdge)
                         .fill(SelectionTint.fill(session.selectedTrack))
                     // a sample being made for the track: the sampler comes in from the right and pushes the editor off to the
                     // left, and back the other way on Cancel or a save (Scott, 2026-11-09); the pads above stay put
@@ -146,7 +146,7 @@ struct SkiffSongPage: View {
                 }
                 .frame(width: g.size.width, height: bottom, alignment: .top)
                 // cut to the panel's own shape (its tab included): what slides in and out shows only on the tint
-                .mask { EditorPanelShape(tab: CGSize(width: PadsPage.compactStrip, height: PadsPage.tabHeight), inset: Self.panelEdge) }
+                .mask { EditorPanelShape(tab: CGSize(width: PadsPage.panelTabWidth, height: PadsPage.tabHeight), inset: Self.panelEdge) }
                 .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9), value: ui.sampler)
             }
             .frame(height: total, alignment: .top)
@@ -204,7 +204,7 @@ struct SkiffSongPage: View {
                 }
             }
             .foregroundStyle(Theme.text)
-            .frame(width: PadsPage.compactStrip, height: PadsPage.tabHeight)
+            .frame(width: PadsPage.panelTabWidth, height: PadsPage.tabHeight)
             .contentShape(Rectangle())
             .geometryGroup()                   // rides the tab's spring with it (the words used to lag behind)
         }

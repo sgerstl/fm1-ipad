@@ -55,6 +55,9 @@ struct PadsPage: View {
     /// (2026-11-08, Scott: "shrink some of the containers… the scene buttons smaller": the scene row 32, the lane heads
     /// 42, so the editor at Half has the room its grid needs)
     static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 32, rowHeight: CGFloat = 42
+    /// The editor panel's tab under the heads: 5 pt wider than them, so its gap to Store matches the gap under Store
+    /// (Scott, 2026-11-09; measured: 17 pt beside, 12 under, the key sitting inside its frame).
+    static let panelTabWidth: CGFloat = compactStrip + 5
     /// The least a full head needs (its content is about 93).
     static let cardHeight: CGFloat = 96
     /// Between the rows at full size and over the editor.
@@ -286,7 +289,7 @@ struct PadsPage: View {
                 RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
-                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, r: s.radius)
+                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, tabR: TrackKnobBox.outerRadius, r: s.radius)
                     .fill(SelectionTint.fill(t))
                     // it floats over the pads and the page under it: the shadow of things at the finger (Scott, 2026-11-09)
                     .elevationShadow(.held)

@@ -23,6 +23,9 @@ struct TrackKnobBox: View {
     /// Two rows of 56 pt boxes, their 4 pt gap, and 8 pt above and below: the same border as its sides on the tint (Scott,
     /// 2026-11-09: 4 pt top and bottom read as no border; 116 had crushed the rows, 2026-11-07).
     static let height: CGFloat = 132
+    /// Its corners on a tab: the tiles' 6 and the 8 pt inset round them (outer = inner + inset), so the tint runs an
+    /// even width round every tile (Scott, 2026-11-09).
+    static let outerRadius: CGFloat = 6 + 8
     /// KnobSpec.all's LEVEL, STEPS, PAN (0 is SWING, global).
     static let knobs = 1..<4
 
