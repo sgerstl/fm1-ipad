@@ -544,7 +544,8 @@ struct PadsPage: View {
                 .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
                 .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected).padding(inset) }
                 .contentShape(RoundedRectangle(cornerRadius: rad))
-                .overlay { padOutline(track: t, held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
+                .overlay { padOutline(track: t, held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset)
+                .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.2), value: waiting) }
             } else {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
@@ -569,7 +570,8 @@ struct PadsPage: View {
             .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected).padding(inset) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: rad))
-            .overlay { padOutline(track: t, held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
+            .overlay { padOutline(track: t, held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset)
+                .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.2), value: waiting) }
             }
         }
         .buttonStyle(PressSink())
@@ -857,6 +859,7 @@ struct PadsPage: View {
             // the time to its launch drawn round it, from the top left corner counter-clockwise; it comes in as the
             // line closes (Scott, 2026-11-10: the outline instead of the numbers)
             LaunchTrace(session: session, track: t, colour: colour, radius: radius, width: radius < 12 ? 2 : 3, date: date)
+                .transition(.opacity)       // (closed, it fades as the pad lights: no cut)
         } else if let mark {
             // the selected pad: its track's colour (on a playing pad, filled in that colour, the tint round it says it)
             RoundedRectangle(cornerRadius: radius).strokeBorder(mark, lineWidth: radius < 8 ? 2 : 3)
@@ -964,6 +967,10 @@ struct LaunchTrace: View {
     let width: CGFloat
     let date: Date
     @State private var from: Double?
+    @State private var last: Double = 0
+    /// Its line came round: held closed until the list says the pattern is in (read just after the line now), never
+    /// started again from the next pass's time (Scott, 2026-11-10: it didn't end cleanly at the hand-off)
+    @State private var closed = false
 
     var body: some View {
         if session.ticksToLaunch(track) == nil {
@@ -971,16 +978,20 @@ struct LaunchTrace: View {
         } else {
             TimelineView(.animation) { _ in
                 let left = session.ticksToLaunch(track) ?? 0
-                let done = from.map { $0 > 0 ? min(1, max(0, 1 - left / $0)) : 1 } ?? 0
+                let done = closed ? 1 : from.map { $0 > 0 ? min(1, max(0, 1 - left / $0)) : 1 } ?? 0
                 ZStack {
                     RoundedRectangle(cornerRadius: radius).strokeBorder(colour.opacity(0.3), lineWidth: width)
                     TraceOutline(radius: radius, inset: width / 2).trim(from: 0, to: done)
                         .stroke(colour, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
                 }
-                // (staged again further off, a new pass at LOOP: from where it is now)
-                .onChange(of: left > (from ?? 0) + 1) { _, more in if more { from = left } }
+                .onChange(of: left) { _, now in
+                    // the time left jumping up: the line passed (it was nearly there) or it was staged again further
+                    // off (from where it is now)
+                    if now > last + 1, !closed { if last <= 12 { closed = true } else { from = now } }
+                    last = now
+                }
             }
-            .onAppear { from = session.ticksToLaunch(track) }
+            .onAppear { from = session.ticksToLaunch(track); last = from ?? 0 }
             .accessibilityHidden(true)
         }
     }

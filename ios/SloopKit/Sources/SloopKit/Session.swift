@@ -203,6 +203,14 @@ public final class DeviceSession {
     }
     /// The launch on track t taken back or cancelled; not when its line is a step away (the list read just after the
     /// swap, the clock a pulse or two behind it).
+    /// Seconds to the soonest launch waiting on any track, from the counted clock.
+    func secondsToNextLaunch() -> Double? {
+        guard let store = skiffSong, counted.running, bpm > 0 else { return nil }
+        let ticks = trackIndices.compactMap { t -> Double? in
+            store.marks(t, launchIn: nil).queued != nil ? ticksToLaunch(t) : nil
+        }
+        return ticks.min().map { $0 / 24 * 60 / Double(bpm) }
+    }
     func dropLaunch(_ t: Int) {
         guard let at = counted.relaunchAt(t), Double(counted.ticks) < at - 6 else { return }
         counted.relaunch(track: t, at: nil)
@@ -444,6 +452,7 @@ public final class DeviceSession {
                         return (self.tracks[t].length, self.tracks[t].division)
                     }, isPlaying: { [weak self] in self?.playing ?? false })
                     skiffSong?.passCount = { [weak self] t in self?.passCount(t) }
+                    skiffSong?.nextLanding = { [weak self] in self?.secondsToNextLaunch() }
                     skiffSong?.onLaunch = { [weak self] t, staged in if staged { self?.noteLaunch(t) } else { self?.dropLaunch(t) } }
                 }
                 await skiffSong?.refresh(pool: true)

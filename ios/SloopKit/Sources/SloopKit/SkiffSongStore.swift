@@ -104,11 +104,15 @@ public final class SkiffSongStore {
         } catch {}
     }
 
-    /// About once a second while a view shows the song (as Skiff's own editor does).
+    /// Seconds to the next launch the session's clock expects (nil: none waiting).
+    @ObservationIgnored public var nextLanding: @MainActor () -> Double? = { nil }
+    /// About once a second while a view shows the song (as Skiff's own editor does), and just after a launch's line, so
+    /// the pad it brings in lights then, not up to a second later (Scott, 2026-11-10: the hand-off)
     public func follow() async {
         while !Task.isCancelled {
             await refresh()
-            try? await Task.sleep(for: .seconds(1))
+            let wait = nextLanding().map { min(1, max(0.03, $0 + 0.06)) } ?? 1
+            try? await Task.sleep(for: .seconds(wait))
         }
     }
 
