@@ -344,21 +344,32 @@ struct PatternBin: View {
                 if drawer, let ui {
                     Button { ui.poolOpen = false; ui.dragPattern = nil } label: {
                         Image(systemName: "chevron.right").font(.system(size: 15, weight: .semibold))
-                            .frame(width: 44, height: 44).raisedKey()
+                            .frame(width: 44, height: 44)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))   // (flat, as the page's keys now)
                     }
                     .buttonStyle(PressSink())
                     .accessibilityLabel("Close patterns")
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Patterns").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                    Text("Patterns").font(.system(size: drawer ? 20 : 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
                     Text("\(used) in this song · \(other) in other projects · \(pool?.free ?? 0) free")
                         .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
             }
             SegmentedKeys(label: "Show", options: ["This song", "All 64"], selected: all ? 1 : 0) { all = $0 == 1 }
             ScrollView {
-                LazyVStack(spacing: 2) {
-                    ForEach(shown, id: \.self) { p in row(p, tracks: m[p] ?? []) }
+                if drawer {
+                    // the Pads' language (Scott, 2026-11-09): cards grouped by the track that uses them, as the lanes
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(groups(shown, m), id: \.title) { g in
+                            groupHead(g)
+                            ForEach(g.patterns, id: \.self) { p in card(p, tracks: m[p] ?? []) }
+                        }
+                    }
+                } else {
+                    LazyVStack(spacing: 2) {
+                        ForEach(shown, id: \.self) { p in row(p, tracks: m[p] ?? []) }
+                    }
                 }
             }
             .scrollIndicators(.hidden)
@@ -366,7 +377,14 @@ struct PatternBin: View {
                 let t = selection?.track ?? session.selectedTrack
                 ArrangeEdits(session: session, store: store).newPatternAtEnd(t)
             } label: {
-                Text("New empty pattern").font(.system(size: 15)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
+                Group {
+                    if drawer {
+                        Text("New empty pattern").font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
+                    } else {
+                        Text("New empty pattern").font(.system(size: 15)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
+                    }
+                }
             }
             .buttonStyle(PressSink())
             .disabled((pool?.free ?? 0) == 0 || store.busy || store.offline)
@@ -397,6 +415,82 @@ struct PatternBin: View {
             if drawer { RoundedRectangle(cornerRadius: 16).fill(Elevation.held.surface).elevationShadow(.held) }
         }
         .modifier(BinPanel(on: !drawer))
+    }
+
+    /// The drawer's groups: each track's own patterns under it, then those shared between tracks, those only saved
+    /// projects use, and (All 64) the free ones.
+    struct PatternGroup: Identifiable { var title: String; var track: Int?; var patterns: [Int]; var id: String { title } }
+    private func groups(_ shown: [Int], _ m: [Int: [Int]]) -> [PatternGroup] {
+        var out: [PatternGroup] = []
+        for t in session.trackIndices {
+            let ps = shown.filter { m[$0] == [t] }
+            if !ps.isEmpty { out.append(PatternGroup(title: "T\(t + 1) \(Entries.trackName(t, session: session))", track: t, patterns: ps)) }
+        }
+        let shared = shown.filter { (m[$0]?.count ?? 0) > 1 }
+        if !shared.isEmpty { out.append(PatternGroup(title: "Shared", track: nil, patterns: shared)) }
+        let elsewhere = shown.filter { m[$0] == nil && !(store.pool?.patterns[$0].isFree ?? true) }
+        if !elsewhere.isEmpty { out.append(PatternGroup(title: "Not in this song", track: nil, patterns: elsewhere)) }
+        let free = shown.filter { store.pool?.patterns[$0].isFree ?? true }
+        if !free.isEmpty { out.append(PatternGroup(title: "Free", track: nil, patterns: free)) }
+        return out
+    }
+
+    private func groupHead(_ g: PatternGroup) -> some View {
+        HStack(spacing: 8) {
+            if let t = g.track { BigTrackChip(track: t, muted: false, side: 22) }
+            Text(g.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+        }
+        .padding(.top, 10).padding(.bottom, 2)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// A pattern as the pads draw one: its number on its track's colour, what it is, its picture, how often the song
+    /// plays it; the selected one tinted and outlined in its track's colour.
+    private func card(_ p: Int, tracks: [Int]) -> some View {
+        let pat = store.pool?.patterns[p]
+        let free = pat?.isFree ?? true
+        let n = inSong(p)
+        let selected = selection.flatMap { s in store.song?.tracks[safe: s.track]?.entries[safe: s.entry]?.poolIndex } == p
+        let owner = tracks.count == 1 ? tracks[0] : nil
+        let colour = free ? Theme.well : owner.map { Theme.track[$0] } ?? Entries.tone(p + 1)
+        return HStack(spacing: 12) {
+            Text(Entries.number(p + 1)).font(.system(size: 17, weight: .bold)).monospacedDigit()
+                .foregroundStyle(free ? Theme.textSecondary : owner != nil ? Theme.onColour : Theme.text)
+                .frame(width: 44, height: 44)
+                .background(RoundedRectangle(cornerRadius: 10).fill(colour))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(free ? "Free" : tracks.isEmpty ? "Not in this song"
+                     : owner != nil ? Entries.trackName(owner!, session: session) : tracks.map { "T\($0 + 1)" }.joined(separator: ", "))
+                    .font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                if let pat, pat.length > 0 {
+                    Text("\(pat.length) steps · \(Entries.divisionName(store.divisions[p] ?? session.tracks[safe: tracks.first ?? 0]?.division ?? 2))")
+                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                }
+            }
+            Spacer(minLength: 0)
+            if let th = ui?.padThumbs[p], !free {
+                PadThumbView(thumb: th, ink: Theme.textSecondary).frame(width: 56, height: 18)
+            }
+            if n > 0 { Text("\(n)×").font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.textSecondary) }
+            if ui != nil, !free { PatternMore(number: p + 1) { at in openMenu(p, at: at) } }
+        }
+        .padding(.leading, 8).padding(.trailing, ui != nil && !free ? 0 : 12)
+        .frame(height: 60)
+        .background(RoundedRectangle(cornerRadius: 12).fill(selected ? SelectionTint.fill(owner ?? session.selectedTrack) : Theme.control))
+        .overlay { if selected { RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.track[owner ?? session.selectedTrack], lineWidth: 2) } }
+        .contentShape(Rectangle())
+        .onDrag {
+            guard !free else { return NSItemProvider() }
+            dragPattern = p + 1
+            return NSItemProvider(object: "pattern \(p + 1)" as NSString)
+        } preview: {
+            Text(Entries.number(p + 1)).font(.system(size: 17, weight: .bold)).foregroundStyle(owner != nil ? Theme.onColour : Theme.text)
+                .frame(width: 56, height: 56).background(RoundedRectangle(cornerRadius: 12).fill(colour))
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(free ? "" : "Drag onto a track to add it")
+        .accessibilityAction(named: "Empty pattern") { if !free { ask(2, p) } }
+        .accessibilityAction(named: "Clear pattern") { if !free { ask(1, p) } }
     }
 
     private func row(_ p: Int, tracks: [Int]) -> some View {
