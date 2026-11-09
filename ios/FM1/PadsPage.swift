@@ -235,6 +235,10 @@ struct PadsPage: View {
     /// of the pad (Scott, 2026-11-09: they sat too high).
     struct SelectedGeometry {
         var frame: CGRect, tab: CGSize, up: Bool, right: Bool, tabAt: CGPoint, knobsAt: CGPoint, border: CGFloat, inner: CGSize
+        /// The tint's corners (a pad's own in that row) and the face's inside it: outer less the border, so the two
+        /// curves run parallel (Scott, 2026-11-09; design-standards: outer = inner + padding).
+        var radius: CGFloat
+        var innerRadius: CGFloat { max(2, radius - border) }
     }
 
     private func selectedGeometry(row r: Int, col c: Int, rows: Int, area: CGSize, cell: CGSize, gap: CGFloat, rowGap: CGFloat) -> SelectedGeometry {
@@ -248,7 +252,8 @@ struct PadsPage: View {
         let knobsAt = CGPoint(x: x, y: up ? frame.minY - tab.height : frame.maxY + drop)
         let b: CGFloat = cell.height < 60 ? 4 : 6          // the border: thinner round short rows
         return SelectedGeometry(frame: frame, tab: tab, up: up, right: right, tabAt: tabAt, knobsAt: knobsAt, border: b,
-                                inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b))
+                                inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b),
+                                radius: Self.padRadius(cell))
     }
 
     /// The selected pad's border of its track's tint and the track's controls hanging from it, as one shape, over the
@@ -257,10 +262,10 @@ struct PadsPage: View {
         ZStack(alignment: .topLeading) {
             if bare {
                 // over the editor, or the controls tapped away: the border alone
-                RoundedRectangle(cornerRadius: 12).fill(SelectionTint.fill(t))
+                RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
-                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right)
+                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, r: s.radius)
                     .fill(SelectionTint.fill(t))
                 TrackKnobBox(session: session, ui: ui, embedded: true)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
@@ -272,7 +277,7 @@ struct PadsPage: View {
 
     /// The selected pad itself, shrunk inside the border.
     private func selectedFace(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, _ s: SelectedGeometry, date: Date, area: CGSize) -> some View {
-        pad(t, i, m, size: s.inner, date: date)
+        pad(t, i, m, size: s.inner, date: date, radius: s.innerRadius, selected: true)
             .frame(width: s.inner.width, height: s.inner.height)
             .geometryGroup()
             .offset(x: s.frame.minX + s.border, y: s.frame.minY + s.border)
@@ -321,10 +326,17 @@ struct PadsPage: View {
 
     // MARK: Pads
 
-    private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date, copy: Bool = false) -> some View {
+    /// A pad's corner radius at its size: 16, or 8 on Half's short rows.
+    static func padRadius(_ size: CGSize) -> CGFloat { size.height < 56 ? 8 : 16 }
+
+    private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date, copy: Bool = false,
+                     radius: CGFloat? = nil, selected: Bool = false) -> some View {
         let side = min(size.width, size.height), small = size.height < 120 || size.width < 150
         let tiny = size.width < 90                // Max's row of 16: the letter and the number only
         let short = size.height < 56              // Half's rows, as tall as the lane heads: one line
+        let rad = radius ?? Self.padRadius(size)
+        // the selected pad outlined in its track's colour, not white (Scott, 2026-11-09: clearer on Half)
+        let mark: Color? = selected ? Theme.track[t] : nil
         let list = store.song?.tracks[safe: t]
         let e = list?.entries[safe: i] ?? .empty
         let blocks = store.blocks(t)
@@ -387,9 +399,9 @@ struct PadsPage: View {
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
-                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: 8) }
-                .contentShape(RoundedRectangle(cornerRadius: 8))
-                .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: 8) }
+                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad) }
+                .contentShape(RoundedRectangle(cornerRadius: rad))
+                .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
             } else {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
@@ -416,10 +428,10 @@ struct PadsPage: View {
             }
             .padding(tiny ? 6 : small ? 10 : 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour) }
+            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
-            .contentShape(RoundedRectangle(cornerRadius: 16))
-            .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: 16) }
+            .contentShape(RoundedRectangle(cornerRadius: rad))
+            .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
             }
         }
         .buttonStyle(PressSink())
@@ -674,13 +686,16 @@ struct PadsPage: View {
     }
 
     /// A pad's outline for its state: a held scene's (white, outside), waiting (dashed, pulsing), the song's next, on it.
-    @ViewBuilder private func padOutline(held: Bool, waiting: Bool, next: Bool, on: Bool, colour: Color, date: Date, radius: CGFloat) -> some View {
+    @ViewBuilder private func padOutline(held: Bool, waiting: Bool, next: Bool, on: Bool, colour: Color, date: Date, radius: CGFloat, mark: Color? = nil) -> some View {
         if held {
             // a scene held: where it would send this track (Scott, 2026-11-09, board 36)
             RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.text, lineWidth: 3).padding(-3)
         } else if waiting {
             let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(date.timeIntervalSinceReferenceDate * .pi))
             RoundedRectangle(cornerRadius: radius).strokeBorder(colour, style: StrokeStyle(lineWidth: radius < 12 ? 2 : 3, dash: [8, 5])).opacity(pulse)
+        } else if let mark {
+            // the selected pad: its track's colour (on a playing pad, filled in that colour, the tint round it says it)
+            RoundedRectangle(cornerRadius: radius).strokeBorder(mark, lineWidth: radius < 8 ? 2 : 3)
         } else if next || on {
             RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.text.opacity(on ? 1 : 0.55), lineWidth: on ? 2 : 1.5)
         }

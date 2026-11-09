@@ -37,7 +37,9 @@ struct PadTabShape: Shape {
     var tab: CGSize
     var up: Bool
     var right: Bool
-    static let r: CGFloat = 12, f: CGFloat = 10
+    static let f: CGFloat = 10
+    /// The corners: the pad's own radius in that row, so the tint lines up with the pads beside it.
+    var r: CGFloat = 12
 
     /// The pad's place and size animate, so the tint travels with the pad and its knobs on the spring: drawn from the
     /// final place at once, it jumped while they glided (Scott, 2026-11-08: "separate motion from their background").
@@ -47,7 +49,7 @@ struct PadTabShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let r = Self.r, f = Self.f, w = cell.width, h = cell.height, W = max(tab.width, w + f), H = tab.height
+        let r = r, f = Self.f, w = cell.width, h = cell.height, W = max(tab.width, w + f), H = tab.height
         var p = Path()          // drawn with the tab under the pad, flush left, from (0, 0); then mirrored into place
         p.move(to: CGPoint(x: r, y: 0))
         p.addLine(to: CGPoint(x: w - r, y: 0))
