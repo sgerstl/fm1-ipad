@@ -42,8 +42,8 @@ struct LibraryPage: View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: panelRoom > 0 ? min(2, self.columns) : self.columns)
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                Text(gridTitle).font(.system(size: 22, weight: .semibold))
-                Text(gridDetail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text(gridTitle).font(.lupe(22, .semibold))
+                Text(gridDetail).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 Spacer()
             }
             .accessibilityElement(children: .combine)
@@ -165,7 +165,7 @@ struct LibraryPage: View {
                     Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(SaveSound.slotName(k)).foregroundStyle(Theme.textSecondary)
-                        Text("Empty").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                        Text("Empty").font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
@@ -211,7 +211,7 @@ struct LibraryPage: View {
                 LED(on: current, colour: Theme.track[session.selectedTrack])
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name.capitalized).fontWeight(current ? .semibold : .regular).lineLimit(1)
-                    if let detail { Text(detail).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1) }
+                    if let detail { Text(detail).font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1) }
                 }
                 Spacer(minLength: 0)
             }
@@ -237,7 +237,7 @@ struct LibraryPage: View {
         let t = session.selectedTrack
         let slots = session.sampleSlots
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Your samples").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+            Text("Your samples").font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary)
                 .padding(.leading, 4).padding(.top, 16)
                 .accessibilityAddTraits(.isHeader)
             LazyVGrid(columns: columns, spacing: 8) {
@@ -276,7 +276,7 @@ struct LibraryPage: View {
     }
 
     private func emptyNote(_ text: String) -> some View {
-        Text(text).font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+        Text(text).font(.lupe(15)).foregroundStyle(Theme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .center).padding(.top, 24)
     }
 }
@@ -310,7 +310,7 @@ struct LibraryEngines: View {
         let engines = session.info?.engines ?? []
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {       // 12 engines + user presets fit without scrolling
-                Text("Engines").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text("Engines").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     .padding(.leading, 8).padding(.bottom, 6)
                     .accessibilityAddTraits(.isHeader)
                 ForEach(Array(engines.enumerated()).filter { !entry || Self.offered(session, $0.offset) }, id: \.offset) { e, name in
@@ -354,7 +354,7 @@ struct LibraryEngines: View {
                 LED(on: current)
                 Text(name).fontWeight(browsing ? .semibold : .regular)
                 Spacer()
-                Text(notHere ?? "\(count)").font(.system(size: notHere == nil ? 13 : 11)).foregroundStyle(Theme.textSecondary)
+                Text(notHere ?? "\(count)").font(.lupe(notHere == nil ? 13 : 11)).foregroundStyle(Theme.textSecondary)
             }
             .foregroundStyle(browsing ? Theme.text : Theme.textSecondary)
             .padding(.horizontal, 12)
@@ -402,7 +402,7 @@ private struct SoundRefusalNote: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle").foregroundStyle(Theme.caution).accessibilityHidden(true)
-            Text(refusal.text).font(.system(size: 13)).foregroundStyle(Theme.text)
+            Text(refusal.text).font(.lupe(13)).foregroundStyle(Theme.text)
             Spacer(minLength: 0)
             Button { session.dismissSoundRefusal() } label: {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())

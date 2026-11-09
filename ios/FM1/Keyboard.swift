@@ -34,9 +34,9 @@ struct KeyboardDrawer: View {
 
     private func header(_ drums: Bool) -> some View {
         HStack(spacing: 16) {
-            Text("Keys").font(.system(size: 17, weight: .semibold))
+            Text("Keys").font(.lupe(17, .semibold))
             if drums {
-                Text("Drums: one sound per white key").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text("Drums: one sound per white key").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
             } else {
                 // the FM-1's OCT buttons; the iPad follows them when you play the FM-1's keys
                 StepperKeys(label: "Octave", value: session.keyboardOctave, range: -3...3, step: 1,
@@ -46,7 +46,7 @@ struct KeyboardDrawer: View {
             }
             if !session.otherChannelsPlaySelected {
                 Text("GLO > MIDI > OTHER is OFF on the FM-1, so these keys play nothing. Set it to SEL.")
-                    .font(.system(size: 13)).foregroundStyle(Theme.text)
+                    .font(.lupe(13)).foregroundStyle(Theme.text)
             }
             Spacer()
             Button { ui.keyboardOpen = false } label: {
@@ -144,7 +144,7 @@ private struct MembraneKey: View {
                     // 6 pt wide (was 4) and taller with the key: the FM-1's light strips read wider (2026-11-06)
                     .frame(width: 6, height: 46)
                 if !name.isEmpty {
-                    Text(name).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(name).font(.lupe(11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
             .offset(y: name.isEmpty ? 0 : 6)

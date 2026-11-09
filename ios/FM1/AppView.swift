@@ -84,7 +84,7 @@ struct AppView: View {
         .overlay { ValueLoupeLayer(loupe: ui.loupe) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
-        .font(.system(size: 15))
+        .font(.lupe(15))
         .monospacedDigit()
     }
 }
@@ -266,7 +266,7 @@ extension AppView {
             if let c = ui.lastClear {
                 HStack(spacing: 16) {
                     TrackChip(track: c.track)
-                    Text("Cleared track \(c.track + 1)").font(.system(size: 15, weight: .semibold))
+                    Text("Cleared track \(c.track + 1)").font(.lupe(15, .semibold))
                     Button {
                         session.undo(c)
                         ui.lastClear = nil
@@ -393,9 +393,9 @@ struct NotOnThisFirmware: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-            Text(title).font(.system(size: 28, weight: .semibold))
+            Text(title).font(.lupe(28, .semibold))
             Text(detail)
-                .font(.system(size: 17))
+                .font(.lupe(17))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 560)
@@ -416,9 +416,9 @@ struct ConnectionState: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-            Text(title).font(.system(size: 28, weight: .semibold))
+            Text(title).font(.lupe(28, .semibold))
             Text(detail)
-                .font(.system(size: 17))
+                .font(.lupe(17))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 560)
@@ -493,10 +493,10 @@ struct LostCard: View {
                 .frame(width: 48, height: 48)
                 .contentTransition(.symbolEffect(.replace))
             VStack(alignment: .leading, spacing: 8) {
-                Text(back ? "Back" : "FM-1 disconnected").font(.system(size: 22, weight: .semibold))
+                Text(back ? "Back" : "FM-1 disconnected").font(.lupe(22, .semibold))
                     .contentTransition(.opacity)
                 Text(back ? "Reading the FM-1. A second." : "Plug it back in, or check it’s switched on. Lupe picks up where you were: nothing here is lost.")
-                    .font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(15)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.opacity)
                 if back {
@@ -520,7 +520,7 @@ struct LookingForFM1: View {
     var body: some View {
         HStack(spacing: 8) {
             ProgressView().tint(Theme.textSecondary)
-            Text("Looking for the FM-1…").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+            Text("Looking for the FM-1…").font(.lupe(15)).foregroundStyle(Theme.textSecondary)
         }
         .accessibilityElement(children: .combine)
     }
@@ -537,9 +537,9 @@ struct RecordingKnobsBar: View {
             HStack(spacing: 12) {
                 Image(systemName: "record.circle").foregroundStyle(Theme.rec).accessibilityHidden(true)
                 Text("Recording knob moves on T\(session.selectedTrack + 1): every change, here or on the FM-1, goes into its steps.")
-                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                    .font(.lupe(13)).fixedSize(horizontal: false, vertical: true)
                 Button { session.toggleRec() } label: {
-                    Text("Stop recording").font(.system(size: 13, weight: .semibold))
+                    Text("Stop recording").font(.lupe(13, .semibold))
                         .padding(.horizontal, 12).frame(minHeight: 44).raisedKey()
                         .contentShape(Rectangle())
                 }

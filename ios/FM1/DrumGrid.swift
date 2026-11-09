@@ -71,7 +71,7 @@ struct DrumGrid: View {
 
             Text(below > 0 ? "\(below) more \(below == 1 ? "lane" : "lanes") below · drag to pan"
                  : topLane > 0 ? "\(topLane) \(topLane == 1 ? "lane" : "lanes") above · drag to pan" : " ")
-                .font(.system(size: 12))
+                .font(.lupe(12))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(height: 16)
                 .accessibilityHidden(true)

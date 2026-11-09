@@ -72,7 +72,7 @@ struct TopBar: View {
                 WaitingDot(on: session.isConnected, waiting: session.skiffSong?.busy == true)
                 // a real FM-1 is just the dot; words for the demo and for trouble (the version is in the menu)
                 if let s = shortStatus {
-                    Text(s).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                    Text(s).font(.lupe(15, .semibold)).lineLimit(1)
                 }
             }
             .frame(minWidth: 44, minHeight: 44)
@@ -119,7 +119,7 @@ struct TopBar: View {
                 HStack(spacing: 8) {
                     Image(systemName: "folder").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
                     Text(projectName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.lupe(15, .semibold))
                         .foregroundStyle(projectNamed ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).truncationMode(.tail)
                         .frame(maxWidth: 170, alignment: .leading)
@@ -363,7 +363,7 @@ struct TopBar: View {
         .overlay(alignment: .top) {
             if fromStartShown {
                 Text("Playing from the start")
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
+                    .font(.lupe(13, .semibold)).foregroundStyle(Theme.text)
                     .fixedSize()
                     .padding(.horizontal, 12).frame(height: 32)
                     .elevated(.held, radius: 8)
@@ -441,7 +441,7 @@ private struct ReadoutLabel: View {
         let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
         let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : song ? "SONG" : nil
         VStack(alignment: .leading, spacing: 0) {
-            Text(position).font(.system(size: 20, weight: .semibold)).monospacedDigit().lineLimit(1)
+            Text(position).font(.lupe(20, .semibold)).monospacedDigit().lineLimit(1)
                 .foregroundStyle(recording ? Theme.recText : Theme.text)
             HStack(spacing: 4) {
                 if let m = mode {
@@ -450,7 +450,7 @@ private struct ReadoutLabel: View {
                 }
                 Text("\(session.bpm) BPM").monospacedDigit()
             }
-            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            .font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
         }
         .frame(width: 112, alignment: .leading)         // "SONG REC · 120 BPM" at its widest: nothing moves
         .padding(.horizontal, 8)

@@ -63,7 +63,7 @@ struct BarsControl: View {
                     Capsule().fill(Theme.well).frame(width: w - 24, height: 6).offset(x: 12, y: 13)
                     Capsule().fill(Theme.textSecondary).frame(width: max(6, pos(bars, w) - 12), height: 6).offset(x: 12, y: 13)
                     ForEach(Self.stops, id: \.self) { s in
-                        Text("\(s)").font(.system(size: 11, weight: s == bars ? .semibold : .regular)).monospacedDigit()
+                        Text("\(s)").font(.lupe(11, s == bars ? .semibold : .regular)).monospacedDigit()
                             .foregroundStyle(s == bars ? Theme.text : Theme.textSecondary)
                             .position(x: pos(s, w), y: 38)
                     }
@@ -88,7 +88,7 @@ struct BarsControl: View {
             .frame(height: 48)
             key("plus", "One bar more") { set(min(64, bars + 1)) }
                 .disabled(!enabled || bars >= 64)
-            Text("\(bars) bar\(bars == 1 ? "" : "s")").font(.system(size: 17, weight: .semibold)).monospacedDigit()
+            Text("\(bars) bar\(bars == 1 ? "" : "s")").font(.lupe(17, .semibold)).monospacedDigit()
                 .frame(width: 76, alignment: .leading)
                 .accessibilityHidden(true)
         }

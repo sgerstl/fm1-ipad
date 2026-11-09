@@ -23,7 +23,7 @@ private struct Space {
     /// Skiff's small type (AF_S) with its baseline at y.
     func text(_ ctx: GraphicsContext, _ s: String, _ x: Double, _ base: Double, _ c: Color, size: CGFloat = 11,
               weight: Font.Weight = .regular, anchor: UnitPoint = .bottomLeading) {
-        ctx.draw(Text(s).font(.system(size: size, weight: weight)).foregroundColor(c), at: p(x, base), anchor: anchor)
+        ctx.draw(Text(s).font(.lupe(size, weight)).foregroundColor(c), at: p(x, base), anchor: anchor)
     }
 }
 
@@ -1101,7 +1101,7 @@ private struct ScopeGraph: View {
                 ScopeTrace(frames: session.scope, colour: colour)
             } else {
                 Text(session.screenLinked ? "Scope needs a newer Skiff 2.2 screen link" : "Scope needs Skiff 2.2 with the screen link")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }

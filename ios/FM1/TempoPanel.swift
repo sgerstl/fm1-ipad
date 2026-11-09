@@ -72,7 +72,7 @@ struct TempoPanel: View {
                     .opacity(off ? 0.5 : 1)
                     .accessibilityHint("Slide to set it. Tap to type a number")
                 Button(action: tap) {
-                    Text("Tap").font(.system(size: 17, weight: .semibold))
+                    Text("Tap").font(.lupe(17, .semibold))
                         .frame(width: Self.tapSide, height: Self.tapSide).raisedKey()
                         .contentShape(Rectangle())
                 }
@@ -83,16 +83,16 @@ struct TempoPanel: View {
             }
             if typing { keypad }
             if let p = typedProblem {
-                Label(p, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Theme.text)
+                Label(p, systemImage: "exclamationmark.circle").font(.lupe(13)).foregroundStyle(Theme.text)
             }
             if let f = following {
                 Label("Following \(f) clock: the tempo comes from the other device. Set CLOCK to INT on the FM-1 to set it here.",
                       systemImage: "metronome")
-                    .font(.system(size: 13)).foregroundStyle(Theme.text)
+                    .font(.lupe(13)).foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
             } else if !typing {
                 Text("\(range.lowerBound)–\(range.upperBound) BPM · slide, or tap to type")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             }
         }
         .padding(16)
@@ -127,7 +127,7 @@ struct TempoPanel: View {
                     Group {
                         if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
                     }
-                    .font(.system(size: k == "Set" ? 15 : 19, weight: .semibold)).monospacedDigit()
+                    .font(.lupe(k == "Set" ? 15 : 19, .semibold)).monospacedDigit()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .raisedKey(primary: k == "Set")
                     .contentShape(Rectangle())

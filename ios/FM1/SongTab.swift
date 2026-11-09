@@ -433,12 +433,12 @@ struct PatternPane: View {
                 tracksMenu(t)
             } else {
                 TrackChip(track: t, selected: true).frame(width: 28, height: 28)
-                Text(Entries.trackName(t, session: session)).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                Text(Entries.trackName(t, session: session)).font(.lupe(15, .semibold)).lineLimit(1)
             }
             Button { openPicker(t, entry: entry) } label: {
                 HStack(spacing: 4) {
-                    Text("pattern").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    Text(pattern.map(Entries.number) ?? "–").font(.system(size: 15, weight: .semibold))
+                    Text("pattern").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
+                    Text(pattern.map(Entries.number) ?? "–").font(.lupe(15, .semibold))
                     Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
                 }
                 .padding(.horizontal, 10).frame(height: 36).raisedKey()
@@ -453,9 +453,9 @@ struct PatternPane: View {
             if !session.isKit(t) { MotionChip(session: session, ui: ui, track: t) }
             if !shared.isEmpty, let entry {
                 Text("also on entr\(shared.count == 1 ? "y" : "ies") \(shared.map(Entries.letter).joined(separator: ", "))")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 Button { Task { await store.send(.copy(track: t, entry: entry)) } } label: {
-                    Text("Make unique").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 12).frame(height: 36).raisedKey()
+                    Text("Make unique").font(.lupe(13, .semibold)).padding(.horizontal, 12).frame(height: 36).raisedKey()
                 }
                 .buttonStyle(PressSink())
                 .disabled(store.offline || session.playing)
@@ -484,7 +484,7 @@ struct PatternPane: View {
         } label: {
             HStack(spacing: 8) {
                 TrackChip(track: t, selected: true).frame(width: 28, height: 28)
-                Text(Entries.trackName(t, session: session)).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                Text(Entries.trackName(t, session: session)).font(.lupe(15, .semibold)).lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(Theme.text)
@@ -521,10 +521,10 @@ struct PatternPane: View {
         } label: {
             HStack(spacing: 8) {
                 LED(on: on)
-                Text("Follow").font(.system(size: 13, weight: on ? .semibold : .regular))
+                Text("Follow").font(.lupe(13, on ? .semibold : .regular))
                 if let p = pinned {
                     Label("pinned to \(Entries.letter(p.entry))", systemImage: "pin.fill")
-                        .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        .font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 }
             }
             .foregroundStyle(Theme.text)
@@ -563,9 +563,9 @@ struct PatternPane: View {
         return HStack(spacing: 8) {
             Image(systemName: "clock").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                 .accessibilityHidden(true)
-            Text("\(c) opens when it comes in").font(.system(size: 13)).foregroundStyle(Theme.text).lineLimit(1)
+            Text("\(c) opens when it comes in").font(.lupe(13)).foregroundStyle(Theme.text).lineLimit(1)
             Button { session.setPlaying(false) } label: {
-                Text("Stop and edit \(c)").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 12).frame(height: 36).raisedKey()
+                Text("Stop and edit \(c)").font(.lupe(13, .semibold)).padding(.horizontal, 12).frame(height: 36).raisedKey()
             }
             .buttonStyle(PressSink())
             .accessibilityHint("Stops the song and opens entry \(c) in the editor")

@@ -79,7 +79,7 @@ struct PhoneAppView: View {
         .coordinateSpace(name: AppView.space)
         .sessionUpkeep(session)        // the same upkeep as the iPad's AppView
         .foregroundStyle(Theme.text)
-        .font(.system(size: 15))
+        .font(.lupe(15))
         .monospacedDigit()
     }
 }
@@ -127,7 +127,7 @@ struct PhoneTopBar: View {
             if picker { ui.trackPicker = ui.trackPicker == nil && !OutsideTouch.justClosed ? pressAt : nil } else { session.select(track: t) }
         } label: {
             VStack(spacing: 5) {
-                Text("\(t + 1)").font(.system(size: 15, weight: .semibold))
+                Text("\(t + 1)").font(.lupe(15, .semibold))
                 Capsule().fill(on ? Theme.onColour.opacity(0.5) : Theme.track[t]).frame(width: 16, height: 3)
             }
             .foregroundStyle(on ? Theme.onColour : Theme.text)
@@ -168,7 +168,7 @@ struct PhoneTopBar: View {
                     TopBar.driveDevice(session: session, ui: ui, to: p)
                 } label: {
                     Text(p.rawValue)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.lupe(13, .semibold))
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity).frame(height: 36)
@@ -208,9 +208,9 @@ struct PhoneTopBar: View {
             Button { if !OutsideTouch.justClosed { ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY) } } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.playing ? "\(pos.step / 16 + 1).\(pos.step % 16 / 4 + 1).\(pos.step % 4 + 1)" : "–")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.lupe(13, .semibold))
                         .foregroundStyle(recording ? Theme.recText : Theme.text)
-                    Text(recording ? "REC" : "\(session.bpm) BPM").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                    Text(recording ? "REC" : "\(session.bpm) BPM").font(.lupe(11)).foregroundStyle(Theme.textSecondary)
                 }
                 .frame(width: 62, alignment: .leading)
                 .padding(.leading, 6)
@@ -312,10 +312,10 @@ struct PhoneSequence: View {
         let scale = track.scale == 0 ? "chromatic" : "\(Music.noteNames[track.root % 12]) \(Music.scales[min(track.scale, 15)].spoken)"
         let detail = session.isDrums(t) ? "Drums · length \(track.length)" : "Track \(t + 1) · \(scale) · length \(track.length)"
         return HStack(spacing: 8) {
-            Text(detail).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            Text(detail).font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             Spacer(minLength: 8)
             Button { setPanel(!stepPanel) } label: {
-                Text("Step \(i + 1)").font(.system(size: 12, weight: .semibold))
+                Text("Step \(i + 1)").font(.lupe(12, .semibold))
                     .padding(.horizontal, 10).frame(height: 28)
                     .latchedKey(stepPanel, 8)
                     .contentShape(Rectangle())
@@ -327,7 +327,7 @@ struct PhoneSequence: View {
                 Button { velocity.toggle() } label: {
                     HStack(spacing: 6) {
                         LED(on: velocity)
-                        Text("Velocity").font(.system(size: 12, weight: .semibold))
+                        Text("Velocity").font(.lupe(12, .semibold))
                     }
                     .padding(.horizontal, 10).frame(height: 28)
                     .latchedKey(velocity, 8)
@@ -410,7 +410,7 @@ struct PhonePianoRoll: View {
                 }
                 if velocity {
                     HStack(spacing: 2) {
-                        Text("Vel").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        Text("Vel").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                             .frame(width: grid.labelWidth, alignment: .trailing)
                         VelocityLane(track: t, selected: ui.selectedStep[track])
                             .offset(x: -offset.x)

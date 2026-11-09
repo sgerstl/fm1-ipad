@@ -100,10 +100,10 @@ struct MotionLanes: View {
                 HStack(spacing: 10) {
                     Image(systemName: "lock").accessibilityHidden(true)
                     Text("Stop the song to edit motion. Each entry brings its own motion when it starts, so a change now wouldn't last.")
-                        .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                        .font(.lupe(13)).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button { session.setPlaying(false) } label: {
-                        Label("Stop", systemImage: "stop.fill").font(.system(size: 13, weight: .semibold))
+                        Label("Stop", systemImage: "stop.fill").font(.lupe(13, .semibold))
                             .padding(.horizontal, 14).frame(minHeight: 44).raisedKey()
                     }
                     .buttonStyle(PressSink())
@@ -115,7 +115,7 @@ struct MotionLanes: View {
             if let said = Self.refusal(session, track: track) {
                 HStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle").accessibilityHidden(true)
-                    Text(said).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                    Text(said).font(.lupe(13)).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button { session.dismissMotionRefusal() } label: {
                         Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
@@ -203,7 +203,7 @@ struct MotionLanes: View {
         } label: {
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
-                    Text(label).font(.system(size: 11)).lineLimit(2).multilineTextAlignment(.trailing)
+                    Text(label).font(.lupe(11)).lineLimit(2).multilineTextAlignment(.trailing)
                     Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                 }
                 .foregroundStyle(Theme.textSecondary)
@@ -442,7 +442,7 @@ struct MotionLaneEditor: View {
         return HStack(spacing: 8) {
             Button { close() } label: {
                 HStack(spacing: 4) {
-                    Text(label).font(.system(size: 13, weight: .semibold)).lineLimit(2).multilineTextAlignment(.trailing)
+                    Text(label).font(.lupe(13, .semibold)).lineLimit(2).multilineTextAlignment(.trailing)
                     Image(systemName: "chevron.up").font(.system(size: 9, weight: .semibold))
                 }
                 .padding(.trailing, 8).frame(width: 88, height: 44, alignment: .trailing)
@@ -454,16 +454,16 @@ struct MotionLaneEditor: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(playing ? "Playing · \(shown(r.value)) at step \(selected + 1)" : "Step \(selected + 1) · \(shown(dragValue ?? r.value))")
-                    .font(.system(size: 15, weight: .semibold)).monospacedDigit().lineLimit(1)
+                    .font(.lupe(15, .semibold)).monospacedDigit().lineLimit(1)
                 Text(playing ? "Stop to edit. The song keeps its own motion while it plays." : status(r))
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
 
             if playing {
                 Button { session.setPlaying(false) } label: {
-                    Label("Stop", systemImage: "stop.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.onColour)
+                    Label("Stop", systemImage: "stop.fill").font(.lupe(14, .semibold)).foregroundStyle(Theme.onColour)
                         .padding(.horizontal, 14).frame(height: 44).raisedKey(primary: true)
                 }
                 .buttonStyle(PressSink())
@@ -479,7 +479,7 @@ struct MotionLaneEditor: View {
                 .accessibilityLabel("More: lock or hold, delete this change, clear the lane")
             }
             Button { close() } label: {
-                Text("Done").font(.system(size: 14, weight: .semibold)).foregroundStyle(playing ? Theme.text : Theme.onColour)
+                Text("Done").font(.lupe(14, .semibold)).foregroundStyle(playing ? Theme.text : Theme.onColour)
                     .padding(.horizontal, 16).frame(height: 44).raisedKey(primary: !playing)
             }
             .buttonStyle(PressSink())
@@ -511,7 +511,7 @@ struct MotionLaneEditor: View {
                     HStack(spacing: 6) {
                         if lock { Diamond(colour: Theme.text).frame(width: 12, height: 12) }
                         else { Image(systemName: "chart.line.flattrend.xyaxis").font(.system(size: 12, weight: .semibold)).accessibilityHidden(true) }
-                        Text(lock ? "Lock" : "Hold").font(.system(size: 14, weight: on ? .semibold : .regular))
+                        Text(lock ? "Lock" : "Hold").font(.lupe(14, on ? .semibold : .regular))
                     }
                     .padding(.horizontal, 12).frame(height: 40)
                     .background { if on { RoundedRectangle(cornerRadius: 8).fill(Theme.tones[2]).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2)) } }
@@ -587,7 +587,7 @@ struct MotionLaneEditor: View {
     }
 
     private func tick(_ s: String, y: CGFloat) -> some View {
-        Text(s).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
+        Text(s).font(.lupe(11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
             .padding(.trailing, 8)
             .offset(y: max(0, y - 7))
     }
@@ -599,9 +599,9 @@ struct MotionLaneEditor: View {
         return HStack(spacing: 18) {
             if !painted.isEmpty {
                 Text("Painting · \(MotionLanes.count(p.writes.count, "change")) · \(max(0, free - p.cost)) of 64 free after")
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(free - p.cost < 0 ? Theme.caution : Theme.text)
+                    .font(.lupe(12, .semibold)).foregroundStyle(free - p.cost < 0 ? Theme.caution : Theme.text)
             } else if playing {
-                Text("Read only while the song plays").font(.system(size: 12)).foregroundStyle(Theme.textSecondaryRaised)
+                Text("Read only while the song plays").font(.lupe(12)).foregroundStyle(Theme.textSecondaryRaised)
             } else {
                 hint("scribble", "Draw across steps to paint")
                 hint("arrow.up.and.down", "Drag a point up or down")
@@ -613,7 +613,7 @@ struct MotionLaneEditor: View {
                 Text("\(label) uses \(used) · ").foregroundStyle(Theme.textSecondaryRaised)
                 Text("\(free) of 64 free").fontWeight(.semibold).foregroundStyle(free < 8 ? Theme.caution : Theme.text)
             }
-            .font(.system(size: 12))
+            .font(.lupe(12))
             .accessibilityElement(children: .combine)
         }
     }
@@ -623,7 +623,7 @@ struct MotionLaneEditor: View {
             Image(systemName: icon).font(.system(size: 12)).accessibilityHidden(true)
             Text(s)
         }
-        .font(.system(size: 12)).foregroundStyle(Theme.textSecondaryRaised)
+        .font(.lupe(12)).foregroundStyle(Theme.textSecondaryRaised)
     }
 
     // MARK: The plot: paint, drag a point, tap a step
@@ -678,7 +678,7 @@ struct MotionLaneEditor: View {
         if let at {
             let y = MotionLaneDrawing.y(at.value, size.height, range, detail: true)
             let x = CGFloat(at.step + 1) * grid.stepWidth - offsetX + 6
-            Text("step \(at.step + 1) · \(shown(at.value))").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.onColour)
+            Text("step \(at.step + 1) · \(shown(at.value))").font(.lupe(12, .semibold)).foregroundStyle(Theme.onColour)
                 .padding(.horizontal, 8).frame(height: 22)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Theme.text))
                 .fixedSize()
@@ -763,8 +763,8 @@ struct MotionChip: View {
         Button { open() } label: {
             HStack(spacing: 4) {
                 if low { Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)) }
-                Text("Motion").font(.system(size: 13)).foregroundStyle(low ? Theme.caution : Theme.textSecondary)
-                Text("\(used)/\(DeviceSession.motionMax)").font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                Text("Motion").font(.lupe(13)).foregroundStyle(low ? Theme.caution : Theme.textSecondary)
+                Text("\(used)/\(DeviceSession.motionMax)").font(.lupe(15, .semibold)).monospacedDigit()
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(low ? Theme.caution : Theme.text)

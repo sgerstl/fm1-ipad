@@ -53,7 +53,7 @@ struct PhoneShape: View {
                 } label: {
                     HStack(spacing: 6) {
                         if on { LED(on: true) }
-                        Text(f.rawValue).font(.system(size: 13, weight: .semibold))
+                        Text(f.rawValue).font(.lupe(13, .semibold))
                     }
                     .foregroundStyle(on ? Theme.text : Theme.textSecondary)
                     .frame(maxWidth: .infinity).frame(height: 44)
@@ -105,14 +105,14 @@ struct PhoneShape: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 LED(on: lit)
-                Text(p.title(session)).font(.system(size: 15, weight: .semibold))
+                Text(p.title(session)).font(.lupe(15, .semibold))
                 if onDevice, let k = pages.firstIndex(where: { $0.fw == p.fw }) {
                     Text("On the FM-1 · \(k + 1)/\(pages.count)")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.lupe(12, .semibold))
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(.white.opacity(0.10)))
                 }
-                if p.scope == 1 { Text("all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary) }
+                if p.scope == 1 { Text("all tracks").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
                 Spacer(minLength: 0)
             }
             .frame(height: 24)

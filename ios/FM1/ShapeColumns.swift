@@ -40,11 +40,11 @@ struct ColumnFace: View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 // (compact: no spacing and tightened, so MOD ENV fits beside its knob number; per label, never per value)
-                Text(spec.label).font(.system(size: 11)).tracking(compact ? 0 : 0.5).allowsTightening(compact).foregroundStyle(label)
+                Text(spec.label).font(.lupe(11)).tracking(compact ? 0 : 0.5).allowsTightening(compact).foregroundStyle(label)
                     .lineLimit(1).minimumScaleFactor(compact ? 1 : 0.8)
                 Spacer(minLength: 0)
                 if number > 0 {       // 0: not one of the FM-1's four knobs
-                    Text("\(number)").font(.system(size: 11, weight: .bold))
+                    Text("\(number)").font(.lupe(11, .bold))
                         .foregroundStyle(hot ? Theme.text : Theme.textSecondary)
                         .frame(width: 18, height: 18)
                         .background(Circle().fill(Theme.control))
@@ -52,7 +52,7 @@ struct ColumnFace: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 RollingText(text: value, size: compact ? 20 : 22).id(spec.id)
-                if !unit.isEmpty { Text(unit).font(.system(size: 11, weight: .medium)).foregroundStyle(label) }
+                if !unit.isEmpty { Text(unit).font(.lupe(11, .medium)).foregroundStyle(label) }
             }
             .foregroundStyle(ink)
             .lineLimit(1)
@@ -122,7 +122,7 @@ struct RollingText: View {
     static let ease: [Double] = [0, 45, 84, 118, 147, 172, 193, 210, 223, 234, 242, 247, 251, 253, 254, 255, 255]
 
     var body: some View {
-        let font = Font.system(size: size, weight: .semibold).monospacedDigit()
+        let font = Font.lupeNumber(size * 1.1, .semibold).monospacedDigit()      // (values in Barlow Condensed: board 45)
         TimelineView(.animation(paused: from.isEmpty)) { tl in
             let e = Int(tl.date.timeIntervalSince(t0) / Self.frame) + 1
             HStack(spacing: 0) {

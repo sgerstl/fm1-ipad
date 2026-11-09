@@ -28,11 +28,11 @@ struct PhonePresetsPopover: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 TrackChip(track: t, size: 28)
-                Text(session.isDrums(t) ? "Kits" : "Track \(t + 1) sound").font(.system(size: 17, weight: .semibold))
+                Text(session.isDrums(t) ? "Kits" : "Track \(t + 1) sound").font(.lupe(17, .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Button { ui.presetsPanel = false } label: {
-                    Text("Done").font(.system(size: 15, weight: .semibold))
+                    Text("Done").font(.lupe(15, .semibold))
                         .padding(.horizontal, 16).frame(height: 44).raisedKey()
                         .contentShape(Rectangle())
                 }

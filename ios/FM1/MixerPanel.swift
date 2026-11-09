@@ -193,7 +193,7 @@ private struct MixerCards: View {
                 Button { withAnimation(spring) { centred = p.id } } label: {
                     HStack(spacing: 8) {
                         LED(on: on)
-                        Text(p.title.capitalized).font(.system(size: 15, weight: on ? .semibold : .regular))
+                        Text(p.title.capitalized).font(.lupe(15, on ? .semibold : .regular))
                             .foregroundStyle(on ? Theme.text : Theme.textSecondary)
                             .lineLimit(1).minimumScaleFactor(0.8)
                         Spacer(minLength: 0)
@@ -346,7 +346,7 @@ private struct MixerStrip: View, Equatable {
             Button { session.select(track: t) } label: {
                 HStack(spacing: 8) {
                     TrackChip(track: t, selected: row.selected).frame(width: 28, height: 28)
-                    Text(row.name).font(.system(size: 13, weight: row.selected ? .semibold : .regular))
+                    Text(row.name).font(.lupe(13, row.selected ? .semibold : .regular))
                         .foregroundStyle(row.selected ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
@@ -366,7 +366,7 @@ private struct MixerStrip: View, Equatable {
             Button { session.set(track: t, param: Param.mute, to: row.mute ? 0 : 1) } label: {
                 HStack(spacing: 6) {
                     LED(on: row.mute)
-                    Text("MUTE").font(.system(size: 13, weight: .semibold))
+                    Text("MUTE").font(.lupe(13, .semibold))
                         .foregroundStyle(row.mute ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }

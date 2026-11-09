@@ -178,7 +178,7 @@ struct KnobControl: View {
             // held: the value in a bubble above the knob
             .overlay(alignment: .top) {
                 if dragging, column == nil, face == nil {
-                    Text(spec.shown).font(.system(size: 15, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.onColour)
+                    Text(spec.shown).font(.lupe(15, .semibold)).monospacedDigit().foregroundStyle(Theme.onColour)
                         .padding(.horizontal, 10).frame(height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.text))
                         .fixedSize()
@@ -241,8 +241,8 @@ struct KnobDial: View {
             let k = size / 40
             Canvas { ctx, sz in drawDial(ctx, sz, fraction: spec.fraction, colour: spec.colour, bipolar: spec.bipolar, radius: 17 * k, line: 4 * k, cap: 11 * k) }
                 .frame(width: size, height: size)
-            Text(spec.label).font(.system(size: size > 40 ? 12 : 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
-            Text(spec.shown).font(.system(size: size > 40 ? 15 : 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+            Text(spec.label).font(.lupe(size > 40 ? 12 : 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            Text(spec.shown).font(.lupe(size > 40 ? 15 : 13, .semibold)).lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(width: size > 40 ? 88 : 56)
     }

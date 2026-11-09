@@ -43,8 +43,8 @@ struct DrumNoPages: View {
         return HStack(alignment: .center, spacing: 16) {
             TrackChip(track: session.drumTrack ?? 0, size: 28)
             VStack(alignment: .leading, spacing: 4) {
-                Text(m.title).font(.system(size: 17, weight: .semibold))
-                Text(m.detail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text(m.title).font(.lupe(17, .semibold))
+                Text(m.detail).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
             }
             Spacer(minLength: 8)
             if family == .lfo {
@@ -69,9 +69,9 @@ struct DrumNoPages: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 LED(on: onDevice)
-                Text(p.engineEdit > 0 ? (p.engineEdit == 1 ? "EDIT 1" : "EDIT 2") : p.title).font(.system(size: 15, weight: .semibold))
+                Text(p.engineEdit > 0 ? (p.engineEdit == 1 ? "EDIT 1" : "EDIT 2") : p.title).font(.lupe(15, .semibold))
                 if onDevice {
-                    Text("On the FM-1").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.text)
+                    Text("On the FM-1").font(.lupe(12, .semibold)).foregroundStyle(Theme.text)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(.white.opacity(0.10)))
                 }
@@ -83,8 +83,8 @@ struct DrumNoPages: View {
                         Circle().stroke(Theme.textTertiary, style: StrokeStyle(lineWidth: 2, dash: [3, 4]))
                             .frame(width: 44, height: 44)
                             .opacity(p.ids[slot] == nil ? 0 : 1)
-                        Text(label(p, slot)).font(.system(size: 12)).lineLimit(1)
-                        Text(" ").font(.system(size: 15))           // where the value would be
+                        Text(label(p, slot)).font(.lupe(12)).lineLimit(1)
+                        Text(" ").font(.lupe(15))           // where the value would be
                     }
                     .frame(maxWidth: .infinity)
                 }

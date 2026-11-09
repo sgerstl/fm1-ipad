@@ -124,10 +124,10 @@ struct LabsSection: View {
                 .accessibilityValue(String(format: item.format, item.value))
             HStack {
                 Text("\(item.detail) Default \(String(format: item.format, item.standard)). Review \(item.review).")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 Spacer(minLength: 8)
                 if item.changed {
-                    Button("Reset") { item.reset(); tick += 1 }.font(.system(size: 13))
+                    Button("Reset") { item.reset(); tick += 1 }.font(.lupe(13))
                 }
             }
         }

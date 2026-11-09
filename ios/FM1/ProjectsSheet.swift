@@ -159,16 +159,16 @@ struct ProjectsSheet: View {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(p.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.text)
+                        Text(p.name).font(.lupe(17, .semibold)).foregroundStyle(Theme.text)
                         if onFM1 {
                             Text(store.edited ? "On FM-1 · edited" : "On FM-1")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.lupe(12, .semibold))
                                 .foregroundStyle(Theme.onColour)
                                 .padding(.horizontal, 8).padding(.vertical, 2)
                                 .background(Capsule().fill(Theme.text))
                         }
                     }
-                    Text(detail(p)).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    Text(detail(p)).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer(minLength: 12)
                 if p.skiff == nil { SectionMarks(filled: p.data.sectionsFilled) }
@@ -253,7 +253,7 @@ struct SectionMarks: View {
             ForEach(0..<4, id: \.self) { k in
                 let on = k < filled.count && filled[k]
                 Text(DeviceSession.sectionName(k))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.lupe(12, .semibold))
                     .foregroundStyle(on ? Theme.onColour : Theme.textSecondary)    // 4.5:1 and up on the sheet
                     .frame(width: 22, height: 22)
                     .background(RoundedRectangle(cornerRadius: 5).fill(on ? Theme.text : Color.clear))

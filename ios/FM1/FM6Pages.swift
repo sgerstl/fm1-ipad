@@ -114,7 +114,7 @@ struct FM6OperatorPage: View {
                 FM6EnvelopeGraph(patch: p, op: n, algorithm: FM6.algorithms[algorithm(p)], tint: tint)
                     .frame(height: 128).recessed(8)
             } else {
-                Text("Reading the patch…").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
+                Text("Reading the patch…").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
             }
         }
         .task(id: t) { await session.skiffEdit?.readPatch(track: t) }
@@ -166,7 +166,7 @@ struct FM6AllOpsPage: View {
                                   feedback: FM6Sheet.shownFeedback(session, p), tint: tint)
                     .frame(height: 168).recessed(8)
             } else {
-                Text("Reading the patch…").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
+                Text("Reading the patch…").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
             }
         }
         .task(id: t) { await session.skiffEdit?.readPatch(track: t) }
@@ -308,11 +308,11 @@ struct FM6AlgorithmChart: View {
                 let fill: Color = op == picked ? Theme.text : alg.carriers.contains(op) ? tint : Theme.control
                 ctx.fill(box, with: .color(fill))
                 let ink: Color = op == picked ? Theme.onColour : silent ? Theme.textTertiary : alg.carriers.contains(op) ? Theme.onColour : Theme.text
-                ctx.draw(Text("\(op)").font(.system(size: 13, weight: .semibold)).foregroundStyle(ink), at: o)
+                ctx.draw(Text("\(op)").font(.lupe(13, .semibold)).foregroundStyle(ink), at: o)
             }
-            ctx.draw(Text("ALG \(String(format: "%02d", algorithm + 1))").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary),
+            ctx.draw(Text("ALG \(String(format: "%02d", algorithm + 1))").font(.lupe(11, .semibold)).foregroundStyle(Theme.textSecondary),
                      at: CGPoint(x: 12, y: 12), anchor: .topLeading)
-            ctx.draw(Text(caption(alg)).font(.system(size: 11)).foregroundStyle(Theme.textSecondary),
+            ctx.draw(Text(caption(alg)).font(.lupe(11)).foregroundStyle(Theme.textSecondary),
                      at: CGPoint(x: size.width - 12, y: 12), anchor: .topTrailing)
         }
         .accessibilityElement()
@@ -365,8 +365,8 @@ struct FM6EnvelopeGraph: View {
             for q in pts[1...4] where q != pts[4] || true {
                 ctx.stroke(Path(ellipseIn: CGRect(x: q.x - 4.5, y: q.y - 4.5, width: 9, height: 9)), with: .color(Theme.text), lineWidth: 1.5)
             }
-            ctx.draw(Text("KEY UP").font(.system(size: 10)).foregroundStyle(Theme.textTertiary), at: CGPoint(x: x0 + held + 4, y: y0), anchor: .topLeading)
-            ctx.draw(Text("OP\(op) \(algorithm.carriers.contains(op) ? "CARRIER" : "MODULATOR")").font(.system(size: 11)).foregroundStyle(Theme.textSecondary),
+            ctx.draw(Text("KEY UP").font(.lupe(10)).foregroundStyle(Theme.textTertiary), at: CGPoint(x: x0 + held + 4, y: y0), anchor: .topLeading)
+            ctx.draw(Text("OP\(op) \(algorithm.carriers.contains(op) ? "CARRIER" : "MODULATOR")").font(.lupe(11)).foregroundStyle(Theme.textSecondary),
                      at: CGPoint(x: x0, y: size.height - 6), anchor: .bottomLeading)
         }
         .accessibilityElement()

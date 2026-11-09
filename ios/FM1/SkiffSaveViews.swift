@@ -96,7 +96,7 @@ struct SaveSoundKey: View {
     var body: some View {
         Button { ui.menu = SaveSound.menu(session: session, ui: ui, at: CGPoint(x: frame.maxX - MenuPanel.width, y: frame.maxY)) } label: {
             Label("Save sound", systemImage: "square.and.arrow.down").labelStyle(.iconOnly)
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
+                .font(.lupe(15, .semibold)).foregroundStyle(Theme.text)
                 .frame(width: 44, height: 44).raisedKey(8).contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
@@ -159,11 +159,11 @@ struct SkiffProjectSlots: View {
         let s = p.slots[k]
         let here = p.musicSlot == k
         return HStack(spacing: 12) {
-            Text("P\(k + 1)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary).frame(width: 28, alignment: .leading)
+            Text("P\(k + 1)").font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary).frame(width: 28, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
-                Text(s.used ? s.name.capitalized : "Empty").font(.system(size: 17, weight: s.used ? .semibold : .regular))
+                Text(s.used ? s.name.capitalized : "Empty").font(.lupe(17, s.used ? .semibold : .regular))
                     .foregroundStyle(s.used ? Theme.text : Theme.textSecondary)
-                if here { Text(p.changed ? "Playing now · changed since" : "Playing now").font(.system(size: 13)).foregroundStyle(Theme.textSecondary) }
+                if here { Text(p.changed ? "Playing now · changed since" : "Playing now").font(.lupe(13)).foregroundStyle(Theme.textSecondary) }
             }
             Spacer(minLength: 12)
             if s.used {

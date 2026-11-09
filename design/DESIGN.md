@@ -23,3 +23,17 @@ A screen that changes with no motion is a bug: note it on the batch list.
 ## Corners
 
 Nested corners follow one formula (outer = inner + padding; a concave turn beside a neighbour = its corner + the gap; each corner nests with what it surrounds). Full text: Scott's design standards, "Radii".
+
+## Type: Barlow (Scott, 2026-11-09, board 45)
+
+Lupe sets its words in **Barlow**, the face Skiff draws the FM-1's screen in, and its big numbers in **Barlow Condensed**, so Lupe reads as the instrument's companion and numbers fit tight heads. Bundled in `ios/FM1/Fonts/` under SIL OFL; `Font.lupe(size, weight)` and `Font.lupeNumber(size, weight)` in `LupeType.swift`. SF Symbols keep the system font.
+
+| Role | Face | Size · weight |
+|---|---|---|
+| Pad number, entry number, values | Barlow Condensed | 23–38 bold (pads), 25 bold (head entry), values 1.1 × their size, semibold |
+| Track number badge | Barlow Condensed | 0.56 × the chip, bold |
+| Titles (page tabs, panels) | Barlow | 17–20 semibold |
+| Instrument name, body | Barlow | 15 regular, the secondary greys |
+| Small lines (passes, ×N, labels) | Barlow | 11–13 regular or medium |
+
+Barlow runs about 7 % small against SF Pro at the same size: `LupeType.scale` takes the words up by that, so sizes written for SF Pro still read the same. Two weights a view at most, as the craft bar says; numbers in even figures (`monospacedDigit`).

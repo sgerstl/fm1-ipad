@@ -214,7 +214,7 @@ struct PadsPage: View {
     }
     /// The tag behind a full head (Scott's lane, board 41): H1's head kept to 100 pt (keys 40 each, no "Then" line),
     /// so the band under the pads stands taller than it (Scott, 2026-11-09: the tag shape back).
-    static let laneTag: CGFloat = 100
+    static let laneTag: CGFloat = 86       // (an even 8 pt inset round the chip and keys; more black between tags: Scott, 2026-11-09)
 
     /// The pads: a row for each of `shown` (every track, or at Max the selected one), the columns sharing the width.
     private func grid(_ t: Int, _ shown: [Int], _ r: Rows) -> some View {
@@ -406,18 +406,18 @@ struct PadsPage: View {
             if let s = previewScene, store.scenesSeen[s] == nil {
                 // (PERFORM says a scene is kept, not what's in it: Lupe knows the ones it stored or recalled)
                 Text("Scene \(s + 1): not seen yet. Recall it once and holding it shows what it does")
-                    .font(.system(size: 13)).foregroundStyle(Theme.text).lineLimit(2).layoutPriority(-1)
+                    .font(.lupe(13)).foregroundStyle(Theme.text).lineLimit(2).layoutPriority(-1)
             } else if let r = store.refusal {
                 RefusalLine(refusal: r, session: session, store: store).layoutPriority(-1)
             }
             // the pattern pool, as on the Timeline (Scott, 2026-11-09): its panel slides in over the page
             Button { ui.poolOpen.toggle() } label: {
-                Label("Patterns", systemImage: "square.grid.2x2").font(.system(size: 15))
+                Label("Patterns", systemImage: "square.grid.2x2").font(.lupe(15))
                     .padding(.horizontal, 14).frame(height: 44).raisedKey()
             }
             .buttonStyle(PressSink(latched: ui.poolOpen))
             .accessibilityHint("The pattern pool: every pattern and which tracks use it")
-            Text("Launch at").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            Text("Launch at").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
             SegmentedKeys(label: "Launch at", options: ["Loop", "Bar", "Beat", "Now"], selected: launch.rawValue,
                           enabled: Array(repeating: !store.offline, count: 4)) { k in
                 let l = SongPlayback.Launch(rawValue: k) ?? .bar
@@ -426,7 +426,7 @@ struct PadsPage: View {
             .fixedSize()
             .accessibilityHint("Where a pad, a scene or a mute lands while playing: the end of the track's pass, the next bar, the next beat, or at once")
             Button { Task { await store.performOp(.cancel) } } label: {
-                Text(waiting > 0 ? "Cancel \(waiting) waiting" : "Cancel waiting").font(.system(size: 15))
+                Text(waiting > 0 ? "Cancel \(waiting) waiting" : "Cancel waiting").font(.lupe(15))
                     .padding(.horizontal, 14).frame(height: 44).raisedKey()
             }
             .buttonStyle(PressSink())
@@ -514,14 +514,14 @@ struct PadsPage: View {
                 // a row as tall as a lane head (Half): one line, the letter, the number, the countdown when waiting,
                 // the pass bar along the foot (board 37)
                 HStack(spacing: 6) {
-                    Text(letter).font(.system(size: 12, weight: .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
+                    Text(letter).font(.lupe(12, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
                     if !title.isEmpty {
-                        Text(title).font(.system(size: e.isRest ? 11 : 15, weight: .bold)).monospacedDigit()
+                        Text(title).font(.lupeNumber(e.isRest ? 12 : 17, .bold)).monospacedDigit()
                             .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
                     }
                     Spacer(minLength: 0)
                     if waiting {
-                        Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                        Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.lupe(11, .semibold)).monospacedDigit()
                             .foregroundStyle(Theme.onColour).padding(.horizontal, 5).frame(height: 18)
                             .background(Capsule().fill(Theme.text)).lineLimit(1).layoutPriority(-1)
                     }
@@ -535,20 +535,20 @@ struct PadsPage: View {
             } else {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(letter).font(.system(size: small ? 13 : 15, weight: .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
+                    Text(letter).font(.lupe(small ? 13 : 15, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
                     Spacer(minLength: 4)
                     if waiting {
-                        Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.system(size: 13, weight: .semibold)).monospacedDigit()
+                        Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.lupe(13, .semibold)).monospacedDigit()
                             .foregroundStyle(Theme.onColour).padding(.horizontal, 8).frame(height: 24)
                             .background(Capsule().fill(Theme.text))
                     }
                 }
                 if !title.isEmpty {
-                    Text(title).font(.system(size: side > 150 ? 34 : tiny ? (e.isRest ? 12 : 17) : small ? 20 : 24, weight: .bold)).monospacedDigit()
+                    Text(title).font(.lupeNumber(side > 150 ? 38 : tiny ? (e.isRest ? 13 : 19) : small ? 23 : 28, .bold)).monospacedDigit()
                         .foregroundStyle(e.isRest ? Theme.textSecondary : ink)
                 }
                 if !tiny {
-                    Text(state).font(.system(size: small ? 12 : 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
+                    Text(state).font(.lupe(small ? 12 : 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 if size.height >= 96, let p = e.poolIndex, let th = ui.padThumbs[p], th.length == store.pool?.patterns[safe: p]?.length {
@@ -902,8 +902,8 @@ struct PadsPage: View {
             }
         } label: {
             VStack(spacing: 0) {
-                Text("\(s + 1)").font(.system(size: 15, weight: kept ? .semibold : .regular)).monospacedDigit()
-                if !word.isEmpty, !compact { Text(word).font(.system(size: 10)) }   // (compact: the fill says it)
+                Text("\(s + 1)").font(.lupe(15, kept ? .semibold : .regular)).monospacedDigit()
+                if !word.isEmpty, !compact { Text(word).font(.lupe(10)) }   // (compact: the fill says it)
             }
             .foregroundStyle(last ? Theme.onColour : kept ? Theme.text : Theme.textSecondary)
             .frame(maxWidth: .infinity).frame(height: compact ? Self.compactScenes : Self.sceneHeight)

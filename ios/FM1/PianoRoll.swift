@@ -77,7 +77,7 @@ struct PianoRoll: View {
             }
 
             HStack(spacing: 8) {
-                Text("Velocity").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text("Velocity").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                     .padding(.trailing, 8).frame(width: 80, alignment: .trailing)
                 VelocityLane(track: t, selected: ui.selectedStep[track])
                     .offset(x: -offset.x)
@@ -132,7 +132,7 @@ struct AuditionLabel: View {
     var body: some View {
         let _ = BodyCounter.tick("AuditionLabel")
         Text(text)
-            .font(.system(size: 13, weight: bold ? .semibold : .regular))
+            .font(.lupe(13, bold ? .semibold : .regular))
             .foregroundStyle(pressed || bold ? Theme.text : Theme.textSecondary)
             .padding(.trailing, 8)
             .frame(width: grid.labelWidth, height: grid.rowHeight, alignment: .trailing)
@@ -164,13 +164,13 @@ struct EditorHeader: View {
         HStack {
             HStack(spacing: 10) {
                 TrackChip(track: track, muted: muted)
-                Text(title).font(.system(size: 17, weight: .semibold))
+                Text(title).font(.lupe(17, .semibold))
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Track \(track + 1), \(title)")
             .accessibilityAddTraits(.isHeader)
             Spacer()
-            Text(detail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            Text(detail).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
         }
         .frame(height: 32)
     }
@@ -198,7 +198,7 @@ struct StepNumbers: View {
                 // every step numbered now a bar fills the grid; beats a step heavier
                 let on = picked?.wrappedValue.contains(i) == true
                 Text("\(i + 1)")
-                    .font(.system(size: 11, weight: i == selected || i % 4 == 0 || on ? .semibold : .regular))
+                    .font(.lupe(11, i == selected || i % 4 == 0 || on ? .semibold : .regular))
                     .foregroundStyle(i == selected || on ? Theme.text : Theme.textSecondary)
                     .frame(width: grid.stepWidth, height: 20)       // centred over its column
                     .background { if on { RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.18)) } }

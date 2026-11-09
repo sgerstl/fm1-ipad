@@ -142,21 +142,21 @@ struct EntryInspector: View {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("T\(track + 1) \(Entries.trackName(track, session: session)) · entr\(block.isChain ? "ies" : "y") \(Entries.letters(block.entries))")
-                        .font(.system(size: 17, weight: .semibold)).lineLimit(1)
+                        .font(.lupe(17, .semibold)).lineLimit(1)
                     Text(patternLine).foregroundStyle(Theme.textSecondary).lineLimit(2)
                 }
                 preview
-                Text(detailLine).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text(detailLine).font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             }
             .frame(width: 300, alignment: .leading)
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Plays").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Plays").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     StepperKeys(label: "Plays", value: block.reps, range: 1...16, step: 1, enabled: !store.busy,
                                 format: { "\($0) time\($0 == 1 ? "" : "s")" }) { edits.setReps(track, block, $0) }
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Sound on entry").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Sound on entry").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     Text(first.sound.map { Entries.soundName($0, session: session) } ?? "None: keeps the track's sound")
                 }
                 if let r = store.refusal, r.track == track, let e = r.entry, block.entries.contains(e) {
@@ -186,7 +186,7 @@ struct EntryInspector: View {
                 }
                 // last, apart: out of the list. Undo puts it back; one that would erase a pattern asks first
                 Button(role: .destructive) { edits.delete(track, block) } label: {
-                    Label(block.isChain ? "Delete entries" : "Delete entry", systemImage: "trash").font(.system(size: 15))
+                    Label(block.isChain ? "Delete entries" : "Delete entry", systemImage: "trash").font(.lupe(15))
                         .foregroundStyle(Theme.text)
                         .frame(maxWidth: .infinity, minHeight: 44).raisedKey()
                         .contentShape(Rectangle())
@@ -238,14 +238,14 @@ struct EntryInspector: View {
             .accessibilityElement()
             .accessibilityLabel("Steps 1 to 16: \((0..<16).filter(tr.isOn).count) on")
         } else if poolIndex != nil {
-            Text("Its steps show here while the track plays it.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            Text("Its steps show here while the track plays it.").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 .frame(height: 24, alignment: .leading)
         }
     }
 
     private func key(_ title: String, primary: Bool = false, enabled: Bool = true, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 15, weight: primary ? .semibold : .regular))
+            Text(title).font(.lupe(15, primary ? .semibold : .regular))
                 .foregroundStyle(primary ? Theme.onColour : Theme.text)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .raisedKey(9, primary: primary)
@@ -279,10 +279,10 @@ struct RefusalLine: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.circle").font(.system(size: 17, weight: .semibold)).accessibilityHidden(true)
-            Text(refusal.text).font(.system(size: 15)).fixedSize(horizontal: false, vertical: true)
+            Text(refusal.text).font(.lupe(15)).fixedSize(horizontal: false, vertical: true)
             if refusal.needsStop, session.playing {
                 Button { session.setPlaying(false); store.dismissRefusal() } label: {
-                    Label("Stop", systemImage: "stop.fill").font(.system(size: 13, weight: .semibold))
+                    Label("Stop", systemImage: "stop.fill").font(.lupe(13, .semibold))
                         .padding(.horizontal, 12).padding(.vertical, 8).frame(minHeight: 44).raisedKey()
                 }
                 .buttonStyle(PressSink())
@@ -351,9 +351,9 @@ struct PatternBin: View {
                     .accessibilityLabel("Close patterns")
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Patterns").font(.system(size: drawer ? 20 : 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                    Text("Patterns").font(.lupe(drawer ? 20 : 15, .semibold)).accessibilityAddTraits(.isHeader)
                     Text("\(used) in this song · \(other) in other projects · \(pool?.free ?? 0) free")
-                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 }
             }
             SegmentedKeys(label: "Show", options: ["This song", "All 64"], selected: all ? 1 : 0) { all = $0 == 1 }
@@ -379,18 +379,18 @@ struct PatternBin: View {
             } label: {
                 Group {
                     if drawer {
-                        Text("New empty pattern").font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                        Text("New empty pattern").font(.lupe(15, .semibold)).frame(maxWidth: .infinity, minHeight: 44)
                             .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
                     } else {
-                        Text("New empty pattern").font(.system(size: 15)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
+                        Text("New empty pattern").font(.lupe(15)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
                     }
                 }
             }
             .buttonStyle(PressSink())
             .disabled((pool?.free ?? 0) == 0 || store.busy || store.offline)
-            if (pool?.free ?? 0) == 0 { Text("All 64 patterns are taken. Clear unused ones to make one.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary) }
+            if (pool?.free ?? 0) == 0 { Text("All 64 patterns are taken. Clear unused ones to make one.").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
             Button { confirmClear = true } label: {
-                Text("Clear \(pool?.unused ?? 0) unused…").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text("Clear \(pool?.unused ?? 0) unused…").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.plain)
@@ -438,7 +438,7 @@ struct PatternBin: View {
     private func groupHead(_ g: PatternGroup) -> some View {
         HStack(spacing: 8) {
             if let t = g.track { BigTrackChip(track: t, muted: false, side: 22) }
-            Text(g.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+            Text(g.title).font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary)
         }
         .padding(.top, 10).padding(.bottom, 2)
         .accessibilityAddTraits(.isHeader)
@@ -454,24 +454,24 @@ struct PatternBin: View {
         let owner = tracks.count == 1 ? tracks[0] : nil
         let colour = free ? Theme.well : owner.map { Theme.track[$0] } ?? Entries.tone(p + 1)
         return HStack(spacing: 12) {
-            Text(Entries.number(p + 1)).font(.system(size: 17, weight: .bold)).monospacedDigit()
+            Text(Entries.number(p + 1)).font(.lupe(17, .bold)).monospacedDigit()
                 .foregroundStyle(free ? Theme.textSecondary : owner != nil ? Theme.onColour : Theme.text)
                 .frame(width: 44, height: 44)
                 .background(RoundedRectangle(cornerRadius: 10).fill(colour))
             VStack(alignment: .leading, spacing: 2) {
                 Text(free ? "Free" : tracks.isEmpty ? "Not in this song"
                      : owner != nil ? Entries.trackName(owner!, session: session) : tracks.map { "T\($0 + 1)" }.joined(separator: ", "))
-                    .font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                    .font(.lupe(15, .semibold)).lineLimit(1)
                 if let pat, pat.length > 0 {
                     Text("\(pat.length) steps · \(Entries.divisionName(store.divisions[p] ?? session.tracks[safe: tracks.first ?? 0]?.division ?? 2))")
-                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 }
             }
             Spacer(minLength: 0)
             if let th = ui?.padThumbs[p], !free {
                 PadThumbView(thumb: th, ink: Theme.textSecondary).frame(width: 56, height: 18)
             }
-            if n > 0 { Text("\(n)×").font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.textSecondary) }
+            if n > 0 { Text("\(n)×").font(.lupe(13, .semibold)).monospacedDigit().foregroundStyle(Theme.textSecondary) }
             if ui != nil, !free { PatternMore(number: p + 1) { at in openMenu(p, at: at) } }
         }
         .padding(.leading, 8).padding(.trailing, ui != nil && !free ? 0 : 12)
@@ -484,7 +484,7 @@ struct PatternBin: View {
             dragPattern = p + 1
             return NSItemProvider(object: "pattern \(p + 1)" as NSString)
         } preview: {
-            Text(Entries.number(p + 1)).font(.system(size: 17, weight: .bold)).foregroundStyle(owner != nil ? Theme.onColour : Theme.text)
+            Text(Entries.number(p + 1)).font(.lupe(17, .bold)).foregroundStyle(owner != nil ? Theme.onColour : Theme.text)
                 .frame(width: 56, height: 56).background(RoundedRectangle(cornerRadius: 12).fill(colour))
         }
         .accessibilityElement(children: .combine)
@@ -499,7 +499,7 @@ struct PatternBin: View {
         let n = inSong(p)
         let selected = selection.flatMap { s in store.song?.tracks[safe: s.track]?.entries[safe: s.entry]?.poolIndex } == p
         return HStack(spacing: 10) {
-            Text(Entries.number(p + 1)).font(.system(size: 13, weight: .semibold))
+            Text(Entries.number(p + 1)).font(.lupe(13, .semibold))
                 .frame(width: 32, height: 28)
                 // its track's colour; grey when no track's list (or more than one) names it
                 .foregroundStyle(!free && tracks.count == 1 ? Theme.onColour : Theme.text)
@@ -509,14 +509,14 @@ struct PatternBin: View {
                 Text(free ? "Free" : tracks.isEmpty ? "Not in this song"
                      : tracks.count == 1 ? "T\(tracks[0] + 1) \(Entries.trackName(tracks[0], session: session))" : tracks.map { "T\($0 + 1)" }.joined(separator: ", "))
                     .lineLimit(1)
-                    .font(.system(size: 13))
+                    .font(.lupe(13))
                 if let pat, pat.length > 0 {
                     Text("\(pat.length) st · \(Entries.divisionName(store.divisions[p] ?? session.tracks[safe: tracks.first ?? 0]?.division ?? 2))")
-                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 }
             }
             Spacer(minLength: 0)
-            if n > 0 { Text("\(n)×").font(.system(size: 12)).foregroundStyle(Theme.textSecondary) }
+            if n > 0 { Text("\(n)×").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
             if ui != nil, !free { PatternMore(number: p + 1) { at in openMenu(p, at: at) } }
         }
         .padding(.leading, 8).padding(.trailing, ui != nil && !free ? 0 : 8)
@@ -530,7 +530,7 @@ struct PatternBin: View {
             dragPattern = p + 1
             return NSItemProvider(object: "pattern \(p + 1)" as NSString)
         } preview: {
-            Text(Entries.number(p + 1)).font(.system(size: 15, weight: .semibold)).padding(.horizontal, 14).frame(height: 44)
+            Text(Entries.number(p + 1)).font(.lupe(15, .semibold)).padding(.horizontal, 14).frame(height: 44)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Entries.tone(p + 1)))
         }
         .accessibilityElement(children: .combine)
@@ -597,11 +597,11 @@ struct EmptySong: View {
     let store: SkiffSongStore
     var body: some View {
         VStack(spacing: 12) {
-            Text("No song on this project yet").font(.system(size: 17, weight: .semibold))
+            Text("No song on this project yet").font(.lupe(17, .semibold))
             Text("Drag a pattern onto a track, or record a loop on the FM-1 and it shows up here.")
                 .foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
             Button { ArrangeEdits(session: session, store: store).newPatternAtEnd(0) } label: {
-                Text("New pattern on T1").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
+                Text("New pattern on T1").font(.lupe(15, .semibold)).foregroundStyle(Theme.onColour)
                     .padding(.horizontal, 16).frame(minHeight: 44).raisedKey(9, primary: true)
             }
             .buttonStyle(PressSink())

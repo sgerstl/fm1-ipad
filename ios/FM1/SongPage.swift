@@ -138,14 +138,14 @@ struct SongPage: View {
     private var orderPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Song").font(.system(size: 22, weight: .semibold))
+                Text("Song").font(.lupe(22, .semibold))
                     .accessibilityAddTraits(.isHeader)
-                Text(position(session.song)).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).monospacedDigit()
+                Text(position(session.song)).font(.lupe(13)).foregroundStyle(Theme.textSecondary).monospacedDigit()
                 Spacer()
                 if session.orderWaitingForStop {
-                    Text("Saves to the FM-1 when you stop").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Saves to the FM-1 when you stop").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 } else if saving || draft != nil {
-                    Text("Saving to the FM-1…").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Saving to the FM-1…").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 }
                 ToggleKey(name: "Loop the song", on: loop, enabled: editable) {
                     loopDraft = !loop
@@ -153,7 +153,7 @@ struct SongPage: View {
                 }
             }
             if let m = session.songMessage {
-                Text(m).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
+                Text(m).font(.lupe(13, .semibold)).foregroundStyle(Theme.text)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Capsule().fill(.white.opacity(0.08)))
             }
@@ -323,9 +323,9 @@ struct SongPage: View {
         let s = session.song
         let live = s.songPlaying && s.songStep == n
         return VStack(alignment: .leading, spacing: 2) {
-            Text(DeviceSession.sectionName(step.section)).font(.system(size: 22, weight: .semibold))
+            Text(DeviceSession.sectionName(step.section)).font(.lupe(22, .semibold))
             Text(live ? "bar \(s.songBar + 1) of \(step.bars)" : "\(step.bars) bar\(step.bars == 1 ? "" : "s")")
-                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                .font(.lupe(12, .semibold)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.75)
             Spacer(minLength: 0)
             if live {
@@ -449,13 +449,13 @@ struct SongPage: View {
         ZStack(alignment: .leading) {
             if let u = undo {
                 HStack(spacing: 12) {
-                    Text(u.text).font(.system(size: 13, weight: .semibold))
+                    Text(u.text).font(.lupe(13, .semibold))
                     Button("Undo") {
                         slots = u.slots
                         undo = nil
                         commit()
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.lupe(13, .semibold))
                     .padding(.horizontal, 14).frame(height: 36).raisedKey()
                     .buttonStyle(PressSink())
                 }
@@ -466,7 +466,7 @@ struct SongPage: View {
                 Text(editable ? (compact ? "Tap a block to change it. Press and drag to move it, drag its right edge for length."
                                          : "Tap a block to change it. Press and drag to move it, flick it up to delete it, drag its right edge for length.")
                               : "Stop the song to change its order, as on the FM-1.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     .padding(.leading, Self.inset)
                     .transition(.opacity)
             }
@@ -518,7 +518,7 @@ struct SongPage: View {
         return Button {
             change { $0[i].step.section = k }
         } label: {
-            Text(DeviceSession.sectionName(k)).font(.system(size: 17, weight: .semibold))
+            Text(DeviceSession.sectionName(k)).font(.lupe(17, .semibold))
                 .foregroundStyle(stored ? Theme.onColour : Theme.textTertiary)
                 .frame(width: 48, height: 44)
                 .background {

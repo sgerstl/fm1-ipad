@@ -42,16 +42,16 @@ struct SkiffStepInspector: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // (short: the step's notes ride on this line instead of their own row)
                     Text("T\(t + 1) \(session.tracks[t].displayName)" + (collapsed && s.isOn ? " · " + s.notes.map(Music.noteName).joined(separator: " ") : ""))
-                        .font(.system(size: 12))
+                        .font(.lupe(12))
                         .foregroundStyle(Theme.textSecondary).lineLimit(1)
-                    Text("Step \(i + 1)").font(.system(size: 20, weight: .semibold))
+                    Text("Step \(i + 1)").font(.lupe(20, .semibold))
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if locks {
                     Button("Clear locks") { Task { await session.clearLocks(track: t, step: i) } }
-                        .font(.system(size: 12, weight: .semibold)).underline()
+                        .font(.lupe(12, .semibold)).underline()
                         .frame(minHeight: 44)
                         .disabled(session.song.songPlaying)
                         .accessibilityHint("Takes this step's locks off; its recorded changes stay")
@@ -114,14 +114,14 @@ struct SkiffStepInspector: View {
         HStack(spacing: 6) {
             if s.isOn {
                 ForEach(Array(s.notes.enumerated()), id: \.offset) { _, n in
-                    Text(Music.noteName(n)).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
+                    Text(Music.noteName(n)).font(.lupe(15, .semibold)).foregroundStyle(Theme.onColour)
                         .padding(.horizontal, 10).frame(height: 30)
                         .background(RoundedRectangle(cornerRadius: 7).fill(tint))
                         .accessibilityLabel(Music.spokenNoteName(n))
                 }
             } else {
                 Text(s.time == .tie ? "Held from the step before" : "No notes: tap the grid to add one")
-                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                     .padding(.horizontal, 10).frame(height: 30)
                     .background(RoundedRectangle(cornerRadius: 7).fill(Theme.well))
             }
@@ -219,7 +219,7 @@ struct SkiffStepInspector: View {
         let m = session.motion[t] ?? TrackMotion()
         let ids = MotionLanes.laneIDs(session, ui, track: t)
         if ids.isEmpty {
-            Text("Nothing recorded or locked on T\(t + 1).").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            Text("Nothing recorded or locked on T\(t + 1).").font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
         } else if collapsed {
             Button {
                 ui.menu = AppMenu(title: "Sound at step \(i + 1)", groups: {
@@ -231,7 +231,7 @@ struct SkiffStepInspector: View {
                 }, at: CGPoint(x: soundFrame.minX, y: soundFrame.maxY), fromKey: true)
             } label: {
                 HStack(spacing: 4) {
-                    Text("Sound at this step").font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    Text("Sound at this step").font(.lupe(13, .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -261,9 +261,9 @@ struct SkiffStepInspector: View {
                         }
                     }
                     .frame(width: 16)
-                    Text(name).font(.system(size: 13)).lineLimit(1)
+                    Text(name).font(.lupe(13)).lineLimit(1)
                     Spacer(minLength: 8)
-                    Text(value).font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                    Text(value).font(.lupe(15, .semibold)).monospacedDigit()
                 }
                 .frame(height: 26)
                 .accessibilityElement(children: .ignore)
@@ -279,7 +279,7 @@ struct SkiffStepInspector: View {
         } label: {
             Label(compact ? "Lock" : session.lockStep == nil ? "Lock knob turns to step \(i + 1)" : "Locking knob turns to step \(i + 1)",
                   systemImage: session.lockStep == nil ? "lock.open" : "lock.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.lupe(13, .semibold))
                 .foregroundStyle(session.lockStep == nil ? Theme.text : Theme.onColour)
                 .padding(.horizontal, compact ? 12 : 0)
                 .frame(maxWidth: compact ? nil : .infinity, minHeight: 44)

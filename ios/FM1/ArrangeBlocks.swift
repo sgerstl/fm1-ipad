@@ -60,30 +60,30 @@ struct BlockView: View {
                 // blocks hid their count)
                 if wide {
                     Text("\(Entries.letters(block.entries)) · \(isRest ? "REST" : label) \(count)")
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
+                        .font(.lupe(11, .semibold)).foregroundStyle(strong)
                 } else if laneHeight >= 40 {
-                    Text(isRest ? "–" : label).font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
-                    Text(count).font(.system(size: 11)).foregroundStyle(dim)
+                    Text(isRest ? "–" : label).font(.lupe(11, .semibold)).foregroundStyle(strong)
+                    Text(count).font(.lupe(11)).foregroundStyle(dim)
                 } else {
-                    Text("\(isRest ? "–" : label) \(count)").font(.system(size: 11, weight: .semibold)).foregroundStyle(strong)
+                    Text("\(isRest ? "–" : label) \(count)").font(.lupe(11, .semibold)).foregroundStyle(strong)
                 }
             } else if wide {
                 HStack(spacing: 4) {
-                    Text(Entries.letters(block.entries)).font(.system(size: 11)).foregroundStyle(dim)
+                    Text(Entries.letters(block.entries)).font(.lupe(11)).foregroundStyle(dim)
                     // an entry with its own sound: Skiff loads it as the entry starts (and the corner is cut)
                     if sound != nil { Image(systemName: "waveform").font(.system(size: 10, weight: .semibold)).foregroundStyle(dim) }
                 }
-                Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(strong)
-                Text(sub).font(.system(size: 12)).foregroundStyle(dim)
+                Text(label).font(.lupe(15, .semibold)).foregroundStyle(strong)
+                Text(sub).font(.lupe(12)).foregroundStyle(dim)
                 if let thumb, !isRest, laneHeight >= 76, width >= 80 {
                     Spacer(minLength: 0)
                     PadThumbView(thumb: thumb, ink: Theme.onColour.opacity(0.6)).frame(height: 14)
                 }
             } else {
                 // narrow: the pattern, then its count (and the sound's mark beside it)
-                Text(isRest ? "–" : label).font(.system(size: 13, weight: .semibold)).foregroundStyle(strong)
+                Text(isRest ? "–" : label).font(.lupe(13, .semibold)).foregroundStyle(strong)
                 HStack(spacing: 2) {
-                    Text(count).font(.system(size: 12)).foregroundStyle(dim)
+                    Text(count).font(.lupe(12)).foregroundStyle(dim)
                     if sound != nil { Image(systemName: "waveform").font(.system(size: 10, weight: .semibold)).foregroundStyle(strong) }
                 }
             }

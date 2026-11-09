@@ -47,7 +47,7 @@ struct LaneMarks: View {
                             // (Scott, 2026-11-09: the blocks' states the pads')
                             let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(tl.date.timeIntervalSinceReferenceDate * .pi))
                             RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2.5, dash: [8, 5])).opacity(pulse).padding(1)
-                            Text(Self.countdown(m.launchIn, session.launchMode)).font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                            Text(Self.countdown(m.launchIn, session.launchMode)).font(.lupe(11, .semibold)).monospacedDigit()
                                 .foregroundStyle(Theme.onColour).padding(.horizontal, 6).frame(height: 18)
                                 .background(Capsule().fill(Theme.text)).padding(3)
                                 .frame(width: w, height: h, alignment: .bottomLeading)
@@ -69,7 +69,7 @@ struct LaneMarks: View {
     private func badge(_ icon: Image?, _ text: String) -> some View {
         HStack(spacing: 2) {
             icon?.font(.system(size: 9, weight: .bold))
-            if !text.isEmpty { Text(text).font(.system(size: 10, weight: .bold)).monospacedDigit() }
+            if !text.isEmpty { Text(text).font(.lupe(10, .bold)).monospacedDigit() }
         }
         .foregroundStyle(Theme.text)
         .padding(.horizontal, 4).frame(height: 14)

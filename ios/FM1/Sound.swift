@@ -251,7 +251,7 @@ struct EntrySoundNote: View {
             let name = Entries.soundName(snd, session: session)
             Label {
                 Text("T\(t + 1) is playing entry \(Entries.letter(e))'s own sound, \(name). Changes here last until entry \(Entries.letter(e)) starts again; to keep them, save a user preset and set it on entry \(Entries.letter(e)) in Arrange.")
-                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                    .font(.lupe(13)).fixedSize(horizontal: false, vertical: true)
             } icon: {
                 Image(systemName: "waveform")
             }
@@ -401,7 +401,7 @@ struct ShapeSection: View {
         return VStack(alignment: .leading, spacing: 10) {
             if showsHeader {
                 HStack(spacing: 8) {
-                    Text(family.rawValue).font(.system(size: 13, weight: .semibold)).tracking(0.6)
+                    Text(family.rawValue).font(.lupe(13, .semibold)).tracking(0.6)
                         .foregroundStyle(lit ? Theme.text : Theme.textSecondary)
                     Rectangle().fill(Theme.stepEmpty).frame(height: 1)
                 }
@@ -574,16 +574,16 @@ private struct CardHeader: View {
         HStack(spacing: 8) {
             LED(on: session.screenLinked ? onDeviceRow != nil : lit)
             Text(rows.count > 1 ? rows.map { $0.title(session) }.joined(separator: " · ") : first.title(session))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.lupe(15, .semibold))
             if let r = onDeviceRow, let k = pages.firstIndex(where: { $0.fw == rows[r].fw }) {
                 // the page the FM-1 shows, counted as its screen counts them ("FX 1/7")
                 Text("On the FM-1 · \(k + 1)/\(pages.count)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.lupe(12, .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(.white.opacity(0.10)))
             }
             if first.scope == 1 {
-                Text("all tracks").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text("all tracks").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             }
             Spacer()
         }
@@ -605,7 +605,7 @@ private struct RowKey: View {
         let p = rows[row]
         let focused = (rows.firstIndex { SoundCard.isActive(session, marks, $0) } ?? 0) == row
         Button { activate() } label: {
-            Text(p.title).font(.system(size: 11, weight: .semibold)).tracking(0.4)
+            Text(p.title).font(.lupe(11, .semibold)).tracking(0.4)
                 .foregroundStyle(focused ? Theme.onColour : Theme.textSecondary)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(width: 52).frame(maxHeight: .infinity)
@@ -719,10 +719,10 @@ struct KeyMapStrip: View {
         let chord = chordMode ? session.pitch(ofKey: key).map { solo ? [$0] : chordNotes(on: $0, t) } ?? [] : []
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Text("What the FM-1's keys play").font(.system(size: 15, weight: .semibold))
+                Text("What the FM-1's keys play").font(.lupe(15, .semibold))
                 Text(chordMode ? chordLine(t)
                      : t.quant == 2 ? "white keys walk the scale" : t.quant == 1 ? "snapped to the scale" : "every key, chromatic")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 Spacer()
             }
             GeometryReader { geo in
@@ -745,11 +745,11 @@ struct KeyMapStrip: View {
             // turning CHORD on or off never moves the pages below
             if chordMode {
                 HStack(spacing: 8) {
-                    Text(session.pitch(ofKey: key).map(Music.noteName) ?? "–").font(.system(size: 13, weight: .semibold))
-                    Text("plays").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    Text(chord.map(Music.noteName).joined(separator: " · ")).font(.system(size: 13, weight: .semibold))
-                    if let n = skiffChord(t, key: key) { Text(n).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
-                    Text(skiff ? "Tap a key to see its chord." : "Tap a white key to see its chord.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text(session.pitch(ofKey: key).map(Music.noteName) ?? "–").font(.lupe(13, .semibold))
+                    Text("plays").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
+                    Text(chord.map(Music.noteName).joined(separator: " · ")).font(.lupe(13, .semibold))
+                    if let n = skiffChord(t, key: key) { Text(n).font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary) }
+                    Text(skiff ? "Tap a key to see its chord." : "Tap a white key to see its chord.").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                 }
                 .frame(height: 18)
@@ -775,7 +775,7 @@ struct KeyMapStrip: View {
         let modifier = chordMode && black && !skiff
         let label = modifier ? (Music.chordModifier(ofKey: key) ?? "") : (p.map(Music.noteName) ?? "")
         let cell = Text(label)
-            .font(.system(size: modifier ? 11 : 12, weight: lit ? .semibold : .regular))
+            .font(.lupe(modifier ? 11 : 12, lit ? .semibold : .regular))
             .foregroundStyle(lit ? Theme.onColour : modifier ? Theme.textSecondary : Theme.text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: 8).fill(lit ? Theme.track[session.selectedTrack] : Color(hex: 0x232427)))

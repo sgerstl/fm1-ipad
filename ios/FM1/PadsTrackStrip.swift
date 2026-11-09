@@ -34,22 +34,22 @@ struct TrackStripCard: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 EntryTitle(list: list)
                                 if parts.count > 1 {
-                                    Text(parts.dropFirst().joined(separator: " ")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                                    Text(parts.dropFirst().joined(separator: " ")).font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                                 }
                             }
                         }
                         // the instrument: under the entry, quieter (Scott, 2026-11-09: "too bold")
-                        Text(Entries.trackName(t, session: session)).font(.system(size: 15))
-                            .padding(.top, 8)
+                        Text(Entries.trackName(t, session: session)).font(.lupe(15))
+                            .padding(.top, 4)
                             .foregroundStyle(muted ? Theme.textSecondary : Theme.textSecondaryRaised).lineLimit(1)
                         if session.playing, m.playing != nil {
                             SmoothBar(track: Theme.well, ink: Theme.track[t]) { session.passProgress(t) ?? 0 }
-                                .frame(height: 4).padding(.top, 6)
+                                .frame(height: 4).padding(.top, 4)
                         }
                         if let p = preview {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold))
-                                Text(Self.previewText(p, list)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                                Text(Self.previewText(p, list)).font(.lupe(12, .semibold)).lineLimit(1)
                             }
                             .foregroundStyle(Theme.text).padding(.top, 4)
                         }
@@ -64,13 +64,13 @@ struct TrackStripCard: View {
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
                 VStack(spacing: 6) {
-                    muteKey(muted: muted, staged: staged).frame(height: 40)
-                    SoloKey(store: store, track: t).frame(height: 40)
+                    muteKey(muted: muted, staged: staged).frame(height: 32)
+                    SoloKey(store: store, track: t).frame(height: 32)
                 }
                 .frame(width: 64)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 92, maxHeight: .infinity, alignment: .topLeading)   // (as tall as its row of pads)
+            .padding(.horizontal, 12).padding(.vertical, 8)      // (8 top and bottom: the tag's even inset)
+            .frame(maxWidth: .infinity, minHeight: 86, maxHeight: .infinity, alignment: .topLeading)   // (as tall as its row of pads)
             // (no tint of its own: its lane runs behind it, the selected track's in its colour; PadsPage.lanes)
             // the whole head selects, its padding too (Scott, 2026-11-09: a dead spot at its foot); its keys keep their own
             .contentShape(RoundedRectangle(cornerRadius: 12))
@@ -89,7 +89,7 @@ struct TrackStripCard: View {
             VStack(spacing: 2) {
                 Image(systemName: muted != (staged != .none) ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 18, weight: .semibold))
-                if staged != .none { Text(cd).font(.system(size: 11, weight: .semibold)).monospacedDigit().lineLimit(1) }
+                if staged != .none { Text(cd).font(.lupe(11, .semibold)).monospacedDigit().lineLimit(1) }
             }
             .foregroundStyle(muted && staged == .none ? Theme.onColour : Theme.text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -156,12 +156,12 @@ struct TrackStripRow: View {
                         BigTrackChip(track: t, muted: muted, side: 30)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
-                                Text(Entries.trackName(t, session: session)).font(.system(size: 15, weight: selected ? .semibold : .regular)).layoutPriority(1)
+                                Text(Entries.trackName(t, session: session)).font(.lupe(15, selected ? .semibold : .regular)).layoutPriority(1)
                                     .foregroundStyle(selected ? Theme.text : Theme.textSecondaryRaised).lineLimit(1)
                                 Spacer(minLength: 4)
                                 // (what it's on; the bar under it is the pass)
                                 Text(preview.map { "→ " + TrackStripCard.previewText($0, list) } ?? lines.plays.components(separatedBy: "  ").first ?? lines.plays)
-                                    .font(.system(size: 12, weight: preview == nil ? .regular : .semibold)).monospacedDigit()
+                                    .font(.lupe(12, preview == nil ? .regular : .semibold)).monospacedDigit()
                                     .minimumScaleFactor(0.8)   // (Half: two keys and a 15 pt name leave no room for a big entry; the pads show it)
                                     .foregroundStyle(preview == nil ? Theme.textSecondaryRaised : Theme.text).lineLimit(1)
                             }
@@ -232,7 +232,7 @@ struct BigTrackChip: View {
 
     var body: some View {
         let r = side * 0.25, c = Theme.track[track]
-        Text("\(track + 1)").font(.system(size: side * 0.5, weight: .bold)).monospacedDigit()
+        Text("\(track + 1)").font(.lupeNumber(side * 0.56, .bold)).monospacedDigit()
             .foregroundStyle(muted ? c : Theme.onColour)
             .frame(width: side, height: side)
             .background {
@@ -267,7 +267,7 @@ struct SoloKey: View {
     var body: some View {
         let on = store.soloed.contains(track)
         Button { Task { await store.toggleSolo(track) } } label: {
-            Text("S").font(.system(size: compact ? 13 : 18, weight: .bold))
+            Text("S").font(.lupe(compact ? 13 : 18, .bold))
                 .foregroundStyle(on ? Theme.onColour : Theme.text)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background { HeadKeySurface(on: on, onColour: Theme.caution) }
@@ -291,13 +291,13 @@ struct EntryTitle: View {
     var body: some View {
         if let l = list, let on = l.entryOn, let e = l.entries[safe: on] {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Entries.letter(on)).font(.system(size: size * 0.68, weight: .semibold)).foregroundStyle(Theme.textSecondary)
-                Text(e.isRest ? "REST" : e.label).font(.system(size: e.isRest ? size * 0.68 : size, weight: .bold)).monospacedDigit()
+                Text(Entries.letter(on)).font(.lupe(size * 0.68, .semibold)).foregroundStyle(Theme.textSecondary)
+                Text(e.isRest ? "REST" : e.label).font(.lupeNumber(e.isRest ? size * 0.72 : size * 1.12, .bold)).monospacedDigit()
                     .foregroundStyle(e.isRest ? Theme.textSecondary : Theme.text)
             }
             .lineLimit(1).minimumScaleFactor(0.7)
         } else {
-            Text("–").font(.system(size: size, weight: .bold)).foregroundStyle(Theme.textSecondary)
+            Text("–").font(.lupe(size, .bold)).foregroundStyle(Theme.textSecondary)
         }
     }
 }

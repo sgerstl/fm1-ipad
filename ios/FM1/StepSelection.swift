@@ -143,7 +143,7 @@ struct SelectionBar: View {
         HStack(spacing: 0) {
             if picking {
                 Text(ui.stepSel.isEmpty ? "\(ui.noteSel.count) note\(ui.noteSel.count == 1 ? "" : "s")" : "steps \(label(ui.stepSel))")
-                    .font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
+                    .font(.lupe(13, .semibold)).lineLimit(1).fixedSize()
                     .padding(.horizontal, 8)
                 if edits.any {
                     // either side (Scott, 2026-11-06): before replaces the steps to the left; after adds to the right
@@ -169,7 +169,7 @@ struct SelectionBar: View {
             if let u = undo {
                 if picking { gap }
                 // what changed, in words while there's room (it gives way first), and Undo
-                Text(u.said).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                Text(u.said).font(.lupe(13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                     .padding(.horizontal, 6).layoutPriority(-1)
                     .accessibilityHidden(true)
                 icon("arrow.uturn.backward", "Undo: \(u.said)") { edits.undo() }.keyboardShortcut("z", modifiers: .command)

@@ -19,7 +19,7 @@ struct PresetsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
                 TrackChip(track: t, size: 28)
-                Text(Self.header(session, track: t, entry: entry)).font(.system(size: 22, weight: .semibold))
+                Text(Self.header(session, track: t, entry: entry)).font(.lupe(22, .semibold))
                     .lineLimit(1).minimumScaleFactor(0.8)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
@@ -103,9 +103,9 @@ private struct EntrySoundNone: View {
                         Text("Starting this \(what) doesn't change the track's sound: the track keeps the one it has, its own or an earlier \(what)'s. Uncheck to give it a sound.")
                     }
                 }
-                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-                if let why { Text(why).font(.system(size: 12)).foregroundStyle(Theme.text) }
+                if let why { Text(why).font(.lupe(12)).foregroundStyle(Theme.text) }
             }
             Spacer(minLength: 0)
             Button {

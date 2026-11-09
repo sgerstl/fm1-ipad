@@ -298,7 +298,7 @@ private struct FirmwareCard<Content: View, Actions: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(title).font(.system(size: 22, weight: .semibold)).accessibilityAddTraits(.isHeader)
+            Text(title).font(.lupe(22, .semibold)).accessibilityAddTraits(.isHeader)
             content
             HStack(spacing: 8) { Spacer(minLength: 0); actions }
         }
@@ -318,7 +318,7 @@ private struct CardKey: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title).font(.system(size: 15, weight: .semibold))
+            Text(title).font(.lupe(15, .semibold))
                 .foregroundStyle(primary ? Theme.onColour : Theme.text)
                 .padding(.horizontal, 16).frame(minHeight: 44)
                 .raisedKey(9, primary: primary)
@@ -410,7 +410,7 @@ struct FirmwarePicker: View {
                 ForEach(LupeFirmware.allCases.filter { !$0.isStock }) { f in row(f) }
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("Back to stock").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                Text("Back to stock").font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary)
                     .accessibilityAddTraits(.isHeader)
                 row(.stock)
             }
@@ -423,7 +423,7 @@ struct FirmwarePicker: View {
             Text(centre.target.isStock ? "Apache-2.0, unchanged. From \(centre.target.source.replacingOccurrences(of: " (Apache-2.0)", with: "")). In the app, no download."
                                        : "\(centre.target.credit) GPL-3.0. Source: \(centre.target.source)."
                                          + (centre.isReady(centre.target) ? " Downloaded already." : " Lupe downloads it from its GitHub release first (about 600 KB)."))
-                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                .font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } actions: {
             CardKey(title: "Cancel") { centre.showPicker = false; centre.pickerNote = nil; centre.skipBackup = false }
@@ -444,12 +444,12 @@ struct FirmwarePicker: View {
                     .foregroundStyle(centre.target == f ? Theme.text : Theme.textTertiary)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(f.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.text)
+                        Text(f.title).font(.lupe(17, .semibold)).foregroundStyle(Theme.text)
                         if running == f {
-                            Text("On this FM-1").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                            Text("On this FM-1").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                         }
                     }
-                    Text(f.detail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    Text(f.detail).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let why = centre.refusal(f) {
                         Label { Text(why) } icon: { Image(systemName: "nosign") }
@@ -519,13 +519,13 @@ struct FirmwareInstallCover: View {
     private var working: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(centre.doing).font(.system(size: 28, weight: .semibold)).accessibilityAddTraits(.isHeader)
-                Text("Keep Lupe open and the FM-1 plugged in.").font(.system(size: 20, weight: .semibold))
+                Text(centre.doing).font(.lupe(28, .semibold)).accessibilityAddTraits(.isHeader)
+                Text("Keep Lupe open and the FM-1 plugged in.").font(.lupe(20, .semibold))
             }
             VStack(alignment: .leading, spacing: 8) {
                 ProgressTrack(value: overall)
                 HStack {
-                    Text(status).font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                    Text(status).font(.lupe(15)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                     Text("\(Int(overall * 100))%").font(.system(size: 15).monospacedDigit()).foregroundStyle(Theme.textSecondary)
                 }
@@ -543,7 +543,7 @@ struct FirmwareInstallCover: View {
                     icon: { Image(systemName: "cable.connector.slash") }
             }
             Text("Don’t unplug it or lock the screen. If it’s cut off anyway, nothing is lost: the FM-1 waits in update mode and running the install again finishes it.")
-                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
+                .font(.lupe(13)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -613,7 +613,7 @@ struct FirmwareInstallCover: View {
 
     private func done(_ id: String, _ backup: String?) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Label { Text(centre.target.isStock ? "Stock V15 is back" : "\(centre.target.title) is installed").font(.system(size: 28, weight: .semibold)) }
+            Label { Text(centre.target.isStock ? "Stock V15 is back" : "\(centre.target.title) is installed").font(.lupe(28, .semibold)) }
                 icon: { Image(systemName: "checkmark.circle").font(.system(size: 28)) }
                 .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: 8) {
@@ -632,7 +632,7 @@ struct FirmwareInstallCover: View {
     /// The download stopped: nothing was sent, so it's a retry, not a recovery.
     private func downloadFailed(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Label { Text("The download didn’t finish").font(.system(size: 28, weight: .semibold)) }
+            Label { Text("The download didn’t finish").font(.lupe(28, .semibold)) }
                 icon: { Image(systemName: "exclamationmark.triangle").font(.system(size: 28)) }
                 .accessibilityAddTraits(.isHeader)
             Text(message).bodyText(primary: true)
@@ -647,7 +647,7 @@ struct FirmwareInstallCover: View {
 
     private func failed(_ message: String, _ inUpdate: Bool, _ backup: String?, _ refused: Bool) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Label { Text(refused ? "Stock V15 can’t go on this FM-1" : centre.target.isStock ? "The restore stopped" : "The install stopped").font(.system(size: 28, weight: .semibold)) }
+            Label { Text(refused ? "Stock V15 can’t go on this FM-1" : centre.target.isStock ? "The restore stopped" : "The install stopped").font(.lupe(28, .semibold)) }
                 icon: { Image(systemName: "exclamationmark.triangle").font(.system(size: 28)) }
                 .accessibilityAddTraits(.isHeader)
             Text(message).bodyText(primary: true)
@@ -701,7 +701,7 @@ private struct StageRow: View {
             Image(systemName: state == .done ? "checkmark.circle.fill" : state == .now ? "circle.dotted.circle" : "circle")
                 .font(.system(size: 17)).frame(width: 24)
                 .foregroundStyle(state == .later ? Theme.textTertiary : Theme.text)
-            Text(name).font(.system(size: 17, weight: state == .now ? .semibold : .regular))
+            Text(name).font(.lupe(17, state == .now ? .semibold : .regular))
                 .foregroundStyle(state == .later ? Theme.textSecondary : Theme.text)
         }
         .accessibilityElement(children: .combine)
@@ -724,7 +724,7 @@ private struct NumberedLine: View {
 private struct KeepPluggedNote: View {
     var body: some View {
         Text("Keep the FM-1 plugged in and Lupe open while it writes, about a minute.")
-            .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            .font(.lupe(13)).foregroundStyle(Theme.textSecondary)
     }
 }
 

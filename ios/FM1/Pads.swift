@@ -59,7 +59,7 @@ struct FunctionPads: View {
         let usable = isUsable(pad)
         return Button { press(pad) } label: {
             Text(pad == .play && session.playing ? "STOP" : pad.rawValue)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.lupe(13, .semibold))
                 .foregroundStyle(on ? Theme.text : usable && hasPages(pad) ? Theme.textSecondary : Theme.textTertiary)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background { if usable { PadSurface(pressed: on) } else { RoundedRectangle(cornerRadius: 9).fill(Theme.control.opacity(0.5)) } }

@@ -54,7 +54,7 @@ struct LaneHeader: View {
             Button { session.select(track: track) } label: {
                 HStack(spacing: 4) {
                     if muted { Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
-                    Text(note ?? Entries.trackName(track, session: session)).font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    Text(note ?? Entries.trackName(track, session: session)).font(.lupe(13, selected ? .semibold : .regular))
                         .foregroundStyle(selected || note != nil ? Theme.text : Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
                 }
@@ -76,11 +76,11 @@ struct LaneHeader: View {
             MuteChip(session: session, track: track, selected: session.selectedTrack == track, size: 28)
                 .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 4) {
-                Text(Entries.trackName(track, session: session) + (tr.mute ? " · muted" : "")).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                Text(Entries.trackName(track, session: session) + (tr.mute ? " · muted" : "")).font(.lupe(14, .semibold)).lineLimit(1)
                 Text(tr.engineName + (tr.length != 16 ? " · \(tr.length) steps" : ""))
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.8)
                 if let note {
-                    Text(note).font(.system(size: 11)).foregroundStyle(Theme.text).lineLimit(2).minimumScaleFactor(0.8)
+                    Text(note).font(.lupe(11)).foregroundStyle(Theme.text).lineLimit(2).minimumScaleFactor(0.8)
                 } else {
                     EntriesUsed(used: used, colour: Theme.track[track])
                 }
@@ -113,7 +113,7 @@ struct EntriesUsed: View {
                 }
             }
             if used >= 14 {
-                Text(used >= 16 ? "Full" : "\(16 - used) left").font(.system(size: 11, weight: .semibold))
+                Text(used >= 16 ? "Full" : "\(16 - used) left").font(.lupe(11, .semibold))
                     .foregroundStyle(Theme.text).lineLimit(1).fixedSize()
             }
         }
@@ -137,7 +137,7 @@ struct Ruler: View {
                     .offset(x: CGFloat(s.from) * barWidth)
             }
             ForEach(Array(stride(from: 0, to: bars, by: 4)), id: \.self) { b in
-                Text("\(b + 1)").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text("\(b + 1)").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     .offset(x: CGFloat(b) * barWidth + 6, y: 4)
             }
         }
@@ -306,7 +306,7 @@ struct Lane: View {
                 // where the dragged pattern goes: a line, and its ghost lifted under the finger
                 Rectangle().fill(Theme.text).frame(width: 2, height: laneHeight + 8)
                     .offset(x: x(spot.at) - 1, y: -4)
-                Text(Entries.number(spot.pattern)).font(.system(size: 15, weight: .semibold))
+                Text(Entries.number(spot.pattern)).font(.lupe(15, .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .frame(width: max(44, x(spot.ticks) - 4), height: laneHeight - 12, alignment: .topLeading)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Theme.track[track]).elevationShadow(.held))
@@ -423,7 +423,7 @@ struct Lane: View {
                 .overlay(alignment: .trailing) { if b.kind != .gap { grip(b, ref: ref).opacity(landing ? 0 : 1) } }
                 .overlay(alignment: .bottomTrailing) {
                     if stretch?.entry == b.entries.upperBound {
-                        Text("×\(b.reps) · \(bars(b.length)) bars").font(.system(size: 12, weight: .semibold))
+                        Text("×\(b.reps) · \(bars(b.length)) bars").font(.lupe(12, .semibold))
                             .padding(.horizontal, 8).frame(height: 24)
                             .elevated(.held, radius: 6)
                             .offset(x: 40, y: 30)

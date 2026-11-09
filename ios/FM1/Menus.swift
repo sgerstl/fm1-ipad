@@ -154,14 +154,14 @@ struct MenuPanel: View {
         let flat = level.groups.flatMap { $0 }
         VStack(alignment: .leading, spacing: 0) {
             if stack.isEmpty {
-                Text(title).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                Text(title).font(.lupe(13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                     .padding(.horizontal, 16).frame(height: 36, alignment: .bottomLeading)
                     .accessibilityAddTraits(.isHeader)
             } else {
                 Button(action: back) {
                     HStack(spacing: 12) {
                         Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).frame(width: 24)
-                        Text(level.title).font(.system(size: 17, weight: .semibold)).lineLimit(1)
+                        Text(level.title).font(.lupe(17, .semibold)).lineLimit(1)
                         Spacer(minLength: 0)
                     }
                     .foregroundStyle(Theme.text)
@@ -244,7 +244,7 @@ struct MenuPanel: View {
     }
 
     private func noteRow(_ item: MenuItem) -> some View {
-        Text(item.title).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+        Text(item.title).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 16).padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -254,12 +254,12 @@ struct MenuPanel: View {
         Button { pick(item) } label: {
             HStack(spacing: 12) {
                 if let chip = item.chip {
-                    Text(chip.text).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.onColour)
+                    Text(chip.text).font(.lupe(13, .semibold)).foregroundStyle(Theme.onColour)
                         .frame(width: 32, height: 26).background(RoundedRectangle(cornerRadius: 6).fill(chip.colour))
                 } else if let icon = item.icon {
                     Image(systemName: icon).font(.system(size: 17)).frame(width: 24)
                 }
-                Text(item.title).font(.system(size: 17)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(item.title).font(.lupe(17)).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
                 if item.checked {
                     Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).accessibilityLabel("Current")
@@ -345,12 +345,12 @@ struct FanMenu: View {
         } label: {
             HStack(spacing: 10) {
                 if let c = item.chip {
-                    Text(c.text).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.onColour)
+                    Text(c.text).font(.lupe(13, .bold)).foregroundStyle(Theme.onColour)
                         .padding(.horizontal, 6).frame(height: 24).background(RoundedRectangle(cornerRadius: 6).fill(c.colour))
                 } else if let i = item.icon {
                     Image(systemName: i).font(.system(size: 17, weight: .semibold)).frame(width: 24)
                 }
-                Text(item.title).font(.system(size: 17, weight: first ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(item.title).font(.lupe(17, first ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
                 if item.children != nil { Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)) }
             }

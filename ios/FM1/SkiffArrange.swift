@@ -61,7 +61,7 @@ struct SkiffArrangePage: View {
                                set: { section = $0 }, apply: { applySection($0) }, cancel: { section = nil; leftOut = [] })
                     if let r = store.refusal, r.entry == nil { RefusalLine(refusal: r, session: session, store: store) }
                 } else if let line = dropAt?.text ?? moveAt?.text {
-                    Text(line).font(.system(size: 13)).padding(.horizontal, 12).frame(height: 32)
+                    Text(line).font(.lupe(13)).padding(.horizontal, 12).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
                         .padding(.leading, headW)
                 } else if let r = store.refusal, r.entry == nil || selection == nil {
@@ -160,7 +160,7 @@ struct SkiffArrangePage: View {
             // the Song tab: the Timeline / Pads switch alone, no "Song · N bars · N tracks" beside it to blur into
             // (Scott, 2026-11-07); the Arrange page keeps it
             if !compact || !store.performs {
-                Text("Song").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                Text("Song").font(.lupe(15, .semibold)).accessibilityAddTraits(.isHeader)
                 Text("\(songBars) bar\(songBars == 1 ? "" : "s") · \(session.trackCount) tracks")
                     .foregroundStyle(Theme.textSecondary).lineLimit(1).fixedSize()
             }
@@ -169,7 +169,7 @@ struct SkiffArrangePage: View {
             if !store.undoStack.isEmpty {
                 // Lupe's own undo: the lists before the last change (a delete, a move, a section)
                 Button { Task { await store.undo() } } label: {
-                    Label("Undo", systemImage: "arrow.uturn.backward").font(.system(size: 15))
+                    Label("Undo", systemImage: "arrow.uturn.backward").font(.lupe(15))
                         .padding(.horizontal, 14).frame(height: 44).raisedKey()
                 }
                 .buttonStyle(PressSink())
@@ -179,7 +179,7 @@ struct SkiffArrangePage: View {
             if let w = loopApartWarning {
                 // the first to give way when the row is narrow (the sound panel's rail beside it): it shortens
                 Label(w, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
+                    .font(.lupe(13)).lineLimit(1).truncationMode(.tail)
                     .foregroundStyle(Theme.text)
                     .padding(.horizontal, 12).frame(height: 32)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
@@ -188,7 +188,7 @@ struct SkiffArrangePage: View {
             }
             if compact {
                 Button { ui.poolOpen.toggle() } label: {
-                    Label("Patterns", systemImage: "square.grid.2x2").font(.system(size: 15))
+                    Label("Patterns", systemImage: "square.grid.2x2").font(.lupe(15))
                         .padding(.horizontal, 14).frame(height: 44).raisedKey()
                 }
                 .buttonStyle(PressSink(latched: ui.poolOpen))
@@ -224,7 +224,7 @@ struct SkiffArrangePage: View {
                 Image(systemName: "minus").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).raisedKey()
             }
             .buttonStyle(PressSink()).accessibilityLabel("Zoom out")
-            Text("\(bars) bars").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).frame(width: 64)
+            Text("\(bars) bars").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(width: 64)
                 .accessibilityHidden(true)
             Button { zoomBars = max(4, bars / 2) } label: {
                 Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).raisedKey()
@@ -482,7 +482,7 @@ struct SkiffArrangePage: View {
                            list: song.tracks[sel.track])
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Text("No entry selected").font(.system(size: 15, weight: .semibold))
+                Text("No entry selected").font(.lupe(15, .semibold))
                 Text("Tap a block to see its pattern and how many times it plays. Double-tap opens it in Sequence.")
                     .foregroundStyle(Theme.textSecondary)
             }
