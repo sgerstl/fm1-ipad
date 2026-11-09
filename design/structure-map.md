@@ -28,7 +28,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 
 ## The Live tab: the performance grid (decided 2026-11-10, mock before building)
 
-*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. Decided the same day: **its own tab, called Live** (Song · Live · Mix · Sounds); **Pads stays** as the one-track view that edits and launches; **a row's stop is its mute**. Mock it on the canvas before any SwiftUI. Open questions and the protocol check: `design/perform-grid-questions.md`.*
+*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. Decided the same day: **its own tab, called Live** (Song · Live · Mix · Sounds); **Pads stays** as the one-track view that edits and launches; **a row's stop is its mute**. Mocked on the canvas, boards 35–37 (generator `design/boards/live.py`); no SwiftUI until Scott OKs the mock. Open questions and the protocol check: `design/perform-grid-questions.md`.*
 
 **What it's for.** Pads already shows all six tracks in its strip (what each plays, what's waiting, its mute), but launches only the selected track's entries. Live covers the gap: launching on any track from one screen. The firmware already allows it: LIST op 3 PLAY takes any track and entry, and nothing on the FM-1 changes the selected track when it's sent.
 
