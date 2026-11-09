@@ -51,7 +51,9 @@ struct ColumnFace: View {
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                RollingText(text: value, size: compact ? 20 : 22).id(spec.id)
+                // (compact: 17, so label, value and gauge fit the 56 pt tile in Barlow Condensed, whose line is taller
+                // than SF Pro's was at 20: Scott, 2026-11-09)
+                RollingText(text: value, size: compact ? 17 : 22).id(spec.id)
                 if !unit.isEmpty { Text(unit).font(.lupe(11, .medium)).foregroundStyle(label) }
             }
             .foregroundStyle(ink)
@@ -60,9 +62,9 @@ struct ColumnFace: View {
             Gauge(fraction: dim ? 0 : spec.fraction, bipolar: spec.bipolar, tint: tint, track: Theme.stepEmpty)
                 .frame(height: 3)
                 .padding(.horizontal, -inset)
-                .padding(.top, 6)
+                .padding(.top, compact ? 4 : 6)
         }
-        .padding(.top, 8).padding(.horizontal, inset)
+        .padding(.top, compact ? 6 : 8).padding(.horizontal, inset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.well))
         // the knob turning (here or on the FM-1, held 600 ms): a white bar along the top, the column as it is
