@@ -189,6 +189,24 @@ public final class DeviceSession {
     }
     /// How far through its pass track t is (0..1), from the counted clock; nil when not known (stopped, no
     /// Start seen, RAND between notes, or firmware that sends its own positions).
+    /// A launch was staged on track t (SkiffSongStore.onLaunch): at BAR or BEAT the track starts a new pass on the line
+    /// (launch.c launch_at: the next bar or beat of the clock from Start). LOOP lands on the pass end, where a pass
+    /// begins anyway, and NOW goes on where the playhead is: nothing to move.
+    func noteLaunch(_ t: Int) {
+        guard trackIndices.contains(t), counted.running, counted.ticks >= 0 else { return }
+        let k = counted.ticks
+        switch launchMode {
+        case .bar: counted.relaunch(track: t, at: Double((k / 96 + 1) * 96))
+        case .beat: counted.relaunch(track: t, at: Double((k / 24 + 1) * 24))
+        case .loop, .now: counted.relaunch(track: t, at: nil)
+        }
+    }
+    /// The launch on track t taken back or cancelled; not when its line is a step away (the list read just after the
+    /// swap, the clock a pulse or two behind it).
+    func dropLaunch(_ t: Int) {
+        guard let at = counted.relaunchAt(t), Double(counted.ticks) < at - 6 else { return }
+        counted.relaunch(track: t, at: nil)
+    }
     public func passProgress(_ t: Int) -> Double? {
         guard trackIndices.contains(t) else { return nil }
         return counted.passProgress(t, at: Double(counted.ticks), length: tracks[t].length)
@@ -426,6 +444,7 @@ public final class DeviceSession {
                         return (self.tracks[t].length, self.tracks[t].division)
                     }, isPlaying: { [weak self] in self?.playing ?? false })
                     skiffSong?.passCount = { [weak self] t in self?.passCount(t) }
+                    skiffSong?.onLaunch = { [weak self] t, staged in if staged { self?.noteLaunch(t) } else { self?.dropLaunch(t) } }
                 }
                 await skiffSong?.refresh(pool: true)
             } else {

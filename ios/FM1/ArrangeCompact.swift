@@ -47,7 +47,7 @@ struct LaneMarks: View {
                             // (Scott, 2026-11-09: the blocks' states the pads')
                             let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(tl.date.timeIntervalSinceReferenceDate * .pi))
                             RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2.5, dash: [8, 5])).opacity(pulse).padding(1)
-                            Text(Self.countdown(m.launchIn, session.launchMode)).font(.lupe(11, .semibold)).monospacedDigit()
+                            LaunchCountdown(session: session, track: track).font(.lupe(11, .semibold)).monospacedDigit()
                                 .foregroundStyle(Theme.onColour).padding(.horizontal, 6).frame(height: 18)
                                 .background(Capsule().fill(Theme.text)).padding(3)
                                 .frame(width: w, height: h, alignment: .bottomLeading)
@@ -149,5 +149,20 @@ struct RowTab: Shape {
         p.closeSubpath()
         guard !down else { return p.offsetBy(dx: 0, dy: rect.minY) }
         return p.applying(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: rect.minY + h))
+    }
+}
+
+/// A launch's countdown, read from the counted clock about 30 times a second on its own timeline: the 4 Hz one the pads
+/// and blocks draw on put the count up to a quarter of a second behind the beat, half a beat at 120 (Scott, 2026-11-10:
+/// "the countdown… isn't very accurate"). Only this text redraws that often.
+struct LaunchCountdown: View {
+    let session: DeviceSession
+    let track: Int
+    var prefix = ""
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30)) { _ in
+            Text(prefix + LaneMarks.countdown(session.ticksToLaunch(track), session.launchMode))
+        }
     }
 }

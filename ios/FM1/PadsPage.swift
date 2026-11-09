@@ -539,7 +539,7 @@ struct PadsPage: View {
                     }
                     Spacer(minLength: 0)
                     if waiting {
-                        Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.lupe(11, .semibold)).monospacedDigit()
+                        LaunchCountdown(session: session, track: t).font(.lupe(11, .semibold)).monospacedDigit()
                             .foregroundStyle(Theme.onColour).padding(.horizontal, 5).frame(height: 18)
                             .background(Capsule().fill(Theme.text)).lineLimit(1).layoutPriority(-1)
                     }
@@ -556,7 +556,7 @@ struct PadsPage: View {
                     Text(letter).font(.lupe(small ? 13 : 15, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
                     Spacer(minLength: 4)
                     if waiting {
-                        Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.lupe(13, .semibold)).monospacedDigit()
+                        LaunchCountdown(session: session, track: t).font(.lupe(13, .semibold)).monospacedDigit()
                             .foregroundStyle(Theme.onColour).padding(.horizontal, 8).frame(height: 24)
                             .background(Capsule().fill(Theme.text))
                     }
@@ -566,7 +566,12 @@ struct PadsPage: View {
                         .foregroundStyle(e.isRest ? Theme.textSecondary : ink)
                 }
                 if !tiny {
-                    Text(state).font(.lupe(small ? 12 : 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
+                    if waiting && !playing && !e.isEmpty {
+                        LaunchCountdown(session: session, track: t, prefix: "Waiting · ").font(.lupe(small ? 12 : 13))
+                            .foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    } else {
+                        Text(state).font(.lupe(small ? 12 : 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 0)
                 if size.height >= 96, let p = e.poolIndex, let th = ui.padThumbs[p], th.length == store.pool?.patterns[safe: p]?.length {

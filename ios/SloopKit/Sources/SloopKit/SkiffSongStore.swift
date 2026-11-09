@@ -7,7 +7,19 @@ import Observation
 /// that has the 2.0 song (INFO `58 01` bit 0) and keeps it, offline, when the device goes away.
 @MainActor @Observable
 public final class SkiffSongStore {
-    public private(set) var song: SkiffSong?
+    public private(set) var song: SkiffSong? { didSet { noticeLaunches(oldValue) } }
+    /// A launch staged on a track (true), or one taken back or cancelled before it landed (false): the session's
+    /// counted clock starts the track's new pass where Skiff will (CountedPlayhead.relaunch).
+    @ObservationIgnored public var onLaunch: @MainActor (Int, Bool) -> Void = { _, _ in }
+    private func noticeLaunches(_ old: SkiffSong?) {
+        guard isPlaying(), let s = song else { return }
+        for (t, l) in s.tracks.enumerated() {
+            let was = old?.tracks[safe: t]?.staged
+            if let st = l.staged, st != was || old?.tracks[safe: t]?.entryOn != l.entryOn,
+               marks(t, launchIn: nil).queued != nil { onLaunch(t, true) }     // (a launch, not the song's own next)
+            else if l.staged == nil, was != nil, old?.tracks[safe: t]?.entryOn == l.entryOn { onLaunch(t, false) }
+        }
+    }
     public private(set) var pool: PatternPool?
     /// Each pattern's DIV, as seen while a track played it (POOL gives LEN, not DIV); unknown ones take
     /// their track's.

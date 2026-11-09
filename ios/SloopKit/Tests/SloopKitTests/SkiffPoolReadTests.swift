@@ -95,3 +95,21 @@ struct SkiffThemeTests {
         #expect(SkiffTheme.guarded([0x10205A, 0xC03030, 0xFFDE5A], fallback: fb) == [1, 2, 0xFFDE5A])
     }
 }
+
+/// A BAR launch restarts the counted pass on the bar line, as launch.c does (Scott, 2026-11-10: the countdown).
+struct CountedRelaunchTests {
+    @Test func barLaunchStartsANewPassOnTheLine() {
+        var c = CountedPlayhead(tracks: 1)
+        let s = [CountedPlayhead.Settings(length: 12, division: 2)]   // 12 sixteenths: a pass out of step with the bar
+        c.start()
+        for _ in 0...100 { c.tick(s, globalSwing: 0) }                // tick 100: step 16 % 12 = 4, into bar 2
+        #expect(c.steps[0] == 4)
+        c.relaunch(track: 0, at: 192)
+        while c.ticks < 191 { c.tick(s, globalSwing: 0) }
+        #expect(c.steps[0] == (191 / 6) % 12)                         // the old pass up to the line
+        c.tick(s, globalSwing: 0)                                     // tick 192: the bar line
+        #expect(c.steps[0] == 0)
+        #expect(c.relaunchAt(0) == nil)
+        #expect(c.passProgress(0, at: 192, length: 12) == 0)
+    }
+}
