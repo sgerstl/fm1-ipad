@@ -15,13 +15,16 @@ If you want the grid to look different from the 4 × 4 pads (a "stage mode", say
 
 ## Open questions for Scott
 
-1. **Where it lives.** A second layout of Pads (One track / All tracks), as the map proposes, or its own entry in the Song switch (Pads · Grid · Timeline)? The map's case: same job, same tools, no third view name. The cost: Pads' tool row gets one more control.
-2. **Stopping a track.** Skiff has no per-track stop (see below). Which should the row's stop be: the **mute** (staged to the launch point, the track keeps running silently, unmuting brings it back in place), or **launching a REST** (the track really goes quiet and its place in the list moves; only works where the list has a REST)? I'd take the mute: it's already on the row head and always works. A real stop would need a firmware change (below).
+**Answered 2026-11-10:** its own tab called Live (1); Pads stays beside it; a row's stop is its mute (2).
+
+1. ~~**Where it lives.**~~ Its own tab, Live.
+2. ~~**Stopping a track.**~~ The mute. A real stop would need a firmware op (below).
 3. **Column launch.** A launch button at the top of each column ("everything to entry C") the way a clip launcher's scenes work? It's not the same as Skiff's scenes, which hold any entry per track. Lupe could send six PLAYs, and at BAR or BEAT they land together; at LOOP each track lands at its own pass end; tracks with nothing in that column keep playing. Leave it out for now, or add it?
-4. **Scenes on the phone.** The scene row doesn't fit under six rows of pads at phone height. Options: a 2 × 8 scene sheet from a Scenes button in the tool row; the grid drops to the tracks in use; or the phone's All tracks has no scenes (One track keeps them). Which?
+4. **The phone.** Live makes five tabs (Pads · Timeline · Live · Mix · Sounds), and the scene row doesn't fit under six rows of pads at phone height. Options: a 2 × 8 scene sheet from a Scenes button in the tool row; the grid drops to the tracks in use; or the phone's All tracks has no scenes (One track keeps them). Which?
 5. **Tapping a staged pad again.** Take the launch back (Lupe would relaunch what's playing, replacing the staged one; see 6 for what that does), or nothing? The FM-1 has no per-track cancel; Cancel takes back everything.
 6. **Tapping a playing pad.** On a clip launcher it restarts the clip. On Skiff it stages the same entry again at the launch point, keeping the track's edits (`same` in `stage_entry`). I haven't confirmed from the source whether the swap restarts the pattern from step 1; a device check settles it. Which do you want: a restart, or nothing?
 7. **The FM-1's own PERFORM layer.** The 4 × 4 mirrors its white keys. The grid has no hardware twin. Is that fine, or should All tracks follow when you hold ARP on the FM-1 (it switches to the PERFORM layer)?
+8. **The FM-1's sound keys on Live.** FX…ARP open the sound panel over Song and Mix. Over Live too (shape a sound mid-set), or leave Live alone while you play?
 
 ## Protocol check: what the grid needs and what Skiff 2.2 + the screen link can do
 
