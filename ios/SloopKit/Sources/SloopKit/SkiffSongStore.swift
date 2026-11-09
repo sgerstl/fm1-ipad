@@ -407,6 +407,7 @@ public final class SkiffSongStore {
             case .store(let s), .recall(let s): learnScene(s)
             default: break
             }
+            if case .recall = op { soloed = []; mutesBeforeSolo = nil }      // (the scene's mutes now: the solo is over)
             refusal = nil
             return true
         } catch {
@@ -414,6 +415,37 @@ public final class SkiffSongStore {
             if let p = try? await d.perform().state { perform = p }
             return false
         }
+    }
+
+    // MARK: Solo (Scott, 2026-11-09, board 43)
+
+    /// The tracks soloed. Skiff's editor protocol has no solo (the FM-1 solos only from GLO's black keys), so Lupe
+    /// does it with PERFORM's mutes: while any track is soloed every other one is muted (staged to the launch point
+    /// while playing, as a mute is), and the mutes from before the first solo come back when the last one is let go.
+    /// Until a firmware SOLO op exists, a scene stored meanwhile keeps the soloed mutes.
+    public private(set) var soloed: Set<Int> = []
+    private var mutesBeforeSolo: [Bool]?
+
+    /// A track's mute as it will be: a staged change already counted.
+    func mutedSoon(_ p: PerformState, _ t: Int) -> Bool {
+        switch p.staged[safe: t] ?? .none { case .mute: true; case .unmute: false; case .none: p.muted[safe: t] ?? false }
+    }
+
+    /// Solo `t` on or off; every track's mute set to match (one MUTE each that differs).
+    @discardableResult
+    public func toggleSolo(_ t: Int) async -> Bool {
+        guard let p = perform else { return false }
+        let n = p.muted.count
+        let now = (0..<n).map { mutedSoon(p, $0) }
+        if soloed.isEmpty { mutesBeforeSolo = now }
+        if soloed.contains(t) { soloed.remove(t) } else { soloed.insert(t) }
+        let target = soloed.isEmpty ? (mutesBeforeSolo ?? now) : (0..<n).map { !soloed.contains($0) }
+        if soloed.isEmpty { mutesBeforeSolo = nil }
+        var ok = true
+        for k in 0..<n where now[k] != target[k] {
+            if await !performOp(.mute(track: k)) { ok = false }
+        }
+        return ok
     }
 
     /// What each scene holds, as Lupe last saw it: PERFORM says only which scenes are kept, not what's in them, and

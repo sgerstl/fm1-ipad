@@ -210,8 +210,8 @@ struct PadsPage: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
-    /// The tag behind a full head: its content (name, what it plays, the pass bar, what's next) and its padding.
-    static let laneTag: CGFloat = 96
+    /// The tag behind a full head: H1's head (board 43) fills its row, Mute over Solo, so the lane is one band.
+    static let laneTag: CGFloat = .infinity
 
     /// The pads: a row for each of `shown` (every track, or at Max the selected one), the columns sharing the width.
     private func grid(_ t: Int, _ shown: [Int], _ r: Rows) -> some View {

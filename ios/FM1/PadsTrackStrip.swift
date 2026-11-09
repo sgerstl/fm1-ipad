@@ -23,27 +23,37 @@ struct TrackStripCard: View {
         return TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             let m = store.marks(t, launchIn: session.ticksToLaunch(t))
             let lines = Self.lines(list, m, playing: session.playing, launch: session.launchMode)
+            let parts = lines.plays.components(separatedBy: "  ")
+            // H1 (Scott, 2026-11-09, board 43): the number big, top left, the entry it's on beside it, big; the name
+            // under; the pass bar and what's next; Mute over Solo down the right
             HStack(alignment: .top, spacing: 8) {
                 Button { session.select(track: t) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            TrackChip(track: t, size: 26, muted: muted)
-                            Text(Entries.trackName(t, session: session)).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .top, spacing: 10) {
+                            BigTrackChip(track: t, muted: muted, side: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(parts.first ?? lines.plays).font(.system(size: 22, weight: .semibold)).monospacedDigit()
+                                    .lineLimit(1).minimumScaleFactor(0.6)
+                                if parts.count > 1 {
+                                    Text(parts.dropFirst().joined(separator: " ")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                                }
+                            }
                         }
-                        Text(lines.plays).font(.system(size: 13)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
+                        Spacer(minLength: 6)
+                        Text(Entries.trackName(t, session: session)).font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(muted ? Theme.textSecondary : Theme.text).lineLimit(1)
                         if session.playing, m.playing != nil {
                             SmoothBar(track: Theme.well, ink: Theme.track[t]) { session.passProgress(t) ?? 0 }
-                                .frame(height: 4)
+                                .frame(height: 4).padding(.top, 6)
                         }
                         if let p = preview {
-                            // the scene held: an arrow line in full white, a second channel to the dashed outline
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold))
                                 Text(Self.previewText(p, list)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
                             }
-                            .foregroundStyle(Theme.text)
+                            .foregroundStyle(Theme.text).padding(.top, 4)
                         } else if !lines.next.isEmpty {
-                            Text(lines.next).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                            Text(lines.next).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1).padding(.top, 4)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -54,20 +64,21 @@ struct TrackStripCard: View {
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", selected" : "")")
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
-                muteKey(muted: muted, staged: staged)
+                VStack(spacing: 6) {
+                    muteKey(muted: muted, staged: staged)
+                    SoloKey(store: store, track: t)
+                }
+                .frame(width: 64)
             }
-            .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 8))
+            .padding(12)
             .frame(maxWidth: .infinity, minHeight: 92, maxHeight: .infinity, alignment: .topLeading)   // (as tall as its row of pads)
-            // no background but the selected track's tint, as the lane heads (Scott, 2026-11-07: grey cards at full
-            // size and nothing when compact was "one or the other")
             // (no tint of its own: its lane runs behind it, the selected track's in its colour; PadsPage.lanes)
-            // the whole head selects, its padding too (Scott, 2026-11-09: a dead spot at its foot); Mute keeps its own
+            // the whole head selects, its padding too (Scott, 2026-11-09: a dead spot at its foot); its keys keep their own
             .contentShape(RoundedRectangle(cornerRadius: 12))
             .onTapGesture { session.select(track: t) }
             .overlay {
                 if preview != nil {
                     RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.text.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                        .padding(selected ? 4 : 0)
                 }
             }
         }
@@ -75,23 +86,16 @@ struct TrackStripCard: View {
 
     private func muteKey(muted: Bool, staged: PerformState.Staged) -> some View {
         let cd = LaneMarks.countdown(session.ticksToLaunch(track), session.launchMode)
-        // an icon, not the word (Scott, 2026-11-09): the speaker struck through when muted; a change waiting shows
-        // what it becomes and when
         return Button { Task { await store.performOp(.mute(track: track)) } } label: {
             VStack(spacing: 2) {
-                Image(systemName: (muted) != (staged != .none) ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                Image(systemName: muted != (staged != .none) ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 18, weight: .semibold))
                 if staged != .none { Text(cd).font(.system(size: 11, weight: .semibold)).monospacedDigit().lineLimit(1) }
             }
-                .foregroundStyle(muted && staged == .none ? Theme.onColour : Theme.text)
-                .frame(width: 72, height: 52)
-                .background {
-                    if muted && staged == .none { RoundedRectangle(cornerRadius: 8).fill(Theme.text) }
-                    else if staged != .none {
-                        RoundedRectangle(cornerRadius: 8).fill(Theme.control)
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [5, 3])))
-                    } else { Chiclet(radius: 8, down: false, edge: true) }
-                }
+            .foregroundStyle(muted && staged == .none ? Theme.onColour : Theme.text)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none) }
+            .animation(.easeOut(duration: 0.15), value: muted)
         }
         .buttonStyle(PressSink())
         .disabled(store.offline)
@@ -150,15 +154,16 @@ struct TrackStripRow: View {
             HStack(spacing: 8) {
                 Button { session.select(track: t) } label: {
                     HStack(spacing: 8) {
-                        TrackChip(track: t, size: 26, muted: muted)
+                        BigTrackChip(track: t, muted: muted, side: 30)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
-                                Text(Entries.trackName(t, session: session)).font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                Text(Entries.trackName(t, session: session)).font(.system(size: 15, weight: selected ? .semibold : .regular)).layoutPriority(1)
                                     .foregroundStyle(selected ? Theme.text : Theme.textSecondaryRaised).lineLimit(1)
                                 Spacer(minLength: 4)
                                 // (what it's on; the bar under it is the pass)
                                 Text(preview.map { "→ " + TrackStripCard.previewText($0, list) } ?? lines.plays.components(separatedBy: "  ").first ?? lines.plays)
-                                    .font(.system(size: 12, weight: preview == nil ? .regular : .semibold))
+                                    .font(.system(size: 12, weight: preview == nil ? .regular : .semibold)).monospacedDigit()
+                                    .minimumScaleFactor(0.8)   // (Half: two keys and a 15 pt name leave no room for a big entry; the pads show it)
                                     .foregroundStyle(preview == nil ? Theme.textSecondaryRaised : Theme.text).lineLimit(1)
                             }
                             if session.playing, m.playing != nil {
@@ -175,17 +180,19 @@ struct TrackStripRow: View {
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
-                Button { Task { await store.performOp(.mute(track: t)) } } label: {
-                    Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(muted ? Theme.onColour : Theme.textSecondaryRaised)
-                        .frame(width: 36, height: 36)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(muted ? Theme.text : Theme.control))
-                        .overlay { if staged != .none { RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [4, 3])) } }
+                HStack(spacing: 2) {
+                    Button { Task { await store.performOp(.mute(track: t)) } } label: {
+                        Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(muted ? Theme.onColour : Theme.text)
+                            .frame(width: 30, height: 34)
+                            .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none) }
+                    }
+                    .buttonStyle(PressSink())
+                    .disabled(store.offline)
+                    .accessibilityLabel(muted ? "Unmute" : "Mute")
+                    .accessibilityValue(staged == .none ? "" : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
+                    SoloKey(store: store, track: t, compact: true).frame(width: 30, height: 34)
                 }
-                .buttonStyle(PressSink())
-                .disabled(store.offline)
-                .accessibilityLabel(muted ? "Unmute" : "Mute")
-                .accessibilityValue(staged == .none ? "" : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
             }
             .padding(.horizontal, 8)
             .frame(height: PadsPage.rowHeight)
@@ -213,5 +220,64 @@ struct SmoothBar: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+
+/// A track's number, big (board 43): its colour filled; muted, the colour as an outline and the number in it, so the
+/// number still says which track.
+struct BigTrackChip: View {
+    let track: Int
+    let muted: Bool
+    var side: CGFloat = 44
+
+    var body: some View {
+        let r = side * 0.25, c = Theme.track[track]
+        Text("\(track + 1)").font(.system(size: side * 0.5, weight: .bold)).monospacedDigit()
+            .foregroundStyle(muted ? c : Theme.onColour)
+            .frame(width: side, height: side)
+            .background {
+                if muted { RoundedRectangle(cornerRadius: r).strokeBorder(c, lineWidth: 2.5) }
+                else { RoundedRectangle(cornerRadius: r).fill(c) }
+            }
+            .animation(.easeOut(duration: 0.15), value: muted)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Mute's and Solo's surface (board 43): flat when off (the control grey, no base edge: the page is flat); pressed in
+/// when on (an inner shadow); a change waiting at the launch point, a dashed white edge.
+struct HeadKeySurface: View {
+    let on: Bool
+    let onColour: Color
+    var staged = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(on ? AnyShapeStyle(onColour.shadow(.inner(color: .black.opacity(0.45), radius: 3, y: 2))) : AnyShapeStyle(Theme.control))
+            .overlay { if staged { RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [5, 3])) } }
+    }
+}
+
+/// Solo (board 43): Lupe's, through PERFORM's mutes (SkiffSongStore.toggleSolo); amber when on.
+struct SoloKey: View {
+    let store: SkiffSongStore
+    let track: Int
+    var compact = false
+
+    var body: some View {
+        let on = store.soloed.contains(track)
+        Button { Task { await store.toggleSolo(track) } } label: {
+            Text("S").font(.system(size: compact ? 13 : 18, weight: .bold))
+                .foregroundStyle(on ? Theme.onColour : Theme.text)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background { HeadKeySurface(on: on, onColour: Theme.caution) }
+                .animation(.easeOut(duration: 0.15), value: on)
+        }
+        .buttonStyle(PressSink())
+        .disabled(store.offline)
+        .accessibilityLabel("Solo track \(track + 1)")
+        .accessibilityValue(on ? "on" : "off")
+        .accessibilityHint("Mutes every other track; again, the mutes come back as they were")
     }
 }

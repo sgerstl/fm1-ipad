@@ -214,7 +214,7 @@ struct SkiffSongPage: View {
                     Image(systemName: ups[k] ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold))
                 }
             }
-            .foregroundStyle(Theme.text)
+            .foregroundStyle(Theme.track[session.selectedTrack])        // (the track's colour on its tint: Scott, 2026-11-09)
             .frame(width: PadsPage.panelTabWidth, height: PadsPage.tabHeight)
             .contentShape(Rectangle())
             .geometryGroup()                   // rides the tab's spring with it (the words used to lag behind)

@@ -176,6 +176,29 @@ import Testing
         #expect(PerformOp.mute(track: 5).bytes == [3, 5] && PerformOp.cancel.bytes == [4] && PerformOp.launch(.now).bytes == [5, 3])
     }
 
+    @Test func soloMutesTheOthersAndGivesTheMutesBack() async throws {
+        let (_, fake, s, run) = try await store()
+        defer { run.cancel() }
+        try await waitFor(5) { s.perform != nil }
+        #expect(await s.performOp(.recall(scene: 2)))             // drums (T4, T6) muted
+        let before = s.perform?.muted
+        #expect(before == [false, false, false, true, false, true])
+        // solo T2: every other track muted
+        #expect(await s.toggleSolo(1))
+        #expect(s.soloed == [1] && s.perform?.muted == [true, false, true, true, true, true])
+        // add T4 to the solo: it comes back in
+        #expect(await s.toggleSolo(3))
+        #expect(s.perform?.muted == [true, false, true, false, true, true])
+        // let both go: the mutes from before the solo
+        let a = await s.toggleSolo(1), b = await s.toggleSolo(3)
+        #expect(a && b)
+        #expect(s.soloed.isEmpty && s.perform?.muted == before && fake.muted == before)
+        // a recall ends a solo
+        #expect(await s.toggleSolo(0))
+        #expect(await s.performOp(.recall(scene: 0)))
+        #expect(s.soloed.isEmpty)
+    }
+
     @Test func scenesStoreRecallAndMuteThroughTheFake() async throws {
         let (session, fake, s, run) = try await store()
         #expect(s.performs)
