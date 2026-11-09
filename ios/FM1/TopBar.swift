@@ -201,31 +201,44 @@ struct TopBar: View {
 
     // MARK: Tabs (three raised keys were tried 2026-11-01 and didn't work: back to the tabs)
 
+    /// The page tabs as one tab on a line (Scott, 2026-11-09, board 44): the current page's tab rises, grey, from a
+    /// 3 pt line with round ends that runs under them all; picking another, the old tab sinks into the line as the new
+    /// one rises out of it, together.
     private var tabs: some View {
-        HStack(spacing: 4) {
-            ForEach(ui.songTab ? Page.skiffTabs : Page.sloopTabs) { p in
-                let current = ui.page == p
-                Button {
-                    ui.page = p
-                    Self.driveDevice(session: session, ui: ui, to: p)
-                } label: {
-                    Text(p.title(skiff: ui.songTab))
-                        .fontWeight(current ? .semibold : .regular)
-                        .foregroundStyle(current ? Theme.text : Theme.textSecondary)
-                        .padding(.horizontal, 18)
-                        .frame(height: 44)
-                        .background { if current { Color.clear.selectedKey() } }
-                        .contentShape(Rectangle())
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(ui.songTab ? Page.skiffTabs : Page.sloopTabs) { p in
+                    let current = ui.page == p
+                    Button {
+                        ui.page = p
+                        Self.driveDevice(session: session, ui: ui, to: p)
+                    } label: {
+                        Text(p.title(skiff: ui.songTab))
+                            .fontWeight(current ? .semibold : .regular)
+                            .foregroundStyle(current ? Theme.text : Theme.textSecondary)
+                            .padding(.horizontal, 18)
+                            .frame(height: 44)
+                            .background(alignment: .bottom) {
+                                TabRise(rise: current ? 1 : 0).fill(Self.tabGrey)
+                                    .animation(reduceMotionTabs ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.3), value: current)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(current ? [.isSelected] : [])
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(current ? [.isSelected] : [])
             }
+            .padding(.horizontal, TabRise.fillet)      // (the line runs a fillet past the outer tabs, so their curves land on it)
+            Capsule().fill(Self.tabGrey).frame(height: 3)
         }
-        .padding(4)
-        .recessed(12)
+        .fixedSize(horizontal: true, vertical: false)      // (the line as long as the tabs, not the bar's room)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pages")
     }
+    /// The tab and its line: a step lighter than the control grey (on the page, the control grey as a thin line all
+    /// but vanished: board 44).
+    static let tabGrey = Theme.tones[2]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotionTabs
 
     /// A tab tapped on the iPad: the FM-1's screen goes to the same place (HOME, the preset browser,
     /// or the Sound tab's button), when linked and following.
@@ -472,5 +485,33 @@ struct WaitingDot: View {
             try? await Task.sleep(for: .milliseconds(300))
             if !Task.isCancelled { shown = true }
         }
+    }
+}
+
+
+/// A page tab rising out of the line under it (TopBar.tabs): `rise` 0 flat, 1 its full height; top corners `r`,
+/// concave fillets where its sides meet the line. Animatable, so a tab sinks and another rises.
+struct TabRise: Shape {
+    var rise: CGFloat
+    static let r: CGFloat = 10, fillet: CGFloat = 6
+    var animatableData: CGFloat { get { rise } set { rise = newValue } }
+
+    func path(in rect: CGRect) -> Path {
+        let h = rect.height, w = rect.width, H = h * max(0, min(1, rise))
+        var p = Path()
+        guard H > 0.5 else { return p }
+        let y0 = h - H, r = min(Self.r, H / 2, w / 2), f = min(Self.fillet, H)
+        p.move(to: CGPoint(x: -f, y: h))
+        p.addQuadCurve(to: CGPoint(x: 0, y: h - f), control: CGPoint(x: 0, y: h))
+        p.addLine(to: CGPoint(x: 0, y: y0 + r))
+        p.addArc(tangent1End: CGPoint(x: 0, y: y0), tangent2End: CGPoint(x: r, y: y0), radius: r)
+        p.addLine(to: CGPoint(x: w - r, y: y0))
+        p.addArc(tangent1End: CGPoint(x: w, y: y0), tangent2End: CGPoint(x: w, y: y0 + r), radius: r)
+        p.addLine(to: CGPoint(x: w, y: h - f))
+        p.addQuadCurve(to: CGPoint(x: w + f, y: h), control: CGPoint(x: w, y: h))
+        p.addLine(to: CGPoint(x: w + f, y: h + 0.5))       // (half a point into the line: no hairline)
+        p.addLine(to: CGPoint(x: -f, y: h + 0.5))
+        p.closeSubpath()
+        return p
     }
 }

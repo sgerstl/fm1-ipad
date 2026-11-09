@@ -157,6 +157,15 @@ struct SkiffSongPage: View {
                     }
                 }
                 .frame(width: g.size.width, height: bottom, alignment: .top)
+                // the panel's header strip (its top edge to the grid) drags and flicks the panel too, as the tab does
+                // (Scott, 2026-11-09); its keys still take their taps (a drag starts past 12 pt, mostly up or down)
+                .simultaneousGesture(DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                    .onChanged { v in
+                        guard dragTop != nil || (v.startLocation.y < Self.headerGrab && abs(v.translation.height) > abs(v.translation.width)) else { return }
+                        ui.pulledAt = Date()
+                        dragged(v.translation.height, tops: tops, pads: pads)
+                    }
+                    .onEnded { v in if dragTop != nil { ui.pulledAt = Date(); released(tops: tops, pads: pads, speed: v.velocity.height) } })
                 // cut to the panel's own shape (its tab included): what slides in and out shows only on the tint
                 .mask { EditorPanelShape(tab: CGSize(width: PadsPage.panelTabWidth, height: PadsPage.tabHeight), inset: Self.panelEdge) }
                 .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9), value: ui.sampler)
@@ -268,6 +277,8 @@ struct SkiffSongPage: View {
     /// Shut, a swipe up from the foot of the page brings the editor back: the strip over the tab (the scene row and a
     /// little above) takes it too, beside its keys' taps, so the tab needn't be found (Scott, 2026-11-07).
     static let pullZone: CGFloat = 120
+    /// The editor panel's header strip that drags it: its inset, the header row and the gap to the grid.
+    static let headerGrab: CGFloat = 76
 
     /// The pattern pool (Scott: "Full height"): a level-3 drawer down the page's right edge, over both halves, the
     /// source a pattern is dragged from onto a lane. A tap outside, Escape or Patterns closes it. While a pattern is
