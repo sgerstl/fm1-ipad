@@ -70,12 +70,16 @@ enum Labs {
         key: "labs.padControlsGap", title: "Track controls: gap under the pad", detail: "Space between the selected pad and the track controls hanging from it, so the controls don't sit too high (Scott: the same gap the pads keep).",
         range: 0...24, step: 1, standard: 8, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
 
+    static let padPlayFade = LabItem(
+        key: "labs.padPlayFade", title: "Pads: play colours fade in", detail: "How long the playing pads' colours take to come in when play starts; they go out on stop in 0.7 of it. 0: no fade.",
+        range: 0...0.5, step: 0.05, standard: 0.2, format: "%.2f s", added: "2026-11-09", review: "2026-11-23")
+
     static let songSlide = LabItem(
         key: "labs.songSlide", title: "Pads and Timeline: slide", detail: "How long the Timeline takes to slide down behind the editor as the pads come in from above, and back. 0 switches at once.",
         range: 0...0.6, step: 0.02, standard: 0.3, format: "%.2f s", added: "2026-11-08", review: "2026-11-23")
 
     static let sections: [(title: String, items: [LabItem])] = [
-        ("Motion", [dividerResponse, dividerDamping, menuOpen, menuClose, songSlide]),
+        ("Motion", [dividerResponse, dividerDamping, menuOpen, menuClose, songSlide, padPlayFade]),
         ("Gestures", [holdToMenu, holdToPaint, panStart, padDragStart, columnTravel, flickSpeed]),
         ("Layout", [padControlsGap]),
     ]

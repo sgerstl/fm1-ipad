@@ -40,6 +40,9 @@ struct PadsPage: View {
     private var controlsShown: Bool { controlsOpen }
     private func showControls(_ v: Bool) { controlsOpen = v }
     @State private var holdAt: CGPoint = .zero
+    /// When the pads came up: play landing in the first moments (Lupe connecting to an FM-1 already playing, the
+    /// transport read just after the song) doesn't fade the colours in.
+    @State private var shownAt = Date()
     @State private var gridFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Full size (the editor shut), over the editor (rows as tall as the lane heads, a shorter scene row), or over the
@@ -171,6 +174,7 @@ struct PadsPage: View {
         // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
         .padding(.bottom, compact ? 8 : 0)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
+        .onAppear { shownAt = Date() }
         // another pad, or another track: its controls back
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
@@ -484,6 +488,13 @@ struct PadsPage: View {
             }
         }
         .buttonStyle(PressSink())
+        // the play colours fade in when play starts and out when it stops (Scott, 2026-11-09: "at least just like fade
+        // in… same when it stops"), out a little quicker (0.7 of the way in). Only the colour: the pass bar's movement
+        // comes from the clock, not this. Not on connecting to an FM-1 already playing. Reduce Motion keeps the fade
+        // (a colour change, no movement).
+        .animation(Labs.padPlayFade.value > 0 && Date().timeIntervalSince(shownAt) > 1.5
+                   ? (playing ? .easeOut(duration: Labs.padPlayFade.value) : .easeIn(duration: Labs.padPlayFade.value * 0.7)) : nil,
+                   value: playing)
         .disabled(store.offline)
         // held: its menu at the finger
         .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
