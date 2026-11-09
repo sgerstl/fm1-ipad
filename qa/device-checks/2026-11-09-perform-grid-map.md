@@ -19,6 +19,10 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 10 | Hold a stored scene (one stored or recalled in Lupe). | Each track's pad for that scene gets a white outline; let go and it's gone. | – | ☐ pass ☐ fail: |
 | 11 | Drag the editor tab to Half, then Max, and back; then flick the tab quickly up and down. | Half: six short rows beside the lane heads, the pads to their right, a border on the selected pad (no controls). Max: the selected track's row of 16. A quick flick moves one place in its direction, even if short. Speed in Settings › Labs › Gestures › Editor divider: flick at. | – | ☐ pass ☐ fail: |
 | 12 | A song using 12+ entries on some track. | The columns grow to fit (up to 16), the pads narrower but all on screen; no sideways pan. | – | ☐ pass ☐ fail: |
+| 13 | Editor shut: drag the tab up to Half. Then make a sample from a pad's hold menu and cancel it. | The step editor rises with the panel, straight up, nothing sliding sideways. The sampler still comes in from the right and the editor goes back in from the left. | – | ☐ pass ☐ fail: |
+| 14 | No grid: tap a track head low down, under its name and lines (not on Mute). | The track is selected: no dead spot anywhere on the head. | – | ☐ pass ☐ fail: |
+| 15 | Drag between No grid and Half. | The heads keep one width, so the pads keep theirs and only get shorter. | – | ☐ pass ☐ fail: |
+| 16 | No grid: look under Store and the scenes. | A gap between them and the coloured panel edge below. The selected pad has no white fringe round its tint. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs skiff-sim, the iPhone, VoiceOver or a later round): the phone (Skiff's Song isn't on the phone yet, so board 40 waits); a chain drawn as one wide pad (board 35) is not built: chained entries still show as separate pads saying "Chained on"; VoiceOver labels now start with the track name ("Lead, entry C…"): release pass.
 
