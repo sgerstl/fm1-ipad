@@ -318,6 +318,7 @@ struct PadsPage: View {
     private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date, copy: Bool = false) -> some View {
         let side = min(size.width, size.height), small = size.height < 120 || size.width < 150
         let tiny = size.width < 90                // Max's row of 16: the letter and the number only
+        let short = size.height < 56              // Half's rows, as tall as the lane heads: one line
         let list = store.song?.tracks[safe: t]
         let e = list?.entries[safe: i] ?? .empty
         let blocks = store.blocks(t)
@@ -327,7 +328,7 @@ struct PadsPage: View {
         let waiting = block != nil && m.queued == block?.id && list?.staged == i
         let next = !waiting && block != nil && m.next == block?.id && block?.entries.lowerBound == i
         let colour = Theme.track[t]
-        let ink = playing ? Theme.onColour : Theme.text
+        let ink = playing && !e.isRest ? Theme.onColour : Theme.text      // (a REST playing is only an outline: light ink)
         let letter = Entries.letter(i)
         let title = e.isEmpty ? "" : e.label
         let state: String = {
@@ -361,6 +362,29 @@ struct PadsPage: View {
             // playing too: it's queued again and comes back in at the launch point (Scott, 2026-11-09)
             Task { await store.send(.play(track: t, entry: i)) }
         } label: {
+            if short {
+                // a row as tall as a lane head (Half): one line, the letter, the number, the countdown when waiting,
+                // the pass bar along the foot (board 37)
+                HStack(spacing: 6) {
+                    Text(letter).font(.system(size: 12, weight: .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
+                    if !title.isEmpty {
+                        Text(title).font(.system(size: e.isRest ? 11 : 15, weight: .bold)).monospacedDigit()
+                            .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    if waiting {
+                        Text(LaneMarks.countdown(m.launchIn, session.launchMode)).font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(Theme.onColour).padding(.horizontal, 5).frame(height: 18)
+                            .background(Capsule().fill(Theme.text)).lineLimit(1).layoutPriority(-1)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
+                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: 8) }
+                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: 8) }
+            } else {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(letter).font(.system(size: small ? 13 : 15, weight: .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
@@ -389,16 +413,7 @@ struct PadsPage: View {
             .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                if held {
-                    // a scene held: where it would send this track (Scott, 2026-11-09, board 36)
-                    RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.text, lineWidth: 3).padding(-3)
-                } else if waiting {
-                    let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(date.timeIntervalSinceReferenceDate * .pi))
-                    RoundedRectangle(cornerRadius: 16).strokeBorder(colour, style: StrokeStyle(lineWidth: 3, dash: [8, 5])).opacity(pulse)
-                } else if next || on {
-                    RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.text.opacity(on ? 1 : 0.55), lineWidth: on ? 2 : 1.5)
-                }
+            .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: 16) }
             }
         }
         .buttonStyle(PressSink())
@@ -638,17 +653,30 @@ struct PadsPage: View {
         return m
     }
 
-    @ViewBuilder private func padSurface(playing: Bool, on: Bool, empty: Bool, rest: Bool, colour: Color) -> some View {
+    @ViewBuilder private func padSurface(playing: Bool, on: Bool, empty: Bool, rest: Bool, colour: Color, radius: CGFloat = 16) -> some View {
         if empty {
-            RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.stepEmpty, lineWidth: 1)
+            RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.stepEmpty, lineWidth: 1)
         } else if rest {
-            RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.disabledOutline, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.disabledOutline, lineWidth: 1.5)
         } else if playing {
-            RoundedRectangle(cornerRadius: 16).fill(colour).elevationShadow(.selected)
+            RoundedRectangle(cornerRadius: radius).fill(colour).elevationShadow(.selected)
         } else {
             // (Chiclet keeps its radius at 8 or less: a pad's own 16, the same base edge under it)
-            RoundedRectangle(cornerRadius: 16).fill(Theme.control)
-                .background { RoundedRectangle(cornerRadius: 16).fill(Theme.chicletEdge).offset(y: 2) }
+            RoundedRectangle(cornerRadius: radius).fill(Theme.control)
+                .background { RoundedRectangle(cornerRadius: radius).fill(Theme.chicletEdge).offset(y: 2) }
+        }
+    }
+
+    /// A pad's outline for its state: a held scene's (white, outside), waiting (dashed, pulsing), the song's next, on it.
+    @ViewBuilder private func padOutline(held: Bool, waiting: Bool, next: Bool, on: Bool, colour: Color, date: Date, radius: CGFloat) -> some View {
+        if held {
+            // a scene held: where it would send this track (Scott, 2026-11-09, board 36)
+            RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.text, lineWidth: 3).padding(-3)
+        } else if waiting {
+            let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(date.timeIntervalSinceReferenceDate * .pi))
+            RoundedRectangle(cornerRadius: radius).strokeBorder(colour, style: StrokeStyle(lineWidth: radius < 12 ? 2 : 3, dash: [8, 5])).opacity(pulse)
+        } else if next || on {
+            RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.text.opacity(on ? 1 : 0.55), lineWidth: on ? 2 : 1.5)
         }
     }
 

@@ -57,7 +57,7 @@ struct TrackStripCard: View {
                 muteKey(muted: muted, staged: staged)
             }
             .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 8))
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 92, maxHeight: .infinity, alignment: .topLeading)   // (as tall as its row of pads)
             // no background but the selected track's tint, as the lane heads (Scott, 2026-11-07: grey cards at full
             // size and nothing when compact was "one or the other")
             .background { RoundedRectangle(cornerRadius: 12).fill(selected ? SelectionTint.fill(track) : .clear) }
