@@ -261,10 +261,11 @@ struct PadsPage: View {
     /// of the pad (Scott, 2026-11-09: they sat too high).
     struct SelectedGeometry {
         var frame: CGRect, tab: CGSize, drop: CGFloat, up: Bool, right: Bool, tabAt: CGPoint, knobsAt: CGPoint, border: CGFloat, inner: CGSize
-        /// The tint's corners (a pad's own in that row) and the face's inside it: outer less the border, so the two
-        /// curves run parallel (Scott, 2026-11-09; design-standards: outer = inner + padding).
-        var radius: CGFloat
-        var innerRadius: CGFloat { max(2, radius - border) }
+        /// The face keeps a pad's own corners, like every pad beside it, and the tint round it grows by the border, so
+        /// the two curves run parallel (Scott, 2026-11-09: "face 16, tint 24"; outer = inner + padding).
+        var padRadius: CGFloat
+        var innerRadius: CGFloat { padRadius }
+        var radius: CGFloat { padRadius + border }
     }
 
     private func selectedGeometry(row r: Int, col c: Int, rows: Int, area: CGSize, cell: CGSize, gap: CGFloat, rowGap: CGFloat) -> SelectedGeometry {
@@ -281,7 +282,7 @@ struct PadsPage: View {
         let b: CGFloat = cell.height < 60 ? 4 : 8
         return SelectedGeometry(frame: frame, tab: tab, drop: drop, up: up, right: right, tabAt: tabAt, knobsAt: knobsAt, border: b,
                                 inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b),
-                                radius: Self.padRadius(cell))
+                                padRadius: Self.padRadius(cell))
     }
 
     /// The selected pad's border of its track's tint and the track's controls hanging from it, as one shape, over the
@@ -293,7 +294,7 @@ struct PadsPage: View {
                 RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
-                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, tabR: TrackKnobBox.outerRadius, r: s.radius)
+                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, tabR: TrackKnobBox.outerRadius, turn: s.padRadius + s.drop, r: s.radius)
                     .fill(SelectionTint.fill(t))
                     // it floats over the pads and the page under it: the shadow of things at the finger (Scott, 2026-11-09)
                     .elevationShadow(.held)

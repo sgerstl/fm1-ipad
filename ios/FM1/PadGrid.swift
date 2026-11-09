@@ -42,6 +42,8 @@ struct PadTabShape: Shape {
     var drop: CGFloat = 0
     /// The tab's own corners (the pad's are `r`): nested round the knobs' tiles, not round the pad.
     var tabR: CGFloat = 12
+    /// The inner turn into the tab: the next pad's corner radius plus the gap, so it follows that corner.
+    var turn: CGFloat = 0
     static let f: CGFloat = 10
     /// The corners: the pad's own radius in that row, so the tint lines up with the pads beside it.
     var r: CGFloat = 12
@@ -56,7 +58,7 @@ struct PadTabShape: Shape {
     func path(in rect: CGRect) -> Path {
         // the inner turn from the pad into the tab: a true arc, the corner radius plus the gap, so it runs parallel to
         // the next pad's corner across the gap (Scott, 2026-11-09: the 10 pt bend didn't match the corners)
-        let r = r, f = drop > 0 ? r + drop : Self.f
+        let r = r, f = turn > 0 ? turn : Self.f
         let w = cell.width, h = cell.height + drop, W = max(tab.width, w + f + tabR), H = tab.height
         var p = Path()          // drawn with the tab under the pad, flush left, from (0, 0); then mirrored into place
         p.move(to: CGPoint(x: r, y: 0))
