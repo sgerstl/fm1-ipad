@@ -494,7 +494,7 @@ struct PadsPage: View {
                 if small { return m.loops ? "Looping" : m.pass.map { "Pass \($0)/\(m.reps)" } ?? "Playing" }
                 return m.loops ? "Playing · looping" : m.pass.map { "Playing · pass \($0) of \(m.reps)" } ?? "Playing"
             }
-            if waiting { return "Waiting · " + LaneMarks.countdown(m.launchIn, session.launchMode) }
+            if waiting { return "Waiting" }      // (how long: the line round it)
             if on { return "On it" }
             if next { return "Next" }
             return e.chained ? "Chained on" : "×\(e.reps)"
@@ -538,40 +538,25 @@ struct PadsPage: View {
                             .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    if waiting {
-                        LaunchCountdown(session: session, track: t).font(.lupe(11, .semibold)).monospacedDigit()
-                            .foregroundStyle(Theme.onColour).padding(.horizontal, 5).frame(height: 18)
-                            .background(Capsule().fill(Theme.text)).lineLimit(1).layoutPriority(-1)
-                    }
                 }
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
                 .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected).padding(inset) }
                 .contentShape(RoundedRectangle(cornerRadius: rad))
-                .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
+                .overlay { padOutline(track: t, held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
             } else {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(letter).font(.lupe(small ? 13 : 15, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
                     Spacer(minLength: 4)
-                    if waiting {
-                        LaunchCountdown(session: session, track: t).font(.lupe(13, .semibold)).monospacedDigit()
-                            .foregroundStyle(Theme.onColour).padding(.horizontal, 8).frame(height: 24)
-                            .background(Capsule().fill(Theme.text))
-                    }
                 }
                 if !title.isEmpty {
                     Text(title).font(.lupeNumber(side > 150 ? 38 : tiny ? (e.isRest ? 13 : 19) : small ? 23 : 28, .bold)).monospacedDigit()
                         .foregroundStyle(e.isRest ? Theme.textSecondary : ink)
                 }
                 if !tiny {
-                    if waiting && !playing && !e.isEmpty {
-                        LaunchCountdown(session: session, track: t, prefix: "Waiting · ").font(.lupe(small ? 12 : 13))
-                            .foregroundStyle(Theme.textSecondary).lineLimit(1)
-                    } else {
-                        Text(state).font(.lupe(small ? 12 : 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
-                    }
+                    Text(state).font(.lupe(small ? 12 : 13)).foregroundStyle(playing ? ink : Theme.textSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 if size.height >= 96, let p = e.poolIndex, let th = ui.padThumbs[p], th.length == store.pool?.patterns[safe: p]?.length {
@@ -584,7 +569,7 @@ struct PadsPage: View {
             .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected).padding(inset) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: rad))
-            .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
+            .overlay { padOutline(track: t, held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
             }
         }
         .buttonStyle(PressSink())
@@ -617,6 +602,7 @@ struct PadsPage: View {
             openMenu(t, i, at: pressAt)
         })
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[key] = $0 } }   // (the dragged copy isn't the pad's place)
+        .accessibilityValue(waiting && !playing ? "waiting, starts in " + LaneMarks.countdown(m.launchIn, session.launchMode) : "")
         .accessibilityLabel("\(Entries.trackName(t, session: session)), entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
         .accessibilityValue(e.isEmpty ? "" : state + (held ? ", the held scene goes here" : ""))
         .accessibilityHint(e.isEmpty ? "Opens a menu: a new pattern, a copy, one from the pool, or a rest"
@@ -863,13 +849,14 @@ struct PadsPage: View {
     }
 
     /// A pad's outline for its state: a held scene's (white, outside), waiting (dashed, pulsing), the song's next, on it.
-    @ViewBuilder private func padOutline(held: Bool, waiting: Bool, next: Bool, on: Bool, colour: Color, date: Date, radius: CGFloat, mark: Color? = nil) -> some View {
+    @ViewBuilder private func padOutline(track t: Int, held: Bool, waiting: Bool, next: Bool, on: Bool, colour: Color, date: Date, radius: CGFloat, mark: Color? = nil) -> some View {
         if held {
             // a scene held: where it would send this track (Scott, 2026-11-09, board 36)
             RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.text, lineWidth: 3).padding(-3)
         } else if waiting {
-            let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(date.timeIntervalSinceReferenceDate * .pi))
-            RoundedRectangle(cornerRadius: radius).strokeBorder(colour, style: StrokeStyle(lineWidth: radius < 12 ? 2 : 3, dash: [8, 5])).opacity(pulse)
+            // the time to its launch drawn round it, from the top left corner counter-clockwise; it comes in as the
+            // line closes (Scott, 2026-11-10: the outline instead of the numbers)
+            LaunchTrace(session: session, track: t, colour: colour, radius: radius, width: radius < 12 ? 2 : 3, date: date)
         } else if let mark {
             // the selected pad: its track's colour (on a playing pad, filled in that colour, the tint round it says it)
             RoundedRectangle(cornerRadius: radius).strokeBorder(mark, lineWidth: radius < 8 ? 2 : 3)
@@ -962,5 +949,57 @@ struct PadsPage: View {
         let entries = seen.enumerated().map { t, x in "track \(t + 1) \(x.entry.map(Entries.letter) ?? "none")" }
         let muted = seen.indices.filter { seen[$0].muted }.map { "\($0 + 1)" }
         return entries.joined(separator: ", ") + (muted.isEmpty ? "" : "; muted: tracks " + muted.joined(separator: ", "))
+    }
+}
+
+/// A waiting pad's outline drawn as its launch comes: from the top left corner, counter-clockwise (down the left side
+/// first), closing as it comes in (Scott, 2026-11-10). From the time left when it was staged, read from the counted
+/// clock each frame; under it the whole outline faint, so the shape reads before the line has gone far. No clock
+/// (joined mid-play): the dashed outline it had.
+struct LaunchTrace: View {
+    let session: DeviceSession
+    let track: Int
+    let colour: Color
+    let radius: CGFloat
+    let width: CGFloat
+    let date: Date
+    @State private var from: Double?
+
+    var body: some View {
+        if session.ticksToLaunch(track) == nil {
+            RoundedRectangle(cornerRadius: radius).strokeBorder(colour, style: StrokeStyle(lineWidth: width, dash: [8, 5]))
+        } else {
+            TimelineView(.animation) { _ in
+                let left = session.ticksToLaunch(track) ?? 0
+                let done = from.map { $0 > 0 ? min(1, max(0, 1 - left / $0)) : 1 } ?? 0
+                ZStack {
+                    RoundedRectangle(cornerRadius: radius).strokeBorder(colour.opacity(0.3), lineWidth: width)
+                    TraceOutline(radius: radius, inset: width / 2).trim(from: 0, to: done)
+                        .stroke(colour, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+                }
+                // (staged again further off, a new pass at LOOP: from where it is now)
+                .onChange(of: left > (from ?? 0) + 1) { _, more in if more { from = left } }
+            }
+            .onAppear { from = session.ticksToLaunch(track) }
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+/// A rounded rectangle's outline from its top left corner, counter-clockwise on the screen: the corner, down the left,
+/// along the bottom, up the right, back along the top.
+struct TraceOutline: Shape {
+    var radius: CGFloat
+    var inset: CGFloat
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: inset, dy: inset), c = max(0, min(radius - inset, r.width / 2, r.height / 2))
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX + c, y: r.minY))
+        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.minY), tangent2End: CGPoint(x: r.minX, y: r.maxY), radius: c)
+        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.maxY), tangent2End: CGPoint(x: r.maxX, y: r.maxY), radius: c)
+        p.addArc(tangent1End: CGPoint(x: r.maxX, y: r.maxY), tangent2End: CGPoint(x: r.maxX, y: r.minY), radius: c)
+        p.addArc(tangent1End: CGPoint(x: r.maxX, y: r.minY), tangent2End: CGPoint(x: r.minX, y: r.minY), radius: c)
+        p.addLine(to: CGPoint(x: r.minX + c, y: r.minY))
+        return p
     }
 }
