@@ -260,7 +260,7 @@ struct PadsPage: View {
                             selectedTint(t, s, area: g.size, bare: bare)
                                 .id("tint\(t).\(i).\(bare)")
                                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare))
-                            selectedFace(t, i, m, s, date: tl.date, area: g.size)
+                            selectedFace(t, i, m, s, date: tl.date, area: g.size, full: bare)
                                 .id("face\(t).\(i)")
                                 .transition(.opacity)
                         }
@@ -290,6 +290,9 @@ struct PadsPage: View {
         /// The face keeps a pad's own corners, like every pad beside it, and the tint round it grows by the border, so
         /// the two curves run parallel (Scott, 2026-11-09: "face 16, tint 24"; outer = inner + padding).
         var padRadius: CGFloat
+        /// On a lane: the concave ears where the box meets the lane's edge (the row gap: they stay off the next row's
+        /// pads), none on the left under pad A at full size, where the box carries on the band's end; the column.
+        var earL: CGFloat = 0, earR: CGFloat = 0, col = 0
         var innerRadius: CGFloat { padRadius }
         var radius: CGFloat { padRadius + border }
     }
@@ -307,7 +310,8 @@ struct PadsPage: View {
     private func selectedGeometry(row r: Int, col c: Int, area: CGSize, cell: CGSize, gap: CGFloat, rowGap: CGFloat,
                                   room: (above: CGFloat, below: CGFloat)) -> SelectedGeometry {
         let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
-        let drop = Labs.padControlsGap.value
+        // on a lane the box hangs straight off its edge (Scott, 2026-11-09: one strip); at Max, no lane, a gap
+        let drop = row ? Labs.padControlsGap.value : 0
         let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
         // down where it fits inside the page, else up where that fits (Half's lower rows, full size's last), else down
         let fitsDown = frame.maxY + drop + tab.height <= area.height + room.below
@@ -322,7 +326,8 @@ struct PadsPage: View {
         let b: CGFloat = cell.height < 60 || cell.width < 90 ? 4 : 8   // (and round Max's narrow keys: "A 0")
         return SelectedGeometry(frame: frame, tab: tab, drop: drop, up: up, right: right, tabAt: tabAt, knobsAt: knobsAt, border: b,
                                 inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b),
-                                padRadius: Self.padRadius(cell))
+                                padRadius: Self.padRadius(cell),
+                                earL: !row && !(c == 0 && layout == .full && !up) ? rowGap : 0, earR: row ? 0 : rowGap, col: c)
     }
 
     /// The selected pad's border of its track's tint and the track's controls hanging from it, as one shape, over the
@@ -330,12 +335,25 @@ struct PadsPage: View {
     private func selectedTint(_ t: Int, _ s: SelectedGeometry, area: CGSize, bare: Bool) -> some View {
         ZStack(alignment: .topLeading) {
             if bare {
-                // over the editor, or the controls tapped away: the border alone
+                // the controls shut: nothing round the pad (it's full size, outlined in its track's colour, on its lane)
+                Color.clear
+            } else if !row {
+                // on a lane: the pad's tint (the lane's colour) and the box hanging straight off the lane's edge, one
+                // strip with it, no shadow (Scott, 2026-11-09); under pad A at full size the band's rounded end is
+                // squared, so the box carries it straight down
                 RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
+                if s.col == 0, layout == .full, !s.up {
+                    Rectangle().fill(SelectionTint.fill(t))
+                        .frame(width: s.padRadius, height: s.padRadius).offset(x: s.frame.minX, y: s.frame.maxY - s.padRadius)
+                }
+                LaneTabShape(box: CGRect(origin: s.knobsAt, size: s.tab), earL: s.earL, earR: s.earR, r: TrackKnobBox.outerRadius, up: s.up)
+                    .fill(SelectionTint.fill(t))
+                TrackKnobBox(session: session, ui: ui, embedded: true)
+                    .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
+                    .offset(x: s.knobsAt.x, y: s.knobsAt.y)
             } else {
-                // the shadow from the controls' box alone, not the pad's tint, which sits in its lane (a shadow from
-                // that read as a seam: board 41); it floats over the pads and page under it (Scott, 2026-11-09)
+                // Max: no lane, so the tab hangs from the pad as before, floating over the editor with its shadow
                 RoundedRectangle(cornerRadius: TrackKnobBox.outerRadius).fill(SelectionTint.fill(t))
                     .frame(width: s.tab.width, height: s.tab.height)
                     .elevationShadow(.held)
@@ -351,11 +369,15 @@ struct PadsPage: View {
     }
 
     /// The selected pad itself, shrunk inside the border.
-    private func selectedFace(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, _ s: SelectedGeometry, date: Date, area: CGSize) -> some View {
-        pad(t, i, m, size: s.inner, date: date, radius: s.innerRadius, selected: true)
-            .frame(width: s.inner.width, height: s.inner.height)
+    /// Full size, its track-colour outline the mark, while its track controls are shut; inside the tint, a border's
+    /// width in, only with them open (Scott, 2026-11-09).
+    private func selectedFace(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, _ s: SelectedGeometry, date: Date, area: CGSize, full: Bool) -> some View {
+        let b = full ? 0 : s.border
+        let size = CGSize(width: s.frame.width - 2 * b, height: s.frame.height - 2 * b)
+        return pad(t, i, m, size: size, date: date, radius: full ? s.padRadius : s.innerRadius, selected: true)
+            .frame(width: size.width, height: size.height)
             .geometryGroup()
-            .offset(x: s.frame.minX + s.border, y: s.frame.minY + s.border)
+            .offset(x: s.frame.minX + b, y: s.frame.minY + b)
             .frame(width: area.width, height: area.height, alignment: .topLeading)
     }
 
@@ -634,7 +656,7 @@ struct PadsPage: View {
         let title = "T\(t + 1) · entry \(Entries.letter(i))" + (e.isEmpty ? (target == i ? " · empty" : " · goes on \(Entries.letter(target))") : "")
         // an empty pad's choices fan out of the finger as big separate buttons (Scott, 2026-11-09); a filled pad's
         // hold keeps the ordinary menu
-        ui.menu = AppMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at, fan: e.isEmpty)
+        ui.menu = AppMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at, fan: e.isEmpty, tint: t)
     }
 
     /// Where something put on empty pad `i` lands: there, or the first empty entry after the list's last filled one.

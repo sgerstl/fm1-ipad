@@ -165,3 +165,38 @@ struct LaneShape: Shape {
         return p
     }
 }
+
+
+/// The track controls' box joined to the selected track's lane (Scott, 2026-11-09: one strip, no shadow): the box
+/// (`box`) hanging straight off the lane's edge, concave ears `ear` where its sides meet that edge (none on the left
+/// under pad A, where the box carries the band's end straight down), its far corners `r`; `up`: hanging above.
+struct LaneTabShape: Shape {
+    var box: CGRect
+    var earL: CGFloat
+    var earR: CGFloat
+    var r: CGFloat
+    var up: Bool
+
+    func path(in rect: CGRect) -> Path {
+        // drawn hanging down from y 0 (half a point into the lane, no hairline), then flipped for `up`
+        let w = box.width, h = box.height, t: CGFloat = -0.5
+        var p = Path()
+        p.move(to: CGPoint(x: -earL, y: t))
+        p.addLine(to: CGPoint(x: w + earR, y: t))
+        if earR > 0 { p.addArc(tangent1End: CGPoint(x: w, y: t), tangent2End: CGPoint(x: w, y: t + earR), radius: earR) }
+        p.addLine(to: CGPoint(x: w, y: h - r))
+        p.addArc(tangent1End: CGPoint(x: w, y: h), tangent2End: CGPoint(x: w - r, y: h), radius: r)
+        p.addLine(to: CGPoint(x: r, y: h))
+        p.addArc(tangent1End: CGPoint(x: 0, y: h), tangent2End: CGPoint(x: 0, y: h - r), radius: r)
+        if earL > 0 {
+            p.addLine(to: CGPoint(x: 0, y: t + earL))
+            p.addArc(tangent1End: CGPoint(x: 0, y: t), tangent2End: CGPoint(x: -earL, y: t), radius: earL)
+        } else {
+            p.addLine(to: CGPoint(x: 0, y: t))
+        }
+        p.closeSubpath()
+        var m = CGAffineTransform(translationX: box.minX, y: up ? box.maxY : box.minY)
+        if up { m = m.scaledBy(x: 1, y: -1) }
+        return p.applying(m)
+    }
+}

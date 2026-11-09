@@ -25,11 +25,13 @@ struct TrackMenuLayer: View {
             ZStack(alignment: .topLeading) {
                 Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                 if let m = ui.trackMenu {
-                    PlacedMenu(title: "Track \(m.track + 1) · \(Entries.trackName(m.track, session: session))",
-                               groups: Self.groups(session, ui, track: m.track), at: m.at, layer: g.size,
-                               close: { ui.trackMenu = nil })
+                    // the empty pads' fan, in the track's tint (Scott, 2026-11-09: "the track header longpress should
+                    // get the same treatment")
+                    FanMenu(title: "Track \(m.track + 1) · \(Entries.trackName(m.track, session: session))",
+                            items: Self.groups(session, ui, track: m.track).flatMap { $0 }.filter { !$0.note }, at: m.at, layer: g.size,
+                            tint: m.track, close: { ui.trackMenu = nil }, open: { _ in })
                         .id(m.track)
-                        .transition(PlacedMenu.transition(at: m.at, layer: g.size, reduceMotion: reduceMotion))
+                        .transition(.opacity.animation(.easeIn(duration: Labs.menuClose.value)))
                 }
             }
         }

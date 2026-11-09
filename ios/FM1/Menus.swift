@@ -55,6 +55,8 @@ struct AppMenu: Identifiable {
     /// Its choices as separate floating buttons fanning out of the finger, the first by it (Scott, 2026-11-09: an empty
     /// pad's "New pattern" nine times in ten). A submenu among them opens as an ordinary menu in their place.
     var fan = false
+    /// The track a fan belongs to: its buttons in the track's tint, the first outlined in its colour (Scott, 2026-11-09).
+    var tint: Int? = nil
 }
 
 /// Draws an open AppMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
@@ -72,7 +74,7 @@ struct AppMenuLayer: View {
                 if let m = menu {
                     let at = CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY)
                     if m.fan {
-                        FanMenu(title: m.title, items: m.groups().flatMap { $0 }.filter { !$0.note }, at: at, layer: g.size,
+                        FanMenu(title: m.title, items: m.groups().flatMap { $0 }.filter { !$0.note }, at: at, layer: g.size, tint: m.tint,
                                 close: { menu = nil },
                                 open: { item in menu = AppMenu(title: item.title, groups: item.children ?? { [] }, at: m.at) })
                             .id(m.id)
@@ -293,6 +295,8 @@ struct FanMenu: View {
     /// The finger, in the layer's space.
     let at: CGPoint
     let layer: CGSize
+    /// The track it belongs to (its buttons in the track's tint, the first outlined in its colour); nil: neutral.
+    var tint: Int? = nil
     let close: () -> Void
     /// A submenu chosen: it opens as an ordinary menu.
     let open: (MenuItem) -> Void
@@ -350,12 +354,19 @@ struct FanMenu: View {
                 Spacer(minLength: 0)
                 if item.children != nil { Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)) }
             }
-            .foregroundStyle(first ? Theme.onColour : Theme.text)
+            .foregroundStyle(first && tint == nil ? Theme.onColour : Theme.text)
             .padding(.horizontal, 16)
             .frame(height: Self.height)
             .background {
-                // the first (New pattern) the primary; each its own floating surface, the shadow of things at the finger
-                RoundedRectangle(cornerRadius: 14).fill(first ? Theme.text : Elevation.held.surface).elevationShadow(.held)
+                if let t = tint {
+                    // the track's: every button in its tint (as its lane and selected pad), the first outlined in the
+                    // full colour, as the tapped pad is (Scott, 2026-11-09)
+                    RoundedRectangle(cornerRadius: 14).fill(SelectionTint.fill(t)).elevationShadow(.held)
+                        .overlay { if first { RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.track[t], lineWidth: 3) } }
+                } else {
+                    // the first the primary; each its own floating surface, the shadow of things at the finger
+                    RoundedRectangle(cornerRadius: 14).fill(first ? Theme.text : Elevation.held.surface).elevationShadow(.held)
+                }
             }
             .opacity(item.enabled ? 1 : 0.45)
         }
