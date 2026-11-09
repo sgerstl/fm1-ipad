@@ -44,7 +44,7 @@ a{color:#A1A1AA}a:hover{color:#EDEDF0}
         <span style="{{r.chip}}">{{r.n}}</span>
         <sc-if value="{{r.showName}}" hint-placeholder-val="{{ true }}"><span style="{{r.nameStyle}}">{{r.name}}</span></sc-if>
         <button aria-pressed="{{r.muted}}" aria-label="{{r.muteAria}}" style="{{r.mute}}">{{r.muteLabel}}</button>
-        <sc-if value="{{r.trackKey}}" hint-placeholder-val="{{ false }}"><button aria-label="Track controls for Lead" style="{{r.tk}}">Track ▾</button></sc-if>
+        <button aria-label="{{r.tkAria}}" style="{{r.tk}}">Track ▾</button>
       </div></sc-if>
       <sc-for list="{{r.pads}}" as="p" hint-placeholder-count="9">
         <button aria-label="{{p.aria}}" style="{{p.style}}">
@@ -193,7 +193,7 @@ class Component extends DCLogic {
       mute += muted ? 'background: #EDEDF0; color: #101012; font-weight: 600;' : staged ? 'background: #26262B; color: #EDEDF0; box-shadow: inset 0 0 0 2px #EDEDF0;' : 'background: #26262B; color: #C4C4CC;';
       return {
         n: r + 1, name: NAMES[r], showName: L.showName, pads: pads, showHead: L.headW > 0,
-        trackKey: !!(V.trackKey && sel), tk: abs(L.headW - 12 - (L.headW - 32) / 2, L.rh - L.muteH - 12, (L.headW - 32) / 2, L.muteH) + 'border: 0; border-radius: 8px; background: #34343B; color: #EDEDF0; font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #EDEDF0;', muted: muted ? 'true' : 'false',
+        tkAria: 'Track controls for ' + NAMES[r], tk: (V.trackKey && sel ? '' : 'display: none; ') + abs(L.headW - 12 - (L.headW - 32) / 2, L.rh - L.muteH - 12, (L.headW - 32) / 2, L.muteH) + 'border: 0; border-radius: 8px; background: #34343B; color: #EDEDF0; font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #EDEDF0;', muted: muted ? 'true' : 'false',
         aria: 'Track ' + (r + 1) + ', ' + NAMES[r] + (sel ? ', selected' : ''),
         muteAria: (muted ? 'Unmute ' : 'Mute ') + NAMES[r] + (staged ? ', mutes at bar 11' : ''),
         muteLabel: L.short ? (muted ? 'M' : staged ? 'M·' : 'M') : (muted ? 'Muted' : staged ? 'Mutes at 11' : 'Mute'),
