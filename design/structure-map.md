@@ -28,7 +28,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 
 ## Pads as a grid: every track's entries in rows (decided 2026-11-10, mock before building)
 
-*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. The same day it went from a Live tab of its own to **Pads itself becoming the grid** (Scott: "change the structure of pads to have rows like live"): one surface that launches, one scene row, four tabs on the phone. Decided: **a row's stop is its mute**; no column launch; a waiting pad tapped takes the launch back; the playing pad tapped restarts it. Mocked on the canvas, boards 35–40 (generator `design/boards/live.py`); no SwiftUI until Scott OKs the mock. Open questions and the protocol check: `design/perform-grid-questions.md`.*
+*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. The same day it went from a Live tab of its own to **Pads itself becoming the grid** (Scott: "change the structure of pads to have rows like live"): one surface that launches, one scene row, four tabs on the phone. Decided: **a row's stop is its mute**; no column launch; a waiting pad tapped takes the launch back; while playing, any other pad tapped, the playing one included, is queued as the next to play. Mocked on the canvas, boards 35–40 (generator `design/boards/live.py`); no SwiftUI until Scott OKs the mock. Open questions and the protocol check: `design/perform-grid-questions.md`.*
 
 **What changes.** The 4 × 4 of one track's entries and the track strip beside it become one grid: a row a track, its entries across. The strip's rows become the row heads, so nothing about a track is lost: what it plays, what's waiting, its mute. The firmware already allows launching any track: LIST op 3 PLAY takes any track and entry, and nothing on the FM-1 changes the selected track when it's sent.
 
@@ -40,7 +40,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 |---|---|
 | **Tool row** | The Timeline / Pads switch, Launch at (LOOP, BAR, BEAT, NOW), Cancel waiting (only while something waits). |
 | **Row heads** (left, one a track) | Number, name and colour, Mute (also the row's stop: PERFORM op 3, staged to the launch point while playing; the track keeps its place and comes back in time). The selected track is marked. **Tapping the number selects the track**, and with it the editor and the FM-1's knobs. |
-| **Pads** (6 rows × the entries) | One pad an entry. **Tap: launch it** (at once stopped, at the launch point playing). Proposed: on the selected track's row a tap also selects the pad for the editor, as today; **on another row it launches only**, so the selection (and the FM-1's knobs) don't jump mid-set. Tap a waiting pad: take the launch back. Tap the playing pad: restart it. |
+| **Pads** (6 rows × the entries) | One pad an entry. **Tap: launch it** (at once stopped, at the launch point playing). On the selected track's row a tap also selects the pad for the editor, as today; **on another row it launches only** (Scott, 2026-11-10), so the selection (and the FM-1's knobs) don't jump mid-set; the row's number selects. **While playing, a tap queues the pad as the track's next, the playing pad included** (Scott, 2026-11-10): it starts again at the launch point. Tap a waiting pad: take the launch back. |
 | **Scene row** (under the grid) | Store and the 16 scenes, as now. Held, the grid outlines each track's pad for that scene. The editor's Open key sits at its end (board 33). |
 
 ### The three positions (the divider)
@@ -62,7 +62,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 ### The FM-1's buttons
 
 - **ARP held (Skiff's PERFORM layer)** shows Song › Pads while held or locked, then goes back to where you were (the 2026-11-07 rule, unchanged).
-- **The sound keys work during a performance** (Scott, 2026-11-10): ENV, LFO, FX, SEL, EDIT and ARP tapped bring the sound panel in over Pads, as now, for the selected track. Proposed (board 39): at No grid the panel sits between the tool row and the scene row, so Launch at, Cancel waiting and all 16 scenes stay in reach; the row heads and the columns left of it stay live.
+- **The sound keys work during a performance** (Scott, 2026-11-10): ENV, LFO, FX, SEL, EDIT and ARP tapped bring the sound panel in over Pads, as now, for the selected track. Agreed (board 39, Scott 2026-11-10): at No grid the panel sits between the tool row and the scene row, so Launch at, Cancel waiting and all 16 scenes stay in reach; the row heads and the columns left of it stay live.
 
 ### What a pad shows
 
