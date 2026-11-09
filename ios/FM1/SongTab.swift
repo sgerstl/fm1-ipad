@@ -15,6 +15,8 @@ struct SkiffSongPage: View {
     /// a drag snaps to the nearest on the spring. One for both views, which share the editor ("should just toggle the
     /// top and leave the bottom, since they are the same"). Kept across launches.
     @AppStorage(SongPosition.key) private var storedPosition = SongPosition.half.rawValue
+    /// The pads' track controls open (PadsPage's choice): at Max they hang over the editor.
+    @AppStorage("padControlsOpen") private var padControlsOpen = true
     /// The position the layout follows: plain state, set inside the spring, so a tap of the tab animates (a change to
     /// the stored setting carried no animation, and Open and Close jumped; Scott, 2026-11-08). Saved as it changes.
     @State private var placed: SongPosition?
@@ -78,6 +80,7 @@ struct SkiffSongPage: View {
             let top = dragTop ?? rest
             let shown = layout ?? position.layout
             let editorShown = dragTop != nil || position != .none
+            let overEditor = pads && shown == .row && padControlsOpen
             // the editor keeps its height while it slides under the fold, the page clipping it
             let bottom = max(Self.editorMin, total - top)
             VStack(spacing: 0) {
@@ -103,8 +106,11 @@ struct SkiffSongPage: View {
                     if store.performs { SongViewSwitch(ui: ui).frame(height: 44) }
                 }
                 // clipped at the foot only: a key on the top row (Cancel waiting) draws its raised edge a point
-                // above the page and was cut (Scott, 2026-11-08)
-                .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
+                // above the page and was cut (Scott, 2026-11-08). At Max on Pads the selected pad's track controls
+                // hang down over the editor (no room above or below a single row), so there the foot gives way and
+                // the pads draw over the panel (Scott, 2026-11-09: open stays open at every size)
+                .mask(alignment: .bottom) { Rectangle().padding(.top, -24).padding(.bottom, overEditor ? -(TrackKnobBox.height + 40) : 0) }
+                .zIndex(overEditor ? 1 : 0)
                 // shut, a swipe up from the foot of the page brings the editor back (beside the scene keys' taps)
                 .simultaneousGesture(DragGesture(minimumDistance: 12, coordinateSpace: .local)
                     .onChanged { v in

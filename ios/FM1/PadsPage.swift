@@ -29,18 +29,16 @@ struct PadsPage: View {
     /// A pad being dragged to another (Scott, 2026-11-08): from the hold, as Timeline blocks; where the hold took, so
     /// the drag starts only once the finger leaves it; and the grid's place (global), for the dragged copy.
     @State private var drag: PadDrag?
-    /// The selected pad tapped while stopped: it stays selected, its track controls roll away (Scott, 2026-11-09); a
-    /// tap again, or another pad, brings them back.
-    /// The selected pad's track controls flipped from where they start: shown at full size, hidden over the editor
-    /// (Half, Max). A double tap on a track head flips them, at any size (Scott, 2026-11-09); so does the selected pad
-    /// tapped while stopped. Back to the start at a change of size.
-    @State private var controlsFlip = false
+    /// Whether the selected pad's track controls are open: the user's choice, kept until they close them (Scott,
+    /// 2026-11-09: "keep it open unless the user closes it"). A double tap on a track head opens or closes them, as
+    /// does the selected pad tapped while stopped; a change of size, another pad or track, or leaving Pads never does.
+    @AppStorage("padControlsOpen") private var controlsOpen = true
     /// The head last double-tapped: another track's double tap shows its controls rather than flipping them away.
     @State private var lastDouble: Int?
     /// The pad whose menu is open (or just closed by the touch now landing): tapped again, it only closes.
     @State private var menuPad: PadKey?
-    private var controlsShown: Bool { (layout == .full) != controlsFlip }
-    private func showControls(_ v: Bool) { controlsFlip = (layout == .full) != v }
+    private var controlsShown: Bool { controlsOpen }
+    private func showControls(_ v: Bool) { controlsOpen = v }
     @State private var holdAt: CGPoint = .zero
     @State private var gridFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -174,7 +172,6 @@ struct PadsPage: View {
         .padding(.bottom, compact ? 8 : 0)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
         // another pad, or another track: its controls back
-        .onChange(of: layout) { _, _ in controlsFlip = false; lastDouble = nil }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
             get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
@@ -227,7 +224,7 @@ struct PadsPage: View {
                     // of theirs, together, quick (Scott, 2026-11-08)
                     ZStack(alignment: .topLeading) {
                         if let i = framed, i < cols, let k = shown.firstIndex(of: t), let m = marks[t] {
-                            let s = selectedGeometry(row: k, col: i, rows: shown.count, area: g.size, cell: cell, gap: gap, rowGap: r.rowGap)
+                            let s = selectedGeometry(row: k, col: i, area: g.size, cell: cell, gap: gap, rowGap: r.rowGap, room: room(r))
                             // the track controls only at full size: over the editor the rows are too short to hang them
                             // from (Scott, 2026-11-09), so the border alone
                             let bare = !controlsShown
@@ -268,18 +265,32 @@ struct PadsPage: View {
         var radius: CGFloat { padRadius + border }
     }
 
-    private func selectedGeometry(row r: Int, col c: Int, rows: Int, area: CGSize, cell: CGSize, gap: CGFloat, rowGap: CGFloat) -> SelectedGeometry {
+    /// How far the track controls may hang past the grid inside the page: above it (under the switch and tool row) and
+    /// below it (over the scene row). At Max they hang over the editor (SkiffSongPage lifts the pads over it there).
+    private func room(_ r: Rows) -> (above: CGFloat, below: CGFloat) {
+        switch layout {
+        case .full: (r.top, r.sceneGap + Self.sceneHeight + Self.sceneFoot)
+        case .compact: (r.top, r.sceneGap + Self.compactScenes + 8)
+        case .row: (r.top, .infinity)
+        }
+    }
+
+    private func selectedGeometry(row r: Int, col c: Int, area: CGSize, cell: CGSize, gap: CGFloat, rowGap: CGFloat,
+                                  room: (above: CGFloat, below: CGFloat)) -> SelectedGeometry {
         let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
         let drop = Labs.padControlsGap.value
         let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
-        let up = rows > 1 && r == rows - 1, right = frame.minX + tab.width > area.width
+        // down where it fits inside the page, else up where that fits (Half's lower rows, full size's last), else down
+        let fitsDown = frame.maxY + drop + tab.height <= area.height + room.below
+        let fitsUp = frame.minY - drop - tab.height >= -room.above
+        let up = !fitsDown && fitsUp, right = frame.minX + tab.width > area.width
         let x = right ? frame.maxX - tab.width : frame.minX
         // the reveal's box (the stem and the tab) and the knobs' place in it, a gap clear of the pads beside
         let tabAt = CGPoint(x: x, y: up ? frame.minY - drop - tab.height : frame.maxY)
         let knobsAt = CGPoint(x: x, y: up ? frame.minY - drop - tab.height : frame.maxY + drop)
         // the border: the knobs' own 8 pt inset, so the tint is one width round the pad and round them (Scott,
         // 2026-11-09); thinner round short rows
-        let b: CGFloat = cell.height < 60 ? 4 : 8
+        let b: CGFloat = cell.height < 60 || cell.width < 90 ? 4 : 8   // (and round Max's narrow keys: "A 0")
         return SelectedGeometry(frame: frame, tab: tab, drop: drop, up: up, right: right, tabAt: tabAt, knobsAt: knobsAt, border: b,
                                 inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b),
                                 padRadius: Self.padRadius(cell))
@@ -406,7 +417,7 @@ struct PadsPage: View {
                 menuPad = key
                 return
             }
-            if !session.playing, t == session.selectedTrack, framedPad(t) == i { controlsFlip.toggle(); return }
+            if !session.playing, t == session.selectedTrack, framedPad(t) == i { controlsOpen.toggle(); return }
             launched += 1
             // a waiting pad tapped again takes its launch back: the entry playing is relaunched in its place, the
             // FM-1 having no per-track cancel (Scott, 2026-11-09, question 5)
