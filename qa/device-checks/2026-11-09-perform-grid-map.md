@@ -25,6 +25,12 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 16 | No grid: look under Store and the scenes. | A gap between them and the coloured panel edge below. The selected pad has no white fringe round its tint. | – | ☐ pass ☐ fail: |
 | 17 | Stopped, No grid: look at the selected pad and its controls. | Flat pad (no dark band under its outline), outlined in its track colour; an even border of tint round it and round the knobs; the box's top a gap below the pads beside it, the tint coming down out of the pad and curving out. | – | ☐ pass ☐ fail: |
 | 18 | Double-tap a track head, at No grid, Half and Max (Max: from the editor's track menu side; the heads are gone, so skip). | At No grid the controls go away and come back; at Half they appear under the selected pad and go again. Double-tapping another track's head selects it and shows its controls. A single tap still selects at once. | – | ☐ pass ☐ fail: |
+| 19 | Tap an empty pad; try both Handedness settings. | Separate buttons fan out of the finger on the side away from your hand, New pattern first (white) level with the finger. Tap New pattern: it's made. Pick a pattern… opens the list menu. | – | ☐ pass ☐ fail: |
+| 20 | Tap an empty pad, then the same pad again. | The menu closes and stays shut. | – | ☐ pass ☐ fail: |
+| 21 | While playing, pin another entry on the selected track (hold › Edit pattern, or a block on the Timeline). | No panel over the steps: the editor stays on what's playing, the header says "C opens when it comes in" with Stop and edit C. When C starts, the editor switches to it. | – | ☐ pass ☐ fail: |
+| 22 | Switch Timeline ↔ Pads. | The Timeline / Pads keys stay put while the views slide past. | – | ☐ pass ☐ fail: |
+| 23 | Tap an empty scene. | The help line sits on a grey box, larger text. | – | ☐ pass ☐ fail: |
+| 24 | Quit Lupe and open it again. | The intro starts from the white icon, not the green one. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs skiff-sim, the iPhone, VoiceOver or a later round): the phone (Skiff's Song isn't on the phone yet, so board 40 waits); a chain drawn as one wide pad (board 35) is not built: chained entries still show as separate pads saying "Chained on"; VoiceOver labels now start with the track name ("Lead, entry C…"): release pass.
 
