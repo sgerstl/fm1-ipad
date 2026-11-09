@@ -105,15 +105,18 @@ struct Emerge: ViewModifier, Animatable {
         let h = tab.height * p
         content
             .mask(alignment: .topLeading) {
+                // room round both for the tab's shadow on every side (Scott, 2026-11-09: it was cut off in a hard-edged
+                // band on the pad beside the selected one, where only the pad's strip let it through)
+                let m: CGFloat = tab.width > 0 ? 32 : 0
                 ZStack(alignment: .topLeading) {
                     Color.clear
                     // the pad and its border, wide enough for the fillets where the tab meets it
-                    Rectangle().frame(width: pad.width + 2 * Self.fillet + 2, height: pad.height + 2)
-                        .offset(x: pad.minX - Self.fillet - 1, y: pad.minY - 1)
-                    // the tab, revealed from the pad's edge, with room round it for its shadow (the mask cut it off)
-                    let m: CGFloat = tab.width > 0 ? 32 : 0
-                    Rectangle().frame(width: tab.width + 2 * m, height: h + m)
-                        .offset(x: tab.minX - m, y: up ? tab.maxY - h - m : tab.minY)
+                    Rectangle().frame(width: pad.width + 2 * Self.fillet + 2 + 2 * m, height: pad.height + 2 + 2 * m)
+                        .offset(x: pad.minX - Self.fillet - 1 - m, y: pad.minY - 1 - m)
+                    // the tab, revealed from the pad's edge
+                    // (its far edge's room grows with the reveal, so no more of the tab shows early)
+                    Rectangle().frame(width: tab.width + 2 * m, height: h + m + m * p)
+                        .offset(x: tab.minX - m, y: up ? tab.maxY - h - m * p : tab.minY - m)
                 }
             }
             // in step with the pad's own face fading (a faster tint left the old pad blank for a beat)
