@@ -52,13 +52,16 @@ struct PadTabShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let r = r, f = Self.f, w = cell.width, h = cell.height + drop, W = max(tab.width, w + f), H = tab.height
+        // the inner turn from the pad into the tab: a true arc, the corner radius plus the gap, so it runs parallel to
+        // the next pad's corner across the gap (Scott, 2026-11-09: the 10 pt bend didn't match the corners)
+        let r = r, f = drop > 0 ? r + drop : Self.f
+        let w = cell.width, h = cell.height + drop, W = max(tab.width, w + f + r), H = tab.height
         var p = Path()          // drawn with the tab under the pad, flush left, from (0, 0); then mirrored into place
         p.move(to: CGPoint(x: r, y: 0))
         p.addLine(to: CGPoint(x: w - r, y: 0))
         p.addArc(tangent1End: CGPoint(x: w, y: 0), tangent2End: CGPoint(x: w, y: r), radius: r)
         p.addLine(to: CGPoint(x: w, y: h - f))
-        p.addQuadCurve(to: CGPoint(x: w + f, y: h), control: CGPoint(x: w, y: h))
+        p.addArc(tangent1End: CGPoint(x: w, y: h), tangent2End: CGPoint(x: w + f, y: h), radius: f)
         p.addLine(to: CGPoint(x: W - r, y: h))
         p.addArc(tangent1End: CGPoint(x: W, y: h), tangent2End: CGPoint(x: W, y: h + r), radius: r)
         p.addLine(to: CGPoint(x: W, y: h + H - r))
@@ -78,6 +81,8 @@ struct PadTabShape: Shape {
 /// The selected pad's controls unrolling out of its edge as it's picked (and rolling back in as another is), the
 /// border fading with them: a reveal, not a scale, so nothing floats half-size over the grid (Scott, 2026-11-08).
 struct Emerge: ViewModifier, Animatable {
+    /// Room beside the pad for the tint's inner turn (up to the radius plus the gap).
+    static let fillet: CGFloat = 40
     var p: CGFloat
     let pad: CGRect, tab: CGRect, up: Bool
 
@@ -99,8 +104,8 @@ struct Emerge: ViewModifier, Animatable {
                 ZStack(alignment: .topLeading) {
                     Color.clear
                     // the pad and its border, wide enough for the fillets where the tab meets it
-                    Rectangle().frame(width: pad.width + 2 * PadTabShape.f + 2, height: pad.height + 2)
-                        .offset(x: pad.minX - PadTabShape.f - 1, y: pad.minY - 1)
+                    Rectangle().frame(width: pad.width + 2 * Self.fillet + 2, height: pad.height + 2)
+                        .offset(x: pad.minX - Self.fillet - 1, y: pad.minY - 1)
                     // the tab, revealed from the pad's edge, with room round it for its shadow (the mask cut it off)
                     let m: CGFloat = tab.width > 0 ? 32 : 0
                     Rectangle().frame(width: tab.width + 2 * m, height: h + m)
