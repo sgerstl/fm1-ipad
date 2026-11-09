@@ -180,8 +180,10 @@ public final class FirmwareInstaller: @unchecked Sendable {
         return pkg.isOfficial ? id.text == officialLoader : isResumable(loader: id) && sameModel(id.text, pkg.product)
     }
 
+    /// Never a Bluetooth port (the bluetooth-poc firmware's FM1-XXXX): installs go over USB only.
     public static func mayBeFM1(portName: String) -> Bool {
-        portName.range(of: portPattern, options: [.regularExpression, .caseInsensitive]) != nil
+        !MIDITransport.isBluetoothName(portName)
+            && portName.range(of: portPattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     // MARK: Finding the device

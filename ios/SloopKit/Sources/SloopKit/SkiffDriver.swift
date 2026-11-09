@@ -331,9 +331,11 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     /// WATCH 3: the pushes and TRACK_CHANGED. Skiff has no screen link.
     /// WATCH: steps and parameters (bits 0, 1), and with the screen link patch the screen too (bit 2), METER (bit 3)
     /// and, while a scope is on show (`scope`), SCOPE (bit 4).
+    /// Over Bluetooth never METER or SCOPE (the bluetooth-poc firmware refuses both there and its reply says so).
     public func watch(screenLink: Bool, scope: Bool) async throws {
-        let bits = (screenLink && skiff.hasScreenLink ? 7 : 3) | (screenLink && skiff.hasMeter ? 8 : 0)
-            | (screenLink && scope && skiff.hasScope ? 16 : 0)
+        let usb = client.link == .usb
+        let bits = (screenLink && skiff.hasScreenLink ? 7 : 3) | (usb && screenLink && skiff.hasMeter ? 8 : 0)
+            | (usb && screenLink && scope && skiff.hasScope ? 16 : 0)
         _ = try await request(SkiffCmd.watch, [UInt8(bits)], match: 0, "WATCH")
     }
 

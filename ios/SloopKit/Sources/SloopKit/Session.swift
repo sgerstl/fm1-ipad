@@ -253,6 +253,12 @@ public final class DeviceSession {
     public private(set) var globalDescs: [Int: ParamDesc] = [:]
     /// fm1-ipad firmware (SLOOP 2.8.4 plus the UI push): the FM-1 reports its page and the iPad can set it.
     public private(set) var screenLinked = false
+    /// The link to the FM-1 (bluetooth-poc, 2026-11-10): over Bluetooth no scope or levels are asked for, and sample
+    /// uploads and firmware installs are refused (they need USB).
+    public private(set) var link: TransportLink = .usb
+    public var onBluetooth: Bool { link == .bluetooth && !isDemo }
+    /// What a Bluetooth session can't do, said once where it matters.
+    public static let bluetoothLimits = "Some features need USB: the scope, levels, sample uploads and firmware installs."
     /// What the FM-1's screen shows, when screenLinked.
     public private(set) var deviceScreen: UIState?
     /// Skiff's second screen link build (`56 01 02`): the screen carries the page's cursor (MOD's route, …) and
@@ -369,6 +375,7 @@ public final class DeviceSession {
         settingsCache = nil; songOrder = nil; usbAudioFull = nil; usbAudioProblem = nil     // never write a settings object read from another FM-1
         sampleSlots = []
         liveSeen = false
+        link = transport.link
         if case .wrongFirmware = status {} else { status = .connecting }
         let c: FirmwareDriver
         do {
@@ -1949,6 +1956,7 @@ extension DeviceSession {
         case tooLong                        // more than UserSample.maxSamples (a slot holds about 7.4 s)
         case empty                          // no samples at all (sampleio refuses that too)
         case refused(stage: String, rc: Int)   // "begin", "write", "end" or "erase", and the device's rc
+        case needsUSB                       // on Bluetooth: the firmware refuses uploads there (bluetooth-poc)
     }
 
     /// SAMPLE's SET: the factory sets, then the user slots. SLOOP: eight, then USR1..USR4. Skiff 2.2: five (SMP_NSETS),
@@ -1974,6 +1982,7 @@ extension DeviceSession {
     public func uploadSample(slot: Int, name: String, samples: [Int16], root: Int = 60,
                              progress: @escaping @MainActor (Double) -> Void) async throws {
         let (header, data) = try UserSample.slot(name: name, samples: samples, root: root)
+        guard !onBluetooth else { throw SampleError.needsUSB }
         guard let c = sampleClient else { throw SampleError.notConnected }
         guard (0..<sampleSlotCount).contains(slot) else { throw SampleError.refused(stage: "begin", rc: 1) }
         do {
@@ -2012,6 +2021,7 @@ extension DeviceSession {
 
     /// Empties a slot (SMP_ERASE, about a second of flash erasing).
     public func eraseSample(slot: Int) async throws {
+        guard !onBluetooth else { throw SampleError.needsUSB }
         guard let c = sampleClient else { throw SampleError.notConnected }
         let rc: Int
         do { rc = try await backupTurn { try await c.sampleErase(slot: slot) } }

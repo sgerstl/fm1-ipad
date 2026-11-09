@@ -45,6 +45,8 @@ targets:
         INFOPLIST_FILE: FM1/LaunchScreen-Info.plist
         INFOPLIST_KEY_UIStatusBarHidden: YES
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Lupe plays the FM-1's sound through the iPad. iOS counts the FM-1's USB audio as a microphone."
+        # (bluetooth-poc) Apple's Bluetooth MIDI view (CABTMIDICentralViewController) scans for the FM-1
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Lupe finds and connects to your FM-1 over Bluetooth MIDI."
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"

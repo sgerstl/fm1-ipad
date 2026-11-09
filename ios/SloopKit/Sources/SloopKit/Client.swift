@@ -8,11 +8,30 @@ public protocol SysExTransport: AnyObject, Sendable {
     var notes: AsyncStream<NoteEvent> { get }
     /// MIDI clock the device sends (Skiff's CLOCK OUT); none from SLOOP or the fake.
     var clock: AsyncStream<ClockEvent> { get }
+    /// USB (the default) or Bluetooth (bluetooth-poc): how long to wait for a reply, how often to ask again.
+    var link: TransportLink { get }
     func send(_ frame: [UInt8])
 }
 
 public extension SysExTransport {
     var clock: AsyncStream<ClockEvent> { AsyncStream { $0.finish() } }
+    var link: TransportLink { .usb }
+}
+
+/// How the FM-1 is reached. Over Bluetooth (the bluetooth-poc firmware, 2026-11-10) replies are slower and some are
+/// dropped: the firmware's send ring drops a whole frame when full, and optimist saw about one reply in three lost while
+/// its screen streamed (optimist docs, ed_mirror.c mbr_reply). So requests wait longer and are sent again more often,
+/// and the scope, the levels, sample uploads and firmware installs stay USB-only.
+public enum TransportLink: Sendable, Equatable {
+    case usb, bluetooth
+
+    /// A request's wait and retries on this link: over Bluetooth twice the wait (600 ms at least: a 600-byte reply is
+    /// about 100 ms at optimist's measured 6.2 KB/s, plus a few 7.5-11.25 ms connection events) and two more tries for a
+    /// request that may be sent again. A request sent once only (retries 0: a commit, a key) stays once.
+    public func adjusted(timeout: Duration, retries: Int) -> (Duration, Int) {
+        guard self == .bluetooth else { return (timeout, retries) }
+        return (max(timeout * 2, .milliseconds(600)), retries > 0 ? retries + 2 : 0)
+    }
 }
 
 public enum ClientError: Error, Equatable {
@@ -47,6 +66,9 @@ public actor SloopClient {
         (pushes, pushSink) = AsyncStream.makeStream(of: Push.self, bufferingPolicy: .bufferingNewest(256))
     }
 
+    /// The link the FM-1 is on (USB, or Bluetooth with the bluetooth-poc firmware).
+    public nonisolated var link: TransportLink { transport.link }
+
     /// A plain MIDI message (a note from the iPad's keyboard), sent at once, outside the request queue.
     public nonisolated func sendMIDI(_ bytes: [UInt8]) { transport.send(bytes) }
 
@@ -73,6 +95,7 @@ public actor SloopClient {
     /// Sends a request and returns the matching reply's body.
     public func send(_ request: Request, timeout: Duration = .milliseconds(300), retries: Int = 1) async throws -> [UInt8] {
         if closed { throw ClientError.closed }
+        let (timeout, retries) = transport.link.adjusted(timeout: timeout, retries: retries)
         return try await withCheckedThrowingContinuation { c in
             nextID += 1
             queue.append(Pending(id: nextID, request: request, timeout: timeout, attemptsLeft: retries + 1, continuation: c))

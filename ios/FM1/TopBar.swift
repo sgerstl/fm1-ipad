@@ -13,6 +13,7 @@ struct TopBar: View {
     @State private var naming: NamePrompt?
     @State private var readoutFrame: CGRect = .zero
     @State private var settingsOpen = false
+    @State private var bluetoothOpen = false
 
     var body: some View {
         let _ = BodyCounter.tick("TopBar")
@@ -83,6 +84,10 @@ struct TopBar: View {
         .accessibilityLabel("\(statusLine), \(versionLine)")
         .accessibilityHint("Choose the FM-1 or a demo, install firmware, or open Settings")
         .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
+        .sheet(isPresented: $bluetoothOpen) { BluetoothConnectSheet() }
+        #if DEBUG
+        .onAppear { if LaunchArgs.all.contains("-open-bluetooth") { bluetoothOpen = true } }   // (screenshots, tests)
+        #endif
     }
 
     /// The connection menu (Lupe's own, 2026-11-05). Scott, 2026-11-06, cut to four things: one line of status, the
@@ -91,9 +96,14 @@ struct TopBar: View {
     /// the diagnostics line and the Developer submenu (its look switch with it).
     private var connectionGroups: [[MenuItem]] {
         let demo = useDemo
+        // (bluetooth-poc) on Bluetooth, one line on what needs the cable; the source row says Bluetooth, and
+        // "Connect over Bluetooth…" opens Apple's Bluetooth MIDI view
+        let bt = session.onBluetooth && session.isConnected
         return [
-            [.note("\(statusLine) · \(versionLine)")],
-            [MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !demo) { useDemo = false },
+            [.note("\(statusLine) · \(versionLine)")] + (bt ? [.note(DeviceSession.bluetoothLimits)] : []),
+            [MenuItem(title: bt ? "FM-1 over Bluetooth" : "FM-1 over USB", icon: bt ? "dot.radiowaves.left.and.right" : "cable.connector",
+                      checked: !demo) { useDemo = false },
+             MenuItem(title: "Connect over Bluetooth…", icon: "antenna.radiowaves.left.and.right") { useDemo = false; bluetoothOpen = true },
              MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: demo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
              MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: demo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }],
             [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true },
@@ -183,7 +193,7 @@ struct TopBar: View {
         switch session.status {
         case .searching: "No FM-1"
         case .connecting: "Connecting…"
-        case .connected: session.isDemo ? "Demo FM-1" : "FM-1 connected"
+        case .connected: session.isDemo ? "Demo FM-1" : session.onBluetooth ? "FM-1 on Bluetooth" : "FM-1 connected"
         case .wrongFirmware: "Wrong firmware"
         case .lost: "FM-1 disconnected"
         }

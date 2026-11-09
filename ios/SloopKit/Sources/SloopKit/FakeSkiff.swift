@@ -48,6 +48,21 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     public private(set) var unanswered: [(cmd: UInt8, args: [UInt8])] = []
     public var unansweredCommands: [UInt8] { lock.lock(); defer { lock.unlock() }; return unanswered.map(\.cmd) }
     var replyDelay: TimeInterval = 0.002
+    /// The link this fake answers on (bluetooth-poc, 2026-11-10). Over Bluetooth, as the firmware does it
+    /// (skiff-bluetooth-poc firmware/src/editor.c ed_service, ed_bt_refused, WATCH): SMP_BEGIN..SMP_ERASE (11..14) and
+    /// BACKUP_PUT (67) get no reply; WATCH's METER (8) and SCOPE (16) are never on and the reply says so. And replies are
+    /// lost: optimist measured about one in three while its screen streamed (its ed_mirror.c, mbr_reply, 2026-10-31);
+    /// `dropEvery` drops every n-th reply (0: none). Replies take longer (`replyDelay`, about a connection event or two).
+    public private(set) var link: TransportLink = .usb
+    public var dropEvery = 0
+    private var replies = 0
+    public private(set) var repliesDropped = 0
+    public func useBluetooth(dropEvery n: Int = 10) {
+        lock.lock(); defer { lock.unlock() }
+        link = .bluetooth
+        dropEvery = n
+        replyDelay = 0.02
+    }
     /// The song: each track's 16 entries (pattern 0 empty, 1...64, 65 REST; REPS byte REPS − 1, 16 on CHAIN;
     /// the entry's sound), the entry each track is on, SONG, and the pool's LENs.
     var lists: [[FakeEntry]] = []
@@ -496,7 +511,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         if busy { dropped += 1; lock.unlock(); return }               // one incoming frame at a time
         busy = true
         requests.append(cmd)
-        let reply = answer(cmd, a)
+        var reply = link == .bluetooth && ((11...14).contains(cmd) || cmd == 67) ? nil : answer(cmd, a)
+        if reply != nil, link == .bluetooth, dropEvery > 0 {
+            replies += 1
+            if replies % dropEvery == 0 { reply = nil; repliesDropped += 1 }
+        }
         lock.unlock()
         DispatchQueue.global().asyncAfter(deadline: .now() + replyDelay) { [self] in
             lock.lock(); busy = false; lock.unlock()
@@ -685,9 +704,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case (22, 1):
             watching = a[0] != 0
             screenWatched = screenLink && a[0] & 4 != 0
-            meterWatched = screenLink && screenLinkVersion >= 3 && a[0] & 8 != 0
-            scopeWatched = screenLink && screenLinkVersion >= 4 && a[0] & 16 != 0
-            return [a[0] & (screenLink ? (screenLinkVersion >= 4 ? 31 : screenLinkVersion >= 3 ? 15 : 7) : 3)]
+            meterWatched = screenLink && link == .usb && screenLinkVersion >= 3 && a[0] & 8 != 0
+            scopeWatched = screenLink && link == .usb && screenLinkVersion >= 4 && a[0] & 16 != 0
+            return [a[0] & (screenLink ? (link == .bluetooth ? 7 : screenLinkVersion >= 4 ? 31 : screenLinkVersion >= 3 ? 15 : 7) : 3)]
         case (25, 0): return [0]
         case (16, 2):
             // UP_LIST: start, count, total, then per slot used, engine, name

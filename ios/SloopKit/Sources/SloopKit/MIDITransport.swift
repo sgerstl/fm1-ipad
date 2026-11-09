@@ -1,7 +1,11 @@
 import CoreMIDI
 import Foundation
 
-/// The FM-1 over USB MIDI. SLOOP keeps Felucca's port name, so the endpoints are found by "Felucca".
+/// The FM-1 over USB MIDI, or over Bluetooth LE MIDI with the bluetooth-poc firmware. SLOOP keeps Felucca's port name, so
+/// the USB endpoints are found by "Felucca". Over Bluetooth iOS shows the FM-1 as a CoreMIDI device once it's connected
+/// through Apple's Bluetooth MIDI view (CABTMIDICentralViewController): its endpoints carry the advertised name,
+/// "FM1-XXXX" (optimist's stack, ble_cfg.h BLE_DEVICE_NAME), and Apple's Bluetooth MIDI driver owns them. USB wins when both
+/// are there.
 public final class MIDITransport: SysExTransport, @unchecked Sendable {
     public let frames: AsyncStream<[UInt8]>
     private let sink: AsyncStream<[UInt8]>.Continuation
@@ -18,21 +22,42 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var finished = false
     public let name: String
+    public let link: TransportLink
 
-    /// The device's endpoints, or nil when no Felucca port is there. FELUCCA_PORT names another port to look for
-    /// (one skiff-sim among several on the Mac, each run with its own --name).
-    public static func findDevice() -> (source: MIDIEndpointRef, destination: MIDIEndpointRef, name: String)? {
+    /// The FM-1's Bluetooth name as the bluetooth-poc firmware advertises it: "FM1-" and four hex digits.
+    public static func isBluetoothName(_ name: String) -> Bool {
+        name.range(of: #"^FM1-[0-9A-Fa-f]{4}\b"#, options: .regularExpression) != nil
+    }
+
+    /// The device's endpoints and link, or nil when no Felucca port (USB) or FM1-XXXX port (Bluetooth) is there.
+    /// FELUCCA_PORT names another USB port to look for (one skiff-sim among several on the Mac, each run with its own --name).
+    public static func findDevice() -> (source: MIDIEndpointRef, destination: MIDIEndpointRef, name: String, link: TransportLink)? {
         let want = ProcessInfo.processInfo.environment["FELUCCA_PORT"] ?? "felucca"
-        func name(_ e: MIDIEndpointRef) -> String {
+        func string(_ e: MIDIEndpointRef, _ key: CFString) -> String {
             var s: Unmanaged<CFString>?
-            MIDIObjectGetStringProperty(e, kMIDIPropertyDisplayName, &s)
+            MIDIObjectGetStringProperty(e, key, &s)
             return (s?.takeRetainedValue() as String?) ?? ""
+        }
+        func name(_ e: MIDIEndpointRef) -> String { string(e, kMIDIPropertyDisplayName) }
+        func offline(_ e: MIDIEndpointRef) -> Bool {     // (a Bluetooth device iOS keeps after it went: not there)
+            var v: Int32 = 0
+            return MIDIObjectGetIntegerProperty(e, kMIDIPropertyOffline, &v) == noErr && v != 0
+        }
+        func bluetooth(_ e: MIDIEndpointRef) -> Bool {
+            guard !offline(e) else { return false }
+            return isBluetoothName(name(e)) || (string(e, kMIDIPropertyDriverOwner).localizedCaseInsensitiveContains("bluetooth")
+                                                && name(e).uppercased().hasPrefix("FM1"))
         }
         let sources = (0..<MIDIGetNumberOfSources()).map(MIDIGetSource)
         let dests = (0..<MIDIGetNumberOfDestinations()).map(MIDIGetDestination)
-        guard let s = sources.first(where: { name($0).localizedCaseInsensitiveContains(want) }),
-              let d = dests.first(where: { name($0).localizedCaseInsensitiveContains(want) }) else { return nil }
-        return (s, d, name(s))
+        if let s = sources.first(where: { name($0).localizedCaseInsensitiveContains(want) }),
+           let d = dests.first(where: { name($0).localizedCaseInsensitiveContains(want) }) {
+            return (s, d, name(s), .usb)
+        }
+        if let s = sources.first(where: bluetooth), let d = dests.first(where: bluetooth) {
+            return (s, d, name(s), .bluetooth)
+        }
+        return nil
     }
 
     public init?() {
@@ -40,7 +65,7 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self, bufferingPolicy: .unbounded)
         (notes, noteSink) = AsyncStream.makeStream(of: NoteEvent.self, bufferingPolicy: .bufferingNewest(128))
         (clock, clockSink) = AsyncStream.makeStream(of: ClockEvent.self, bufferingPolicy: .bufferingNewest(512))
-        source = dev.source; destination = dev.destination; name = dev.name
+        source = dev.source; destination = dev.destination; name = dev.name; link = dev.link
 
         let status = MIDIClientCreateWithBlock("FM1 iPad" as CFString, &client) { [weak self] note in
             if note.pointee.messageID == .msgObjectRemoved || note.pointee.messageID == .msgSetupChanged {

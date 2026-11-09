@@ -167,6 +167,12 @@ final class FirmwareCentre {
     }
 
     func start(_ firmware: LupeFirmware, session: DeviceSession) {
+        // (bluetooth-poc) never over Bluetooth: the installer writes over USB only, and a backup over Bluetooth is slow
+        if demo == nil, session.onBluetooth {
+            pickerNote = "Firmware installs need USB. Connect the FM-1 with a USB-C cable, then install."
+            showPicker = true
+            return
+        }
         if demo == nil, let why = batteryRefusal() { pickerNote = why; showPicker = true; return }
         target = firmware
         pickerNote = nil

@@ -24,3 +24,10 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 | PLAY, REC | The transport |
 
 **On screen** (2026-11-08): with the sound panel open, the same 12 keys sit in two rows at its foot, in the FM-1's order. With it shut there are none; pages open from the FM-1's own keys. Settings › Sound buttons brings back the FX…SEQ rail down the side (and the panel then leaves its keys out).
+
+## The top bar's FM-1 menu (bluetooth-poc, 2026-11-10, not agreed yet)
+
+Status line · source (**FM-1 over USB**, or **FM-1 over Bluetooth** while on it; Skiff demo; SLOOP demo) ·
+**Connect over Bluetooth…** (new: a sheet with Apple's Bluetooth MIDI list, CABTMIDICentralViewController, and one line of
+instructions) · Install firmware… · Settings…. On Bluetooth the status block gains one note: "Some features need USB: the
+scope, levels, sample uploads and firmware installs." No new tab or panel. For Scott to agree before any polish.

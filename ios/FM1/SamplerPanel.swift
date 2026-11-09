@@ -430,6 +430,7 @@ struct SamplerPanel: View {
         case DeviceSession.SampleError.notConnected: "THE FM-1 ISN'T CONNECTED"
         case DeviceSession.SampleError.tooLong: "TOO LONG FOR A SLOT: TRIM IT"
         case DeviceSession.SampleError.empty: "NOTHING TO SEND: RECORD A TAKE"
+        case DeviceSession.SampleError.needsUSB: "SAMPLES GO OVER USB: CONNECT THE CABLE"
         case DeviceSession.SampleError.refused(let stage, let rc): "THE FM-1 REFUSED IT (\(stage.uppercased()) \(rc))"
         default: "THE FM-1 DIDN'T ANSWER: TRY AGAIN"
         }
