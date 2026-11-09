@@ -143,6 +143,7 @@ struct SkiffSongPage: View {
                                 PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
                                     // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
                                     .environment(\.grid, inPanel)
+                                    .environment(\.flatPanels, true)
                                     .padding(.vertical, Self.inset)
                                     .padding(.horizontal, Self.panelEdge + Self.inset)
                                     .geometryGroup()

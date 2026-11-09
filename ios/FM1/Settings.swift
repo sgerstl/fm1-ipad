@@ -54,6 +54,13 @@ enum PadPreviews {
     static var on: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
 }
 
+/// Lupe's tracks in the FM-1's THEME colours (Scott, 2026-11-09): on by default; only the six track colours, Lupe's
+/// own surfaces and greys stay (they're tuned for contrast).
+enum ThemeColours {
+    static let key = "themeTrackColours"
+    static var on: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+}
+
 /// The value loupe's switch (ValueLoupe.swift). On by default; off, LoupeState.show does nothing.
 enum Magnifier {
     static let key = "magnifier"

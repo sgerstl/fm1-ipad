@@ -13,6 +13,7 @@ struct SettingsSheet: View {
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
     @AppStorage(PadPreviews.key) private var padPreviews = true
+    @AppStorage(ThemeColours.key) private var themeColours = true
     @AppStorage(SoundButtons.key) private var soundButtons = SoundButtons.standard
     @AppStorage(Handedness.key) private var handedness = Handedness.right
 
@@ -50,6 +51,12 @@ struct SettingsSheet: View {
                     Toggle("Sound buttons", isOn: $soundButtons)
                 } footer: {
                     Text("Off, pages open from the FM-1's own buttons, and an open panel shows all twelve along its foot, laid out as on the FM-1. On, the FX to SEQ buttons stay down the side so you can open a page from the screen, and the panel leaves them out.")
+                }
+
+                Section {
+                    Toggle("Track colours from the FM-1's theme", isOn: $themeColours)
+                } footer: {
+                    Text("The tracks take the colours the FM-1's theme gives them (SKIFF, CRYPT, NEON, QUARK or your custom set). A colour too dark to read on Lupe's page keeps Lupe's own. HI-CON and PAPER have no track colours of their own, so Lupe keeps its.")
                 }
 
                 Section {

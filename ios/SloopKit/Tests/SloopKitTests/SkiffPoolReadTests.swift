@@ -77,3 +77,21 @@ struct SkiffPoolReadTests {
         #expect(SkiffPatternSketch(record: [UInt8](repeating: 0, count: 888)) == nil)   // empty record
     }
 }
+
+/// The FM-1's THEME track colours (SkiffTheme).
+struct SkiffThemeTests {
+    @Test func builtInsAndCustomAndTheGuard() throws {
+        #expect(SkiffTheme.tracks(palette: 0)?.first == 0xFF5A36)        // SKIFF: Lupe's own
+        #expect(SkiffTheme.tracks(palette: 1) == nil && SkiffTheme.tracks(palette: 2) == nil)   // HI-CON, PAPER: none
+        #expect(SkiffTheme.tracks(palette: 4)?[1] == 0x30E0FF)          // NEON's cyan
+        // CUSTOM: T1 pure red (RGB565 0xF800), the rest pure green (0x07E0)
+        let c: [UInt16] = Array(repeating: 0, count: 5) + [0xF800] + Array(repeating: 0x07E0, count: 5)
+        let reply: [UInt8] = [0, 3, 0] + Pack7.encode(c.flatMap { [UInt8($0 & 0xFF), UInt8($0 >> 8)] })
+        let t = try #require(SkiffTheme.customTracks(reply))
+        #expect(t[0] == 0xFF0000 && t[1] == 0x00FF00)
+        #expect(SkiffTheme.customTracks([0, 0, 0] + Pack7.encode([UInt8](repeating: 0, count: 22))) == nil)   // none stored
+        // the guard: a navy (too dark on the page) and a mid red (too dark for the numbers on it) fall back
+        let fb: [UInt32] = [1, 2, 3]
+        #expect(SkiffTheme.guarded([0x10205A, 0xC03030, 0xFFDE5A], fallback: fb) == [1, 2, 0xFFDE5A])
+    }
+}

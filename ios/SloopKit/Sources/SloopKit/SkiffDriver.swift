@@ -365,6 +365,17 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         guard b.count >= 7 else { throw DecodeError.short(cmd: 80) }
         return (PerformRC(rawValue: Int(b[1])) ?? .failed, try PerformState(b[2...], tracks: shape.trackCount))
     }
+    /// The FM-1's track colours under its THEME (SkiffTheme): UI_STATE's palette, then COLORS for CUSTOM. nil: the
+    /// THEME has none of its own (HI-CON, PAPER) or the FM-1 didn't say.
+    public func themeTrackColours() async throws -> [UInt32]? {
+        let s = try await request(34, [], match: 0, "UI_STATE", timeout: .milliseconds(300), retries: 0)
+        guard s.count >= 2 else { return nil }
+        let p = Int(s[1])
+        if p == SkiffTheme.custom {
+            return SkiffTheme.customTracks(try await request(39, [], match: 0, "COLORS", timeout: .milliseconds(300), retries: 0))
+        }
+        return SkiffTheme.tracks(palette: p)
+    }
     /// TRANSPORT is Skiff's keep-alive (EDITOR_PROTOCOL.md: "instead of PING").
     public func ping() async throws { _ = try await transportState() }
     public func preset(engine: Int, index: Int) async throws -> (engine: Int, preset: Int) {

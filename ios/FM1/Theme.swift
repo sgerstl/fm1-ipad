@@ -151,11 +151,20 @@ extension Color {
 
 /// A panel: elevation 1, one solid surface and its shadow.
 struct PanelBackground: ViewModifier {
+    @Environment(\.flatPanels) private var flat
     func body(content: Content) -> some View {
         content.background {
-            RoundedRectangle(cornerRadius: 14).fill(Theme.panel).elevationShadow(.panel)
+            // flat inside the Song tab's tinted editor panel (Scott, 2026-11-09: no shadow on the step grid and the
+            // step options there; the tint is their ground)
+            if flat { RoundedRectangle(cornerRadius: 14).fill(Theme.panel) }
+            else { RoundedRectangle(cornerRadius: 14).fill(Theme.panel).elevationShadow(.panel) }
         }
     }
+}
+
+extension EnvironmentValues {
+    /// Panels drawn flat, no shadow (PanelBackground): the Song tab's editor panel sets it.
+    @Entry var flatPanels = false
 }
 
 /// A well, for things that show you something: a darker fill, nothing more.

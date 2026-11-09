@@ -255,6 +255,9 @@ public final class DeviceSession {
     public private(set) var screenLinked = false
     /// What the FM-1's screen shows, when screenLinked.
     public private(set) var deviceScreen: UIState?
+    /// The FM-1's track colours under its THEME (Skiff; SkiffTheme), read on connecting and every few seconds while
+    /// connected; nil: none of its own, or not Skiff. The app decides whether to use them (a setting).
+    public private(set) var themeTrackColours: [UInt32]?
     /// Skiff's second screen link build (`56 01 02`): the screen carries the page's cursor (MOD's route, …) and
     /// Lupe can set it. False on the first build (`56 01 01`), which Lupe offers to update.
     public private(set) var screenCursor = false
@@ -448,6 +451,7 @@ public final class DeviceSession {
                 group.addTask { await self.clockLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             }
             group.addTask { await self.resyncLoop(c) }
+            if let k = self.driver as? SkiffDriver { group.addTask { await self.themeLoop(k) } }
             group.addTask { await self.noteLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             await group.next()           // any loop ending means the device went away
             group.cancelAll()
@@ -456,6 +460,16 @@ public final class DeviceSession {
         driver = nil
         skiffSong?.detach()
         if !Task.isCancelled { status = .lost("FM-1 disconnected") }
+    }
+
+    /// The FM-1's THEME, followed (a change on its MENU shows up within a few seconds). Never ends on its own.
+    private func themeLoop(_ k: SkiffDriver) async {
+        while !Task.isCancelled {
+            // (an answer replaces it, nil included; a missed one keeps what was read)
+            do { let c = try await k.themeTrackColours(); if c != themeTrackColours { themeTrackColours = c } } catch {}
+            try? await Task.sleep(for: .seconds(5))
+        }
+        try? await Task.sleep(for: .seconds(86400 * 365))
     }
 
     /// Takes the connected device's size: the tracks are rebuilt only when it differs from what the app has.

@@ -118,6 +118,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// The pattern bank's stored records (pattern 0...63 → its 888 bytes), served as BACKUP objects 16...31, four a
     /// chunk, as Skiff's editor_backup.c does: GET refused (rc 5) until a LIST this connection, rc 3 while playing.
     public var bankRecords: [Int: [UInt8]] = [:]
+    /// The THEME in use (UI_STATE's palette: 0 SKIFF … 5 QUARK, 6 CUSTOM) and CUSTOM's eleven colours (RGB565, BG SURF
+    /// TEXT THEME ACCENT, then T1..T6), answered as Skiff does (EDITOR_PROTOCOL.md "THEME CUSTOM").
+    public var themePalette = 0
+    public var customColours: [UInt16]? = nil
     private var backupListed = false
     /// USER's 32 slots (engine, name; nil empty) and PROJECT's 4 (nil empty), for the SAVE pages.
     var userSlots: [(engine: Int, name: String)?] = Array(repeating: nil, count: 32)
@@ -640,6 +644,14 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             } else if p == 127 { screen.home = true; screen.layer = 0; screen.menu = 0 }
             else if p < 46, !refusedPages.contains(p) { if p != screen.page || screen.home { cursor = 0 }; screen = (false, p, 0, 0, 0) }
             return screenBytes()
+        case (34, 0):
+            // UI_STATE: caps, palette, font, monitor, filter, favoriteSig u28, bankSig u28
+            return [0, UInt8(themePalette), 0, 0, 0] + [UInt8](repeating: 0, count: 8)
+        case (39, 0):
+            // COLORS: rc, flags (bit 0 a set stored, bit 1 in use), look, pack7 of the 22 bytes
+            let c = customColours ?? Array(repeating: 0, count: 11)
+            let bytes = c.flatMap { [UInt8($0 & 0xFF), UInt8($0 >> 8)] }
+            return [0, customColours == nil ? 0 : (themePalette == 6 ? 3 : 1), 0] + Pack7.encode(bytes)
         case (72, 1):
             // MENU_DESC: index → index, id, kind, value, min, max, … (the rest isn't read); past the list: id 127
             return a[0] == 0 ? [0, UInt8(SkiffMenu.usbLevel), 0] + v14(usbLevel) + v14(0) + v14(1) : [a[0], 127]
