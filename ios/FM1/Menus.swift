@@ -52,6 +52,9 @@ struct AppMenu: Identifiable {
     /// Opened from a key (a ⋯, a header, the connection readout): `at` is the menu's top-left, below the key. Otherwise
     /// `at` is the finger, and the menu opens beside it on the side away from the playing hand (Settings › Handedness).
     var fromKey = false
+    /// Its choices as separate floating buttons fanning out of the finger, the first by it (Scott, 2026-11-09: an empty
+    /// pad's "New pattern" nine times in ten). A submenu among them opens as an ordinary menu in their place.
+    var fan = false
 }
 
 /// Draws an open AppMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
@@ -68,9 +71,17 @@ struct AppMenuLayer: View {
                 Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                 if let m = menu {
                     let at = CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY)
-                    PlacedMenu(title: m.title, groups: m.groups(), at: at, fromKey: m.fromKey, layer: g.size, close: { menu = nil })
-                        .id(m.id)
-                        .transition(PlacedMenu.transition(at: at, layer: g.size, reduceMotion: reduceMotion))
+                    if m.fan {
+                        FanMenu(title: m.title, items: m.groups().flatMap { $0 }.filter { !$0.note }, at: at, layer: g.size,
+                                close: { menu = nil },
+                                open: { item in menu = AppMenu(title: item.title, groups: item.children ?? { [] }, at: m.at) })
+                            .id(m.id)
+                            .transition(.opacity.animation(.easeIn(duration: Labs.menuClose.value)))
+                    } else {
+                        PlacedMenu(title: m.title, groups: m.groups(), at: at, fromKey: m.fromKey, layer: g.size, close: { menu = nil })
+                            .id(m.id)
+                            .transition(PlacedMenu.transition(at: at, layer: g.size, reduceMotion: reduceMotion))
+                    }
                 }
             }
         }
@@ -269,5 +280,86 @@ struct MenuPanel: View {
         .focused($focus, equals: index)
         .accessibilityAddTraits(item.checked ? .isSelected : [])
         .accessibilityHint(item.children != nil ? "Opens a submenu" : "")
+    }
+}
+
+
+/// A menu as separate floating buttons fanned out of the finger: beside it on the side away from the playing hand
+/// (Settings › Handedness), the first level with it, a gap between each whose half belongs to the button either side,
+/// so the targets are bigger than they look (Scott, 2026-11-09). They come out of the finger one after another.
+struct FanMenu: View {
+    let title: String
+    let items: [MenuItem]
+    /// The finger, in the layer's space.
+    let at: CGPoint
+    let layer: CGSize
+    let close: () -> Void
+    /// A submenu chosen: it opens as an ordinary menu.
+    let open: (MenuItem) -> Void
+    @AppStorage(Handedness.key) private var hand = Handedness.right
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var out = false
+
+    static let width: CGFloat = 240, height: CGFloat = 56, gap: CGFloat = 12
+
+    var body: some View {
+        let n = CGFloat(items.count)
+        let total = n * Self.height + max(0, n - 1) * Self.gap
+        let x = hand.menuX(touch: at.x, menuWidth: Self.width, in: layer.width)
+        let y = Handedness.menuY(touch: at.y, menuHeight: total, in: layer.height)
+        ZStack(alignment: .topLeading) {
+            Color.clear.allowsHitTesting(false)
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { k, item in
+                    let top = y + CGFloat(k) * (Self.height + Self.gap)
+                    // from the finger to its place
+                    let dx = at.x - (x + Self.width / 2), dy = at.y - (top + Self.height / 2)
+                    button(item, first: k == 0)
+                        .padding(.vertical, Self.gap / 2)
+                        .contentShape(Rectangle())          // the gaps take the touch too
+                        .offset(x: out || reduceMotion ? 0 : dx, y: out || reduceMotion ? 0 : dy)
+                        .scaleEffect(out || reduceMotion ? 1 : 0.3)
+                        .opacity(out ? 1 : 0)
+                        .animation(reduceMotion ? .easeOut(duration: 0.15)
+                                   : .timingCurve(0.2, 0.8, 0.2, 1, duration: Labs.menuOpen.value).delay(Double(k) * 0.03), value: out)
+                }
+            }
+            .frame(width: Self.width)
+            .closesOnOutsideTouch(close)
+            .offset(x: x, y: y - Self.gap / 2)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(title)
+        }
+        .frame(width: layer.width, height: layer.height, alignment: .topLeading)
+        .onAppear { out = true }
+        .onKeyPress(.escape) { close(); return .handled }
+    }
+
+    private func button(_ item: MenuItem, first: Bool) -> some View {
+        Button {
+            if item.children != nil { open(item) } else { close(); item.action?() }
+        } label: {
+            HStack(spacing: 10) {
+                if let c = item.chip {
+                    Text(c.text).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.onColour)
+                        .padding(.horizontal, 6).frame(height: 24).background(RoundedRectangle(cornerRadius: 6).fill(c.colour))
+                } else if let i = item.icon {
+                    Image(systemName: i).font(.system(size: 17, weight: .semibold)).frame(width: 24)
+                }
+                Text(item.title).font(.system(size: 17, weight: first ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+                if item.children != nil { Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)) }
+            }
+            .foregroundStyle(first ? Theme.onColour : Theme.text)
+            .padding(.horizontal, 16)
+            .frame(height: Self.height)
+            .background {
+                // the first (New pattern) the primary; each its own floating surface, the shadow of things at the finger
+                RoundedRectangle(cornerRadius: 14).fill(first ? Theme.text : Elevation.held.surface).elevationShadow(.held)
+            }
+            .opacity(item.enabled ? 1 : 0.45)
+        }
+        .buttonStyle(PressSink())
+        .disabled(!item.enabled)
     }
 }

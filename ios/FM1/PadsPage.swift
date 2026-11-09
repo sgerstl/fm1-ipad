@@ -37,6 +37,8 @@ struct PadsPage: View {
     @State private var controlsFlip = false
     /// The head last double-tapped: another track's double tap shows its controls rather than flipping them away.
     @State private var lastDouble: Int?
+    /// The pad whose menu is open (or just closed by the touch now landing): tapped again, it only closes.
+    @State private var menuPad: PadKey?
     private var controlsShown: Bool { (layout == .full) != controlsFlip }
     private func showControls(_ v: Bool) { controlsFlip = (layout == .full) != v }
     @State private var holdAt: CGPoint = .zero
@@ -119,7 +121,9 @@ struct PadsPage: View {
             // the heads one width at every position, so the pads keep theirs as they shorten (Scott, 2026-11-09)
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
-                    SongViewSwitch(ui: ui).frame(height: 44)
+                    // its place only: the live switch is the Song tab's, over both views, so it stays put as they
+                    // slide past each other (Scott, 2026-11-09)
+                    SongViewSwitch(ui: ui).frame(height: 44).hidden().accessibilityHidden(true)
                     Color.clear.frame(height: r.top - 44)
                     // Max: the heads fold into the editor header's track menu (PatternPane)
                     VStack(alignment: .leading, spacing: r.rowGap) {
@@ -393,7 +397,13 @@ struct PadsPage: View {
             // tap an empty pad", a menu so a stray tap mid-jam makes nothing)
             if heldKey == "p\(t).\(i)" { heldKey = nil; return }  // (the release of a hold: its menu is open)
             if ui.justPulled { return }                          // (the lift that ends a pull of the editor)
-            if e.isEmpty { openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero); return }
+            if e.isEmpty {
+                // the same empty pad tapped again: its menu closes and stays shut (the touch already closed it)
+                if menuPad == key, OutsideTouch.justClosed || ui.menu != nil { menuPad = nil; ui.menu = nil; return }
+                openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero)
+                menuPad = key
+                return
+            }
             if !session.playing, t == session.selectedTrack, framedPad(t) == i { controlsFlip.toggle(); return }
             launched += 1
             // a waiting pad tapped again takes its launch back: the entry playing is relaunched in its place, the
@@ -568,7 +578,9 @@ struct PadsPage: View {
         // silent gaps (Scott, 2026-11-07); the title says where it goes
         let target = e.isEmpty ? Self.landing(store.song?.tracks[safe: t], i) : i
         let title = "T\(t + 1) · entry \(Entries.letter(i))" + (e.isEmpty ? (target == i ? " · empty" : " · goes on \(Entries.letter(target))") : "")
-        ui.menu = AppMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at)
+        // an empty pad's choices fan out of the finger as big separate buttons (Scott, 2026-11-09); a filled pad's
+        // hold keeps the ordinary menu
+        ui.menu = AppMenu(title: title, groups: { e.isEmpty ? emptyMenu(t, target) : padMenu(t, i) }, at: at, fan: e.isEmpty)
     }
 
     /// Where something put on empty pad `i` lands: there, or the first empty entry after the list's last filled one.

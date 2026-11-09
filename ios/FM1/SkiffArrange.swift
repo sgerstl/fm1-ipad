@@ -149,7 +149,8 @@ struct SkiffArrangePage: View {
 
     private var toolRow: some View {
         HStack(spacing: 12) {
-            if compact, store.performs { SongViewSwitch(ui: ui) }
+            // (its place only: the live switch is the Song tab's, over both views, so it stays put as they slide)
+            if compact, store.performs { SongViewSwitch(ui: ui).hidden().accessibilityHidden(true) }
             // the Song tab: the Timeline / Pads switch alone, no "Song · N bars · N tracks" beside it to blur into
             // (Scott, 2026-11-07); the Arrange page keeps it
             if !compact || !store.performs {

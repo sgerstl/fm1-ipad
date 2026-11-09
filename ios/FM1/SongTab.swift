@@ -98,6 +98,10 @@ struct SkiffSongPage: View {
                 // both halves pinned to the page's width: left loose, swapping the panel's contents (the sampler for
                 // the editor) re-centred the top half 12 pt to the left (Scott, 2026-11-09)
                 .frame(width: g.size.width, height: top)
+                // Timeline / Pads: one switch over both views, still while they slide past it (each keeps its place)
+                .overlay(alignment: .topLeading) {
+                    if store.performs { SongViewSwitch(ui: ui).frame(height: 44) }
+                }
                 // clipped at the foot only: a key on the top row (Cancel waiting) draws its raised edge a point
                 // above the page and was cut (Scott, 2026-11-08)
                 .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
@@ -350,9 +354,15 @@ struct PatternPane: View {
         let pinned = ui.pinnedEntry.flatMap { $0.track == t ? $0 : nil }
         let entry = pinned?.entry ?? list?.entryOn
         let loaded = pinned == nil || pinned?.entry == list?.entryOn
+        // pinned to an entry the track isn't on while the song plays: Skiff edits only the pattern a track has, so the
+        // editor stays on what plays, editable, with a line saying the pinned one opens when it comes in (Scott,
+        // 2026-11-09: the panel over the steps that said so interrupted too often). It switches by itself when the
+        // entry starts (the pin then matches); stopped, the track goes there.
+        let waiting = !loaded && session.playing ? pinned : nil
+        let live = loaded || waiting != nil
         let editor = height - Self.headerHeight - 12
         VStack(alignment: .leading, spacing: 12) {
-            header(t, list: list, entry: entry, pinned: pinned)
+            header(t, list: list, entry: waiting != nil ? list?.entryOn : entry, pinned: pinned, waiting: waiting)
             HStack(alignment: .top, spacing: 16) {
                 VStack(spacing: 16) {
                     Group {
@@ -367,9 +377,8 @@ struct PatternPane: View {
                         if session.isKit(t) { DrumGrid(session: session, ui: ui) } else { PianoRoll(session: session, ui: ui, track: t) }
                     }
                     .flashRing(ui, .grid)
-                    .opacity(loaded ? 1 : 0.35)
-                    .allowsHitTesting(loaded)
-                    if !loaded, let p = pinned { notLoaded(p, list: list) }
+                    .opacity(live ? 1 : 0.35)
+                    .allowsHitTesting(live)
                 }
             }
             .environment(\.editorHeight, editor)
@@ -378,11 +387,16 @@ struct PatternPane: View {
         // following: the track moved on to another entry, so the editor reads its pattern now, not at the next resync
         .onChange(of: list?.entryOn) { _, _ in Task { await session.rereadSteps(track: t) } }
         .onChange(of: list?.patternOn) { _, _ in Task { await session.rereadSteps(track: t) } }
+        // stopped while pinned to another entry: the track goes there (LIST op 3), and its pattern opens
+        .onChange(of: session.playing) { _, on in
+            guard !on, let p = pinned, list?.entryOn != p.entry else { return }
+            Task { await store.send(.play(track: p.track, entry: p.entry)) }
+        }
     }
 
     // MARK: Header: "Bass · pattern 07 · entry C · also on entries D", Make unique, the picker; follow or pinned
 
-    private func header(_ t: Int, list: SongList?, entry: Int?, pinned: EntryRef?) -> some View {
+    private func header(_ t: Int, list: SongList?, entry: Int?, pinned: EntryRef?, waiting: EntryRef? = nil) -> some View {
         let e = entry.flatMap { list?.entries[safe: $0] }
         let pattern = e.flatMap { $0.isRest || $0.isEmpty ? nil : $0.pattern } ?? list?.patternOn
         let shared = entry.map { list?.sharing($0) ?? [] } ?? []
@@ -407,6 +421,7 @@ struct PatternPane: View {
             .accessibilityLabel("Pattern \(pattern.map(Entries.number) ?? "none")")
             .accessibilityHint("Pick another pattern for this entry, or a new empty one")
             // (no "entry B" here: Scott, 2026-11-07)
+            if let w = waiting { waitingLine(w) }
             if !session.isKit(t) { MotionChip(session: session, ui: ui, track: t) }
             if !shared.isEmpty, let entry {
                 Text("also on entr\(shared.count == 1 ? "y" : "ies") \(shared.map(Entries.letter).joined(separator: ", "))")
@@ -512,37 +527,22 @@ struct PatternPane: View {
         }, at: CGPoint(x: headerFrame.minX + 200, y: headerFrame.maxY), fromKey: true)
     }
 
-    /// Pinned to an entry that isn't what the track plays: Skiff edits the pattern a track has, and sending the
-    /// track there while playing would launch it, so it opens on STOP. (Wording, Scott 2026-11-06: plain English, no
-    /// firmware talk; what each button does said on it.)
-    private func notLoaded(_ p: EntryRef, list: SongList?) -> some View {
+    /// The pinned entry waiting to come in (the song plays and the track is on another): said in the header, with a
+    /// way to stop and edit it now. Nothing covers the steps. (Wording, Scott 2026-11-06: plain English, what each
+    /// button does said on it.)
+    private func waitingLine(_ p: EntryRef) -> some View {
         let c = Entries.letter(p.entry)
-        return VStack(spacing: 12) {
-            Text("Entry \(c) can't open while the song plays")
-                .font(.system(size: 17, weight: .semibold))
-                .accessibilityAddTraits(.isHeader)
-            Text("Opening it now would make this track jump to \(c).")
-                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
-            HStack(spacing: 8) {
-                Button { session.setPlaying(false) } label: {
-                    Text("Stop and edit \(c)").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
-                        .padding(.horizontal, 18).frame(minHeight: 44).raisedKey(primary: true)
-                }
-                .buttonStyle(PressSink())
-                Button { ui.pinnedEntry = nil } label: {
-                    Text("Follow the song").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 18).frame(minHeight: 44).raisedKey()
-                }
-                .buttonStyle(PressSink())
+        return HStack(spacing: 8) {
+            Image(systemName: "clock").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                .accessibilityHidden(true)
+            Text("\(c) opens when it comes in").font(.system(size: 13)).foregroundStyle(Theme.text).lineLimit(1)
+            Button { session.setPlaying(false) } label: {
+                Text("Stop and edit \(c)").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 12).frame(height: 36).raisedKey()
             }
+            .buttonStyle(PressSink())
+            .accessibilityHint("Stops the song and opens entry \(c) in the editor")
         }
-        .padding(20)
-        .frame(maxWidth: 440)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel).elevationShadow(.panel))
-        // stopped, the track goes there (the pin's LIST op 3), and the pattern opens
-        .onChange(of: session.playing) { _, on in
-            guard !on, list?.entryOn != p.entry else { return }
-            Task { await store.send(.play(track: p.track, entry: p.entry)) }
-        }
+        .accessibilityElement(children: .contain)
     }
 }
 

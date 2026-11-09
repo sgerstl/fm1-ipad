@@ -278,8 +278,8 @@ struct RefusalLine: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.circle").accessibilityHidden(true)
-            Text(refusal.text).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+            Image(systemName: "exclamationmark.circle").font(.system(size: 17, weight: .semibold)).accessibilityHidden(true)
+            Text(refusal.text).font(.system(size: 15)).fixedSize(horizontal: false, vertical: true)
             if refusal.needsStop, session.playing {
                 Button { session.setPlaying(false); store.dismissRefusal() } label: {
                     Label("Stop", systemImage: "stop.fill").font(.system(size: 13, weight: .semibold))
@@ -294,6 +294,11 @@ struct RefusalLine: View {
             .accessibilityLabel("Dismiss")
         }
         .foregroundStyle(Theme.text)
+        // on a lifted box, not bare on the page: white text on black was easy to miss (Scott, 2026-11-09); the
+        // neutral lift, not a track tint, which already means "selected"
+        .padding(.leading, 14)
+        .frame(minHeight: 44)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.tones[2]))
         .accessibilityElement(children: .contain)
     }
 }
