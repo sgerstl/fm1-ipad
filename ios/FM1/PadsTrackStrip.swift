@@ -46,14 +46,14 @@ struct TrackStripCard: View {
                             Text(lines.next).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .trackMenuPress(session: session, ui: ui, track: t)
-                .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", on the pads" : "")")
+                .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", selected" : "")")
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
-                .accessibilityHint(selected ? "" : "Puts its entries on the pads")
+                .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
                 muteKey(muted: muted, staged: staged)
             }
             .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 8))
@@ -61,6 +61,9 @@ struct TrackStripCard: View {
             // no background but the selected track's tint, as the lane heads (Scott, 2026-11-07: grey cards at full
             // size and nothing when compact was "one or the other")
             .background { RoundedRectangle(cornerRadius: 12).fill(selected ? SelectionTint.fill(track) : .clear) }
+            // the whole head selects, its padding too (Scott, 2026-11-09: a dead spot at its foot); Mute keeps its own
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .onTapGesture { session.select(track: t) }
             .overlay {
                 if preview != nil {
                     RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.text.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))

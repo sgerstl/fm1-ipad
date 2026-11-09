@@ -115,24 +115,33 @@ struct SkiffSongPage: View {
                         .fill(SelectionTint.fill(session.selectedTrack))
                     // a sample being made for the track: the sampler comes in from the right and pushes the editor off to the
                     // left, and back the other way on Cancel or a save (Scott, 2026-11-09); the pads above stay put
-                    if editorShown, let r = ui.sampler, !r.fromBrowse {
-                        SamplerPanel(session: session, ui: ui, request: r)
-                            // held to the panel's inside: a wider sampler pushed the page and shifted it all 12 pt left
-                            .frame(width: max(0, g.size.width - 2 * (Self.panelEdge + Self.inset)))
-                            .padding(.vertical, Self.inset)
-                            .padding(.horizontal, Self.panelEdge + Self.inset)
-                            .geometryGroup()    // one piece: its keys' highlights don't trail it
-                            .transition(reduceMotion ? .opacity : .move(edge: .trailing))
-                            .zIndex(1)          // above the tint while it leaves too, or it drops behind it and vanishes
-                    } else if editorShown {
-                        PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
-                            // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
-                            .environment(\.grid, inPanel)
-                            .padding(.vertical, Self.inset)
-                            .padding(.horizontal, Self.panelEdge + Self.inset)
-                            .geometryGroup()
-                            .transition(reduceMotion ? .opacity : .move(edge: .leading))
-                            .zIndex(1)
+                    // the editor rising with the panel: no slide of its own, so it comes up with the tint (Scott,
+                    // 2026-11-09: it moved in sideways, the sampler's swap transition firing on every rise); the
+                    // sideways swap is only between the sampler and the editor, inside
+                    if editorShown {
+                        ZStack(alignment: .top) {
+                            if let r = ui.sampler, !r.fromBrowse {
+                                SamplerPanel(session: session, ui: ui, request: r)
+                                    // held to the panel's inside: a wider sampler pushed the page and shifted it all 12 pt left
+                                    .frame(width: max(0, g.size.width - 2 * (Self.panelEdge + Self.inset)))
+                                    .padding(.vertical, Self.inset)
+                                    .padding(.horizontal, Self.panelEdge + Self.inset)
+                                    .geometryGroup()    // one piece: its keys' highlights don't trail it
+                                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                                    .zIndex(1)          // above the tint while it leaves too, or it drops behind it and vanishes
+                            } else {
+                                PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
+                                    // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
+                                    .environment(\.grid, inPanel)
+                                    .padding(.vertical, Self.inset)
+                                    .padding(.horizontal, Self.panelEdge + Self.inset)
+                                    .geometryGroup()
+                                    .transition(reduceMotion ? .opacity : .move(edge: .leading))
+                                    .zIndex(1)
+                            }
+                        }
+                        .transition(.identity)
+                        .zIndex(1)
                     }
                 }
                 .frame(width: g.size.width, height: bottom, alignment: .top)

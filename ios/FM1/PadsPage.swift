@@ -44,7 +44,7 @@ struct PadsPage: View {
     /// A pad's place: its track and entry.
     struct PadKey: Hashable { var track: Int, entry: Int }
 
-    static let stripWidth: CGFloat = 248, gap: CGFloat = 12, sceneHeight: CGFloat = 56
+    static let gap: CGFloat = 12, sceneHeight: CGFloat = 56
     /// (2026-11-08, Scott: "shrink some of the containers… the scene buttons smaller": the scene row 32, the lane heads
     /// 42, so the editor at Half has the room its grid needs)
     static let compactStrip: CGFloat = 232, compactGap: CGFloat = 6, compactScenes: CGFloat = 32, rowHeight: CGFloat = 42
@@ -52,6 +52,8 @@ struct PadsPage: View {
     static let cardHeight: CGFloat = 96
     /// Between the rows at full size and over the editor.
     static let fullRowGap: CGFloat = 8, compactRowGap: CGFloat = 4
+    /// Under the scene row at full size, clear of the editor panel's lip.
+    static let sceneFoot: CGFloat = 12
     /// A row and a card swapping as the slot resizes: a quick crossfade, so the two aren't seen over each other for the
     /// whole spring (2026-11-08)
     static let swap = AnyTransition.opacity.animation(.easeOut(duration: 0.12))
@@ -80,7 +82,8 @@ struct PadsPage: View {
         case .full:
             // the rows share what's left between the tool row and the scenes
             let top: CGFloat = 52, n = max(1, tracks)
-            let room = size.height - top - Self.gap - Self.sceneHeight - CGFloat(n - 1) * Self.fullRowGap
+            // (and a gap under the scenes: they touched the panel's lip, Scott 2026-11-09)
+            let room = size.height - top - Self.gap - Self.sceneHeight - Self.sceneFoot - CGFloat(n - 1) * Self.fullRowGap
             return Rows(top: top, rowHeight: max(Self.cardHeight, floor(room / CGFloat(n))), rowGap: Self.fullRowGap, sceneGap: Self.gap, count: n)
         case .compact:
             return Rows(top: 54, rowHeight: Self.rowHeight, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
@@ -103,7 +106,8 @@ struct PadsPage: View {
         let tracks = Array(session.trackIndices)
         GeometryReader { root in
             let r = rows(root.size, tracks: tracks.count)
-            HStack(alignment: .top, spacing: compact ? 12 : 16) {
+            // the heads one width at every position, so the pads keep theirs as they shorten (Scott, 2026-11-09)
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
                     SongViewSwitch(ui: ui).frame(height: 44)
                     Color.clear.frame(height: r.top - 44)
@@ -128,7 +132,7 @@ struct PadsPage: View {
                     }
                     Spacer(minLength: Self.tabHeight)          // the editor panel's tab, in the scene row's line
                 }
-                .frame(width: compact ? Self.compactStrip : Self.stripWidth)
+                .frame(width: Self.compactStrip)
                 VStack(spacing: 0) {
                     toolbar(t)
                     Color.clear.frame(height: r.top - 44)
