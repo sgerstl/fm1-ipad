@@ -12,6 +12,7 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
+    @AppStorage(PadPreviews.key) private var padPreviews = true
     @AppStorage(SoundButtons.key) private var soundButtons = SoundButtons.standard
     @AppStorage(Handedness.key) private var handedness = Handedness.right
 
@@ -49,6 +50,12 @@ struct SettingsSheet: View {
                     Toggle("Sound buttons", isOn: $soundButtons)
                 } footer: {
                     Text("Off, pages open from the FM-1's own buttons, and an open panel shows all twelve along its foot, laid out as on the FM-1. On, the FX to SEQ buttons stay down the side so you can open a page from the screen, and the panel leaves them out.")
+                }
+
+                Section {
+                    Toggle("Show every pattern on the pads", isOn: $padPreviews)
+                } footer: {
+                    Text("While the song is stopped, Lupe reads the FM-1's stored patterns so each pad shows its pattern before you play it. Off, a pad shows its pattern once it has played. A trial until 16 November.")
                 }
 
                 Section {

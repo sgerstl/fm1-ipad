@@ -115,6 +115,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// Pages SCREEN_GOTO refuses as Skiff does for one the track's engine doesn't show (LANES on ANALOG).
     var refusedPages: Set<Int> = [18]
     var poolLen = Array(repeating: 0, count: 64)
+    /// The pattern bank's stored records (pattern 0...63 → its 888 bytes), served as BACKUP objects 16...31, four a
+    /// chunk, as Skiff's editor_backup.c does: GET refused (rc 5) until a LIST this connection, rc 3 while playing.
+    public var bankRecords: [Int: [UInt8]] = [:]
+    private var backupListed = false
     /// USER's 32 slots (engine, name; nil empty) and PROJECT's 4 (nil empty), for the SAVE pages.
     var userSlots: [(engine: Int, name: String)?] = Array(repeating: nil, count: 32)
     var projectSlots: [String?] = ["SONG ONE", nil, nil, nil]
@@ -584,16 +588,34 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         return h + [UInt8](repeating: 0, count: UserSample.dataOffset - h.count) + sampleSlots[k].data.prefix(sampleSlots[k].dataLength)
     }
 
+    /// A bank chunk (object 16...31): its four records, or nothing when all four are empty (listed as size 0).
+    private func bankObject(_ c: Int) -> [UInt8] {
+        let recs = (0..<4).map { bankRecords[4 * c + $0] }
+        guard recs.contains(where: { $0 != nil }) else { return [] }
+        return recs.flatMap { $0 ?? [UInt8](repeating: 0, count: 888) }
+    }
+
     private func backupAnswer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
         switch cmd {
         case 65:
             playing = false
-            let objs = sampleSlots.indices.map { (32 + $0, sampleObject($0)) }
+            backupListed = true
+            let objs = (0..<16).map { (16 + $0, bankObject($0)) } + sampleSlots.indices.map { (32 + $0, sampleObject($0)) }
             var b: [UInt8] = [1, 0, UInt8(objs.count)]
             for (id, o) in objs { b += [UInt8(id)] + Pack7.u35(UInt32(o.count)) + Pack7.u35(CRC32.of(o)) }
             return b
         case 66:
-            guard a.count >= 8, (32..<(32 + sampleSlots.count)).contains(Int(a[0])) else { return a.isEmpty ? nil : [a[0], 1] }
+            guard a.count >= 8 else { return a.isEmpty ? nil : [a[0], 1] }
+            let id = Int(a[0])
+            if (16..<32).contains(id) {
+                // editor_backup.c: rc 5 before a LIST, 3 while the transport runs, 1 past the object
+                guard backupListed else { return [a[0], 5] + Pack7.u35(0) + [0, 0] }
+                guard !playing else { return [a[0], 3] + Pack7.u35(0) + [0, 0] }
+                let o = bankObject(id - 16), off = Int(Pack7.readU35(a[1...])), n = Int(a[6]) | Int(a[7]) << 7
+                guard n > 0, off + n <= o.count else { return [a[0], 1] + Pack7.u35(UInt32(off)) + [0, 0] }
+                return [a[0], 0] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)] + Pack7.encode(Array(o[off..<(off + n)]))
+            }
+            guard (32..<(32 + sampleSlots.count)).contains(id) else { return [a[0], 1] }
             let o = sampleObject(Int(a[0]) - 32), off = Int(Pack7.readU35(a[1...])), n = Int(a[6]) | Int(a[7]) << 7
             let chunk = Array(o[min(off, o.count)..<min(off + n, o.count)])
             return [a[0], 0] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)] + Pack7.encode(chunk)

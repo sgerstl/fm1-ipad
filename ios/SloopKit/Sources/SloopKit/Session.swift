@@ -1769,6 +1769,12 @@ public final class DeviceSession {
         guard let k = driver as? SkiffDriver, let info else { throw ProjectError.notConnected }
         return try await backupTurn { try await SkiffProjectTransfer.read(firmware: info.version, request: SkiffProjectTransfer.request(k)) }
     }
+    /// The stored patterns in pool chunks `chunks` (SkiffPoolRead): only while stopped; nil when it couldn't (playing,
+    /// another backup turn, not Skiff). For the pads' pictures.
+    public func readSkiffPool(chunks: [Int]) async -> [Int: [UInt8]]? {
+        guard let k = driver as? SkiffDriver, !playing else { return nil }
+        return try? await backupTurn { try await SkiffPoolRead.records(chunks: chunks, request: SkiffProjectTransfer.request(k)) }
+    }
     /// An iPad project onto the FM-1 as the music, named `name` (SkiffProject.swift), then everything read again.
     public func writeSkiffProject(_ p: SkiffProjectData, name: String?, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {
         guard let k = driver as? SkiffDriver else { throw ProjectError.notConnected }

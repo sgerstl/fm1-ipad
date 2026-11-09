@@ -304,3 +304,61 @@ public enum SkiffProjectTransfer {
         }
     }
 }
+
+
+/// The pattern pool read for the pads' pictures (Scott, 2026-11-09, a trial): the bank's chunks over BACKUP_GET, which
+/// Skiff answers only while stopped and only after a BACKUP_LIST this connection (editor_backup.c: rc 3, rc 5). The
+/// LIST is sent only when GET asks for it, so a stop doesn't write the waiting patterns to flash every time.
+public enum SkiffPoolRead {
+    /// The stored records in `chunks` (0...15, four patterns each): pattern 0...63 → its 888 bytes, the empty left out.
+    public static func records(chunks: [Int], request: BackupRequest) async throws -> [Int: [UInt8]] {
+        typealias T = SkiffProjectTransfer
+        var out: [Int: [UInt8]] = [:]
+        var sizes: [Int: (size: Int, crc: UInt32)]? = nil
+        for c in chunks.sorted() {
+            let id = 16 + c
+            var bytes: [UInt8]
+            do {
+                if let s = sizes, (s[id]?.size ?? 0) == 0 { continue }          // listed empty
+                bytes = try await T.read(id, from: 0, count: T.chunkLength, request)
+            } catch SkiffProjectError.refused(_, let rc) where rc == 5 && sizes == nil {
+                sizes = try await T.listObjects(request)                      // (the LIST GET asks for, once)
+                guard (sizes?[id]?.size ?? 0) > 0 else { continue }
+                bytes = try await T.read(id, from: 0, count: T.chunkLength, request)
+            } catch SkiffProjectError.refused(_, let rc) where rc == 1 {
+                continue                                                      // (all four empty: size 0)
+            }
+            for k in 0..<T.perChunk {
+                let r = Array(bytes[(k * T.record)..<((k + 1) * T.record)])
+                if r[0] != 0 { out[4 * c + k] = r }
+            }
+        }
+        return out
+    }
+}
+
+/// What a stored pattern's steps hold, enough to draw it small (bank.c pat_decode, project.c step_get9): its LEN,
+/// and per step whether a note starts there, its notes and its lane hits.
+public struct SkiffPatternSketch: Equatable, Sendable {
+    public struct Step: Equatable, Sendable {
+        public var note: Bool          // a NOTE step (time 0) with notes or hits
+        public var notes: [Int]
+        public var hits: Int           // how many lanes hit
+    }
+    public var length: Int
+    public var steps: [Step]
+    public var drums: Bool { steps.contains { $0.hits > 0 } }
+
+    /// From an 888-byte record (version 1, 2 or 3; 0 and others: nil).
+    public init?(record r: [UInt8]) {
+        guard r.count >= 8 + 64 * 9, [1, 2, 3].contains(r[0]) else { return nil }
+        length = max(1, min(64, Int(r[2]) - 64))
+        steps = (0..<64).map { i in
+            let b = Array(r[(8 + 9 * i)..<(8 + 9 * i + 9)])
+            let n = Int(b[4] & 7), time = Int(b[4] >> 3) & 3
+            let notes = (0..<min(4, n)).map { Int(b[$0] & 127) }
+            let hits = b[6].nonzeroBitCount
+            return Step(note: time == 0 && (n > 0 || hits > 0), notes: notes, hits: hits)
+        }
+    }
+}

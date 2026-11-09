@@ -36,6 +36,47 @@ struct PadThumb: Equatable {
     }
 
     /// Each track's pattern as it is now, into the session's drawings (the Song tab, both views, once a second).
+    /// From a stored pattern (the pool read): the same picture its track would give it playing.
+    static func of(_ s: SkiffPatternSketch) -> PadThumb {
+        let n = s.length
+        func range(_ c: Int) -> Range<Int> { (c * n / 16)..<max(c * n / 16 + 1, (c + 1) * n / 16) }
+        if s.drums {
+            let cols: [Double?] = (0..<16).map { c in
+                range(c).filter { $0 < s.steps.count && s.steps[$0].note }.map { s.steps[$0].hits }.max().map { min(1, 0.35 + 0.2 * Double($0)) }
+            }
+            return PadThumb(length: n, drums: true, columns: cols)
+        }
+        let tops: [Int?] = (0..<16).map { c in range(c).compactMap { i in i < s.steps.count && s.steps[i].note ? s.steps[i].notes.max() : nil }.max() }
+        let present = tops.compactMap { $0 }
+        guard let lo = present.min(), let hi = present.max() else { return PadThumb(length: n, drums: false, columns: Array(repeating: nil, count: 16)) }
+        let span = Double(max(1, hi - lo))
+        return PadThumb(length: n, drums: false, columns: tops.map { $0.map { hi == lo ? 0.5 : 0.1 + 0.9 * Double($0 - lo) / span } })
+    }
+
+    /// While stopped on Pads, the stored patterns' pictures (PadPreviews): the pool's chunks whose patterns changed
+    /// since they were last read (their LENs and uses: a pattern's steps change only while a track is on it, and
+    /// that one is drawn live by `learn`). One read at a time.
+    @MainActor static func fromPool(_ session: DeviceSession, _ store: SkiffSongStore, _ ui: EditorUI) async {
+        guard PadPreviews.on, !session.playing, !store.offline, ui.songView == .pads, !poolReading,
+              let pool = store.pool?.patterns, pool.count == 64 else { return }
+        let sig = pool.map { "\($0.length).\($0.uses)" }
+        let chunks = (0..<16).filter { c in (0..<4).contains { sig[4 * c + $0] != poolSeen[safe: 4 * c + $0] } }
+        guard !chunks.isEmpty else { return }
+        poolReading = true
+        defer { poolReading = false }
+        guard let recs = await session.readSkiffPool(chunks: chunks) else { return }   // (playing again, busy: next time)
+        let live = Set(session.trackIndices.compactMap { store.song?.tracks[safe: $0]?.patternOn })
+        // a picture drawn live wins over the stored one (an edit can still be waiting for flash): the pool fills in the
+        // missing, and replaces one only where that pattern itself changed in the pool (a new one, a project opened)
+        for (p, r) in recs where !live.contains(p) && (ui.padThumbs[p] == nil || sig[p] != poolSeen[safe: p]) {
+            if let s = SkiffPatternSketch(record: r) { ui.padThumbs[p] = of(s) }
+        }
+        if poolSeen.count != 64 { poolSeen = Array(repeating: "", count: 64) }
+        for c in chunks { for k in 0..<4 { poolSeen[4 * c + k] = sig[4 * c + k] } }
+    }
+    @MainActor private static var poolSeen: [String] = []
+    @MainActor private static var poolReading = false
+
     @MainActor static func learn(_ session: DeviceSession, _ store: SkiffSongStore, _ ui: EditorUI) {
         for k in session.trackIndices {
             guard let p = store.song?.tracks[safe: k]?.patternOn, k < session.tracks.count else { continue }

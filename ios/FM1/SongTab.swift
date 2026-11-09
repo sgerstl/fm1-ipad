@@ -163,6 +163,7 @@ struct SkiffSongPage: View {
         .task {
             while !Task.isCancelled {
                 PadThumb.learn(session, store, ui)
+                await PadThumb.fromPool(session, store, ui)
                 try? await Task.sleep(for: .seconds(1))
             }
         }

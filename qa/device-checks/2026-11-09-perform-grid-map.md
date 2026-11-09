@@ -31,6 +31,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 22 | Switch Timeline ↔ Pads. | The Timeline / Pads keys stay put while the views slide past. | – | ☐ pass ☐ fail: |
 | 23 | Tap an empty scene. | The help line sits on a grey box, larger text. | – | ☐ pass ☐ fail: |
 | 24 | Quit Lupe and open it again. | The intro starts from the white icon, not the green one. | – | ☐ pass ☐ fail: |
+| 25 | Stop the song on Pads (No grid). Wait a second or two. | Pads you haven't played yet show their pattern pictures. Play: they stay. Settings › Show every pattern on the pads off: only played pads show one. Note how long the pictures took to appear. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs skiff-sim, the iPhone, VoiceOver or a later round): the phone (Skiff's Song isn't on the phone yet, so board 40 waits); a chain drawn as one wide pad (board 35) is not built: chained entries still show as separate pads saying "Chained on"; VoiceOver labels now start with the track name ("Lead, entry C…"): release pass.
 
