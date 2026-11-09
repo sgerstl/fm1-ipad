@@ -25,7 +25,24 @@ struct LaneHeader: View {
     /// tab did (Scott, 2026-11-06): on the selected track a tap mutes and unmutes; on another it selects, so a stray
     /// tap can't mute a track you weren't on. Muted: the chip goes grey with a line of the track's colour, and a
     /// crossed speaker leads the name.
-    private var compactBody: some View {
+    @ViewBuilder private var compactBody: some View {
+        // the Song tab: the Pads' heads (Scott, 2026-11-09: one set for both views): full on tall lanes, one line on
+        // short ones; a section's note, when one is picked, keeps the old line (it says what the section does here)
+        if let ui, note == nil {
+            Group {
+                if laneHeight >= SkiffArrangePage.cardHeads {
+                    TrackStripCard(session: session, store: store, ui: ui, track: track)
+                } else {
+                    TrackStripRow(session: session, store: store, ui: ui, track: track, preview: nil)
+                }
+            }
+            .frame(width: SkiffArrangePage.headWidth(compact: true) - 12, height: laneHeight, alignment: .topLeading)
+        } else {
+            legacyCompactBody
+        }
+    }
+
+    private var legacyCompactBody: some View {
         let selected = session.selectedTrack == track
         let muted = session.tracks[track].mute
         return HStack(spacing: 0) {
@@ -48,7 +65,7 @@ struct LaneHeader: View {
             .accessibilityLabel("Track \(track + 1), \(Entries.trackName(track, session: session))\(muted ? ", muted" : "")")
             .accessibilityAddTraits(selected ? .isSelected : [])
         }
-        .frame(width: SkiffArrangePage.headerWidth - 8, height: laneHeight, alignment: .leading)
+        .frame(width: SkiffArrangePage.headWidth(compact: true) - 12, height: laneHeight, alignment: .leading)
     }
 
     private func fullBody(_ tr: TrackState, _ used: Int) -> some View {

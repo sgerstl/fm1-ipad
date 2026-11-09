@@ -33,6 +33,10 @@ struct SkiffArrangePage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let headerWidth: CGFloat = 152
+    /// The Song tab's Timeline: the Pads' heads and their width (Scott, 2026-11-09: one set of track heads for both),
+    /// so its lanes start where the pads do.
+    static func headWidth(compact: Bool) -> CGFloat { compact ? PadsPage.compactStrip + 12 : headerWidth }
+    private var headW: CGFloat { Self.headWidth(compact: compact) }
     static let fullLaneHeight: CGFloat = 80
     static let laneGap: CGFloat = 8
     static let binWidth: CGFloat = 272
@@ -57,7 +61,7 @@ struct SkiffArrangePage: View {
                 } else if let line = dropAt?.text ?? moveAt?.text {
                     Text(line).font(.system(size: 13)).padding(.horizontal, 12).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
-                        .padding(.leading, Self.headerWidth)
+                        .padding(.leading, headW)
                 } else if let r = store.refusal, r.entry == nil || selection == nil {
                     RefusalLine(refusal: r, session: session, store: store)
                 }
@@ -233,7 +237,7 @@ struct SkiffArrangePage: View {
 
     private var lanesArea: some View {
         GeometryReader { geo in
-            let laneWidth = geo.size.width - Self.headerWidth
+            let laneWidth = geo.size.width - headW
             let barWidth = laneWidth / CGFloat(bars)
             let contentWidth = max(laneWidth, CGFloat(max(bars, songBars + 1)) * barWidth)
             HStack(alignment: .top, spacing: 0) {
@@ -244,7 +248,7 @@ struct SkiffArrangePage: View {
                         LaneHeader(session: session, store: store, track: t, note: section.flatMap { s in note(t, plans, s) }, ui: ui)
                     }
                 }
-                .frame(width: Self.headerWidth)
+                .frame(width: headW)
                 ScrollView(.horizontal) {
                     VStack(alignment: .leading, spacing: Self.laneGap) {
                         Ruler(bars: Int(contentWidth / barWidth), barWidth: barWidth, section: $section,
@@ -304,15 +308,27 @@ struct SkiffArrangePage: View {
     /// name). Behind the blocks; the name's weight still marks it without colour.
     @ViewBuilder private var selectedRow: some View {
         if compact {
-            let t = session.selectedTrack
-            RoundedRectangle(cornerRadius: 8).fill(SelectionTint.fill(t))
-                .frame(height: laneHeight + Self.laneGap)
-                .offset(y: 24 + Self.laneGap / 2 + CGFloat(t) * (laneHeight + Self.laneGap))
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            // each track's lane, as on the Pads (board 41): a tag behind its head joined to a band under its blocks,
+            // the selected one in its tint, the others the panel grey (Scott, 2026-11-09: one look for both views)
+            GeometryReader { g in
+                ZStack(alignment: .topLeading) {
+                    ForEach(0..<session.trackCount, id: \.self) { t in
+                        let tall = laneHeight >= Self.cardHeads
+                        LaneShape(tag: CGSize(width: headW, height: tall ? min(laneHeight, PadsPage.laneTag) : laneHeight),
+                                  height: laneHeight, tagR: tall ? 19 : 10, padR: 8)
+                            .fill(t == session.selectedTrack ? SelectionTint.fill(t) : Theme.panel)
+                            .frame(width: g.size.width, height: laneHeight)
+                            .offset(y: 24 + Self.laneGap + CGFloat(t) * (laneHeight + Self.laneGap))
+                    }
+                }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: session.selectedTrack)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
+    /// From this lane height the Timeline's heads are the Pads' full ones (H1); under it, the one-line heads.
+    static let cardHeads: CGFloat = 96
 
     private var keyboardShortcuts: some View {
         let keys: [(KeyEquivalent, String)] = [(.leftArrow, "Previous entry"), (.rightArrow, "Next entry"), (.upArrow, "Track above"),

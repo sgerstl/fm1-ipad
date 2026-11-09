@@ -194,7 +194,7 @@ struct TrackStripRow: View {
                 }
             }
             .padding(.horizontal, 8)
-            .frame(height: PadsPage.rowHeight)
+            .frame(maxHeight: .infinity)            // (as tall as its slot: the Pads' 42, or a Timeline lane)
             // (no tint of its own: its lane runs behind it; PadsPage.lanes)
             .overlay { if preview != nil { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
         }
