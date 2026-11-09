@@ -150,9 +150,9 @@ struct LaneShape: Shape {
     var tagR: CGFloat
     var padR: CGFloat
 
-    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, CGFloat> {
-        get { AnimatablePair(AnimatablePair(tag.height, height), tagR) }
-        set { tag.height = newValue.first.first; height = newValue.first.second; tagR = newValue.second }
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+        get { AnimatablePair(AnimatablePair(tag.height, height), AnimatablePair(tag.width, padR)) }
+        set { tag.height = newValue.first.first; height = newValue.first.second; tag.width = newValue.second.first; padR = newValue.second.second }
     }
 
     func path(in rect: CGRect) -> Path {

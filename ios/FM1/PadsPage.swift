@@ -202,16 +202,25 @@ struct PadsPage: View {
     private func lanes(_ tracks: [Int], _ r: Rows, width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(tracks.enumerated()), id: \.element) { k, t in
-                LaneShape(tag: CGSize(width: Self.compactStrip + 12, height: compact ? r.rowHeight : min(r.rowHeight, Self.laneTag)),
-                          height: r.rowHeight, tagR: compact ? 10 : 19, padR: Self.padRadius(CGSize(width: 100, height: r.rowHeight)))
-                    .fill(t == session.selectedTrack ? SelectionTint.fill(t) : Theme.panel)
-                    .frame(width: width, height: r.rowHeight)
-                    .offset(y: r.top + CGFloat(k) * (r.rowHeight + r.rowGap))
+                // the selected lane grows into the gaps above and below, and its band starts a border's width left of
+                // pad A, so its colour runs evenly round its pads (they shrink by the rest: Scott, 2026-11-09)
+                let sel = t == session.selectedTrack
+                let b = sel ? selectedLaneBorder : 0, bleed = b / 2
+                let padR = Self.padRadius(CGSize(width: 100, height: r.rowHeight))
+                LaneShape(tag: CGSize(width: Self.compactStrip + 12 - b, height: (compact ? r.rowHeight : min(r.rowHeight, Self.laneTag)) + bleed),
+                          height: r.rowHeight + 2 * bleed, tagR: compact ? 10 : 19, padR: padR + b)
+                    .fill(sel ? SelectionTint.fill(t) : Theme.panel)
+                    .frame(width: width, height: r.rowHeight + 2 * bleed)
+                    .offset(y: r.top + CGFloat(k) * (r.rowHeight + r.rowGap) - bleed)
+                    .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: sel)
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+    /// The colour round the selected row's pads (half from the lane growing into the gaps, half from its pads shrinking).
+    private var selectedLaneBorder: CGFloat { compact ? 3 : 6 }
+
     /// The tag behind a full head (Scott's lane, board 41): H1's head kept to 100 pt (keys 40 each, no "Then" line),
     /// so the band under the pads stands taller than it (Scott, 2026-11-09: the tag shape back).
     static let laneTag: CGFloat = 86       // (an even 8 pt inset round the chip and keys; more black between tags: Scott, 2026-11-09)
@@ -238,8 +247,11 @@ struct PadsPage: View {
                             let inset: CGFloat = 0
                             // (shrunk inside its tint: only its surface and outline come in, its words stay in line with
                             // the pads beside it. Scott, 2026-11-09)
+                            let rowSel = k == t && !row
                             pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date, selected: sel, inset: inset)
+                                .padding(.vertical, rowSel ? selectedLaneBorder / 2 : 0)      // (the selected row's pads in its colour)
                                 .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: inset)
+                                .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: rowSel)
                                 // one piece on the spring: without it the box bounced and its words stood still
                                 .geometryGroup()
                                 .opacity(drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
@@ -328,7 +340,7 @@ struct PadsPage: View {
                                   room: (above: CGFloat, below: CGFloat)) -> SelectedGeometry {
         let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
         // on a lane the box hangs straight off its edge (Scott, 2026-11-09: one strip); at Max, no lane, a gap
-        let drop = row ? Labs.padControlsGap.value : 0
+        let drop = row ? Labs.padControlsGap.value : selectedLaneBorder / 2
         let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
         // above where it fits inside the page (Scott, 2026-11-09: above by default), else below (the top row)
         let fitsDown = frame.maxY + drop + tab.height <= area.height + room.below
