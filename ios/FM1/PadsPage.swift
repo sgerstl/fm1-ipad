@@ -235,8 +235,9 @@ struct PadsPage: View {
                             // back as the new one shrinks, together (Scott, 2026-11-09: not a crossfade)
                             let sel = k == t && i == framed
                             let inset = sel && controlsShown ? Self.selectedBorder(cell) : 0
-                            pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date, selected: sel)
-                                .padding(inset)
+                            // (shrunk inside its tint: only its surface and outline come in, its words stay in line with
+                            // the pads beside it. Scott, 2026-11-09)
+                            pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date, selected: sel, inset: inset)
                                 .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: inset)
                                 // one piece on the spring: without it the box bounced and its words stood still
                                 .geometryGroup()
@@ -448,7 +449,7 @@ struct PadsPage: View {
     static func padRadius(_ size: CGSize) -> CGFloat { size.height < 56 ? 8 : 16 }
 
     private func pad(_ t: Int, _ i: Int, _ m: SongPlayback.Marks, size: CGSize, date: Date, copy: Bool = false,
-                     radius: CGFloat? = nil, selected: Bool = false) -> some View {
+                     radius: CGFloat? = nil, selected: Bool = false, inset: CGFloat = 0) -> some View {
         let side = min(size.width, size.height), small = size.height < 120 || size.width < 150
         let tiny = size.width < 90                // Max's row of 16: the letter and the number only
         let short = size.height < 56              // Half's rows, as tall as the lane heads: one line
@@ -529,9 +530,9 @@ struct PadsPage: View {
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
-                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected) }
+                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected).padding(inset) }
                 .contentShape(RoundedRectangle(cornerRadius: rad))
-                .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
+                .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
             } else {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
@@ -558,10 +559,10 @@ struct PadsPage: View {
             }
             .padding(tiny ? 6 : small ? 10 : 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected) }
+            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected).padding(inset) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: rad))
-            .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
+            .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark).padding(inset) }
             }
         }
         .buttonStyle(PressSink())
