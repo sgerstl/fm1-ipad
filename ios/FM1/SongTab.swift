@@ -576,11 +576,49 @@ enum SongView: Equatable { case timeline, pads }
 struct SongViewSwitch: View {
     let ui: EditorUI
 
+    /// Two icons in one key, the view you're in lit (Scott, 2026-11-09, board 43): bars of different lengths for the
+    /// Timeline, a grid for the Pads. VoiceOver and a hold say the names.
     var body: some View {
-        SegmentedKeys(label: "Song view", options: ["Timeline", "Pads"], selected: ui.songView == .pads ? 1 : 0) { k in
-            ui.songView = k == 1 ? .pads : .timeline
+        HStack(spacing: 2) {
+            option(.timeline, "Timeline: every track's entries along the bars") { TimelineGlyph() }
+            option(.pads, "Pads: every track's entries to launch, the scenes under them") { Image(systemName: "square.grid.2x2.fill").font(.system(size: 17, weight: .semibold)) }
         }
+        .padding(3)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.well))
         .fixedSize()
-        .accessibilityHint("Timeline: every track's entries along the bars. Pads: one track's entries as 16 pads to launch, the scenes under them.")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Song view")
+    }
+
+    private func option<G: View>(_ v: SongView, _ hint: String, @ViewBuilder glyph: () -> G) -> some View {
+        let on = ui.songView == v
+        return Button { ui.songView = v } label: {
+            glyph()
+                .foregroundStyle(on ? Theme.text : Theme.textSecondary)
+                .frame(width: 52, height: 38)
+                .background { if on { RoundedRectangle(cornerRadius: 9).fill(Theme.control) } }   // (12 = 9 + its 3 inset)
+                .contentShape(Rectangle())
+                .animation(.easeOut(duration: 0.15), value: on)
+        }
+        .buttonStyle(PressSink())
+        .help(v == .pads ? "Pads" : "Timeline")
+        .accessibilityLabel(v == .pads ? "Pads" : "Timeline")
+        .accessibilityHint(hint)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// The Timeline's icon: three bars of different lengths, as blocks along bars.
+private struct TimelineGlyph: View {
+    var body: some View {
+        Canvas { ctx, sz in
+            let h: CGFloat = 4, r: CGFloat = 1.5
+            let rows: [(CGFloat, CGFloat)] = [(0, 0.45), (0.5, 1), (0, 0.65)]
+            for (k, (a, b)) in rows.enumerated() {
+                let y = 3 + CGFloat(k) * (h + 3)
+                ctx.fill(Path(roundedRect: CGRect(x: a * sz.width, y: y, width: (b - a) * sz.width, height: h), cornerRadius: r), with: .foreground)
+            }
+        }
+        .frame(width: 20, height: 22)
     }
 }
