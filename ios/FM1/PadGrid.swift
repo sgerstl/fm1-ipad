@@ -123,3 +123,45 @@ struct Emerge: ViewModifier, Animatable {
             .opacity(Double(p))
     }
 }
+
+
+/// A track's lane (PadsPage.lanes): the tag (`tag`, from the left) with corners `tagR` (the chip's 7 + its 12 inset),
+/// joined to the band (`height`) from the tag's right edge, where pad A starts, to the right; the band's corner there is
+/// a pad's (`padR`, flush under pad A) and the turn from pad A's side into the tag's foot `padR` too. A tag as tall as
+/// the band: one band (Half).
+struct LaneShape: Shape {
+    var tag: CGSize
+    var height: CGFloat
+    var tagR: CGFloat
+    var padR: CGFloat
+
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, CGFloat> {
+        get { AnimatablePair(AnimatablePair(tag.height, height), tagR) }
+        set { tag.height = newValue.first.first; height = newValue.first.second; tagR = newValue.second }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let X = rect.maxX, bx = tag.width, h = height, th = min(tag.height, h), rt = min(tagR, th / 2)
+        var p = Path()
+        p.move(to: CGPoint(x: rt, y: 0))
+        p.addLine(to: CGPoint(x: X, y: 0))
+        p.addLine(to: CGPoint(x: X, y: h))
+        if th >= h - 0.5 {
+            // one band: the tag as tall as it
+            p.addLine(to: CGPoint(x: rt, y: h))
+            p.addArc(tangent1End: CGPoint(x: 0, y: h), tangent2End: CGPoint(x: 0, y: h - rt), radius: rt)
+        } else {
+            let rb = min(padR, (h - th) / 2), rc = min(padR, (h - th) / 2)
+            p.addLine(to: CGPoint(x: bx + rb, y: h))
+            p.addArc(tangent1End: CGPoint(x: bx, y: h), tangent2End: CGPoint(x: bx, y: h - rb), radius: rb)
+            p.addLine(to: CGPoint(x: bx, y: th + rc))
+            p.addArc(tangent1End: CGPoint(x: bx, y: th), tangent2End: CGPoint(x: bx - rc, y: th), radius: rc)
+            p.addLine(to: CGPoint(x: rt, y: th))
+            p.addArc(tangent1End: CGPoint(x: 0, y: th), tangent2End: CGPoint(x: 0, y: th - rt), radius: rt)
+        }
+        p.addLine(to: CGPoint(x: 0, y: rt))
+        p.addArc(tangent1End: CGPoint(x: 0, y: 0), tangent2End: CGPoint(x: rt, y: 0), radius: rt)
+        p.closeSubpath()
+        return p
+    }
+}

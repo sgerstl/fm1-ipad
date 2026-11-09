@@ -170,6 +170,10 @@ struct PadsPage: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+            // each track's lane behind its head and pads (Scott, 2026-11-09, board 41)
+            .background(alignment: .topLeading) {
+                if !row { lanes(tracks, r, width: root.size.width) }
+            }
         }
         // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
         .padding(.bottom, compact ? 8 : 0)
@@ -187,6 +191,27 @@ struct PadsPage: View {
             Button("Cancel", role: .cancel) { store.confirmation = nil }
         } message: { c in Text(c.message) }
     }
+
+    // MARK: Lanes (Scott, 2026-11-09, board 41)
+
+    /// Each track's lane: at full size a tag behind its head, as tall as the head's content, joined to a band the pads'
+    /// height under every pad and off the edge; over the editor (Half) one band. The selected track's in its tint (one
+    /// colour with its pad's tint and track controls: one shape), the others the panel grey.
+    private func lanes(_ tracks: [Int], _ r: Rows, width: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(tracks.enumerated()), id: \.element) { k, t in
+                LaneShape(tag: CGSize(width: Self.compactStrip + 12, height: compact ? r.rowHeight : min(r.rowHeight, Self.laneTag)),
+                          height: r.rowHeight, tagR: compact ? 10 : 19, padR: Self.padRadius(CGSize(width: 100, height: r.rowHeight)))
+                    .fill(t == session.selectedTrack ? SelectionTint.fill(t) : Theme.panel)
+                    .frame(width: width, height: r.rowHeight)
+                    .offset(y: r.top + CGFloat(k) * (r.rowHeight + r.rowGap))
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+    /// The tag behind a full head: its content (name, what it plays, the pass bar, what's next) and its padding.
+    static let laneTag: CGFloat = 96
 
     /// The pads: a row for each of `shown` (every track, or at Max the selected one), the columns sharing the width.
     private func grid(_ t: Int, _ shown: [Int], _ r: Rows) -> some View {
@@ -309,10 +334,14 @@ struct PadsPage: View {
                 RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
+                // the shadow from the controls' box alone, not the pad's tint, which sits in its lane (a shadow from
+                // that read as a seam: board 41); it floats over the pads and page under it (Scott, 2026-11-09)
+                RoundedRectangle(cornerRadius: TrackKnobBox.outerRadius).fill(SelectionTint.fill(t))
+                    .frame(width: s.tab.width, height: s.tab.height)
+                    .elevationShadow(.held)
+                    .offset(x: s.knobsAt.x, y: s.knobsAt.y)
                 PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, tabR: TrackKnobBox.outerRadius, turn: s.padRadius + s.drop, r: s.radius)
                     .fill(SelectionTint.fill(t))
-                    // it floats over the pads and the page under it: the shadow of things at the finger (Scott, 2026-11-09)
-                    .elevationShadow(.held)
                 TrackKnobBox(session: session, ui: ui, embedded: true)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
@@ -381,6 +410,7 @@ struct PadsPage: View {
         let tiny = size.width < 90                // Max's row of 16: the letter and the number only
         let short = size.height < 56              // Half's rows, as tall as the lane heads: one line
         let rad = radius ?? Self.padRadius(size)
+        let laned = layout != .row && t == session.selectedTrack        // on the selected track's lane (board 41)
         // the selected pad outlined in its track's colour, not white (Scott, 2026-11-09: clearer on Half)
         let key = PadKey(track: t, entry: i)
         // ...and the empty pad whose menu is open, so you can see which one the choices are for (Scott, 2026-11-09)
@@ -452,7 +482,7 @@ struct PadsPage: View {
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
-                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected) }
+                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected) }
                 .contentShape(RoundedRectangle(cornerRadius: rad))
                 .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
             } else {
@@ -481,7 +511,7 @@ struct PadsPage: View {
             }
             .padding(tiny ? 6 : small ? 10 : 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected) }
+            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: rad))
             .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
@@ -733,9 +763,12 @@ struct PadsPage: View {
         return m
     }
 
-    @ViewBuilder private func padSurface(playing: Bool, on: Bool, empty: Bool, rest: Bool, colour: Color, radius: CGFloat = 16, raised: Bool = true) -> some View {
+    @ViewBuilder private func padSurface(playing: Bool, on: Bool, empty: Bool, rest: Bool, colour: Color, radius: CGFloat = 16, raised: Bool = true,
+                                         laned: Bool = false) -> some View {
         if empty {
-            RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.stepEmpty, lineWidth: 1)
+            // a well in its lane (board 41): the lane shows round it, not through it
+            RoundedRectangle(cornerRadius: radius).fill(Theme.well)
+                .overlay { RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.stepEmpty, lineWidth: 1) }
         } else if rest {
             RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.disabledOutline, lineWidth: 1.5)
         } else if playing {
@@ -748,6 +781,8 @@ struct PadsPage: View {
             // (Chiclet keeps its radius at 8 or less: a pad's own 16, the same base edge under it)
             RoundedRectangle(cornerRadius: radius).fill(Theme.control)
                 .background { RoundedRectangle(cornerRadius: radius).fill(Theme.chicletEdge).offset(y: 2) }
+                // on the selected track's lane, an edge: grey on its tint was 1.10:1 (board 41)
+                .overlay { if laned { RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.laneEdge, lineWidth: 1) } }
         }
     }
 

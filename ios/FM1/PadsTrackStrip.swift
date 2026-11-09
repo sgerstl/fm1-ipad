@@ -60,7 +60,7 @@ struct TrackStripCard: View {
             .frame(maxWidth: .infinity, minHeight: 92, maxHeight: .infinity, alignment: .topLeading)   // (as tall as its row of pads)
             // no background but the selected track's tint, as the lane heads (Scott, 2026-11-07: grey cards at full
             // size and nothing when compact was "one or the other")
-            .background { RoundedRectangle(cornerRadius: 12).fill(selected ? SelectionTint.fill(track) : .clear) }
+            // (no tint of its own: its lane runs behind it, the selected track's in its colour; PadsPage.lanes)
             // the whole head selects, its padding too (Scott, 2026-11-09: a dead spot at its foot); Mute keeps its own
             .contentShape(RoundedRectangle(cornerRadius: 12))
             .onTapGesture { session.select(track: t) }
@@ -189,7 +189,7 @@ struct TrackStripRow: View {
             }
             .padding(.horizontal, 8)
             .frame(height: PadsPage.rowHeight)
-            .background(RoundedRectangle(cornerRadius: 10).fill(selected ? SelectionTint.fill(t) : .clear))
+            // (no tint of its own: its lane runs behind it; PadsPage.lanes)
             .overlay { if preview != nil { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
         }
     }
