@@ -327,10 +327,10 @@ struct PadsPage: View {
         // on a lane the box hangs straight off its edge (Scott, 2026-11-09: one strip); at Max, no lane, a gap
         let drop = row ? Labs.padControlsGap.value : 0
         let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
-        // down where it fits inside the page, else up where that fits (Half's lower rows, full size's last), else down
+        // above where it fits inside the page (Scott, 2026-11-09: above by default), else below (the top row)
         let fitsDown = frame.maxY + drop + tab.height <= area.height + room.below
         let fitsUp = frame.minY - drop - tab.height >= -room.above
-        let up = !fitsDown && fitsUp, right = frame.minX + tab.width > area.width
+        let up = fitsUp || !fitsDown, right = frame.minX + tab.width > area.width
         let x = right ? frame.maxX - tab.width : frame.minX
         // the reveal's box (the stem and the tab) and the knobs' place in it, a gap clear of the pads beside
         let tabAt = CGPoint(x: x, y: up ? frame.minY - drop - tab.height : frame.maxY)
