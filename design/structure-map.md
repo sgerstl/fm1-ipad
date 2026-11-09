@@ -7,7 +7,7 @@ Where everything lives (CLAUDE.md, rule 4). Change this first, get Scott's OK, t
 | Tab | What's on it | Panels that come in over it |
 |---|---|---|
 | **Song** | Pads (default) or Timeline, switched at the top left; the pattern editor below the divider (No grid / Half / Max) | Sound panel (right), Sampler (in the editor's place), Presets |
-| **Live** (proposed 2026-11-10) | The performance grid: all six tracks' entries as rows of pads, the scenes under them. Launching only, no editing (section below) | none |
+| **Live** (2026-11-10) | The performance grid: all six tracks' entries as rows of pads, the scenes under them. Launching only, no editing (section below) | Sound panel (right) |
 | **Mix** | Mixer carousel: levels, sends, the FX pages | Sound panel |
 | **Sounds** | Engines and presets for the selected track | Sound panel |
 
@@ -21,6 +21,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 | SEQ | The Song tab's places: NOTES and FEEL in the step inspector, PATTERN, AUTOMATION, SONG |
 | GLO | The Mix tab; again, its next section |
 | HOME | Closes the sound panel |
+| ARP held (PERFORM) | The Live tab while held (2026-11-10; was Pads) |
 | SAVE | Save (held: the song layer) |
 | PLAY, REC | The transport |
 
@@ -34,9 +35,12 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 
 ### Where it lives
 
-**Its own tab, Live**, between Song and Mix. A playing mode apart from editing: no divider and no pattern editor under it, no sound panel over it. Pads keeps the 4 × 4 for one track, with the editing (hold menus, drag, record sample, track controls). The overlap is on purpose: Pads is where you build and try an entry, Live is where you play the song.
+**Its own tab, Live**, between Song and Mix. A playing mode apart from editing: no divider and no pattern editor under it. The sound panel does come in over it (below). Pads keeps the 4 × 4 for one track, with the editing (hold menus, drag, record sample, track controls). The overlap is on purpose: Pads is where you build and try an entry, Live is where you play the song.
 
-The FM-1's buttons: none of them opens Live. Whether FX…ARP open the sound panel over Live (as over Mix) or leave it alone while you play is open question 8.
+**The FM-1's buttons on Live** (Scott, 2026-11-10):
+- **ARP held (Skiff's PERFORM layer) brings up Live.** This replaces the rule of 2026-11-07, where ARP held showed Pads. Lupe sees it through the screen link (SCREEN's layer 7, pushed when the layer opens and closes). Proposed, as the Pads rule did: Live while ARP is held or its layer is locked, then back to the tab you were on when you let go. Lupe doesn't change tab when you're on Live already.
+- **The sound keys work during a performance.** ENV, LFO, FX, SEL, EDIT and ARP (tapped) bring the sound panel in over Live, as over Song and Mix, for the selected track. The panel covers the right-hand columns; the row heads and the columns left of it stay live, so you can still launch, mute and select a track while shaping. HOME closes it. On the phone the panel covers the pads and leaves the row heads (number and mute) live, as round 4's sound panel leaves the strip.
+- Neither is in the mock yet (boards 35–37 show Live with the panel shut).
 
 ### What's on it
 
