@@ -65,4 +65,23 @@ import Testing
         _ = try await u.info()
         #expect(await u.linkLogCSV().split(separator: "\n").count == 1)
     }
+
+    /// Over Bluetooth the resync's backstop step reads stand back (every 30 s / 60 s, not 4 s / 3 s): after the connect
+    /// a few seconds of passes send no step reads, where USB's pace would send hundreds.
+    @Test func theResyncLeavesTheLinkFreeOverBluetooth() async throws {
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.useBluetooth(dropEvery: 0)
+        var once = false
+        let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        s.resyncInterval = .milliseconds(200)
+        let run = Task { await s.run() }
+        try await waitFor(40) { s.isConnected }
+        try await Task.sleep(for: .milliseconds(500))
+        let before = fake.requests.filter { $0 == 30 }.count
+        try await Task.sleep(for: .seconds(3))                           // passes 8..22
+        let steps = fake.requests.filter { $0 == 30 }.count - before
+        #expect(steps == 0, "step reads in 3 s of resync over Bluetooth: \(steps)")
+        #expect(fake.unansweredCommands.isEmpty)
+        run.cancel()
+    }
 }

@@ -1263,21 +1263,27 @@ public final class DeviceSession {
     }
 
     private func resyncLoop(_ c: FirmwareDriver) async {
-        var pass = 0
+        var pass = onBluetooth ? 1 : 0                   // (bluetooth-poc: the connect has just read every step)
         while !Task.isCancelled {
             try? await Task.sleep(for: resyncInterval)
+            // (bluetooth-poc) Over Bluetooth a round trip is ~44 ms (measured 2026-11-10, 4,674 requests): the USB pace
+            // below asked for ~37 requests a second, the link carries ~22, and every edit waited behind the backlog
+            // (median 640 ms, up to 2 s; 77% of it step reads). There: the backstop step reads every 30 s (the selected
+            // track) and 60 s (another), and no pass while requests already wait
+            let bt = onBluetooth
+            if bt, let k = (c as? SkiffDriver)?.client ?? (c as? SloopDriver)?.client, await k.waiting >= 3 { continue }
             do {
                 let sel = selectedTrack
                 // Skiff pushes its step changes (WATCH bit 0): the full read is a backstop, every fourth pass (64
                 // requests each time); SLOOP's every pass
-                if !(c is SkiffDriver) || pass % 4 == 0 { _ = try await readSteps(sel) }
-                if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
+                if bt ? pass % 30 == 0 : (!(c is SkiffDriver) || pass % 4 == 0) { _ = try await readSteps(sel) }
+                if pass % (bt ? 10 : 3) == 0 {           // every third pass: the next other track, params, globals
                     let n = trackCount
-                    let other = (sel + 1 + (pass / 3) % max(1, n - 1)) % n
+                    let other = (sel + 1 + (pass / (bt ? 10 : 3)) % max(1, n - 1)) % n
                     if other == 0 { try await readTrackList(); try await readGlobals() }
                     try await readParams(sel)
                     try await readParams(other)
-                    _ = try await readSteps(other)
+                    if !bt || pass % 60 == 0 { _ = try await readSteps(other) }
                 }
             } catch ClientError.closed { return } catch {}
             pass += 1

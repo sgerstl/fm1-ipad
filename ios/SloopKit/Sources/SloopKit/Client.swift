@@ -76,6 +76,9 @@ public actor SloopClient {
         linkLog.append(LinkEntry(at: Date(), name: "push \(cmd)", queuedMs: 0, rttMs: 0, tries: 0, ok: true, behind: queue.count))
         if linkLog.count > 5000 { linkLog.removeFirst(linkLog.count - 5000) }
     }
+    /// Requests waiting or in flight (the resync stands back while edits queue: Session.resyncLoop).
+    public var waiting: Int { queue.count + (inFlight == nil ? 0 : 1) }
+
     /// The link log as CSV: time, request, ms queued, ms round trip, tries, answered, requests behind it.
     public func linkLogCSV() -> String {
         let f = ISO8601DateFormatter()
