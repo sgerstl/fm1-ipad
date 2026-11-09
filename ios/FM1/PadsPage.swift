@@ -234,6 +234,8 @@ struct PadsPage: View {
                         if let d = drag, !d.refused, let m = marks[d.track] { dragged(d, m, cell: cell, date: tl.date) }
                     }
                     .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
+                    // the controls unrolling out of the pad's foot and rolling back in, shown or hidden (Scott, 2026-11-09)
+                    .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: controlsShown)
                 }
             }
         }
