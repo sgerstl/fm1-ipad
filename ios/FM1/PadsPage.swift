@@ -176,7 +176,11 @@ struct PadsPage: View {
                             pad(k, i, marks[k] ?? store.marks(k, launchIn: nil), size: cell, date: tl.date)
                                 // one piece on the spring: without it the box bounced and its words stood still
                                 .geometryGroup()
-                                .opacity(drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
+                                // the selected pad hidden under its tint: its outline and shadow showed round the
+                                // tint's edges (Scott, 2026-11-09: "white border bleeding"); a crossfade as the tint
+                                // moves, so switching pads still never leaves a blank
+                                .opacity(k == t && i == framed ? 0 : drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
+                                .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
                                 .overlay {
                                     if let d = drag, d.track == k, landing(of: d) == i {
                                         RoundedRectangle(cornerRadius: 16)
@@ -184,8 +188,6 @@ struct PadsPage: View {
                                             .allowsHitTesting(false)
                                     }
                                 }
-                                // (left showing under the selected pad: its tint covers it, and as a new pad is picked
-                                // the grid's own pad is there while the tint fades in, no blank flash)
                                 .allowsHitTesting(!(k == t && i == framed))
                         }
                     }
