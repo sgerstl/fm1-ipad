@@ -37,9 +37,10 @@ struct SkiffSongPage: View {
     static let editorMin: CGFloat = 420
     /// The panel's lip under the tab when the editor is shut, and its padding round the editor.
     static let lip: CGFloat = 12, inset: CGFloat = 12
-    /// The panel's tint stands this far in from the page's edges (its tab over the lane heads); the editor sits a
-    /// further `inset` inside it, so nothing spills past the tint (Scott, 2026-11-08).
-    static let panelEdge: CGFloat = 16
+    /// The panel's tint stands this far in from the page's edges: none, so it's as wide as the pads and lanes over it
+    /// and its tab sits under the track strip (Scott, 2026-11-09: 16 in, it read too narrow). The editor sits `inset`
+    /// inside it, so nothing spills past the tint.
+    static let panelEdge: CGFloat = 0
     /// The song's least: the tool row, the ruler and every lane at its least (28 pt and its gap), so it never spills.
     static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
     /// The give past either end: the drag follows the finger at this rate there.
@@ -167,7 +168,9 @@ struct SkiffSongPage: View {
 
     private var inPanel: GridMetrics {
         var g = grid
-        g.stepWidth = grid.stepWidth - 2 * Self.panelEdge / 16
+        // all the room the panel takes round the editor, the edge and the inset (only the edge was given up, and the
+        // grid ran out to the tint's sides with no inset)
+        g.stepWidth = grid.stepWidth - 2 * (Self.panelEdge + Self.inset) / 16
         return g
     }
 
@@ -200,7 +203,7 @@ struct SkiffSongPage: View {
         .simultaneousGesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
             .onChanged { v in ui.pulledAt = Date(); dragged(v.translation.height, tops: tops, pads: pads) }
             .onEnded { _ in ui.pulledAt = Date(); released(tops: tops, pads: pads) })
-        .offset(x: 16, y: top - PadsPage.tabHeight)
+        .offset(x: Self.panelEdge, y: top - PadsPage.tabHeight)
         .accessibilityLabel("Pattern editor")
         .accessibilityValue(position == .none ? "closed" : position == .half ? "half" : "largest")
         .accessibilityHint(position == .none ? "Opens the pattern editor" : position == .half ? "Closes the pattern editor" : "Makes the pattern editor smaller")
