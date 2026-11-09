@@ -17,6 +17,9 @@ struct BlockView: View {
     var state: String? = nil
     /// Loop entry (SONG OFF): every entry loops and REPS doesn't apply, so the block says ↻, not ×N.
     var loops = false
+    /// Its pattern's picture, as the pads show it (Scott, 2026-11-09: the blocks tell as much as the pads); drawn where
+    /// the block has room.
+    var thumb: PadThumb? = nil
     @Environment(\.arrangeCompact) private var compact
     @Environment(\.arrangeLaneHeight) private var laneHeight
 
@@ -72,6 +75,10 @@ struct BlockView: View {
                 }
                 Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(strong)
                 Text(sub).font(.system(size: 12)).foregroundStyle(dim)
+                if let thumb, !isRest, laneHeight >= 76, width >= 80 {
+                    Spacer(minLength: 0)
+                    PadThumbView(thumb: thumb, ink: Theme.onColour.opacity(0.6)).frame(height: 14)
+                }
             } else {
                 // narrow: the pattern, then its count (and the sound's mark beside it)
                 Text(isRest ? "–" : label).font(.system(size: 13, weight: .semibold)).foregroundStyle(strong)
@@ -102,8 +109,12 @@ struct BlockView: View {
             else if linked { shape.stroke(solid ? Theme.onColour : Theme.textSecondary, style: StrokeStyle(lineWidth: 2, dash: [5, 4])).padding(4) }
         }
         .compositingGroup()
-        // the Song tab while playing: what isn't playing dimmed, so each track's playing block stands out
+        // the Song tab while playing: what isn't playing dimmed, so each track's playing block stands out; the change
+        // fades as the pads' play colours do (Labs › Pads: play colours fade in; out quicker)
         .opacity(compact && session.playing && !playing && !selected ? 0.5 : 1)
+        .animation(Labs.padPlayFade.value > 0 ? (playing ? .easeOut(duration: Labs.padPlayFade.value) : .easeIn(duration: Labs.padPlayFade.value * 0.7)) : nil,
+                   value: playing)
+        .animation(Labs.padPlayFade.value > 0 ? .easeOut(duration: Labs.padPlayFade.value) : nil, value: session.playing)
         .shadow(color: .black.opacity(selected ? Elevation.selected.shadow.opacity : 0),
                 radius: Elevation.selected.shadow.radius, y: selected ? Elevation.selected.shadow.y : 0)
         .contentShape(Rectangle())

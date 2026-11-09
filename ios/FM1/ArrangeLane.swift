@@ -172,6 +172,8 @@ struct Lane: View {
     let openMenu: (ArrangeMenu, CGPoint) -> Void
     var focus: AccessibilityFocusState<EntryRef?>.Binding
     let ui: EditorUI
+    /// A block's first entry's pattern (0...63), for its picture (PadThumb).
+    private func first(_ b: SongBlock) -> Int? { store.song?.tracks[safe: track]?.entries[safe: b.entries.lowerBound]?.poolIndex }
     /// A section's range on this track, snapped to its passes (ticks).
     var bracket: ClosedRange<Double>? = nil
 
@@ -387,7 +389,7 @@ struct Lane: View {
                       selected: selected, linked: linked,
                       playing: !isHeld && lifted != ref && session.playing && b.entries.contains(list.entryOn ?? -1),
                       state: compact && session.playing ? LaneMarks.spoken(store.marks(track, launchIn: session.ticksToLaunch(track)), block: b, launch: session.launchMode) : nil,
-                      loops: loops)
+                      loops: loops, thumb: first(b).flatMap { ui.padThumbs[$0] })
                 .frame(width: w, height: laneHeight - 12)
                 // carried: faint in its own place, or, once it would move, an empty dashed place where it lands
                 // (the block itself is under the finger). The view stays, so the finger's gesture does too

@@ -43,9 +43,14 @@ struct LaneMarks: View {
                         }
                         if m.playing == b.id, m.ends { badge(nil, "END").frame(width: w, height: h, alignment: .bottomTrailing) }
                         if m.queued == b.id {
-                            let pulse = reduceMotion ? 1 : 0.55 + 0.45 * abs(sin(tl.date.timeIntervalSinceReferenceDate * .pi))
-                            RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, lineWidth: 2).opacity(pulse).padding(1)
-                            badge(Image(systemName: "timer"), Self.countdown(m.launchIn, session.launchMode)).frame(width: w, height: h, alignment: .bottomLeading)
+                            // waiting, as on the pads: a dashed outline, pulsing, and the countdown on a white capsule
+                            // (Scott, 2026-11-09: the blocks' states the pads')
+                            let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(tl.date.timeIntervalSinceReferenceDate * .pi))
+                            RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2.5, dash: [8, 5])).opacity(pulse).padding(1)
+                            Text(Self.countdown(m.launchIn, session.launchMode)).font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                                .foregroundStyle(Theme.onColour).padding(.horizontal, 6).frame(height: 18)
+                                .background(Capsule().fill(Theme.text)).padding(3)
+                                .frame(width: w, height: h, alignment: .bottomLeading)
                         }
                     }
                     .frame(width: w, height: h)
