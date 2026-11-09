@@ -84,6 +84,9 @@ struct SkiffSongPage: View {
             let overEditor = false
             // the editor keeps its height while it slides under the fold, the page clipping it
             let bottom = max(Self.editorMin, total - top)
+            // the editor laid out at the size it ends at, so its contents rise with the panel instead of being uncovered
+            // as it grows (Scott, 2026-11-09); dragged, it follows the finger
+            let paneHeight = dragTop != nil ? bottom : max(Self.editorMin, total - rest)
             VStack(spacing: 0) {
                 // Pads and Timeline: the pads come in from above as the Timeline goes down behind the editor, and back
                 ZStack(alignment: .topLeading) {
@@ -141,7 +144,7 @@ struct SkiffSongPage: View {
                                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
                                     .zIndex(1)          // above the tint while it leaves too, or it drops behind it and vanishes
                             } else {
-                                PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
+                                PatternPane(session: session, store: store, ui: ui, height: paneHeight - 2 * Self.inset, trackMenu: pads && shown == .row)
                                     // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
                                     .environment(\.grid, inPanel)
                                     .environment(\.flatPanels, true)
