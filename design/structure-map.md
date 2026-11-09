@@ -6,12 +6,11 @@ Where everything lives (CLAUDE.md, rule 4). Change this first, get Scott's OK, t
 
 | Tab | What's on it | Panels that come in over it |
 |---|---|---|
-| **Song** | Pads (default) or Timeline, switched at the top left; the pattern editor below the divider (No grid / Half / Max) | Sound panel (right), Sampler (in the editor's place), Presets |
-| **Live** (2026-11-10) | The performance grid: all six tracks' entries as rows of pads, the scenes under them. Launching only, no editing (section below) | Sound panel (right) |
+| **Song** | Pads (default; from 2026-11-10 a grid of all six tracks' entries, section below) or Timeline, switched at the top left; the pattern editor below the divider (No grid / Half / Max) | Sound panel (right), Sampler (in the editor's place), Presets |
 | **Mix** | Mixer carousel: levels, sends, the FX pages | Sound panel |
 | **Sounds** | Engines and presets for the selected track | Sound panel |
 
-The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · Timeline · Mix · Sounds (decided 2026-11-08, phone only). With Live: Pads · Timeline · Live · Mix · Sounds, five on the phone (tight: open question 4).
+The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · Timeline · Mix · Sounds (decided 2026-11-08, phone only).
 
 ## The FM-1's buttons
 
@@ -21,70 +20,78 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 | SEQ | The Song tab's places: NOTES and FEEL in the step inspector, PATTERN, AUTOMATION, SONG |
 | GLO | The Mix tab; again, its next section |
 | HOME | Closes the sound panel |
-| ARP held (PERFORM) | The Live tab while held (2026-11-10; was Pads) |
+| ARP held (PERFORM) | Song › Pads while held, then back (2026-11-07; unchanged by the grid) |
 | SAVE | Save (held: the song layer) |
 | PLAY, REC | The transport |
 
 **On screen** (2026-11-08): with the sound panel open, the same 12 keys sit in two rows at its foot, in the FM-1's order. With it shut there are none; pages open from the FM-1's own keys. Settings › Sound buttons brings back the FX…SEQ rail down the side (and the panel then leaves its keys out).
 
-## The Live tab: the performance grid (decided 2026-11-10, mock before building)
+## Pads as a grid: every track's entries in rows (decided 2026-11-10, mock before building)
 
-*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. Decided the same day: **its own tab, called Live** (Song · Live · Mix · Sounds); **Pads stays** as the one-track view that edits and launches; **a row's stop is its mute**. Mocked on the canvas, boards 35–38 (generator `design/boards/live.py`); no SwiftUI until Scott OKs the mock. Open questions and the protocol check: `design/perform-grid-questions.md`.*
+*Scott, 2026-11-10: a pad grid with one row per track and one column per entry, so a drum and a lead pattern can be launched without changing the selected track, like a clip launcher. The same day it went from a Live tab of its own to **Pads itself becoming the grid** (Scott: "change the structure of pads to have rows like live"): one surface that launches, one scene row, four tabs on the phone. Decided: **a row's stop is its mute**; no column launch; a waiting pad tapped takes the launch back; the playing pad tapped restarts it. Mocked on the canvas, boards 35–40 (generator `design/boards/live.py`); no SwiftUI until Scott OKs the mock. Open questions and the protocol check: `design/perform-grid-questions.md`.*
 
-**What it's for.** Pads already shows all six tracks in its strip (what each plays, what's waiting, its mute), but launches only the selected track's entries. Live covers the gap: launching on any track from one screen. The firmware already allows it: LIST op 3 PLAY takes any track and entry, and nothing on the FM-1 changes the selected track when it's sent.
+**What changes.** The 4 × 4 of one track's entries and the track strip beside it become one grid: a row a track, its entries across. The strip's rows become the row heads, so nothing about a track is lost: what it plays, what's waiting, its mute. The firmware already allows launching any track: LIST op 3 PLAY takes any track and entry, and nothing on the FM-1 changes the selected track when it's sent.
 
-### Where it lives
-
-**Its own tab, Live**, between Song and Mix. A playing mode apart from editing: no divider and no pattern editor under it. The sound panel does come in over it (below). Pads keeps the 4 × 4 for one track, with the editing (hold menus, drag, record sample, track controls). The overlap is on purpose: Pads is where you build and try an entry, Live is where you play the song.
-
-**The FM-1's buttons on Live** (Scott, 2026-11-10):
-- **ARP held (Skiff's PERFORM layer) brings up Live.** This replaces the rule of 2026-11-07, where ARP held showed Pads. Lupe sees it through the screen link (SCREEN's layer 7, pushed when the layer opens and closes). Live while ARP is held or its layer is locked, then back to the tab you were on when you let go (Scott, 2026-11-10, as the Pads rule did). Lupe doesn't change tab when you're on Live already.
-- **The sound keys work during a performance.** ENV, LFO, FX, SEL, EDIT and ARP (tapped) bring the sound panel in over Live, as over Song and Mix, for the selected track. The panel covers the right-hand columns; the row heads and the columns left of it stay live, so you can still launch, mute and select a track while shaping. HOME closes it. On the phone the panel covers the pads and leaves the row heads (number and mute) live, as round 4's sound panel leaves the strip.
-- Board 38 shows the panel over Live, between the tool row and the scene row so neither is covered (proposed).
+**The cost, named:** Pads was polished (the selected pad's tab, the Emerge reveal, the 4 × 4 ↔ 2 × 8 glide). This rebuilds its layout. Reusing its pieces (the pad face, the scene row, `store.marks`, `PadGrid`) is a requirement of the build.
 
 ### What's on it
 
 | Part | What it holds |
 |---|---|
-| **Tool row** | Launch at (LOOP, BAR, BEAT, NOW), Cancel (everything staged, shown only while something waits), the transport as on Song. |
-| **Row heads** (left, one a track) | Track name and colour, its mute, which is also the row's stop (PERFORM op 3: staged to the launch point while playing; the track keeps its place and comes back in time). The selected track is marked. Tapping the head selects the track; this is the only thing on the grid that changes the selection. |
-| **Pads** (6 rows × the entries) | One pad an entry. Tap: launch it (PLAY: at once stopped, at the launch point playing). Tap a waiting pad: take the launch back. Tap the playing pad: restart it at the launch point (decided 2026-11-10; restart pending a device check). |
-| **Scene row** (under the grid) | The 16 scenes, as Pads has them: tap to recall, Store latched then tap to store. Held, the grid shows the scene's pads (below). |
+| **Tool row** | The Timeline / Pads switch, Launch at (LOOP, BAR, BEAT, NOW), Cancel waiting (only while something waits). |
+| **Row heads** (left, one a track) | Number, name and colour, Mute (also the row's stop: PERFORM op 3, staged to the launch point while playing; the track keeps its place and comes back in time). The selected track is marked. **Tapping the number selects the track**, and with it the editor and the FM-1's knobs. |
+| **Pads** (6 rows × the entries) | One pad an entry. **Tap: launch it** (at once stopped, at the launch point playing). Proposed: on the selected track's row a tap also selects the pad for the editor, as today; **on another row it launches only**, so the selection (and the FM-1's knobs) don't jump mid-set. Tap a waiting pad: take the launch back. Tap the playing pad: restart it. |
+| **Scene row** (under the grid) | Store and the 16 scenes, as now. Held, the grid outlines each track's pad for that scene. The editor's Open key sits at its end (board 33). |
 
-There's no track strip: the row heads replace it.
+### The three positions (the divider)
+
+| Position | The grid |
+|---|---|
+| **No grid** (editor shut) | The full grid (board 35): rows about 116 pt, as many columns as the song uses. |
+| **Half** (the default) | Six lane-height rows (42 pt), exactly today's compact strip rows, with the pads running on to the right of each (board 37). The 2 × 8 block goes; the scene row (32) and the editor under it, as now. |
+| **Max** | The selected track's row of 16 (64 pt), as today; the track menu in the editor's header picks the track (board 38). Six rows don't fit. |
+
+### Editing, now that pads are small and shared
+
+- **Hold menus** stay on every pad (any row): they act on that track's entry, without selecting it.
+- **Drag to rearrange** within a row (that track's list), as now. Across rows (copying an entry to another track, which the shared pool allows) is left out for now.
+- **The selected pad's track controls** (the tab hanging under the pad today) would cover the rows below. Proposed: they move to the selected row's head (a Track key that opens them over the grid). Open question 9.
+- **The editor** follows the selected pad, as now.
+
+### The FM-1's buttons
+
+- **ARP held (Skiff's PERFORM layer)** shows Song › Pads while held or locked, then goes back to where you were (the 2026-11-07 rule, unchanged).
+- **The sound keys work during a performance** (Scott, 2026-11-10): ENV, LFO, FX, SEL, EDIT and ARP tapped bring the sound panel in over Pads, as now, for the selected track. Proposed (board 39): at No grid the panel sits between the tool row and the scene row, so Launch at, Cancel waiting and all 16 scenes stay in reach; the row heads and the columns left of it stay live.
 
 ### What a pad shows
 
 | State | Shown as (structure, not look) |
 |---|---|
-| Empty | An empty well, not a button; VoiceOver reads "empty". PLAY on an empty entry is refused (rc 1) and leaves whatever was staged, so it does nothing. |
-| Empty past the list's end | The same, quieter: Skiff never plays it. |
-| A pattern | Its number ("05"), as Pads. |
-| A REST | "REST". Launching it silences the track, so it's also the grid's per-track stop where a list has one. |
-| A chain | One wide pad across its entries, boxed as the FM-1 and Timeline draw it. A tap on any part launches from the chain's first (firmware does this). |
+| Empty | An empty well; VoiceOver reads "empty". PLAY on an empty entry is refused (rc 1) and leaves whatever was staged, so a tap does nothing; its hold menu still offers New and Set. |
+| A pattern | Its number ("05") and passes ("×4"). |
+| A REST | "REST". Launching it silences the track. |
+| A chain | One wide pad across its entries. A tap on any part launches from the chain's first (firmware does this). |
 | An entry with a sound | Its top right corner cut, as on the FM-1. |
-| **Playing** | Marked, with the pass progress through its pattern and, for REPS above 1, the pass ("2/4"). |
-| **Staged** (a launch waiting) | Marked differently from playing, with the countdown to the launch point. Reduce Motion: a static mark, no blinking. |
-| **The song's next** (SONG ON and ONCE) | A quieter mark than a launch: it comes in by itself. Skiff stages both through the same field; Lupe already separates them (`SongPlayback.marks`). |
-| Muted row | The whole row dimmed, plus the row head's mute. Not by colour alone. |
-| A scene held | The pad each track would go to outlined, for scenes Lupe has seen; an unseen scene says so in the tool row, as now. |
+| **Playing** | The track colour, a pass bar, the pass ("2/4") when REPS is over 1. On a muted row: outlined, not filled. |
+| **Waiting** (a launch) | A dashed outline and when it lands ("bar 11"). Reduce Motion: static. |
+| **The song's next** (SONG ON and ONCE) | A thin grey outline and "next": it comes in by itself (`SongPlayback.marks` already separates it from a launch). |
+| A scene held | A white outline and "S3" on each track's pad, for scenes Lupe has seen; an unseen one says so in the tool row. |
 
-Progress and countdowns come from Lupe's own count of the MIDI clock, per track. When that count isn't known (stopped, no Start seen, RAND between notes), the pad shows playing and staged without progress.
+Progress and countdowns come from Lupe's own count of the MIDI clock, per track; when that isn't known, no bar.
 
 ### How many columns
 
-Not always 16. The grid shows entries A to the last one any track uses, plus one empty column, at least 8. Most songs use fewer than 16, so the pads stay bigger. More than fit: two-finger pan sideways (the design brief's rule: one finger plays, two fingers move the view).
+Entries A to the last one any track uses, plus one empty column (so there's always somewhere to add), at least 8. More than fit: two-finger pan sideways.
 
 ### On the phone (landscape)
 
-A fifth tab, Live. Six rows of pads at 44 pt; 8 columns in view, two-finger pan for the rest; the row heads narrow to the track number and mute. The scenes fit under the grid at 34 pt with rows at 40 (board 37, kept 2026-11-10): under the 44 aim, over the 24 floor.
+The Pads tab becomes the grid (board 40): four tabs as now (Pads · Timeline · Mix · Sounds). Six rows at 40, 8 columns in view, two-finger pan; row heads shrink to the number and Mute; the scenes at 34 under them. Under the 44 aim, over the 24 floor. The editor up: the selected track's row of 16, as round 4.
 
 ### What it leaves out on purpose
 
-- No column launch ("launch all of column C"): Skiff's scenes aren't columns, and two kinds of row-across launch would be confusing (decided 2026-11-10).
-- No editing on the grid: no hold menus, no drag, no editor. A row head's hold could offer "Edit in Pads" (select the track, go to Song).
+- No column launch: Skiff's scenes aren't columns (decided 2026-11-10).
 - No per-pad launch settings: LAUNCH is one setting for the whole FM-1.
 
 ### Accessibility floor for it
 
-Each pad is a button: "T2, entry C, pattern 05, playing, pass 2 of 4" or "… staged, lands in 1 bar". Rows are containers named for the track. A held scene preview gets a VoiceOver action ("Show scene 3 on the grid") as its non-hold way in. No drags on the grid, so 2.5.7 has nothing to cover. Pads stay at 44 pt or more on the iPad; the phone at its 44 pt floor is why it pans instead of shrinking.
+Each pad is a button: "Lead, entry C, pattern 13, waiting, bar 11". Rows are groups named for the track. The scene preview gets a VoiceOver action as its non-hold way in. Every drag keeps its hold-menu way in (2.5.7). Pads at 44 pt or more at No grid; Half's 42 and the phone's 40 are the exceptions, over the 24 floor.
