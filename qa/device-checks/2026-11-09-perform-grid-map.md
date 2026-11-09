@@ -23,6 +23,8 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 14 | No grid: tap a track head low down, under its name and lines (not on Mute). | The track is selected: no dead spot anywhere on the head. | – | ☐ pass ☐ fail: |
 | 15 | Drag between No grid and Half. | The heads keep one width, so the pads keep theirs and only get shorter. | – | ☐ pass ☐ fail: |
 | 16 | No grid: look under Store and the scenes. | A gap between them and the coloured panel edge below. The selected pad has no white fringe round its tint. | – | ☐ pass ☐ fail: |
+| 17 | Stopped, No grid: look at the selected pad and its controls. | Flat pad (no dark band under its outline), outlined in its track colour; an even border of tint round it and round the knobs; the box's top a gap below the pads beside it, the tint coming down out of the pad and curving out. | – | ☐ pass ☐ fail: |
+| 18 | Double-tap a track head, at No grid, Half and Max (Max: from the editor's track menu side; the heads are gone, so skip). | At No grid the controls go away and come back; at Half they appear under the selected pad and go again. Double-tapping another track's head selects it and shows its controls. A single tap still selects at once. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs skiff-sim, the iPhone, VoiceOver or a later round): the phone (Skiff's Song isn't on the phone yet, so board 40 waits); a chain drawn as one wide pad (board 35) is not built: chained entries still show as separate pads saying "Chained on"; VoiceOver labels now start with the track name ("Lead, entry C…"): release pass.
 

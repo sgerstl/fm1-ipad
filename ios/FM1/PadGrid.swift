@@ -37,6 +37,9 @@ struct PadTabShape: Shape {
     var tab: CGSize
     var up: Bool
     var right: Bool
+    /// How far the tint comes straight down out of the pad before the tab widens: the grid's gap, so the tab's top
+    /// stands that far below the pads beside it (Scott, 2026-11-09).
+    var drop: CGFloat = 0
     static let f: CGFloat = 10
     /// The corners: the pad's own radius in that row, so the tint lines up with the pads beside it.
     var r: CGFloat = 12
@@ -49,7 +52,7 @@ struct PadTabShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let r = r, f = Self.f, w = cell.width, h = cell.height, W = max(tab.width, w + f), H = tab.height
+        let r = r, f = Self.f, w = cell.width, h = cell.height + drop, W = max(tab.width, w + f), H = tab.height
         var p = Path()          // drawn with the tab under the pad, flush left, from (0, 0); then mirrored into place
         p.move(to: CGPoint(x: r, y: 0))
         p.addLine(to: CGPoint(x: w - r, y: 0))
@@ -67,7 +70,7 @@ struct PadTabShape: Shape {
         p.closeSubpath()
         var t = CGAffineTransform.identity
         if right { t = t.concatenating(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: w, ty: 0)) }
-        if up { t = t.concatenating(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: h)) }
+        if up { t = t.concatenating(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: cell.height)) }
         return p.applying(t).applying(CGAffineTransform(translationX: cell.minX, y: cell.minY))
     }
 }
@@ -84,7 +87,7 @@ struct Emerge: ViewModifier, Animatable {
     }
 
     static func transition(_ s: PadsPage.SelectedGeometry, row: Bool) -> AnyTransition {
-        let tab = row ? .zero : CGRect(origin: s.tabAt, size: s.tab)
+        let tab = row ? .zero : CGRect(origin: s.tabAt, size: CGSize(width: s.tab.width, height: s.tab.height + s.drop))
         return .modifier(active: Emerge(p: 0, pad: s.frame, tab: tab, up: s.up),
                          identity: Emerge(p: 1, pad: s.frame, tab: tab, up: s.up))
     }

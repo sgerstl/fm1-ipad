@@ -31,7 +31,14 @@ struct PadsPage: View {
     @State private var drag: PadDrag?
     /// The selected pad tapped while stopped: it stays selected, its track controls roll away (Scott, 2026-11-09); a
     /// tap again, or another pad, brings them back.
-    @State private var controlsHidden = false
+    /// The selected pad's track controls flipped from where they start: shown at full size, hidden over the editor
+    /// (Half, Max). A double tap on a track head flips them, at any size (Scott, 2026-11-09); so does the selected pad
+    /// tapped while stopped. Back to the start at a change of size.
+    @State private var controlsFlip = false
+    /// The head last double-tapped: another track's double tap shows its controls rather than flipping them away.
+    @State private var lastDouble: Int?
+    private var controlsShown: Bool { (layout == .full) != controlsFlip }
+    private func showControls(_ v: Bool) { controlsFlip = (layout == .full) != v }
     @State private var holdAt: CGPoint = .zero
     @State private var gridFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -128,6 +135,17 @@ struct PadsPage: View {
                             .frame(height: r.rowHeight, alignment: .top)
                             .clipped()
                             .geometryGroup()
+                            // double-tapped: the track controls in or out under its selected pad (its single tap
+                            // selects it, beside this, with no wait)
+                            .simultaneousGesture(TapGesture(count: 2).onEnded {
+                                session.select(track: k)
+                                showControls(lastDouble != k || !controlsShown)
+                                lastDouble = k
+                            })
+                            .accessibilityAction(named: controlsShown ? "Hide track controls" : "Show track controls") {
+                                session.select(track: k)
+                                showControls(!controlsShown)
+                            }
                         }
                     }
                     Spacer(minLength: Self.tabHeight)          // the editor panel's tab, in the scene row's line
@@ -149,8 +167,7 @@ struct PadsPage: View {
         .padding(.bottom, compact ? 8 : 0)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
         // another pad, or another track: its controls back
-        .onChange(of: framedPad(session.selectedTrack)) { _, _ in controlsHidden = false }
-        .onChange(of: session.selectedTrack) { _, _ in controlsHidden = false }
+        .onChange(of: layout) { _, _ in controlsFlip = false; lastDouble = nil }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
             get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
@@ -206,7 +223,7 @@ struct PadsPage: View {
                             let s = selectedGeometry(row: k, col: i, rows: shown.count, area: g.size, cell: cell, gap: gap, rowGap: r.rowGap)
                             // the track controls only at full size: over the editor the rows are too short to hang them
                             // from (Scott, 2026-11-09), so the border alone
-                            let bare = compact || controlsHidden
+                            let bare = !controlsShown
                             selectedTint(t, s, area: g.size, bare: bare)
                                 .id("tint\(t).\(i).\(bare)")
                                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare))
@@ -234,7 +251,7 @@ struct PadsPage: View {
     /// right-aligned where it'd run off the grid; from the last row, upward), and the controls in that tab, a gap clear
     /// of the pad (Scott, 2026-11-09: they sat too high).
     struct SelectedGeometry {
-        var frame: CGRect, tab: CGSize, up: Bool, right: Bool, tabAt: CGPoint, knobsAt: CGPoint, border: CGFloat, inner: CGSize
+        var frame: CGRect, tab: CGSize, drop: CGFloat, up: Bool, right: Bool, tabAt: CGPoint, knobsAt: CGPoint, border: CGFloat, inner: CGSize
         /// The tint's corners (a pad's own in that row) and the face's inside it: outer less the border, so the two
         /// curves run parallel (Scott, 2026-11-09; design-standards: outer = inner + padding).
         var radius: CGFloat
@@ -244,14 +261,16 @@ struct PadsPage: View {
     private func selectedGeometry(row r: Int, col c: Int, rows: Int, area: CGSize, cell: CGSize, gap: CGFloat, rowGap: CGFloat) -> SelectedGeometry {
         let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
         let drop = Labs.padControlsGap.value
-        let knobs = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
-        let tab = CGSize(width: knobs.width, height: knobs.height + drop)
+        let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
         let up = rows > 1 && r == rows - 1, right = frame.minX + tab.width > area.width
         let x = right ? frame.maxX - tab.width : frame.minX
-        let tabAt = CGPoint(x: x, y: up ? frame.minY - tab.height : frame.maxY)
-        let knobsAt = CGPoint(x: x, y: up ? frame.minY - tab.height : frame.maxY + drop)
-        let b: CGFloat = cell.height < 60 ? 4 : 6          // the border: thinner round short rows
-        return SelectedGeometry(frame: frame, tab: tab, up: up, right: right, tabAt: tabAt, knobsAt: knobsAt, border: b,
+        // the reveal's box (the stem and the tab) and the knobs' place in it, a gap clear of the pads beside
+        let tabAt = CGPoint(x: x, y: up ? frame.minY - drop - tab.height : frame.maxY)
+        let knobsAt = CGPoint(x: x, y: up ? frame.minY - drop - tab.height : frame.maxY + drop)
+        // the border: the knobs' own 8 pt inset, so the tint is one width round the pad and round them (Scott,
+        // 2026-11-09); thinner round short rows
+        let b: CGFloat = cell.height < 60 ? 4 : 8
+        return SelectedGeometry(frame: frame, tab: tab, drop: drop, up: up, right: right, tabAt: tabAt, knobsAt: knobsAt, border: b,
                                 inner: CGSize(width: cell.width - 2 * b, height: cell.height - 2 * b),
                                 radius: Self.padRadius(cell))
     }
@@ -265,7 +284,7 @@ struct PadsPage: View {
                 RoundedRectangle(cornerRadius: s.radius).fill(SelectionTint.fill(t))
                     .frame(width: s.frame.width, height: s.frame.height).offset(x: s.frame.minX, y: s.frame.minY)
             } else {
-                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, r: s.radius)
+                PadTabShape(cell: s.frame, tab: s.tab, up: s.up, right: s.right, drop: s.drop, r: s.radius)
                     .fill(SelectionTint.fill(t))
                 TrackKnobBox(session: session, ui: ui, embedded: true)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
@@ -368,7 +387,7 @@ struct PadsPage: View {
             if heldKey == "p\(t).\(i)" { heldKey = nil; return }  // (the release of a hold: its menu is open)
             if ui.justPulled { return }                          // (the lift that ends a pull of the editor)
             if e.isEmpty { openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero); return }
-            if !session.playing, t == session.selectedTrack, framedPad(t) == i { controlsHidden.toggle(); return }
+            if !session.playing, t == session.selectedTrack, framedPad(t) == i { controlsFlip.toggle(); return }
             launched += 1
             // a waiting pad tapped again takes its launch back: the entry playing is relaunched in its place, the
             // FM-1 having no per-track cancel (Scott, 2026-11-09, question 5)
@@ -399,7 +418,7 @@ struct PadsPage: View {
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
-                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad) }
+                .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected) }
                 .contentShape(RoundedRectangle(cornerRadius: rad))
                 .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
             } else {
@@ -428,7 +447,7 @@ struct PadsPage: View {
             }
             .padding(tiny ? 6 : small ? 10 : 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad) }
+            .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected) }
             // (an empty pad is only an outline: the whole of it takes the tap and the hold)
             .contentShape(RoundedRectangle(cornerRadius: rad))
             .overlay { padOutline(held: held, waiting: waiting, next: next, on: on, colour: colour, date: date, radius: rad, mark: mark) }
@@ -671,13 +690,17 @@ struct PadsPage: View {
         return m
     }
 
-    @ViewBuilder private func padSurface(playing: Bool, on: Bool, empty: Bool, rest: Bool, colour: Color, radius: CGFloat = 16) -> some View {
+    @ViewBuilder private func padSurface(playing: Bool, on: Bool, empty: Bool, rest: Bool, colour: Color, radius: CGFloat = 16, raised: Bool = true) -> some View {
         if empty {
             RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.stepEmpty, lineWidth: 1)
         } else if rest {
             RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.disabledOutline, lineWidth: 1.5)
         } else if playing {
-            RoundedRectangle(cornerRadius: radius).fill(colour).elevationShadow(.selected)
+            if raised { RoundedRectangle(cornerRadius: radius).fill(colour).elevationShadow(.selected) }
+            else { RoundedRectangle(cornerRadius: radius).fill(colour) }
+        } else if !raised {
+            // the selected pad, flat in its tint: its base edge showed as a dark band under the outline
+            RoundedRectangle(cornerRadius: radius).fill(Theme.control)
         } else {
             // (Chiclet keeps its radius at 8 or less: a pad's own 16, the same base edge under it)
             RoundedRectangle(cornerRadius: radius).fill(Theme.control)
