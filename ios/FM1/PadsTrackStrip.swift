@@ -32,16 +32,16 @@ struct TrackStripCard: View {
                         HStack(alignment: .top, spacing: 10) {
                             BigTrackChip(track: t, muted: muted, side: 44)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(parts.first ?? lines.plays).font(.system(size: 22, weight: .semibold)).monospacedDigit()
-                                    .lineLimit(1).minimumScaleFactor(0.6)
+                                EntryTitle(list: list)
                                 if parts.count > 1 {
                                     Text(parts.dropFirst().joined(separator: " ")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                                 }
                             }
                         }
-                        Text(Entries.trackName(t, session: session)).font(.system(size: 17, weight: .semibold))
+                        // the instrument: under the entry, quieter (Scott, 2026-11-09: "too bold")
+                        Text(Entries.trackName(t, session: session)).font(.system(size: 15))
                             .padding(.top, 8)
-                            .foregroundStyle(muted ? Theme.textSecondary : Theme.text).lineLimit(1)
+                            .foregroundStyle(muted ? Theme.textSecondary : Theme.textSecondaryRaised).lineLimit(1)
                         if session.playing, m.playing != nil {
                             SmoothBar(track: Theme.well, ink: Theme.track[t]) { session.passProgress(t) ?? 0 }
                                 .frame(height: 4).padding(.top, 6)
@@ -278,5 +278,26 @@ struct SoloKey: View {
         .accessibilityLabel("Solo track \(track + 1)")
         .accessibilityValue(on ? "on" : "off")
         .accessibilityHint("Mutes every other track; again, the mutes come back as they were")
+    }
+}
+
+
+/// The entry a track is on, written as a pad writes it (Scott, 2026-11-09): its letter small and grey, then its pattern
+/// number bold in even figures; a REST says so, smaller.
+struct EntryTitle: View {
+    let list: SongList?
+    var size: CGFloat = 22
+
+    var body: some View {
+        if let l = list, let on = l.entryOn, let e = l.entries[safe: on] {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(Entries.letter(on)).font(.system(size: size * 0.68, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                Text(e.isRest ? "REST" : e.label).font(.system(size: e.isRest ? size * 0.68 : size, weight: .bold)).monospacedDigit()
+                    .foregroundStyle(e.isRest ? Theme.textSecondary : Theme.text)
+            }
+            .lineLimit(1).minimumScaleFactor(0.7)
+        } else {
+            Text("–").font(.system(size: size, weight: .bold)).foregroundStyle(Theme.textSecondary)
+        }
     }
 }
