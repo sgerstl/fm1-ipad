@@ -671,7 +671,13 @@ struct PadsPage: View {
         guard let list = store.song?.tracks[safe: t] else { return [] }
         let free = (store.pool?.free ?? 0) > 0
         var first = [MenuItem(title: free ? "New pattern" : "New pattern: all 64 taken", icon: "plus", enabled: free && idle) {
-            Task { if await store.send(.new(track: t, entry: i)) { edit(t, i) } }
+            Task {
+                guard await store.send(.new(track: t, entry: i)) else { return }
+                // playing: queue it too, so it comes in at the launch point and the editor opens on it then (Skiff
+                // edits only the pattern a track has; Scott, 2026-11-09). It plays empty until notes go in.
+                if session.playing { launched += 1; await store.send(.play(track: t, entry: i)) }
+                edit(t, i)
+            }
         }]
         if let on = list.entryOn, let p = list.entries[safe: on]?.poolIndex {
             first.append(MenuItem(title: free ? "Copy of \(Entries.letter(on)) · \(Entries.number(p + 1))" : "Copy of \(Entries.number(p + 1)): all 64 taken",
