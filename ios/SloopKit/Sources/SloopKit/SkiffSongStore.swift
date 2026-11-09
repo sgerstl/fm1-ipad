@@ -11,9 +11,13 @@ public final class SkiffSongStore {
     /// A launch staged on a track (true), or one taken back or cancelled before it landed (false): the session's
     /// counted clock starts the track's new pass where Skiff will (CountedPlayhead.relaunch).
     @ObservationIgnored public var onLaunch: @MainActor (Int, Bool) -> Void = { _, _ in }
+    /// A track came onto another entry (a launch landed, the song moved on): the session takes its pattern's LEN and
+    /// DIV at once, not at its next round of reads (every 15 s for a track not selected).
+    @ObservationIgnored public var onArrive: @MainActor (Int) -> Void = { _ in }
     private func noticeLaunches(_ old: SkiffSong?) {
         guard isPlaying(), let s = song else { return }
         for (t, l) in s.tracks.enumerated() {
+            if let o = old?.tracks[safe: t]?.entryOn, let e = l.entryOn, o != e || old?.tracks[safe: t]?.patternOn != l.patternOn { onArrive(t) }
             let was = old?.tracks[safe: t]?.staged
             if let st = l.staged, st != was || old?.tracks[safe: t]?.entryOn != l.entryOn,
                marks(t, launchIn: nil).queued != nil { onLaunch(t, true) }     // (a launch, not the song's own next)

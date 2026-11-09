@@ -203,6 +203,19 @@ public final class DeviceSession {
     }
     /// The launch on track t taken back or cancelled; not when its line is a step away (the list read just after the
     /// swap, the clock a pulse or two behind it).
+    /// Track t came onto another pattern: its LEN from the pool (and DIV, when seen before) now, so the counted pass is
+    /// the pattern's, then read from the FM-1 to be sure. Before, a track not selected kept the old pattern's LEN for
+    /// up to 15 s and its pass ended where that one's would: a LOOP launch's line then came before or after Skiff's
+    /// (Scott, 2026-11-10: USR1, longer patterns, onto 55, it switched before the line closed).
+    func arrived(_ t: Int) {
+        guard trackIndices.contains(t), let store = skiffSong, let p = store.song?.tracks[safe: t]?.patternOn else { return }
+        if let len = store.pool?.patterns[safe: p]?.length, len > 0 {
+            let l = max(1, min(stepCount, len))
+            if tracks[t].length != l { tracks[t].length = l }
+        }
+        if let d = store.divisions[p], tracks[t].division != d { tracks[t].division = d }
+        Task { try? await self.readParams(t) }
+    }
     /// Seconds to the soonest launch waiting on any track, from the counted clock.
     func secondsToNextLaunch() -> Double? {
         guard let store = skiffSong, counted.running, bpm > 0 else { return nil }
@@ -452,6 +465,7 @@ public final class DeviceSession {
                         return (self.tracks[t].length, self.tracks[t].division)
                     }, isPlaying: { [weak self] in self?.playing ?? false })
                     skiffSong?.passCount = { [weak self] t in self?.passCount(t) }
+                    skiffSong?.onArrive = { [weak self] t in self?.arrived(t) }
                     skiffSong?.nextLanding = { [weak self] in self?.secondsToNextLaunch() }
                     skiffSong?.onLaunch = { [weak self] t, staged in if staged { self?.noteLaunch(t) } else { self?.dropLaunch(t) } }
                 }
