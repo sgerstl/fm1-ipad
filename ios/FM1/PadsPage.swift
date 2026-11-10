@@ -304,6 +304,13 @@ struct PadsPage: View {
                             selectedTint(t, s, area: g.size, bare: bare)
                                 .id("tint\(t).\(i).\(bare)")
                                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare, slide: !bare))
+                            // shut: the tab that opens them, on the row's edge they'd open from (Scott, 2026-11-10)
+                            if bare, !row {
+                                OpenControlsTab(track: t, up: s.up, width: Self.openTabWidth, height: Self.openTabHeight) { showControls(true) }
+                                    .offset(x: s.frame.maxX - Self.openTabWidth,
+                                            y: s.up ? s.frame.minY - laneBleed - Self.openTabHeight : s.frame.maxY + laneBleed)
+                                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
+                            }
                         }
                         if let d = drag, !d.refused, let m = marks[d.track] { dragged(d, m, cell: cell, date: tl.date) }
                     }
@@ -417,6 +424,10 @@ struct PadsPage: View {
         }
         .frame(width: area.width, height: area.height, alignment: .topLeading)
     }
+
+    /// The tab that opens the track controls while they're shut: 56 wide (the two carets and room either side), 22 out
+    /// from the lane's edge; its touch 44 high and 78 wide round it.
+    static let openTabWidth: CGFloat = 56, openTabHeight: CGFloat = 22
 
     /// The border the selected pad shrinks by inside its tint, controls open: thinner round short rows and Max's keys.
     static func selectedBorder(_ cell: CGSize) -> CGFloat { cell.height < 60 || cell.width < 90 ? 4 : 8 }
@@ -1152,5 +1163,36 @@ struct PadMarks: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// The selected row's tab while the track controls are shut (Scott, 2026-11-10: "a little tab to sit on top of the
+/// selected track row above and right justified to the selected pad that will allow the user to open the track controls…
+/// double tapping the track header isn't ideal"). The lane's tint, so it reads as part of the lane; the step tab's carets
+/// in the track's colour, pointing the way the controls will open. Right-aligned to the selected pad, on the edge the box
+/// opens from: the top, or the bottom on a row where the box opens downward. The box's own carets (beside PAN) close it:
+/// the open box meets its lane with no free edge for the tab to ride as a handle without changing which way boxes open.
+struct OpenControlsTab: View {
+    let track: Int
+    let up: Bool
+    let width: CGFloat
+    let height: CGFloat
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            ZStack {
+                UnevenRoundedRectangle(topLeadingRadius: up ? 10 : 0, bottomLeadingRadius: up ? 0 : 10,
+                                       bottomTrailingRadius: up ? 0 : 10, topTrailingRadius: up ? 10 : 0)
+                    .fill(SelectionTint.fill(track))
+                TabCarets(ups: [up, up], colour: Theme.track[track])
+            }
+            .frame(width: width, height: height)
+            // 44 high to touch (78 wide): 11 past its outer edge, 11 over the selected pad's corner
+            .contentShape(Rectangle().inset(by: -(44 - height) / 2))
+        }
+        .buttonStyle(PressSink())
+        .accessibilityLabel("Show track controls")
+        .accessibilityHint("Opens the selected track's knobs under its pad")
     }
 }

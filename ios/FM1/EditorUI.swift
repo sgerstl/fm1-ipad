@@ -126,7 +126,8 @@ final class EditorUI {
     var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user : .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs. Closed, it chooses for the track
     /// again next time.
-    var presetsPanel = false { didSet { if !presetsPanel { soundEntry = nil } } }
+    /// -presets-panel opens it at launch (the before/after screenshots, qa/top-row-2026-11-10).
+    var presetsPanel = LaunchArgs.all.contains("-presets-panel") { didSet { if !presetsPanel { soundEntry = nil } } }
     /// The sound panel choosing an entry's own sound (a pad's, a Timeline block's) instead of the track's (Scott,
     /// 2026-11-08: "Select sound" opens the panel; its header says what it's choosing for). Nil: the track.
     var soundEntry: SoundEntryTarget?
