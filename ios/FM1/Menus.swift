@@ -205,7 +205,7 @@ struct MenuPanel: View {
         .background {
             // Escape from a hardware keyboard even where the rows don't hold focus
             Button("Close menu") { if stack.isEmpty { close() } else { back() } }
-                .keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+                .keyboardShortcut(.cancelAction).opacity(0).modifier(ShortcutOnly())
         }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)

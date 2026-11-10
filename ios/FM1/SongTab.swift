@@ -308,7 +308,7 @@ struct SkiffSongPage: View {
                                               removal: .move(edge: .trailing).animation(.easeIn(duration: 0.22))))
                     .background {
                         Button("Close the patterns") { ui.poolOpen = false; ui.dragPattern = nil }
-                            .keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+                            .keyboardShortcut(.cancelAction).opacity(0).modifier(ShortcutOnly())
                     }
                     .accessibilityAddTraits(.isModal)
                     .accessibilityAction(.escape) { ui.poolOpen = false }

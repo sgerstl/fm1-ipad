@@ -104,7 +104,7 @@ struct TempoPanel: View {
         .onKeyPress(.downArrow) { session.setBPM(session.bpm - 1); return .handled }
         .onKeyPress(.escape) { if typing { typing = false } else { close() }; return .handled }
         .background {
-            Button("Close tempo", action: close).keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+            Button("Close tempo", action: close).keyboardShortcut(.cancelAction).opacity(0).modifier(ShortcutOnly())
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tempo")
