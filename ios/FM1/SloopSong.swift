@@ -36,15 +36,16 @@ struct SloopSongPage: View {
     private var position: SongPosition { placed ?? SongPosition(rawValue: storedPosition) ?? .half }
     private func place(_ p: SongPosition) { placed = p; storedPosition = p.rawValue }
     private var spring: Animation? {
-        reduceMotion ? .easeOut(duration: 0.2) : .spring(response: Labs.dividerResponse.value, dampingFraction: Labs.dividerDamping.value)
+        reduceMotion ? .easeOut(duration: 0.2) : .spring(response: DividerFeel.current.response, dampingFraction: DividerFeel.current.damping)
     }
     private var slide: Animation? { reduceMotion ? .easeOut(duration: 0.15) : .easeInOut(duration: max(0.2, Labs.songSlide.value)) }
 
-    static let tool: CGFloat = 44, toolGap: CGFloat = 10
+    /// (Since the one row above the pages, 2026-11-10: the tools are in the top bar, the page starts at the top.)
+    static let tool: CGFloat = 0, toolGap: CGFloat = 0
     /// Half: the four heads as lane rows (42, as Skiff's), the panel's tab line under them.
     static let halfTop: CGFloat = tool + toolGap + SloopPads.labels + 4 * PadsPage.rowHeight + 3 * PadsPage.compactRowGap + 12 + PadsPage.tabHeight
     /// Max: the tool row and one row of section keys.
-    static let maxTop: CGFloat = tool + 8 + 64 + 12 + PadsPage.tabHeight
+    static let maxTop: CGFloat = 64 + 12 + PadsPage.tabHeight
 
     private func tops(_ total: CGFloat) -> [SongPosition: CGFloat] {
         let half = max(Self.maxTop, min(Self.halfTop, total - SkiffSongPage.editorMin))
@@ -59,8 +60,7 @@ struct SloopSongPage: View {
             let layout: SloopPadsLayout = top >= (tops[.half]! + tops[.none]!) / 2 ? .full : top > (tops[.half]! + tops[.max]!) / 2 ? .half : .row
             let bottom = max(SkiffSongPage.editorMin, total - top)
             VStack(spacing: 0) {
-                VStack(spacing: Self.toolGap) {
-                    toolRow
+                VStack(spacing: 0) {
                     ZStack(alignment: .topLeading) {
                         if ui.songView == .pads {
                             SloopPads(session: session, ui: ui, layout: layout)
@@ -86,56 +86,6 @@ struct SloopSongPage: View {
         .onChange(of: ui.sampler) { _, r in
             if let r, !r.fromBrowse, position == .none { withAnimation(spring) { place(.half) } }
         }
-    }
-
-    // MARK: The tool row
-
-    private var toolRow: some View {
-        HStack(spacing: 12) {
-            SongViewSwitch(ui: ui).frame(height: Self.tool)
-            ToggleKey(name: session.song.songRecording ? "SONG REC: recording" : "SONG REC", on: session.song.songRecording) {
-                session.toggleSongRec()
-            }
-            .accessibilityHint("From the next bar, every section you play, and for how long, becomes the song's order")
-            if let m = session.songMessage {
-                Text(m).font(.lupe(13, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
-                    .padding(.horizontal, 12).frame(height: 32)
-                    .background(Capsule().fill(Theme.tones[2]))
-                    .transition(.opacity)
-            } else if ui.songView == .timeline, let o = session.songOrder {
-                Text(orderLine(o)).font(.lupe(13)).foregroundStyle(Theme.textSecondary).lineLimit(1).monospacedDigit()
-            } else if ui.songView == .pads {
-                Text(hint).font(.lupe(13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
-            }
-            Spacer(minLength: 0)
-            if ui.songView == .timeline, let o = session.songOrder {
-                if session.orderWaitingForStop {
-                    Text("Saves to the FM-1 when you stop").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
-                }
-                // the order's own setting: round and round, or stop at the end
-                ToggleKey(name: "Loop the song", on: o.loop, enabled: !session.song.songPlaying && !session.song.songRecording) {
-                    var n = o
-                    n.loop.toggle()
-                    session.setSongOrder(n)
-                }
-                .accessibilityHint("On: the song plays round and round. Off: it stops at the end")
-            }
-        }
-        .frame(height: Self.tool)
-        .animation(.easeOut(duration: 0.15), value: session.songMessage)
-    }
-
-    /// "4 steps · 20 bars · step 2 of 4, bar 3 of 4" (as the order panel's own line).
-    private func orderLine(_ o: SongOrder) -> String {
-        let s = session.song
-        let n = o.steps.count, bars = o.steps.reduce(0) { $0 + $1.bars }
-        let at = s.songPlaying ? " · step \(s.songStep + 1) of \(n), bar \(s.songBar + 1) of \(s.songStepBars)" : ""
-        return "\(n) step\(n == 1 ? "" : "s") · \(bars) bars" + (s.songRecording ? " · SONG REC" : "") + at
-    }
-
-    private var hint: String {
-        return session.playing ? "Tap a section: it plays from the next bar. Hold: store, add to the song, clear."
-                               : "Tap a section: it loads as the loop. Hold: store, add to the song, clear."
     }
 
     // MARK: The editor panel, its tab and carets (as Skiff's: SkiffSongPage)
@@ -210,7 +160,7 @@ struct SloopSongPage: View {
                 guard let at = dragTop else { return }
                 var p = tops.min { abs($0.value - at) < abs($1.value - at) }?.key ?? .half
                 // a flick goes one place on in its direction
-                if abs(v.velocity.height) > Labs.flickSpeed.value {
+                if abs(v.velocity.height) > Labs.flickSpeed {
                     let order: [SongPosition] = [.max, .half, .none]
                     let i = order.firstIndex(of: position) ?? 1
                     p = order[v.velocity.height < 0 ? max(0, i - 1) : min(2, i + 1)]
@@ -391,10 +341,12 @@ struct SloopPads: View {
     }
 
     private func inTracks(_ st: State) -> Bool { [.loaded, .playing, .edited, .song, .recording].contains(st) }
+    /// Option A (board 48 A, as Skiff's Timeline): full colour only while it sounds.
+    private func sounding(_ st: State) -> Bool { [.playing, .song, .recording].contains(st) || (st == .edited && session.playing) }
 
     private func sectionPad(_ k: Int) -> some View {
         let st = state(k)
-        let lit = inTracks(st)
+        let lit = sounding(st)
         let colour = Theme.track[k]
         let compact = layout != .full
         let name = DeviceSession.sectionName(k)
@@ -420,12 +372,12 @@ struct SloopPads: View {
                 }
             }
             .foregroundStyle(lit ? Theme.onColour : st == .empty ? Theme.textSecondary : Theme.text)   // (empty: 4.5:1 on the well at 13 pt)
-            .padding(.leading, st == .empty || lit ? 14 : 18).padding(.top, compact ? 6 : 10)
+            .padding(.leading, 14).padding(.top, compact ? 6 : 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background { face(st, colour: colour) }
+            .background { face(st, k: k) }
             .overlay { outline(st) }
             .contentShape(Rectangle())
-            .animation(.easeOut(duration: 0.15), value: st)
+            .animation(Labs.padPlayFade.value > 0 ? .easeOut(duration: Labs.padPlayFade.value) : .easeOut(duration: 0.15), value: st)
         }
         .buttonStyle(PressSink())
         .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { pressAt = $0.location })
@@ -436,20 +388,24 @@ struct SloopPads: View {
         .accessibilityAction(named: "Section menu") { menu(k, at: .zero) }
     }
 
-    @ViewBuilder private func face(_ st: State, colour: Color) -> some View {
+    /// Option A, as Skiff's Timeline and pads (board 48 A): sounding, the section's colour; in the tracks but stopped
+    /// (loaded, edited), the Pads' selected look (flat grey, a 3 pt outline in its colour); stored or waiting, a 32% tint
+    /// with a 1.5 pt edge in its colour; empty, a well.
+    @ViewBuilder private func face(_ st: State, k: Int) -> some View {
         let r = RoundedRectangle(cornerRadius: 12)
-        if inTracks(st) {
+        let colour = Theme.track[k]
+        if sounding(st) {
             r.fill(colour).overlay(alignment: .bottom) {
                 if session.playing { BarProgress(session: session).padding(.horizontal, 12).padding(.bottom, 12) }
             }
+        } else if inTracks(st) {
+            r.fill(Theme.control).overlay { r.stroke(colour, lineWidth: 3).padding(1.5) }
         } else if st == .empty {
             // its edge in the tertiary grey (3.9:1 on the well; the control grey was 1.25:1, under 1.4.11's 3:1)
             r.fill(Theme.well).overlay(r.strokeBorder(Theme.textTertiary, lineWidth: 1))
         } else {
-            // stored: the control grey, its colour as the band down its edge (the lanes' band, board 41)
-            r.fill(Theme.control).overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12).fill(colour).frame(width: 6)
-            }
+            r.fill(SelectionTint.fill(k, percent: SelectionTint.restingBlock))
+                .overlay { r.stroke(colour, lineWidth: 1.5).padding(0.75) }
         }
     }
 
@@ -661,5 +617,100 @@ struct SloopLoopCell: View {
         .accessibilityElement()
         .accessibilityLabel("Track \(track + 1) loop")
         .accessibilityValue("\(tr.length) steps, \((0..<min(tr.length, tr.steps.count)).filter { tr.isOn($0) }.count) with notes")
+    }
+}
+
+// MARK: - In the one row above the pages (2026-11-10, after Skiff's board 47 b)
+
+/// SLOOP's Song tab tools in the top row, after Pads · Timeline · Mix: SONG REC on both; on the Timeline the order's own
+/// setting (Loop the song) and where the song is. (Skiff's Launch at, Cancel waiting, Patterns and zoom have no SLOOP
+/// counterpart: a section always starts on the next bar, there's no pool, the order wraps instead of zooming.)
+struct SloopTools: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    @State private var recFrame: CGRect = .zero
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) { row(words: true); row(words: false) }
+    }
+
+    private func row(words: Bool) -> some View {
+        HStack(spacing: 8) {
+            ToggleKey(name: session.song.songRecording ? "SONG REC: recording" : "SONG REC", on: session.song.songRecording) {
+                recPressed()
+            }
+            .globalFrame($recFrame)
+            .accessibilityHint("From the next bar, every section you play, and for how long, becomes the song's order")
+            if ui.songView == .timeline, let o = session.songOrder {
+                ToggleKey(name: "Loop the song", on: o.loop, enabled: !session.song.songPlaying && !session.song.songRecording) {
+                    var n = o
+                    n.loop.toggle()
+                    session.setSongOrder(n)
+                }
+                .accessibilityHint("On: the song plays round and round. Off: it stops at the end")
+                if words {
+                    Text(Self.orderLine(o, session.song)).font(.lupe(13)).foregroundStyle(Theme.textSecondary).monospacedDigit().lineLimit(1)
+                }
+            }
+        }
+        .fixedSize()
+    }
+
+    /// What SONG REC records replaces the whole order: with one there, it asks first, in place at the key (DESIGN.md:
+    /// the destructive confirm; it was a system dialog on the old Arrange page).
+    private func recPressed() {
+        let steps = session.songOrder?.steps.count ?? 0
+        guard !session.song.songRecording, steps > 0 else { session.toggleSongRec(); return }
+        let items: [MenuItem] = [
+            .note("The sections you play from the next bar, and for how long, become the song's order. The FM-1 keeps no copy of the order now."),
+            .destructive(title: "Record over the song", icon: "record.circle",
+                         confirm: "Replace the song's \(steps) step\(steps == 1 ? "" : "s") with what you play") { session.toggleSongRec() },
+        ]
+        ui.menu = AppMenu(title: "SONG REC", groups: { [items, [MenuItem(title: "Keep the song", icon: "xmark") {}]] },
+                          at: CGPoint(x: recFrame.minX, y: recFrame.maxY), fromKey: true)
+    }
+
+    /// "4 steps · 20 bars · step 2 of 4, bar 3 of 4".
+    static func orderLine(_ o: SongOrder, _ s: SongState) -> String {
+        let n = o.steps.count, bars = o.steps.reduce(0) { $0 + $1.bars }
+        let at = s.songPlaying ? " · step \(s.songStep + 1) of \(n), bar \(s.songBar + 1) of \(s.songStepBars)" : ""
+        return "\(n) step\(n == 1 ? "" : "s") · \(bars) bars" + (s.songRecording ? " · SONG REC" : "") + at
+    }
+}
+
+/// Under the row, as Skiff's SongStrip: SLOOP's refusals and notes ("Stop the song to change its order", "Saves to the
+/// FM-1 when you stop") until they're dealt with; with Stop when stopping is the way out.
+struct SloopStrip: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var say: String? {
+        guard ui.page == .song else { return nil }
+        if let m = session.songMessage { return m }
+        if session.orderWaitingForStop { return "The new song order goes to the FM-1 when you stop" }
+        return nil
+    }
+
+    var body: some View {
+        ZStack {
+            if let m = say {
+                HStack(spacing: 12) {
+                    Text(m).font(.lupe(15)).lineLimit(2)
+                    if session.playing, m.localizedCaseInsensitiveContains("stop") {
+                        Button { session.setPlaying(false) } label: {
+                            Text("Stop").font(.lupe(15, .semibold)).padding(.horizontal, 16).frame(height: 36).raisedKey()
+                        }
+                        .buttonStyle(PressSink())
+                    }
+                }
+                .padding(.leading, 16).padding(.trailing, 6).frame(minHeight: 48)
+                .elevated(.held, radius: 12)
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.25), value: say)
     }
 }

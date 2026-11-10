@@ -42,16 +42,23 @@ struct TopBar: View {
                         .padding(.top, 64 + 4)
                 }
             } else if ui.sloopShell {
-                // SLOOP in the same tabs (2026-11-10): one row as Skiff's, its song mode (Loop · Song) where Skiff's
-                // playback mode sits
+                // SLOOP in the same row (2026-11-10, after board 47 b): the FM-1 key (with Projects and the iPad's audio),
+                // Pads · Timeline · Mix, SLOOP's tools, Keys and the transport; Loop · Song in the tempo panel, its word in
+                // the readout; refusals in the strip under the row
                 HStack(spacing: 12) {
-                    connection
-                    project
-                    Spacer(minLength: 12)
-                    tabs
-                    Spacer(minLength: 12)
-                    SloopSongModeKeys(session: session).fixedSize()
-                    transport
+                    connection.fixedSize()
+                    songTabs
+                    if ui.page == .song {
+                        SloopTools(session: session, ui: ui)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .layoutPriority(-1)
+                    } else {
+                        Spacer(minLength: 12)
+                    }
+                    skiffTransport
+                }
+                .overlay(alignment: .top) {
+                    SloopStrip(session: session, ui: ui).padding(.top, 64 + 4)
                 }
             } else {
                 // the tabs sit in the middle of the bar whatever the two sides hold
@@ -99,7 +106,7 @@ struct TopBar: View {
                     Text(s).font(.lupe(15, .semibold)).lineLimit(1)
                 }
                 // Skiff: its menu holds Projects and the iPad's audio too, so it says it opens
-                if ui.songTab { Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
+                if ui.shell { Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
             }
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
@@ -135,7 +142,7 @@ struct TopBar: View {
              MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: demo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
              MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: demo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }],
             // Skiff: what's set once moved here from the top bar (Scott, 2026-11-10, board 47): Projects, the iPad's audio
-            ui.songTab ? [MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true },
+            ui.shell ? [MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true },
                           MenuItem(title: "Play through the iPad", icon: through.enabled ? "speaker.wave.2.fill" : "speaker.wave.2",
                                    checked: through.enabled) { through.enabled.toggle() }] : [],
             [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true },
@@ -281,7 +288,7 @@ struct TopBar: View {
     /// so going between them is the same slide as before, the editor staying put under them; the tab line is the same.
     private var songTabs: some View {
         let tabs: [(title: String, current: Bool, pick: () -> Void)] = [
-            ("Pads", ui.page == .song && ui.songView == .pads, { pickSong(.pads) }),
+            ("Pads", ui.page == .song && ui.songView == .pads, { pickSong(.pads) }),   // (SLOOP: its sections; the Timeline its order)
             ("Timeline", ui.page == .song && ui.songView == .timeline, { pickSong(.timeline) }),
             ("Mix", ui.page == .mixer, { ui.page = .mixer; Self.driveDevice(session: session, ui: ui, to: .mixer) }),
         ]
@@ -529,7 +536,9 @@ private struct ReadoutLabel: View {
         let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
         // Skiff: the playback mode's word, always (its keys are in the tempo panel since 2026-11-10, board 47)
         let skiffMode: String? = session.skiffSong?.song.map { ["Loop", "Song", "Once"][safe: $0.mode.rawValue] ?? "Song" }
-        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : skiffMode ?? (song ? "SONG" : nil)
+        // SLOOP in the same layout: its song mode's word, always (its keys are in the tempo panel too)
+        let sloopMode: String? = TempoPanel.sloopMode(session) ? (session.song.songMode ? "Song" : "Loop") : nil
+        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : skiffMode ?? sloopMode ?? (song ? "SONG" : nil)
         VStack(alignment: .leading, spacing: 0) {
             Text(position).font(.lupe(20, .semibold)).monospacedDigit().lineLimit(1)
                 .foregroundStyle(recording ? Theme.recText : Theme.text)

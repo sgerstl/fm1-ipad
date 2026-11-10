@@ -62,6 +62,9 @@ struct TempoPanel: View {
     static let tapSide: CGFloat = 76
     /// 300, or wide enough for Loop entry · Play song · Play once on Skiff.
     @MainActor static func width(_ s: DeviceSession) -> CGFloat { s.skiffSong != nil ? 360 : 300 }
+    /// SLOOP in the Song · Mix layout: its song mode lives here, where Skiff's playback mode does (2026-11-10).
+    @MainActor static func sloopMode(_ s: DeviceSession) -> Bool { s.dialect == .sloop && s.capabilities.contains(.sloopSong) && UIDevice.current.userInterfaceIdiom == .pad
+        && !LaunchArgs.all.contains("-sloop-classic") }
 
     var body: some View {
         let off = following != nil
@@ -90,6 +93,14 @@ struct TempoPanel: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Playback").font(.lupe(12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
                     SongModeKeys(store: store)
+                }
+            }
+            // SLOOP's song mode (Loop · Song), in the same place: Loop plays the loop and a tapped section replaces it;
+            // Song makes PLAY run the order and STOP bring the loop back
+            if Self.sloopMode(session), !typing {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Song mode").font(.lupe(12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
+                    SloopSongModeKeys(session: session)
                 }
             }
             if let p = typedProblem {

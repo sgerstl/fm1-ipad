@@ -12,6 +12,8 @@ struct BarPills: View {
     /// Bars played, the fraction of the one playing included (2.4: two full, the third 40 % through).
     let played: Double
     let width: CGFloat
+    /// The pills' ink: the dark text on a solid section colour; the light text on Option A's resting tint.
+    var ink: Color = Theme.onColour
 
     var body: some View {
         let n = max(count, 1)
@@ -33,10 +35,10 @@ struct BarPills: View {
     }
 
     private func pill(width w: CGFloat, fill: Double) -> some View {
-        Capsule().fill(Theme.onColour.opacity(0.22))
+        Capsule().fill(ink.opacity(0.22))
             .overlay(alignment: .leading) {
                 if fill > 0 {
-                    Capsule().fill(Theme.onColour.opacity(0.8)).frame(width: max(6, w * CGFloat(fill)))
+                    Capsule().fill(ink.opacity(0.8)).frame(width: max(6, w * CGFloat(fill)))
                 }
             }
             .frame(width: max(0, w))

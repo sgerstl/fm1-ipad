@@ -333,6 +333,12 @@ struct SongPage: View {
     private func block(_ n: Int, _ step: SongOrder.Step, width w: CGFloat, open: Bool) -> some View {
         let s = session.song
         let live = s.songPlaying && s.songStep == n
+        // the Song tab's Timeline (lane) as Skiff's option A (board 48 A, Scott 2026-11-10): at rest a 32% tint of the
+        // section's colour with a 1.5 pt edge in it and the light text; full colour only while it plays; its menu open,
+        // the Pads' selected look (flat grey, a 3 pt outline in its colour). Arrange's own page keeps every block solid.
+        let solid = !lane || live
+        let ink = solid ? Theme.onColour : Theme.text
+        let shape = RoundedRectangle(cornerRadius: 12)
         return VStack(alignment: .leading, spacing: 2) {
             Text(DeviceSession.sectionName(step.section)).font(.lupe(22, .semibold))
             Text(live ? "bar \(s.songBar + 1) of \(step.bars)" : "\(step.bars) bar\(step.bars == 1 ? "" : "s")")
@@ -342,22 +348,32 @@ struct SongPage: View {
             if live {
                 // the bar playing fills at the tempo (4 beats a bar, as SLOOP counts them), beat by beat with Reduce Motion
                 TimelineView(.animation(minimumInterval: reduceMotion ? 60 / Double(max(session.bpm, 20)) : nil)) { tl in
-                    BarPills(count: step.bars, played: Double(s.songBar) + barFraction(at: tl.date), width: w - 20)
+                    BarPills(count: step.bars, played: Double(s.songBar) + barFraction(at: tl.date), width: w - 20, ink: ink)
                 }
             } else {
-                BarPills(count: step.bars, played: s.songPlaying && n < s.songStep ? Double(step.bars) : 0, width: w - 20)
+                BarPills(count: step.bars, played: s.songPlaying && n < s.songStep ? Double(step.bars) : 0, width: w - 20, ink: ink)
             }
         }
-        .foregroundStyle(Theme.onColour)
+        .foregroundStyle(ink)
         .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 10)
         .frame(width: w, height: blockHeight, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 12)
-            .fill(Theme.pad(step.section)))
+        .background {
+            if solid { shape.fill(Theme.pad(step.section)) }
+            else if open { shape.fill(Theme.control) }
+            else {
+                shape.fill(SelectionTint.fill(step.section, percent: SelectionTint.restingBlock))
+                    .overlay { shape.stroke(Theme.track[step.section], lineWidth: 1.5).padding(0.75) }
+            }
+        }
         // the edge you drag for length
         .overlay(alignment: .trailing) {
-            Capsule().fill(Theme.onColour.opacity(0.35)).frame(width: 4, height: 28).padding(.trailing, 4)
+            Capsule().fill(solid ? Theme.onColour.opacity(0.35) : Theme.textSecondary).frame(width: 4, height: 28).padding(.trailing, 4)
         }
-        .overlay { if open { RoundedRectangle(cornerRadius: 15).stroke(Theme.text, lineWidth: 2).padding(-4) } }
+        .overlay {
+            if open, lane { shape.stroke(Theme.track[step.section], lineWidth: 3).padding(live ? -3 : 1.5) }
+            else if open { RoundedRectangle(cornerRadius: 15).stroke(Theme.text, lineWidth: 2).padding(-4) }
+        }
+        .animation(.easeOut(duration: 0.15), value: live)
     }
 
     /// How far through the bar playing the song is, from when the iPad saw the bar begin. Held at the
