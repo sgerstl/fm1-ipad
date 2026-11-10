@@ -120,3 +120,66 @@ Each pad is a button: "Lead, entry C, pattern 13, waiting, bar 11". Rows are gro
 | **Wrong firmware** | Connected, unknown firmware | B's full page, its own text. |
 
 Motion: lost in 300 ms (page fade) and 250 ms (card down, ease-out); state blends 150 ms; picked up 200 ms (card up, ease-in) and 250 ms (page back). Reduce Motion: cross-fades only. Options B (a page of its own) and C (status in the top bar) are on the board.
+
+## SLOOP: the same tabs, its own song (2026-11-10, proposed: Scott to agree before merging)
+
+*From the SLOOP design pass (`qa/sloop-design-pass-2026-11-10/README.md`, boards S1 to S6). SLOOP-Lupe is SLOOP 2.8.4 plus Lupe's screen link. Until now it kept the pre-Skiff layout (Sequence · Shape · Arrange · Browse on the iPad and the phone). The aim: one product whichever firmware is on the FM-1. The tabs, the panels, the divider and the gestures are the same; what's inside the Song tab is SLOOP's own model, not Skiff's faked.*
+
+### What SLOOP's model is (and isn't)
+
+| | SLOOP 2.8.4 | Skiff 2.2, for comparison |
+|---|---|---|
+| Tracks | 4: T1 to T3 synths, T4 the drum kit (16 lanes) | 6, any engine |
+| What a track plays | **One 64-step loop.** No pattern pool, no list of entries | A list of up to 16 entries from a shared pool of patterns |
+| Sections | **A to D**: each a snapshot of all four tracks' loops. Played from the next bar (playing) or loaded (stopped); stored from the working loop; cleared only stopped; the FM-1 keeps no copy | Scenes: one entry and a mute per track |
+| Song | **An order of up to 16 steps**, each a section and a length in bars (1 to 64); loop or stop at the end; **song mode** (PLAY plays the order, STOP brings the loop back); **SONG REC** (sections played become the order) | Each track's list, played through |
+| Mute | A track parameter, immediate (not staged to a launch point) | PERFORM's, staged |
+| Solo | **None** in the protocol | Lupe's, through PERFORM's mutes |
+| Mixer | Per track LEVEL, PAN, MUTE and the REV send (FX page); the shared DLY, REV/CHO and the GLO pages (GLOBAL, MASTER, DRUMS, TEXTURE, SYSTEM, MIDI 1 to 3) | Skiff's MIXER, DELAY, REVERB, CHORUS, GLOBAL |
+| Sounds | Presets per engine, user presets, kits on T4, user samples | The same, plus Skiff's 32 user slots |
+| Screen link | UI (cmd 90) and UI_GOTO; the FM-1's page, its layer (SAVE held: the song layer 7; SEL held: 5); no cursor | SCREEN 90 with the page's cursor, SCREEN_GOTO, METER, SCOPE |
+| Pass progress | Each track's step and length in LIVE | Counted from the clock |
+
+### Tabs
+
+| | Today | Proposed |
+|---|---|---|
+| iPad | Sequence · Shape · Arrange · Browse | **Song · Mix**, as Skiff |
+| Phone | Sequence · Shape · Arrange · Browse | Unchanged in this pass (mocked, board S6; the phone's Skiff tabs are in flux on another branch) |
+
+Where each old tab goes:
+
+| Old SLOOP tab | Goes to |
+|---|---|
+| **Sequence** (the piano roll or drum grid, the step panel, the track's knobs, the track box with 64-step timelines) | The Song tab's **editor**, under the divider (No grid · Half · Max), as Skiff's. The track box's timelines become the **track heads** on Pads. The whole-track knobs (TrackPanel) stay beside the step panel when there's room, and are reached from the head's menu when there isn't |
+| **Shape** (every button's pages) | The **sound panel**, from the right over Song or Mix: FX, SEL, ENV, LFO, EDIT and ARP on the FM-1 or the rail. GLO's pages go to **Mix** |
+| **Arrange** (the section keys A to D, the song order as blocks, Loop / Song, SONG REC) | The Song tab: the sections as **Pads**, the order as the **Timeline**, Loop / Song and SONG REC in the tool row |
+| **Browse** (engines, presets, user presets, kits, samples) | The **sounds panel**, from the track head's name ("Acid ⌄"), SAVE, the sound panel's "Sounds ⌄" or the track's menu |
+
+### The Song tab on SLOOP
+
+| Part | What it holds | Skiff pattern it reuses |
+|---|---|---|
+| **Tool row** | The Pads / Timeline switch; Loop · Song (song mode); SONG REC; "Store the loop in…" | The tool row and SongViewSwitch |
+| **Track heads** (left, one a track) | Number, name, the sound name with its chevron (opens the sounds panel), its chips (CHORD, ARP), where the loop is (a bar for step / length while playing), Mute. **No Solo** (SLOOP has none; not faked). Tap the number: select the track | The H1 head (board 43), the sound key, chips (board 46) |
+| **The loop** (a column beside the heads) | Each track's working loop, drawn as a small picture of its 64 steps; "changes not in a section" when the tracks were edited since the last store or load | The pad face (PadThumb's look) |
+| **Section pads A to D** | One tall pad a section, across all four rows (a section holds every track). Empty: a well, "empty". Stored: its colour (TE_COL, as on the FM-1). Playing: filled, with the bar's progress. Asked for: the **waiting outline** and "next bar". The song's next (song mode): a thin grey outline, "next". **Tap:** play from the next bar (playing) or load (stopped; over edited tracks it asks first, in place). **Hold:** a fan menu: Store the loop here, Add to the song, Clear (the destructive confirm in place; stopped only) | Pads' waiting outline, "next", fan menus, the destructive confirm |
+| **Timeline** (the switch's other side) | The song order as one lane of blocks on a bar ruler, each block its section's colour and its bars; the playhead in song mode. Tap a block: its menu (section, bars, duplicate, delete); drag to move; drag its right edge for bars. While the song plays the order can't change (the FM-1 refuses): "Stop to change the song", with Stop | The Timeline's lanes and blocks, the stop-to-rearrange strip |
+| **Editor** (under the divider) | The selected track's piano roll or drum grid, the step panel; the header names the track (no pattern number: SLOOP has none) | The editor panel, its tab and carets, the three positions |
+
+What SLOOP's Song tab leaves out, and why: no pattern picker, pool drawer, chains, launch quantize (LOOP, BAR, BEAT, NOW), Cancel waiting, scenes or per-track launches. SLOOP has none of them. A section always starts on the next bar.
+
+### Mix on SLOOP
+
+The four tracks' strips (LEVEL, PAN, MUTE, the REV send), then the shared cards: DLY, REV/CHO and the GLO pages. Skiff's MixerPage, as it is. Open question: whether SYSTEM and MIDI 1 to 3 belong on Mix or in Settings.
+
+### The FM-1's buttons on SLOOP
+
+| FM-1 button | On the iPad |
+|---|---|
+| FX, SEL, ENV, LFO, EDIT, ARP | The sound panel on that button's pages, over the tab that's up |
+| GLO | Mix |
+| HOME, the sequencer's pages | Song (the editor) |
+| SAVE (PRESETS) | The sounds panel over the tab that's up |
+| SAVE held (the song layer) | Song › Pads (the sections) |
+| PLAY, REC | The transport |
