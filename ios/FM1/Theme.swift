@@ -16,7 +16,9 @@ enum Theme {
     static let primaryEdge = Color(hex: 0x8A8A92)        // the primary chiclet's edge (its top is `text`)
     static let disabledOutline = Color(hex: 0x4A4A52)
     /// A filled pad's 1 pt edge on the selected track's lane: 3:1 against a lane tint (Scott, 2026-11-09, board 41).
-    static let laneEdge = Color(hex: 0x7C7C85)
+    static let laneEdge = Color(hex: 0x8E8E96)           // (2026-11-10: 0x7C7C85 was 2.67:1 on the lime lane; 3.40:1 at worst now)
+    /// A REST block's dashes on the Song tab's Timeline: 4.20:1 on the lane (disabledOutline was 1.98:1). Board 48.
+    static let restDash = Color(hex: 0x7C7C85)
     /// The tone ladder lifted and held things step along: lifted to [2], held at [3].
     static let tones = [0x26262B, 0x2D2D33, 0x34343B, 0x3E3E46, 0x48484F].map { Color(hex: $0) }
     /// Arrange's blocks on Skiff: greys, told apart by the pattern number on them (canvas board A).
@@ -293,11 +295,14 @@ struct LED: View {
 /// on the iPad from 18, 24 and 30 %).
 enum SelectionTint {
     static let percent: CGFloat = 24
-    static func fill(_ t: Int) -> Color {
+    /// A Timeline block at rest (Scott, 2026-11-10, board 48 A): a stronger step of the same tint, so it reads on its
+    /// own lane's 24%.
+    static let restingBlock: CGFloat = 32
+    static func fill(_ t: Int, percent pc: CGFloat = percent) -> Color {
         var a = (r: CGFloat(0), g: CGFloat(0), b: CGFloat(0), x: CGFloat(0)), p = a
         UIColor(Theme.track[t]).getRed(&a.r, green: &a.g, blue: &a.b, alpha: &a.x)
         UIColor(Theme.page).getRed(&p.r, green: &p.g, blue: &p.b, alpha: &p.x)
-        let k = percent / 100
+        let k = pc / 100
         return Color(red: p.r + (a.r - p.r) * k, green: p.g + (a.g - p.g) * k, blue: p.b + (a.b - p.b) * k)
     }
 }

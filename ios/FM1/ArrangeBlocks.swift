@@ -49,10 +49,15 @@ struct BlockView: View {
         let _ = BodyCounter.tick("BlockView")
         let shape = BlockShape(cut: sound != nil ? 12 : 0)
         let wide = width >= 56
-        let solid = !isRest
-        // on a solid track colour every line is the dark text (6:1 or better on each); weight ranks them
-        let strong = solid ? Theme.onColour : Theme.textSecondary
-        let dim = strong
+        // the Song tab's Timeline, toned down (Scott, 2026-11-10, board 48 A): at rest a 32% tint of the track with a
+        // track-colour edge; full colour only while it plays; selected as the Pads draw it (flat grey, a 3 pt outline in
+        // the track's colour). The Arrange page keeps every block solid.
+        let toned = compact
+        let solid = !isRest && (!toned || playing)
+        // on a solid track colour every line is the dark text (6:1 or better on each); weight ranks them. On the tint:
+        // the light text (7.4:1 at worst, lime) and the raised secondary for counts (5.0:1)
+        let strong = solid ? Theme.onColour : isRest ? Theme.textSecondary : toned ? Theme.text : Theme.textSecondary
+        let dim = solid ? Theme.onColour : isRest ? Theme.textSecondary : toned ? (selected ? Theme.textSecondary : Theme.textSecondaryRaised) : Theme.textSecondary
         VStack(alignment: .leading, spacing: 2) {
             if laneHeight < 52 {
                 // a short lane (the Song tab): one line, "B · 05 ×2"; a narrow block, its count under it where the
@@ -77,7 +82,7 @@ struct BlockView: View {
                 Text(sub).font(.lupe(12)).foregroundStyle(dim)
                 if let thumb, !isRest, laneHeight >= 76, width >= 80 {
                     Spacer(minLength: 0)
-                    PadThumbView(thumb: thumb, ink: Theme.onColour.opacity(0.6)).frame(height: 14)
+                    PadThumbView(thumb: thumb, ink: solid ? Theme.onColour.opacity(0.6) : Theme.textSecondary).frame(height: 14)
                 }
             } else {
                 // narrow: the pattern, then its count (and the sound's mark beside it)
@@ -94,7 +99,15 @@ struct BlockView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: laneHeight < 52 ? .leading : .topLeading)
         .background {
             if isRest {
-                shape.stroke(Theme.disabledOutline, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                // (the lane edge's grey on the Song tab: disabledOutline was 1.98:1 on the lane, 4.20:1 now)
+                shape.stroke(toned ? Theme.restDash : Theme.disabledOutline, style: StrokeStyle(lineWidth: toned ? 1.5 : 1, dash: [4, 3]))
+            } else if toned && selected && !playing {
+                shape.fill(Theme.control)
+                    .overlay { if block.isChain { ChainDividers(parts: block.parts, reps: block.reps) } }
+            } else if toned && !playing {
+                shape.fill(SelectionTint.fill(track, percent: SelectionTint.restingBlock))
+                    .overlay { shape.stroke(Theme.track[track], lineWidth: 1.5).padding(0.75) }
+                    .overlay { if block.isChain { ChainDividers(parts: block.parts, reps: block.reps) } }
             } else {
                 shape.fill(Theme.track[track])
                     .overlay { if block.isChain { ChainDividers(parts: block.parts, reps: block.reps) } }
@@ -103,15 +116,16 @@ struct BlockView: View {
         .overlay {
             // on a solid colour the ring goes outside, on the lane (light on amber would be under 3:1), and
             // the linked copies' dashes are dark
-            if selected { shape.stroke(Theme.text, lineWidth: 2).padding(solid ? -3 : 1) }
-            // the Song tab while playing: the block each track plays outlined inside
-            else if compact, playing { shape.stroke(Theme.text, lineWidth: 2).padding(2) }
+            // selected on the Song tab: the Pads' 3 pt outline in the track's colour, inside; on a playing (solid) block,
+            // outside on the lane's tint (4.45:1 at worst)
+            if selected, toned { shape.stroke(Theme.track[track], lineWidth: 3).padding(playing ? -3 : 1.5) }
+            else if selected { shape.stroke(Theme.text, lineWidth: 2).padding(solid ? -3 : 1) }
             else if linked { shape.stroke(solid ? Theme.onColour : Theme.textSecondary, style: StrokeStyle(lineWidth: 2, dash: [5, 4])).padding(4) }
         }
         .compositingGroup()
         // the Song tab while playing: what isn't playing dimmed, so each track's playing block stands out; the change
         // fades as the pads' play colours do (Labs › Pads: play colours fade in; out quicker)
-        .opacity(compact && session.playing && !playing && !selected ? 0.5 : 1)
+        // (the Song tab no longer dims what isn't playing: at rest the blocks are tinted, so the playing ones stand out)
         .animation(Labs.padPlayFade.value > 0 ? (playing ? .easeOut(duration: Labs.padPlayFade.value) : .easeIn(duration: Labs.padPlayFade.value * 0.7)) : nil,
                    value: playing)
         .animation(Labs.padPlayFade.value > 0 ? .easeOut(duration: Labs.padPlayFade.value) : nil, value: session.playing)

@@ -43,14 +43,11 @@ struct LaneMarks: View {
                         }
                         if m.playing == b.id, m.ends { badge(nil, "END").frame(width: w, height: h, alignment: .bottomTrailing) }
                         if m.queued == b.id {
-                            // waiting, as on the pads: a dashed outline, pulsing, and the countdown on a white capsule
-                            // (Scott, 2026-11-09: the blocks' states the pads')
-                            let pulse = reduceMotion ? 1 : 0.6 + 0.4 * abs(sin(tl.date.timeIntervalSinceReferenceDate * .pi))
-                            RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2.5, dash: [8, 5])).opacity(pulse).padding(1)
-                            LaunchCountdown(session: session, track: track).font(.lupe(11, .semibold)).monospacedDigit()
-                                .foregroundStyle(Theme.onColour).padding(.horizontal, 6).frame(height: 18)
-                                .background(Capsule().fill(Theme.text)).padding(3)
-                                .frame(width: w, height: h, alignment: .bottomLeading)
+                            // waiting, as the pads now draw it (2026-11-10, board 48): the time to its launch traced round
+                            // it in the track's colour, closing as it lands; no countdown numbers
+                            LaunchTrace(left: { session.ticksToLaunch(track) }, colour: Theme.track[track], radius: 6, width: 2.5)
+                                .frame(width: w, height: h)
+                                .transition(.opacity)
                         }
                     }
                     .frame(width: w, height: h)
