@@ -1,0 +1,22 @@
+# Device check: sloop-design-pass, 2026-11-10
+
+Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it with the iPad and the FM-1; the branch merges only after it passes. **Run it only when the FM-1 is on SLOOP-Lupe 2.8.4** (or the 2.8.5 build from the flash-chips branch, if that's what's on it by then). On Skiff none of this shows: SLOOP's layout appears only with SLOOP connected.
+
+**Setup:** SLOOP-Lupe on the FM-1 (screen link) · Lupe from branch `sloop-design-pass` (worktree `~/code/fm1-ipad-sloop-pass`), iPad in landscape · USB-C cable, headphones in the FM-1 · no launch flags. To compare with the old layout, the launch flag `-sloop-classic` brings back Sequence · Shape · Arrange · Browse.
+**Back up first?** Yes, for checks 5, 6 and 7: storing, clearing a section and changing the song order write the FM-1's flash. Back up with Lupe › Projects (save the project to the iPad) or SLOOP's editor › Song & sections › Save a backup.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 1 | Connect. Look at the top bar and the Song tab. | Tabs **Song · Mix** (no Sequence, Shape, Arrange or Browse). Loop · Song beside REC and Play. Song shows four track heads, "The loop now" with each track's steps, and sections A to D as tall pads; the editor below on the selected track's tint. | – | ☐ pass ☐ fail: |
+| 2 | Tap the editor's tab (the three carets under the heads) twice, then drag it up past the heads. | Shut (all carets up): the heads and section pads fill the page. Again: Half. Dragged up: Max, the sections as one row of keys, the editor larger. Each move springs into place; nothing jumps. | – | ☐ pass ☐ fail: |
+| 3 | Press FX, then ENV, then GLO, then HOME on the FM-1. | FX and ENV: the sound panel slides in from the right over Song, on that button's pages. GLO: the Mix tab (four strips, then the DLY / REV/CHO / GLO cards). HOME: back to Song, panel closed. | – | ☐ pass ☐ fail: |
+| 4 | Tap a track head's sound name ("Dx Rhodes ⌄"), then press SAVE on the FM-1. | The sounds panel (engines, presets) comes in from the right; the page stays live beside it. SAVE closes it and shows the sections (the song layer). | – | ☐ pass ☐ fail: |
+| 5 | Playing, tap a stored section that isn't playing. | Its pad gets the waiting outline, traced round as the bar runs out, and says "next bar"; on the bar it fills with its colour and says "playing". On the FM-1 the same section starts. | Yes | ☐ pass ☐ fail: |
+| 6 | Stopped, hold an empty section, pick "Store the loop here". Hold it again, pick "Clear section …", then confirm. | The menu fans out at your finger. Stored: the pad turns grey with its colour down the edge, "stored". Clear asks once more in its own row with the section named; confirmed, the pad is empty again. Playing, Clear says "(stop first)" and can't be picked. | Yes | ☐ pass ☐ fail: |
+| 7 | Switch to Timeline (the bars icon, top left). Stopped, drag a block's right edge longer, then hold a section on Pads and pick "Add to the song". | Timeline: the order as blocks in the sections' colours. The longer block keeps its new bars after a second ("Saving to the FM-1…"). Add to the song: a new 4-bar block at the end. SLOOP's own song page on the FM-1 shows the same order. | Yes | ☐ pass ☐ fail: |
+| 8 | Tap Song in Loop · Song (top bar), press Play, then Stop. | Song mode: PLAY runs the order (the playing block lit on the Timeline, the next one outlined on Pads); STOP brings your loop back. The FM-1's song mode matches. | – | ☐ pass ☐ fail: |
+| 9 | Mute track 2 on its head; move track 1's LEVEL fader on Mix. | Mute: the speaker key presses in, the head's number turns to an outline, the track goes quiet at once (SLOOP's mute isn't staged). LEVEL: the FM-1's track level follows; the FM-1's screen doesn't jump to another page. | – | ☐ pass ☐ fail: |
+
+**Not covered here:** VoiceOver (labels and actions were added but not tried; release pass), the phone (not changed in this pass, apart from the drum track now being called "Drums"), Reduce Motion on the device, animation hitches (the simulator can't show them), and the newer flash chip.
+
+**After the run:** failures go on the batch list with the check number; passes move their items to "On the device", with "VoiceOver: release pass".

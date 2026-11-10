@@ -53,6 +53,11 @@ struct AppView: View {
                         if ui.sloopShell, let s {
                             if SoundPanelControl.follow(s, session: session, ui: ui) { return }
                             if s.layer == 7, ui.followDevice { ui.songView = .pads }
+                            // SAVE again (the FM-1 on its song pages): the sounds panel goes, the sections show
+                            if ui.followDevice, SoundPage.tab(for: s, session) == .song, ui.presetsPanel {
+                                ui.presetsPanel = false
+                                ui.songView = .pads
+                            }
                             // GLO's pages are Mix's; SEQ's (NOTES, PATTERN) the Song tab's editor
                             if ui.followDevice, !s.home, s.layer == 0, s.menu == 0, let p = SoundPage.page(session, fw: s.page),
                                p.family == .glo || p.family == .seq {
