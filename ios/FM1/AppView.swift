@@ -27,6 +27,10 @@ struct AppView: View {
                     .allowsHitTesting(!held)
                     .grayscale(held ? 0.85 : 0)
                     .opacity(held ? 0.45 : 1)
+                    // ...and out of VoiceOver's reach while held: allowsHitTesting stops fingers, not VoiceOver's
+                    // double-tap, so the read-only page could still be pressed (2026-11-10, WCAG 4.1.2). The card
+                    // (the overlay, below) stays readable.
+                    .accessibilityHidden(held)
                     .animation(.easeOut(duration: held ? 0.3 : 0.25), value: held)
                     .overlay(alignment: .top) {
                         if held {
@@ -59,6 +63,12 @@ struct AppView: View {
         }
         .sessionUpkeep(session)
         .onChange(of: session.isConnected, initial: true) { _, on in if on { everConnected = true } }
+        // the card is said when it comes and when the FM-1 is back, once each (4.1.3: a status message reaches
+        // VoiceOver without moving focus; the card's own line blends, which VoiceOver doesn't hear)
+        .onChange(of: held) { was, now in
+            if now, !was { AccessibilityNotification.Announcement("FM-1 disconnected. Plug it back in; nothing is lost.").post() }
+            else if was, !now, session.isConnected { AccessibilityNotification.Announcement("FM-1 back").post() }
+        }
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
         // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
