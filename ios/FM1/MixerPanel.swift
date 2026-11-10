@@ -292,7 +292,7 @@ struct MixerStrips: View {
         let id = revID
         HStack(alignment: .top, spacing: 8) {
             ForEach(Array(session.trackIndices), id: \.self) { t in
-                MixerStrip(session: session, row: row(t, id), touched: touched).equatable()
+                MixerStrip(session: session, ui: ui, row: row(t, id), touched: touched).equatable()
             }
         }
         .task(id: id) {
@@ -334,6 +334,7 @@ struct MixerStrips: View {
 /// sticky fader in the track's colour, PAN and the REVERB send across, MUTE a toggle chiclet (down is muted).
 private struct MixerStrip: View, Equatable {
     let session: DeviceSession
+    let ui: EditorUI
     let row: MixRow
     let touched: () -> Void
 
@@ -343,6 +344,12 @@ private struct MixerStrip: View, Equatable {
         let _ = BodyCounter.tick("mixer.strip")
         let t = row.track, colour = Theme.track[t]
         VStack(spacing: 12) {
+            // the Half pads' track head (Scott, 2026-11-10: "the same track headers… just for consistency"): chip, name,
+            // what it plays, the pass bar, Mute and Solo. Its Mute is PERFORM's (at the launch point while playing), so
+            // the strip's own MUTE goes. Without Skiff's song (older firmware): the strip's own name and MUTE.
+            if let store = session.skiffSong {
+                TrackStripRow(session: session, store: store, ui: ui, track: t, preview: nil).frame(height: 44)
+            } else {
             Button { session.select(track: t) } label: {
                 HStack(spacing: 8) {
                     TrackChip(track: t, selected: row.selected).frame(width: 28, height: 28)
@@ -357,12 +364,14 @@ private struct MixerStrip: View, Equatable {
             .accessibilityLabel("Track \(t + 1), \(row.name)")
             .accessibilityHint("Selects the track")
             .accessibilityAddTraits(row.selected ? .isSelected : [])
+            }
             Fader(axis: .vertical, spec: levelSpec, tint: row.mute ? Theme.textTertiary : colour, nudge: 2,
                   detent: MixerStrips.unity, touched: touched,
                   meter: AnyView(LevelLine(meters: session.meters, track: t, muted: row.mute, tint: colour)))
                 .frame(maxHeight: .infinity)
             Fader(axis: .horizontal, spec: panSpec, tint: colour, touched: touched)
             if row.rev != nil { Fader(axis: .horizontal, spec: revSpec, tint: colour, touched: touched) }
+            if session.skiffSong == nil {
             Button { session.set(track: t, param: Param.mute, to: row.mute ? 0 : 1) } label: {
                 HStack(spacing: 6) {
                     LED(on: row.mute)
@@ -378,8 +387,9 @@ private struct MixerStrip: View, Equatable {
             .accessibilityLabel("Mute track \(t + 1)")
             .accessibilityAddTraits(.isToggle)
             .accessibilityValue(row.mute ? "muted" : "playing")
+            }
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
+        .padding(.horizontal, session.skiffSong == nil ? 10 : 6).padding(.vertical, 8)   // (6: room for the head's name)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 12).fill(row.selected ? colour.opacity(0.12) : Theme.well))
         .accessibilityElement(children: .contain)

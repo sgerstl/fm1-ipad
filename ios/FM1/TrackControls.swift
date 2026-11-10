@@ -16,6 +16,9 @@ struct TrackKnobBox: View {
     /// The knob last turned on the FM-1, lit as the sound panel lights it (Scott, 2026-11-07: "work exactly like the
     /// ones in the panel").
     @State private var marks = ShapeMarks()
+    /// Pads' and the Timeline's: the box shown on the selected lane (shared). Its close key shuts it, so nobody has to
+    /// remember the head's double tap (Scott, 2026-11-10), which stays.
+    @AppStorage("padControlsOpen") private var controlsOpen = true
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
     /// Its width on a tab: HOME's four 92 pt columns, their gaps, 8 pt each side.
@@ -78,6 +81,12 @@ struct TrackKnobBox: View {
                     KnobControl(ui: ui, column: (number: 0, tint: Theme.track[t], hot: false)) { KnobSpec.all(session)[k] }
                         .frame(width: 92, height: 56)
                 }
+                // the cell beside PAN: a small round close key in its bottom right corner, round and dark so it
+                // reads as a key, not a fifth parameter; its touch the full 44 pt
+                if embedded {
+                    Color.clear.frame(width: 92, height: 56)
+                        .overlay(alignment: .bottomTrailing) { CloseControlsKey { controlsOpen = false } }
+                }
             }
         }
         .environment(\.compactColumns, true)
@@ -132,5 +141,27 @@ private struct MuteChipStyle: ToggleStyle {
         .accessibilityRepresentation {
             Toggle(isOn: configuration.$isOn) { configuration.label }
         }
+    }
+}
+
+/// The track controls' close key (Scott, 2026-11-10: "a little close button… a quarter of the size of the other squares"):
+/// a 28 pt dark disc with a cross, in a 44 pt touch area anchored to the box's bottom right corner.
+struct CloseControlsKey: View {
+    let close: () -> Void
+    var body: some View {
+        Button(action: close) {
+            ZStack(alignment: .bottomTrailing) {
+                Color.clear
+                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.text)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Theme.control))
+                    .overlay(Circle().strokeBorder(Theme.textSecondary.opacity(0.6), lineWidth: 1))
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .accessibilityLabel("Close track controls")
+        .accessibilityHint("Double-tapping the track's head opens them again")
     }
 }
