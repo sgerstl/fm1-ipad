@@ -10,6 +10,7 @@ struct SettingsSheet: View {
     let session: DeviceSession
     @Environment(AudioThrough.self) private var through
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(PadsPage.confirmClearKey) private var confirmPadClear = true
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
     @AppStorage(PadPreviews.key) private var padPreviews = true
@@ -45,6 +46,12 @@ struct SettingsSheet: View {
                     Text(handedness == .right
                          ? "Menus open to the left of your finger, so your hand doesn't cover them. The sound buttons sit on the right."
                          : "Menus open to the right of your finger, so your hand doesn't cover them. The sound buttons sit on the left.")
+                }
+
+                Section {
+                    Toggle("Confirm before clearing a pad", isOn: $confirmPadClear)
+                } footer: {
+                    Text("Clearing a pad whose pattern nothing else uses erases that pattern, and it can't be undone. On, Lupe asks first. Off (\u{201C}Don't ask again\u{201D}), it clears straight away.")
                 }
 
                 Section {

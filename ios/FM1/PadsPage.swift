@@ -951,11 +951,18 @@ struct PadsPage: View {
 
     /// CLEAR (stopped only: playing, the store says "Stop to…" with a Stop key). A pattern nothing else names goes with
     /// the entry and can't be undone: asked first.
+    /// Asked unless "Don't ask again" was ticked (Scott, 2026-11-10); Settings › Confirm before clearing a pad brings it back.
+    static let confirmClearKey = "confirmPadClear"
     private func clear(_ t: Int, _ i: Int, _ e: SongEntry) {
         let alone = e.poolIndex.map { (store.pool?.patterns[safe: $0]?.uses ?? 0) <= 1 } ?? false
-        if alone, let p = e.poolIndex, !session.playing {
-            store.ask("Clear entry \(Entries.letter(i))?", "Pattern \(Entries.number(p + 1)) is used nowhere else, so it's erased with the entry. This can't be undone.",
-                      confirm: "Clear entry \(Entries.letter(i))") { await store.send(.clear(track: t, entry: i)) }
+        let ask = UserDefaults.standard.object(forKey: Self.confirmClearKey) as? Bool ?? true
+        if alone, ask, let p = e.poolIndex, !session.playing {
+            ui.menu = AppMenu.confirm("Clear entry \(Entries.letter(i))", confirm: "Clear entry \(Entries.letter(i))",
+                                      caption: "Pattern \(Entries.number(p + 1)) is used nowhere else, so it's erased with the entry. This can't be undone.",
+                                      tint: t, at: pressAt,
+                                      optOut: .init(key: Self.confirmClearKey, hint: "Clears pads without asking, erasing a pattern nothing else uses. Turn back on in Settings")) {
+                Task { await store.send(.clear(track: t, entry: i)) }
+            }
         } else {
             Task { await store.send(.clear(track: t, entry: i)) }
         }

@@ -74,14 +74,18 @@ struct AppMenu: Identifiable {
     /// What the choice does, in a line or three over the fan (what goes, whether it comes back): the honest part a
     /// system dialog's message carried (2026-11-10, the last system dialogs converted).
     var caption: String? = nil
+    /// A "Don't ask again" box under the confirm (Scott, 2026-11-10, clearing a pad): ticked when the confirm is tapped,
+    /// the setting under `key` turns off. Cancel leaves it as it was. `hint` says where it comes back on.
+    var optOut: OptOut? = nil
+    struct OptOut { var key: String; var label = "Don't ask again"; var hint: String }
 
     /// One destructive thing asked once more, in place at the finger: its confirm (red-outlined, `confirm` naming what
     /// goes) and Cancel, with `caption` over them. For what used to be a system alert.
     static func confirm(_ title: String, confirm: String, caption: String? = nil, icon: String = "trash", tint: Int? = nil,
-                        at: CGPoint = TouchPoint.last, action: @escaping () -> Void) -> AppMenu {
+                        at: CGPoint = TouchPoint.last, optOut: OptOut? = nil, action: @escaping () -> Void) -> AppMenu {
         AppMenu(title: title, groups: { [[.destructive(title: title, icon: icon, confirm: confirm, action: action),
                                           MenuItem(title: "Cancel", icon: "xmark") {}]] },
-                at: at, fan: true, tint: tint, asking: true, caption: caption)
+                at: at, fan: true, tint: tint, asking: true, caption: caption, optOut: optOut)
     }
 }
 
@@ -134,7 +138,7 @@ struct AppMenuLayer: View {
                     let at = CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY)
                     if m.fan {
                         FanMenu(title: m.title, items: m.groups().flatMap { $0 }.filter { !$0.note }, at: at, layer: g.size, tint: m.tint,
-                                asking: m.asking, caption: m.caption, close: { menu = nil },
+                                asking: m.asking, caption: m.caption, optOut: m.optOut, close: { menu = nil },
                                 open: { item in menu = AppMenu(title: item.title, groups: item.children ?? { [] }, at: m.at) })
                             .id(m.id)
                             .transition(.opacity.animation(.easeIn(duration: Labs.menuClose.value)))
@@ -359,8 +363,10 @@ struct FanMenu: View {
     /// Opens on its first item's confirm (AppMenu.asking).
     var asking = false
     var caption: String? = nil
+    var optOut: AppMenu.OptOut? = nil
     let close: () -> Void
     /// A submenu chosen: it opens as an ordinary menu.
+    @State private var optedOut = false
     let open: (MenuItem) -> Void
     @AppStorage(Handedness.key) private var hand = Handedness.right
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -378,7 +384,8 @@ struct FanMenu: View {
         // the caption over the buttons: its height from its length (13 pt, about 30 letters a line in 240 pt)
         let capH: CGFloat = caption.map { 20 + CGFloat(Int((Double($0.count) / 28).rounded(.up))) * 18 } ?? 0
         let capTop: CGFloat = capH > 0 ? capH + Self.gap : 0
-        let total = capTop + n * Self.height + max(0, n - 1) * Self.gap
+        let boxH: CGFloat = optOut != nil ? 44 + Self.gap : 0
+        let total = capTop + n * Self.height + max(0, n - 1) * Self.gap + boxH
         let x = hand.menuX(touch: at.x, menuWidth: Self.width, in: layer.width)
         let y = Handedness.menuY(touch: at.y, menuHeight: total, in: layer.height)
         ZStack(alignment: .topLeading) {
@@ -407,6 +414,7 @@ struct FanMenu: View {
                         .animation(reduceMotion ? .easeOut(duration: 0.15)
                                    : .timingCurve(0.2, 0.8, 0.2, 1, duration: Labs.menuOpen.value).delay(Double(k) * 0.03), value: out)
                 }
+                if let o = optOut { optOutBox(o).opacity(out ? 1 : 0).animation(.easeOut(duration: reduceMotion ? 0.15 : Labs.menuOpen.value), value: out) }
             }
             .frame(width: Self.width)
             .closesOnOutsideTouch(close)
@@ -443,6 +451,7 @@ struct FanMenu: View {
     private func confirmButton(_ item: MenuItem) -> some View {
         Button {
             guard Date().timeIntervalSince(confirmShownAt) > 0.4 else { return }
+            if optedOut, let o = optOut { UserDefaults.standard.set(false, forKey: o.key) }
             close(); item.action?()
         } label: {
             HStack(spacing: 10) {
@@ -463,6 +472,19 @@ struct FanMenu: View {
         .accessibilityFocused($confirmFocused)
         .accessibilityHint("Can't be undone. Cancel, or tap away, keeps everything")
         .transition(.opacity)
+    }
+
+    /// "Don't ask again": a real toggle, 44 pt tall, the whole row its target. Takes effect with the confirm.
+    private func optOutBox(_ o: AppMenu.OptOut) -> some View {
+        Toggle(isOn: $optedOut) {
+            Text(o.label).font(.lupe(15)).foregroundStyle(Theme.text)
+        }
+        .toggleStyle(CheckBox())
+        .padding(.horizontal, 16)
+        .frame(width: Self.width, height: 44)
+        .background(RoundedRectangle(cornerRadius: 14).fill(tint.map { SelectionTint.fill($0) } ?? Elevation.held.surface).elevationShadow(.held))
+        .padding(.top, Self.gap)
+        .accessibilityHint(o.hint)
     }
 
     private var cancelButton: some View {
@@ -521,5 +543,28 @@ struct FanMenu: View {
         }
         .buttonStyle(PressSink())
         .disabled(!item.enabled)
+    }
+}
+
+
+/// A checkbox: a box that fills with a tick, its words beside it, the whole row the target (a Toggle underneath, so
+/// VoiceOver says "switch button, on/off").
+struct CheckBox: ToggleStyle {
+    func makeBody(configuration c: Configuration) -> some View {
+        Button { c.isOn.toggle() } label: {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(c.isOn ? Theme.text : Color.clear)
+                    .overlay { RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.text, lineWidth: 2) }
+                    .overlay { if c.isOn { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.onColour) } }
+                    .frame(width: 22, height: 22)
+                c.label
+                Spacer(minLength: 0)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityRepresentation { Toggle(isOn: c.$isOn) { c.label } }
     }
 }
