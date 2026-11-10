@@ -90,3 +90,27 @@ import Testing
         run.cancel()
     }
 }
+
+/// The Song tab's "Add to the song" on SLOOP (the SLOOP design pass, 2026-11-10): a section held, added at the order's end.
+@Suite struct SongOrderAppendTests {
+    @Test func appendsAtTheEndWithFourBars() {
+        let o = SongOrder.standard.appending(section: 2)
+        #expect(o?.steps.map(\.section) == [0, 1, 2, 3, 2])
+        #expect(o?.steps.last?.bars == 4)
+        #expect(o?.loop == SongOrder.standard.loop)
+    }
+
+    @Test func refusesAFullOrderAndABadSection() {
+        let full = SongOrder(steps: (0..<SongOrder.maxSteps).map { .init(section: $0 % 4, bars: 1) }, loop: true)
+        #expect(full.appending(section: 0) == nil)
+        #expect(SongOrder.standard.appending(section: 4) == nil)
+        #expect(SongOrder.standard.appending(section: 1, bars: 99)?.steps.last?.bars == 64)
+    }
+
+    @Test func survivesTheSettingsBytes() {
+        var settings = Array("3REP".utf8) + Array(repeating: UInt8(0), count: 120)
+        settings = SongOrder.standard.written(into: settings)
+        let added = SongOrder.standard.appending(section: 1)!
+        #expect(SongOrder(settings: added.written(into: settings)) == added)
+    }
+}

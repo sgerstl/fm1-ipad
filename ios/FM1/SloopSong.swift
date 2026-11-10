@@ -346,6 +346,13 @@ struct SloopPads: View {
                 .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.9), value: layout)
             }
         }
+        // -section-menu B: opens that section's hold menu (screenshots, as -sound-panel does for the panel)
+        .task {
+            let a = LaunchArgs.all
+            guard let i = a.firstIndex(of: "-section-menu"), i + 1 < a.count, let k = ["A", "B", "C", "D"].firstIndex(of: a[i + 1]) else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            menu(k, at: CGPoint(x: 760 + CGFloat(k) * 260, y: 330))
+        }
     }
 
     // MARK: A section
@@ -395,10 +402,22 @@ struct SloopPads: View {
             if held == k { held = nil; return }
             tap(k)
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.lupeNumber(compact ? 30 : 64, .bold))
-                Text(label(st)).font(.lupe(13, st == .nextBar || lit ? .semibold : .regular)).lineLimit(1)
-                Spacer(minLength: 0)
+            Group {
+                if layout == .row {
+                    // one row over the largest editor: the letter and its word side by side, the bar under them
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(name).font(.lupeNumber(30, .bold))
+                        Text(label(st)).font(.lupe(13, st == .nextBar || lit ? .semibold : .regular)).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.lupeNumber(compact ? 30 : 64, .bold))
+                        Text(label(st)).font(.lupe(13, st == .nextBar || lit ? .semibold : .regular)).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                }
             }
             .foregroundStyle(lit ? Theme.onColour : st == .empty ? Theme.textTertiary : Theme.text)
             .padding(.leading, st == .empty || lit ? 14 : 18).padding(.top, compact ? 6 : 10)
@@ -498,8 +517,7 @@ struct SloopPads: View {
     }
 
     private func add(_ k: Int) {
-        guard var o = session.songOrder, o.steps.count < SongOrder.maxSteps else { return }
-        o.steps.append(SongOrder.Step(section: k, bars: 4))
+        guard let o = session.songOrder?.appending(section: k) else { return }
         session.setSongOrder(o)
     }
 }
