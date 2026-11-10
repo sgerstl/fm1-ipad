@@ -144,9 +144,14 @@ SLOOP 2.8.4's model, read from `SloopDriver`, `Session.swift`, `Song.swift` and 
 - The SLOOP screens in `one-row/after`: Pads at No grid, Half and Max; the Timeline; Mix; FX over Pads; the section menu; `-sloop-classic` still shows the old four tabs.
 - `swift test`: **294 passed**. The app builds with no errors.
 
-**Not verified:** the same as §7 (no taps driven, nothing on the FM-1). New this round and also untried: the tempo panel's Loop · Song (no launch flag opens the tempo panel), the SONG REC confirm, and the strip. The canvas boards S2–S4 still show the earlier two-row bar; I haven't redrawn them.
+**Not verified:** the same as §7 (no taps driven, nothing on the FM-1). New this round and also untried: the tempo panel's Loop · Song (no launch flag opens the tempo panel), the SONG REC confirm, and the strip. The canvas boards S2–S4 were redrawn afterwards with the one-row bar (Pads · Timeline · Mix, SLOOP's tools, "Loop" or "Song" in the readout), the strip under the row, and option A on the section pads and blocks (canvas version 140). S3 still draws the Timeline on a ruler, which is Q3's proposal; the build has wrapping blocks.
 
-**New questions:**
+**Decided (Scott, 2026-11-10, through the Bluetooth PoC session):**
+
+- **Q9: SLOOP's bar matches Skiff's.** No project name or Save key in the bar; Projects stays in the FM-1 menu. Built so (`c7fe92e`).
+- **Q10: SLOOP's section Clear always asks**, whatever Settings › Confirm before clearing a pad says. The code already did: that setting is read only by Skiff's pad clear (`PadsPage.confirmClearKey`), and the section menu's Clear is a plain `MenuItem.destructive` with no opt-out. A comment there now records the decision. **No test added:** the menu is app code, and the app has no unit-test target here (SloopKit's tests can't reach it). A UI test belongs with the `FM1UITests` target the a11y branch adds.
+
+The questions as asked:
 
 9. **Projects on SLOOP.** The old bar showed the project's name and a Save key with an "edited" dot. Now, as on Skiff, Projects is in the FM-1 menu. Fine to lose the always-visible name and dot? *Recommend yes,* for parity, but SLOOP's projects are saved by hand more often than Skiff's slots, so watch for it on the device.
 10. **Section Clear and "Confirm before clearing a pad".** *Recommend* SLOOP's section Clear keeps asking whatever that setting says: a section has no copy anywhere, and a Skiff pad's pattern survives in the pool.

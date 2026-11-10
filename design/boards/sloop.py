@@ -66,23 +66,45 @@ def speaker(x, y, c=T2R, muted=False):
     w = '<path d="M16 9l5 6M21 9l-5 6"/>' if muted else '<path d="M15 9.5a3.5 3.5 0 0 1 0 5M17.5 7a7 7 0 0 1 0 10"/>'
     return SPEAKER.format(x=x, y=y, c=c, w=w)
 
-def topbar(X, Y, W, playing=True, song_mode=0, tab=0):
-    """As Skiff's (the real bar, 2026-11-10): the connection, Projects, Song · Mix at the left; the song mode, iPad audio,
-    the keys, REC, play and the position at the right. SLOOP's song mode is Loop · Song where Skiff's playback mode is."""
+def tint(c, pct=32):
+    return f'color-mix(in srgb, {c} {pct}%, {PAGE})'
+
+def topbar(X, Y, W, playing=True, song_mode=0, tab='pads', tools=('SONG REC',), line=None):
+    """The one row above the pages (board 47 b, Pads · Timeline · Mix since 66a426b), SLOOP's: the FM-1 key with its menu
+    (Projects, the iPad's audio), the three tabs, the tab's tools, Keys and the transport. Loop · Song lives in the tempo
+    panel; its word is in the readout."""
     o = []
     o.append(box(X + 4, Y + 18, 8, 8, f'background:{TEXT};border-radius:4px;') + tx(X + 22, Y + 12, 'Demo', 15, TEXT, 600))
-    o.append(tx(X + 86, Y + 10, '▭', 18, T2R))
-    o.append(tabs(X + 360, Y - 8, sel=tab))
-    s, sw = seg(X + W - 640, Y - 2, ['Loop', 'Song'], song_mode); o.append(s)
-    o.append(speaker(X + W - 640 + sw + 24, Y + 10, T2R))
-    o.append(tx(X + W - 640 + sw + 70, Y + 8, '▥', 20, T2R))
+    o.append(tx(X + 72, Y + 12, '⌄', 13, T2, 700))
+    names = ('Pads', 'Timeline', 'Mix')
+    tabsel = {'pads': 0, 'timeline': 1, 'mix': 2}[tab]
+    ws = [tw(n, 16) + 36 for n in names]
+    tabs_w = sum(ws) + 8
+    o.append(tabs(X + 110 + tabs_w / 2, Y - 8, names=names, sel=tabsel))
+    cx = X + 110 + tabs_w + 16
+    if tab != 'mix':
+        for t in tools:
+            k, kw = key(cx, Y, t, on=(t == 'Loop the song')); o.append(k); cx += kw + 8
+        if line: o.append(tx(cx + 4, Y + 13, line, 13, T2))
+    o.append(tx(X + W - 300, Y + 10, '▥', 20, T2R))      # Keys
     rx = X + W - 260
     o.append(box(rx, Y - 6, 260, 56, f'background:{WELL};border-radius:12px;'))
     o.append(box(rx + 16, Y + 14, 14, 14, f'background:{REC};border-radius:7px;'))
     o.append(box(rx + 52, Y, 44, 44, f'background:{CONTROL if playing else "transparent"};border-radius:9px;'))
     o.append(tx(rx + 52, Y + 10, '■' if playing else '▶', 18, TEXT, 700, 'width:44px;text-align:center;'))
     o.append(tx(rx + 112, Y + 0, '9 · 3', 22, TEXT, 700, num=True))
-    o.append(tx(rx + 112, Y + 26, '108 BPM', 12, T2R))
+    o.append(tx(rx + 112, Y + 27, ('Song' if song_mode else 'Loop'), 12, TEXT, 600))
+    o.append(tx(rx + 146, Y + 27, '· 108 BPM', 12, T2R))
+    return ''.join(o)
+
+def strip(X, Y, W, text, stop=True):
+    """Under the row: a refusal or a note until it's dealt with (Skiff's SongStrip), with Stop where that's the way out."""
+    w = tw(text, 15) + (110 if stop else 40)
+    x = X + (W - w) / 2
+    o = [box(x, Y, w, 48, f'background:{HELD};border-radius:12px;box-shadow:0 12px 28px rgba(0,0,0,.6);'),
+         tx(x + 16, Y + 14, text, 15, TEXT)]
+    if stop:
+        k, _ = key(x + w - 86, Y + 6, 'Stop', w=78, h=36); o.append(k)
     return ''.join(o)
 
 def thumb(x, y, w, h, t, seed=0, alpha=1):
@@ -139,18 +161,22 @@ def section_pad(x, y, w, h, k, state, compact=False, bar=0.0, label=None):
     letter = 'ABCD'[k]
     big = 30 if compact else 64
     if state == 'empty':
-        o.append(box(x, y, w, h, f'background:{WELL};border-radius:12px;box-shadow:inset 0 0 0 1px {CONTROL};'))
-        o.append(tx(x + 14, y + 10, letter, big, T3, 700, num=True))
-        o.append(tx(x + 14, y + (big + 14 if not compact else 46), 'empty', 13, T3))
+        o.append(box(x, y, w, h, f'background:{WELL};border-radius:12px;box-shadow:inset 0 0 0 1px {T3};'))
+        o.append(tx(x + 14, y + 10, letter, big, T2, 700, num=True))
+        o.append(tx(x + 14, y + (big + 14 if not compact else 46), 'empty', 13, T2))
         return ''.join(o)
     playing = state == 'playing'
-    o.append(box(x, y, w, h, f'background:{c if playing else CONTROL};border-radius:12px;'))
-    if not playing:
-        o.append(box(x, y, 6, h, f'background:{c};border-radius:12px 0 0 12px;'))   # its colour as the band down its edge (board 41)
+    # option A (board 48 A, as Skiff's Timeline): full colour only while it sounds; at rest a 32% tint, a 1.5 pt edge
+    if playing:
+        o.append(box(x, y, w, h, f'background:{c};border-radius:12px;'))
+    elif state == 'loaded':
+        o.append(box(x, y, w, h, f'background:{CONTROL};border-radius:12px;box-shadow:inset 0 0 0 3px {c};'))
+    else:
+        o.append(box(x, y, w, h, f'background:{tint(c)};border-radius:12px;box-shadow:inset 0 0 0 1.5px {c};'))
     fg = ON if playing else TEXT
-    o.append(tx(x + 18, y + 10, letter, big, fg, 700, num=True))
-    sub = label or {'stored': 'stored', 'playing': 'playing', 'waiting': 'next bar', 'next': 'next'}[state]
-    o.append(tx(x + 18, y + (big + 14 if not compact else 46), sub, 13, ON if playing else T2R, 600 if state in ('playing', 'waiting') else 400))
+    o.append(tx(x + 14, y + 10, letter, big, fg, 700, num=True))
+    sub = label or {'stored': 'stored', 'playing': 'playing', 'waiting': 'next bar', 'next': 'next', 'loaded': 'loaded'}[state]
+    o.append(tx(x + 14, y + (big + 14 if not compact else 46), sub, 13, ON if playing else TEXT, 600 if state in ('playing', 'waiting') else 400))
     if not compact:
         for t in range(4):     # what the section holds isn't readable over the protocol: no pictures inside (S2 note)
             pass
@@ -203,17 +229,12 @@ def frame(x, y, w, h, title):
     return box(x, y, w, h, f'background:{PAGE};border-radius:22px;box-shadow:0 0 0 1px #2A2A30;') + tx(x, y - 34, title, 17, T2R, 600)
 
 def pads_screen(X, Y, layout='full', playing=True):
-    """iPad landscape (1376 × 1032): the top bar, the tool row, heads, the loop column, sections A–D; the editor below."""
+    """iPad landscape (1376 × 1032): the one row, heads, the loop column, sections A–D; the editor below."""
     W, H = 1376, 1032
     o = [frame(X, Y, W, H, '')]
     P = 24
-    o.append(topbar(X + P, Y + P, W - 2 * P, playing=playing, song_mode=0))
-    ty = Y + P + 64 + 16
-    # tool row: the switch, SONG REC, the hint
-    s, sw = seg(X + P, ty, ['Timeline', 'Pads'], 1); o.append(s)
-    k, kw = key(X + P + sw + 12, ty, 'SONG REC'); o.append(k)
-    o.append(tx(X + P + sw + 12 + kw + 16, ty + 13, 'Tap a section: it plays from the next bar. Hold: store the loop in it, add it to the song, clear it.', 13, T2))
-    top = ty + 44 + 10
+    o.append(topbar(X + P, Y + P, W - 2 * P, playing=playing, song_mode=0, tab='pads'))
+    top = Y + P + 64 + 16 + 20          # the page starts under the row; the columns' labels over it
     hw = 232 if layout != 'full' else 300
     lw = 150 if layout != 'full' else 200
     sx = X + P + hw + 12 + lw + 12
@@ -250,13 +271,9 @@ def timeline_screen(X, Y, layout='half', song_playing=True):
     W, H = 1376, 1032
     o = [frame(X, Y, W, H, '')]
     P = 24
-    o.append(topbar(X + P, Y + P, W - 2 * P, playing=song_playing, song_mode=1))
-    ty = Y + P + 64 + 16
-    s, sw = seg(X + P, ty, ['Timeline', 'Pads'], 0); o.append(s)
-    k, kw = key(X + P + sw + 12, ty, 'SONG REC'); o.append(k)
-    k2, kw2 = key(X + P + sw + 12 + kw + 12, ty, 'Loop at the end', on=True); o.append(k2)
-    o.append(tx(X + P + sw + 12 + kw + 12 + kw2 + 16, ty + 13, '7 steps · 28 bars', 13, T2))
-    top = ty + 44 + 10
+    o.append(topbar(X + P, Y + P, W - 2 * P, playing=song_playing, song_mode=1, tab='timeline',
+                    tools=('SONG REC', 'Loop the song'), line='7 steps · 28 bars' + (' · step 3, bar 2 of 4' if song_playing else '')))
+    top = Y + P + 64 + 16
     # ruler
     lx = X + P + 232 + 12
     lwid = X + W - P - lx
@@ -271,17 +288,20 @@ def timeline_screen(X, Y, layout='half', song_playing=True):
     # the lane head: the song
     o.append(box(X + P, ly, 232, lh, f'background:{PANEL};border-radius:12px;'))
     o.append(tx(X + P + 14, ly + 12, 'Song', 20, TEXT, 600))
-    o.append(tx(X + P + 14, ly + 40, 'step 3 of 7 · bar 2 of 4', 13, T2R))
+    o.append(tx(X + P + 14, ly + 40, 'step 3 of 7 · bar 2 of 4' if song_playing else '7 steps · loops', 13, T2R))
     order = [(0, 4), (0, 4), (1, 4), (2, 2), (1, 4), (2, 2), (3, 8)]
     cx = lx
     for i, (sec, b) in enumerate(order):
         bw = b * ppb - 4
         playing = i == 2 and song_playing
-        st = f'background:{COL[sec] if playing else CONTROL};border-radius:10px;'
+        # option A: at rest a 32% tint with a 1.5 pt edge; full colour only while it plays; the block whose menu is open,
+        # flat grey with a 3 pt outline (here block 5 when stopped)
+        if playing: st = f'background:{COL[sec]};border-radius:10px;'
+        elif i == 4 and not song_playing: st = f'background:{CONTROL};border-radius:10px;box-shadow:inset 0 0 0 3px {COL[sec]};'
+        else: st = f'background:{tint(COL[sec])};border-radius:10px;box-shadow:inset 0 0 0 1.5px {COL[sec]};'
         o.append(box(cx, ly, bw, lh, st))
-        if not playing: o.append(box(cx, ly + lh - 6, bw, 6, f'background:{COL[sec]};border-radius:0 0 10px 10px;'))
         o.append(tx(cx + 10, ly + 8, 'ABCD'[sec], 30 if layout == 'half' else 22, ON if playing else TEXT, 700, num=True))
-        o.append(tx(cx + 10, ly + (48 if layout == 'half' else 34), f'{b} bars', 13, ON if playing else T2R))
+        o.append(tx(cx + 10, ly + (48 if layout == 'half' else 34), f'{b} bars', 13, ON if playing else TEXT))
         if i == 3 and song_playing:
             o.append(box(cx - 3, ly - 3, bw + 6, lh + 6, f'border:1px solid {T2};border-radius:13px;'))
             o.append(tx(cx + 10, ly + lh - 30, 'next', 12, T2R))
@@ -296,14 +316,10 @@ def timeline_screen(X, Y, layout='half', song_playing=True):
     for k3 in range(4):
         stored = k3 < 3
         kx = lx + k3 * 92
-        o.append(box(kx, ky, 80, 40, f'background:{CONTROL if stored else WELL};border-radius:9px;'))
-        o.append(box(kx, ky + 34, 80, 6, f'background:{COL[k3] if stored else "transparent"};border-radius:0 0 9px 9px;'))
-        o.append(tx(kx, ky + 6, 'ABCD'[k3] + ('' if stored else ' · empty'), 18 if stored else 13, TEXT if stored else T3, 700 if stored else 400, 'width:80px;text-align:center;', num=stored))
+        o.append(box(kx, ky, 80, 40, (f'background:{tint(COL[k3])};box-shadow:inset 0 0 0 1.5px {COL[k3]};' if stored else f'background:{WELL};box-shadow:inset 0 0 0 1px {T3};') + 'border-radius:9px;'))
+        o.append(tx(kx, ky + 6, 'ABCD'[k3] + ('' if stored else ' · empty'), 18 if stored else 13, TEXT if stored else T3, 700 if stored else 400, 'width:80px;text-align:center;', num=stored) if stored else tx(kx, ky + 12, 'D · empty', 13, T2, 400, 'width:80px;text-align:center;'))
     if song_playing:
-        sy = ky
-        o.append(box(lx + 400, sy, lwid - 400, 40, f'background:{HELD};border-radius:10px;'))
-        o.append(tx(lx + 416, sy + 11, 'The song is playing: the FM-1 changes the order only when stopped.', 14, TEXT))
-        k4, _ = key(X + W - P - 92, sy + 2, 'Stop', w=84, h=36); o.append(k4)
+        o.append(strip(X + P, Y + P + 64 + 4, W - 2 * P, 'Stop the song to change its order'))
     ey = ky + 40 + 12
     o.append(editor(X + P, ey, W - 2 * P, Y + H - P - ey, t=1, pos='half' if layout == 'half' else 'max'))
     return ''.join(o)
@@ -312,7 +328,7 @@ def mix_screen(X, Y):
     W, H = 1376, 1032
     o = [frame(X, Y, W, H, '')]
     P = 24
-    o.append(topbar(X + P, Y + P, W - 2 * P, tab=1))
+    o.append(topbar(X + P, Y + P, W - 2 * P, tab='mix'))
     ty = Y + P + 64 + 16
     sh = 520
     o.append(box(X + P, ty, W - 2 * P, sh, f'background:{PANEL};border-radius:16px;'))
@@ -513,7 +529,7 @@ def s3():
         (1, '<b style="color:#EDEDF0">One lane, not six:</b> SLOOP’s song is one order of sections, every track following it. Blocks are as wide as their bars on one ruler, as on Skiff’s Timeline, in the section’s colour.'),
         (2, '<b style="color:#EDEDF0">Editing the order:</b> tap a block for its menu (section, bars, duplicate, delete), hold and drag to move, drag its right edge for bars; drag a section key onto the lane to add one (or its menu’s Add to the song).'),
         (3, '<b style="color:#EDEDF0">While the song plays</b> the FM-1 refuses a new order: the strip under the lane says so and carries Stop, as Skiff’s stop-to-rearrange does. Nothing is dimmed without a reason on screen.'),
-        (4, '<b style="color:#EDEDF0">Loop · Song</b> moves to the top bar, where Skiff’s playback mode sits; “Loop at the end” is the order’s own setting, so it stays in the tool row beside SONG REC.'),
+        (4, '<b style="color:#EDEDF0">The one row</b> (board 47 b): Pads · Timeline · Mix, then the tab’s tools: SONG REC and “Loop the song” (the order’s own setting). Loop · Song is in the tempo panel, as Skiff’s playback mode is; the readout says which. Refusals sit in the strip under the row, with Stop. Built as wrapping blocks for now (Q3: the ruler).'),
     ], w=2860))
     page('SloopTimeline.dc.html', 'SLOOP timeline', BW, BH, o)
 

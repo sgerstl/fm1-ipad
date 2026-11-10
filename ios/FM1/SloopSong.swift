@@ -464,6 +464,8 @@ struct SloopPads: View {
         var items = [store,
                      MenuItem(title: "Add to the song", icon: "text.append", enabled: canAdd) { add(k) }]
         if stored {
+            // always asks, whatever Settings › Confirm before clearing a pad says (Scott, 2026-11-10): the FM-1 keeps no copy
+            // of a section, where a Skiff pad's pattern survives in the pool. So no opt-out here, and no read of that key
             items.append(.destructive(title: session.playing ? "Clear (stop first)" : "Clear section \(name)", enabled: !session.playing,
                                       confirm: "Clear section \(name), erasing it" + (inSong ? " (the song won't play until it holds tracks again)" : "")) {
                 session.clearSection(k)
