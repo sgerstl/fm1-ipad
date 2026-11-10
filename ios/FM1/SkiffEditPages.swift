@@ -124,6 +124,7 @@ struct LaneFaders: View {
                     .contentShape(Rectangle())
                     .onTapGesture { pick(k) }
                     .accessibilityElement()
+                    .accessibilityAction { pick(k) }        // (an explicit activation, not a tap synthesised at its centre)
                     .accessibilityLabel(SkiffEdit.laneNames[k].capitalized)
                     .accessibilityValue("level \(levels[k] * 100 / 127) percent" + (mix ? ", pan \(MixerStrips.pan(pans[k]))" : ""))
                     .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
@@ -354,6 +355,7 @@ struct ZoneMap: View {
                         .offset(x: x(z.lowerBound), y: 10)
                         .onTapGesture { pick(k) }
                         .accessibilityElement()
+                        .accessibilityAction { pick(k) }    // (a zone can be 4 pt wide: a synthesised tap could miss it)
                         .accessibilityLabel("Sample \(k + 1), \(Music.noteName(z.lowerBound)) to \(Music.noteName(z.upperBound))")
                         .accessibilityAddTraits(k == picked ? [.isButton, .isSelected] : .isButton)
                 }

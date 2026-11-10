@@ -102,6 +102,7 @@ struct TrackStripCard: View {
         .buttonStyle(PressSink())
         .disabled(store.offline)
         .accessibilityLabel("Mute track \(track + 1)")
+        .accessibilityAddTraits(.isToggle)
         .accessibilityValue(staged == .mute ? "mutes \(cd)" : staged == .unmute ? "unmutes \(cd)" : muted ? "muted" : "playing")
         .accessibilityHint(staged != .none ? "Takes the waiting change back" : session.playing ? "At the launch point" : "")
     }
@@ -191,8 +192,10 @@ struct TrackStripRow: View {
                     }
                     .buttonStyle(PressSink())
                     .disabled(store.offline)
-                    .accessibilityLabel(muted ? "Unmute" : "Mute")
-                    .accessibilityValue(staged == .none ? "" : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
+                    // which track's, said on every row (it was "Mute" six times), and its state as a toggle (2026-11-10)
+                    .accessibilityLabel("Mute track \(t + 1)")
+                    .accessibilityValue(staged == .none ? (muted ? "muted" : "playing") : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
+                    .accessibilityAddTraits(.isToggle)
                     SoloKey(store: store, track: t, compact: true).frame(width: 30, height: 34)
                 }
             }
@@ -279,6 +282,7 @@ struct SoloKey: View {
         .buttonStyle(PressSink())
         .disabled(store.offline)
         .accessibilityLabel("Solo track \(track + 1)")
+        .accessibilityAddTraits(.isToggle)
         .accessibilityValue(on ? "on" : "off")
         .accessibilityHint("Mutes every other track; again, the mutes come back as they were")
     }
