@@ -21,7 +21,7 @@ struct PadsPage: View {
     /// Each pad's frame (global): where its menu opens when it's tapped (an empty pad) rather than held.
     @State private var padFrames: [PadKey: CGRect] = [:]
     /// A scene held: the heads and the pads show what it would do (Scott, 2026-11-07); let go, it's gone.
-    @State private var previewScene: Int?
+    private var previewScene: Int? { ui.previewScene }
     /// Where the finger is (global), for a hold's menu; and the key a hold took, so the tap its release makes is
     /// dropped (the pads redraw four times a second, which resets UIKit's long press: SwiftUI's, beside the button)
     @State private var pressAt: CGPoint = .zero
@@ -85,11 +85,11 @@ struct PadsPage: View {
     /// under them).
     static func halfTop(_ tracks: Int) -> CGFloat {
         let strip = CGFloat(tracks) * rowHeight + CGFloat(max(0, tracks - 1)) * compactRowGap
-        return 44 + 10 + strip + 8 + compactScenes + 8
+        return 2 + strip + 8 + compactScenes + 8
     }
     /// Max: the tool row and the row of 16 keys.
     static let rowHeight16: CGFloat = 64
-    static let rowTop: CGFloat = 44 + 8 + rowHeight16 + 8
+    static let rowTop: CGFloat = rowHeight16 + 8
 
     /// Where the rows go: from `top` (under the switch and the tool row), `rows` of `rowHeight` with `rowGap` between,
     /// the heads on the left and the pads on the right on the same lines.
@@ -102,14 +102,15 @@ struct PadsPage: View {
         switch layout {
         case .full:
             // the rows share what's left between the tool row and the scenes
-            let top: CGFloat = 52, n = max(1, tracks)
+            // (the tool row went up into the top bar, Scott 2026-11-10, board 47: the rows start at the page's top)
+            let top: CGFloat = 0, n = max(1, tracks)
             // (and a gap under the scenes: they touched the panel's lip, Scott 2026-11-09)
             let room = size.height - top - Self.gap - Self.sceneHeight - Self.sceneFoot - CGFloat(n - 1) * Self.fullRowGap
             return Rows(top: top, rowHeight: max(Self.cardHeight, floor(room / CGFloat(n))), rowGap: Self.fullRowGap, sceneGap: Self.gap, count: n)
         case .compact:
-            return Rows(top: 54, rowHeight: Self.rowHeight, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
+            return Rows(top: 2, rowHeight: Self.rowHeight, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
         case .row:
-            return Rows(top: 52, rowHeight: Self.rowHeight16, rowGap: 0, sceneGap: 0, count: 1)
+            return Rows(top: 0, rowHeight: Self.rowHeight16, rowGap: 0, sceneGap: 0, count: 1)
         }
     }
 
@@ -132,8 +133,8 @@ struct PadsPage: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // its place only: the live switch is the Song tab's, over both views, so it stays put as they
                     // slide past each other (Scott, 2026-11-09)
-                    SongViewSwitch(ui: ui).frame(height: 44).hidden().accessibilityHidden(true)
-                    Color.clear.frame(height: r.top - 44)
+                    // (the switch and the tool row are the top bar's since 2026-11-10, board 47)
+                    Color.clear.frame(height: r.top)
                     // Max: the heads fold into the editor header's track menu (PatternPane)
                     VStack(alignment: .leading, spacing: r.rowGap) {
                         ForEach(row ? [] : tracks, id: \.self) { k in
@@ -168,8 +169,7 @@ struct PadsPage: View {
                 }
                 .frame(width: Self.compactStrip)
                 VStack(spacing: 0) {
-                    toolbar(t)
-                    Color.clear.frame(height: r.top - 44)
+                    Color.clear.frame(height: r.top)
                     grid(t, row ? [t] : tracks, r)
                         .frame(height: r.height)
                         .zIndex(1)                              // (the track controls hang over the scene row's gap)
@@ -347,11 +347,13 @@ struct PadsPage: View {
 
     /// How far the track controls may hang past the grid inside the page: above it (under the switch and tool row) and
     /// below it (over the scene row). At Max they hang over the editor (SkiffSongPage lifts the pads over it there).
+    /// Over the grid's top the box may use the page's gap under the top bar, never the bar (AppView's 16 pt spacing).
+    static let roomOverTop: CGFloat = 16
     private func room(_ r: Rows) -> (above: CGFloat, below: CGFloat) {
         switch layout {
-        case .full: (r.top, r.sceneGap + Self.sceneHeight + Self.sceneFoot)
-        case .compact: (r.top, r.sceneGap + Self.compactScenes + 8)
-        case .row: (r.top, .infinity)
+        case .full: (r.top + Self.roomOverTop, r.sceneGap + Self.sceneHeight + Self.sceneFoot)
+        case .compact: (r.top + Self.roomOverTop, r.sceneGap + Self.compactScenes + 8)
+        case .row: (r.top + Self.roomOverTop, .infinity)
         }
     }
 
@@ -433,51 +435,6 @@ struct PadsPage: View {
     static func selectedBorder(_ cell: CGSize) -> CGFloat { cell.height < 60 || cell.width < 90 ? 4 : 8 }
 
     // MARK: Toolbar
-
-    private func toolbar(_ t: Int) -> some View {
-        let launch = store.perform?.launch ?? session.launchMode
-        let waiting = waitingCount
-        return HStack(spacing: 12) {
-            // (every track's on the grid now: Max alone shows one, named in the editor's header)
-            Spacer(minLength: 8)
-            if let s = previewScene, store.scenesSeen[s] == nil {
-                // (PERFORM says a scene is kept, not what's in it: Lupe knows the ones it stored or recalled)
-                Text("Scene \(s + 1): not seen yet. Recall it once and holding it shows what it does")
-                    .font(.lupe(13)).foregroundStyle(Theme.text).lineLimit(2).layoutPriority(-1)
-            } else if let r = store.refusal {
-                RefusalLine(refusal: r, session: session, store: store).layoutPriority(-1)
-            }
-            // the pattern pool, as on the Timeline (Scott, 2026-11-09): its panel slides in over the page
-            Button { ui.poolOpen.toggle() } label: {
-                Label("Patterns", systemImage: "square.grid.2x2").font(.lupe(15))
-                    .padding(.horizontal, 14).frame(height: 44).raisedKey()
-            }
-            .buttonStyle(PressSink(latched: ui.poolOpen))
-            .accessibilityHint("The pattern pool: every pattern and which tracks use it")
-            Text("Launch at").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
-            SegmentedKeys(label: "Launch at", options: ["Loop", "Bar", "Beat", "Now"], selected: launch.rawValue,
-                          enabled: Array(repeating: !store.offline, count: 4)) { k in
-                let l = SongPlayback.Launch(rawValue: k) ?? .bar
-                Task { if await store.performOp(.launch(l)) { session.adoptLaunch(l) } }
-            }
-            .fixedSize()
-            .accessibilityHint("Where a pad, a scene or a mute lands while playing: the end of the track's pass, the next bar, the next beat, or at once")
-            Button { Task { await store.performOp(.cancel) } } label: {
-                Text(waiting > 0 ? "Cancel \(waiting) waiting" : "Cancel waiting").font(.lupe(15))
-                    .padding(.horizontal, 14).frame(height: 44).raisedKey()
-            }
-            .buttonStyle(PressSink())
-            .disabled(waiting == 0 || store.offline)
-            .accessibilityHint("Takes back every launch and mute still waiting for the launch point")
-        }
-        .frame(height: 44)
-    }
-
-    /// Launches and mutes waiting for the launch point (the song's own next isn't one).
-    private var waitingCount: Int {
-        let launches = session.trackIndices.filter { store.marks($0, launchIn: nil).queued != nil || (session.playing && store.launching[$0] != nil) }.count
-        return launches + (store.perform?.staged.filter { $0 != .none }.count ?? 0)
-    }
 
     // MARK: Pads
 
@@ -1061,13 +1018,13 @@ struct PadsPage: View {
         .disabled(store.offline)
         // held (a kept scene, not storing): the strip shows what it would do, nothing sent; let go, it's gone
         .simultaneousGesture(DragGesture(minimumDistance: 0).onEnded { _ in
-            if previewScene == s { previewScene = nil }
+            if ui.previewScene == s { ui.previewScene = nil }
             releaseHold("s\(s)")
         })
         .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             guard kept, !storing else { return }
             heldKey = "s\(s)"
-            previewScene = s
+            ui.previewScene = s
         })
         .accessibilityLabel("Scene \(s + 1)" + (kept ? "" : ", empty") + (last ? ", recalled or stored last" : ""))
         .accessibilityValue(kept ? sceneSpoken(s) : "")

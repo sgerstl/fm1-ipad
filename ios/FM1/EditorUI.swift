@@ -74,6 +74,10 @@ final class EditorUI {
     var pinnedEntry: EntryRef?
     /// Each pattern's drawing for the pads (PadThumb), as seen while a track was on it: kept for the session.
     var padThumbs: [Int: PadThumb] = [:]
+    /// The Song tab's Timeline: bars across the lanes, set by the top bar's zoom (nil: fitted to the song).
+    var timelineZoom: Int?
+    /// The Pads: a stored scene held, its preview on the pads (and, when Lupe hasn't seen it, a line under the top bar).
+    var previewScene: Int?
     /// The Song tab: the pattern pool's drawer is open.
     var poolOpen = false
     /// A pattern being dragged from the pool (set as the drag starts), shared by the drawer and the lanes.

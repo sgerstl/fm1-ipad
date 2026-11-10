@@ -18,16 +18,27 @@ struct TopBar: View {
         let _ = BodyCounter.tick("TopBar")
         Group {
             if ui.songTab, let store = session.skiffSong {
-                // Skiff: the playback mode sits beside play and stop, so the bar is one row (centred tabs would
-                // collide with it)
+                // Skiff: everything above the pads in one row (Scott, 2026-11-10, board 47 direction b): where you are
+                // (the FM-1 and its menu, the tabs, Pads / Timeline), what launches (the Song tab's tools), the transport.
+                // Projects and the iPad's audio are in the FM-1 menu; the playback mode is under the tempo, its word in
+                // the readout. The fixed parts keep their size; the tools give way in their own order (SongTools).
                 HStack(spacing: 12) {
-                    connection
-                    skiffProjectsKey
-                    Spacer(minLength: 12)
+                    connection.fixedSize()
                     tabs
-                    Spacer(minLength: 12)
-                    SongModeKeys(store: store).fixedSize()
-                    transport
+                    if ui.page == .song, store.performs { SongViewSwitch(ui: ui) }
+                    if ui.page == .song {
+                        SongTools(session: session, store: store, ui: ui)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .layoutPriority(-1)
+                    } else {
+                        Spacer(minLength: 12)
+                    }
+                    skiffTransport
+                }
+                // under the row: a refusal, an unseen scene, lanes ending apart, until it's dealt with
+                .overlay(alignment: .top) {
+                    SongStrip(session: session, store: store, ui: ui)
+                        .padding(.top, 64 + 4)
                 }
             } else {
                 // the tabs sit in the middle of the bar whatever the two sides hold
@@ -74,6 +85,8 @@ struct TopBar: View {
                 if let s = shortStatus {
                     Text(s).font(.lupe(15, .semibold)).lineLimit(1)
                 }
+                // Skiff: its menu holds Projects and the iPad's audio too, so it says it opens
+                if ui.songTab { Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
             }
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
@@ -83,6 +96,18 @@ struct TopBar: View {
         .accessibilityLabel("\(statusLine), \(versionLine)")
         .accessibilityHint("Choose the FM-1 or a demo, install firmware, or open Settings")
         .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
+    }
+
+    /// Skiff's keys after the tools: Keys, then REC, play / stop and the readout (the iPad's audio is in the FM-1 menu).
+    private var skiffTransport: some View {
+        HStack(spacing: 8) {
+            IconKey(label: "Keys", symbol: "pianokeys", onSymbol: "pianokeys.inverse", on: ui.keyboardOpen, enabled: session.isConnected) {
+                ui.keyboardOpen.toggle()
+            }
+            .accessibilityHint("Shows the FM-1's keyboard")
+            transportGroup.padding(.leading, 4)
+        }
+        .fixedSize()
     }
 
     /// The connection menu (Lupe's own, 2026-11-05). Scott, 2026-11-06, cut to four things: one line of status, the
@@ -96,9 +121,13 @@ struct TopBar: View {
             [MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !demo) { useDemo = false },
              MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: demo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
              MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: demo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }],
+            // Skiff: what's set once moved here from the top bar (Scott, 2026-11-10, board 47): Projects, the iPad's audio
+            ui.songTab ? [MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true },
+                          MenuItem(title: "Play through the iPad", icon: through.enabled ? "speaker.wave.2.fill" : "speaker.wave.2",
+                                   checked: through.enabled) { through.enabled.toggle() }] : [],
             [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true },
              MenuItem(title: "Settings…", icon: "gearshape") { settingsOpen = true }],
-        ]
+        ].filter { !$0.isEmpty }
     }
 
 
@@ -439,7 +468,9 @@ private struct ReadoutLabel: View {
         let pos = session.positions[session.selectedTrack]
         let song = session.song.songMode
         let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
-        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : song ? "SONG" : nil
+        // Skiff: the playback mode's word, always (its keys are in the tempo panel since 2026-11-10, board 47)
+        let skiffMode: String? = session.skiffSong?.song.map { ["Loop", "Song", "Once"][safe: $0.mode.rawValue] ?? "Song" }
+        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : skiffMode ?? (song ? "SONG" : nil)
         VStack(alignment: .leading, spacing: 0) {
             Text(position).font(.lupe(20, .semibold)).monospacedDigit().lineLimit(1)
                 .foregroundStyle(recording ? Theme.recText : Theme.text)
@@ -457,7 +488,7 @@ private struct ReadoutLabel: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
+        .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : $0 == "Loop" ? "Loop entry" : $0 == "Song" ? "Play song" : $0 == "Once" ? "Play once" : "Song mode" },
                              session.playing ? "bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "stopped",
                              "\(session.bpm) BPM"].compactMap { $0 }.joined(separator: ", "))
     }

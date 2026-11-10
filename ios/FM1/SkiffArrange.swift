@@ -13,7 +13,6 @@ struct SkiffArrangePage: View {
     let store: SkiffSongStore
     let ui: EditorUI
     @State private var selection: EntryRef?
-    @State private var zoomBars: Int?
     @State private var allPatterns = false
     /// A pattern being dragged from the bin (set when the drag starts; EditorUI's, so the Song tab's drawer can
     /// start one), and where it would go.
@@ -47,7 +46,8 @@ struct SkiffArrangePage: View {
         let _ = BodyCounter.tick("SkiffArrangePage")
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                toolRow
+                // the Song tab's tools are the top bar's (Scott, 2026-11-10, board 47); the Arrange page keeps its row
+                if !(compact && store.performs) { toolRow }
                 if store.song == nil {
                     SkeletonLanes(count: session.trackCount)
                 } else if (store.song?.tracks.allSatisfy { $0.used == 0 }) ?? true {
@@ -209,24 +209,27 @@ struct SkiffArrangePage: View {
     }
 
     /// Lanes that end on different bars loop apart in SONG ON (each track moves on at its own pass ends).
-    private var loopApartWarning: String? {
+    private var loopApartWarning: String? { Self.loopApart(store) }
+    @MainActor static func loopApart(_ store: SkiffSongStore) -> String? {
         let ends = store.laneEnds.filter { $0 > 0 }
         guard let lo = ends.min(), let hi = ends.max(), hi - lo >= 0.25 else { return nil }
         func bar(_ b: Double) -> String { b == b.rounded() ? "\(Int(b))" : String(format: "%.1f", b) }
         return "Tracks end at bars \(bar(lo))–\(bar(hi)), so they loop apart"
     }
 
-    private var bars: Int { zoomBars ?? max(8, (songBars + 3) / 4 * 4 + (songBars % 4 == 0 ? 4 : 0)) }
+    private var bars: Int { Self.bars(zoom: ui.timelineZoom, songBars: songBars) }
+    static func bars(zoom: Int?, songBars: Int) -> Int { zoom ?? max(8, (songBars + 3) / 4 * 4 + (songBars % 4 == 0 ? 4 : 0)) }
+    @MainActor static func songBars(_ store: SkiffSongStore) -> Int { Int((store.laneEnds.max() ?? 0).rounded(.up)) }
 
     private var zoom: some View {
         HStack(spacing: 4) {
-            Button { zoomBars = min(128, bars * 2) } label: {
+            Button { ui.timelineZoom = min(128, bars * 2) } label: {
                 Image(systemName: "minus").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).raisedKey()
             }
             .buttonStyle(PressSink()).accessibilityLabel("Zoom out")
             Text("\(bars) bars").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(width: 64)
                 .accessibilityHidden(true)
-            Button { zoomBars = max(4, bars / 2) } label: {
+            Button { ui.timelineZoom = max(4, bars / 2) } label: {
                 Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).raisedKey()
             }
             .buttonStyle(PressSink()).accessibilityLabel("Zoom in")

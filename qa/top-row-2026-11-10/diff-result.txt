@@ -1,0 +1,18 @@
+mix-env.png                104–115pt 128–319pt 324–348pt 356–371pt 375–630pt 634–979pt
+mix.png                    104–112pt 132–251pt 457–522pt 529–559pt 564–574pt 582–629pt 634–644pt 658–693pt 702–976pt
+pads-full-env-rail.png     104–113pt 128–165pt 172–567pt 571–979pt
+pads-full-shut.png         186–313pt 318–318pt 327–567pt 571–979pt
+pads-full-t1.png           104–475pt 488–603pt 616–731pt 744–859pt 872–955pt
+pads-full-t2.png           104–567pt 571–979pt
+pads-full-t5-up.png        186–228pt 232–313pt 318–318pt 327–979pt
+pads-half-env-keys.png     104–113pt 128–165pt 180–319pt 324–348pt 361–371pt 375–545pt 554–630pt 641–979pt
+pads-half-t1.png           514–523pt 566–630pt 641–663pt 668–700pt 712–734pt 740–758pt 768–776pt 782–836pt 848–979pt
+pads-half-t3.png           120–133pt 455–466pt 867–884pt 889–924pt 932–979pt
+pads-half-t4.png           515–526pt 538–550pt 555–568pt 572–584pt 589–596pt 601–614pt 618–625pt 647–663pt 681–689pt 693–706pt 709–717pt 739–755pt 785–798pt 831–844pt 877–890pt 944–979pt
+pads-half-t6.png           515–526pt 542–551pt 555–580pt 589–597pt 601–625pt 647–663pt 681–689pt 693–706pt 709–717pt 727–735pt 739–763pt 785–798pt 831–844pt 877–890pt 932–979pt
+pads-max.png               408–658pt 801–836pt 848–935pt 940–979pt
+sounds-alone.png           104–104pt 128–567pt 571–979pt
+sounds-beside-env.png      104–122pt 128–374pt 379–510pt 514–702pt 706–776pt 783–863pt 879–889pt 894–909pt 924–979pt
+timeline-full.png          104–161pt 181–186pt 208–213pt 223–979pt
+timeline-half-t4.png       104–162pt 515–526pt 538–550pt 555–568pt 572–584pt 589–596pt 601–614pt 618–625pt 647–663pt 681–689pt 693–706pt 709–717pt 739–755pt 785–798pt 831–844pt 877–890pt 944–979pt
+timeline-half.png          104–162pt 514–523pt 566–630pt 641–663pt 668–700pt 712–734pt 740–758pt 768–776pt 782–836pt 848–979pt

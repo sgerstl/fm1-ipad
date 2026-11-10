@@ -8,13 +8,21 @@ D=758BB7A6-80EC-4437-865C-89A5B9A41750; APP=com.scottgerstl.fm1ipad
 OUTD=${0:a:h}/$1; mkdir -p $OUTD
 shot() {   # name position(0 full,1 half,2 max) controlsOpen rail extra-flags...
   local name=$1 pos=$2 open=$3 rail=$4; shift 4
+  # ONLY="a b": just those scenes (a retake when one caught the app still connecting)
+  if [[ -n "$ONLY" && " $ONLY " != *" $name "* ]]; then return; fi
   xcrun simctl terminate $D $APP 2>/dev/null || true
   # the settings as launch arguments (UserDefaults' argument domain): written with `defaults`, cfprefsd served the app
   # stale values; the demo held stopped so nothing moves between before and after
   xcrun simctl launch $D $APP -songPosition $pos -padControlsOpen $open -soundRail.v2 $rail \
     -demo-skiff -demo -demo-stopped -no-intro -demo-chord 4 "$@" >/dev/null
+  # settled: two frames a second apart that match, after at least 6 s (the FM-1 read can take longer), at most 30 s
   sleep 6
-  xcrun simctl io $D screenshot $OUTD/$name.png >/dev/null 2>&1
+  for i in {1..24}; do
+    xcrun simctl io $D screenshot $OUTD/.a.png >/dev/null 2>&1; sleep 1
+    xcrun simctl io $D screenshot $OUTD/$name.png >/dev/null 2>&1
+    cmp -s $OUTD/.a.png $OUTD/$name.png && break
+  done
+  rm -f $OUTD/.a.png
   python3 -c "
 from PIL import Image; im=Image.open('$OUTD/$name.png'); w,h=im.size
 (im if w > h else im.crop((0,int(h*0.219),w,int(h*0.781)))).save('$OUTD/$name.png')"
@@ -33,5 +41,8 @@ shot sounds-alone        0 YES NO  -page song -presets-panel
 shot timeline-full       0 YES NO  -page song -song-timeline
 shot timeline-half       1 YES NO  -page song -song-timeline
 shot timeline-half-t4    1 YES NO  -page song -song-timeline -demo-track 4
+shot pads-half-t3         1 YES NO  -page song -demo-track 3
+shot pads-half-t4         1 YES NO  -page song -demo-track 4
+shot pads-full-t2         0 YES NO  -page song -demo-track 2
 shot mix                 1 YES NO  -page mixer
 shot mix-env             1 YES YES -page mixer -sound-panel ENV
