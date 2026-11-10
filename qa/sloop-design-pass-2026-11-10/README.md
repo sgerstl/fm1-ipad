@@ -80,7 +80,7 @@ SLOOP 2.8.4's model, read from `SloopDriver`, `Session.swift`, `Song.swift` and 
 | `SongPage.swift` (SLOOP's) | `lane:` mode for the Timeline (no section keys, no header, 96 pt blocks) |
 | `SloopKit/Song.swift`, `SongTests.swift` | `appending(section:bars:)` and its tests |
 
-**Merge note:** a trial `git merge-tree` against `perform-grid-map`'s current tip (`790c2ed`) has **no conflicts**. But that branch has since moved Skiff to **one row above the pages** (board 47 b: Song · Mix and the Song tab's tools in the top row, the playback mode in the tempo panel). This branch's SLOOP top bar follows the earlier two-row Skiff layout (the bar, then Pads' tool row). After both land, SLOOP's row should follow 47 b too: Loop · Song in the tempo panel beside the playback mode's place, SONG REC and "Loop the song" in the row's Song tools. That's a follow-up once `perform-grid-map` settles. `SloopSongPage`'s divider is also a smaller copy of `SkiffSongPage`'s, kept separate so as not to edit `SongTab.swift` while it's in flux. Extracting one shared `SongSplit` is the clean-up after the merge.
+**Merge note (superseded by round two, §9: `perform-grid-map` is now merged in):** a trial `git merge-tree` against `perform-grid-map`'s current tip (`790c2ed`) has **no conflicts**. But that branch has since moved Skiff to **one row above the pages** (board 47 b: Song · Mix and the Song tab's tools in the top row, the playback mode in the tempo panel). This branch's SLOOP top bar follows the earlier two-row Skiff layout (the bar, then Pads' tool row). After both land, SLOOP's row should follow 47 b too: Loop · Song in the tempo panel beside the playback mode's place, SONG REC and "Loop the song" in the row's Song tools. That's a follow-up once `perform-grid-map` settles. `SloopSongPage`'s divider is also a smaller copy of `SkiffSongPage`'s, kept separate so as not to edit `SongTab.swift` while it's in flux. Extracting one shared `SongSplit` is the clean-up after the merge.
 
 ## 6. Open questions for you (with my recommendation)
 
@@ -120,3 +120,33 @@ SLOOP 2.8.4's model, read from `SloopDriver`, `Session.swift`, `Song.swift` and 
 12. **Behaviour defaults:** destructive friction is the in-place confirm. No toasts carry actions.
 13. **Rendered check:** `check-render.mjs` is for web pages and doesn't apply to SwiftUI. The simulator screenshots were read instead; largest faults fixed in order (the tab covering T4's head, the Max label over the bar, the Timeline cut off at Half).
 14. **Gold compare:** against Skiff's own Pads and Timeline (`before/skiff-ipad-*`), the project's reference. The one difference: the SLOOP pads are tall columns, not a grid (Q2). **No fresh-eye subagent review was run.**
+
+## 9. Round two: the one row (Scott, via the Bluetooth PoC session: "Yes, update SLOOP")
+
+`perform-grid-map` at `66a426b` merged in (`7f8ece0`, a plain merge, no rebase). It brought the one row (75dc3db, 790c2ed), Pads · Timeline · Mix (66a426b), the Pads and Timeline open tab (317d2d5, 710f7fe), Timeline option A (bf87863), the in-place confirms (18a29e4) and Settings › Touch (826e2d4). **The merge had no conflicts.** One compile fix followed: Labs' divider and flick names changed in 826e2d4, so `SloopSongPage` now reads `DividerFeel.current` and `Labs.flickSpeed`, as Skiff's Song tab does. The merge commit on its own doesn't build; `c7fe92e` does.
+
+**SLOOP on the new tabs** (`c7fe92e`, SLOOP-side only; no Skiff code changed):
+
+| Skiff now | SLOOP | Notes |
+|---|---|---|
+| One row: FM-1 key ⌄ · Pads · Timeline · Mix · the tab's tools · Keys · transport | Same row, same keys (Skiff's `songTabs` and transport reused) | SLOOP's project name and its Save key with the "edited" dot left the bar: Projects is in the FM-1 menu, as on Skiff. **Q9** |
+| Pads tools: Patterns, Launch at, Cancel waiting | **SONG REC** | SLOOP has no pool, no launch quantize (a section always starts on the next bar) and no per-track cancel |
+| Timeline tools: Undo, Patterns, zoom | **SONG REC, Loop the song**, "4 steps · 20 bars" (and the playing step and bar) | The order wraps rather than zooming; its own Undo (after a delete) stays in the panel's line |
+| Playback mode in the tempo panel, its word in the readout | **Loop · Song in the tempo panel** ("Song mode"), "Loop" or "Song" in the readout | Fits SLOOP's model: song mode is one global setting, as Skiff's playback mode is. SONG REC and REC still take the readout's word while on |
+| The strip under the row (refusals, notes) | **SloopStrip**: SLOOP's `songMessage` ("Stop the song to change its order"…) and "goes to the FM-1 when you stop", with Stop where stopping is the way out | |
+| The Pads/Timeline open tab for the track controls | **Not applied.** SLOOP has no track-controls box under a pad: its whole-track knobs are in the editor beside the step panel | Nothing to open |
+| Timeline option A: resting 32% tint with a track-colour edge, full colour only while playing, selected = grey with a 3 pt outline | **Applied** to SLOOP's Timeline blocks (resting, the playing step solid, the block whose menu is open selected) and to the **section pads** (stored or waiting: the tint; sounding: solid; in the tracks but stopped, loaded or edited: the selected look; empty: the well) | Contrast computed for SLOOP's four colours: light text on the tint 7.6–11.1:1; the edges 5.0–12.3:1 on the page; the 3 pt outline 3.9–9.6:1 on grey |
+| In-place confirms | SLOOP already used them (section Clear, Store over a stored section). **New:** SONG REC over an existing order asks in place at its key. Before, there was no ask in the new layout; on the old Arrange page it was a system dialog | |
+| Settings › Touch | Applies as is (it's app-wide). "Confirm before clearing a pad" is about a Skiff pad. SLOOP's section Clear always asks, because the FM-1 keeps no copy | **Q10** |
+
+**Verified (simulator):**
+- **Skiff is unchanged by this work.** The merged branch's build was compared with `perform-grid-map`'s own tip (built in a throwaway detached worktree, since removed). Pads at No grid and Mix are **pixel-identical**. Pads at Half, the Timeline and the FX panel differ by **1–2/255** in under 320 pixels: rendering noise. `one-row/before` vs `one-row/after`.
+- The SLOOP screens in `one-row/after`: Pads at No grid, Half and Max; the Timeline; Mix; FX over Pads; the section menu; `-sloop-classic` still shows the old four tabs.
+- `swift test`: **294 passed**. The app builds with no errors.
+
+**Not verified:** the same as §7 (no taps driven, nothing on the FM-1). New this round and also untried: the tempo panel's Loop · Song (no launch flag opens the tempo panel), the SONG REC confirm, and the strip. The canvas boards S2–S4 still show the earlier two-row bar; I haven't redrawn them.
+
+**New questions:**
+
+9. **Projects on SLOOP.** The old bar showed the project's name and a Save key with an "edited" dot. Now, as on Skiff, Projects is in the FM-1 menu. Fine to lose the always-visible name and dot? *Recommend yes,* for parity, but SLOOP's projects are saved by hand more often than Skiff's slots, so watch for it on the device.
+10. **Section Clear and "Confirm before clearing a pad".** *Recommend* SLOOP's section Clear keeps asking whatever that setting says: a section has no copy anywhere, and a Skiff pad's pattern survives in the pool.

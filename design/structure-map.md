@@ -146,7 +146,7 @@ Motion: lost in 300 ms (page fade) and 250 ms (card down, ease-out); state blend
 
 | | Today | Proposed |
 |---|---|---|
-| iPad | Sequence · Shape · Arrange · Browse | **Song · Mix**, as Skiff |
+| iPad | Sequence · Shape · Arrange · Browse | **Pads · Timeline · Mix** in the one row, as Skiff (2026-11-10, after board 47 b and 66a426b) |
 | Phone | Sequence · Shape · Arrange · Browse | Unchanged in this pass (mocked, board S6; the phone's Skiff tabs are in flux on another branch) |
 
 Where each old tab goes:
@@ -162,7 +162,7 @@ Where each old tab goes:
 
 | Part | What it holds | Skiff pattern it reuses |
 |---|---|---|
-| **Tool row** | The Pads / Timeline switch; Loop · Song (song mode); SONG REC; "Store the loop in…" | The tool row and SongViewSwitch |
+| **Tools** (in the one row) | SONG REC; on the Timeline, Loop the song and where the song is. Loop · Song (song mode) in the tempo panel, its word in the readout; refusals in the strip under the row | The one row, the tempo panel, SongStrip |
 | **Track heads** (left, one a track) | Number, name, the sound name with its chevron (opens the sounds panel), its chips (CHORD, ARP), where the loop is (a bar for step / length while playing), Mute. **No Solo** (SLOOP has none; not faked). Tap the number: select the track | The H1 head (board 43), the sound key, chips (board 46) |
 | **The loop** (a column beside the heads) | Each track's working loop, drawn as a small picture of its 64 steps; "changes not in a section" when the tracks were edited since the last store or load | The pad face (PadThumb's look) |
 | **Section pads A to D** | One tall pad a section, across all four rows (a section holds every track). Empty: a well, "empty". Stored: its colour (TE_COL, as on the FM-1). Playing: filled, with the bar's progress. Asked for: the **waiting outline** and "next bar". The song's next (song mode): a thin grey outline, "next". **Tap:** play from the next bar (playing) or load (stopped; over edited tracks it asks first, in place). **Hold:** a fan menu: Store the loop here, Add to the song, Clear (the destructive confirm in place; stopped only) | Pads' waiting outline, "next", fan menus, the destructive confirm |
