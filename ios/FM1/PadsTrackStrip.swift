@@ -62,12 +62,12 @@ struct TrackStripCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .trackMenuPress(session: session, ui: ui, track: t)
                 .overlayPreferenceValue(SoundNameAnchor.self) { a in
                     SoundNameKey(session: session, ui: ui, track: t, anchor: a, size: 15, weight: .regular,
                                  colour: muted ? Theme.textSecondary : Theme.textSecondaryRaised)
                 }
+                .buttonStyle(.plain)
+                .trackMenuPress(session: session, ui: ui, track: t)
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", selected" : "")")
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
@@ -208,12 +208,12 @@ struct TrackStripRow: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .trackMenuPress(session: session, ui: ui, track: t)
                 .overlayPreferenceValue(SoundNameAnchor.self) { a in
                     SoundNameKey(session: session, ui: ui, track: t, anchor: a, size: 15, weight: selected ? .semibold : .regular,
                                  colour: selected ? Theme.text : Theme.textSecondaryRaised)
                 }
+                .buttonStyle(.plain)
+                .trackMenuPress(session: session, ui: ui, track: t)
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
