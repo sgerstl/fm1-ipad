@@ -369,7 +369,7 @@ struct PadsPage: View {
                                   room: (above: CGFloat, below: CGFloat)) -> SelectedGeometry {
         let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
         // on a lane the box hangs straight off its edge (Scott, 2026-11-09: one strip); at Max, no lane, a gap
-        let drop = row ? Labs.padControlsGap.value : laneBleed
+        let drop = row ? Labs.padControlsGap : laneBleed
         let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session))
         // above where it fits inside the page (Scott, 2026-11-09: above by default), else below (the top row)
         let fitsDown = frame.maxY + drop + tab.height <= area.height + room.below
@@ -599,7 +599,7 @@ struct PadsPage: View {
                 }
                 // held, then moved off the hold: the pad lifts and follows the finger (its menu goes)
                 guard heldKey == k, !e.isEmpty, !multi.contains(k) else { return }
-                if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padDragStart.value { beginDrag(t, i, at: v.location) }
+                if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padSlideStart.value { beginDrag(t, i, at: v.location) }
                 drag?.at = v.location
             }
             .onEnded { v in

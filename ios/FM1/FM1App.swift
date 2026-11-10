@@ -23,6 +23,7 @@ struct RootView: View {
     @State private var firmware = FirmwareCentre()
 
     init() {
+        Labs.migrate()          // values under merged keys carry over (2026-11-10, the motion options cleaned up)
         let demo = LaunchArgs.all.contains("-demo")
         let s = DeviceSession(demo: demo, skiff: DeviceSession.launchedSkiffDemo)
         _session = State(initialValue: s)

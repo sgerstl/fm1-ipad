@@ -141,7 +141,7 @@ struct AppMenuLayer: View {
                                 asking: m.asking, caption: m.caption, optOut: m.optOut, close: { menu = nil },
                                 open: { item in menu = AppMenu(title: item.title, groups: item.children ?? { [] }, at: m.at) })
                             .id(m.id)
-                            .transition(.opacity.animation(.easeIn(duration: Labs.menuClose.value)))
+                            .transition(.opacity.animation(.easeIn(duration: Labs.menuCloseTime)))
                     } else {
                         PlacedMenu(title: m.title, groups: m.groups(), at: at, fromKey: m.fromKey, layer: g.size, close: { menu = nil })
                             .id(m.id)
@@ -194,7 +194,7 @@ struct PlacedMenu: View {
         let from = UnitPoint(x: at.x / max(1, layer.width), y: at.y / max(1, layer.height))
         let grow = AnyTransition.scale(scale: 0.2, anchor: from).combined(with: .opacity)
         return .asymmetric(insertion: grow.animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: Labs.menuOpen.value)),
-                           removal: grow.animation(.easeIn(duration: Labs.menuClose.value)))
+                           removal: grow.animation(.easeIn(duration: Labs.menuCloseTime)))
     }
 }
 

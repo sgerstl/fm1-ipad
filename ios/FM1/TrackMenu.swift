@@ -31,7 +31,7 @@ struct TrackMenuLayer: View {
                             items: Self.groups(session, ui, track: m.track).flatMap { $0 }.filter { !$0.note }, at: m.at, layer: g.size,
                             tint: m.track, close: { ui.trackMenu = nil }, open: { _ in })
                         .id(m.track)
-                        .transition(.opacity.animation(.easeIn(duration: Labs.menuClose.value)))
+                        .transition(.opacity.animation(.easeIn(duration: Labs.menuCloseTime)))
                 }
             }
         }
