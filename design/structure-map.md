@@ -107,8 +107,9 @@ About 330 pt under the 44 pt top bar, inside the side safe areas (59 each side):
 
 | Tab | What's on it | Built in this round? |
 |---|---|---|
-| **Pads** | The grid (board 40, below). | Yes |
-| **Timeline** | The song's timeline for the phone. Not designed. Until it is, **the tab is left out** (three tabs: Pads · Mix · Sounds) rather than showing a "not yet" card. *Proposed; the other way is the four tabs and a card on Timeline.* | No |
+| **Pads** | The grid (board 40; boards 46, 47). | Yes |
+| **Edit** | The selected pad's pattern and its steps (below). Takes Timeline's place on the phone for now (Scott, 2026-11-10). | Yes |
+| **Timeline** | The song's timeline for the phone. Not designed; **left out** until it is. When it comes, the phone has five tabs or Edit and Timeline share one. | No |
 | **Mix** | One section at a time, picked down the left (below). | Yes |
 | **Sounds** | As built. | — |
 
@@ -121,10 +122,21 @@ About 330 pt under the 44 pt top bar, inside the side safe areas (59 each side):
 | **Scenes** | Store (52) and the 16 scenes at 34, under the rows. Held: the preview, as on the iPad. |
 | **Launch at, Cancel waiting** | Not on the tab (no room for the tool row). Proposed: a **Launch key in the top bar**, beside play, showing the waiting count; tapped, a small menu: LOOP BAR BEAT NOW and Cancel waiting. *Board 40 named it but didn't draw it.* |
 | **The selected pad's track controls** | The border only, as at Half. |
-| **The pattern editor** | Not on the phone this round: Pads launches and mutes; patterns are edited on the iPad or the FM-1. (The map's earlier "the editor up: the selected track's row of 16, as round 4" waits for the Timeline design.) |
+| **The pattern editor** | On the Edit tab, not under the grid (no room). |
 | **Sound panel** | Unchanged by this round: whatever the FM-1's sound keys do on the phone today, they still do. |
 
 Under the 44 aim (rows 40, scenes 34, Mute 34), over the 24 floor; each has a VoiceOver way in.
+
+### Edit (board 50)
+
+*Scott, 2026-11-10: "An Edit tab", so the step panel has a way in. The SLOOP phone's Sequence tab, for Skiff.*
+
+| Part | What it holds |
+|---|---|
+| **Ruler** (28 tall) | The track and pattern the editor shows: "5 Piano · B · pattern 12", the pattern a menu (as the iPad editor's header). Then the **Step N** key and Velocity. |
+| **The grid** | The selected track's pattern a bar wide (the phone's piano roll, or its drum grid on a kit), two-finger pan along the pattern. It follows the selected pad: tap a pad on Pads, or another track's number, and Edit shows that. Motion lanes are left out on the phone. |
+| **Step panel** | **The Step N key** slides it in from the right, 320 wide, over the grid's right side; × closes it. Melodic: the Skiff step inspector (NOTES: PITCH MOVE LENGTH VELOCITY; FEEL: CHANCE RATCHET COND NUDGE; Sound at this step; Lock; ‹ › for the step). Drums: the drum step panel. A step tapped in the grid selects it; the panel follows. |
+| **The FM-1's SEQ** | Lands on Edit with the step panel open (NOTES, then FEEL), as on the iPad. PATTERN, AUTOMATION and SONG pages: Edit too, panel shut. |
 
 ### Mix
 

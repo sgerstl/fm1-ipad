@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lupe phone, Skiff</title>
-<!-- Boards 46–49: the phone with a Skiff FM-1 (design/structure-map.md › "The phone with a Skiff FM-1"). A mock, 2026-11-10. -->
+<!-- Boards 46–50: the phone with a Skiff FM-1 (design/structure-map.md › "The phone with a Skiff FM-1"). A mock, 2026-11-10. -->
 <style>
 @font-face { font-family: Barlow; src: url(../../ios/FM1/Fonts/Barlow-Regular.ttf); font-weight: 400; }
 @font-face { font-family: Barlow; src: url(../../ios/FM1/Fonts/Barlow-SemiBold.ttf); font-weight: 600; }
@@ -31,8 +31,8 @@ h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
 </style>
 </head>
 <body>
-<h1>Lupe on the phone with a Skiff FM-1: Pads and Mix</h1>
-<p class="lede">852 × 393, landscape; the hatched strips are the side safe areas (59 each). Three tabs, Pads · Mix · Sounds, with Timeline left out until it's designed. Numbers in white discs match the notes under each screen. Track names and colours as the demo.</p>
+<h1>Lupe on the phone with a Skiff FM-1: Pads, Edit and Mix</h1>
+<p class="lede">852 × 393, landscape; the hatched strips are the side safe areas (59 each). Four tabs, Pads · Edit · Mix · Sounds; Timeline is left out until it's designed. Numbers in white discs match the notes under each screen. Track names and colours as the demo.</p>
 <div id="boards"></div>
 
 <script>
@@ -48,10 +48,10 @@ function topBar(tab, opts = {}) {
   let h = '';
   h += el('', 67, 6, 40, 44, `background:${COL[sel]};border-radius:8px;box-shadow:inset 0 0 0 2px #EDEDF0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#101012;font-size:15px;font-weight:600`,
     `${sel + 1}<span style="width:16px;height:3px;border-radius:2px;background:rgba(16,16,18,.5)"></span>`);
-  const tabs = ['Pads', 'Mix', 'Sounds'], tw = opts.launch ? 300 : 360;
+  const tabs = ['Pads', 'Edit', 'Mix', 'Sounds'], tw = opts.launch ? 320 : 360;
   h += el('rec', 115, 6, tw, 44, 'padding:4px;display:flex;gap:2px');
   tabs.forEach((t, i) => {
-    const w = (tw - 8 - 4) / 3, on = t === tab;
+    const w = (tw - 8 - 6) / 4, on = t === tab;
     h += el(on ? 'key' : '', 119 + i * (w + 2), 10, w, 36, on ? '' : 'display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text2)', t);
   });
   let x = 115 + tw + 8;
@@ -195,10 +195,56 @@ function delay() {
   return h;
 }
 
+
+// Edit (board 50): the ruler, the selected pad's pattern a bar wide, the step panel in from the Step key
+function edit() {
+  const c = COL[4];
+  let h = '';
+  h += el('', 59, 58, 734, 28, 'display:flex;align-items:center;gap:8px',
+    `<span style="width:22px;height:22px;border-radius:6px;background:${c};color:#101012;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center">5</span>
+     <span style="font-size:13px;font-weight:600">Piano · B</span>
+     <span class="key" style="height:28px;padding:0 10px;font-size:12px;gap:6px"><span style="font-weight:400;color:var(--text2r)">pattern</span>12 ▾</span>
+     <span style="font-size:12px;color:var(--text2)">C minor · 16 steps</span>
+     <span style="flex:1"></span>
+     <span class="key" style="height:28px;padding:0 10px;font-size:12px;background:#EDEDF0;color:#101012">Step 5</span>
+     <span class="key" style="height:28px;padding:0 10px;font-size:12px;gap:6px;color:var(--text2r)"><span style="width:6px;height:6px;border-radius:3px;background:#45454D"></span>Velocity</span>`);
+  // the piano roll: note names 44 wide, 16 steps of 43
+  const gx = 105, gy = 92, sw = 43, rh = 44, notes = ['D#4', 'D4', 'C4', 'A#3', 'G#3', 'G3'];
+  h += el('rec', gx, gy, 16 * sw, 6 * rh, 'border-radius:8px;overflow:hidden');
+  for (let k = 0; k < 16; k += 4) h += el('', gx + k * sw, gy, 4 * sw, 6 * rh, `background:${(k / 4) % 2 ? '#141417' : '#111114'}`);
+  notes.forEach((n, r) => {
+    h += el('', 59, gy + r * rh, 42, rh, 'display:flex;align-items:center;justify-content:flex-end;font-size:12px;color:var(--text2)', n);
+    h += el('', gx, gy + r * rh + rh - 1, 16 * sw, 1, 'background:#1E1E22');
+  });
+  [[0, 2, 2], [2, 4, 1], [4, 2, 2], [6, 3, 1], [8, 4, 2], [10, 1, 1], [12, 2, 3]].forEach(([st, r, len]) => {
+    const sel = st === 4;
+    h += el('', gx + st * sw + 2, gy + r * rh + 4, len * sw - 4, rh - 8, `background:${c};border-radius:6px;${sel ? 'box-shadow:0 0 0 2px #EDEDF0' : ''}`);
+  });
+  h += el('', gx + 6.4 * sw, gy, 2, 6 * rh, 'background:#EDEDF0;opacity:.7');
+  // the step panel, 320 wide, over the grid's right side
+  const px = 793 - 320, py = 92;
+  h += el('', px, py, 320, 266, 'background:var(--panel);border-radius:14px;box-shadow:0 14px 28px rgba(0,0,0,.55);padding:12px', `
+    <div style="font-size:11px;color:var(--text2)">T5 Piano · C4</div>
+    <div style="font-size:20px;font-weight:600;margin-top:2px">Step 5</div>`);
+  h += el('key', px + 176, py + 8, 40, 36, '', '‹') + el('key', px + 220, py + 8, 40, 36, '', '›') + el('key', px + 268, py + 8, 44, 36, 'font-size:13px', '✕');
+  const cell = (x, y, w, hh, lab, v, n, f) => el('', x, y, w, hh, 'background:var(--control);border-radius:8px;box-shadow:0 2px 0 var(--edge)',
+    `<span class="lab" style="position:absolute;left:10px;top:7px">${lab}</span>${n ? `<span style="position:absolute;right:8px;top:6px;width:15px;height:15px;border-radius:8px;background:#34343B;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--text2r)">${n}</span>` : ''}
+     <span style="position:absolute;left:10px;top:22px;font-size:18px;font-weight:600">${v}</span>
+     <span style="position:absolute;left:10px;right:10px;bottom:5px;height:3px;border-radius:2px;background:#3A3A42"><span style="display:block;height:3px;width:${f * 100}%;background:${c};border-radius:2px"></span></span>`);
+  const x0 = px + 12, cw = (296 - 6) / 2;
+  h += cell(x0, py + 56, cw, 50, 'PITCH', 'C4', 1, .5) + cell(x0 + cw + 6, py + 56, cw, 50, 'MOVE', 'Step 5', 2, .3);
+  h += cell(x0, py + 112, cw, 50, 'LENGTH', '2 steps', 3, .2) + cell(x0 + cw + 6, py + 112, cw, 50, 'VELOCITY', '100', 4, .78);
+  const fw = (296 - 18) / 4;
+  [['CHANCE', '100%', 1], ['RATCHET', '×1', 0], ['COND', '--', 0], ['NUDGE', '0', .5]].forEach(([l, v, f], i) => h += cell(x0 + i * (fw + 6), py + 170, fw, 48, l, v, 0, f));
+  h += el('', x0, py + 224, 296, 34, 'display:flex;align-items:center;justify-content:space-between',
+    `<span style="font-size:13px;font-weight:600">Sound at this step ▾</span><span class="key" style="height:34px;padding:0 12px;font-size:13px">Lock</span>`);
+  return h;
+}
+
 const BOARDS = [
   { title: '46 · Pads: the grid on the phone (board 40, with the Launch key)', html: topBar('Pads', { launch: true }) + pads() +
       disc(1, 452, 2) + disc(2, 66, 50) + disc(3, 101, 50) + disc(4, 470, 50) + disc(5, 772, 120) + disc(6, 60, 322),
-    notes: ['Three tabs: Pads · Mix · Sounds. Timeline is left out until it\'s designed (the other way: four tabs and a "not yet" card).',
+    notes: ['Four tabs: Pads · Edit · Mix · Sounds. Edit holds the selected pad\'s pattern and the step panel (board 50); Timeline is left out until it\'s designed.',
       'Row heads 72 wide: the number in the track\'s colour (tap: select the track; Piano is selected, its lane tinted). No name; VoiceOver reads it.',
       'Mute, 34 pt. The row\'s stop, as on the iPad. Track 6 is muted: its playing pad is outlined, not filled.',
       'Pads 78 × 40, the iPad\'s Half faces: number and passes on one line, the pass bar along the foot, a dashed outline and "b11" while waiting, the corner cut for a sound. A tap launches; a hold opens the menu.',
@@ -219,6 +265,13 @@ const BOARDS = [
     notes: ['Delay lit: its card fills the page. Reverb, Chorus and Global look the same, each its own card.',
       'The iPad\'s card: the four columns (the FM-1\'s knobs 1–4), a slide on one turns it. No swipe between pages, so the columns get the whole finger.',
       'The graph at the phone\'s width.'] },
+  { title: '50 · Edit: the selected pad\'s pattern, the step panel open', html: topBar('Edit', { launch: true }) + edit() +
+      disc(1, 52, 52) + disc(2, 640, 52) + disc(3, 100, 200) + disc(4, 460, 86) + disc(5, 466, 318),
+    notes: ['The ruler: the track and entry the editor shows (Piano · B, the pad selected on Pads), the pattern a menu, the scale and length.',
+      'The Step key (lit: the panel is open) and Velocity, which swaps a velocity lane in under the grid. As the SLOOP phone\'s Sequence tab.',
+      'The pattern a bar wide, the phone\'s piano roll (a kit: its drum grid). Two fingers pan; a tap on a note selects its step. No motion lanes on the phone.',
+      'The step panel, 320 wide, in from the right over the grid: the Skiff step inspector. ‹ › step along; ✕ closes it (so does the Step key).',
+      'NOTES two by two (the FM-1\'s knobs 1–4), FEEL across, Sound at this step and Lock. SEQ on the FM-1 lands here with the panel open.'] },
 ];
 document.getElementById('boards').innerHTML = BOARDS.map(b => `
   <section class="board" aria-label="${b.title}">
