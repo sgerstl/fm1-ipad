@@ -599,6 +599,7 @@ struct PadsPage: View {
                    ? (playing ? .easeOut(duration: Labs.padPlayFade.value) : .easeIn(duration: Labs.padPlayFade.value * 0.7)) : nil,
                    value: playing)
         .disabled(store.offline)
+        .onDisappear { if !copy { padFrames[key] = nil } }      // (a row that went, at Max: never a drop target)
         // held: its menu at the finger
         .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { v in
@@ -628,7 +629,6 @@ struct PadsPage: View {
             openMenu(t, i, at: pressAt)
         })
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[key] = $0 } }   // (the dragged copy isn't the pad's place)
-        .onDisappear { if !copy { padFrames[key] = nil } }      // (a row that went, at Max: never a drop target)
         .accessibilityValue(waiting && !playing ? "waiting, starts in " + LaneMarks.countdown(m.launchIn, session.launchMode) : "")
         .accessibilityLabel("\(Entries.trackName(t, session: session)), entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
         .accessibilityValue(e.isEmpty ? "" : state + (held ? ", the held scene goes here" : ""))
