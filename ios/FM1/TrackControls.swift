@@ -13,6 +13,8 @@ struct TrackKnobBox: View {
     let ui: EditorUI
     /// On the selected row's tab (the Song tab): no card of its own, the tab is its surface.
     var embedded = false
+    /// Which way the box goes back into its lane when it shuts (it hangs above the pad: down): its carets point there.
+    var closesDown = true
     /// The knob last turned on the FM-1, lit as the sound panel lights it (Scott, 2026-11-07: "work exactly like the
     /// ones in the panel").
     @State private var marks = ShapeMarks()
@@ -93,7 +95,7 @@ struct TrackKnobBox: View {
                 // reads as a key, not a fifth parameter; its touch the full 44 pt
                 if embedded {
                     Color.clear.frame(width: 92, height: 56)
-                        .overlay(alignment: .bottomTrailing) { CloseControlsKey { controlsOpen = false } }
+                        .overlay(alignment: .bottomTrailing) { CloseControlsKey(down: closesDown, colour: Theme.track[t]) { controlsOpen = false } }
                 }
             }
         }
@@ -152,17 +154,19 @@ private struct MuteChipStyle: ToggleStyle {
     }
 }
 
-/// The track controls' close key (Scott, 2026-11-10: "a little close button… a quarter of the size of the other squares"):
-/// a 28 pt dark disc with a cross, in a 44 pt touch area anchored to the box's bottom right corner.
+/// The track controls' close key (Scott, 2026-11-10): the step tab's carets in the track's colour, two of them for the
+/// box's two positions, pointing the way it goes as it shuts (back into its lane). Only here, in the open box: opening is
+/// the head's double tap and its "Show track controls" action. A 44 pt touch area in the box's bottom right corner; the
+/// track colour on its own tint is 4.45:1 (violet) to 7.3:1 (lime) in the SKIFF theme.
 struct CloseControlsKey: View {
+    var down = true
+    let colour: Color
     let close: () -> Void
     var body: some View {
         Button(action: close) {
             ZStack(alignment: .bottomTrailing) {
                 Color.clear
-                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.text)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(Theme.control))      // (no ring: Scott, 2026-11-10, subtler; × 12.9:1 on it)
+                TabCarets(ups: [!down, !down], colour: colour).frame(width: 36, height: 24)
             }
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
@@ -170,5 +174,21 @@ struct CloseControlsKey: View {
         .buttonStyle(PressSink())
         .accessibilityLabel("Close track controls")
         .accessibilityHint("Double-tapping the track's head opens them again")
+    }
+}
+
+/// The panel tabs' carets: one chevron per position the panel has, each up or down for where a tap takes it (the step
+/// editor's tab, three; the track controls, two).
+struct TabCarets: View {
+    let ups: [Bool]
+    let colour: Color
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(ups.enumerated()), id: \.offset) { _, up in
+                Image(systemName: up ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold))
+            }
+        }
+        .foregroundStyle(colour)
+        .accessibilityHidden(true)
     }
 }

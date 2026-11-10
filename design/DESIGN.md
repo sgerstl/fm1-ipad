@@ -37,3 +37,14 @@ Lupe sets its words in **Barlow**, the face Skiff draws the FM-1's screen in, an
 | Small lines (passes, ×N, labels) | Barlow | 11–13 regular or medium |
 
 Barlow runs about 7 % small against SF Pro at the same size: `LupeType.scale` takes the words up by that, so sizes written for SF Pro still read the same. Two weights a view at most, as the craft bar says; numbers in even figures (`monospacedDigit`).
+
+
+## Destructive actions: confirm in place (2026-11-10)
+
+Anything that loses work asks once more **where the finger is**, never in a system alert or confirmation dialog (Scott:
+"style it like the other menus with the theme and keep it close to the button press"). In a fan menu, the item is a
+`MenuItem.destructive(title:confirm:)`: tapped, its own row turns into a button outlined in `Theme.recText` whose words
+name exactly what goes ("Clear all 5 pads on T4 Drum Kit, erasing pattern 07"), the row below into Cancel, the other
+rows fade. The confirm ignores taps for 0.4 s, so a double tap can't go through it. Tapping away, Escape or VoiceOver's
+two-finger scrub cancels; VoiceOver focuses the confirm and announces its words. Where the change can be undone instead
+(a step clear, kept for Undo), Undo wins over a confirm.

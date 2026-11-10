@@ -16,6 +16,9 @@ struct MenuItem {
     var note = false
     var action: (() -> Void)?
     var children: (() -> [[MenuItem]])?
+    /// A destructive choice's second step: tapped, the fan turns this row into a red-outlined button with these words
+    /// (what goes, named), and the next into Cancel, where the finger is (Scott, 2026-11-10: no system dialog).
+    var confirm: String? = nil
 
     /// A line with nothing to do: a note, or a choice shown but not offered.
     init(title: String, icon: String? = nil, chip: (text: String, colour: Color)? = nil, enabled: Bool = true,
@@ -40,6 +43,14 @@ struct MenuItem {
     }
 
     static func note(_ text: String) -> MenuItem { MenuItem(title: text, enabled: false, note: true) }
+
+    /// A choice that loses something: it asks once more, in place (`confirm` names what goes).
+    static func destructive(title: String, icon: String? = "trash", enabled: Bool = true, confirm: String,
+                            action: @escaping () -> Void) -> MenuItem {
+        var m = MenuItem(title: title, icon: icon, enabled: enabled, action: action)
+        m.confirm = confirm
+        return m
+    }
 }
 
 /// A Lupe menu anywhere in the app (2026-11-05: every system menu becomes one): a title, its groups (built when it
@@ -303,6 +314,11 @@ struct FanMenu: View {
     @AppStorage(Handedness.key) private var hand = Handedness.right
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var out = false
+    /// The destructive item asking to be confirmed (its row turns into the confirm, the next into Cancel).
+    @State private var confirming: Int?
+    /// When the confirm came up: it takes no tap for a moment, so the second tap of a quick double tap can't confirm.
+    @State private var confirmShownAt = Date.distantPast
+    @AccessibilityFocusState private var confirmFocused: Bool
 
     static let width: CGFloat = 240, height: CGFloat = 56, gap: CGFloat = 12
 
@@ -318,7 +334,7 @@ struct FanMenu: View {
                     let top = y + CGFloat(k) * (Self.height + Self.gap)
                     // from the finger to its place
                     let dx = at.x - (x + Self.width / 2), dy = at.y - (top + Self.height / 2)
-                    button(item, first: k == 0)
+                    row(k, item)
                         .padding(.vertical, Self.gap / 2)
                         .contentShape(Rectangle())          // the gaps take the touch too
                         .offset(x: out || reduceMotion ? 0 : dx, y: out || reduceMotion ? 0 : dy)
@@ -333,15 +349,78 @@ struct FanMenu: View {
             .offset(x: x, y: y - Self.gap / 2)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(title)
+            .accessibilityAction(.escape) { close() }        // (VoiceOver's two-finger scrub)
         }
         .frame(width: layer.width, height: layer.height, alignment: .topLeading)
         .onAppear { out = true }
         .onKeyPress(.escape) { close(); return .handled }
     }
 
+    /// Row k: its item, or while one is confirming, the confirm on that item's row and Cancel on the next (the row
+    /// before when it's the last); the others fade away and take no touches.
+    @ViewBuilder private func row(_ k: Int, _ item: MenuItem) -> some View {
+        if let c = confirming {
+            let cancelRow = c + 1 < items.count ? c + 1 : c - 1
+            if k == c { confirmButton(items[c]) }
+            else if k == cancelRow { cancelButton }
+            else { button(item, first: k == 0).opacity(0).allowsHitTesting(false).accessibilityHidden(true) }
+        } else {
+            button(item, first: k == 0)
+        }
+    }
+
+    /// The second step: the same size and place, outlined in the record red, the words naming what goes.
+    private func confirmButton(_ item: MenuItem) -> some View {
+        Button {
+            guard Date().timeIntervalSince(confirmShownAt) > 0.4 else { return }
+            close(); item.action?()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: item.icon ?? "trash").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.recText).frame(width: 24)
+                Text(item.confirm ?? item.title).font(.lupe(15, .semibold)).lineLimit(2).minimumScaleFactor(0.85)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 16)
+            .frame(height: Self.height)
+            .background {
+                RoundedRectangle(cornerRadius: 14).fill(tint.map { SelectionTint.fill($0) } ?? Elevation.held.surface).elevationShadow(.held)
+                    .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.recText, lineWidth: 3) }   // (recText: 4.9:1 or more on every track's tint; rec fell to 2.98 on lime)
+            }
+        }
+        .buttonStyle(PressSink())
+        .accessibilityFocused($confirmFocused)
+        .accessibilityHint("Can't be undone. Cancel, or tap away, keeps everything")
+        .transition(.opacity)
+    }
+
+    private var cancelButton: some View {
+        Button { close() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).frame(width: 24)
+                Text("Cancel").font(.lupe(17))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 16)
+            .frame(height: Self.height)
+            .background { RoundedRectangle(cornerRadius: 14).fill(tint.map { SelectionTint.fill($0) } ?? Elevation.held.surface).elevationShadow(.held) }
+        }
+        .buttonStyle(PressSink())
+        .transition(.opacity)
+    }
+
     private func button(_ item: MenuItem, first: Bool) -> some View {
         Button {
-            if item.children != nil { open(item) } else { close(); item.action?() }
+            if item.children != nil { open(item) }
+            else if item.confirm != nil, let k = items.firstIndex(where: { $0.title == item.title }) {
+                confirmShownAt = Date()
+                withAnimation(.easeOut(duration: reduceMotion ? 0.15 : 0.2)) { confirming = k }
+                confirmFocused = true
+                UIAccessibility.post(notification: .announcement, argument: item.confirm)
+            }
+            else { close(); item.action?() }
         } label: {
             HStack(spacing: 10) {
                 if let c = item.chip {

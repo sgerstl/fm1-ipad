@@ -942,3 +942,20 @@ extension SkiffOnTheDeviceTests {
         run.cancel()
     }
 }
+
+/// The head's Clear all pads (Scott, 2026-11-10: "clearing a track from the track header doesn't seem to work"; it only
+/// ever cleared the steps of the pattern the track was on, never its pads): every entry on the row emptied through the
+/// fake, the patterns only it used erased with them, confirmed in place.
+extension SkiffSongTests {
+    @Test func clearAllPadsEmptiesTheRow() async throws {
+        let (_, _, s, run) = try await store()
+        defer { run.cancel() }
+        let before = try #require(s.song?.tracks[0].entries)
+        try #require(before.contains { !$0.isEmpty })
+        let none = before.map { _ in SongEntry(pattern: 0) }
+        #expect(s.blocked(track: 0, to: none) == nil)                     // stopped: nothing in the way
+        #expect(await s.rewrite(track: 0, to: none, confirmed: true))
+        try await waitFor(5) { s.song?.tracks[0].entries.allSatisfy(\.isEmpty) == true }
+        #expect(s.song?.tracks[1].entries.contains { !$0.isEmpty } == true)  // the other rows untouched
+    }
+}

@@ -222,12 +222,7 @@ struct SkiffSongPage: View {
             let next: SongPosition = switch position { case .none: .half; case .half: .none; case .max: .half }
             withAnimation(spring) { positionRaw = next.rawValue; layout = nil }
         } label: {
-            HStack(spacing: 2) {
-                ForEach(0..<3, id: \.self) { k in
-                    Image(systemName: ups[k] ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold))
-                }
-            }
-            .foregroundStyle(Theme.track[session.selectedTrack])        // (the track's colour on its tint: Scott, 2026-11-09)
+            TabCarets(ups: ups, colour: Theme.track[session.selectedTrack])   // (the track's colour on its tint: Scott, 2026-11-09)
             .frame(width: PadsPage.panelTabWidth, height: PadsPage.tabHeight)
             .contentShape(Rectangle())
             .geometryGroup()                   // rides the tab's spring with it (the words used to lag behind)

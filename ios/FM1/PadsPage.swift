@@ -379,7 +379,7 @@ struct PadsPage: View {
                 // 2026-11-09); the pad's tint is under the pads (selectedGround)
                 LaneTabShape(box: CGRect(origin: s.knobsAt, size: s.tab), earL: s.earL, earR: s.earR, r: TrackKnobBox.outerRadius, up: s.up)
                     .fill(SelectionTint.fill(t))
-                TrackKnobBox(session: session, ui: ui, embedded: true)
+                TrackKnobBox(session: session, ui: ui, embedded: true, closesDown: s.up)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session), alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
             } else {
@@ -388,7 +388,7 @@ struct PadsPage: View {
                     .frame(width: s.tab.width, height: s.tab.height)
                     .elevationShadow(.held)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
-                TrackKnobBox(session: session, ui: ui, embedded: true)
+                TrackKnobBox(session: session, ui: ui, embedded: true, closesDown: s.up)
                     .frame(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session), alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
             }

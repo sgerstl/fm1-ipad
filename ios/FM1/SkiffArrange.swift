@@ -308,7 +308,7 @@ struct SkiffArrangePage: View {
                 ZStack(alignment: .topLeading) {
                     LaneTabShape(box: CGRect(origin: s.knobsAt, size: tab), earL: gap, earR: gap, r: TrackKnobBox.outerRadius, up: up)
                         .fill(SelectionTint.fill(t))
-                    TrackKnobBox(session: session, ui: ui, embedded: true)
+                    TrackKnobBox(session: session, ui: ui, embedded: true, closesDown: up)
                         .frame(width: tab.width, height: tab.height, alignment: .topLeading)
                         .offset(x: x, y: y)
                 }
@@ -340,7 +340,7 @@ struct SkiffArrangePage: View {
             let panel = ui.soundPanel != nil
             // a tab of the selected row's own colour, hanging from its right end (above it on the last rows): the knobs
             // part of the track, not floating over the next one (Scott, 2026-11-07)
-            TrackKnobBox(session: session, ui: ui, embedded: true)
+            TrackKnobBox(session: session, ui: ui, embedded: true, closesDown: !down)
                 .background { RowTab(down: down, flushRight: !panel).fill(SelectionTint.fill(t)) }
                 .offset(x: panel ? -(SoundPanel.width + 12) : 0,
                         y: down ? below : max(0, top - 4 - TrackKnobBox.height(for: session)))
