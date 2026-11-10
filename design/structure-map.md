@@ -97,9 +97,9 @@ The Pads tab becomes the grid (board 40). The whole phone layout, Mix included, 
 
 Each pad is a button: "Lead, entry C, pattern 13, waiting, bar 11". Rows are groups named for the track. The scene preview gets a VoiceOver action as its non-hold way in. Every drag keeps its hold-menu way in (2.5.7). Pads at 44 pt or more at No grid; Half's 42 and the phone's 40 are the exceptions, over the 24 floor.
 
-## The phone with a Skiff FM-1 (landscape, 852 × 393; updated 2026-11-10, proposed: Scott's OK before building)
+## The phone with a Skiff FM-1 (landscape, 852 × 393; agreed and built 2026-11-10, boards 46–50)
 
-*Built today (7137fa9): Song · Mix · Sounds, the iPad's three. Song shows a card, "Arrange on Skiff is on the iPad for now"; Mix is the iPad's MixerPage as it is, which doesn't fit (strips under the top bar, the effect cards over the strips, the foot off the screen: `qa/accessibility-2026-11-10/screens/iPhone-skiff-mix.jpg`). Sounds works. SLOOP's phone tabs (Sequence · Shape · Arrange · Browse) are unchanged by this.*
+*Before this (7137fa9): Song · Mix · Sounds, the iPad's three. Song shows a card, "Arrange on Skiff is on the iPad for now"; Mix is the iPad's MixerPage as it is, which doesn't fit (strips under the top bar, the effect cards over the strips, the foot off the screen: `qa/accessibility-2026-11-10/screens/iPhone-skiff-mix.jpg`). Sounds works. SLOOP's phone tabs (Sequence · Shape · Arrange · Browse) are unchanged by this.*
 
 About 330 pt under the 44 pt top bar, inside the side safe areas (59 each side): 734 wide. One job a tab, never the iPad's canvas shrunk.
 
@@ -117,15 +117,19 @@ About 330 pt under the 44 pt top bar, inside the side safe areas (59 each side):
 
 | Part | On the phone |
 |---|---|
-| **Row heads** | 72 wide: the number (tap: select the track) and Mute (M, 34). No name; VoiceOver reads it. |
-| **Pads** | Six rows at 40 with 4 between, pads 78 wide; 8 columns in view, the rest by a two-finger pan sideways (one finger stays a tap or a hold). Same faces, states and hold menus as the iPad's Half (`PadsPage` `.compact`, reused, not a second grid). |
-| **Scenes** | Store (52) and the 16 scenes at 34, under the rows. Held: the preview, as on the iPad. |
-| **Launch at, Cancel waiting** | Not on the tab (no room for the tool row). Proposed: a **Launch key in the top bar**, beside play, showing the waiting count; tapped, a small menu: LOOP BAR BEAT NOW and Cancel waiting. *Board 40 named it but didn't draw it.* |
+| **Row heads** | 72 wide: the number (tap: select the track; held: its menu) and Mute (34, the iPad's speaker key). No name; VoiceOver reads it. |
+| **Pads** | Six rows with 4 between: 40 at the least, up to 44 where the phone has the height (44 on a 6.3-inch iPhone 17). Pads 78 wide (the iPad's small face: letter and number); 8 columns in view (7 with the rail), the rest by a pan sideways, one finger or two as the grids since 2026-11-07. Same faces, states and hold menus as the iPad's (`PadsPage` `.phone`, reused, not a second grid). |
+| **Scenes** | Store (88, as the iPad's: narrower cut its word) and the 16 scenes at 34, under the rows and the heads. Held: the preview, as on the iPad. A refusal (an empty scene tapped) shows over the scenes until dismissed. |
+| **Launch at, Cancel waiting** | Not on the tab (no room for the tool row). A **Launch key in the top bar**, beside REC, showing the launch point and the waiting count; tapped, Lupe's menu: Loop Bar Beat Now (the setting ticked), what waits, Cancel waiting (board 47 drew them as segments; built as a menu). |
 | **The selected pad's track controls** | The border only, as at Half. |
 | **The pattern editor** | On the Edit tab, not under the grid (no room). |
-| **Sound panel** | Unchanged by this round: whatever the FM-1's sound keys do on the phone today, they still do. |
+| **Sound panel** | Over every Skiff tab, from the right, as on the iPad: the FM-1's ENV LFO FX SEL EDIT ARP (or the rail) bring it in for the selected track. On Pads it covers the right-hand columns and the scenes under them. |
 
-Under the 44 aim (rows 40, scenes 34, Mute 34), over the 24 floor; each has a VoiceOver way in.
+Under the 44 aim (scenes 34, Mute 34, rows 40 on the smallest phones), over the 24 floor; each has a VoiceOver way in.
+
+### The sound buttons (Scott, 2026-11-10)
+
+Settings › Sound buttons works on the phone too: on, the rail (FX SEL ENV LFO EDIT ARP SEQ) runs down the right of every Skiff tab, 56 wide, its seven keys sharing the height (about 40 each); the page gives up its width. Off (the default), the panel brings the FM-1's 12 keys in two rows at its foot, as on the iPad. SEQ on the phone goes to Edit.
 
 ### Edit (board 50)
 
@@ -133,9 +137,9 @@ Under the 44 aim (rows 40, scenes 34, Mute 34), over the 24 floor; each has a Vo
 
 | Part | What it holds |
 |---|---|
-| **Ruler** (28 tall) | The track and pattern the editor shows: "5 Piano · B · pattern 12", the pattern a menu (as the iPad editor's header). Then the **Step N** key and Velocity. |
+| **Ruler** (28 tall) | The track and pattern the editor shows: "5 Piano · B · pattern 12 · C minor · 16 steps". Then the **Step N** key and Velocity. *The pattern menu is left out for now: Skiff edits the pattern a track is on, and a pad launched on Pads changes it.* |
 | **The grid** | The selected track's pattern a bar wide (the phone's piano roll, or its drum grid on a kit), two-finger pan along the pattern. It follows the selected pad: tap a pad on Pads, or another track's number, and Edit shows that. Motion lanes are left out on the phone. |
-| **Step panel** | **The Step N key** slides it in from the right, 320 wide, over the grid's right side; × closes it. Melodic: the Skiff step inspector (NOTES: PITCH MOVE LENGTH VELOCITY; FEEL: CHANCE RATCHET COND NUDGE; Sound at this step; Lock; ‹ › for the step). Drums: the drum step panel. A step tapped in the grid selects it; the panel follows. |
+| **Step panel** | **The Step N key** slides it in from the right, 320 wide, over the grid's right side, and closes it (an ✕ on the key while it's open: the inspector's own ‹ › sit where a × would). It scrolls when it's taller than the phone. Melodic: the Skiff step inspector (NOTES: PITCH MOVE LENGTH VELOCITY; FEEL: CHANCE RATCHET COND NUDGE; Sound at this step; Lock; ‹ › for the step). Drums: the drum step panel. A step tapped in the grid selects it; the panel follows. |
 | **The FM-1's SEQ** | Lands on Edit with the step panel open (NOTES, then FEEL), as on the iPad. PATTERN, AUTOMATION and SONG pages: Edit too, panel shut. |
 
 ### Mix
@@ -145,7 +149,7 @@ The iPad's Mix holds six strips across the top and the four effect cards under t
 | Part | What it holds |
 |---|---|
 | **Selector** (left, 112 wide) | Mixer · Delay · Reverb · Chorus · Global, five keys at 44. The lit one is on screen; linked, the FM-1 shows the same page. **GLO on the FM-1 steps through them** (MIXER 1/5 … GLOBAL 5/5), as it steps the iPad's sections. |
-| **Mixer** | The six tracks as **six rows** (one a track, like the Pads rows): number and name (tap: select), LEVEL on a horizontal fader in the track's colour with its dB, PAN, the REVERB send, Mute. Rows 44 tall. |
+| **Mixer** | The six tracks as **six rows** (one a track, like the Pads rows): number and name (tap: select), LEVEL on a horizontal fader in the track's colour with its dB, PAN, the REVERB send (the iPad's faders, laid across), Mute. Rows 48 tall. |
 | **Delay, Reverb, Chorus, Global** | That page's card, the iPad's own (its four columns and graph), filling the space. No swipe between pages: a slide on a column turns it. |
 
 Nothing changes on the iPad's Mix.

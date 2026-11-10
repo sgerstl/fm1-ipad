@@ -9,24 +9,36 @@ struct PhoneAppView: View {
     let ui: EditorUI
     @Binding var useDemo: Bool
     @State private var size = CGSize(width: 852, height: 393)
+    @State private var padsReturn: Page?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The page under the top bar.
+    @ViewBuilder private var page: some View {
+        switch ui.page {
+        case .sequencer: PhoneSequence(session: session, ui: ui)
+        case .sound: PhoneShape(session: session, ui: ui)
+        case .library: PhoneBrowse(session: session, ui: ui)
+        case .mixer: PhoneMix(session: session, ui: ui)
+        case .song:
+            if session.capabilities.contains(.sloopSong) { SongPage(session: session, ui: ui, compact: true) }
+            else if let store = session.skiffSong {
+                // Skiff's Pads, the grid (board 40, 46): six rows of 40, the scenes under them
+                PadsPage(session: session, store: store, ui: ui, layout: .phone)
+            } else { NotOnThisFirmware.arrange(session) }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 8) {
             PhoneTopBar(session: session, ui: ui, useDemo: $useDemo)
             if session.isConnected {
                 Group {
-                    switch ui.page {
-                    case .sequencer: PhoneSequence(session: session, ui: ui)
-                    case .sound: PhoneShape(session: session, ui: ui)
-                    case .library: PhoneBrowse(session: session, ui: ui)
-                    case .mixer: MixerPage(session: session, ui: ui)
-                    case .song:
-                        if session.capabilities.contains(.sloopSong) { SongPage(session: session, ui: ui, compact: true) }
-                        else if session.skiffSong != nil {
-                            NotOnThisFirmware(title: "Arrange on Skiff is on the iPad for now",
-                                              detail: "The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.")
-                        } else { NotOnThisFirmware.arrange(session) }
+                    // Skiff: the sound panel comes in from the right over every tab, the FM-1's sound keys (and the
+                    // rail, Settings › Sound buttons) opening it, as on the iPad (Scott, 2026-11-10)
+                    if ui.songTab {
+                        SoundPanelHost(session: session, ui: ui) { page }
+                    } else {
+                        page
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -41,6 +53,19 @@ struct PhoneAppView: View {
                 ConnectionState(status: session.status, useDemo: $useDemo)
             }
         }
+        // ARP held on the FM-1 (Skiff's PERFORM) shows Pads while it's held, then goes back (as the iPad, 2026-11-07)
+        .onChange(of: session.screenLinked && session.deviceScreen?.layer == SkiffButtonMap.performLayer) { _, held in
+            guard session.skiffSong?.performs == true, ui.followDevice else { return }
+            if held {
+                padsReturn = ui.page
+                if ui.page != .song { ui.pageFromDevice = true; ui.page = .song }
+            } else if let r = padsReturn {
+                ui.page = r
+                padsReturn = nil
+            }
+        }
+        // another tab closes the sound panel (the FM-1's key or the rail brings it back)
+        .onChange(of: ui.page) { _, _ in if ui.songTab { ui.soundPanel = nil } }
         .padding(.horizontal, 8)
         .padding(.top, 6)
         // a held knob's full-size ring, over everything and kept on the screen, as on the iPad
@@ -95,6 +120,8 @@ struct PhoneTopBar: View {
     @Environment(AudioThrough.self) private var through
     @Environment(FirmwareCentre.self) private var firmware
     @State private var moreFrame: CGRect = .zero
+    /// Settings (Sound buttons, Handedness, Labs…): on the phone too, from ⋯ (2026-11-10: the rail's setting needs a way in)
+    @State private var settingsOpen = false
 
     private var recording: Bool { session.isRecordingAnything }
     @State private var chipFrames: [Int: CGRect] = [:]
@@ -112,6 +139,7 @@ struct PhoneTopBar: View {
                 .disabled(!session.isConnected)
                 .opacity(session.isConnected ? 1 : 0.45)
             if session.isConnected { tabs } else { Spacer() }
+            if session.isConnected, ui.songTab, let store = session.skiffSong { PhoneLaunchKey(session: session, store: store, ui: ui) }
             transport
             more
         }
@@ -161,13 +189,13 @@ struct PhoneTopBar: View {
 
     private var tabs: some View {
         HStack(spacing: 2) {
-            ForEach(ui.songTab ? Page.skiffTabs : Page.sloopTabs) { p in
+            ForEach(ui.songTab ? Page.phoneSkiffTabs : Page.sloopTabs) { p in
                 let current = ui.page == p
                 Button {
                     ui.page = p
                     TopBar.driveDevice(session: session, ui: ui, to: p)
                 } label: {
-                    Text(p.title(skiff: ui.songTab))
+                    Text(p.title(skiff: ui.songTab, phone: true))
                         .font(.lupe(13, .semibold))
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.85)
@@ -241,6 +269,7 @@ struct PhoneTopBar: View {
                 if through.enabled { audio.append(.note(through.summary)) }
                 g.append(audio)
                 g.append([MenuItem(title: useDemo ? "Use the FM-1" : "Use the demo FM-1", icon: useDemo ? "cable.connector" : "play.rectangle") { useDemo.toggle() }])
+                g.append([MenuItem(title: "Settings…", icon: "gearshape") { settingsOpen = true }])
                 if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
                 return g
             }, at: CGPoint(x: moreFrame.maxX - MenuPanel.width, y: moreFrame.maxY), fromKey: true)
@@ -253,6 +282,70 @@ struct PhoneTopBar: View {
         .buttonStyle(PressSink())
         .globalFrame($moreFrame)
         .accessibilityLabel("More")
+        .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
+    }
+}
+
+// MARK: - Launch at (Skiff)
+
+/// Skiff's Launch at and Cancel waiting, which the iPad keeps in the Pads tool row: no room for that row on the phone,
+/// so a key in the top bar (board 46): the launch point and how many launches wait; tapped, a menu of the four points,
+/// what waits and Cancel waiting (board 47, as a menu).
+struct PhoneLaunchKey: View {
+    let session: DeviceSession
+    let store: SkiffSongStore
+    let ui: EditorUI
+    @State private var frame: CGRect = .zero
+
+    private var launch: SongPlayback.Launch { store.perform?.launch ?? session.launchMode }
+    /// Launches and mutes waiting for the launch point (as PadsPage counts them).
+    private var waiting: Int {
+        let launches = session.trackIndices.filter { store.marks($0, launchIn: nil).queued != nil }.count
+        return launches + (store.perform?.staged.filter { $0 != .none }.count ?? 0)
+    }
+    static func name(_ l: SongPlayback.Launch) -> String { ["Loop", "Bar", "Beat", "Now"][l.rawValue] }
+
+    var body: some View {
+        // (redrawn with the pads' clock: what waits changes as launches land)
+        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            let w = waiting
+            Button {
+                if !OutsideTouch.justClosed { open() }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(Self.name(launch)).font(.lupe(13, .semibold))
+                    if w > 0 { Text("· \(w) wait").font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised) }
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .frame(minWidth: 56, minHeight: 44)
+                .background { Color.clear.raisedKey() }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSink())
+            .globalFrame($frame)
+            .disabled(store.offline)
+            .accessibilityLabel("Launch at")
+            .accessibilityValue(Self.name(launch) + (w > 0 ? ", \(w) waiting" : ""))
+            .accessibilityHint("Where a pad, a scene or a mute lands while playing, and Cancel waiting")
+        }
+    }
+
+    private func open() {
+        ui.menu = AppMenu(title: "Launch at", groups: {
+            var g: [[MenuItem]] = []
+            g.append(SongPlayback.Launch.allCases.map { l in
+                MenuItem(title: Self.name(l), checked: l == launch) {
+                    Task { if await store.performOp(.launch(l)) { session.adoptLaunch(l) } }
+                }
+            })
+            let w = waiting
+            g.append([MenuItem(title: w > 0 ? "\(w) waiting for the launch point" : "Nothing waiting", note: true),
+                      MenuItem(title: w > 0 ? "Cancel \(w) waiting" : "Cancel waiting", icon: "xmark", enabled: w > 0) {
+                          Task { await store.performOp(.cancel) }
+                      }])
+            return g
+        }, at: CGPoint(x: frame.minX, y: frame.maxY), fromKey: true)
     }
 }
 
@@ -299,6 +392,9 @@ struct PhoneSequence: View {
         .overlay(alignment: .topTrailing) {
             if stepPanel { panel.transition(reduceMotion ? .opacity : .move(edge: .trailing)) }
         }
+        // Skiff's SEQ (NOTES, FEEL) on the FM-1 or the rail: the step panel comes in (SeqKey.focus flashes it)
+        .onChange(of: ui.flash) { _, f in if f?.target == .stepPanel { ui.flash = nil; if !stepPanel { setPanel(true) } } }
+        .onAppear { if ui.flash?.target == .stepPanel { ui.flash = nil; stepPanel = true } }
     }
 
     /// The panel slides in and out with the iPad's side-panel timing.
@@ -310,18 +406,28 @@ struct PhoneSequence: View {
         let track = session.tracks[t]
         let i = ui.selectedStep[t]
         let scale = track.scale == 0 ? "chromatic" : "\(Music.noteNames[track.root % 12]) \(Music.scales[min(track.scale, 15)].spoken)"
-        let detail = session.isDrums(t) ? "Drums · length \(track.length)" : "Track \(t + 1) · \(scale) · length \(track.length)"
+        var detail = session.isDrums(t) ? "Drums · length \(track.length)" : "Track \(t + 1) · \(scale) · length \(track.length)"
+        // Skiff (the Edit tab, board 50): the track, the entry it's on and its pattern, the pattern Skiff edits
+        if let store = session.skiffSong, let list = store.song?.tracks[safe: t], let on = list.entryOn, let e = list.entries[safe: on] {
+            detail = "\(t + 1) \(Entries.trackName(t, session: session)) · \(Entries.letter(on)) · " + (e.isRest ? "REST" : "pattern \(e.label)")
+                + (session.isKit(t) ? "" : " · \(scale)") + " · \(track.length) steps"
+        }
         return HStack(spacing: 8) {
             Text(detail).font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             Spacer(minLength: 8)
             Button { setPanel(!stepPanel) } label: {
-                Text("Step \(i + 1)").font(.lupe(12, .semibold))
+                HStack(spacing: 6) {
+                    Text("Step \(i + 1)").font(.lupe(12, .semibold))
+                    // Skiff: the inspector's own ‹ › sit where the panel's × would, so this key closes it (board 50)
+                    if stepPanel, skiffInspector { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
+                }
                     .padding(.horizontal, 10).frame(height: 28)
                     .latchedKey(stepPanel, 8)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressSink(latched: stepPanel))
             .accessibilityLabel("Step \(i + 1) panel")
+            .accessibilityHint(stepPanel ? "Closes the step panel" : "Opens the step panel")
             .accessibilityAddTraits(stepPanel ? .isSelected : [])
             if !session.isDrums(t) {
                 Button { velocity.toggle() } label: {
@@ -339,23 +445,30 @@ struct PhoneSequence: View {
         }
     }
 
+    /// Skiff's step inspector rather than SLOOP's panel (a melodic Skiff track).
+    private var skiffInspector: Bool { session.dialect == .skiff && !session.isKit(session.selectedTrack) }
+
     // The iPad's selected-step panel, scrolling inside a narrower overlay; × closes it.
     private var panel: some View {
         ScrollView {
-            SelectedStepPanel(session: session, ui: ui)
+            // Skiff's melodic tracks: its own step inspector (NOTES, FEEL, the sound at the step), as the iPad's editor
+            if skiffInspector { SkiffStepInspector(session: session, ui: ui) }
+            else { SelectedStepPanel(session: session, ui: ui) }
         }
         .scrollIndicators(.hidden)
         .frame(width: Overview.boxWidth)        // the iPad column's width, so its keys lay out as there
         .overlay(alignment: .topTrailing) {
-            Button { setPanel(false) } label: {
-                Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
-                    .frame(width: 44, height: 44)
-                    .background { Color.clear.raisedKey() }
-                    .contentShape(Rectangle())
+            if !skiffInspector {
+                Button { setPanel(false) } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                        .background { Color.clear.raisedKey() }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .padding(8)
+                .accessibilityLabel("Close the step panel")
             }
-            .buttonStyle(PressSink())
-            .padding(8)
-            .accessibilityLabel("Close the step panel")
         }
         .shadow(color: .black.opacity(0.55), radius: 14, y: 8)
         .padding(.top, 34)

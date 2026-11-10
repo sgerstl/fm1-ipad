@@ -9,7 +9,9 @@ import SwiftUI
 // largest editor (Max) only the selected track's row of 16 is left (boards 37, 38).
 
 /// The Pads page's three layouts (SongPosition.layout).
-enum PadsLayout { case full, compact, row }
+/// `.phone`: the iPhone's Pads tab (board 40, 46): six rows of 40, the heads shrunk to the number and Mute, the columns
+/// 78 wide panning sideways, the scenes at 34 under it all; no tool row (Launch at is the top bar's), no track controls.
+enum PadsLayout { case full, compact, row, phone }
 
 struct PadsPage: View {
     let session: DeviceSession
@@ -39,7 +41,7 @@ struct PadsPage: View {
     @State private var menuPad: PadKey?
     /// Shown where the user left them open, except over the largest editor (Max), where they close (Scott, 2026-11-09);
     /// the choice is kept and comes back on leaving Max.
-    private var controlsShown: Bool { controlsOpen && layout != .row }
+    private var controlsShown: Bool { controlsOpen && layout != .row && layout != .phone }
     private func showControls(_ v: Bool) { controlsOpen = v }
     @State private var holdAt: CGPoint = .zero
     /// When the pads came up: play landing in the first moments (Lupe connecting to an FM-1 already playing, the
@@ -52,6 +54,13 @@ struct PadsPage: View {
     var layout: PadsLayout = .full
     private var compact: Bool { layout != .full }
     private var row: Bool { layout == .row }
+    private var phone: Bool { layout == .phone }
+    /// The phone's sizes (board 40): heads 72, pads 78 × 40, scenes 34, Store 52.
+    static let phoneHead: CGFloat = 72, phonePad: CGFloat = 78, phoneRow: CGFloat = 40, phoneScenes: CGFloat = 34
+    /// The scene row's height at this layout.
+    private var sceneH: CGFloat { phone ? Self.phoneScenes : compact ? Self.compactScenes : Self.sceneHeight }
+    /// The heads' width: the lane's tag runs behind them.
+    private var headWidth: CGFloat { phone ? Self.phoneHead : Self.compactStrip }
 
     /// A pad's place: its track and entry.
     struct PadKey: Hashable { var track: Int, entry: Int }
@@ -105,6 +114,11 @@ struct PadsPage: View {
             return Rows(top: 54, rowHeight: Self.rowHeight, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
         case .row:
             return Rows(top: 52, rowHeight: Self.rowHeight16, rowGap: 0, sceneGap: 0, count: 1)
+        case .phone:
+            // 40 at the least (board 40), up to the 44 aim where the phone has the height (6.3-inch and up)
+            let n = max(1, tracks), room = size.height - 8 - Self.phoneScenes - CGFloat(n - 1) * Self.compactRowGap
+            let h = size.height > 0 ? min(44, max(Self.phoneRow, floor(room / CGFloat(n)))) : Self.phoneRow
+            return Rows(top: 0, rowHeight: h, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
         }
     }
 
@@ -118,9 +132,86 @@ struct PadsPage: View {
 
     var body: some View {
         let _ = BodyCounter.tick("PadsPage")
+        Group {
+            if phone { phoneBody } else { regularBody }
+        }
+        // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
+        .padding(.bottom, compact && !phone ? 8 : 0)
+        .sensoryFeedback(.impact(weight: .light), trigger: launched)
+        .onAppear { shownAt = Date() }
+        // another pad, or another track: its controls back
+        .task(id: store.offline) { if !store.offline { await store.follow() } }
+        .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
+            get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
+                            presenting: store.confirmation) { c in
+            Button(c.confirmLabel, role: .destructive) {
+                store.confirmation = nil
+                Task { await c.action() }
+            }
+            Button("Cancel", role: .cancel) { store.confirmation = nil }
+        } message: { c in Text(c.message) }
+    }
+
+    /// The phone's Pads (board 40, 46): the heads (number and Mute) beside the rows, which pan sideways when the song has
+    /// more columns than fit; the scenes across the foot. What waits and Launch at are the top bar's (PhoneLaunchKey).
+    private var phoneBody: some View {
+        GeometryReader { g in phoneGrid(g.size) }
+    }
+
+    private func phoneGrid(_ size: CGSize) -> some View {
         let t = session.selectedTrack
         let tracks = Array(session.trackIndices)
-        GeometryReader { root in
+        let r = rows(size, tracks: tracks.count)
+        let cols = columns
+        let gridW = CGFloat(cols) * Self.phonePad + CGFloat(cols - 1) * Self.compactGap
+        return VStack(alignment: .leading, spacing: r.sceneGap) {
+            HStack(alignment: .top, spacing: 6) {
+                VStack(spacing: r.rowGap) {
+                    ForEach(tracks, id: \.self) { k in
+                        PhonePadHead(session: session, store: store, ui: ui, track: k,
+                                     preview: previewScene.flatMap { store.scenesSeen[$0]?[safe: k] })
+                            .frame(height: r.rowHeight)
+                            .accessibilitySortPriority(Self.rowOrder(k))
+                    }
+                }
+                .frame(width: Self.phoneHead)
+                // the columns past the screen's edge: a pan sideways (one finger or two, as the grids since 2026-11-07)
+                ScrollView(.horizontal) {
+                    grid(t, tracks, r).frame(width: gridW, height: r.height)
+                }
+                .scrollIndicators(.hidden)
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollClipDisabled(false)
+            }
+            .frame(height: r.height)
+            .background(alignment: .topLeading) {
+                GeometryReader { g in lanes(tracks, r, width: g.size.width) }
+            }
+            sceneRow
+                .accessibilityElement(children: .contain)
+                .accessibilitySortPriority(Self.rowOrder(tracks.count))
+            Spacer(minLength: 0)
+        }
+        // a refusal (an empty scene tapped, a change the FM-1 turned down): over the scenes until dismissed; the iPad's
+        // tool row has it, which the phone hasn't
+        .overlay(alignment: .bottom) {
+            if let rf = store.refusal {
+                RefusalLine(refusal: rf, session: session, store: store)
+                    .transition(.opacity)
+            } else if let s = previewScene, store.scenesSeen[s] == nil {
+                Text("Scene \(s + 1): not seen yet. Recall it once and holding it shows what it does")
+                    .font(.lupe(13)).padding(.horizontal, 12).frame(minHeight: 44)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Pads")
+    }
+
+    private var regularBody: some View {
+        let t = session.selectedTrack
+        let tracks = Array(session.trackIndices)
+        return GeometryReader { root in
             let r = rows(root.size, tracks: tracks.count)
             // the heads one width at every position, so the pads keep theirs as they shorten (Scott, 2026-11-09)
             HStack(alignment: .top, spacing: 12) {
@@ -184,21 +275,6 @@ struct PadsPage: View {
                 if !row { lanes(tracks, r, width: root.size.width) }
             }
         }
-        // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
-        .padding(.bottom, compact ? 8 : 0)
-        .sensoryFeedback(.impact(weight: .light), trigger: launched)
-        .onAppear { shownAt = Date() }
-        // another pad, or another track: its controls back
-        .task(id: store.offline) { if !store.offline { await store.follow() } }
-        .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
-            get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
-                            presenting: store.confirmation) { c in
-            Button(c.confirmLabel, role: .destructive) {
-                store.confirmation = nil
-                Task { await c.action() }
-            }
-            Button("Cancel", role: .cancel) { store.confirmation = nil }
-        } message: { c in Text(c.message) }
     }
 
     // MARK: Lanes (Scott, 2026-11-09, board 41)
@@ -214,7 +290,7 @@ struct PadsPage: View {
                 let sel = t == session.selectedTrack
                 let b = sel ? selectedLaneBorder : 0, bleed = sel ? laneBleed : 0
                 let padR = Self.padRadius(CGSize(width: 100, height: r.rowHeight))
-                LaneShape(tag: CGSize(width: Self.compactStrip + 12 - b, height: (compact ? r.rowHeight : min(r.rowHeight, Self.laneTag)) + bleed),
+                LaneShape(tag: CGSize(width: headWidth + 12 - b, height: (compact ? r.rowHeight : min(r.rowHeight, Self.laneTag)) + bleed),
                           height: r.rowHeight + 2 * bleed, tagR: compact ? 10 : 19, padR: padR + b)
                     .fill(sel ? SelectionTint.fill(t) : Theme.panel)
                     .frame(width: width, height: r.rowHeight + 2 * bleed)
@@ -343,6 +419,7 @@ struct PadsPage: View {
         case .full: (r.top, r.sceneGap + Self.sceneHeight + Self.sceneFoot)
         case .compact: (r.top, r.sceneGap + Self.compactScenes + 8)
         case .row: (r.top, .infinity)
+        case .phone: (r.top, r.sceneGap + Self.phoneScenes)
         }
     }
 
@@ -828,6 +905,8 @@ struct PadsPage: View {
         ui.pinnedEntry = EntryRef(track: t, entry: i)
         // the editor is under the pads now: no trip to the Timeline (Scott, 2026-11-07); shut, it opens
         ui.openEditor += 1
+        // the phone: the editor is its own tab
+        if phone { ui.page = .sequencer }
     }
 
     /// CLEAR (stopped only: playing, the store says "Stop to…" with a Stop key). A pattern nothing else names goes with
@@ -907,9 +986,9 @@ struct PadsPage: View {
 
     private var sceneRow: some View {
         let perf = store.perform
-        return HStack(spacing: 8) {
+        return HStack(spacing: phone ? 4 : 8) {
             // the same word either way, lit while armed: the scenes beside it never move (Scott, 2026-11-07)
-            ToggleKey(name: "Store", on: storing, enabled: !store.offline, height: compact ? Self.compactScenes : Self.sceneHeight) { if !ui.justPulled { storing.toggle() } }
+            ToggleKey(name: "Store", on: storing, enabled: !store.offline, height: sceneH) { if !ui.justPulled { storing.toggle() } }
                 .frame(width: 88)               // (its word turns semibold when lit: a fixed width, not its own)
                 .accessibilityValue(storing ? "on: tap a scene to store into it" : "")
                 .accessibilityHint("Then tap a scene: it keeps the entry each track is on now, and its mute")
@@ -917,7 +996,7 @@ struct PadsPage: View {
                 ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf).geometryGroup() }
             }
         }
-        .frame(height: compact ? Self.compactScenes : Self.sceneHeight)
+        .frame(height: sceneH)
     }
 
     private func sceneKey(_ s: Int, _ perf: PerformState?) -> some View {
@@ -943,7 +1022,7 @@ struct PadsPage: View {
                 if !word.isEmpty, !compact { Text(word).font(.lupe(10)) }   // (compact: the fill says it)
             }
             .foregroundStyle(last ? Theme.onColour : kept ? Theme.text : Theme.textSecondary)
-            .frame(maxWidth: .infinity).frame(height: compact ? Self.compactScenes : Self.sceneHeight)
+            .frame(maxWidth: .infinity).frame(height: sceneH)
             .background {
                 if last { RoundedRectangle(cornerRadius: 8).fill(Theme.text).elevationShadow(.selected) }
                 else if kept { Chiclet(radius: 8, down: false, edge: true) }

@@ -89,16 +89,20 @@ struct SoundRail: View {
     let session: DeviceSession
     let ui: EditorUI
     static let width: CGFloat = 56
+    /// The phone (Scott, 2026-11-10): seven keys in about 330 pt, so they share the height (about 40 each) rather than
+    /// standing 48 tall.
+    static var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
+    static var keyHeight: CGFloat? { phone ? nil : 48 }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Self.phone ? 4 : 8) {
             ForEach(SoundPanelControl.families) { f in
                 let on = ui.soundPanel?.family == f
                 let none = SoundPage.shown(session, f).isEmpty
                 Button { SoundPanelControl.press(f, session: session, ui: ui) } label: {
                     Text(f.rawValue).font(.lupe(12, .semibold)).tracking(0.5)
                         .foregroundStyle(on ? Theme.text : none ? Theme.textTertiary : Theme.textSecondary)
-                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .frame(maxWidth: .infinity, minHeight: Self.keyHeight, maxHeight: Self.phone ? .infinity : nil)
                         .background {
                             // disabled: no raised edge, dimmed
                             if on { Color.clear.selectedKey(8) } else if none { RoundedRectangle(cornerRadius: 8).fill(Theme.control.opacity(0.5)) }
@@ -113,9 +117,9 @@ struct SoundRail: View {
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
             SeqKey(session: session, ui: ui)
-            Spacer(minLength: 0)
+            if !Self.phone { Spacer(minLength: 0) }
         }
-        .padding(.vertical, 8).padding(.horizontal, 6)
+        .padding(.vertical, Self.phone ? 4 : 8).padding(.horizontal, 6)
         .frame(width: Self.width)
         .frame(maxHeight: .infinity)
         .panel()
@@ -291,7 +295,7 @@ struct SoundPanelHost<Content: View>: View {
     @AppStorage(Handedness.key) private var hand = Handedness.right
 
     /// The app's margin round the pages (AppView's padding): a flush panel runs over it to the screen's edge.
-    static var pageMargin: CGFloat { 24 }
+    static var pageMargin: CGFloat { UIDevice.current.userInterfaceIdiom == .phone ? 8 : 24 }
     private var flush: Bool { !showRail || hand == .left }
 
     /// The panel's slide, and on the Song tab the page's with it, so their edges stay together.
@@ -356,7 +360,7 @@ struct SeqKey: View {
         Button { press() } label: {
             Text("SEQ").font(.lupe(12, .semibold)).tracking(0.5)
                 .foregroundStyle(Theme.textSecondary)
-                .frame(maxWidth: .infinity, minHeight: 48)
+                .frame(maxWidth: .infinity, minHeight: SoundRail.keyHeight, maxHeight: SoundRail.phone ? .infinity : nil)
                 .background { Color.clear.raisedKey(8) }
                 .contentShape(Rectangle())
         }
@@ -367,11 +371,13 @@ struct SeqKey: View {
 
     private func press() {
         ui.soundPanel = nil
-        let onSong = ui.page == .song
+        // (the phone: SEQ's places are the Edit tab's)
+        let home: Page = ui.phone ? .sequencer : .song
+        let onSong = ui.page == home
         let now = session.screenLinked ? session.deviceScreen.flatMap { s in s.home ? nil : Self.pages.firstIndex(of: s.page) } : last
         let k = onSong ? (now.map { ($0 + 1) % Self.pages.count } ?? 0) : 0
         last = k
-        if !onSong { ui.page = .song }
+        if !onSong { ui.page = home }
         if session.screenLinked, ui.followDevice { session.showOnDevice(page: Self.pages[k]) }
         Self.focus(Self.pages[k], ui)
     }

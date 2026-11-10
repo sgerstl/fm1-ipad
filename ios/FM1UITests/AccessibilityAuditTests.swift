@@ -185,6 +185,41 @@ final class AccessibilityAuditTests: XCTestCase {
         audit("firmware-installing")
     }
 
+    // MARK: The phone's own screens (2026-11-10: Pads · Edit · Mix · Sounds, boards 46–50)
+
+    private func phoneOnly() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "the phone's layout")
+    }
+
+    func testPhoneEdit() throws {
+        try phoneOnly()
+        launch(["-page", "edit"])
+        audit("edit")
+        let step = app.buttons.matching(NSPredicate(format: "label ENDSWITH ' panel' AND label BEGINSWITH 'Step '")).firstMatch
+        if step.waitForExistence(timeout: 3) { step.tap(); sleep(1); audit("edit-step-panel") }
+        else { print("A11Y|\(device)|reach|no Step key") }
+    }
+
+    func testPhoneMixDelay() throws {
+        try phoneOnly()
+        launch()
+        tap("Mix")
+        if tap("Delay") { audit("mix-delay") }
+    }
+
+    func testPhoneLaunchMenu() throws {
+        try phoneOnly()
+        launch()
+        if tap("Launch at") { audit("launch-menu") }
+    }
+
+    func testPhoneSoundPanel() throws {
+        try phoneOnly()
+        // Settings › Sound buttons on: the rail down the right, then FX's pages over Pads
+        launch(["-soundRail.v2", "YES"])
+        if tap("FX pages") { audit("sound-panel") }
+    }
+
     func testPadMenu() {
         launch(["-songPosition", "0"])
         let pad = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Entry' OR label CONTAINS ', entry'")).firstMatch

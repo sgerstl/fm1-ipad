@@ -154,7 +154,8 @@ struct MenuPanel: View {
         let flat = level.groups.flatMap { $0 }
         VStack(alignment: .leading, spacing: 0) {
             if stack.isEmpty {
-                Text(title).font(.lupe(13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                // (the raised grey: plain secondary is 4.1:1 on the menu's surface, tones[3]; this is 6.1. Audit, 2026-11-10)
+                Text(title).font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
                     .padding(.horizontal, 16).frame(height: 36, alignment: .bottomLeading)
                     .accessibilityAddTraits(.isHeader)
             } else {
@@ -244,7 +245,7 @@ struct MenuPanel: View {
     }
 
     private func noteRow(_ item: MenuItem) -> some View {
-        Text(item.title).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
+        Text(item.title).font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 16).padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
