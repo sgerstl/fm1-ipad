@@ -193,6 +193,10 @@ extension AppView {
                     .frame(height: PianoRoll.panelHeight)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+                    // over a dimmed page: VoiceOver stays in it, and the scrub closes it (2026-11-10, 1.3.1, 2.4.3)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityAddTraits(.isModal)
+                    .accessibilityAction(.escape) { ui.sampler = nil }
                     .zIndex(5)
             }
             if ui.presetsPanel {
@@ -521,8 +525,8 @@ struct LostCard: View {
         .frame(width: 520, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 16).fill(Theme.control).elevationShadow(.held))
         .animation(.easeOut(duration: 0.15), value: back)
+        // (no .updatesFrequently: the card changes twice, and AppView announces each change; 2026-11-10)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.updatesFrequently)
     }
 }
 
