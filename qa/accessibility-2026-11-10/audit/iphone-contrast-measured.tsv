@@ -1,0 +1,19 @@
+screen	label	frame	audit	measured
+iPhone-connection-menu	Sequence	122,10,113x36	Contrast failed	10.73
+iPhone-firmware-picker	Sequence	122,10,113x36	Contrast failed	2.02
+iPhone-firmware-picker	Track 1 · chromatic · length 16	70,64,164x15	Contrast failed	1.61
+iPhone-firmware-picker	1.2.4	686,11,30x17	Contrast failed	1.99
+iPhone-firmware-picker	120 BPM	686,30,44x14	Contrast failed	1.60
+iPhone-firmware-picker	Velocity	726,58,77x28	Contrast failed	2.15
+iPhone-firmware-picker	B3	70,92,44x46	Contrast failed	1.04
+iPhone-firmware-picker	A♯3	70,138,44x46	Contrast failed	1.30
+iPhone-firmware-picker	A3	70,184,44x46	Contrast failed	1.00
+iPhone-firmware-picker	G♯3	70,230,44x46	Contrast failed	1.34
+iPhone-firmware-picker	F♯3	70,276,44x46	Contrast failed	1.25
+iPhone-firmware-picker	E3	70,322,44x46	Contrast failed	1.00
+iPhone-mix	Sequence	122,10,113x36	Contrast failed	10.73
+iPhone-song-pads-half	Sequence	122,10,113x36	Contrast failed	10.73
+iPhone-song-pads-max	Sequence	122,10,113x36	Contrast failed	10.73
+iPhone-song-pads-nogrid	Sequence	122,10,113x36	Contrast failed	10.73
+iPhone-song-timeline	Sequence	122,10,113x36	Contrast failed	10.73
+iPhone-sounds	Sequence	122,10,113x36	Contrast failed	10.73

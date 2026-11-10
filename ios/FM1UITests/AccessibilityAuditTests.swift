@@ -2,7 +2,7 @@ import XCTest
 
 /// The accessibility audit (2026-11-10): `performAccessibilityAudit()` on each main screen, against the demo FM-1
 /// (`-demo`, Skiff), simulator only. Every issue the audit raises is written out (the test log, lines starting
-/// `A11Y|`, and `audit.tsv` in the output folder) and the test then fails if any were raised that aren't on the
+/// `A11Y|`, and `<screen>.tsv` in the output folder) and the test then fails if any were raised that aren't on the
 /// written list of known ones below, so a new one can't slip in unseen. Nothing is suppressed without a reason
 /// written beside it.
 ///
@@ -56,32 +56,40 @@ final class AccessibilityAuditTests: XCTestCase {
         let a = XCTAttachment(screenshot: shot); a.name = screen; a.lifetime = .keepAlways; add(a)
 
         var rows: [String] = []
-        do {
-            try app.performAccessibilityAudit(for: .all) { issue in
-                let el = issue.element
-                // (each property read is a query of the app: two, not four, keep a screen's audit to minutes)
-                let label = el?.label ?? ""
-                let f = el?.frame ?? .zero
-                let id = "", type = ""
-                let frame = el == nil ? "" : "\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width))x\(Int(f.height))"
-                let kind = Self.name(issue.auditType)
-                let row = [screen, kind, label, id, type, frame, issue.compactDescription, issue.detailedDescription]
-                    .map { $0.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ") }
-                    .joined(separator: "\t")
-                rows.append(row)
-                print("A11Y|" + row.replacingOccurrences(of: "\t", with: "|"))
-                if Self.accepted["\(screen)|\(kind)|\(label)"] == nil { self.unexpected.append(row) }
-                return true        // handled here (logged), so the audit goes on to the next issue
+        // one audit pass per kind: a whole screen of Lupe (six rows of pads, the editor, the top bar) in one pass ran out
+        // of the audit's time ("Audit failed to complete in time", code -56); a pass that still does is written as ERROR
+        let passes: [(String, XCUIAccessibilityAuditType)] = [
+            ("contrast", .contrast), ("hitRegion", .hitRegion),
+            ("description", [.sufficientElementDescription, .trait]), ("elementDetection", .elementDetection),
+            ("text", [.dynamicType, .textClipped]),
+        ]
+        for (passName, kinds) in passes {
+            do {
+                try app.performAccessibilityAudit(for: kinds) { issue in
+                    let el = issue.element
+                    // (each property read is a query of the app: two, keep a screen's audit to minutes)
+                    let label = el?.label ?? ""
+                    let f = el?.frame ?? .zero
+                    let frame = el == nil ? "" : "\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width))x\(Int(f.height))"
+                    let kind = Self.name(issue.auditType)
+                    let row = [screen, kind, label, "", "", frame, issue.compactDescription, issue.detailedDescription]
+                        .map { $0.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ") }
+                        .joined(separator: "\t")
+                    rows.append(row)
+                    print("A11Y|" + row.replacingOccurrences(of: "\t", with: "|"))
+                    if Self.accepted["\(screen)|\(kind)|\(label)"] == nil { self.unexpected.append(row) }
+                    return true        // handled here (logged), so the audit goes on to the next issue
+                }
+            } catch {
+                let row = "\(screen)\tERROR(\(passName))\t\t\t\t\t\(error.localizedDescription)\t"
+                rows.append(row); unexpected.append(row)
+                print("A11Y|\(screen)|ERROR(\(passName))|\(error.localizedDescription)")
             }
-        } catch {
-            rows.append("\(screen)\tERROR\t\t\t\t\t\(error)\t")
-            print("A11Y|\(screen)|ERROR|\(error)")
         }
         if rows.isEmpty { print("A11Y|\(screen)|none") }
-        let tsv = Self.out.appendingPathComponent("audit.tsv")
+        // one file a screen (the tests can run side by side on clones); concatenate them for the whole audit
         let text = rows.isEmpty ? "\(screen)\tnone\n" : rows.joined(separator: "\n") + "\n"
-        if let h = try? FileHandle(forWritingTo: tsv) { h.seekToEndOfFile(); h.write(text.data(using: .utf8)!); try? h.close() }
-        else { try? text.write(to: tsv, atomically: true, encoding: .utf8) }
+        try? text.write(to: Self.out.appendingPathComponent("\(screen).tsv"), atomically: true, encoding: .utf8)
     }
 
     override func tearDown() {
