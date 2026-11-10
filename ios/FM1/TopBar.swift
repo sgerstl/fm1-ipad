@@ -24,8 +24,9 @@ struct TopBar: View {
                 // the readout. The fixed parts keep their size; the tools give way in their own order (SongTools).
                 HStack(spacing: 12) {
                     connection.fixedSize()
-                    tabs
-                    if ui.page == .song, store.performs { SongViewSwitch(ui: ui) }
+                    // Pads · Timeline · Mix (Scott, 2026-11-10: the phone's split, in place of Song · Mix and the
+                    // Pads / Timeline switch); the tools after them follow the tab
+                    if store.performs { songTabs } else { tabs }
                     if ui.page == .song {
                         SongTools(session: session, store: store, ui: ui)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -264,6 +265,49 @@ struct TopBar: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pages")
     }
+    /// Skiff on the iPad: Pads · Timeline · Mix, as the phone has them. Pads and Timeline are the Song page's two views,
+    /// so going between them is the same slide as before, the editor staying put under them; the tab line is the same.
+    private var songTabs: some View {
+        let tabs: [(title: String, current: Bool, pick: () -> Void)] = [
+            ("Pads", ui.page == .song && ui.songView == .pads, { pickSong(.pads) }),
+            ("Timeline", ui.page == .song && ui.songView == .timeline, { pickSong(.timeline) }),
+            ("Mix", ui.page == .mixer, { ui.page = .mixer; Self.driveDevice(session: session, ui: ui, to: .mixer) }),
+        ]
+        return VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(tabs.indices, id: \.self) { k in
+                    let t = tabs[k]
+                    Button { t.pick() } label: {
+                        Text(t.title)
+                            .fontWeight(t.current ? .semibold : .regular)
+                            .foregroundStyle(t.current ? Theme.text : Theme.textSecondary)
+                            .padding(.horizontal, 18)
+                            .frame(height: 44)
+                            .background(alignment: .bottom) {
+                                TabRise(rise: t.current ? 1 : 0).fill(Self.tabGrey)
+                                    .animation(reduceMotionTabs ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.3), value: t.current)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(t.current ? [.isSelected] : [])
+                    .accessibilityHint(k == 0 ? "Every track's entries to launch, the scenes under them"
+                                       : k == 1 ? "Every track's entries along the bars" : "Levels, sends and the effects")
+                }
+            }
+            .padding(.horizontal, TabRise.fillet)
+            Capsule().fill(Self.tabGrey).frame(height: 3)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Pages")
+    }
+
+    private func pickSong(_ v: SongView) {
+        if ui.page != .song { ui.page = .song; Self.driveDevice(session: session, ui: ui, to: .song) }
+        ui.songView = v
+    }
+
     /// The tab and its line: a step lighter than the control grey (on the page, the control grey as a thin line all
     /// but vanished: board 44).
     static let tabGrey = Theme.tones[2]
