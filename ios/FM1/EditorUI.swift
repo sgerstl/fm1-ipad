@@ -14,6 +14,12 @@ enum Page: String, CaseIterable, Identifiable {
     static let sloopTabs: [Page] = [.sequencer, .sound, .song, .library]
     /// The tabs on Skiff: Song · Mix · Sounds.
     static let skiffTabs: [Page] = [.song, .mixer, .library]
+    /// The iPad's tabs on Skiff since 2026-11-10 (Scott): Song · Mix. The Sounds tab's browser is the sounds panel
+    /// (PresetsPanel), opened from SAVE, the track controls' sound key, the sound panel and the menus. The phone keeps
+    /// Sounds (skiffTabs) until its Song tab exists.
+    static let skiffPadTabs: [Page] = [.song, .mixer]
+    /// Whether this is the iPad, where Skiff has no Sounds tab.
+    @MainActor static var padHasNoSoundsTab: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     /// A tab's name: Skiff's are Song · Mix · Sounds (2026-11-06).
     func title(skiff: Bool) -> String {
         guard skiff else { return rawValue }
@@ -45,6 +51,12 @@ final class EditorUI {
         // sound panel, over the tab that was up
         didSet {
             if songTab, page == .sequencer { page = .song }
+            // the iPad has no Sounds tab on Skiff: whatever asks for it (the FM-1's SAVE, a launch flag) gets the sounds
+            // panel over the tab that was up
+            if songTab, page == .library, Page.padHasNoSoundsTab {
+                page = oldValue == .library ? .song : oldValue
+                presetsPanel = true
+            }
             if songTab, page == .sound {
                 page = oldValue == .sound ? .song : oldValue
                 if SoundPanelControl.families.contains(soundFamily) { soundPanel = SoundPanelState(family: soundFamily) }
@@ -53,7 +65,7 @@ final class EditorUI {
     }
     /// Skiff: the Song tab (Arrange's lanes over the pattern editor) stands for Sequence and Arrange.
     var songTab = false {
-        didSet { if songTab, page == .sequencer || page == .sound { page = .song } }
+        didSet { if songTab, page == .sequencer || page == .sound || (page == .library && Page.padHasNoSoundsTab) { page = .song } }
     }
     /// The Song tab as pads (PadsPage.swift) or a timeline. Pads first (Scott, 2026-11-09: the pads are how a song is
     /// built; the timeline is where it's cut). -song-timeline opens on the timeline (screenshots).

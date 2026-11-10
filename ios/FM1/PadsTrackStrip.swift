@@ -40,9 +40,12 @@ struct TrackStripCard: View {
                             }
                         }
                         // the instrument: under the entry, quieter (Scott, 2026-11-09: "too bold")
-                        Text(Entries.trackName(t, session: session)).font(.lupe(15))
+                        // (drawn by the sound key over it, SoundNameKey: here only to hold its place)
+                        SoundName(session: session, track: t, size: 15, weight: .regular,
+                                  colour: muted ? Theme.textSecondary : Theme.textSecondaryRaised)
+                            .opacity(0)
+                            .anchorPreference(key: SoundNameAnchor.self, value: .bounds) { $0 }
                             .padding(.top, 4)
-                            .foregroundStyle(muted ? Theme.textSecondary : Theme.textSecondaryRaised).lineLimit(1)
                         if session.playing, m.playing != nil {
                             SmoothBar(track: Theme.well, ink: Theme.track[t]) { session.passProgress(t) ?? 0 }
                                 .frame(height: 4).padding(.top, 4)
@@ -61,6 +64,10 @@ struct TrackStripCard: View {
                 }
                 .buttonStyle(.plain)
                 .trackMenuPress(session: session, ui: ui, track: t)
+                .overlayPreferenceValue(SoundNameAnchor.self) { a in
+                    SoundNameKey(session: session, ui: ui, track: t, anchor: a, size: 15, weight: .regular,
+                                 colour: muted ? Theme.textSecondary : Theme.textSecondaryRaised)
+                }
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", selected" : "")")
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
@@ -180,8 +187,11 @@ struct TrackStripRow: View {
                         BigTrackChip(track: t, muted: muted, side: 30)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
-                                Text(Entries.trackName(t, session: session)).font(.lupe(15, selected ? .semibold : .regular)).layoutPriority(1)
-                                    .foregroundStyle(selected ? Theme.text : Theme.textSecondaryRaised).lineLimit(1)
+                                SoundName(session: session, track: t, size: 15, weight: selected ? .semibold : .regular,
+                                          colour: selected ? Theme.text : Theme.textSecondaryRaised)
+                                    .opacity(0)
+                                    .anchorPreference(key: SoundNameAnchor.self, value: .bounds) { $0 }
+                                    .layoutPriority(1)
                                 Spacer(minLength: 4)
                                 // (what it's on; the bar under it is the pass)
                                 Text(preview.map { "→ " + TrackStripCard.previewText($0, list) } ?? lines.plays.components(separatedBy: "  ").first ?? lines.plays)
@@ -200,6 +210,10 @@ struct TrackStripRow: View {
                 }
                 .buttonStyle(.plain)
                 .trackMenuPress(session: session, ui: ui, track: t)
+                .overlayPreferenceValue(SoundNameAnchor.self) { a in
+                    SoundNameKey(session: session, ui: ui, track: t, anchor: a, size: 15, weight: selected ? .semibold : .regular,
+                                 colour: selected ? Theme.text : Theme.textSecondaryRaised)
+                }
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -334,6 +348,59 @@ struct EntryTitle: View {
             .lineLimit(1).minimumScaleFactor(0.7)
         } else {
             Text("–").font(.lupe(size, .bold)).foregroundStyle(Theme.textSecondary)
+        }
+    }
+}
+
+// MARK: The sound's name as a key (Scott, 2026-11-10: the Sounds tab went, so the head shows the way in)
+
+/// A head's instrument name (it's the track's sound) with a small chevron: the visible way into the sounds panel, so a
+/// new user needn't know SAVE or the sound panel's "Sounds". Laid out in the head's label (hidden there) and drawn over it
+/// by SoundNameKey, a button of its own: the head's tap still selects, its hold still opens the track menu.
+struct SoundName: View {
+    let session: DeviceSession
+    let track: Int
+    let size: CGFloat
+    let weight: Font.Weight
+    let colour: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(Entries.trackName(track, session: session)).font(.lupe(size, weight)).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: size * 0.6, weight: .bold)).foregroundStyle(Theme.textSecondary)
+        }
+        .foregroundStyle(colour)
+    }
+}
+
+struct SoundNameAnchor: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
+}
+
+struct SoundNameKey: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    let track: Int
+    let anchor: Anchor<CGRect>?
+    let size: CGFloat
+    let weight: Font.Weight
+    let colour: Color
+
+    var body: some View {
+        GeometryReader { g in
+            if let anchor {
+                let r = g[anchor]
+                Button { ui.chooseSound(session, track: track) } label: {
+                    SoundName(session: session, track: track, size: size, weight: weight, colour: colour)
+                        .frame(width: r.width, height: r.height, alignment: .leading)
+                        .contentShape(Rectangle().inset(by: -8))       // (34 pt or more to touch; the head's tap round it)
+                }
+                .buttonStyle(PressSink())
+                .position(x: r.midX, y: r.midY)
+                .accessibilityLabel("Sound, \(Entries.trackName(track, session: session))")
+                .accessibilityHint("Opens the sounds for track \(track + 1)")
+            }
         }
     }
 }

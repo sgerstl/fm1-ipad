@@ -207,7 +207,7 @@ struct TopBar: View {
     private var tabs: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                ForEach(ui.songTab ? Page.skiffTabs : Page.sloopTabs) { p in
+                ForEach(ui.songTab ? Page.skiffPadTabs : Page.sloopTabs) { p in
                     let current = ui.page == p
                     Button {
                         ui.page = p

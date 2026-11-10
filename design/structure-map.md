@@ -6,11 +6,21 @@ Where everything lives (CLAUDE.md, rule 4). Change this first, get Scott's OK, t
 
 | Tab | What's on it | Panels that come in over it |
 |---|---|---|
-| **Song** | Pads (default; from 2026-11-09 a grid of all six tracks' entries, section below) or Timeline, switched at the top left; the pattern editor below the divider (No grid / Half / Max) | Sound panel (right), Sampler (in the editor's place), Presets |
-| **Mix** | Mixer carousel: levels, sends, the FX pages | Sound panel |
-| **Sounds** | Engines and presets for the selected track | Sound panel |
+| **Song** | Pads (default; from 2026-11-09 a grid of all six tracks' entries, section below) or Timeline, switched at the top left; the pattern editor below the divider (No grid / Half / Max) | Sound panel (right), Sounds panel, Sampler (in the editor's place) |
+| **Mix** | Mixer carousel: levels, sends, the FX pages | Sound panel, Sounds panel |
 
-The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · Timeline · Mix · Sounds (decided 2026-11-08, phone only).
+**The iPad's tab bar is Song · Mix** (Scott, 2026-11-10). The Sounds tab went: its browser is the **Sounds panel** ("Choose a sound for Track N": engines, presets in three columns, kits, the 32 user slots, user samples, a pad's or block's own sound). It's the same view the tab used, so nothing was lost. It comes in from the right over Song or Mix, doesn't dim the page, and sits to the left of the sound panel (ENV, LFO…) when that's open, so a sound can be picked and shaped at once. Ways in:
+- **The track head's name** with its chevron ("Acid ⌄"), on Pads, the Timeline and the Mix strips. This is the visible way in.
+- SAVE (PRESETS, then USER), on the FM-1 or its key.
+- The sound panel's "Sounds ⌄".
+- A track's long-press menu.
+- A pad's or block's "Select sound".
+
+It closes with Done, SAVE's next press, another tab or Escape.
+
+**Not decided:** splitting Song into Pads · Timeline in the iPad's tab bar (the phone's split, below). It needs its own design pass. Two tabs is thin, and Pads · Timeline · Mix would match the phone.
+
+The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · Timeline · Mix · Sounds (decided 2026-11-08, phone only). **The phone keeps its Sounds tab** until its Song tab exists: on Skiff today its Song says "on the iPad for now", so Mix and Sounds are its working tabs.
 
 ## The FM-1's buttons
 
@@ -21,7 +31,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 | GLO | The Mix tab; again, its next section |
 | HOME | Closes the sound panel |
 | ARP held (PERFORM) | Song › Pads while held, then back (2026-11-07; unchanged by the grid) |
-| SAVE | Save (held: the song layer) |
+| SAVE | PRESETS and USER: the Sounds panel over the tab that's up (2026-11-10); PATTERNS: the Song tab's Patterns drawer; PROJECT: the Projects sheet. Held: the song layer |
 | PLAY, REC | The transport |
 
 **On screen** (2026-11-08): with the sound panel open, the same 12 keys sit in two rows at its foot, in the FM-1's order. With it shut there are none; pages open from the FM-1's own keys. Settings › Sound buttons brings back the FX…SEQ rail down the side (and the panel then leaves its keys out).

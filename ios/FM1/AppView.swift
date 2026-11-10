@@ -159,17 +159,9 @@ extension AppView {
             }
             .transition(.opacity)
             .id(ui.page)
-            // the Presets panel: from the right, over the page; the page dims and a tap on it closes the
-            // panel, while the track box stays lit and live above the dimming, to switch tracks
-            if ui.presetsPanel {
-                Color.black.opacity(0.35)
-                    .contentShape(Rectangle())
-                    .onTapGesture { ui.presetsPanel = false }
-                    .accessibilityLabel("Close the presets")
-                    .accessibilityAddTraits(.isButton)
-                    .transition(.opacity)
-                    .zIndex(1)
-            }
+            // the Presets panel: from the right, over the page, which no longer dims and stays live beside it (Scott,
+            // 2026-11-10, when the Sounds tab went): pads, the track heads and the sound panel all still answer. Done, SAVE,
+            // another tab or Escape close it.
             // (none over Skiff's Song tab or the Mixer: their own rows select a track)
             if !skiffArrange, ui.page != .mixer {
                 Overview(session: session, ui: ui, expanded: ui.page == .sequencer || ui.timelineOpen)
@@ -188,6 +180,10 @@ extension AppView {
             if ui.presetsPanel {
                 PresetsPanel(session: session, ui: ui)
                     .geometryGroup()                      // moves as one piece: nothing inside trails it
+                    // beside the sound panel (ENV, LFO…) when that's open, so a sound can be picked and shaped together:
+                    // the panel's width, the rail's when it's on the right, and their gaps (780 + 442 + 68 fits 1376)
+                    .padding(.trailing, presetsRoom)
+                    .animation(reduceMotion ? nil : SoundPanelHost<EmptyView>.slide, value: presetsRoom)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
                     // on top while it leaves too: without an order a leaving view drops behind the rest
@@ -201,6 +197,19 @@ extension AppView {
             ui.presetsPanel = false
             ui.soundPanel = nil
         }
+    }
+
+    /// How far in from the right the Presets panel sits: clear of the sound panel and the rail when they're there.
+    private var presetsRoom: CGFloat {
+        guard ui.soundPanel != nil, ui.songTab, ui.page == .song || ui.page == .mixer else { return 0 }
+        // (read here, not as @AppStorage: this is an extension of AppView; Settings changes them only between uses)
+        let d = UserDefaults.standard
+        let showRail = d.object(forKey: SoundButtons.key) as? Bool ?? SoundButtons.standard
+        let hand = d.string(forKey: Handedness.key).flatMap(Handedness.init(rawValue:)) ?? .right
+        let rail = showRail && hand == .right ? SoundRail.width + 12 : 0
+        // a flush panel runs over the page margin to the screen edge, so it takes that much less room
+        let flush = !showRail || hand == .left
+        return SoundPanel.width + 12 + rail - (flush ? SoundPanelHost<EmptyView>.pageMargin : 0)
     }
 
     /// Arrange on Skiff has its own lane headers: no track box over it.
