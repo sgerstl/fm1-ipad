@@ -87,7 +87,7 @@ struct FunctionPads: View {
         case .play: return session.playing
         case .rec: return session.recording
         case .home: return ui.songTab ? ui.soundPanel == nil && session.deviceScreen?.home == true : ui.page == .sequencer
-        case .save: return ui.page == .library || ui.page == .song
+        case .save: return ui.presetsPanel || ui.projectsOpen || ui.page == .library || (ui.page == .song && (!ui.songTab || ui.poolOpen))
         case .glo where session.dialect == .skiff: return ui.page == .mixer
         case .seq:
             if session.screenLinked, let s = session.deviceScreen { return !s.home && [ScreenMap.of(session).notes, ScreenMap.of(session).pattern].contains(s.page) && ui.page != .library }
@@ -128,9 +128,10 @@ struct FunctionPads: View {
         case .save where session.dialect == .skiff && ui.songTab:
             SkiffNavigator.save(session: session, ui: ui)
         case .save:
-            // as the FM-1's SAVE: the presets first; pressed again, the song (SLOOP's SECTION page)
-            if ui.page == .library { openSong() } else {
-                ui.page = .library
+            // as the FM-1's SAVE: the presets first, in the sounds panel over the page (Scott, 2026-11-10: keep the
+            // place); pressed again, the song (SLOOP's SECTION page)
+            if ui.presetsPanel || ui.page == .library { ui.presetsPanel = false; openSong() } else {
+                ui.chooseSound(session, track: session.selectedTrack)
                 if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).presets) }
             }
         case .glo where session.dialect == .skiff:

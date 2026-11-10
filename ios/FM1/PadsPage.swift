@@ -265,9 +265,12 @@ struct PadsPage: View {
                                 .geometryGroup()
                                 .opacity(drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
                                 .overlay {
-                                    if let d = drag, d.track == k, landing(of: d) == i {
+                                    // where the drop goes: a pad of its row to move to, or an empty pad (any row) to copy into,
+                                    // filled faintly so an empty target reads as one (Scott, 2026-11-10)
+                                    if let d = drag, let tg = dropTarget(of: d), tg.key == PadKey(track: k, entry: i) {
                                         RoundedRectangle(cornerRadius: 16)
-                                            .strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
+                                            .fill(Theme.text.opacity(tg.empty ? 0.1 : 0))
+                                            .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5])) }
                                             .allowsHitTesting(false)
                                     }
                                 }
@@ -625,6 +628,7 @@ struct PadsPage: View {
             openMenu(t, i, at: pressAt)
         })
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[key] = $0 } }   // (the dragged copy isn't the pad's place)
+        .onDisappear { if !copy { padFrames[key] = nil } }      // (a row that went, at Max: never a drop target)
         .accessibilityValue(waiting && !playing ? "waiting, starts in " + LaneMarks.countdown(m.launchIn, session.launchMode) : "")
         .accessibilityLabel("\(Entries.trackName(t, session: session)), entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
         .accessibilityValue(e.isEmpty ? "" : state + (held ? ", the held scene goes here" : ""))
@@ -650,8 +654,10 @@ struct PadsPage: View {
 
     private func beginDrag(_ t: Int, _ i: Int, at: CGPoint) {
         ui.menu = nil
-        // Skiff rewrites a list only while stopped: say so at the lift, not after the drop
-        if session.playing {
+        // playing, a pad still lifts: it can be copied into an empty pad (SET and COPY work playing). Skiff rewrites a
+        // list only while stopped, so a move is refused at the drop. A rest has nothing to copy: said at the lift.
+        let e = store.song?.tracks[safe: t]?.entries[safe: i]
+        if session.playing, e?.poolIndex == nil {
             store.refuse(track: t, entry: i, "Stop to rearrange: the FM-1 moves pads only while stopped", needsStop: true)
             drag = PadDrag(track: t, from: i, at: at, refused: true)
             return
@@ -661,14 +667,80 @@ struct PadsPage: View {
     }
 
     private func endDrag(at: CGPoint) {
-        guard let d = drag else { return }
+        guard var d = drag else { return }
         drag = nil
-        guard !d.refused, let target = pad(at: at, track: d.track) else { return }
-        move(d.track, from: d.from, to: target)
+        d.at = at
+        guard !d.refused, let tg = dropTarget(of: d) else { return }
+        if tg.empty {
+            offerDrop(from: PadKey(track: d.track, entry: d.from), to: tg.key, at: at)
+        } else if session.playing {
+            store.refuse(track: d.track, entry: d.from, "Stop to rearrange: the FM-1 moves pads only while stopped", needsStop: true)
+        } else {
+            move(d.track, from: d.from, to: tg.key.entry)
+        }
     }
 
-    /// The pad under a point (global) in a track's row: a drag rearranges one track's list, never across rows.
-    private func pad(at p: CGPoint, track: Int) -> Int? { padFrames.first { $0.key.track == track && $0.value.contains(p) }?.key.entry }
+    /// The pad under a point (global), any row.
+    private func pad(at p: CGPoint) -> PadKey? { padFrames.first { $0.value.contains(p) }?.key }
+
+    /// Where a drag would drop: onto a pad of its own row (a move, as before: a swap with a filled one), or onto an
+    /// empty pad of any row, which asks to copy the pattern in (Scott, 2026-11-10). An empty pad past a list's end
+    /// stands for the first empty one after it, as everywhere on the pads. A filled pad of another row takes nothing.
+    struct DropTarget: Equatable { var key: PadKey, empty: Bool }
+    private func dropTarget(of d: PadDrag) -> DropTarget? {
+        guard !d.refused, let k = pad(at: d.at), k != PadKey(track: d.track, entry: d.from),
+              let list = store.song?.tracks[safe: k.track], let e = list.entries[safe: k.entry] else { return nil }
+        if e.isEmpty {
+            // a rest has no pattern to copy: in its own row it can still move there
+            let hasPattern = store.song?.tracks[safe: d.track]?.entries[safe: d.from]?.poolIndex != nil
+            if hasPattern { return DropTarget(key: PadKey(track: k.track, entry: Self.landing(list, k.entry)), empty: true) }
+            guard k.track == d.track, let r = PadMove.apply(list.entries, from: d.from, to: k.entry) else { return nil }
+            return DropTarget(key: PadKey(track: k.track, entry: r.landed), empty: false)
+        }
+        guard k.track == d.track else { return nil }
+        return DropTarget(key: k, empty: false)
+    }
+
+    /// A pattern dropped on an empty pad (or "Copy to…" picked): the choice fans out of the finger. A copy of its own
+    /// (SET, then COPY, as an empty pad's "Copy of"); the same pattern, shared (SET alone: Skiff lets any track's entry
+    /// name any kept pattern, so an edit to it shows in both); in its own row, a move there as before; Cancel.
+    private func offerDrop(from: PadKey, to: PadKey, at: CGPoint) {
+        guard let e = store.song?.tracks[safe: from.track]?.entries[safe: from.entry], let p = e.poolIndex else { return }
+        let n = Entries.number(p + 1)
+        let free = (store.pool?.free ?? 0) > 0
+        // short enough for the fan's width (its buttons are one line): "Copy 04 here (as 15)"
+        let becomes = free ? ArrangeEdits(session: session, store: store).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+        let t = to.track, j = to.entry
+        var choices = [
+            MenuItem(title: "Copy \(n) here\(becomes)", icon: "square.on.square", enabled: free && idle) {
+                Task { if await store.send(.set(track: t, entry: j, pattern: p + 1)) { await store.send(.copy(track: t, entry: j)) } }
+            },
+            // the same pattern, named twice: an edit shows in both places
+            MenuItem(title: from.track == t ? "Repeat \(n) here" : "Share \(n) with T\(from.track + 1)", icon: "link", enabled: idle) {
+                Task { await store.send(.set(track: t, entry: j, pattern: p + 1)) }
+            },
+        ]
+        if from.track == t, PadMove.apply(store.song?.tracks[safe: t]?.entries ?? [], from: from.entry, to: j) != nil {
+            choices.append(MenuItem(title: session.playing ? "Move here (stop first)" : "Move here", icon: "arrow.up.and.down.and.arrow.left.and.right",
+                                    enabled: idle && !session.playing) { move(t, from: from.entry, to: j) })
+        }
+        let title = "\(n) to T\(t + 1) · entry \(Entries.letter(j))"
+        ui.menu = AppMenu(title: title, groups: { [choices, [MenuItem(title: "Cancel", icon: "xmark") {}]] }, at: at, fan: true, tint: t)
+        UIAccessibility.post(notification: .announcement, argument: title)
+    }
+
+    /// "Copy to…" (the drag's equivalent without one, for VoiceOver and Switch Control): each track's next empty pad.
+    private func copyTargets(_ t: Int, _ i: Int) -> [MenuItem] {
+        let at = padFrames[PadKey(track: t, entry: i)].map { CGPoint(x: $0.midX, y: $0.midY) } ?? pressAt
+        return (store.song?.tracks ?? []).enumerated().map { k, list in
+            let next = (list.entries.lastIndex { !$0.isEmpty } ?? -1) + 1
+            let name = "T\(k + 1) \(Entries.trackName(k, session: session))"
+            guard next < list.entries.count else { return MenuItem(title: "\(name): no empty pad", enabled: false) }
+            return MenuItem(title: "\(name) · entry \(Entries.letter(next))", chip: nil) {
+                offerDrop(from: PadKey(track: t, entry: i), to: PadKey(track: k, entry: next), at: at)
+            }
+        }
+    }
 
     /// What a pad's pattern carries, as marks (Scott, 2026-11-10, board 46 d): recorded motion, a direction other than
     /// forward (both the pattern's), and its own sound (the pad's). Known from the pattern's picture: the track's own
@@ -687,13 +759,6 @@ struct PadsPage: View {
         }
         if e.sound != nil { m.append(PadMark(symbol: "music.note", spoken: "its own sound")) }
         return m
-    }
-
-    /// Where the dragged pad would land: the pad under the finger, or past the list's end the first empty one after it.
-    private func landing(of d: PadDrag) -> Int? {
-        guard !d.refused, let target = pad(at: d.at, track: d.track), target != d.from,
-              let es = store.song?.tracks[safe: d.track]?.entries else { return nil }
-        return PadMove.apply(es, from: d.from, to: target)?.landed
     }
 
     private func move(_ t: Int, from: Int, to target: Int) {
@@ -816,6 +881,9 @@ struct PadsPage: View {
             g.append([MenuItem(title: "Select sound", icon: "waveform", enabled: idle) {
                 ui.chooseSound(session, track: t, entry: SoundEntryTarget(ref: EntryRef(track: t, entry: i), pad: true))
             }])
+        }
+        if e.poolIndex != nil {
+            g.append([MenuItem.submenu(title: "Copy to…", icon: "doc.on.doc", enabled: idle, children: { [copyTargets(t, i)] })])
         }
         g.append([MenuItem.submenu(title: "Move to…", icon: "arrow.up.and.down.and.arrow.left.and.right",
                            enabled: idle && !session.playing, children: { [moveTargets(t, i, list)] })])

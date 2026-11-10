@@ -57,20 +57,23 @@ enum SkiffNavigator {
             go(.sequencer, ui)
             flash(f == .pattern ? .trackPanel : f == .automation ? .grid : .stepPanel, ui)
         case .arrange(let patterns):
+            if patterns { ui.presetsPanel = false }
             go(.song, ui)
             // SAVE > PATTERNS: the Song tab's Patterns drawer, open
             if patterns { if ui.songTab { ui.poolOpen = true }; flash(.patternBin, ui) }
         case .browse: browse(user: s.page == 36, session: session, ui: ui)
         case .projects:
             // the Projects sheet: SLOOP's backups, or Skiff's 4 slots on the FM-1 beside the iPad's projects
-            if session.capabilities.contains(.projects) || session.dialect == .skiff { ui.projectsOpen = true }
+            if session.capabilities.contains(.projects) || session.dialect == .skiff { ui.presetsPanel = false; ui.projectsOpen = true }
         case .mixer: break
         }
     }
 
-    /// SAVE's PRESETS (35) and USER (36) pages: the Sounds tab, on the factory sounds or the user slots.
+    /// SAVE's PRESETS (35) and USER (36) pages: the sounds panel over the tab that's up, on the factory sounds or the
+    /// user slots, so nothing on the page moves (Scott, 2026-11-10: "instead of going to the sounds page, it should just
+    /// pull open the sounds panel so that the user doesn't lose their place"). On the Sounds tab itself, its own browser.
     @MainActor private static func browse(user: Bool, session: DeviceSession, ui: EditorUI) {
-        go(.library, ui)
+        if ui.page != .library, !ui.presetsPanel { ui.chooseSound(session, track: session.selectedTrack) }
         if user { ui.librarySection = .user }
         else if ui.librarySection == .user, !session.selectedIsDrums { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
     }
@@ -79,13 +82,15 @@ enum SkiffNavigator {
     /// FM-1's screen when linked; otherwise from where Lupe is.
     @MainActor static func save(session: DeviceSession, ui: EditorUI) {
         let now: Int? = if session.screenLinked, let s = session.deviceScreen, !s.home, (35...38).contains(s.page) { s.page }
+            else if ui.projectsOpen { 38 }
             else if ui.page == .song && ui.poolOpen { 37 }
-            else if ui.page == .library { ui.librarySection == .user ? 36 : 35 }
+            else if ui.presetsPanel || ui.page == .library { ui.librarySection == .user ? 36 : 35 }
             else { nil }
         let next = now.map { $0 == 38 ? 35 : $0 + 1 } ?? 35
         if session.screenLinked, ui.followDevice { session.showOnDevice(page: next) }
         if next != 37 { ui.poolOpen = false }
         if next != 38 { ui.projectsOpen = false }
+        if next > 36 { ui.presetsPanel = false }
         switch next {
         case 35, 36: browse(user: next == 36, session: session, ui: ui)
         case 37: go(.song, ui); ui.poolOpen = true
