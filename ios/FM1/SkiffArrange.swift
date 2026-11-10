@@ -504,6 +504,7 @@ struct SkiffArrangePage: View {
 /// works: it doesn't go through focus.
 struct ShortcutOnly: ViewModifier {
     func body(content: Content) -> some View {
-        content.accessibilityHidden(true).focusable(false)
+        // (accessibilityHidden alone left them in the tree, each at its full size: at no size there's nothing to land on)
+        content.frame(width: 0, height: 0).clipped().accessibilityHidden(true).focusable(false)
     }
 }
