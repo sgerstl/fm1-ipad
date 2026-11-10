@@ -265,9 +265,16 @@ struct FirmwareLayer: View {
             } else if centre.showPicker {
                 scrim { centre.showPicker = false }
                 fitted { FirmwarePicker(centre: centre, session: session) }
+                    // on a scrim: VoiceOver stays on the card, the scrub closes it as the scrim's tap does (2026-11-10)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityAddTraits(.isModal)
+                    .accessibilityAction(.escape) { centre.showPicker = false }
             } else if let o = centre.visibleOffer {
                 scrim { centre.dismissedOffer = o }
                 fitted { FirmwareOfferCard(offer: o, centre: centre, session: session) }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityAddTraits(.isModal)
+                    .accessibilityAction(.escape) { centre.dismissedOffer = o }
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: centre.isActive)
@@ -442,6 +449,7 @@ struct FirmwarePicker: View {
                 Image(systemName: centre.target == f ? "largecircle.fill.circle" : "circle")
                     .font(.system(size: 17)).frame(width: 24)
                     .foregroundStyle(centre.target == f ? Theme.text : Theme.textTertiary)
+                    .accessibilityHidden(true)      // (the row says it with .isSelected; the symbol's name was read too)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(f.title).font(.lupe(17, .semibold)).foregroundStyle(Theme.text)
@@ -512,6 +520,14 @@ struct FirmwareInstallCover: View {
         }
         .persistentSystemOverlays(.hidden)
         .accessibilityAddTraits(.isModal)
+        // the end of a write is a new screen in place: VoiceOver goes to it, so "done" or "failed" is heard without
+        // hunting for it (2026-11-10, WCAG 4.1.3)
+        .onChange(of: centre.phase) { _, p in
+            switch p {
+            case .done, .failed, .downloadFailed: AccessibilityNotification.ScreenChanged(nil).post()
+            default: break
+            }
+        }
     }
 
     // MARK: Working

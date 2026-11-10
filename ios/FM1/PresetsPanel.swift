@@ -48,6 +48,8 @@ struct PresetsPanel: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Self.header(session, track: t, entry: ui.soundEntry.flatMap { $0.ref.track == t ? $0 : nil }))
         .onChange(of: ui.soundEntry) { _, _ in choosing = false }
+        // not modal (the track box stays live), but the scrub closes it, as its close key does (2026-11-10)
+        .accessibilityAction(.escape) { ui.presetsPanel = false }
     }
 
     private func entryHasNoSound(_ entry: SoundEntryTarget?) -> Bool {

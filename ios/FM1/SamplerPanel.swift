@@ -376,6 +376,8 @@ struct SamplerPanel: View {
             .elevated(.held, radius: 14)
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
+            // a modal needs a way out without finding its button: the two-finger scrub, as the scrim's tap (2026-11-10)
+            .accessibilityAction(.escape) { asking = nil }
         }
         .transition(.opacity)
     }

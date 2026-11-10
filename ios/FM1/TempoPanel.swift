@@ -108,6 +108,7 @@ struct TempoPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tempo")
+        .accessibilityAddTraits(.isModal)       // (a popover that closes on an outside touch: VoiceOver stays in it, 2026-11-10)
         .accessibilityAction(.escape) { close() }
     }
 
