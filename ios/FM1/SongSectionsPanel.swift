@@ -42,7 +42,6 @@ struct SectionsPanel: View {
     let ui: EditorUI
     /// Where the finger is on a key: a held stored section opens its menu there.
     @State private var pressAt = CGPoint.zero
-    @State private var confirmRec = false
     /// The key just held: its release isn't a tap (a tap loads the section, over the tracks being saved).
     @State private var held: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,7 +57,7 @@ struct SectionsPanel: View {
                 Spacer(minLength: 0)
                 ToggleKey(name: session.song.songRecording ? "SONG REC: recording" : "SONG REC", on: session.song.songRecording) {
                     // what SONG REC records replaces the whole order: ask when there is one
-                    if !session.song.songRecording, !(session.songOrder?.steps.isEmpty ?? true) { confirmRec = true } else { session.toggleSongRec() }
+                    if !session.song.songRecording, !(session.songOrder?.steps.isEmpty ?? true) { askSongRec() } else { session.toggleSongRec() }
                 }
                 .accessibilityHint("From the next bar, every section you play, and how long, becomes the song")
             }
@@ -69,12 +68,14 @@ struct SectionsPanel: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .panel()
-        .confirmationDialog("SONG REC replaces the song", isPresented: $confirmRec, titleVisibility: .visible) {
-            Button("Record over the song", role: .destructive) { session.toggleSongRec() }
-            Button("Keep the song", role: .cancel) {}
-        } message: {
-            Text("The sections you play, and for how long, become the song's order. Its \(session.songOrder?.steps.count ?? 0) steps now are replaced, and the FM-1 keeps no copy.")
-        }
+    }
+
+    /// SONG REC over a song: asked once more in place (2026-11-10: no system dialog); the old order doesn't come back.
+    private func askSongRec() {
+        let n = session.songOrder?.steps.count ?? 0
+        ui.menu = AppMenu.confirm("Record over the song", confirm: "Record over the song's \(n) steps",
+                                  caption: "The sections you play, and for how long, become the song's order. Its \(n) steps now are replaced, and the FM-1 keeps no copy.",
+                                  icon: "record.circle") { session.toggleSongRec() }
     }
 
     /// What a section key shows: one state per key, each with a look and a word (never colour alone).

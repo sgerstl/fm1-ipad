@@ -194,15 +194,12 @@ struct PadsPage: View {
         .onAppear { shownAt = Date() }
         // another pad, or another track: its controls back
         .task(id: store.offline) { if !store.offline { await store.follow() } }
-        .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
-            get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
-                            presenting: store.confirmation) { c in
-            Button(c.confirmLabel, role: .destructive) {
-                store.confirmation = nil
-                Task { await c.action() }
-            }
-            Button("Cancel", role: .cancel) { store.confirmation = nil }
-        } message: { c in Text(c.message) }
+        // a change that can't be taken back asks once more, in place at the finger (2026-11-10: no system dialog)
+        .onChange(of: store.confirmation?.id) {
+            guard let c = store.confirmation else { return }
+            store.confirmation = nil
+            ui.menu = AppMenu.confirm(c.title, confirm: c.confirmLabel, caption: c.message) { Task { await c.action() } }
+        }
     }
 
     // MARK: Lanes (Scott, 2026-11-09, board 41)

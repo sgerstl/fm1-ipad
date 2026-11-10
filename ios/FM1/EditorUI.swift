@@ -95,6 +95,8 @@ final class EditorUI {
     var menu: AppMenu?
     /// A sound waiting on its name before it goes to a user slot (Skiff's SAVE > USER).
     var saveSound: SaveSoundRequest?
+    /// A name asked for in place (TextPromptLayer at the root).
+    var textPrompt: TextPrompt?
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?

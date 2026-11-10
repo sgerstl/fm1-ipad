@@ -71,6 +71,51 @@ struct AppMenu: Identifiable {
     /// A fan that opens already asking: its first item's confirm (red-outlined, its words) and Cancel, for a key whose
     /// only job is the destructive thing (Clear N unused). Nothing else to pick, so no extra tap first (2026-11-10).
     var asking = false
+    /// What the choice does, in a line or three over the fan (what goes, whether it comes back): the honest part a
+    /// system dialog's message carried (2026-11-10, the last system dialogs converted).
+    var caption: String? = nil
+
+    /// One destructive thing asked once more, in place at the finger: its confirm (red-outlined, `confirm` naming what
+    /// goes) and Cancel, with `caption` over them. For what used to be a system alert.
+    static func confirm(_ title: String, confirm: String, caption: String? = nil, icon: String = "trash", tint: Int? = nil,
+                        at: CGPoint = TouchPoint.last, action: @escaping () -> Void) -> AppMenu {
+        AppMenu(title: title, groups: { [[.destructive(title: title, icon: icon, confirm: confirm, action: action),
+                                          MenuItem(title: "Cancel", icon: "xmark") {}]] },
+                at: at, fan: true, tint: tint, asking: true, caption: caption)
+    }
+}
+
+/// Where the last finger went down (global, the window's points): where a confirm that a gesture didn't open itself
+/// (a menu's item, a store's question) opens. Read from a passive recognizer on the window (TouchPointWatch).
+enum TouchPoint {
+    nonisolated(unsafe) static var last: CGPoint = CGPoint(x: 600, y: 400)     // (written on the main thread only)
+}
+
+/// Records each touch-down for TouchPoint without taking part: never recognizes, cancels nothing, delays nothing.
+struct TouchPointWatch: UIViewRepresentable {
+    func makeUIView(context: Context) -> WatchView { let v = WatchView(); v.isUserInteractionEnabled = false; return v }
+    func updateUIView(_ v: WatchView, context: Context) {}
+
+    final class WatchView: UIView {
+        private var g: Recorder?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if let g { g.view?.removeGestureRecognizer(g) }
+            guard let w = window else { return }
+            let r = Recorder(target: nil, action: nil)
+            r.cancelsTouchesInView = false; r.delaysTouchesBegan = false; r.delaysTouchesEnded = false
+            w.addGestureRecognizer(r)
+            g = r
+        }
+    }
+    final class Recorder: UIGestureRecognizer {
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            if let t = touches.first, let w = view { TouchPoint.last = t.location(in: w) }
+            state = .failed
+        }
+        override func canPrevent(_ other: UIGestureRecognizer) -> Bool { false }
+        override func canBePrevented(by other: UIGestureRecognizer) -> Bool { false }
+    }
 }
 
 /// Draws an open AppMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
@@ -89,7 +134,7 @@ struct AppMenuLayer: View {
                     let at = CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY)
                     if m.fan {
                         FanMenu(title: m.title, items: m.groups().flatMap { $0 }.filter { !$0.note }, at: at, layer: g.size, tint: m.tint,
-                                asking: m.asking, close: { menu = nil },
+                                asking: m.asking, caption: m.caption, close: { menu = nil },
                                 open: { item in menu = AppMenu(title: item.title, groups: item.children ?? { [] }, at: m.at) })
                             .id(m.id)
                             .transition(.opacity.animation(.easeIn(duration: Labs.menuClose.value)))
@@ -313,6 +358,7 @@ struct FanMenu: View {
     var tint: Int? = nil
     /// Opens on its first item's confirm (AppMenu.asking).
     var asking = false
+    var caption: String? = nil
     let close: () -> Void
     /// A submenu chosen: it opens as an ordinary menu.
     let open: (MenuItem) -> Void
@@ -329,14 +375,27 @@ struct FanMenu: View {
 
     var body: some View {
         let n = CGFloat(items.count)
-        let total = n * Self.height + max(0, n - 1) * Self.gap
+        // the caption over the buttons: its height from its length (13 pt, about 30 letters a line in 240 pt)
+        let capH: CGFloat = caption.map { 20 + CGFloat(Int((Double($0.count) / 28).rounded(.up))) * 18 } ?? 0
+        let capTop: CGFloat = capH > 0 ? capH + Self.gap : 0
+        let total = capTop + n * Self.height + max(0, n - 1) * Self.gap
         let x = hand.menuX(touch: at.x, menuWidth: Self.width, in: layer.width)
         let y = Handedness.menuY(touch: at.y, menuHeight: total, in: layer.height)
         ZStack(alignment: .topLeading) {
             Color.clear.allowsHitTesting(false)
             VStack(spacing: 0) {
+                if let caption {
+                    Text(caption).font(.lupe(13)).foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .frame(width: Self.width, height: capH, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(tint.map { SelectionTint.fill($0) } ?? Elevation.held.surface).elevationShadow(.held))
+                        .padding(.top, Self.gap / 2).padding(.bottom, Self.gap / 2)
+                        .opacity(out ? 1 : 0)
+                        .animation(.easeOut(duration: reduceMotion ? 0.15 : Labs.menuOpen.value), value: out)
+                }
                 ForEach(Array(items.enumerated()), id: \.offset) { k, item in
-                    let top = y + CGFloat(k) * (Self.height + Self.gap)
+                    let top = y + capTop + CGFloat(k) * (Self.height + Self.gap)
                     // from the finger to its place
                     let dx = at.x - (x + Self.width / 2), dy = at.y - (top + Self.height / 2)
                     row(k, item)
@@ -353,7 +412,7 @@ struct FanMenu: View {
             .closesOnOutsideTouch(close)
             .offset(x: x, y: y - Self.gap / 2)
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(title)
+            .accessibilityLabel(caption.map { "\(title). \($0)" } ?? title)
             .accessibilityAction(.escape) { close() }        // (VoiceOver's two-finger scrub)
         }
         .frame(width: layer.width, height: layer.height, alignment: .topLeading)

@@ -57,7 +57,7 @@ struct TopBar: View {
         .frame(height: 64)
         .zIndex(1)              // the play key's "Playing from the start" tag hangs below the bar, over the page
         .sheet(isPresented: projectsOpen) { ProjectsSheet(store: projects, session: session) }
-        .namePrompt($naming, store: projects)
+        .namePrompt($naming, store: projects, into: Binding(get: { ui.textPrompt }, set: { ui.textPrompt = $0 }))
     }
 
     /// Skiff's folder: the Projects sheet, its 4 slots on the FM-1 beside the iPad's projects (SAVE > PROJECT).

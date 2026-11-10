@@ -96,15 +96,12 @@ struct SkiffArrangePage: View {
         .onDisappear { menu = nil; lifted = nil; moveAt = nil; dropAt = nil }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         // a change that would erase a pattern asks first (CLEAR erases one nothing else uses)
-        .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
-            get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
-                            presenting: store.confirmation) { c in
-            Button(c.confirmLabel, role: .destructive) {
-                store.confirmation = nil
-                Task { await c.action() }
-            }
-            Button("Cancel", role: .cancel) { store.confirmation = nil }
-        } message: { c in Text(c.message) }
+        // a change that can't be taken back asks once more, in place at the finger (2026-11-10: no system dialog)
+        .onChange(of: store.confirmation?.id) {
+            guard let c = store.confirmation else { return }
+            store.confirmation = nil
+            ui.menu = AppMenu.confirm(c.title, confirm: c.confirmLabel, caption: c.message) { Task { await c.action() } }
+        }
     }
 
     /// The block whose menu is open: it stays lifted, and holds still.
