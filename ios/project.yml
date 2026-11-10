@@ -49,4 +49,20 @@ targets:
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
     scheme:
-      testTargets: []
+      testTargets: [FM1UITests]
+  # the accessibility audit (2026-11-10): XCUITest's performAccessibilityAudit on each main screen, against the demo
+  # FM-1 (-demo); simulator only. Run: xcodebuild test -scheme FM1 -destination 'platform=iOS Simulator,name=A11y iPad'
+  FM1UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: FM1UITests
+    dependencies:
+      - target: FM1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scottgerstl.fm1ipad.uitests
+        PRODUCT_NAME: FM1UITests
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: FM1
