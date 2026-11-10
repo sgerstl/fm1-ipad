@@ -51,6 +51,11 @@ struct PadsPage: View {
     /// transport read just after the song) doesn't fade the colours in.
     @State private var shownAt = Date()
     @State private var gridFrame: CGRect = .zero
+    /// Each finger's press: when and where it went down, and whether it slid away fast before the hold could tell
+    /// (a swipe or a flick: no drag from it). Press and slide lifts the pad sooner than the hold (Scott, 2026-11-10).
+    @State private var pressStart: [String: (at: Date, point: CGPoint, swiped: Bool)] = [:]
+    /// A pattern dragged from the Patterns panel over a pad: the pad it would land on, and whether that one is empty.
+    @State private var panelDrop: DropTarget?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Full size (the editor shut), over the editor (rows as tall as the lane heads, a shorter scene row), or over the
     /// largest editor (the selected track's row of 16, no heads, no scenes) (boards 35, 37, 38).
@@ -267,7 +272,7 @@ struct PadsPage: View {
                                 .overlay {
                                     // where the drop goes: a pad of its row to move to, or an empty pad (any row) to copy into,
                                     // filled faintly so an empty target reads as one (Scott, 2026-11-10)
-                                    if let d = drag, let tg = dropTarget(of: d), tg.key == PadKey(track: k, entry: i) {
+                                    if let tg = drag.flatMap({ dropTarget(of: $0) }) ?? panelDrop, tg.key == PadKey(track: k, entry: i) {
                                         RoundedRectangle(cornerRadius: 16)
                                             .fill(Theme.text.opacity(tg.empty ? 0.1 : 0))
                                             .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5])) }
@@ -279,6 +284,12 @@ struct PadsPage: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .globalFrame($gridFrame)
+                // a pattern from the Patterns panel (Scott, 2026-11-10: "make the pads take drops")
+                .onDrop(of: [.plainText], delegate: PadPatternDrop(
+                    active: { ui.dragPattern != nil },
+                    over: { loc in panelHover(CGPoint(x: gridFrame.minX + loc.x, y: gridFrame.minY + loc.y)) },
+                    left: { panelDrop = nil },
+                    drop: { loc, p in panelDropped(p, at: CGPoint(x: gridFrame.minX + loc.x, y: gridFrame.minY + loc.y)) }))
                 // under the pads: the selected pad's tint (its lane's colour), and at Max its tab
                 .background(alignment: .topLeading) {
                     ZStack(alignment: .topLeading) {
@@ -574,9 +585,21 @@ struct PadsPage: View {
                 let k = "p\(t).\(i)"
                 if fingers[k] == nil {
                     fingers[k] = v.location
+                    pressStart[k] = (Date(), v.location, false)
                     if fingers.count > 1 { multi.formUnion(fingers.keys) }
                 } else { fingers[k] = v.location }
                 if !multi.contains(k) { pressAt = v.location }
+                // pressed, then slid: the pad lifts without waiting for the hold (Scott, 2026-11-10: "the waiting period
+                // for the longpress should be shorter if it detects a slide"). Moving before the dwell is a swipe, not a
+                // drag; a quick tap never moves that far; a still hold still opens the menu at holdToMenu.
+                if drag == nil, heldKey != k, !e.isEmpty, !multi.contains(k), fingers.count == 1, var ps = pressStart[k], !ps.swiped {
+                    let moved = hypot(v.location.x - ps.point.x, v.location.y - ps.point.y)
+                    let held = Date().timeIntervalSince(ps.at)
+                    if moved > Labs.padSlideStart.value {
+                        if held < Labs.padSlideDwell.value { ps.swiped = true; pressStart[k] = ps }
+                        else { heldKey = k; holdAt = ps.point; beginDrag(t, i, at: v.location) }
+                    }
+                }
                 // held, then moved off the hold: the pad lifts and follows the finger (its menu goes)
                 guard heldKey == k, !e.isEmpty, !multi.contains(k) else { return }
                 if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padDragStart.value { beginDrag(t, i, at: v.location) }
@@ -584,13 +607,13 @@ struct PadsPage: View {
             }
             .onEnded { v in
                 let k = "p\(t).\(i)"
-                fingers[k] = nil; multi.remove(k)
+                fingers[k] = nil; multi.remove(k); pressStart[k] = nil
                 if drag != nil { endDrag(at: v.location) }
                 releaseHold(k)
             })
         .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             // (never with another finger down, or one that was while this was pressed: several fingers queue, Scott 2026-11-10)
-            guard !store.offline, !multi.contains("p\(t).\(i)"), fingers.count <= 1 else { return }
+            guard !store.offline, !multi.contains("p\(t).\(i)"), fingers.count <= 1, drag == nil, pressStart["p\(t).\(i)"]?.swiped != true else { return }
             heldKey = "p\(t).\(i)"
             holdAt = pressAt
             launched += 1
@@ -618,6 +641,7 @@ struct PadsPage: View {
         var track: Int, from: Int
         var at: CGPoint                  // the finger, global
         var refused = false              // playing: said so, nothing lifts
+        var grab: CGSize = .zero         // where on the pad it was taken, from its centre: the copy stays there under the finger
     }
 
     private func beginDrag(_ t: Int, _ i: Int, at: CGPoint) {
@@ -630,7 +654,10 @@ struct PadsPage: View {
             drag = PadDrag(track: t, from: i, at: at, refused: true)
             return
         }
-        drag = PadDrag(track: t, from: i, at: at)
+        // taken where the finger first pressed it (Scott, 2026-11-10: "the pad should stay under the finger… it's off to
+        // one corner right now"): the copy keeps that point under the finger instead of centring itself on it
+        let c = padFrames[PadKey(track: t, entry: i)].map { CGPoint(x: $0.midX, y: $0.midY) } ?? holdAt
+        drag = PadDrag(track: t, from: i, at: at, grab: CGSize(width: holdAt.x - c.x, height: holdAt.y - c.y))
         launched += 1
     }
 
@@ -697,6 +724,49 @@ struct PadsPage: View {
         UIAccessibility.post(notification: .announcement, argument: title)
     }
 
+    /// A panel pattern over the grid: the pad it would land on (an empty pad past a list's end stands for the first empty
+    /// one after it, as everywhere on the pads), outlined as a pad drag's target is. Nil off the pads.
+    private func panelHover(_ at: CGPoint) -> Bool {
+        guard let k = pad(at: at), let list = store.song?.tracks[safe: k.track], let e = list.entries[safe: k.entry] else {
+            if panelDrop != nil { panelDrop = nil }
+            return false
+        }
+        let tg = e.isEmpty ? DropTarget(key: PadKey(track: k.track, entry: Self.landing(list, k.entry)), empty: true)
+                           : DropTarget(key: k, empty: false)
+        if tg != panelDrop { panelDrop = tg }
+        return true
+    }
+
+    /// A panel pattern let go on a pad. An empty one takes it at once, shared (SET: Skiff entries name a pool pattern, so
+    /// an edit shows everywhere it's used). A filled one asks first, in place at the drop: share it here, a copy here,
+    /// or Cancel; nothing is replaced until one is picked (Scott, 2026-11-10).
+    private func panelDropped(_ number: Int, at: CGPoint) {
+        defer { panelDrop = nil; ui.dragPattern = nil }
+        guard panelHover(at), let tg = panelDrop, let p = Optional(number - 1), store.pool?.patterns[safe: p]?.isFree == false else { return }
+        let t = tg.key.track, j = tg.key.entry, n = Entries.number(number)
+        if tg.empty {
+            Task { await store.send(.set(track: t, entry: j, pattern: number)) }
+            UIAccessibility.post(notification: .announcement, argument: "\(n) on T\(t + 1) entry \(Entries.letter(j))")
+            return
+        }
+        guard let old = store.song?.tracks[safe: t]?.entries[safe: j] else { return }
+        let was = old.poolIndex.map { Entries.number($0 + 1) } ?? (old.isRest ? "REST" : "it")
+        let free = (store.pool?.free ?? 0) > 0
+        let becomes = free ? ArrangeEdits(session: session, store: store).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+        let choices = [
+            // shared: the same pattern, named here too (an edit shows everywhere it's used)
+            MenuItem(title: "Replace \(was) with \(n)", icon: "link", enabled: idle && old.poolIndex != p) {
+                Task { await store.send(.set(track: t, entry: j, pattern: number)) }
+            },
+            MenuItem(title: "Copy \(n) here\(becomes)", icon: "square.on.square", enabled: free && idle) {
+                Task { if await store.send(.set(track: t, entry: j, pattern: number)) { await store.send(.copy(track: t, entry: j)) } }
+            },
+        ]
+        let title = "\(n) onto T\(t + 1) · entry \(Entries.letter(j)), which has \(was)"
+        ui.menu = AppMenu(title: title, groups: { [choices, [MenuItem(title: "Cancel", icon: "xmark") {}]] }, at: at, fan: true, tint: t)
+        UIAccessibility.post(notification: .announcement, argument: title)
+    }
+
     /// "Copy to…" (the drag's equivalent without one, for VoiceOver and Switch Control): each track's next empty pad.
     private func copyTargets(_ t: Int, _ i: Int) -> [MenuItem] {
         let at = padFrames[PadKey(track: t, entry: i)].map { CGPoint(x: $0.midX, y: $0.midY) } ?? pressAt
@@ -740,7 +810,7 @@ struct PadsPage: View {
             .frame(width: cell.width, height: cell.height)
             .scaleEffect(reduceMotion ? 1 : 1.06)
             .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
-            .position(x: d.at.x - gridFrame.minX, y: d.at.y - gridFrame.minY)
+            .position(x: d.at.x - d.grab.width - gridFrame.minX, y: d.at.y - d.grab.height - gridFrame.minY)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -1152,5 +1222,29 @@ struct OpenControlsTab: View {
         .buttonStyle(PressSink())
         .accessibilityLabel("Show track controls")
         .accessibilityHint(hint)
+    }
+}
+
+
+/// The pads' drop target for a pattern from the Patterns panel: where it's over (the grid's own space), and the pattern
+/// number from the dragged item itself ("pattern 12"), as the Timeline's lanes read it.
+struct PadPatternDrop: DropDelegate {
+    let active: () -> Bool
+    let over: (CGPoint) -> Bool
+    let left: () -> Void
+    let drop: (CGPoint, Int) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { active() }
+    func dropEntered(info: DropInfo) { _ = over(info.location) }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: over(info.location) ? .copy : .forbidden) }
+    func dropExited(info: DropInfo) { left() }
+    func performDrop(info: DropInfo) -> Bool {
+        guard let provider = info.itemProviders(for: [.plainText]).first else { left(); return false }
+        let at = info.location
+        _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
+            guard let text = obj as? NSString, text.hasPrefix("pattern "), let p = Int(text.substring(from: 8)) else { return }
+            Task { @MainActor in drop(at, p) }
+        }
+        return true
     }
 }

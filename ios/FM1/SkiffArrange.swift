@@ -75,7 +75,7 @@ struct SkiffArrangePage: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             // (the Song tab: the pool is a full-height drawer of the page's, SkiffSongPage)
             if !compact {
-                PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: dragPatternBinding)
+                PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: dragPatternBinding, host: ui)
                     .frame(width: Self.binWidth)
                     .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
             }

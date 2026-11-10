@@ -60,6 +60,12 @@ enum Labs {
     static let padDragStart = LabItem(
         key: "labs.padDragStart", title: "Pad drag starts after", detail: "How far a held pad moves before it lifts to be dragged.",
         range: 4...30, step: 1, standard: 10, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
+    static let padSlideStart = LabItem(
+        key: "labs.padSlideStart", title: "Pad press-and-slide: lifts after", detail: "How far a pressed pad slides before it lifts to be dragged, without waiting for the hold.",
+        range: 4...30, step: 1, standard: 8, format: "%.0f pt", added: "2026-11-10", review: "2026-11-24")
+    static let padSlideDwell = LabItem(
+        key: "labs.padSlideDwell", title: "Pad press-and-slide: pressed at least", detail: "A slide sooner than this after touching is a swipe, not a drag.",
+        range: 0.05...0.4, step: 0.01, standard: 0.15, format: "%.2f s", added: "2026-11-10", review: "2026-11-24")
     static let columnTravel = LabItem(
         key: "labs.columnTravel", title: "Column slide: full range in", detail: "How far a slide on a value column goes from its lowest to its highest.",
         range: 120...480, step: 10, standard: 240, format: "%.0f pt", added: "2026-11-09", review: "2026-11-23")
@@ -80,7 +86,7 @@ enum Labs {
 
     static let sections: [(title: String, items: [LabItem])] = [
         ("Motion", [dividerResponse, dividerDamping, menuOpen, menuClose, songSlide, padPlayFade]),
-        ("Gestures", [holdToMenu, holdToPaint, panStart, padDragStart, columnTravel, flickSpeed]),
+        ("Gestures", [holdToMenu, holdToPaint, panStart, padDragStart, padSlideStart, padSlideDwell, columnTravel, flickSpeed]),
         ("Layout", [padControlsGap]),
     ]
     static var all: [LabItem] { sections.flatMap(\.items) }

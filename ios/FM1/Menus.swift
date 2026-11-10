@@ -68,6 +68,9 @@ struct AppMenu: Identifiable {
     var fan = false
     /// The track a fan belongs to: its buttons in the track's tint, the first outlined in its colour (Scott, 2026-11-09).
     var tint: Int? = nil
+    /// A fan that opens already asking: its first item's confirm (red-outlined, its words) and Cancel, for a key whose
+    /// only job is the destructive thing (Clear N unused). Nothing else to pick, so no extra tap first (2026-11-10).
+    var asking = false
 }
 
 /// Draws an open AppMenu over what it's put on, under its anchor (above it where it wouldn't fit), closed by a
@@ -86,7 +89,7 @@ struct AppMenuLayer: View {
                     let at = CGPoint(x: m.at.x - frame.minX, y: m.at.y - frame.minY)
                     if m.fan {
                         FanMenu(title: m.title, items: m.groups().flatMap { $0 }.filter { !$0.note }, at: at, layer: g.size, tint: m.tint,
-                                close: { menu = nil },
+                                asking: m.asking, close: { menu = nil },
                                 open: { item in menu = AppMenu(title: item.title, groups: item.children ?? { [] }, at: m.at) })
                             .id(m.id)
                             .transition(.opacity.animation(.easeIn(duration: Labs.menuClose.value)))
@@ -308,6 +311,8 @@ struct FanMenu: View {
     let layer: CGSize
     /// The track it belongs to (its buttons in the track's tint, the first outlined in its colour); nil: neutral.
     var tint: Int? = nil
+    /// Opens on its first item's confirm (AppMenu.asking).
+    var asking = false
     let close: () -> Void
     /// A submenu chosen: it opens as an ordinary menu.
     let open: (MenuItem) -> Void
@@ -352,7 +357,13 @@ struct FanMenu: View {
             .accessibilityAction(.escape) { close() }        // (VoiceOver's two-finger scrub)
         }
         .frame(width: layer.width, height: layer.height, alignment: .topLeading)
-        .onAppear { out = true }
+        .onAppear {
+            out = true
+            if asking, items.first?.confirm != nil {
+                confirmShownAt = Date(); confirming = 0; confirmFocused = true
+                UIAccessibility.post(notification: .announcement, argument: items.first?.confirm)
+            }
+        }
         .onKeyPress(.escape) { close(); return .handled }
     }
 

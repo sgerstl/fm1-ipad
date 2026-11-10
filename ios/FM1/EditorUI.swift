@@ -79,7 +79,7 @@ final class EditorUI {
     /// The Pads: a stored scene held, its preview on the pads (and, when Lupe hasn't seen it, a line under the top bar).
     var previewScene: Int?
     /// The Song tab: the pattern pool's drawer is open.
-    var poolOpen = false
+    var poolOpen = LaunchArgs.all.contains("-pool-open")      // (-pool-open: the Patterns drawer up, for captures)
     /// A pattern being dragged from the pool (set as the drag starts), shared by the drawer and the lanes.
     var dragPattern: Int?
     /// Step editing: the notes picked (a tap, or a lasso) and the steps picked (along the step numbers), on this

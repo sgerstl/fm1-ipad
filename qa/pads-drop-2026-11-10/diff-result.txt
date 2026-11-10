@@ -1,0 +1,8 @@
+pads-full-pool.png       identical
+pads-full-shut.png       identical
+pads-full-t1.png         identical
+pads-half-pool.png       identical
+pads-half-t4.png         identical
+pads-max.png             identical
+tl-half-pool.png         identical
+tl-half-t4.png           differs in x 515–858, y 1019–1024 pt
