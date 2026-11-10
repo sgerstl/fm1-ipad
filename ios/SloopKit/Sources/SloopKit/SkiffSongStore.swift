@@ -283,9 +283,43 @@ public final class SkiffSongStore {
         if undoStack.count > 32 { undoStack.removeFirst() }
     }
 
+    /// Pads launched whose PLAY hasn't been answered yet: track → entry. Drawn as waiting at once (Scott, 2026-11-10:
+    /// several fingers at once, each queued).
+    public private(set) var launching: [Int: Int] = [:]
+    @ObservationIgnored private var launchOrder: [Int] = []
+    @ObservationIgnored private var draining = false
+
+    /// A pad's launch (PLAY), queued: several in a row (fingers on three pads) go one after another, as SloopClient
+    /// takes one request at a time, never refused for the one before still going in. One a track: a later touch on
+    /// the same track replaces one not sent yet (as tapping one pad after another in a row does).
+    public func launch(track t: Int, entry e: Int) {
+        launching[t] = e
+        if !launchOrder.contains(t) { launchOrder.append(t) }
+        guard !draining else { return }
+        draining = true
+        Task { await drainLaunches() }
+    }
+
+    private func drainLaunches() async {
+        var sent = false
+        while let t = launchOrder.first {
+            // an edit going in: wait for it (up to a second), the launch after it
+            var waited = 0
+            while busy, waited < 50 { try? await Task.sleep(for: .milliseconds(20)); waited += 1 }
+            launchOrder.removeFirst()
+            guard let e = launching[t] else { continue }
+            _ = await send(.play(track: t, entry: e), readPool: false)
+            sent = true
+            if launching[t] == e { launching[t] = nil }      // (else touched again meanwhile: queued again by launch)
+        }
+        draining = false
+        // the pool once for the lot (a launch can file what went out as a new pattern), not once a launch
+        if sent, let d = driver, let p = try? await d.pool(), pool != p { pool = p }
+    }
+
     /// One op that the rewrite can't express (NEW, COPY, COPY+, PLAY, SONG): sent, then read back.
     @discardableResult
-    public func send(_ op: ListOp) async -> Bool {
+    public func send(_ op: ListOp, readPool: Bool = true) async -> Bool {
         guard !busyRefusal(op.track) else { return false }
         guard let d = driver, let before = song else {
             refusal = Refusal(track: op.track, entry: op.entry, text: "The FM-1 is disconnected: editing is off until it's back")
@@ -309,7 +343,7 @@ public final class SkiffSongStore {
             }
             refusal = nil
             switch op { case .play, .song: break; default: record(before) }     // undo is for the lists
-            pool = try? await d.pool()
+            if readPool { pool = try? await d.pool() }
             return true
         } catch {
             refusal = Refusal(track: op.track, entry: op.entry, text: "The FM-1 didn't answer; the song is as it says now")

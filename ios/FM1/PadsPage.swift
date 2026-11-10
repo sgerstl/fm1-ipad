@@ -26,6 +26,11 @@ struct PadsPage: View {
     /// dropped (the pads redraw four times a second, which resets UIKit's long press: SwiftUI's, beside the button)
     @State private var pressAt: CGPoint = .zero
     @State private var heldKey: String?
+    /// The pads a finger is on now, and where (several at once: Scott, 2026-11-10, "touch like three pads at once to
+    /// queue them"). A pad touched while another finger was down is in `multi` until its finger lifts: no menu, no drag
+    /// for it, only its tap.
+    @State private var fingers: [String: CGPoint] = [:]
+    @State private var multi: Set<String> = []
     /// A pad being dragged to another (Scott, 2026-11-08): from the hold, as Timeline blocks; where the hold took, so
     /// the drag starts only once the finger leaves it; and the grid's place (global), for the dragged copy.
     @State private var drag: PadDrag?
@@ -456,7 +461,7 @@ struct PadsPage: View {
 
     /// Launches and mutes waiting for the launch point (the song's own next isn't one).
     private var waitingCount: Int {
-        let launches = session.trackIndices.filter { store.marks($0, launchIn: nil).queued != nil }.count
+        let launches = session.trackIndices.filter { store.marks($0, launchIn: nil).queued != nil || (session.playing && store.launching[$0] != nil) }.count
         return launches + (store.perform?.staged.filter { $0 != .none }.count ?? 0)
     }
 
@@ -482,7 +487,9 @@ struct PadsPage: View {
         let block = blocks.first { $0.entries.contains(i) }
         let playing = list?.entryOn == i && session.playing
         let on = list?.entryOn == i && !session.playing
-        let waiting = block != nil && m.queued == block?.id && list?.staged == i
+        // waiting from the touch, before the FM-1 answers (a launch going in), then as its lists say
+        let sent = session.playing ? store.launching[t] : nil
+        let waiting = sent.map { $0 == i } ?? (block != nil && m.queued == block?.id && list?.staged == i)
         let next = !waiting && block != nil && m.next == block?.id && block?.entries.lowerBound == i
         let colour = Theme.track[t]
         let ink = playing && !e.isRest ? Theme.onColour : Theme.text      // (a REST playing is only an outline: light ink)
@@ -503,6 +510,9 @@ struct PadsPage: View {
         return Button {
             // an empty pad: what to put there, beside it (Scott, 2026-11-07: "you want to create a new pattern when you
             // tap an empty pad", a menu so a stray tap mid-jam makes nothing)
+            // (the finger is off: a drag cancelled by the system never says so, and a pad left counted down would keep the
+            // menus shut)
+            fingers["p\(t).\(i)"] = nil; multi.remove("p\(t).\(i)")
             if heldKey == "p\(t).\(i)" { heldKey = nil; return }  // (the release of a hold: its menu is open)
             if ui.justPulled { return }                          // (the lift that ends a pull of the editor)
             if e.isEmpty {
@@ -518,7 +528,7 @@ struct PadsPage: View {
             // FM-1 having no per-track cancel (Scott, 2026-11-09, question 5)
             if waiting, session.playing, let on = list?.entryOn {
                 if t == session.selectedTrack, ui.pinnedEntry?.track == t { ui.pinnedEntry = EntryRef(track: t, entry: on) }
-                Task { await store.send(.play(track: t, entry: on)) }
+                store.launch(track: t, entry: on)
                 return
             }
             // on the selected track the selection goes with the tap, playing or not: a pin left from Edit pattern or
@@ -526,7 +536,7 @@ struct PadsPage: View {
             if t == session.selectedTrack { ui.pinnedEntry = EntryRef(track: t, entry: i) }
             // any other pad launches, on any row, without selecting its track (question 10); while playing, the one
             // playing too: it's queued again and comes back in at the launch point (Scott, 2026-11-09)
-            Task { await store.send(.play(track: t, entry: i)) }
+            store.launch(track: t, entry: i)
         } label: {
             if short {
                 // a row as tall as a lane head (Half): one line, the letter, the number, the countdown when waiting,
@@ -586,18 +596,26 @@ struct PadsPage: View {
         // held: its menu at the finger
         .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { v in
-                pressAt = v.location
+                let k = "p\(t).\(i)"
+                if fingers[k] == nil {
+                    fingers[k] = v.location
+                    if fingers.count > 1 { multi.formUnion(fingers.keys) }
+                } else { fingers[k] = v.location }
+                if !multi.contains(k) { pressAt = v.location }
                 // held, then moved off the hold: the pad lifts and follows the finger (its menu goes)
-                guard heldKey == "p\(t).\(i)", !e.isEmpty else { return }
+                guard heldKey == k, !e.isEmpty, !multi.contains(k) else { return }
                 if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padDragStart.value { beginDrag(t, i, at: v.location) }
                 drag?.at = v.location
             }
             .onEnded { v in
+                let k = "p\(t).\(i)"
+                fingers[k] = nil; multi.remove(k)
                 if drag != nil { endDrag(at: v.location) }
-                releaseHold("p\(t).\(i)")
+                releaseHold(k)
             })
         .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
-            guard !store.offline else { return }
+            // (never with another finger down, or one that was while this was pressed: several fingers queue, Scott 2026-11-10)
+            guard !store.offline, !multi.contains("p\(t).\(i)"), fingers.count <= 1 else { return }
             heldKey = "p\(t).\(i)"
             holdAt = pressAt
             launched += 1
