@@ -20,6 +20,9 @@ struct SongPage: View {
     var compact = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The order alone, as the Song tab's Timeline (SLOOP in the Skiff tabs, 2026-11-10): no section keys over it.
+    var lane = false
+
     /// A step in the order, with an identity that survives moves (two blocks can hold the same step).
     struct Slot: Identifiable, Equatable {
         var id = UUID()
@@ -73,7 +76,7 @@ struct SongPage: View {
     static let rowsSpace = "songRows"
     /// Points per bar: the song fills the row's width when it fits on one, never under 30 (then the blocks wrap).
     static let minUnit: CGFloat = 30
-    private var blockHeight: CGFloat { compact ? 96 : Self.blockHeight }
+    private var blockHeight: CGFloat { compact || lane ? 96 : Self.blockHeight }
     private var addWidth: CGFloat { compact ? 44 : Self.addWidth }
     private var minBlock: CGFloat { compact ? 72 : Self.minBlock }
     private var minUnit: CGFloat { compact ? 16 : Self.minUnit }
@@ -99,6 +102,9 @@ struct SongPage: View {
                 .scrollIndicators(.hidden)
                 .frame(minWidth: 0, maxWidth: .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
+            } else if lane {
+                // the Song tab's Timeline (SLOOP in the Skiff tabs): the order alone; the sections are the Pads' side
+                orderPanel
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     SectionsPanel(session: session, ui: ui)
@@ -137,6 +143,19 @@ struct SongPage: View {
 
     private var orderPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // (as the Song tab's Timeline the tool row carries the position, Loop the song and the messages)
+            if !lane { orderHeader }
+            arrangement(width: rowWidth)
+                // minWidth 0: without it the frame is never narrower than the rows it holds, so the rows
+                // could only grow (the phone stayed at the first guess, 900 pt, 2026-11-04)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+        }
+        .padding(lane ? 12 : 16)
+        .panel()
+    }
+
+    @ViewBuilder private var orderHeader: some View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("Song").font(.lupe(22, .semibold))
                     .accessibilityAddTraits(.isHeader)
@@ -157,14 +176,6 @@ struct SongPage: View {
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Capsule().fill(.white.opacity(0.08)))
             }
-            arrangement(width: rowWidth)
-                // minWidth 0: without it the frame is never narrower than the rows it holds, so the rows
-                // could only grow (the phone stayed at the first guess, 900 pt, 2026-11-04)
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-        }
-        .padding(16)
-        .panel()
     }
 
     private func position(_ s: SongState) -> String {

@@ -29,6 +29,18 @@ struct TopBar: View {
                     SongModeKeys(store: store).fixedSize()
                     transport
                 }
+            } else if ui.sloopShell {
+                // SLOOP in the same tabs (2026-11-10): one row as Skiff's, its song mode (Loop · Song) where Skiff's
+                // playback mode sits
+                HStack(spacing: 12) {
+                    connection
+                    project
+                    Spacer(minLength: 12)
+                    tabs
+                    Spacer(minLength: 12)
+                    SloopSongModeKeys(session: session).fixedSize()
+                    transport
+                }
             } else {
                 // the tabs sit in the middle of the bar whatever the two sides hold
                 ZStack {
@@ -207,13 +219,13 @@ struct TopBar: View {
     private var tabs: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                ForEach(ui.songTab ? Page.skiffPadTabs : Page.sloopTabs) { p in
+                ForEach(ui.songTab ? Page.skiffPadTabs : ui.sloopShell ? Page.sloopPadTabs : Page.sloopTabs) { p in
                     let current = ui.page == p
                     Button {
                         ui.page = p
                         Self.driveDevice(session: session, ui: ui, to: p)
                     } label: {
-                        Text(p.title(skiff: ui.songTab))
+                        Text(p.title(skiff: ui.shell))
                             .fontWeight(current ? .semibold : .regular)
                             .foregroundStyle(current ? Theme.text : Theme.textSecondary)
                             .padding(.horizontal, 18)
@@ -253,7 +265,10 @@ struct TopBar: View {
         case .song: session.showOnDevice(page: ScreenMap.of(session).song)
         case .sound:
             if let first = SoundPage.shown(session, ui.soundFamily).first { session.showOnDevice(page: first.fw) }
-        case .mixer: session.showOnDevice(page: ui.mixerSection.page)
+        case .mixer:
+            // SLOOP has no MIXER page: GLO's first page (GLOBAL) stands for Mix
+            if session.dialect == .skiff { session.showOnDevice(page: ui.mixerSection.page) }
+            else if let g = SoundPage.pages(session).first(where: { $0.family == .glo }) { session.showOnDevice(page: g.fw) }
         }
     }
 

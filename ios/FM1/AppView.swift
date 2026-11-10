@@ -48,6 +48,19 @@ struct AppView: View {
                             if let s, !SoundPanelControl.follow(s, session: session, ui: ui) { SkiffNavigator.follow(s, session: session, ui: ui) }
                             return
                         }
+                        // SLOOP in the Song · Mix tabs: a sound button brings the sound panel over the tab, as on Skiff;
+                        // SAVE held (the song layer) shows the sections
+                        if ui.sloopShell, let s {
+                            if SoundPanelControl.follow(s, session: session, ui: ui) { return }
+                            if s.layer == 7, ui.followDevice { ui.songView = .pads }
+                            // GLO's pages are Mix's; SEQ's (NOTES, PATTERN) the Song tab's editor
+                            if ui.followDevice, !s.home, s.layer == 0, s.menu == 0, let p = SoundPage.page(session, fw: s.page),
+                               p.family == .glo || p.family == .seq {
+                                let tab: Page = p.family == .glo ? .mixer : .song
+                                if tab != ui.page { ui.pageFromDevice = true; ui.page = tab }
+                                return
+                            }
+                        }
                         guard ui.followDevice, let s, let tab = SoundPage.tab(for: s, session), tab != ui.page else { return }
                         ui.pageFromDevice = true
                         ui.page = tab
@@ -61,6 +74,10 @@ struct AppView: View {
         .onChange(of: session.isConnected, initial: true) { _, on in if on { everConnected = true } }
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
+        // SLOOP in the same tabs (the SLOOP design pass, 2026-11-10); -sloop-classic keeps the old four tabs, for comparing
+        .onChange(of: session.dialect == .sloop && session.capabilities.contains(.sloopSong), initial: true) { _, on in
+            ui.sloopShell = on && !LaunchArgs.all.contains("-sloop-classic")
+        }
         // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
         // follows the playback mode to the timeline: Pads are the default, the timeline is the user's to pick, 2026-11-09)
         .onChange(of: session.screenLinked && session.deviceScreen?.layer == SkiffButtonMap.performLayer) { _, held in
@@ -98,7 +115,7 @@ extension AppView {
             // its scroll views mid-animation; its playheads pause while it's hidden.
             let onSequencer = ui.page == .sequencer
             // (Skiff has no Sequence page: its Song tab carries the editor)
-            if !ui.songTab {
+            if !ui.shell {
                 SequencerPage(session: session, ui: ui)
                 .opacity(onSequencer ? 1 : 0)
                 .allowsHitTesting(onSequencer)
@@ -125,7 +142,12 @@ extension AppView {
                     }
                 case .song:
                     HStack(alignment: .top, spacing: 16) {
-                        if session.capabilities.contains(.sloopSong) {
+                        if session.capabilities.contains(.sloopSong), ui.sloopShell {
+                            // SLOOP's Song tab in the Skiff layout: its sections as pads or its order as a lane, the editor below
+                            SoundPanelHost(session: session, ui: ui) {
+                                SloopSongPage(session: session, ui: ui)
+                            }
+                        } else if session.capabilities.contains(.sloopSong) {
                             leftColumn {
                                 FunctionPads(session: session, ui: ui)
                                 SongModePanel(session: session)
@@ -201,7 +223,7 @@ extension AppView {
 
     /// How far in from the right the Presets panel sits: clear of the sound panel and the rail when they're there.
     private var presetsRoom: CGFloat {
-        guard ui.soundPanel != nil, ui.songTab, ui.page == .song || ui.page == .mixer else { return 0 }
+        guard ui.soundPanel != nil, ui.shell, ui.page == .song || ui.page == .mixer else { return 0 }
         // (read here, not as @AppStorage: this is an extension of AppView; Settings changes them only between uses)
         let d = UserDefaults.standard
         let showRail = d.object(forKey: SoundButtons.key) as? Bool ?? SoundButtons.standard
@@ -213,7 +235,7 @@ extension AppView {
     }
 
     /// Arrange on Skiff has its own lane headers: no track box over it.
-    private var skiffArrange: Bool { ui.page == .song && session.skiffSong != nil }
+    private var skiffArrange: Bool { ui.page == .song && (session.skiffSong != nil || ui.sloopShell) }
 
     /// The left column under the track box.
     private func leftColumn<C: View>(@ViewBuilder _ content: () -> C) -> some View {

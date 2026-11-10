@@ -18,6 +18,8 @@ enum Page: String, CaseIterable, Identifiable {
     /// (PresetsPanel), opened from SAVE, the track controls' sound key, the sound panel and the menus. The phone keeps
     /// Sounds (skiffTabs) until its Song tab exists.
     static let skiffPadTabs: [Page] = [.song, .mixer]
+    /// SLOOP on the iPad, in the same tabs (2026-11-10, proposed): Song · Mix.
+    static let sloopPadTabs: [Page] = [.song, .mixer]
     /// Whether this is the iPad, where Skiff has no Sounds tab.
     @MainActor static var padHasNoSoundsTab: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     /// A tab's name: Skiff's are Song · Mix · Sounds (2026-11-06).
@@ -50,14 +52,14 @@ final class EditorUI {
         // And there's no Shape tab (Scott, 2026-11-06): whatever asks for Shape brings the button's pages in on the
         // sound panel, over the tab that was up
         didSet {
-            if songTab, page == .sequencer { page = .song }
+            if shell, page == .sequencer { page = .song }
             // the iPad has no Sounds tab on Skiff: whatever asks for it (the FM-1's SAVE, a launch flag) gets the sounds
             // panel over the tab that was up
-            if songTab, page == .library, Page.padHasNoSoundsTab {
+            if shell, page == .library, Page.padHasNoSoundsTab {
                 page = oldValue == .library ? .song : oldValue
                 presetsPanel = true
             }
-            if songTab, page == .sound {
+            if shell, page == .sound {
                 page = oldValue == .sound ? .song : oldValue
                 if SoundPanelControl.families.contains(soundFamily) { soundPanel = SoundPanelState(family: soundFamily) }
             }
@@ -65,7 +67,18 @@ final class EditorUI {
     }
     /// Skiff: the Song tab (Arrange's lanes over the pattern editor) stands for Sequence and Arrange.
     var songTab = false {
-        didSet { if songTab, page == .sequencer || page == .sound || (page == .library && Page.padHasNoSoundsTab) { page = .song } }
+        didSet { if songTab { enterShell() } }
+    }
+    /// SLOOP on the iPad in the Skiff tabs (the SLOOP design pass, 2026-11-10, boards S1–S5): Song · Mix, the sound panel
+    /// for Shape, the sounds panel for Browse, the Song tab holding SLOOP's sections, its order and the editor.
+    var sloopShell = false {
+        didSet { if sloopShell { enterShell() } }
+    }
+    /// The Song · Mix layout, whichever firmware: Skiff's Song tab, or SLOOP's in the same tabs. (`songTab` stays Skiff's
+    /// own: its song store, the pool, its playback mode.)
+    var shell: Bool { songTab || sloopShell }
+    private func enterShell() {
+        if page == .sequencer || page == .sound || (page == .library && Page.padHasNoSoundsTab) { page = .song }
     }
     /// The Song tab as pads (PadsPage.swift) or a timeline. Pads first (Scott, 2026-11-09: the pads are how a song is
     /// built; the timeline is where it's cut). -song-timeline opens on the timeline (screenshots).

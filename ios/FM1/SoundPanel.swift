@@ -52,9 +52,9 @@ enum SoundPanelControl {
     @MainActor static func follow(_ s: UIState, session: DeviceSession, ui: EditorUI) -> Bool {
         // a button the track's engine has no pages for, pressed on the FM-1: nothing in Lupe, on any tab (the FM-1
         // shows what it shows)
-        if ui.songTab, !s.home, s.layer == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family),
+        if ui.shell, !s.home, s.layer == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family),
            SoundPage.shown(session, page.family).isEmpty { return true }
-        guard ui.followDevice, session.screenLinked, ui.songTab else { return false }
+        guard ui.followDevice, session.screenLinked, ui.shell else { return false }
         if s.home { ui.soundPanel = nil; return false }
         guard s.layer == 0, s.menu == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family) else { return false }
         press(page.family, session: session, ui: ui, fromDevice: true)
@@ -79,7 +79,7 @@ enum SoundPanelControl {
         guard session.screenLinked, ui.followDevice else { return }
         switch ui.page {
         case .mixer, .library: TopBar.driveDevice(session: session, ui: ui, to: ui.page)
-        default: if session.deviceScreen?.home != true { session.showOnDevice(page: SkiffButtonMap.home) }
+        default: if session.deviceScreen?.home != true { session.showOnDevice(page: ScreenMap.of(session).home) }
         }
     }
 }

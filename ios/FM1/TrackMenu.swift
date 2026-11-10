@@ -42,7 +42,7 @@ struct TrackMenuLayer: View {
         var g: [[MenuItem]] = []
         // the sound, from here: the sound panel slides out over the page (Scott, 2026-11-08: "Select sound"), not on the
         // Sounds tab, where the browser is the page itself
-        if !(ui.songTab && ui.page == .library) {
+        if !(ui.shell && ui.page == .library) {
             g.append([MenuItem(title: "Select sound", icon: "square.grid.2x2") { ui.chooseSound(session, track: t) }])
         }
         var more: [MenuItem] = []
