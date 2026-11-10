@@ -60,8 +60,11 @@ struct TrackStripCard: View {
                 }
                 .buttonStyle(.plain)
                 .trackMenuPress(session: session, ui: ui, track: t)
-                .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", selected" : "")")
+                // selected as a trait, not words in the label (2026-11-10): VoiceOver says it the system's way, and
+                // the rotor and Switch Control see it
+                .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
+                .accessibilityAddTraits(selected ? .isSelected : [])
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
                 VStack(spacing: 6) {
                     muteKey(muted: muted, staged: staged).frame(height: 32)

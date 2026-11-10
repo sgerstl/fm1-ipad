@@ -604,9 +604,14 @@ struct PadsPage: View {
             openMenu(t, i, at: pressAt)
         })
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[key] = $0 } }   // (the dragged copy isn't the pad's place)
-        .accessibilityValue(waiting && !playing ? "waiting, starts in " + LaneMarks.countdown(m.launchIn, session.launchMode) : "")
         .accessibilityLabel("\(Entries.trackName(t, session: session)), entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
-        .accessibilityValue(e.isEmpty ? "" : state + (held ? ", the held scene goes here" : ""))
+        // one value (2026-11-10: there were two .accessibilityValue modifiers here and only one is ever read, so a
+        // waiting pad's countdown went unsaid): its state, when a waiting one lands, the held scene
+        .accessibilityValue(e.isEmpty ? "" : state
+                            + (waiting && !playing ? ", starts in " + LaneMarks.countdown(m.launchIn, session.launchMode) : "")
+                            + (held ? ", the held scene goes here" : ""))
+        // the selected pad (the editor's) is said, not only drawn in its track's colour (1.3.1, 1.4.1)
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityHint(e.isEmpty ? "Opens a menu: a new pattern, a copy, one from the pool, or a rest"
                            : waiting && session.playing ? "Takes the launch back. Actions: its menu"
                            : session.playing ? "Launches it at the launch point. Actions: its menu" : "Moves the track to it. Actions: its menu")
