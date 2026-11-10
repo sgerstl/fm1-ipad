@@ -220,7 +220,7 @@ public final class DeviceSession {
     func secondsToNextLaunch() -> Double? {
         guard let store = skiffSong, counted.running, bpm > 0 else { return nil }
         let ticks = trackIndices.compactMap { t -> Double? in
-            store.marks(t, launchIn: nil).queued != nil ? ticksToLaunch(t) : nil
+            store.marks(t, launchIn: nil).queued != nil || (store.perform?.staged[safe: t] ?? .none) != .none ? ticksToLaunch(t) : nil
         }
         return ticks.min().map { $0 / 24 * 60 / Double(bpm) }
     }

@@ -461,7 +461,9 @@ public final class SkiffSongStore {
             case .store(let s), .recall(let s): learnScene(s)
             default: break
             }
-            if case .recall = op { soloed = []; mutesBeforeSolo = nil }      // (the scene's mutes now: the solo is over)
+            if case .recall = op { soloed = []; mutesBeforeSolo = nil; soloStaged = [:] }      // (the scene's mutes now: the solo is over)
+            if case .recall(let s) = op, isPlaying() { recallStaged = (s, Set(song?.tracks.indices ?? 0..<0)) }
+            if case .cancel = op { soloStaged = [:]; recallStaged = nil }
             refusal = nil
             return true
         } catch {
@@ -478,6 +480,25 @@ public final class SkiffSongStore {
     /// while playing, as a mute is), and the mutes from before the first solo come back when the last one is let go.
     /// Until a firmware SOLO op exists, a scene stored meanwhile keeps the soloed mutes.
     public private(set) var soloed: Set<Int> = []
+    /// What waits for the launch point because of a key, drawn round that key until it lands (Scott, 2026-11-10): a
+    /// Solo's staged mutes (solo track → the tracks still waiting), a recalled scene's tracks. Only the ones still
+    /// staged; gone when none are.
+    public var soloWaiting: [Int: Set<Int>] { soloStaged.compactMapValues { let w = stillStaged($0); return w.isEmpty ? nil : w } }
+    public var recallWaiting: (scene: Int, tracks: Set<Int>)? {
+        guard let r = recallStaged else { return nil }
+        let w = stillStaged(r.tracks)
+        return w.isEmpty ? nil : (r.scene, w)
+    }
+    private var soloStaged: [Int: Set<Int>] = [:]
+    private var recallStaged: (scene: Int, tracks: Set<Int>)?
+    /// Of `ks`, the tracks with a mute or a launch waiting.
+    public func stillStaged(_ ks: Set<Int>) -> Set<Int> {
+        guard isPlaying() else { return [] }
+        return ks.filter { k in
+            (perform?.staged[safe: k] ?? .none) != .none || launching[k] != nil
+                || (song?.tracks[safe: k]?.staged != nil && marks(k, launchIn: nil).queued != nil)
+        }
+    }
     private var mutesBeforeSolo: [Bool]?
 
     /// A track's mute as it will be: a staged change already counted.
@@ -495,10 +516,11 @@ public final class SkiffSongStore {
         if soloed.contains(t) { soloed.remove(t) } else { soloed.insert(t) }
         let target = soloed.isEmpty ? (mutesBeforeSolo ?? now) : (0..<n).map { !soloed.contains($0) }
         if soloed.isEmpty { mutesBeforeSolo = nil }
-        var ok = true
+        var ok = true, staged: Set<Int> = []
         for k in 0..<n where now[k] != target[k] {
-            if await !performOp(.mute(track: k)) { ok = false }
+            if await !performOp(.mute(track: k)) { ok = false } else { staged.insert(k) }
         }
+        if isPlaying() { soloStaged = soloStaged.filter { !stillStaged($0.value).isEmpty }; soloStaged[t] = staged }
         return ok
     }
 

@@ -65,7 +65,7 @@ struct TrackStripCard: View {
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
                 VStack(spacing: 6) {
                     muteKey(muted: muted, staged: staged).frame(height: 32)
-                    SoloKey(store: store, track: t).frame(height: 32)
+                    SoloKey(store: store, track: t, session: session).frame(height: 32)
                 }
                 .frame(width: 64)
             }
@@ -89,12 +89,13 @@ struct TrackStripCard: View {
             VStack(spacing: 2) {
                 Image(systemName: muted != (staged != .none) ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 18, weight: .semibold))
-                if staged != .none { Text(cd).font(.lupe(11, .semibold)).monospacedDigit().lineLimit(1) }
             }
             .foregroundStyle(muted && staged == .none ? Theme.onColour : Theme.text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none) }
+            .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none,
+                                         left: { session.ticksToLaunch(track) }) }
             .animation(.easeOut(duration: 0.15), value: muted)
+            .animation(.easeOut(duration: 0.2), value: staged)
         }
         .buttonStyle(PressSink())
         .disabled(store.offline)
@@ -184,13 +185,15 @@ struct TrackStripRow: View {
                         Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(muted ? Theme.onColour : Theme.text)
                             .frame(width: 30, height: 34)
-                            .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none) }
+                            .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none,
+                                                         left: { session.ticksToLaunch(t) }) }
+                            .animation(.easeOut(duration: 0.2), value: staged)
                     }
                     .buttonStyle(PressSink())
                     .disabled(store.offline)
                     .accessibilityLabel(muted ? "Unmute" : "Mute")
                     .accessibilityValue(staged == .none ? "" : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
-                    SoloKey(store: store, track: t, compact: true).frame(width: 30, height: 34)
+                    SoloKey(store: store, track: t, compact: true, session: session).frame(width: 30, height: 34)
                 }
             }
             .padding(.horizontal, 8)
@@ -245,16 +248,18 @@ struct BigTrackChip: View {
 }
 
 /// Mute's and Solo's surface (board 43): flat when off (the control grey, no base edge: the page is flat); pressed in
-/// when on (an inner shadow); a change waiting at the launch point, a dashed white edge.
+/// when on (an inner shadow); a change waiting at the launch point, the pads' waiting line round it (LaunchTrace:
+/// Scott, 2026-11-10), light on the flat key, dark on a lit one, so it reads either way.
 struct HeadKeySurface: View {
     let on: Bool
     let onColour: Color
     var staged = false
+    var left: () -> Double? = { nil }
 
     var body: some View {
         RoundedRectangle(cornerRadius: 8)
             .fill(on ? AnyShapeStyle(onColour.shadow(.inner(color: .black.opacity(0.45), radius: 3, y: 2))) : AnyShapeStyle(Theme.control))
-            .overlay { if staged { RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [5, 3])) } }
+            .overlay { if staged { LaunchTrace(left: left, colour: on ? Theme.onColour : Theme.text, radius: 8, width: 2, base: 0.6).transition(.opacity) } }
     }
 }
 
@@ -263,15 +268,20 @@ struct SoloKey: View {
     let store: SkiffSongStore
     let track: Int
     var compact = false
+    var session: DeviceSession? = nil
 
     var body: some View {
         let on = store.soloed.contains(track)
+        // the mutes it staged, until the last of them lands
+        let waits = store.soloWaiting[track] ?? []
         Button { Task { await store.toggleSolo(track) } } label: {
             Text("S").font(.lupe(compact ? 13 : 18, .bold))
                 .foregroundStyle(on ? Theme.onColour : Theme.text)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background { HeadKeySurface(on: on, onColour: Theme.caution) }
+                .background { HeadKeySurface(on: on, onColour: Theme.caution, staged: !waits.isEmpty,
+                                             left: { session.flatMap { s in waits.compactMap { s.ticksToLaunch($0) }.max() } }) }
                 .animation(.easeOut(duration: 0.15), value: on)
+                .animation(.easeOut(duration: 0.2), value: waits.isEmpty)
         }
         .buttonStyle(PressSink())
         .disabled(store.offline)

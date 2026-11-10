@@ -876,7 +876,7 @@ struct PadsPage: View {
         } else if waiting {
             // the time to its launch drawn round it, from the top left corner counter-clockwise; it comes in as the
             // line closes (Scott, 2026-11-10: the outline instead of the numbers)
-            LaunchTrace(session: session, track: t, colour: colour, radius: radius, width: radius < 12 ? 2 : 3, date: date)
+            LaunchTrace(left: { session.ticksToLaunch(t) }, colour: colour, radius: radius, width: radius < 12 ? 2 : 3)
                 .transition(.opacity)       // (closed, it fades as the pad lights: no cut)
         } else if let mark {
             // the selected pad: its track's colour (on a playing pad, filled in that colour, the tint round it says it)
@@ -943,6 +943,15 @@ struct PadsPage: View {
                 else if kept { Chiclet(radius: 8, down: false, edge: true) }
                 else { RoundedRectangle(cornerRadius: 8).strokeBorder(storing ? Theme.text.opacity(0.7) : Theme.stepEmpty, lineWidth: storing ? 1.5 : 1) }
             }
+            // recalled while playing: its line round it until the last of its tracks comes in (dark on the white key)
+            .overlay {
+                if let w = store.recallWaiting, w.scene == s {
+                    LaunchTrace(left: { w.tracks.compactMap { session.ticksToLaunch($0) }.max() },
+                                colour: last ? Theme.onColour : Theme.text, radius: 8, width: 2, base: 0.6)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.2), value: store.recallWaiting?.scene)
             // the whole key takes the touch, and the gaps round it: an empty scene is only an outline, and only drawn
             // pixels are hit, so its inside missed (Scott, 2026-11-09: "hard to hit"), as the empty pads once did
             .contentShape(Rectangle().inset(by: -4))
@@ -973,17 +982,20 @@ struct PadsPage: View {
     }
 }
 
-/// A waiting pad's outline drawn as its launch comes: from the top left corner, counter-clockwise (down the left side
-/// first), closing as it comes in (Scott, 2026-11-10). From the time left when it was staged, read from the counted
-/// clock each frame; under it the whole outline faint, so the shape reads before the line has gone far. No clock
-/// (joined mid-play): the dashed outline it had.
+/// Anything waiting for the launch point, its outline drawn as that comes: from the top left corner, counter-clockwise
+/// (down the left side first), closing as it lands (Scott, 2026-11-10: the pads, then Mute, Solo and the scenes, "the
+/// same pattern for… anything else that waits for the loop"). `left` is the clock ticks to go (nil: no clock); read
+/// each frame, from the time left when it began; under it the whole outline faint, so the shape reads before the line
+/// has gone far. No clock (joined mid-play): a dashed outline. It follows the rounded rectangle it sits in (`radius`).
+/// Reduce Motion: drawn the same (a line growing in place, nothing travels).
 struct LaunchTrace: View {
-    let session: DeviceSession
-    let track: Int
+    let left: () -> Double?
     let colour: Color
     let radius: CGFloat
     let width: CGFloat
-    let date: Date
+    /// The faint whole outline's strength: the pads' 0.3 (Scott's look); the keys 0.6, so their waiting edge is 3:1
+    /// before the line has gone anywhere
+    var base: Double = 0.3
     @State private var from: Double?
     @State private var last: Double = 0
     /// Its line came round: held closed until the list says the pattern is in (read just after the line now), never
@@ -991,14 +1003,14 @@ struct LaunchTrace: View {
     @State private var closed = false
 
     var body: some View {
-        if session.ticksToLaunch(track) == nil {
+        if left() == nil {
             RoundedRectangle(cornerRadius: radius).strokeBorder(colour, style: StrokeStyle(lineWidth: width, dash: [8, 5]))
         } else {
             TimelineView(.animation) { _ in
-                let left = session.ticksToLaunch(track) ?? 0
+                let left = self.left() ?? 0
                 let done = closed ? 1 : from.map { $0 > 0 ? min(1, max(0, 1 - left / $0)) : 1 } ?? 0
                 ZStack {
-                    RoundedRectangle(cornerRadius: radius).strokeBorder(colour.opacity(0.3), lineWidth: width)
+                    RoundedRectangle(cornerRadius: radius).strokeBorder(colour.opacity(base), lineWidth: width)
                     TraceOutline(radius: radius, inset: width / 2).trim(from: 0, to: done)
                         .stroke(colour, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
                 }
@@ -1009,7 +1021,7 @@ struct LaunchTrace: View {
                     last = now
                 }
             }
-            .onAppear { from = session.ticksToLaunch(track); last = from ?? 0 }
+            .onAppear { from = self.left(); last = from ?? 0 }
             .accessibilityHidden(true)
         }
     }
