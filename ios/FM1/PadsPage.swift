@@ -157,6 +157,7 @@ struct PadsPage: View {
                                 session.select(track: k)
                                 showControls(!controlsShown)
                             }
+                            .accessibilitySortPriority(Self.rowOrder(k))
                         }
                     }
                     Spacer(minLength: Self.tabHeight)          // the editor panel's tab, in the scene row's line
@@ -164,6 +165,8 @@ struct PadsPage: View {
                 .frame(width: Self.compactStrip)
                 VStack(spacing: 0) {
                     toolbar(t)
+                        .accessibilityElement(children: .contain)
+                        .accessibilitySortPriority(Self.toolOrder)
                     Color.clear.frame(height: r.top - 44)
                     grid(t, row ? [t] : tracks, r)
                         .frame(height: r.height)
@@ -173,6 +176,9 @@ struct PadsPage: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+            // one container, so the sort priorities above order the heads, the pads and the scenes together
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Pads")
             // each track's lane behind its head and pads (Scott, 2026-11-09, board 41)
             .background(alignment: .topLeading) {
                 if !row { lanes(tracks, r, width: root.size.width) }
@@ -604,7 +610,10 @@ struct PadsPage: View {
             openMenu(t, i, at: pressAt)
         })
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[key] = $0 } }   // (the dragged copy isn't the pad's place)
-        .accessibilityLabel("\(Entries.trackName(t, session: session)), entry \(letter)" + (e.isEmpty ? ", empty" : e.isRest ? ", rest, \(e.reps) times" : ", pattern \(title), \(e.reps) times"))
+        // the track's number with its name (two tracks can share a name: "Drum Kit" on 4 and 6), and "once" for one
+        // pass (2026-11-10)
+        .accessibilityLabel("Track \(t + 1) \(Entries.trackName(t, session: session)), entry \(letter)"
+                            + (e.isEmpty ? ", empty" : (e.isRest ? ", rest, " : ", pattern \(title), ") + (e.reps == 1 ? "once" : "\(e.reps) times")))
         // one value (2026-11-10: there were two .accessibilityValue modifiers here and only one is ever read, so a
         // waiting pad's countdown went unsaid): its state, when a waiting one lands, the held scene
         .accessibilityValue(e.isEmpty ? "" : state
@@ -620,7 +629,17 @@ struct PadsPage: View {
                 Button("Entry menu") { openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero) }
             }
         }
+        // read row by row, each after its track's head (see `rowOrder`)
+        .accessibilitySortPriority(Self.rowOrder(t, pad: i))
     }
+
+    /// VoiceOver's order on the grid (2026-11-10): the tool row, then each track's head and its pads, row by row, then
+    /// the scenes. The heads and the pads are two stacks side by side, so VoiceOver read all six heads, then the tool
+    /// row, the scenes and only then the pads, far from their heads. Higher goes first.
+    static func rowOrder(_ track: Int, pad: Int? = nil) -> Double {
+        1000 - Double(track) * 20 - (pad.map { 1 + Double($0) * 0.01 } ?? 0)
+    }
+    static let toolOrder: Double = 2000
 
     /// The finger lifted: a hold's flag outlives the tap it drops by a moment, then goes (a hold that made no tap
     /// mustn't swallow the next one).
