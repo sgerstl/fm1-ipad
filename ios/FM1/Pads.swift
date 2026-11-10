@@ -88,7 +88,7 @@ struct FunctionPads: View {
         case .rec: return session.recording
         case .home: return ui.shell ? ui.soundPanel == nil && session.deviceScreen?.home == true : ui.page == .sequencer
         case .save: return ui.presetsPanel || ui.projectsOpen || ui.page == .library || (ui.page == .song && (!ui.shell || ui.poolOpen))
-        case .glo where session.dialect == .skiff: return ui.page == .mixer
+        case .glo where session.dialect == .skiff || ui.shell: return ui.page == .mixer
         case .seq:
             if session.screenLinked, let s = session.deviceScreen { return !s.home && [ScreenMap.of(session).notes, ScreenMap.of(session).pattern].contains(s.page) && ui.page != .library }
             return ui.page == .sound && ui.soundFamily == .seq
@@ -172,6 +172,13 @@ struct FunctionPads: View {
         default:
             guard let f = pad.family else { return }
             // the Mixer tab keeps its place: the button's pages come in on the sound panel, as from its rail
+            // SLOOP in the Song · Mix tabs: GLO's pages are Mix's (Skiff's GLO has its own case above)
+            if ui.shell, f == .glo {
+                ui.soundPanel = nil
+                ui.page = .mixer
+                if session.screenLinked, ui.followDevice, let g = SoundPage.reached(session, .glo).first { session.showOnDevice(page: g.fw) }
+                return
+            }
             if ui.shell, SoundPanelControl.families.contains(f) {
                 SoundPanelControl.press(f, session: session, ui: ui)
                 return

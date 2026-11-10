@@ -419,7 +419,7 @@ struct SloopPads: View {
                     }
                 }
             }
-            .foregroundStyle(lit ? Theme.onColour : st == .empty ? Theme.textTertiary : Theme.text)
+            .foregroundStyle(lit ? Theme.onColour : st == .empty ? Theme.textSecondary : Theme.text)   // (empty: 4.5:1 on the well at 13 pt)
             .padding(.leading, st == .empty || lit ? 14 : 18).padding(.top, compact ? 6 : 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background { face(st, colour: colour) }
@@ -443,7 +443,8 @@ struct SloopPads: View {
                 if session.playing { BarProgress(session: session).padding(.horizontal, 12).padding(.bottom, 12) }
             }
         } else if st == .empty {
-            r.fill(Theme.well).overlay(r.strokeBorder(Theme.control, lineWidth: 1))
+            // its edge in the tertiary grey (3.9:1 on the well; the control grey was 1.25:1, under 1.4.11's 3:1)
+            r.fill(Theme.well).overlay(r.strokeBorder(Theme.textTertiary, lineWidth: 1))
         } else {
             // stored: the control grey, its colour as the band down its edge (the lanes' band, board 41)
             r.fill(Theme.control).overlay(alignment: .leading) {
