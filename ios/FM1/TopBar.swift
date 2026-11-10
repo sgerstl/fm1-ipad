@@ -488,7 +488,7 @@ private struct ReadoutLabel: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : $0 == "Loop" ? "Loop entry" : $0 == "Song" ? "Play song" : $0 == "Once" ? "Play once" : "Song mode" },
+        .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
                              session.playing ? "bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "stopped",
                              "\(session.bpm) BPM"].compactMap { $0 }.joined(separator: ", "))
     }
