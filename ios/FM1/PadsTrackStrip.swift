@@ -193,7 +193,7 @@ struct TrackStripRow: View {
                     .disabled(store.offline)
                     .accessibilityLabel(muted ? "Unmute" : "Mute")
                     .accessibilityValue(staged == .none ? "" : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
-                    SoloKey(store: store, track: t, compact: true, session: session).frame(width: 30, height: 34)
+                    SoloKey(store: store, track: t, compact: true).frame(width: 30, height: 34)
                 }
             }
             .padding(.horizontal, 8)
@@ -268,7 +268,7 @@ struct SoloKey: View {
     let store: SkiffSongStore
     let track: Int
     var compact = false
-    var session: DeviceSession? = nil
+    var session: DeviceSession? = nil        // (else the app's: TrackColours.session)
 
     var body: some View {
         let on = store.soloed.contains(track)
@@ -279,7 +279,7 @@ struct SoloKey: View {
                 .foregroundStyle(on ? Theme.onColour : Theme.text)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background { HeadKeySurface(on: on, onColour: Theme.caution, staged: !waits.isEmpty,
-                                             left: { session.flatMap { s in waits.compactMap { s.ticksToLaunch($0) }.max() } }) }
+                                             left: { (session ?? TrackColours.session).flatMap { s in waits.compactMap { s.ticksToLaunch($0) }.max() } }) }
                 .animation(.easeOut(duration: 0.15), value: on)
                 .animation(.easeOut(duration: 0.2), value: waits.isEmpty)
         }
