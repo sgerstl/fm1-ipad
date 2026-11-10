@@ -305,31 +305,47 @@ struct FanMenu: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var out = false
 
-    static let width: CGFloat = 240, height: CGFloat = 56, gap: CGFloat = 12
+    static let width: CGFloat = 240, height: CGFloat = 56, gap: CGFloat = 12, margin: CGFloat = 12
+
+    /// How many buttons go in a column: all of them where they fit the layer's height; otherwise they wrap into
+    /// columns side by side (the phone, 393 pt tall, fits five), balanced so the columns are as even as they can be.
+    static func rows(_ n: Int, in height: CGFloat) -> Int {
+        let fit = max(1, Int((height - 2 * margin + gap) / (Self.height + gap)))
+        guard n > fit else { return max(1, n) }
+        let cols = (n + fit - 1) / fit
+        return (n + cols - 1) / cols
+    }
 
     var body: some View {
-        let n = CGFloat(items.count)
-        let total = n * Self.height + max(0, n - 1) * Self.gap
-        let x = hand.menuX(touch: at.x, menuWidth: Self.width, in: layer.width)
+        let rows = Self.rows(items.count, in: layer.height)
+        let cols = (items.count + rows - 1) / rows
+        let w = CGFloat(cols) * Self.width + CGFloat(cols - 1) * Self.gap
+        let total = CGFloat(rows) * Self.height + CGFloat(max(0, rows - 1)) * Self.gap
+        let x = hand.menuX(touch: at.x, menuWidth: w, in: layer.width)
         let y = Handedness.menuY(touch: at.y, menuHeight: total, in: layer.height)
         ZStack(alignment: .topLeading) {
             Color.clear.allowsHitTesting(false)
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.offset) { k, item in
-                    let top = y + CGFloat(k) * (Self.height + Self.gap)
-                    // from the finger to its place
-                    let dx = at.x - (x + Self.width / 2), dy = at.y - (top + Self.height / 2)
-                    button(item, first: k == 0)
-                        .padding(.vertical, Self.gap / 2)
-                        .contentShape(Rectangle())          // the gaps take the touch too
-                        .offset(x: out || reduceMotion ? 0 : dx, y: out || reduceMotion ? 0 : dy)
-                        .scaleEffect(out || reduceMotion ? 1 : 0.3)
-                        .opacity(out ? 1 : 0)
-                        .animation(reduceMotion ? .easeOut(duration: 0.15)
-                                   : .timingCurve(0.2, 0.8, 0.2, 1, duration: Labs.menuOpen.value).delay(Double(k) * 0.03), value: out)
+            HStack(alignment: .top, spacing: Self.gap) {
+                ForEach(0..<cols, id: \.self) { c in
+                    VStack(spacing: 0) {
+                        ForEach(Array(items.enumerated()).filter { $0.offset / rows == c }, id: \.offset) { k, item in
+                            let left = x + CGFloat(c) * (Self.width + Self.gap)
+                            let top = y + CGFloat(k % rows) * (Self.height + Self.gap)
+                            // from the finger to its place
+                            let dx = at.x - (left + Self.width / 2), dy = at.y - (top + Self.height / 2)
+                            button(item, first: k == 0)
+                                .padding(.vertical, Self.gap / 2)
+                                .contentShape(Rectangle())          // the gaps take the touch too
+                                .offset(x: out || reduceMotion ? 0 : dx, y: out || reduceMotion ? 0 : dy)
+                                .scaleEffect(out || reduceMotion ? 1 : 0.3)
+                                .opacity(out ? 1 : 0)
+                                .animation(reduceMotion ? .easeOut(duration: 0.15)
+                                           : .timingCurve(0.2, 0.8, 0.2, 1, duration: Labs.menuOpen.value).delay(Double(k) * 0.03), value: out)
+                        }
+                    }
+                    .frame(width: Self.width)
                 }
             }
-            .frame(width: Self.width)
             .closesOnOutsideTouch(close)
             .offset(x: x, y: y - Self.gap / 2)
             .accessibilityElement(children: .contain)

@@ -10,7 +10,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 - **Launch key:** in the top bar.
 - **Sound panel:** comes in from the right, with Settings › Sound buttons' rail.
 
-The iPad is meant to be unchanged.
+The iPad is meant to be unchanged. A pad's hold menu wraps into a second column where its buttons don't fit the screen's height (the phone); on the iPad they always fit, so it stays one column.
 
 **Setup:** FM-1 on Skiff-Lupe firmware · Lupe from this branch, on an iPhone (landscape) and on the iPad · USB cable · a song with a few entries on several tracks.
 **Back up first?** No. Nothing here writes the FM-1's flash: launches, mutes, scenes, Launch at and the mixer are live settings. (If you tap Store on a scene, that keeps the scene in the FM-1's PERFORM state, as on the iPad.)
@@ -30,11 +30,10 @@ The iPad is meant to be unchanged.
 | 11 | Press **FX** on the FM-1 while on Pads. Then press **HOME**. | The sound panel slides in from the right over the pads, with FX's pages for the selected track and the FM-1's 12 keys at its foot. HOME closes it. | – | ☐ pass ☐ fail: |
 | 12 | iPhone: ⋯ › **Settings…** (new on the phone) › **Sound buttons** on. Back on the phone, tap ENV on the rail, then SEQ. | A column of keys down the right edge: FX, SEL, ENV, LFO, EDIT, ARP and SEQ, all reachable, with the top bar still in place. ENV brings its panel in. SEQ goes to Edit. | – | ☐ pass ☐ fail: |
 | 13 | Hold **ARP** on the FM-1 (PERFORM) while on Mix, then let go. | Lupe shows Pads while it's held, then goes back to Mix. | – | ☐ pass ☐ fail: |
-| 14 | iPhone, Pads: hold a filled pad, pick **Edit pattern**. Then tap Bar to open its menu. | Lupe goes to Edit on that pad's pattern. The Launch menu's grey title ("Launch at") reads clearly: it's a shade lighter in every menu now, on the iPad too (contrast fix). | – | ☐ pass ☐ fail: |
+| 14 | iPhone, Pads: hold a filled pad on track 1. Look at the buttons, then pick **Edit pattern**. Then tap Bar to open its menu. | The pad's buttons fit the screen in two columns (Edit pattern first, top left), none cut off at the bottom. Lupe goes to Edit on that pad's pattern. The Launch menu's grey title ("Launch at") reads clearly: it's a shade lighter in every menu now, on the iPad too (contrast fix). | – | ☐ pass ☐ fail: |
 | 15 | iPad, same FM-1: open Lupe and tap through Song, Mix and Sounds. Open the mixer and an effect card. | As before: Song with the Pads grid and the tool row, Mix with six strips over the carousel. The rail, if it's on, looks as it did. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs skiff-sim, VoiceOver or a later round):
-- **Known, not fixed:** a pad's hold menu (the fan of buttons) runs off the bottom of the phone, with "Select sound" half cut and more below. A follow-up.
 - **Checked in the simulator only:**
   - All of the above, against the Skiff demo on the "A11y iPhone" simulator (iPhone 17, 44 pt rows).
   - The smallest phones (iPhone 16e and SE class): the rows drop to 40 there. Not checked.
