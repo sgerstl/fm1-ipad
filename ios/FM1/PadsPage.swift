@@ -350,7 +350,7 @@ struct PadsPage: View {
         let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
         // on a lane the box hangs straight off its edge (Scott, 2026-11-09: one strip); at Max, no lane, a gap
         let drop = row ? Labs.padControlsGap.value : laneBleed
-        let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
+        let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session))
         // above where it fits inside the page (Scott, 2026-11-09: above by default), else below (the top row)
         let fitsDown = frame.maxY + drop + tab.height <= area.height + room.below
         let fitsUp = frame.minY - drop - tab.height >= -room.above
@@ -380,7 +380,7 @@ struct PadsPage: View {
                 LaneTabShape(box: CGRect(origin: s.knobsAt, size: s.tab), earL: s.earL, earR: s.earR, r: TrackKnobBox.outerRadius, up: s.up)
                     .fill(SelectionTint.fill(t))
                 TrackKnobBox(session: session, ui: ui, embedded: true)
-                    .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
+                    .frame(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session), alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
             } else {
                 // Max: no lane, the tab floats over the editor with its shadow (its shape is under the pads)
@@ -389,7 +389,7 @@ struct PadsPage: View {
                     .elevationShadow(.held)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
                 TrackKnobBox(session: session, ui: ui, embedded: true)
-                    .frame(width: TrackKnobBox.width, height: TrackKnobBox.height, alignment: .topLeading)
+                    .frame(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session), alignment: .topLeading)
                     .offset(x: s.knobsAt.x, y: s.knobsAt.y)
             }
         }
@@ -547,6 +547,7 @@ struct PadsPage: View {
                         Text(title).font(.lupeNumber(e.isRest ? 12 : 17, .bold)).monospacedDigit()
                             .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
                     }
+                    PadMarks(marks: padMarks(e), ink: ink, boxed: false)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 8)
@@ -562,6 +563,8 @@ struct PadsPage: View {
                     Text(letter).font(.lupe(small ? 13 : 15, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
                     Spacer(minLength: 4)
                 }
+                // the pattern's marks in the top right corner: motion, its direction, the pad's own sound (board 46 d)
+                .overlay(alignment: .topTrailing) { if !tiny { PadMarks(marks: padMarks(e), ink: ink, boxed: true) } }
                 if !title.isEmpty {
                     Text(title).font(.lupeNumber(side > 150 ? 38 : tiny ? (e.isRest ? 13 : 19) : small ? 23 : 28, .bold)).monospacedDigit()
                         .foregroundStyle(e.isRest ? Theme.textSecondary : ink)
@@ -666,6 +669,25 @@ struct PadsPage: View {
 
     /// The pad under a point (global) in a track's row: a drag rearranges one track's list, never across rows.
     private func pad(at p: CGPoint, track: Int) -> Int? { padFrames.first { $0.key.track == track && $0.value.contains(p) }?.key.entry }
+
+    /// What a pad's pattern carries, as marks (Scott, 2026-11-10, board 46 d): recorded motion, a direction other than
+    /// forward (both the pattern's), and its own sound (the pad's). Known from the pattern's picture: the track's own
+    /// while it's on it, the pool's for the rest.
+    private func padMarks(_ e: SongEntry) -> [PadMark] {
+        guard !e.isEmpty else { return [] }
+        var m: [PadMark] = []
+        if let p = e.poolIndex, let th = ui.padThumbs[p] {
+            if th.motion > 0 { m.append(PadMark(symbol: "waveform.path", spoken: "recorded motion")) }
+            switch th.direction {
+            case 1: m.append(PadMark(symbol: "arrow.left", spoken: "plays backwards"))
+            case 2: m.append(PadMark(symbol: "arrow.left.arrow.right", spoken: "plays ping-pong"))
+            case 3: m.append(PadMark(symbol: "shuffle", spoken: "plays in random order"))
+            default: break
+            }
+        }
+        if e.sound != nil { m.append(PadMark(symbol: "music.note", spoken: "its own sound")) }
+        return m
+    }
 
     /// Where the dragged pad would land: the pad under the finger, or past the list's end the first empty one after it.
     private func landing(of d: PadDrag) -> Int? {
@@ -1042,5 +1064,25 @@ struct TraceOutline: Shape {
         p.addArc(tangent1End: CGPoint(x: r.maxX, y: r.minY), tangent2End: CGPoint(x: r.minX, y: r.minY), radius: c)
         p.addLine(to: CGPoint(x: r.minX + c, y: r.minY))
         return p
+    }
+}
+
+struct PadMark: Hashable { let symbol: String; let spoken: String }
+
+/// A pad's marks: 20 pt outlined squares with the symbol (full size), or bare symbols after the number (Half). Dark ink
+/// on a playing pad, light on the others (the pad's own ink). Read with the pad (its value), so hidden here.
+struct PadMarks: View {
+    let marks: [PadMark]
+    let ink: Color
+    var boxed = true
+    var body: some View {
+        HStack(spacing: boxed ? 3 : 4) {
+            ForEach(marks, id: \.self) { m in
+                Image(systemName: m.symbol).font(.system(size: boxed ? 10 : 11, weight: .bold)).foregroundStyle(ink)
+                    .frame(width: boxed ? 20 : nil, height: boxed ? 20 : nil)
+                    .overlay { if boxed { RoundedRectangle(cornerRadius: 6).strokeBorder(ink.opacity(0.85), lineWidth: 1.5) } }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

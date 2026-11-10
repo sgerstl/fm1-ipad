@@ -267,6 +267,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         p.arpMode = first("MODE", in: track) ?? p.arpMode              // ARP's MODE comes first
         p.direction = first("DIR", in: track)
         p.swing = first("SWING", in: track, after: p.length)           // the PATTERN page's, after ARP's
+        p.slicer = first("SLICER", in: track); p.duck = first("BY", in: track); p.follow = first("FOLLOW", in: track)
         p.insertType = nil; p.envSync = nil                            // SLOOP's screen rules: not Skiff's
         p.bpm = first("BPM", in: globals) ?? 0
         p.globalSwing = first("SWING+", in: globals) ?? 1

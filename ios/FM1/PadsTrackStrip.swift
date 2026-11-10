@@ -20,6 +20,7 @@ struct TrackStripCard: View {
         let perf = store.perform
         let muted = perf?.muted[safe: t] ?? session.tracks[t].mute
         let staged = perf?.staged[safe: t] ?? PerformState.Staged.none
+        let chips = TrackChips.of(session, t)
         return TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             let m = store.marks(t, launchIn: session.ticksToLaunch(t))
             let lines = Self.lines(list, m, playing: session.playing, launch: session.launchMode)
@@ -33,7 +34,7 @@ struct TrackStripCard: View {
                             BigTrackChip(track: t, muted: muted, side: 44)
                             VStack(alignment: .leading, spacing: 2) {
                                 EntryTitle(list: list)
-                                if parts.count > 1 {
+                                if parts.count > 1, chips.isEmpty {     // (with chips: the playing pad says the pass)
                                     Text(parts.dropFirst().joined(separator: " ")).font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                                 }
                             }
@@ -67,7 +68,22 @@ struct TrackStripCard: View {
                     muteKey(muted: muted, staged: staged).frame(height: 32)
                     SoloKey(store: store, track: t, session: session).frame(height: 32)
                 }
-                .frame(width: 64)
+                // its effects as chips stacked between the words and the keys, the keys 44 wide beside them (Scott,
+                // 2026-11-10, board 46): three fit the head's height, more and the third is "+N"
+                .frame(width: chips.isEmpty ? 64 : 44)
+                .padding(.leading, chips.isEmpty ? 0 : Self.chipColumn(chips) + 6)
+                .overlay(alignment: .topLeading) {
+                    if !chips.isEmpty {
+                        let f = TrackChips.fit(chips, max: 3)
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(f.shown) { c in
+                                ChipView(chip: c) { TrackChips.open(c, track: t, session: session, ui: ui) }.frame(maxWidth: Self.chipColumn(chips), alignment: .leading)
+                            }
+                            if !f.more.isEmpty { MoreChips(chips: f.more) { TrackChips.open($0, track: t, session: session, ui: ui) } }
+                        }
+                        .frame(width: Self.chipColumn(chips), alignment: .leading)
+                    }
+                }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)      // (8 top and bottom: the tag's even inset)
             .frame(maxWidth: .infinity, minHeight: 86, maxHeight: .infinity, alignment: .topLeading)   // (as tall as its row of pads)
@@ -81,6 +97,13 @@ struct TrackStripCard: View {
                 }
             }
         }
+    }
+
+    /// The chips' column: as wide as its widest chip, 60 at most (the words beside it keep the rest).
+    static func chipColumn(_ cs: [EffectChip]) -> CGFloat {
+        let f = TrackChips.fit(cs, max: 3)
+        let w = f.shown.map { ChipView.estimate($0, .small) }.max() ?? 0
+        return min(60, max(w, f.more.isEmpty ? 0 : ChipView.plusWidth(.small)))
     }
 
     private func muteKey(muted: Bool, staged: PerformState.Staged) -> some View {
@@ -180,6 +203,9 @@ struct TrackStripRow: View {
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
+                // its effects: no room for words on one line, so their count, a menu of them (board 46)
+                let chips = TrackChips.of(session, t)
+                if !chips.isEmpty { MoreChips(chips: chips, countOnly: true) { TrackChips.open($0, track: t, session: session, ui: ui) } }
                 HStack(spacing: 2) {
                     Button { Task { await store.performOp(.mute(track: t)) } } label: {
                         Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 13, weight: .semibold))

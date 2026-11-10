@@ -29,6 +29,11 @@ struct TrackKnobBox: View {
     /// Its corners on a tab: the tiles' 6 and the 8 pt inset round them (outer = inner + inset), so the tint runs an
     /// even width round every tile (Scott, 2026-11-09).
     static let outerRadius: CGFloat = 6 + 8
+    /// Taller by a row of chips while the selected track has an effect applied (Scott, 2026-11-10, board 46).
+    static let chipRow: CGFloat = 22 + 4
+    @MainActor static func height(for session: DeviceSession) -> CGFloat {
+        height + (TrackChips.of(session, session.selectedTrack).isEmpty ? 0 : chipRow)
+    }
     /// KnobSpec.all's LEVEL, STEPS, PAN (0 is SWING, global).
     static let knobs = 1..<4
 
@@ -61,7 +66,10 @@ struct TrackKnobBox: View {
     var body: some View {
         let t = session.selectedTrack
         let home = Self.homeIDs(session)
+        let chips = TrackChips.of(session, t)
         VStack(alignment: .leading, spacing: 4) {
+            // the track's effects in a row above the tiles, as many as fit, the last "+N" (board 46)
+            if !chips.isEmpty { ChipRow(session: session, ui: ui, track: t, chips: chips, width: Self.width - 16) }
             // HOME's four as the columns everywhere else (Scott, 2026-11-06), the track's colour, numbered as the FM-1's
             // knobs; a slide turns one, as on every column (the way Settings says), and it turns that knob's parameter on the FM-1 too
             if !home.isEmpty {
@@ -92,7 +100,7 @@ struct TrackKnobBox: View {
         .environment(\.compactColumns, true)
         .padding(.horizontal, embedded ? 8 : 6)
         .padding(.vertical, 8)
-        .frame(height: Self.homeIDs(session).isEmpty ? 72 : Self.height)
+        .frame(height: (Self.homeIDs(session).isEmpty ? 72 : Self.height) + (chips.isEmpty ? 0 : Self.chipRow))
         .background { if !embedded { RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held) } }
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .flashRing(ui, .trackPanel)
@@ -154,8 +162,7 @@ struct CloseControlsKey: View {
                 Color.clear
                 Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.text)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(Theme.control))
-                    .overlay(Circle().strokeBorder(Theme.textSecondary.opacity(0.6), lineWidth: 1))
+                    .background(Circle().fill(Theme.control))      // (no ring: Scott, 2026-11-10, subtler; × 12.9:1 on it)
             }
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())

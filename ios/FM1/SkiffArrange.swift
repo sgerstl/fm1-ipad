@@ -297,7 +297,7 @@ struct SkiffArrangePage: View {
                 let laneTop = 24 + gap + CGFloat(t) * (h + gap)
                 let bx = CGFloat(b.start / SongPlacement.ticksPerBar) * barWidth + 2
                 let bw = max(8, CGFloat(b.length / SongPlacement.ticksPerBar) * barWidth - 4)
-                let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height)
+                let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session))
                 let up = laneTop - tab.height >= 0
                 let right = bx + tab.width > contentWidth
                 let x = right ? max(0, bx + bw - tab.width) : bx
@@ -335,7 +335,7 @@ struct SkiffArrangePage: View {
             let below = top + laneHeight + 4
             // under the row unless that runs well past the last lane (over the divider is fine): above it, it rose
             // over the ruler on short lanes (Scott, 2026-11-07, Clarinet on T3)
-            let down = below + TrackKnobBox.height <= total + 24
+            let down = below + TrackKnobBox.height(for: session) <= total + 24
             // a sound panel over the page: the box steps left of it, so it stays in view (2026-11-06), and hangs free
             let panel = ui.soundPanel != nil
             // a tab of the selected row's own colour, hanging from its right end (above it on the last rows): the knobs
@@ -343,7 +343,7 @@ struct SkiffArrangePage: View {
             TrackKnobBox(session: session, ui: ui, embedded: true)
                 .background { RowTab(down: down, flushRight: !panel).fill(SelectionTint.fill(t)) }
                 .offset(x: panel ? -(SoundPanel.width + 12) : 0,
-                        y: down ? below : max(0, top - 4 - TrackKnobBox.height))
+                        y: down ? below : max(0, top - 4 - TrackKnobBox.height(for: session)))
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
         }
     }

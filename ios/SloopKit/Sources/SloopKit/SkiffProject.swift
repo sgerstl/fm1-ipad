@@ -347,12 +347,18 @@ public struct SkiffPatternSketch: Equatable, Sendable {
     }
     public var length: Int
     public var steps: [Step]
+    /// DIR (0 FWD, 1 REV, 2 PING, 3 RAND) and how many motion records it carries (bank.c bk_pack_raw: r[6], r[7]):
+    /// the pad's marks (Scott, 2026-11-10, board 46 d).
+    public var direction = 0
+    public var motion = 0
     public var drums: Bool { steps.contains { $0.hits > 0 } }
 
     /// From an 888-byte record (version 1, 2 or 3; 0 and others: nil).
     public init?(record r: [UInt8]) {
         guard r.count >= 8 + 64 * 9, [1, 2, 3].contains(r[0]) else { return nil }
         length = max(1, min(64, Int(r[2]) - 64))
+        direction = max(0, min(3, Int(r[6]) - 64))
+        motion = Int(r[7] & 127)
         steps = (0..<64).map { i in
             let b = Array(r[(8 + 9 * i)..<(8 + 9 * i + 9)])
             let n = Int(b[4] & 7), time = Int(b[4] >> 3) & 3

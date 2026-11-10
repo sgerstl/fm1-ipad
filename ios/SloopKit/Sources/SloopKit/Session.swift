@@ -19,6 +19,7 @@ public struct TrackState: Equatable, Sendable {
     public var transpose = 0        // P_TRN, semitones
     public var chord = 0            // P_CHORD: 0 OFF
     public var arpMode = 0          // P_AMODE: 0 OFF
+    public var slicer = 0, duck = 0, follow = 0     // Skiff: SLICER, DUCK's BY, FOLLOW (0 OFF): the head's chips
     public var length = 16          // P_SLEN
     public var division = 2         // P_SDIV, 1/16
     public var pan = 0
@@ -1059,6 +1060,9 @@ public final class DeviceSession {
             case ids.swing: tr.swing = v
             default: break
             }
+            if id == ids.slicer { tr.slicer = v }
+            if id == ids.duck { tr.duck = v }
+            if id == ids.follow { tr.follow = v }
         }
         if tr != tracks[t] { tracks[t] = tr }
     }

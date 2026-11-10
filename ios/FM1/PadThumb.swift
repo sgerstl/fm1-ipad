@@ -12,6 +12,9 @@ struct PadThumb: Equatable {
     var drums: Bool
     /// 0...1 a column's height (drums) or pitch (synth); nil: nothing there.
     var columns: [Double?]
+    /// The pattern's DIR and its motion records (the pad's marks, board 46 d): the track's while it's on it, else the pool's.
+    var direction = 0
+    var motion = 0
 
     @MainActor static func of(_ tr: TrackState, drums: Bool) -> PadThumb {
         let n = max(1, min(tr.length, tr.steps.count))
@@ -69,7 +72,7 @@ struct PadThumb: Equatable {
         // a picture drawn live wins over the stored one (an edit can still be waiting for flash): the pool fills in the
         // missing, and replaces one only where that pattern itself changed in the pool (a new one, a project opened)
         for (p, r) in recs where !live.contains(p) && (ui.padThumbs[p] == nil || sig[p] != poolSeen[safe: p]) {
-            if let s = SkiffPatternSketch(record: r) { ui.padThumbs[p] = of(s) }
+            if let s = SkiffPatternSketch(record: r) { var th = of(s); th.direction = s.direction; th.motion = s.motion; ui.padThumbs[p] = th }
         }
         if poolSeen.count != 64 { poolSeen = Array(repeating: "", count: 64) }
         for c in chunks { for k in 0..<4 { poolSeen[4 * c + k] = sig[4 * c + k] } }
@@ -80,7 +83,8 @@ struct PadThumb: Equatable {
     @MainActor static func learn(_ session: DeviceSession, _ store: SkiffSongStore, _ ui: EditorUI) {
         for k in session.trackIndices {
             guard let p = store.song?.tracks[safe: k]?.patternOn, k < session.tracks.count else { continue }
-            let th = of(session.tracks[k], drums: session.isKit(k))
+            var th = of(session.tracks[k], drums: session.isKit(k))
+            th.direction = session.tracks[k].direction; th.motion = session.motion[k]?.recorded ?? 0
             if ui.padThumbs[p] != th { ui.padThumbs[p] = th }
         }
     }

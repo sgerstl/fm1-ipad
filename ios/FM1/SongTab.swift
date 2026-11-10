@@ -110,7 +110,7 @@ struct SkiffSongPage: View {
                 // above the page and was cut (Scott, 2026-11-08). At Max on Pads the selected pad's track controls
                 // hang down over the editor (no room above or below a single row), so there the foot gives way and
                 // the pads draw over the panel (Scott, 2026-11-09: open stays open at every size)
-                .mask(alignment: .bottom) { Rectangle().padding(.top, -24).padding(.bottom, overEditor ? -(TrackKnobBox.height + 40) : 0) }
+                .mask(alignment: .bottom) { Rectangle().padding(.top, -24).padding(.bottom, overEditor ? -(TrackKnobBox.height(for: session) + 40) : 0) }
                 .zIndex(overEditor ? 1 : 0)
                 // shut, a swipe up from the foot of the page brings the editor back (beside the scene keys' taps)
                 .simultaneousGesture(DragGesture(minimumDistance: 12, coordinateSpace: .local)
