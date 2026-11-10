@@ -23,6 +23,7 @@ struct RootView: View {
     @State private var firmware = FirmwareCentre()
 
     init() {
+        Labs.migrate()          // values under merged keys carry over (2026-11-10, the motion options cleaned up)
         let demo = LaunchArgs.all.contains("-demo")
         let s = DeviceSession(demo: demo, skiff: DeviceSession.launchedSkiffDemo)
         _session = State(initialValue: s)
@@ -65,6 +66,8 @@ struct RootView: View {
         .overlay { TempoOverlay(session: session, ui: ui) }
         .overlay { AppMenuLayer(menu: $ui.menu) }
         .modifier(SaveSoundPrompt(session: session, ui: ui))
+        .overlay { TextPromptLayer(prompt: $ui.textPrompt) }
+        .background(TouchPointWatch())               // where a confirm a gesture didn't open opens: the last finger
         .overlay { FirmwareLayer(centre: firmware, session: session) }    // installing firmware: over everything
         // Lupe's intro on every cold launch, over the app, which starts (and connects) underneath it
         .overlay { if !introOver { LaunchIntro { introOver = true } } }

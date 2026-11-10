@@ -315,9 +315,11 @@ struct PatternBin: View {
     var drawer = false
     /// Where a pattern's own menu opens (Empty, Clear: the drawer's SAVE > PATTERNS housekeeping); nil: no menu.
     var ui: EditorUI? = nil
-    @State private var confirmClear = false
-    /// A one-pattern change waiting on its confirm: POOL op 1 (Clear) or 2 (Empty), and the pattern 0…63.
-    @State private var pending: (op: Int, p: Int)?
+    /// Where the confirms open (Lupe's own, in place, never a system dialog: Scott, 2026-11-10), when `ui` isn't given
+    /// because the bin has no per-pattern menus.
+    var host: EditorUI? = nil
+    private var menus: EditorUI? { ui ?? host }
+    @State private var clearKeyFrame: CGRect = .zero
 
     /// Pattern (0...63) → the tracks whose lists name it.
     private var tracksOf: [Int: [Int]] {
@@ -389,24 +391,13 @@ struct PatternBin: View {
             .buttonStyle(PressSink())
             .disabled((pool?.free ?? 0) == 0 || store.busy || store.offline)
             if (pool?.free ?? 0) == 0 { Text("All 64 patterns are taken. Clear unused ones to make one.").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
-            Button { confirmClear = true } label: {
+            Button { askClearUnused(pool?.unused ?? 0) } label: {
                 Text("Clear \(pool?.unused ?? 0) unused…").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.plain)
             .disabled((pool?.unused ?? 0) == 0 || session.playing || store.busy || store.offline)
-            .confirmationDialog("Clear \(pool?.unused ?? 0) unused patterns?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Clear \(pool?.unused ?? 0) patterns", role: .destructive) { Task { _ = await store.clearUnused() } }
-            } message: {
-                Text("Patterns no list and no saved project uses. This can't be undone.")
-            }
-            .alert(pendingTitle, isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), presenting: pending) { x in
-                Button(x.op == 1 ? "Clear pattern" : "Empty pattern", role: .destructive) { run(x.op, x.p) }
-                Button("Cancel", role: .cancel) {}
-            } message: { x in
-                Text(x.op == 1 ? "Its number comes free for a new pattern. This can't be undone."
-                     : "Its steps go; the pattern and the entries that use it stay. This can't be undone.")
-            }
+            .globalFrame($clearKeyFrame)
         }
         .padding(16)
         .frame(maxHeight: .infinity, alignment: .top)
@@ -539,29 +530,48 @@ struct PatternBin: View {
         .accessibilityAction(named: "Clear pattern") { if !free { ask(1, p) } }
     }
 
-    private var pendingTitle: String {
-        guard let x = pending else { return "" }
-        return "\(x.op == 1 ? "Clear" : "Empty") pattern \(Entries.number(x.p + 1))?"
+    /// Clear N unused: the themed confirm, opening at the key, already asking (it's the key's only job).
+    private func askClearUnused(_ n: Int) {
+        guard let ui = menus, n > 0 else { return }
+        ui.menu = AppMenu(title: "Clear \(n) unused patterns", groups: {
+            [[MenuItem.destructive(title: "Clear \(n) unused patterns", confirm: "Clear \(n) unused \(n == 1 ? "pattern" : "patterns")") {
+                Task { _ = await store.clearUnused() }
+            }, MenuItem(title: "Cancel", icon: "xmark") {}]]
+        }, at: CGPoint(x: clearKeyFrame.midX, y: clearKeyFrame.midY), fan: true, asking: true)
+    }
+
+    /// The two one-pattern changes, as the menu's in-place confirms: Empty (POOL op 2) and Clear (op 1).
+    private func emptyItem(_ p: Int, playing: Bool) -> MenuItem {
+        MenuItem.destructive(title: playing ? "Empty its steps (stop first)" : "Empty its steps", icon: "square.dashed", enabled: !playing,
+                             confirm: "Empty \(Entries.number(p + 1))'s steps") { run(2, p) }
+    }
+    private func clearItem(_ p: Int, playing: Bool, uses: Int) -> MenuItem {
+        let title = playing ? "Clear pattern (stop first)" : uses > 0 ? "Clear pattern: \(uses == 1 ? "1 use" : "\(uses) use") it" : "Clear pattern"
+        return MenuItem.destructive(title: title, icon: "trash", enabled: !playing && uses == 0,
+                                    confirm: "Clear pattern \(Entries.number(p + 1))") { run(1, p) }
     }
 
     /// A pattern's menu: Empty (its steps), Clear (the number itself, when nothing uses it). Stopped only, as Skiff.
+    /// A fan at the ⋯ (Scott, 2026-11-10: the themed confirm, in place, as Clear all pads), each asking once more.
     private func openMenu(_ p: Int, at: CGPoint) {
-        guard let ui else { return }
+        guard let ui = menus else { return }
         ui.menu = AppMenu(title: "Pattern \(Entries.number(p + 1))", groups: {
             let uses = store.pool?.patterns[p].uses ?? 0
             let playing = session.playing
-            var notes: [MenuItem] = []
-            if playing { notes.append(.note("Stop to change patterns: Skiff does this only while stopped.")) }
-            else if uses > 0 { notes.append(.note("Clear needs it unused: \(uses == 1 ? "1 entry or track uses" : "\(uses) entries and tracks use") it.")) }
-            return [[MenuItem(title: "Empty its steps…", icon: "square.dashed", enabled: !playing) { ask(2, p) },
-                     MenuItem(title: "Clear pattern…", icon: "trash", enabled: !playing && uses == 0) { ask(1, p) }]]
-                + (notes.isEmpty ? [] : [notes])
-        }, at: at, fromKey: true)
+            return [[emptyItem(p, playing: playing), clearItem(p, playing: playing, uses: uses), MenuItem(title: "Cancel", icon: "xmark") {}]]
+        }, at: at, fan: true)
     }
 
+    /// VoiceOver's Empty and Clear actions: the same fan, opening on that item's confirm.
     private func ask(_ op: Int, _ p: Int) {
         if session.playing { store.refuse(track: nil, entry: nil, SongRC.playing.reason, needsStop: true); return }
-        pending = (op, p)
+        guard let ui = menus else { return }
+        let uses = store.pool?.patterns[p].uses ?? 0
+        if op == 1, uses > 0 { store.refuse(track: nil, entry: nil, "Clear needs it unused: \(uses == 1 ? "1 entry or track uses" : "\(uses) entries and tracks use") it"); return }
+        let item = op == 1 ? clearItem(p, playing: false, uses: 0) : emptyItem(p, playing: false)
+        let mid = CGPoint(x: clearKeyFrame.midX, y: clearKeyFrame.minY - 120)
+        ui.menu = AppMenu(title: "Pattern \(Entries.number(p + 1))", groups: { [[item, MenuItem(title: "Cancel", icon: "xmark") {}]] },
+                          at: mid, fan: true, asking: true)
     }
 
     private func run(_ op: Int, _ p: Int) {

@@ -87,8 +87,12 @@ final class EditorUI {
     var pinnedEntry: EntryRef?
     /// Each pattern's drawing for the pads (PadThumb), as seen while a track was on it: kept for the session.
     var padThumbs: [Int: PadThumb] = [:]
+    /// The Song tab's Timeline: bars across the lanes, set by the top bar's zoom (nil: fitted to the song).
+    var timelineZoom: Int?
+    /// The Pads: a stored scene held, its preview on the pads (and, when Lupe hasn't seen it, a line under the top bar).
+    var previewScene: Int?
     /// The Song tab: the pattern pool's drawer is open.
-    var poolOpen = false
+    var poolOpen = LaunchArgs.all.contains("-pool-open")      // (-pool-open: the Patterns drawer up, for captures)
     /// A pattern being dragged from the pool (set as the drag starts), shared by the drawer and the lanes.
     var dragPattern: Int?
     /// Step editing: the notes picked (a tap, or a lasso) and the steps picked (along the step numbers), on this
@@ -104,6 +108,8 @@ final class EditorUI {
     var menu: AppMenu?
     /// A sound waiting on its name before it goes to a user slot (Skiff's SAVE > USER).
     var saveSound: SaveSoundRequest?
+    /// A name asked for in place (TextPromptLayer at the root).
+    var textPrompt: TextPrompt?
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
@@ -139,7 +145,8 @@ final class EditorUI {
     var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user : .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs. Closed, it chooses for the track
     /// again next time.
-    var presetsPanel = false { didSet { if !presetsPanel { soundEntry = nil } } }
+    /// -presets-panel opens it at launch (the before/after screenshots, qa/top-row-2026-11-10).
+    var presetsPanel = LaunchArgs.all.contains("-presets-panel") { didSet { if !presetsPanel { soundEntry = nil } } }
     /// The sound panel choosing an entry's own sound (a pad's, a Timeline block's) instead of the track's (Scott,
     /// 2026-11-08: "Select sound" opens the panel; its header says what it's choosing for). Nil: the track.
     var soundEntry: SoundEntryTarget?

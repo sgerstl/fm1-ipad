@@ -1,0 +1,8 @@
+mix.png                  identical
+pads-full-t1.png         identical
+pads-half-t4.png         identical
+tl-full.png              differs in x 269–1234, y 142–934 pt
+tl-half-t4-shut.png      differs in x 269–1234, y 142–364 pt
+tl-half-t4.png           differs in x 269–1234, y 142–364 pt
+tl-half.png              differs in x 269–1234, y 142–364 pt
+tl-max.png               differs in x 269–1234, y 142–338 pt

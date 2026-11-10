@@ -13,9 +13,7 @@ struct LibraryPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// When the user last scrolled the list themselves: the knob's follow leaves them be for a moment.
     @State private var scrolledByHand: Date = .distantPast
-    @State private var clearing: Int?
     /// A user slot waiting on its erase confirm (Skiff's SAVE > USER).
-    @State private var erasing: UserPreset?
     /// The sound panel pushing the page (Browse, 2026-11-06): two columns while it's open, back to four after.
     @Environment(\.soundPanelRoom) private var panelRoom
 
@@ -108,13 +106,6 @@ struct LibraryPage: View {
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .panel()
-        .alert("Erase \(erasing.map { SaveSound.slotName($0.slot) } ?? "")?", isPresented: Binding(get: { erasing != nil }, set: { if !$0 { erasing = nil } }),
-               presenting: erasing) { p in
-            Button("Erase sound", role: .destructive) { Task { _ = await session.eraseUserPreset(slot: p.slot) } }
-            Button("Cancel", role: .cancel) {}
-        } message: { p in
-            Text("“\(p.name.capitalized)” is removed from the FM-1. Tracks playing it keep their sound. This can't be undone.")
-        }
     }
 
     private var skiff: Bool { session.dialect == .skiff }
@@ -155,7 +146,7 @@ struct LibraryPage: View {
                             [[MenuItem(title: "Replace with T\(t + 1)'s sound…", icon: "arrow.triangle.2.circlepath") {
                                 ui.saveSound = SaveSoundRequest(slot: k, replacing: p.name)
                              }],
-                             [MenuItem(title: "Erase…", icon: "trash") { erasing = p }]]
+                             [MenuItem(title: "Erase…", icon: "trash") { askErase(p) }]]
                         }, at: at, fromKey: true)
                     }
                 }
@@ -254,24 +245,33 @@ struct LibraryPage: View {
                         guard full else { return }
                         ui.menu = AppMenu(title: "\(session.sampleSlotName(k)) · \(s?.name ?? "")", groups: {
                             [[MenuItem(title: "Record over", icon: "mic") { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }],
-                             [MenuItem(title: "Clear", icon: "trash") { clearing = k }]]
+                             [MenuItem(title: "Clear", icon: "trash") { askClear(k) }]]
                         }, at: at)
                     }, changed: { _, _ in }, ended: { _, _, _ in }))
                     .accessibilityAction(named: "Record over") { if full { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) } }
-                    .accessibilityAction(named: "Clear") { if full { clearing = k } }
+                    .accessibilityAction(named: "Clear") { if full { askClear(k) } }
                     .id("usr-\(k)")
                 }
             }
             .padding(4)
         }
         .task { await session.refreshSampleSlots() }
-        .alert("Clear \(session.sampleSlotName(clearing ?? 0))?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
-            Button("Clear \(session.sampleSlotName(clearing ?? 0))", role: .destructive) {
-                if let k = clearing { Task { try? await session.eraseSample(slot: k) } }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The FM-1 keeps no copy of it.")
+    }
+
+    /// Erase a user slot: asked once more in place (2026-11-10: no system alert).
+    private func askErase(_ p: UserPreset) {
+        let slot = SaveSound.slotName(p.slot)
+        ui.menu = AppMenu.confirm("Erase \(slot)", confirm: "Erase \(slot) “\(p.name.capitalized)”",
+                                  caption: "It's removed from the FM-1 for good. Tracks playing it keep their sound.") {
+            Task { _ = await session.eraseUserPreset(slot: p.slot) }
+        }
+    }
+
+    /// Clear a sample slot: asked once more in place; the FM-1 keeps no copy.
+    private func askClear(_ k: Int) {
+        let name = session.sampleSlotName(k)
+        ui.menu = AppMenu.confirm("Clear \(name)", confirm: "Clear \(name)", caption: "The recording is erased from the FM-1, which keeps no copy.") {
+            Task { try? await session.eraseSample(slot: k) }
         }
     }
 

@@ -173,7 +173,7 @@ struct CloseControlsKey: View {
         }
         .buttonStyle(PressSink())
         .accessibilityLabel("Close track controls")
-        .accessibilityHint("Double-tapping the track's head opens them again")
+        .accessibilityHint("The tab on the track's row opens them again")
     }
 }
 

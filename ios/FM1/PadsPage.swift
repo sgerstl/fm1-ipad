@@ -21,7 +21,7 @@ struct PadsPage: View {
     /// Each pad's frame (global): where its menu opens when it's tapped (an empty pad) rather than held.
     @State private var padFrames: [PadKey: CGRect] = [:]
     /// A scene held: the heads and the pads show what it would do (Scott, 2026-11-07); let go, it's gone.
-    @State private var previewScene: Int?
+    private var previewScene: Int? { ui.previewScene }
     /// Where the finger is (global), for a hold's menu; and the key a hold took, so the tap its release makes is
     /// dropped (the pads redraw four times a second, which resets UIKit's long press: SwiftUI's, beside the button)
     @State private var pressAt: CGPoint = .zero
@@ -51,6 +51,11 @@ struct PadsPage: View {
     /// transport read just after the song) doesn't fade the colours in.
     @State private var shownAt = Date()
     @State private var gridFrame: CGRect = .zero
+    /// Each finger's press: when and where it went down, and whether it slid away fast before the hold could tell
+    /// (a swipe or a flick: no drag from it). Press and slide lifts the pad sooner than the hold (Scott, 2026-11-10).
+    @State private var pressStart: [String: (at: Date, point: CGPoint, swiped: Bool)] = [:]
+    /// A pattern dragged from the Patterns panel over a pad: the pad it would land on, and whether that one is empty.
+    @State private var panelDrop: DropTarget?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Full size (the editor shut), over the editor (rows as tall as the lane heads, a shorter scene row), or over the
     /// largest editor (the selected track's row of 16, no heads, no scenes) (boards 35, 37, 38).
@@ -85,11 +90,11 @@ struct PadsPage: View {
     /// under them).
     static func halfTop(_ tracks: Int) -> CGFloat {
         let strip = CGFloat(tracks) * rowHeight + CGFloat(max(0, tracks - 1)) * compactRowGap
-        return 44 + 10 + strip + 8 + compactScenes + 8
+        return 2 + strip + 8 + compactScenes + 8
     }
     /// Max: the tool row and the row of 16 keys.
     static let rowHeight16: CGFloat = 64
-    static let rowTop: CGFloat = 44 + 8 + rowHeight16 + 8
+    static let rowTop: CGFloat = rowHeight16 + 8
 
     /// Where the rows go: from `top` (under the switch and the tool row), `rows` of `rowHeight` with `rowGap` between,
     /// the heads on the left and the pads on the right on the same lines.
@@ -102,14 +107,15 @@ struct PadsPage: View {
         switch layout {
         case .full:
             // the rows share what's left between the tool row and the scenes
-            let top: CGFloat = 52, n = max(1, tracks)
+            // (the tool row went up into the top bar, Scott 2026-11-10, board 47: the rows start at the page's top)
+            let top: CGFloat = 0, n = max(1, tracks)
             // (and a gap under the scenes: they touched the panel's lip, Scott 2026-11-09)
             let room = size.height - top - Self.gap - Self.sceneHeight - Self.sceneFoot - CGFloat(n - 1) * Self.fullRowGap
             return Rows(top: top, rowHeight: max(Self.cardHeight, floor(room / CGFloat(n))), rowGap: Self.fullRowGap, sceneGap: Self.gap, count: n)
         case .compact:
-            return Rows(top: 54, rowHeight: Self.rowHeight, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
+            return Rows(top: 2, rowHeight: Self.rowHeight, rowGap: Self.compactRowGap, sceneGap: 8, count: tracks)
         case .row:
-            return Rows(top: 52, rowHeight: Self.rowHeight16, rowGap: 0, sceneGap: 0, count: 1)
+            return Rows(top: 0, rowHeight: Self.rowHeight16, rowGap: 0, sceneGap: 0, count: 1)
         }
     }
 
@@ -132,8 +138,8 @@ struct PadsPage: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // its place only: the live switch is the Song tab's, over both views, so it stays put as they
                     // slide past each other (Scott, 2026-11-09)
-                    SongViewSwitch(ui: ui).frame(height: 44).hidden().accessibilityHidden(true)
-                    Color.clear.frame(height: r.top - 44)
+                    // (the switch and the tool row are the top bar's since 2026-11-10, board 47)
+                    Color.clear.frame(height: r.top)
                     // Max: the heads fold into the editor header's track menu (PatternPane)
                     VStack(alignment: .leading, spacing: r.rowGap) {
                         ForEach(row ? [] : tracks, id: \.self) { k in
@@ -168,8 +174,7 @@ struct PadsPage: View {
                 }
                 .frame(width: Self.compactStrip)
                 VStack(spacing: 0) {
-                    toolbar(t)
-                    Color.clear.frame(height: r.top - 44)
+                    Color.clear.frame(height: r.top)
                     grid(t, row ? [t] : tracks, r)
                         .frame(height: r.height)
                         .zIndex(1)                              // (the track controls hang over the scene row's gap)
@@ -189,15 +194,12 @@ struct PadsPage: View {
         .onAppear { shownAt = Date() }
         // another pad, or another track: its controls back
         .task(id: store.offline) { if !store.offline { await store.follow() } }
-        .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
-            get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
-                            presenting: store.confirmation) { c in
-            Button(c.confirmLabel, role: .destructive) {
-                store.confirmation = nil
-                Task { await c.action() }
-            }
-            Button("Cancel", role: .cancel) { store.confirmation = nil }
-        } message: { c in Text(c.message) }
+        // a change that can't be taken back asks once more, in place at the finger (2026-11-10: no system dialog)
+        .onChange(of: store.confirmation?.id) {
+            guard let c = store.confirmation else { return }
+            store.confirmation = nil
+            ui.menu = AppMenu.confirm(c.title, confirm: c.confirmLabel, caption: c.message) { Task { await c.action() } }
+        }
     }
 
     // MARK: Lanes (Scott, 2026-11-09, board 41)
@@ -267,7 +269,7 @@ struct PadsPage: View {
                                 .overlay {
                                     // where the drop goes: a pad of its row to move to, or an empty pad (any row) to copy into,
                                     // filled faintly so an empty target reads as one (Scott, 2026-11-10)
-                                    if let d = drag, let tg = dropTarget(of: d), tg.key == PadKey(track: k, entry: i) {
+                                    if let tg = drag.flatMap({ dropTarget(of: $0) }) ?? panelDrop, tg.key == PadKey(track: k, entry: i) {
                                         RoundedRectangle(cornerRadius: 16)
                                             .fill(Theme.text.opacity(tg.empty ? 0.1 : 0))
                                             .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5])) }
@@ -279,6 +281,12 @@ struct PadsPage: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .globalFrame($gridFrame)
+                // a pattern from the Patterns panel (Scott, 2026-11-10: "make the pads take drops")
+                .onDrop(of: [.plainText], delegate: PadPatternDrop(
+                    active: { ui.dragPattern != nil },
+                    over: { loc in panelHover(CGPoint(x: gridFrame.minX + loc.x, y: gridFrame.minY + loc.y)) },
+                    left: { panelDrop = nil },
+                    drop: { loc, p in panelDropped(p, at: CGPoint(x: gridFrame.minX + loc.x, y: gridFrame.minY + loc.y)) }))
                 // under the pads: the selected pad's tint (its lane's colour), and at Max its tab
                 .background(alignment: .topLeading) {
                     ZStack(alignment: .topLeading) {
@@ -304,6 +312,13 @@ struct PadsPage: View {
                             selectedTint(t, s, area: g.size, bare: bare)
                                 .id("tint\(t).\(i).\(bare)")
                                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare, slide: !bare))
+                            // shut: the tab that opens them, on the row's edge they'd open from (Scott, 2026-11-10)
+                            if bare, !row {
+                                OpenControlsTab(track: t, up: s.up, width: Self.openTabWidth, height: Self.openTabHeight) { showControls(true) }
+                                    .offset(x: s.frame.maxX - Self.openTabWidth,
+                                            y: s.up ? s.frame.minY - laneBleed - Self.openTabHeight : s.frame.maxY + laneBleed)
+                                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
+                            }
                         }
                         if let d = drag, !d.refused, let m = marks[d.track] { dragged(d, m, cell: cell, date: tl.date) }
                     }
@@ -340,11 +355,13 @@ struct PadsPage: View {
 
     /// How far the track controls may hang past the grid inside the page: above it (under the switch and tool row) and
     /// below it (over the scene row). At Max they hang over the editor (SkiffSongPage lifts the pads over it there).
+    /// Over the grid's top the box may use the page's gap under the top bar, never the bar (AppView's 16 pt spacing).
+    static let roomOverTop: CGFloat = 16
     private func room(_ r: Rows) -> (above: CGFloat, below: CGFloat) {
         switch layout {
-        case .full: (r.top, r.sceneGap + Self.sceneHeight + Self.sceneFoot)
-        case .compact: (r.top, r.sceneGap + Self.compactScenes + 8)
-        case .row: (r.top, .infinity)
+        case .full: (r.top + Self.roomOverTop, r.sceneGap + Self.sceneHeight + Self.sceneFoot)
+        case .compact: (r.top + Self.roomOverTop, r.sceneGap + Self.compactScenes + 8)
+        case .row: (r.top + Self.roomOverTop, .infinity)
         }
     }
 
@@ -352,7 +369,7 @@ struct PadsPage: View {
                                   room: (above: CGFloat, below: CGFloat)) -> SelectedGeometry {
         let frame = CGRect(x: CGFloat(c) * (cell.width + gap), y: CGFloat(r) * (cell.height + rowGap), width: cell.width, height: cell.height)
         // on a lane the box hangs straight off its edge (Scott, 2026-11-09: one strip); at Max, no lane, a gap
-        let drop = row ? Labs.padControlsGap.value : laneBleed
+        let drop = row ? Labs.padControlsGap : laneBleed
         let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session))
         // above where it fits inside the page (Scott, 2026-11-09: above by default), else below (the top row)
         let fitsDown = frame.maxY + drop + tab.height <= area.height + room.below
@@ -418,55 +435,14 @@ struct PadsPage: View {
         .frame(width: area.width, height: area.height, alignment: .topLeading)
     }
 
+    /// The tab that opens the track controls while they're shut: 56 wide (the two carets and room either side), 22 out
+    /// from the lane's edge; its touch 44 high and 78 wide round it.
+    static let openTabWidth: CGFloat = 56, openTabHeight: CGFloat = 22
+
     /// The border the selected pad shrinks by inside its tint, controls open: thinner round short rows and Max's keys.
     static func selectedBorder(_ cell: CGSize) -> CGFloat { cell.height < 60 || cell.width < 90 ? 4 : 8 }
 
     // MARK: Toolbar
-
-    private func toolbar(_ t: Int) -> some View {
-        let launch = store.perform?.launch ?? session.launchMode
-        let waiting = waitingCount
-        return HStack(spacing: 12) {
-            // (every track's on the grid now: Max alone shows one, named in the editor's header)
-            Spacer(minLength: 8)
-            if let s = previewScene, store.scenesSeen[s] == nil {
-                // (PERFORM says a scene is kept, not what's in it: Lupe knows the ones it stored or recalled)
-                Text("Scene \(s + 1): not seen yet. Recall it once and holding it shows what it does")
-                    .font(.lupe(13)).foregroundStyle(Theme.text).lineLimit(2).layoutPriority(-1)
-            } else if let r = store.refusal {
-                RefusalLine(refusal: r, session: session, store: store).layoutPriority(-1)
-            }
-            // the pattern pool, as on the Timeline (Scott, 2026-11-09): its panel slides in over the page
-            Button { ui.poolOpen.toggle() } label: {
-                Label("Patterns", systemImage: "square.grid.2x2").font(.lupe(15))
-                    .padding(.horizontal, 14).frame(height: 44).raisedKey()
-            }
-            .buttonStyle(PressSink(latched: ui.poolOpen))
-            .accessibilityHint("The pattern pool: every pattern and which tracks use it")
-            Text("Launch at").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
-            SegmentedKeys(label: "Launch at", options: ["Loop", "Bar", "Beat", "Now"], selected: launch.rawValue,
-                          enabled: Array(repeating: !store.offline, count: 4)) { k in
-                let l = SongPlayback.Launch(rawValue: k) ?? .bar
-                Task { if await store.performOp(.launch(l)) { session.adoptLaunch(l) } }
-            }
-            .fixedSize()
-            .accessibilityHint("Where a pad, a scene or a mute lands while playing: the end of the track's pass, the next bar, the next beat, or at once")
-            Button { Task { await store.performOp(.cancel) } } label: {
-                Text(waiting > 0 ? "Cancel \(waiting) waiting" : "Cancel waiting").font(.lupe(15))
-                    .padding(.horizontal, 14).frame(height: 44).raisedKey()
-            }
-            .buttonStyle(PressSink())
-            .disabled(waiting == 0 || store.offline)
-            .accessibilityHint("Takes back every launch and mute still waiting for the launch point")
-        }
-        .frame(height: 44)
-    }
-
-    /// Launches and mutes waiting for the launch point (the song's own next isn't one).
-    private var waitingCount: Int {
-        let launches = session.trackIndices.filter { store.marks($0, launchIn: nil).queued != nil || (session.playing && store.launching[$0] != nil) }.count
-        return launches + (store.perform?.staged.filter { $0 != .none }.count ?? 0)
-    }
 
     // MARK: Pads
 
@@ -606,23 +582,35 @@ struct PadsPage: View {
                 let k = "p\(t).\(i)"
                 if fingers[k] == nil {
                     fingers[k] = v.location
+                    pressStart[k] = (Date(), v.location, false)
                     if fingers.count > 1 { multi.formUnion(fingers.keys) }
                 } else { fingers[k] = v.location }
                 if !multi.contains(k) { pressAt = v.location }
+                // pressed, then slid: the pad lifts without waiting for the hold (Scott, 2026-11-10: "the waiting period
+                // for the longpress should be shorter if it detects a slide"). Moving before the dwell is a swipe, not a
+                // drag; a quick tap never moves that far; a still hold still opens the menu at holdToMenu.
+                if drag == nil, heldKey != k, !e.isEmpty, !multi.contains(k), fingers.count == 1, var ps = pressStart[k], !ps.swiped {
+                    let moved = hypot(v.location.x - ps.point.x, v.location.y - ps.point.y)
+                    let held = Date().timeIntervalSince(ps.at)
+                    if moved > Labs.padSlideStart.value {
+                        if held < Labs.padSlideDwell.value { ps.swiped = true; pressStart[k] = ps }
+                        else { heldKey = k; holdAt = ps.point; beginDrag(t, i, at: v.location) }
+                    }
+                }
                 // held, then moved off the hold: the pad lifts and follows the finger (its menu goes)
                 guard heldKey == k, !e.isEmpty, !multi.contains(k) else { return }
-                if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padDragStart.value { beginDrag(t, i, at: v.location) }
+                if drag == nil, hypot(v.location.x - holdAt.x, v.location.y - holdAt.y) > Labs.padSlideStart.value { beginDrag(t, i, at: v.location) }
                 drag?.at = v.location
             }
             .onEnded { v in
                 let k = "p\(t).\(i)"
-                fingers[k] = nil; multi.remove(k)
+                fingers[k] = nil; multi.remove(k); pressStart[k] = nil
                 if drag != nil { endDrag(at: v.location) }
                 releaseHold(k)
             })
         .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             // (never with another finger down, or one that was while this was pressed: several fingers queue, Scott 2026-11-10)
-            guard !store.offline, !multi.contains("p\(t).\(i)"), fingers.count <= 1 else { return }
+            guard !store.offline, !multi.contains("p\(t).\(i)"), fingers.count <= 1, drag == nil, pressStart["p\(t).\(i)"]?.swiped != true else { return }
             heldKey = "p\(t).\(i)"
             holdAt = pressAt
             launched += 1
@@ -650,6 +638,7 @@ struct PadsPage: View {
         var track: Int, from: Int
         var at: CGPoint                  // the finger, global
         var refused = false              // playing: said so, nothing lifts
+        var grab: CGSize = .zero         // where on the pad it was taken, from its centre: the copy stays there under the finger
     }
 
     private func beginDrag(_ t: Int, _ i: Int, at: CGPoint) {
@@ -662,7 +651,10 @@ struct PadsPage: View {
             drag = PadDrag(track: t, from: i, at: at, refused: true)
             return
         }
-        drag = PadDrag(track: t, from: i, at: at)
+        // taken where the finger first pressed it (Scott, 2026-11-10: "the pad should stay under the finger… it's off to
+        // one corner right now"): the copy keeps that point under the finger instead of centring itself on it
+        let c = padFrames[PadKey(track: t, entry: i)].map { CGPoint(x: $0.midX, y: $0.midY) } ?? holdAt
+        drag = PadDrag(track: t, from: i, at: at, grab: CGSize(width: holdAt.x - c.x, height: holdAt.y - c.y))
         launched += 1
     }
 
@@ -729,6 +721,49 @@ struct PadsPage: View {
         UIAccessibility.post(notification: .announcement, argument: title)
     }
 
+    /// A panel pattern over the grid: the pad it would land on (an empty pad past a list's end stands for the first empty
+    /// one after it, as everywhere on the pads), outlined as a pad drag's target is. Nil off the pads.
+    private func panelHover(_ at: CGPoint) -> Bool {
+        guard let k = pad(at: at), let list = store.song?.tracks[safe: k.track], let e = list.entries[safe: k.entry] else {
+            if panelDrop != nil { panelDrop = nil }
+            return false
+        }
+        let tg = e.isEmpty ? DropTarget(key: PadKey(track: k.track, entry: Self.landing(list, k.entry)), empty: true)
+                           : DropTarget(key: k, empty: false)
+        if tg != panelDrop { panelDrop = tg }
+        return true
+    }
+
+    /// A panel pattern let go on a pad. An empty one takes it at once, shared (SET: Skiff entries name a pool pattern, so
+    /// an edit shows everywhere it's used). A filled one asks first, in place at the drop: share it here, a copy here,
+    /// or Cancel; nothing is replaced until one is picked (Scott, 2026-11-10).
+    private func panelDropped(_ number: Int, at: CGPoint) {
+        defer { panelDrop = nil; ui.dragPattern = nil }
+        guard panelHover(at), let tg = panelDrop, let p = Optional(number - 1), store.pool?.patterns[safe: p]?.isFree == false else { return }
+        let t = tg.key.track, j = tg.key.entry, n = Entries.number(number)
+        if tg.empty {
+            Task { await store.send(.set(track: t, entry: j, pattern: number)) }
+            UIAccessibility.post(notification: .announcement, argument: "\(n) on T\(t + 1) entry \(Entries.letter(j))")
+            return
+        }
+        guard let old = store.song?.tracks[safe: t]?.entries[safe: j] else { return }
+        let was = old.poolIndex.map { Entries.number($0 + 1) } ?? (old.isRest ? "REST" : "it")
+        let free = (store.pool?.free ?? 0) > 0
+        let becomes = free ? ArrangeEdits(session: session, store: store).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+        let choices = [
+            // shared: the same pattern, named here too (an edit shows everywhere it's used)
+            MenuItem(title: "Replace \(was) with \(n)", icon: "link", enabled: idle && old.poolIndex != p) {
+                Task { await store.send(.set(track: t, entry: j, pattern: number)) }
+            },
+            MenuItem(title: "Copy \(n) here\(becomes)", icon: "square.on.square", enabled: free && idle) {
+                Task { if await store.send(.set(track: t, entry: j, pattern: number)) { await store.send(.copy(track: t, entry: j)) } }
+            },
+        ]
+        let title = "\(n) onto T\(t + 1) · entry \(Entries.letter(j)), which has \(was)"
+        ui.menu = AppMenu(title: title, groups: { [choices, [MenuItem(title: "Cancel", icon: "xmark") {}]] }, at: at, fan: true, tint: t)
+        UIAccessibility.post(notification: .announcement, argument: title)
+    }
+
     /// "Copy to…" (the drag's equivalent without one, for VoiceOver and Switch Control): each track's next empty pad.
     private func copyTargets(_ t: Int, _ i: Int) -> [MenuItem] {
         let at = padFrames[PadKey(track: t, entry: i)].map { CGPoint(x: $0.midX, y: $0.midY) } ?? pressAt
@@ -772,7 +807,7 @@ struct PadsPage: View {
             .frame(width: cell.width, height: cell.height)
             .scaleEffect(reduceMotion ? 1 : 1.06)
             .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
-            .position(x: d.at.x - gridFrame.minX, y: d.at.y - gridFrame.minY)
+            .position(x: d.at.x - d.grab.width - gridFrame.minX, y: d.at.y - d.grab.height - gridFrame.minY)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -916,11 +951,18 @@ struct PadsPage: View {
 
     /// CLEAR (stopped only: playing, the store says "Stop to…" with a Stop key). A pattern nothing else names goes with
     /// the entry and can't be undone: asked first.
+    /// Asked unless "Don't ask again" was ticked (Scott, 2026-11-10); Settings › Confirm before clearing a pad brings it back.
+    static let confirmClearKey = "confirmPadClear"
     private func clear(_ t: Int, _ i: Int, _ e: SongEntry) {
         let alone = e.poolIndex.map { (store.pool?.patterns[safe: $0]?.uses ?? 0) <= 1 } ?? false
-        if alone, let p = e.poolIndex, !session.playing {
-            store.ask("Clear entry \(Entries.letter(i))?", "Pattern \(Entries.number(p + 1)) is used nowhere else, so it's erased with the entry. This can't be undone.",
-                      confirm: "Clear entry \(Entries.letter(i))") { await store.send(.clear(track: t, entry: i)) }
+        let ask = UserDefaults.standard.object(forKey: Self.confirmClearKey) as? Bool ?? true
+        if alone, ask, let p = e.poolIndex, !session.playing {
+            ui.menu = AppMenu.confirm("Clear entry \(Entries.letter(i))", confirm: "Clear entry \(Entries.letter(i))",
+                                      caption: "Pattern \(Entries.number(p + 1)) is used nowhere else, so it's erased with the entry. This can't be undone.",
+                                      tint: t, at: pressAt,
+                                      optOut: .init(key: Self.confirmClearKey, hint: "Clears pads without asking, erasing a pattern nothing else uses. Turn back on in Settings")) {
+                Task { await store.send(.clear(track: t, entry: i)) }
+            }
         } else {
             Task { await store.send(.clear(track: t, entry: i)) }
         }
@@ -1050,13 +1092,13 @@ struct PadsPage: View {
         .disabled(store.offline)
         // held (a kept scene, not storing): the strip shows what it would do, nothing sent; let go, it's gone
         .simultaneousGesture(DragGesture(minimumDistance: 0).onEnded { _ in
-            if previewScene == s { previewScene = nil }
+            if ui.previewScene == s { ui.previewScene = nil }
             releaseHold("s\(s)")
         })
         .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
             guard kept, !storing else { return }
             heldKey = "s\(s)"
-            previewScene = s
+            ui.previewScene = s
         })
         .accessibilityLabel("Scene \(s + 1)" + (kept ? "" : ", empty") + (last ? ", recalled or stored last" : ""))
         .accessibilityValue(kept ? sceneSpoken(s) : "")
@@ -1152,5 +1194,61 @@ struct PadMarks: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// The selected row's tab while the track controls are shut (Scott, 2026-11-10: "a little tab to sit on top of the
+/// selected track row above and right justified to the selected pad that will allow the user to open the track controls…
+/// double tapping the track header isn't ideal"). The lane's tint, so it reads as part of the lane; the step tab's carets
+/// in the track's colour, pointing the way the controls will open. Right-aligned to the selected pad, on the edge the box
+/// opens from: the top, or the bottom on a row where the box opens downward. The box's own carets (beside PAN) close it:
+/// the open box meets its lane with no free edge for the tab to ride as a handle without changing which way boxes open.
+struct OpenControlsTab: View {
+    let track: Int
+    let up: Bool
+    let width: CGFloat
+    let height: CGFloat
+    var hint = "Opens the selected track's knobs under its pad"
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            ZStack {
+                UnevenRoundedRectangle(topLeadingRadius: up ? 10 : 0, bottomLeadingRadius: up ? 0 : 10,
+                                       bottomTrailingRadius: up ? 0 : 10, topTrailingRadius: up ? 10 : 0)
+                    .fill(SelectionTint.fill(track))
+                TabCarets(ups: [up, up], colour: Theme.track[track])
+            }
+            .frame(width: width, height: height)
+            // 44 high to touch (78 wide): 11 past its outer edge, 11 over the selected pad's corner
+            .contentShape(Rectangle().inset(by: -(44 - height) / 2))
+        }
+        .buttonStyle(PressSink())
+        .accessibilityLabel("Show track controls")
+        .accessibilityHint(hint)
+    }
+}
+
+
+/// The pads' drop target for a pattern from the Patterns panel: where it's over (the grid's own space), and the pattern
+/// number from the dragged item itself ("pattern 12"), as the Timeline's lanes read it.
+struct PadPatternDrop: DropDelegate {
+    let active: () -> Bool
+    let over: (CGPoint) -> Bool
+    let left: () -> Void
+    let drop: (CGPoint, Int) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { active() }
+    func dropEntered(info: DropInfo) { _ = over(info.location) }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: over(info.location) ? .copy : .forbidden) }
+    func dropExited(info: DropInfo) { left() }
+    func performDrop(info: DropInfo) -> Bool {
+        guard let provider = info.itemProviders(for: [.plainText]).first else { left(); return false }
+        let at = info.location
+        _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
+            guard let text = obj as? NSString, text.hasPrefix("pattern "), let p = Int(text.substring(from: 8)) else { return }
+            Task { @MainActor in drop(at, p) }
+        }
+        return true
     }
 }

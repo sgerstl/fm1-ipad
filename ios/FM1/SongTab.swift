@@ -44,10 +44,11 @@ struct SkiffSongPage: View {
     /// inside it, so nothing spills past the tint.
     static let panelEdge: CGFloat = 0
     /// The song's least: the tool row, the ruler and every lane at its least (28 pt and its gap), so it never spills.
-    static func songMin(_ tracks: Int) -> CGFloat { 44 + 8 + 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
+    /// (no tool row in it since 2026-11-10: the top bar has the Timeline's tools)
+    static func songMin(_ tracks: Int) -> CGFloat { 24 + 8 + CGFloat(tracks) * (28 + SkiffArrangePage.laneGap) }
     /// The give past either end: the drag follows the finger at this rate there.
     static let give: CGFloat = 0.3
-    private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: Labs.dividerResponse.value * Self.slow, dampingFraction: Labs.dividerDamping.value) }
+    private var spring: Animation? { reduceMotion ? .easeOut(duration: 0.2) : .spring(response: DividerFeel.current.response * Self.slow, dampingFraction: DividerFeel.current.damping) }
     /// -slow-motion: the spring eight times slower, to watch a transition frame by frame (screen recordings, checks).
     static let slow: Double = LaunchArgs.all.contains("-slow-motion") ? 8 : 1
 
@@ -81,7 +82,9 @@ struct SkiffSongPage: View {
             let shown = layout ?? position.layout
             let editorShown = dragTop != nil || position != .none
             // (the track controls close over the largest editor, Scott 2026-11-09: nothing hangs over it now)
-            let overEditor = false
+            // the Timeline's open track controls hang from the lane, past the lanes' foot over the editor where they don't
+            // fit above (Scott, 2026-11-10: "fix the clipping"); the Pads' still close over the editor
+            let overEditor = !pads && padControlsOpen && position != .none
             // the editor keeps its height while it slides under the fold, the page clipping it
             let bottom = max(Self.editorMin, total - top)
             VStack(spacing: 0) {
@@ -102,10 +105,7 @@ struct SkiffSongPage: View {
                 // both halves pinned to the page's width: left loose, swapping the panel's contents (the sampler for
                 // the editor) re-centred the top half 12 pt to the left (Scott, 2026-11-09)
                 .frame(width: g.size.width, height: top)
-                // Timeline / Pads: one switch over both views, still while they slide past it (each keeps its place)
-                .overlay(alignment: .topLeading) {
-                    if store.performs { SongViewSwitch(ui: ui).frame(height: 44) }
-                }
+                // (Timeline / Pads: the switch is in the top bar since 2026-11-10, board 47, still while they slide)
                 // clipped at the foot only: a key on the top row (Cancel waiting) draws its raised edge a point
                 // above the page and was cut (Scott, 2026-11-08). At Max on Pads the selected pad's track controls
                 // hang down over the editor (no room above or below a single row), so there the foot gives way and
@@ -265,7 +265,7 @@ struct SkiffSongPage: View {
         guard let at = dragTop else { return }
         let order = tops.sorted { $0.value < $1.value }.map(\.key)       // largest editor (top) to shut (bottom)
         var p = nearest(at, tops)
-        if abs(speed) > Labs.flickSpeed.value, let i = order.firstIndex(of: position) {
+        if abs(speed) > Labs.flickSpeed, let i = order.firstIndex(of: position) {
             p = order[speed < 0 ? max(0, i - 1) : min(order.count - 1, i + 1)]
         }
         withAnimation(spring) { positionRaw = p.rawValue; dragTop = nil; layout = p.layout } completion: { layout = nil }
@@ -312,7 +312,7 @@ struct SkiffSongPage: View {
 
     /// The lanes share what's left under the tool row and the ruler.
     static func laneHeight(_ top: CGFloat, tracks: Int) -> CGFloat {
-        let lanes = top - 44 - 8 - 24 - 8
+        let lanes = top - 24 - 8
         // no cap: the lanes share all the room, as the pads' rows do, so at full size they're tall enough for the Pads'
         // full heads (Scott, 2026-11-09: "doesn't use all the vertical space")
         return max(28, lanes / CGFloat(max(1, tracks)) - SkiffArrangePage.laneGap)

@@ -9,6 +9,8 @@ Where everything lives (CLAUDE.md, rule 4). Change this first, get Scott's OK, t
 | **Song** | Pads (default; from 2026-11-09 a grid of all six tracks' entries, section below) or Timeline, switched at the top left; the pattern editor below the divider (No grid / Half / Max) | Sound panel (right), Sounds panel, Sampler (in the editor's place) |
 | **Mix** | Mixer carousel: levels, sends, the FX pages | Sound panel, Sounds panel |
 
+**One row above the pages** (Scott, 2026-11-10, board 47 direction b, built): the FM-1 key ("Demo ⌄", its menu now also Projects… and Play through the iPad), Pads · Timeline · Mix (since 2026-11-10; was Song · Mix and a Pads / Timeline switch), then the tab's tools (Pads: Patterns, Launch at ⌄, Cancel N waiting; Timeline: Undo, Patterns, zoom), then Keys, REC, Play and the readout ("Song · 120 BPM": the playback mode's word; its three keys are in the tempo popup). As the row narrows the tools give way in order: the "Launch at" words, Patterns to its icon, Cancel to ✕ N; Play, the tabs and Cancel never go. A refusal, an unseen scene or the Timeline's "Tracks end at…" shows on a strip under the row until it's dealt with. The Pads and Timeline start at the page's top (52 pt back).
+
 **The iPad's tab bar is Song · Mix** (Scott, 2026-11-10). The Sounds tab went: its browser is the **Sounds panel** ("Choose a sound for Track N": engines, presets in three columns, kits, the 32 user slots, user samples, a pad's or block's own sound). It's the same view the tab used, so nothing was lost. It comes in from the right over Song or Mix, doesn't dim the page, and sits to the left of the sound panel (ENV, LFO…) when that's open, so a sound can be picked and shaped at once. Ways in:
 - **The track head's name** with its chevron ("Acid ⌄"), on Pads, the Timeline and the Mix strips. This is the visible way in.
 - SAVE (PRESETS, then USER), on the FM-1 or its key.
@@ -18,7 +20,7 @@ Where everything lives (CLAUDE.md, rule 4). Change this first, get Scott's OK, t
 
 It closes with Done, SAVE's next press, another tab or Escape.
 
-**Not decided:** splitting Song into Pads · Timeline in the iPad's tab bar (the phone's split, below). It needs its own design pass. Two tabs is thin, and Pads · Timeline · Mix would match the phone.
+**The iPad's tabs are Pads · Timeline · Mix** (Scott, 2026-11-10: the phone's split). Pads and Timeline are the Song page's two views: going between them is the same slide as before, the editor staying put under them, and the tools after the tabs follow the tab. The Pads / Timeline switch went. SLOOP's top bar still has its own tabs: it follows later.
 
 The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · Timeline · Mix · Sounds (decided 2026-11-08, phone only). **The phone keeps its Sounds tab** until its Song tab exists: on Skiff today its Song says "on the iPad for now", so Mix and Sounds are its working tabs.
 

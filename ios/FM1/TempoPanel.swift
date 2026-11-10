@@ -18,7 +18,8 @@ struct TempoOverlay: View {
 
     /// The panel's width (TempoPanel's frame) and half the top bar's readout (ReadoutLabel's 112 + 16): where it
     /// grows from. The phone's readout is narrower; a few points off at that size and speed don't show.
-    private static let width: CGFloat = 300, readoutHalf: CGFloat = 64
+    private var width: CGFloat { TempoPanel.width(session) }
+    private static let readoutHalf: CGFloat = 64
 
     var body: some View {
         let open = ui.tempoAt != nil
@@ -27,9 +28,9 @@ struct TempoOverlay: View {
             ZStack(alignment: .topLeading) {
                 Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                 if let at = ui.tempoAt {
-                    let left = min(max(16, at.x - frame.minX), g.size.width - Self.width - 16)
+                    let left = min(max(16, at.x - frame.minX), g.size.width - width - 16)
                     // the readout's middle, over the panel's top edge
-                    let anchor = UnitPoint(x: min(1, max(0, (at.x - frame.minX + Self.readoutHalf - left) / Self.width)), y: 0)
+                    let anchor = UnitPoint(x: min(1, max(0, (at.x - frame.minX + Self.readoutHalf - left) / width)), y: 0)
                     TempoPanel(session: session, ui: ui) { ui.tempoAt = nil }
                         .fixedSize()
                         .closesOnOutsideTouch { ui.tempoAt = nil }
@@ -59,6 +60,8 @@ struct TempoPanel: View {
     private var range: ClosedRange<Int> { session.bpmRange }
     private var following: String? { session.externalClock }
     static let tapSide: CGFloat = 76
+    /// 300, or wide enough for Loop entry · Play song · Play once on Skiff.
+    @MainActor static func width(_ s: DeviceSession) -> CGFloat { s.skiffSong != nil ? 360 : 300 }
 
     var body: some View {
         let off = following != nil
@@ -82,6 +85,13 @@ struct TempoPanel: View {
                 .accessibilityHint("Tap in time: the tempo follows the last few taps")
             }
             if typing { keypad }
+            // Skiff's playback mode, here since 2026-11-10 (Scott, board 47): the readout under the tempo says which
+            if let store = session.skiffSong, !typing {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Playback").font(.lupe(12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
+                    SongModeKeys(store: store)
+                }
+            }
             if let p = typedProblem {
                 Label(p, systemImage: "exclamationmark.circle").font(.lupe(13)).foregroundStyle(Theme.text)
             }
@@ -96,7 +106,7 @@ struct TempoPanel: View {
             }
         }
         .padding(16)
-        .frame(width: 300)
+        .frame(width: Self.width(session))
         // the one level-3 shadow, the panel's: on its shape, not the stack (which would shade every row and key)
         .elevated(.held, radius: 12)
         .task { await session.refreshTempo() }
