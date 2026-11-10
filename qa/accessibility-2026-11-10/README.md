@@ -134,7 +134,7 @@ Fails that matter: P2 (`stepEmpty` edges), P7 (colour at 0.3), P9 (`textTertiary
 - **Whether F4's order holds.** It relies on SwiftUI sorting siblings across two side-by-side stacks; the simulator's element tree didn't show the new order, and it may never show sort priorities. VoiceOver on the iPad is the test (device check 1).
 - **Full Keyboard Access:** focus visibility on Lupe's custom keys (no focus ring styling was written for them; the system draws its own), whether the pads can be reached at all, traps in the fan menus. Not checked here at all.
 - **Switch Control and Voice Control:** not checked. Voice Control depends on visible names matching labels ("tap Mute track 2" works only because the label now says it; the key itself shows a speaker).
-- **The iPhone:** Song, Mix and Sounds were audited after the tabs fix (see below), but the phone has no Pads or Timeline yet, so there was no Pads grid to audit. Its Mix needs a phone layout before an audit of it means much.
+- **The iPhone:** its own layout (Pads grid, Edit, Mix pages) is audited in the third run below. VoiceOver on it still needs a person.
 - **Motion settings**, how each looks with Reduce Motion, and Increase Contrast once P11 exists: Part B.
 - Whether the fixes in F13–F19 trap or release focus the way they should when opened from the FM-1's own buttons.
 
@@ -164,6 +164,39 @@ The `songTab` flag now lives at the app's root (`FM1App`), over both layouts, an
 
 dynamicType everywhere is P1, unchanged. No missing-label (sufficientElementDescription) lines on any phone screen.
 
+### Third run: the phone's own layout (branch `claude/vibrant-grothendieck-2c3efb`, 2026-11-10)
+
+The phone now has the layout agreed in `design/structure-map.md` › "The phone with a Skiff FM-1" (boards 46–50):
+- **Tabs:** Pads · Edit · Mix · Sounds.
+- **Pads:** the grid (`PadsPage` `.phone`), rows of 44 on this simulator.
+- **Edit:** the pattern with the Skiff step panel.
+- **Mix:** one GLO page at a time.
+- **Top bar:** a Launch key.
+- **Sound panel:** comes in from the right, with the rail when Settings › Sound buttons is on.
+
+**The run:** same "A11y iPhone" simulator, same test. It adds five phone-only screens: Edit, Edit with the step panel, Mix › Delay, the Launch menu, and the sound panel with the rail.
+- **Files:** `audit/iphone-audit-phone-layout.tsv` (994 lines over 17 screens) and `audit/iphone-phone-layout-contrast-measured.tsv`.
+- **Screens:** `screens/iPhone-phone-*.jpg`.
+- **What the four Song tests show:** the phone ignores the editor position, so all four now audit the phone's Pads grid (the same screen four times).
+
+| Screen | Lines | What they are |
+|---|---|---|
+| Pads (×4) | 63 dynamicType, 1 contrast | The selected tab, 10.7:1 measured (false positive). **No hit-region and no missing-label lines** on the grid, its heads (number, mute) or the scenes. |
+| Edit | 15 dynamicType, 1 contrast | The tab (false positive). |
+| Edit, step panel | 47 dynamicType, 3 contrast | The tab, the Step key (12.5:1), Velocity (12.4:1). All false positives. |
+| **Mix** (Mixer rows) | 59 dynamicType, 19 contrast | **Was** 64 dynamicType, 28 contrast, 1 hitRegion, 1 textClipped. Now nothing sits under the top bar or runs off the screen. Contrast: PAN and REVERB measure 12–16:1 (false positives). The track names measure 1.3–3.5:1 in the screenshot, but the tokens are 10.9:1 (`textSecondaryRaised` on `well`): short words are too few pixels for the 97th-percentile method. Selected tab and Mixer key 10.7:1. No hit-region or clipped lines now. |
+| Mix › Delay | 33 dynamicType, 2 contrast, 1 hitRegion | Contrast: the tab and the Delay key (false positives). Hit region: "DELAY, all tracks", 120 × 19, the card's heading. It's the iPad's card and the same finding as on the iPad. |
+| Launch menu | 70 dynamicType, 8 contrast, 2 elementDetection | **One real contrast failure, fixed here.** The menu's title and note lines ("Launch at", "Nothing waiting") were `textSecondary` on the menu's surface (`tones[3]`): 4.13:1 from the tokens, 4.13 measured. Every Lupe menu had it. They now use `textSecondaryRaised`, 6.11:1. "Cancel waiting" at 1.5:1 is disabled (nothing waiting; exempt). The rest is the pads dimmed behind the menu. The two elementDetection lines ("potentially inaccessible element/text") need a VoiceOver look at the menu. |
+| Sound panel (rail on) | 89 dynamicType, 4 contrast, 1 hitRegion | Contrast: the pads under the panel and the tab (false positives). Hit region: the FX card's heading "FX", 33 × 19, the iPad's panel component. |
+| Pad hold menu | 69 dynamicType, 26 contrast, 1 textClipped | Contrast: the pads dimmed behind the fan. Clipped: "Duplicate to next empty pad", shown "Duplicate to next empty…" at the phone's width. **Seen by hand:** the fan's last buttons run off the bottom of the phone ("Select sound" half cut, more below). The fan needs to open upward or scroll on the phone. A follow-up, not fixed here. |
+| Sounds | 33 dynamicType, 8 contrast, 1 textClipped | Unchanged from the second run. |
+| Connection menu, firmware picker, installing | as before | The phone's ⋯ menu now has **Settings…**, so the phone's Settings can be reached (it couldn't in the second run). The test still looks for the iPad's connection key, so it didn't audit Settings on the phone. |
+
+dynamicType everywhere is P1, unchanged. Still needs a human:
+- VoiceOver on the phone's grid: reading order heads → pads → scenes, and the Launch key's value.
+- The step panel's scroll.
+- The rail's 40 pt keys with a thumb.
+
 ## Builds and tests
 
 - SloopKit: `swift test`, 290 tests in 50 suites passed (none of the known flakes failed this time; SloopKit itself is untouched).
@@ -181,5 +214,6 @@ dynamicType everywhere is P1, unchanged. No missing-label (sufficientElementDesc
 - `audit/ipad-contrast-measured.tsv`, `audit/iphone-contrast-measured.tsv`: each contrast line with the screenshot's own measure
 - `audit/iphone-audit.tsv`: the phone's first run (Sequence only)
 - `audit/iphone-audit-skiff-tabs.tsv`, `audit/iphone-skiff-tabs-contrast-measured.tsv`, `screens/iPhone-skiff-*.jpg`: the phone's second run, after the tabs fix
+- `audit/iphone-audit-phone-layout.tsv`, `audit/iphone-phone-layout-contrast-measured.tsv`, `screens/iPhone-phone-*.jpg`: the phone's third run, its own layout
 - `screens/`: each audited screen, landscape
 - The test: `ios/FM1UITests/AccessibilityAuditTests.swift`
