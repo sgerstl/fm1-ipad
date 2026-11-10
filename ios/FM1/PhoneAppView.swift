@@ -167,7 +167,7 @@ struct PhoneTopBar: View {
                     ui.page = p
                     TopBar.driveDevice(session: session, ui: ui, to: p)
                 } label: {
-                    Text(p.rawValue)
+                    Text(p.title(skiff: ui.songTab))
                         .font(.lupe(13, .semibold))
                         .foregroundStyle(current ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.85)

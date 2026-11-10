@@ -69,8 +69,6 @@ struct AppView: View {
             if now, !was { AccessibilityNotification.Announcement("FM-1 disconnected. Plug it back in; nothing is lost.").post() }
             else if was, !now, session.isConnected { AccessibilityNotification.Announcement("FM-1 back").post() }
         }
-        // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
-        .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
         // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
         // follows the playback mode to the timeline: Pads are the default, the timeline is the user's to pick, 2026-11-09)
         .onChange(of: session.screenLinked && session.deviceScreen?.layer == SkiffButtonMap.performLayer) { _, held in

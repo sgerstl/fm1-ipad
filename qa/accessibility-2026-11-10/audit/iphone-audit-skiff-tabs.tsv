@@ -1,0 +1,209 @@
+iPhone-connection-menu	contrast	Song			122,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-connection-menu	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-connection-menu	dynamicType	1.4.2			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-connection-menu	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-connection-menu	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-connection-menu	dynamicType	Arrange on Skiff is on the iPad for now			186,172,500x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-connection-menu	dynamicType	The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.			171,224,530x43	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-connection-menu	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	1.2.3			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Check the firmware file			193,210,182x21	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.			171,224,530x43	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	14%			684,134,32x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Back up the projects			193,176,161x22	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Write			193,244,44x22	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Don’t unplug it or lock the screen. If it’s cut off anyway, nothing is lost: the FM-1 waits in update mode and running the install again finishes it.			157,324,519x33	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Installing Skiff-Lupe 2.2			157,23,314x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Writing the firmware			157,133,143x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Restart the FM-1			193,278,129x22	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Arrange on Skiff is on the iPad for now			186,172,500x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-installing	dynamicType	Keep Lupe open and the FM-1 plugged in.			157,67,380x26	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	contrast	Song			122,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-firmware-picker	contrast	1.2.4			686,11,30x17	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-firmware-picker	contrast	120 BPM			686,30,44x14	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Skiff is by illuminus5, a fork of Felucca by Leo Kuroshita (Hügelton Instruments). Lupe adds only the screen link. GPL-3.0. Source: github.com/sgerstl/skiff, tag lupe-skiff-2.2-screen-link.6 (Skiff v2.2 plus skiff/0001-screen-link.patch in Lupe's repository). Downloaded already.			201,342,449x67	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.			171,224,530x43	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	SLOOP 2.8.4 with Lupe's screen link: three tracks and drums. SLOOP 2.8.4 plus a 47-line patch.			249,86,366x33	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Stock V15			249,185,77x22	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	M-VAVE's own firmware, as the FM-1 shipped. Lupe can't read or show it.			249,211,380x33	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Arrange on Skiff is on the iPad for now			186,172,500x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Back to stock			201,148,83x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	1.2.1			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Lupe backs up the projects, settings, presets and samples to Files first (On My iPhone › Lupe › Skiff › Backups), then writes. Keep the FM-1 plugged in for about a minute.			201,272,461x54	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	SLOOP-Lupe 2.8.4			249,60,145x22	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-firmware-picker	dynamicType	Skiff 2.2 with Lupe's screen link: six tracks, songs and Arrange. Skiff v2.2 plus a 73-line patch.			249,-5,377x33	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Song			122,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Mix			275,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Sounds			428,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Delay			70,347,132x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Reverb			70,399,132x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	1			96,0,28x28	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	PAN			96,172,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	REVERB			96,242,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	MUTE			96,312,90x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Pad			214,-8,90x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	PAN			214,172,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	3			332,0,28x30	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Pulse Ld			332,-8,90x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	PAN			332,172,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	REVERB			332,242,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Drum Kit			451,-8,90x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	PAN			451,172,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	REVERB			451,242,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	5			569,0,28x30	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Piano			569,-8,90x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	PAN			569,172,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	REVERB			569,242,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	Drum Kit			687,-8,90x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	PAN			687,172,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	REVERB			687,242,90x58	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	MUTE			687,312,90x44	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	TYPE			756,375,26x13	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	contrast	1			803,375,6x13	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-mix	hitRegion	DELAY, all tracks			337,330,120x19	Hit area is too small	The size of this SwiftUI.AccessibilityNode is too small for user to interact.
+iPhone-mix	dynamicType	all tracks			407,332,50x15	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	12%			159,244,26x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	C			177,174,8x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Pad			214,-8,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Pulse Ld			332,-8,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	1			96,0,28x28	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Delay			70,347,132x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	REVERB			96,242,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	C			414,174,8x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	DELAY			351,330,48x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	1			398,369,6x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	55%			277,244,26x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Drum Kit			687,-8,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	FEEDBACK			435,370,33x11	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Acid			96,-8,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	MUTE			687,312,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	REVERB			569,242,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	-4 dB			477,138,37x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	6			687,0,28x30	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	3			574,369,6x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	MUTE			96,312,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	C			296,174,8x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	REVERB			451,242,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	16%			396,244,26x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	MUTE			332,312,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	2			214,0,28x30	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	REVERB			687,242,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	-4 dB			240,138,37x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Drum Kit			451,-8,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	1.4.2			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	PAN			332,172,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	PAN			214,172,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	28%			633,244,26x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	-4 dB			122,138,37x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	C			532,174,8x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	3			332,0,28x30	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	-4 dB			359,138,37x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	C			769,174,8x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	16%			514,244,26x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Piano			569,-8,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	16%			751,244,26x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	2			486,369,6x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	REVERB			332,242,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	REVERB			214,242,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	MUTE			451,312,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	4			451,0,28x30	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	C			651,174,8x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	PAN			687,172,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	MIX			611,369,20x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	-4 dB			595,138,37x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	-4 dB			714,138,37x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	COLOR			523,369,37x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	MUTE			569,312,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	PAN			569,172,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	TIME			347,369,27x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	PAN			451,172,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	MUTE			214,312,90x44	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	4			662,369,6x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	5			569,0,28x30	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	dynamicType	PAN			96,172,90x58	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-mix	textClipped	FEEDBACK			435,370,33x11	Text clipped	Text of this SwiftUI.AccessibilityNode may be clipped at larger Dynamic Type sizes.
+iPhone-song-pads-half	contrast	Song			122,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-song-pads-half	dynamicType	The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.			171,224,530x43	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-half	dynamicType	1.4.1			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-half	dynamicType	Arrange on Skiff is on the iPad for now			186,172,500x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-half	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-half	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-half	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-half	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-max	contrast	Song			122,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-song-pads-max	dynamicType	Arrange on Skiff is on the iPad for now			186,172,500x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-max	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-max	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-max	dynamicType	The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.			171,224,530x43	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-max	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-max	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-max	dynamicType	1.4.1			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	contrast	Song			122,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	dynamicType	The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.			171,224,530x43	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	dynamicType	Arrange on Skiff is on the iPad for now			186,172,500x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-pads-nogrid	dynamicType	1.4.2			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-timeline	contrast	Song			122,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-song-timeline	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-timeline	dynamicType	1.3.4			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-timeline	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-timeline	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-timeline	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-timeline	dynamicType	Arrange on Skiff is on the iPad for now			186,172,500x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-song-timeline	dynamicType	The phone's version isn't designed yet. Arrange on an iPad, or on the FM-1 itself.			171,224,530x43	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	contrast	Sounds			428,10,151x36	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-sounds	contrast	Voice			110,324,38x19	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-sounds	contrast	8			248,325,7x17	Contrast nearly passed	Contrast is not high enough for SwiftUI.AccessibilityNode unless font size is larger.
+iPhone-sounds	contrast	Trio			110,367,27x19	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-sounds	contrast	9			248,369,7x17	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-sounds	contrast	Bone Flute			312,382,150x56	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-sounds	contrast	War Horn			470,382,150x56	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-sounds	contrast	Dark Strings			629,382,150x56	Contrast failed	Contrast failed for SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Sine Key			629,190,150x55	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Phase			110,192,42x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Analog			308,78,72x28	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Sounds			428,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	25			241,105,14x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Sample			110,280,52x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Lofi			110,236,28x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Acid			470,192,150x55	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Rave			312,254,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	8			248,237,7x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	120 BPM			686,30,44x14	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Synth Brass			312,318,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	0			248,149,7x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	25 presets			388,87,63x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Strings			629,318,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	-			110,148,6x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Song			122,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Saw Lead			312,126,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	10			241,281,14x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	9			248,193,7x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Sqr Bass			629,126,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Analog			110,104,49x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Mix			275,10,151x36	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Synth Pluck			629,254,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	8			248,325,7x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Soft Pad			470,126,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Wind Sweep			470,318,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Sub Bass			470,254,150x56	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Engines			90,70,44x15	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Voice			110,324,38x19	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	1.3.3			686,11,30x17	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	dynamicType	Pwm Str			312,190,150x55	Dynamic Type font sizes are unsupported	User will not be able to change the font size of this SwiftUI.AccessibilityNode
+iPhone-sounds	textClipped	Lofi			110,236,28x19	Text clipped	Text of this SwiftUI.AccessibilityNode may be clipped at larger Dynamic Type sizes.

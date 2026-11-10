@@ -1,0 +1,45 @@
+screen	label	frame	audit	measured
+iPhone-connection-menu	Song	122,10,151x36	Contrast failed	10.73
+iPhone-firmware-picker	Song	122,10,151x36	Contrast failed	2.02
+iPhone-firmware-picker	1.2.4	686,11,30x17	Contrast failed	2.22
+iPhone-firmware-picker	120 BPM	686,30,44x14	Contrast failed	1.60
+iPhone-mix	Song	122,10,151x36	Contrast failed	6.42
+iPhone-mix	Mix	275,10,151x36	Contrast failed	2.42
+iPhone-mix	Sounds	428,10,151x36	Contrast failed	1.25
+iPhone-mix	Delay	70,347,132x44	Contrast failed	10.73
+iPhone-mix	Reverb	70,399,132x44	Contrast failed	1.29
+iPhone-mix	1	96,0,28x28	Contrast failed	5.19
+iPhone-mix	PAN	96,172,90x58	Contrast failed	12.82
+iPhone-mix	REVERB	96,242,90x58	Contrast failed	12.82
+iPhone-mix	MUTE	96,312,90x44	Contrast failed	12.89
+iPhone-mix	Pad	214,-8,90x44	Contrast failed	1.25
+iPhone-mix	PAN	214,172,90x58	Contrast failed	16.13
+iPhone-mix	3	332,0,28x30	Contrast failed	12.09
+iPhone-mix	Pulse Ld	332,-8,90x44	Contrast failed	3.06
+iPhone-mix	PAN	332,172,90x58	Contrast failed	16.13
+iPhone-mix	REVERB	332,242,90x58	Contrast failed	16.13
+iPhone-mix	Drum Kit	451,-8,90x44	Contrast failed	3.02
+iPhone-mix	PAN	451,172,90x58	Contrast failed	16.13
+iPhone-mix	REVERB	451,242,90x58	Contrast failed	16.13
+iPhone-mix	5	569,0,28x30	Contrast failed	12.89
+iPhone-mix	Piano	569,-8,90x44	Contrast failed	2.59
+iPhone-mix	PAN	569,172,90x58	Contrast failed	16.13
+iPhone-mix	REVERB	569,242,90x58	Contrast failed	16.13
+iPhone-mix	Drum Kit	687,-8,90x44	Contrast failed	3.56
+iPhone-mix	PAN	687,172,90x58	Contrast failed	16.13
+iPhone-mix	REVERB	687,242,90x58	Contrast failed	16.13
+iPhone-mix	MUTE	687,312,90x44	Contrast failed	5.19
+iPhone-mix	TYPE	756,375,26x13	Contrast failed	6.92
+iPhone-mix	1	803,375,6x13	Contrast failed	1.29
+iPhone-song-pads-half	Song	122,10,151x36	Contrast failed	10.73
+iPhone-song-pads-max	Song	122,10,151x36	Contrast failed	10.73
+iPhone-song-pads-nogrid	Song	122,10,151x36	Contrast failed	10.73
+iPhone-song-timeline	Song	122,10,151x36	Contrast failed	10.73
+iPhone-sounds	Sounds	428,10,151x36	Contrast failed	10.73
+iPhone-sounds	Voice	110,324,38x19	Contrast failed	3.64
+iPhone-sounds	8	248,325,7x17	Contrast nearly passed	3.91
+iPhone-sounds	Trio	110,367,27x19	Contrast failed	1.14
+iPhone-sounds	9	248,369,7x17	Contrast failed	1.14
+iPhone-sounds	Bone Flute	312,382,150x56	Contrast failed	1.01
+iPhone-sounds	War Horn	470,382,150x56	Contrast failed	1.01
+iPhone-sounds	Dark Strings	629,382,150x56	Contrast failed	1.01
