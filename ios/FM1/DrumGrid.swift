@@ -139,7 +139,12 @@ struct DrumGridContent: View {
                         .accessibilityLabel(StepLabels.drums(index: i, t, lanes: lanes))
                         .accessibilityAddTraits(i == selected ? [.isButton, .isSelected] : .isButton)
                         .accessibilityAction { ui.selectedStep[dt] = i }
+                        .accessibilityValue(ui.stepSel.contains(i) ? "picked" : "")
                         .accessibilityActions {
+                            // pick steps for the selection bar without the drag (2026-11-10, 2.1.1; as the piano roll)
+                            if session.dialect == .skiff {      // (picking is Skiff's: SLOOP has no selection bar)
+                                Button(ui.stepSel.contains(i) ? "Unpick step" : "Pick step") { ui.stepSel.formSymmetricDifference([i]) }
+                            }
                             ForEach(lanes.indices, id: \.self) { l in
                                 Button("\(lanes[l]) \(t.gridSteps[i].has(l) ? "off" : "on")") {
                                     ui.selectedStep[dt] = i; ui.selectedLane = l
