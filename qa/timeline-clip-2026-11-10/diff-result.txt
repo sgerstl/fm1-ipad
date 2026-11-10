@@ -1,0 +1,12 @@
+pads-full-shut.png       identical
+pads-full-t1.png         identical
+pads-half-t4.png         identical
+pads-max.png             identical
+tl-full-open.png         identical
+tl-half-t1-open.png      identical
+tl-half-t4-open.png      differs in x 270–666, y 370–437 pt
+tl-half-t4-shut.png      identical
+tl-half-t5-open.png      identical
+tl-half-t6-open.png      identical
+tl-half-t6-shut.png      identical
+tl-max-open.png          identical

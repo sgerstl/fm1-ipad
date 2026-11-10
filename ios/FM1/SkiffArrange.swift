@@ -14,6 +14,9 @@ struct SkiffArrangePage: View {
     let ui: EditorUI
     @State private var selection: EntryRef?
     @State private var allPatterns = false
+    /// The lanes' sideways scroll: the track controls draw outside the scroll (so they can hang past its foot, over the
+    /// editor at Half) and follow it by this.
+    @State private var lanesScrollX: CGFloat = 0
     /// A pattern being dragged from the bin (set when the drag starts; EditorUI's, so the Song tab's drawer can
     /// start one), and where it would go.
     private var dragPattern: Int? { ui.dragPattern }
@@ -269,11 +272,22 @@ struct SkiffArrangePage: View {
                         SongPlayhead(session: session, store: store, barWidth: barWidth,
                                      height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap))
                     }
-                    .overlay(alignment: .topLeading) { laneControls(barWidth: barWidth, contentWidth: contentWidth) }
                     .frame(width: contentWidth, alignment: .leading)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDisabled(lifted != nil)
+                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.x }) { _, x in lanesScrollX = x }
+            }
+            // the track controls outside the scroll, which clipped them at its foot (at Half the editor cut the box and
+            // its carets off; Scott, 2026-11-10: "fix the clipping"): moved with the scroll, cut off at the heads' edge
+            // only, free to hang down over the editor (SongTab lets the page's foot give way while they're open)
+            .overlay(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    laneControls(barWidth: barWidth, contentWidth: contentWidth).offset(x: -lanesScrollX)
+                }
+                .frame(width: laneWidth, height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap), alignment: .topLeading)
+                .mask { Rectangle().padding(.vertical, -400) }
+                .offset(x: headW)
             }
             .background(alignment: .topLeading) { selectedRow }
             .opacity(store.offline ? 0.5 : 1)
@@ -315,6 +329,8 @@ struct SkiffArrangePage: View {
                         .frame(width: tab.width, height: tab.height, alignment: .topLeading)
                         .offset(x: x, y: y)
                 }
+                // scrolled partly under the heads, its hidden part would take their taps (it draws outside the scroll)
+                .allowsHitTesting(x - lanesScrollX >= 0)
                 .frame(width: contentWidth, height: total, alignment: .topLeading)
                 .id("lanebox\(t).\(b.id)")
                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: false, slide: true))
@@ -331,6 +347,7 @@ struct SkiffArrangePage: View {
                 OpenControlsTab(track: t, up: up, width: w, height: th,
                                 hint: "Opens the selected track's knobs at its block") { controlsOpen = true }
                     .offset(x: max(0, bx + bw - w), y: up ? laneTop - th : laneTop + h)
+                    .allowsHitTesting(max(0, bx + bw - w) - lanesScrollX >= -11)
                     .id("lanetab\(t).\(b.id)")
                     .transition(.opacity.animation(.easeOut(duration: 0.15)))
             }

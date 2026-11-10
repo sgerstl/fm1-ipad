@@ -82,7 +82,9 @@ struct SkiffSongPage: View {
             let shown = layout ?? position.layout
             let editorShown = dragTop != nil || position != .none
             // (the track controls close over the largest editor, Scott 2026-11-09: nothing hangs over it now)
-            let overEditor = false
+            // the Timeline's open track controls hang from the lane, past the lanes' foot over the editor where they don't
+            // fit above (Scott, 2026-11-10: "fix the clipping"); the Pads' still close over the editor
+            let overEditor = !pads && padControlsOpen && position != .none
             // the editor keeps its height while it slides under the fold, the page clipping it
             let bottom = max(Self.editorMin, total - top)
             VStack(spacing: 0) {
