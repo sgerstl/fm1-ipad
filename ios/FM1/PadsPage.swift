@@ -1134,6 +1134,7 @@ struct OpenControlsTab: View {
     let up: Bool
     let width: CGFloat
     let height: CGFloat
+    var hint = "Opens the selected track's knobs under its pad"
     let open: () -> Void
 
     var body: some View {
@@ -1150,6 +1151,6 @@ struct OpenControlsTab: View {
         }
         .buttonStyle(PressSink())
         .accessibilityLabel("Show track controls")
-        .accessibilityHint("Opens the selected track's knobs under its pad")
+        .accessibilityHint(hint)
     }
 }

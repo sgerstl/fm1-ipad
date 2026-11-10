@@ -319,6 +319,21 @@ struct SkiffArrangePage: View {
                 .id("lanebox\(t).\(b.id)")
                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: false, slide: true))
             }
+            // shut: the Pads' open tab on the selected lane (Scott, 2026-11-10: "Yes, add it"), right-aligned to the block
+            // the editor shows (the Timeline's selected pad), on the edge the controls would open from
+            if compact, !controlsOpen, dragPattern == nil, lifted == nil, let b = block {
+                let h = laneHeight, gap = Self.laneGap
+                let laneTop = 24 + gap + CGFloat(t) * (h + gap)
+                let bx = CGFloat(b.start / SongPlacement.ticksPerBar) * barWidth + 2
+                let bw = max(8, CGFloat(b.length / SongPlacement.ticksPerBar) * barWidth - 4)
+                let up = laneTop - TrackKnobBox.height(for: session) >= 0
+                let w = PadsPage.openTabWidth, th = PadsPage.openTabHeight
+                OpenControlsTab(track: t, up: up, width: w, height: th,
+                                hint: "Opens the selected track's knobs at its block") { controlsOpen = true }
+                    .offset(x: max(0, bx + bw - w), y: up ? laneTop - th : laneTop + h)
+                    .id("lanetab\(t).\(b.id)")
+                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
+            }
         }
         .frame(width: contentWidth, height: total, alignment: .topLeading)
         .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: block?.id)
