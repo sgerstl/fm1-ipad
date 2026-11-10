@@ -240,7 +240,11 @@ struct PhoneTopBar: View {
                 var audio = [MenuItem(title: "Play through the iPhone", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
                 if through.enabled { audio.append(.note(through.summary)) }
                 g.append(audio)
-                g.append([MenuItem(title: useDemo ? "Use the FM-1" : "Use the demo FM-1", icon: useDemo ? "cable.connector" : "play.rectangle") { useDemo.toggle() }])
+                // the source, as the iPad's connection menu (TopBar.connectionGroups): the FM-1, or a demo running
+                // Skiff or SLOOP (2026-11-10: the phone had only a demo on/off, which always opened SLOOP)
+                g.append([MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !useDemo) { useDemo = false },
+                          MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: useDemo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
+                          MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: useDemo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }])
                 if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
                 return g
             }, at: CGPoint(x: moreFrame.maxX - MenuPanel.width, y: moreFrame.maxY), fromKey: true)
