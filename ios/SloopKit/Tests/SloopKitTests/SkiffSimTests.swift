@@ -22,14 +22,16 @@ import Testing
         #expect(d.dialect == .skiff)
         #expect(d.shape.trackCount == 6 && d.shape.stepCount == 64 && d.shape.drumTrack == nil)
         #expect(!d.shape.canPlay(track: 4, engine: 9) && d.shape.canPlay(track: 0, engine: 9))
-        #expect(d.info.paramCount == 146 && d.info.firstEngineParam == 138)
+        let v22 = d.firmware == .v2_2                              // 2.5.1: STRUM and DIR before the engine's eight
+        #expect(d.info.paramCount == (v22 ? 146 : 148) && d.info.firstEngineParam == (v22 ? 138 : 140))
         #expect(d.params.chord == 81 && d.params.direction == 91 && d.params.swing == 31)
         let pages = d.pageLayout ?? []
         #expect(pages.first { $0.title == "ENV 2" }?.ids == [97, 98, 99, 100])
         #expect(pages.first { $0.title == "INSERT" }?.ids == [121, 122, 123, 124])
         #expect(pages.first { $0.title == "CHORUS" }?.ids == [10, 11, 25, 26])
-        let e = try await d.desc(scope: 0, id: 138)               // scope 2 on the wire
-        #expect(e.label == "WAVE" && e.id == 138)
+        let e0 = d.info.firstEngineParam
+        let e = try await d.desc(scope: 0, id: e0)                // scope 2 on the wire
+        #expect(e.label == "WAVE" && e.id == e0)
         await d.close()
     }
 
@@ -96,10 +98,11 @@ import Testing
         #expect(stored.extra.count == before.extra.count)
         _ = try await d.setSynthStep(track: 5, index: 63, before)       // put it back
         #expect(try await d.synthStep(track: 5, index: 63) == before)
-        // a wide id through TRACK_PARAM: bit 6 of the track byte
-        let v = try await d.trackParam(track: 2, id: 140)
-        #expect(try await d.setTrackParam(track: 2, id: 140, value: 33) == 33)
-        _ = try await d.setTrackParam(track: 2, id: 140, value: v)
+        // a wide id through TRACK_PARAM: bit 6 of the track byte (129, a lane's PAN on 2.2 and 2.5.1 alike: 140 is the
+        // engine's first on 2.5.1, with its own range)
+        let v = try await d.trackParam(track: 2, id: 129)
+        #expect(try await d.setTrackParam(track: 2, id: 129, value: 33) == 33)
+        _ = try await d.setTrackParam(track: 2, id: 129, value: v)
         await d.close()
     }
 

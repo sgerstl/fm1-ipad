@@ -334,7 +334,7 @@ extension SkiffSongSimTests {
 
     @Test func screenAndGotoOnTheRealFirmware() async throws {
         let d = try await driver()
-        #expect(d.skiff.hasScreenLink && d.info.version == "FELUCCA v2.2")
+        #expect(d.skiff.hasScreenLink && d.firmware.rawValue == d.info.version)      // 2.2 or 2.5.1: Lupe's page numbers either way
         _ = try await d.selectTrack(0)                                  // T1, ANALOG
         var s = try await d.screen()
         print("SCREEN at connect:", s)
