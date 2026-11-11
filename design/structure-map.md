@@ -242,3 +242,17 @@ The four tracks' strips (LEVEL, PAN, MUTE, the REV send), then the shared cards:
 | SAVE (PRESETS) | The sounds panel over the tab that's up |
 | SAVE held (the song layer) | Song › Pads (the sections) |
 | PLAY, REC | The transport |
+
+## Exports (2026-11-11, proposed: Scott picks on boards 51 and 52 before any export UI is built)
+
+Four exports (vault `export-plan.md`): the song as audio, a session as audio ("Capture"), MIDI, and a Skiff backup (the whole FM-1: Skiff has no single-project file). A Lupe project file comes later. Where they live, three options:
+
+| Option | Export (MIDI, song audio, Skiff backup) | Capture a session | Adds to the top row |
+|---|---|---|---|
+| **A** (proposed) | The FM-1 key's menu › Export…, a sheet with the four rows | The FM-1 key's menu, under Export… | Nothing |
+| B | Projects sheet › a project's ⋯ menu (MIDI, the project file); the Skiff backup on the FM-1 page | The FM-1 key's menu, beside Play through the iPad | Nothing |
+| C | The FM-1 key's menu › Export… | A Capture key between Keys and REC (held: its menu, including Capture the song) | One key, the first to go to an icon as the row narrows |
+
+A take in progress shows in one place (board 52): **1** the readout turns into the take's time, level and Stop (proposed); **2** a strip under the row; **3** a ring and the time on the FM-1 key. Capture never looks like the FM-1's REC: a level waveform and the word Capture, never a red dot.
+
+Files go to `Documents/Skiff/Exports` (and `SLOOP/Exports`), then the share sheet. The FM-1's buttons don't change.
