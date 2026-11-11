@@ -10,4 +10,6 @@ The builds Lupe installs, kept here so each release is reproducible. They're **n
 
 A new build: new file, new pin in `LupeFirmware`, new release tag (`LupeFirmware.releaseTag`), then an app build. Never replace an asset on an existing release: installed copies of Lupe pin the old hash.
 
+**Debug builds on a device carry these files** (since 2026-11-11): the app target's "Bundle release firmware (Debug)" phase copies them into the app as `DebugFirmware/`, and `FirmwareStore(localReleases:)` installs them, still checked against the pins. The GitHub releases were never made and the repo is private, so the download path 404s on a device; it only matters for a Release build.
+
 In a Debug build the app and the tests use these copies directly (`LupeFirmware.localCopy`), so the simulator's firmware demos and the tests need no network.

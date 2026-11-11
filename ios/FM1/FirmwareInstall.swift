@@ -33,7 +33,12 @@ final class FirmwareCentre {
     var phase: Phase = .idle
     var target: LupeFirmware = .skiff
     /// Skiff-Lupe and SLOOP-Lupe, downloaded when chosen and kept (Application Support).
+    #if DEBUG
+    // a Debug build carries firmware/releases/ (the "Bundle release firmware (Debug)" build phase): no GitHub release needed
+    let store = FirmwareStore(localReleases: Bundle.main.url(forResource: "DebugFirmware", withExtension: nil))
+    #else
     let store = FirmwareStore()
+    #endif
     /// This install starts with a download (the file wasn't on the device yet).
     private(set) var downloads = false
     var showPicker = false

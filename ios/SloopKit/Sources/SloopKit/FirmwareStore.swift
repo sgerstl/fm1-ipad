@@ -61,15 +61,28 @@ public struct HTTPFirmwareTransport: FirmwareTransport {
 public final class FirmwareStore: Sendable {
     public let directory: URL
     private let transport: FirmwareTransport
+    /// Debug builds on a device: release files copied into the app at build time (FM1's "Bundle release firmware (Debug)"
+    /// phase, into DebugFirmware/), so the installer works without a GitHub release. Still checked against the pins.
+    private let localReleases: URL?
 
     /// Application Support/Firmware (not in Files: the user doesn't manage these).
     public static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Firmware")
     }
 
-    public init(directory: URL = FirmwareStore.defaultDirectory, transport: FirmwareTransport = HTTPFirmwareTransport()) {
+    public init(directory: URL = FirmwareStore.defaultDirectory, transport: FirmwareTransport = HTTPFirmwareTransport(),
+                localReleases: URL? = nil) {
         self.directory = directory
         self.transport = transport
+        self.localReleases = localReleases
+    }
+
+    /// The build's own copy of a release (see `localReleases`), when it's there and matches its pin.
+    public func localRelease(_ f: LupeFirmware) -> URL? {
+        guard let dir = localReleases, !f.isBundled else { return nil }
+        let url = dir.appending(path: f.fileName)
+        guard let data = try? Data(contentsOf: url), Self.digest(data) == f.sha256 else { return nil }
+        return url
     }
 
     private func place(_ f: LupeFirmware) -> URL { directory.appending(path: f.fileName) }
@@ -85,12 +98,13 @@ public final class FirmwareStore: Sendable {
     }
 
     /// Installable without the internet: in the app, or already downloaded.
-    public func isReady(_ f: LupeFirmware) -> Bool { f.isBundled || cachedFile(f) != nil }
+    public func isReady(_ f: LupeFirmware) -> Bool { f.isBundled || localRelease(f) != nil || cachedFile(f) != nil }
 
     /// The file for `f`: the app's own (stock V15), the cached download, or a new download, verified before it's kept.
     @discardableResult
     public func fetch(_ f: LupeFirmware, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
         if f.isBundled, let url = f.localCopy { progress(1); return url }
+        if let url = localRelease(f) { progress(1); return url }
         if let url = cachedFile(f) { progress(1); return url }
         guard let remote = f.downloadURL else { throw FirmwareDownloadError.failed("no download for \(f.title)") }
         let data: Data
@@ -113,7 +127,7 @@ public final class FirmwareStore: Sendable {
     /// The parsed package from the app or the cache (nil-free: a file not there yet is `PackageError.missing`).
     public func package(_ f: LupeFirmware) throws -> FirmwarePackage {
         if f.isBundled { return try f.load() }
-        guard let url = cachedFile(f), let data = try? Data(contentsOf: url) else { throw PackageError.missing(f.rawValue) }
+        guard let url = localRelease(f) ?? cachedFile(f), let data = try? Data(contentsOf: url) else { throw PackageError.missing(f.rawValue) }
         return try FirmwarePackage(data: [UInt8](data), pinned: f)
     }
 

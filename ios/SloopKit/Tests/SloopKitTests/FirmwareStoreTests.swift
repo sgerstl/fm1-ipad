@@ -57,6 +57,25 @@ import Testing
         #expect(t.unanswered.isEmpty)
     }
 
+    /// A Debug build's own copies (DebugFirmware/ in the app): installable with no request; a wrong file there is ignored.
+    @Test func aDebugBuildsOwnCopyNeedsNoDownload() async throws {
+        let base = FileManager.default.temporaryDirectory.appending(path: "fwlocal-\(UUID().uuidString)")
+        let rel = base.appending(path: "DebugFirmware")
+        try FileManager.default.createDirectory(at: rel, withIntermediateDirectories: true)
+        try Self.real(.skiff251).write(to: rel.appending(path: LupeFirmware.skiff251.fileName))
+        try Data([1, 2, 3]).write(to: rel.appending(path: LupeFirmware.skiff.fileName))     // fails its pin
+        let t = FakeTransport()
+        let store = FirmwareStore(directory: base.appending(path: "cache"), transport: t, localReleases: rel)
+        #expect(store.isReady(.skiff251))
+        #expect(!store.isReady(.skiff))
+        let url = try await store.fetch(.skiff251)
+        #expect(url.deletingLastPathComponent().lastPathComponent == "DebugFirmware")
+        #expect(try store.package(.skiff251).product == "FM-1_725")
+        #expect(t.requested.isEmpty)
+        _ = try? await store.fetch(.skiff)                          // the bad copy is skipped: it goes to the download
+        #expect(t.requested == [LupeFirmware.skiff.downloadURL!])
+    }
+
     @Test func theCachedFileIsUsedWithoutAnotherRequest() async throws {
         let t = FakeTransport(), store = Self.tempStore(t)
         t.answer(LupeFirmware.sloop.downloadURL!, .data(try Self.real(.sloop)))

@@ -26,9 +26,20 @@ targets:
         excludes: [LaunchScreen-Info.plist]     # merged into the Info.plist, not a resource
     dependencies:
       - package: SloopKit
+    postBuildScripts:
+      # Debug only: copy the release firmware into the app so the installer works on a device without a GitHub
+      # release (the repo is private, downloads 404). Release builds download as before. Added 2026-11-11.
+      - name: Bundle release firmware (Debug)
+        basedOnDependencyAnalysis: false
+        script: |
+          [ "$CONFIGURATION" = "Debug" ] || exit 0
+          dst="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/DebugFirmware"
+          mkdir -p "$dst"
+          cp "$SRCROOT/../firmware/releases/"*.fwsc "$dst/"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.scottgerstl.fm1ipad
+        ENABLE_USER_SCRIPT_SANDBOXING: NO       # the Debug firmware copy reads ../firmware/releases
         PRODUCT_NAME: FM1
         TARGETED_DEVICE_FAMILY: "1,2"          # iPhone too (2026-11-04), landscape only
         GENERATE_INFOPLIST_FILE: YES
