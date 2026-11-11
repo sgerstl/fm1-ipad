@@ -113,7 +113,7 @@ struct StepperKeys: View {
             key("minus", "Lower \(label)") { set(max(range.lowerBound, value - step)) }
                 .disabled(!enabled || value <= range.lowerBound)
             Text(enabled ? format(value) : "–")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.lupe(17, .semibold))
                 .frame(minWidth: 48)
                 .accessibilityHidden(true)
             key("plus", "Raise \(label)") { set(min(range.upperBound, value + step)) }

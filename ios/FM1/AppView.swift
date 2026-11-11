@@ -9,12 +9,35 @@ struct AppView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     /// The Song tab's view before ARP was held on the FM-1 (the Pads while it's held), to go back to.
     @State private var padsReturn: SongView?
+    /// Connected at least once this launch: a loss then holds the page instead of swapping it (board 42, option A).
+    @State private var everConnected = false
+    /// The FM-1 lost (or found again and being read) after it was connected: the page stays where it was, faded back
+    /// and grey, read-only, with the card over it (Scott, 2026-11-09: "A").
+    private var held: Bool {
+        guard everConnected, !session.isConnected else { return false }
+        switch session.status { case .lost, .connecting: return true; default: return false }
+    }
 
     var body: some View {
         VStack(spacing: 16) {
             TopBar(session: session, ui: ui, useDemo: $useDemo)
-            if case .connected = session.status {
+            if session.isConnected || held {
                 pages.animation(pageAnimation, value: ui.page)
+                    // held: faded back and grey, touches off; back to itself when the FM-1 is read again
+                    .allowsHitTesting(!held)
+                    .grayscale(held ? 0.85 : 0)
+                    .opacity(held ? 0.45 : 1)
+                    .animation(.easeOut(duration: held ? 0.3 : 0.25), value: held)
+                    .overlay(alignment: .top) {
+                        if held {
+                            LostCard(status: session.status)
+                                .padding(.top, 8)
+                                .transition(reduceMotion ? .opacity.animation(.easeOut(duration: 0.15))
+                                            : .asymmetric(insertion: .move(edge: .top).combined(with: .opacity).animation(.easeOut(duration: 0.25)),
+                                                          removal: .move(edge: .top).combined(with: .opacity).animation(.easeIn(duration: 0.2))))
+                        }
+                    }
+                    .animation(.easeOut(duration: 0.25), value: held)
                     // a button pressed on the FM-1 brings up the tab that shows its screen
                     .onChange(of: session.deviceScreen) { _, s in
                         // Skiff: every button lands somewhere (SkiffButtonMap), GLO in the mixer panel
@@ -25,20 +48,41 @@ struct AppView: View {
                             if let s, !SoundPanelControl.follow(s, session: session, ui: ui) { SkiffNavigator.follow(s, session: session, ui: ui) }
                             return
                         }
+                        // SLOOP in the Song · Mix tabs: a sound button brings the sound panel over the tab, as on Skiff;
+                        // SAVE held (the song layer) shows the sections
+                        if ui.sloopShell, let s {
+                            if SoundPanelControl.follow(s, session: session, ui: ui) { return }
+                            if s.layer == 7, ui.followDevice { ui.songView = .pads }
+                            // SAVE again (the FM-1 on its song pages): the sounds panel goes, the sections show
+                            if ui.followDevice, SoundPage.tab(for: s, session) == .song, ui.presetsPanel {
+                                ui.presetsPanel = false
+                                ui.songView = .pads
+                            }
+                            // GLO's pages are Mix's; SEQ's (NOTES, PATTERN) the Song tab's editor
+                            if ui.followDevice, !s.home, s.layer == 0, s.menu == 0, let p = SoundPage.page(session, fw: s.page),
+                               p.family == .glo || p.family == .seq {
+                                let tab: Page = p.family == .glo ? .mixer : .song
+                                if tab != ui.page { ui.pageFromDevice = true; ui.page = tab }
+                                return
+                            }
+                        }
                         guard ui.followDevice, let s, let tab = SoundPage.tab(for: s, session), tab != ui.page else { return }
                         ui.pageFromDevice = true
                         ui.page = tab
                     }
-            } else if ui.page == .song, let store = session.skiffSong, store.song != nil, store.offline {
-                // disconnected on Arrange: the last song stays, dimmed and read-only, under a status bar
-                SkiffArrangePage(session: session, store: store, ui: ui)
             } else {
                 ConnectionState(status: session.status, useDemo: $useDemo)
+                    .transition(.opacity.animation(.easeOut(duration: 0.3)))
             }
         }
         .sessionUpkeep(session)
+        .onChange(of: session.isConnected, initial: true) { _, on in if on { everConnected = true } }
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
+        // SLOOP in the same tabs (the SLOOP design pass, 2026-11-10); -sloop-classic keeps the old four tabs, for comparing
+        .onChange(of: session.dialect == .sloop && session.capabilities.contains(.sloopSong), initial: true) { _, on in
+            ui.sloopShell = on && !LaunchArgs.all.contains("-sloop-classic")
+        }
         // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
         // follows the playback mode to the timeline: Pads are the default, the timeline is the user's to pick, 2026-11-09)
         .onChange(of: session.screenLinked && session.deviceScreen?.layer == SkiffButtonMap.performLayer) { _, held in
@@ -62,7 +106,7 @@ struct AppView: View {
         .overlay { ValueLoupeLayer(loupe: ui.loupe) }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
-        .font(.system(size: 15))
+        .font(.lupe(15))
         .monospacedDigit()
     }
 }
@@ -76,7 +120,7 @@ extension AppView {
             // its scroll views mid-animation; its playheads pause while it's hidden.
             let onSequencer = ui.page == .sequencer
             // (Skiff has no Sequence page: its Song tab carries the editor)
-            if !ui.songTab {
+            if !ui.shell {
                 SequencerPage(session: session, ui: ui)
                 .opacity(onSequencer ? 1 : 0)
                 .allowsHitTesting(onSequencer)
@@ -103,7 +147,12 @@ extension AppView {
                     }
                 case .song:
                     HStack(alignment: .top, spacing: 16) {
-                        if session.capabilities.contains(.sloopSong) {
+                        if session.capabilities.contains(.sloopSong), ui.sloopShell {
+                            // SLOOP's Song tab in the Skiff layout: its sections as pads or its order as a lane, the editor below
+                            SoundPanelHost(session: session, ui: ui) {
+                                SloopSongPage(session: session, ui: ui)
+                            }
+                        } else if session.capabilities.contains(.sloopSong) {
                             leftColumn {
                                 FunctionPads(session: session, ui: ui)
                                 SongModePanel(session: session)
@@ -137,17 +186,9 @@ extension AppView {
             }
             .transition(.opacity)
             .id(ui.page)
-            // the Presets panel: from the right, over the page; the page dims and a tap on it closes the
-            // panel, while the track box stays lit and live above the dimming, to switch tracks
-            if ui.presetsPanel {
-                Color.black.opacity(0.35)
-                    .contentShape(Rectangle())
-                    .onTapGesture { ui.presetsPanel = false }
-                    .accessibilityLabel("Close the presets")
-                    .accessibilityAddTraits(.isButton)
-                    .transition(.opacity)
-                    .zIndex(1)
-            }
+            // the Presets panel: from the right, over the page, which no longer dims and stays live beside it (Scott,
+            // 2026-11-10, when the Sounds tab went): pads, the track heads and the sound panel all still answer. Done, SAVE,
+            // another tab or Escape close it.
             // (none over Skiff's Song tab or the Mixer: their own rows select a track)
             if !skiffArrange, ui.page != .mixer {
                 Overview(session: session, ui: ui, expanded: ui.page == .sequencer || ui.timelineOpen)
@@ -166,6 +207,10 @@ extension AppView {
             if ui.presetsPanel {
                 PresetsPanel(session: session, ui: ui)
                     .geometryGroup()                      // moves as one piece: nothing inside trails it
+                    // beside the sound panel (ENV, LFO…) when that's open, so a sound can be picked and shaped together:
+                    // the panel's width, the rail's when it's on the right, and their gaps (780 + 442 + 68 fits 1376)
+                    .padding(.trailing, presetsRoom)
+                    .animation(reduceMotion ? nil : SoundPanelHost<EmptyView>.slide, value: presetsRoom)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
                     // on top while it leaves too: without an order a leaving view drops behind the rest
@@ -181,8 +226,21 @@ extension AppView {
         }
     }
 
+    /// How far in from the right the Presets panel sits: clear of the sound panel and the rail when they're there.
+    private var presetsRoom: CGFloat {
+        guard ui.soundPanel != nil, ui.shell, ui.page == .song || ui.page == .mixer else { return 0 }
+        // (read here, not as @AppStorage: this is an extension of AppView; Settings changes them only between uses)
+        let d = UserDefaults.standard
+        let showRail = d.object(forKey: SoundButtons.key) as? Bool ?? SoundButtons.standard
+        let hand = d.string(forKey: Handedness.key).flatMap(Handedness.init(rawValue:)) ?? .right
+        let rail = showRail && hand == .right ? SoundRail.width + 12 : 0
+        // a flush panel runs over the page margin to the screen edge, so it takes that much less room
+        let flush = !showRail || hand == .left
+        return SoundPanel.width + 12 + rail - (flush ? SoundPanelHost<EmptyView>.pageMargin : 0)
+    }
+
     /// Arrange on Skiff has its own lane headers: no track box over it.
-    private var skiffArrange: Bool { ui.page == .song && session.skiffSong != nil }
+    private var skiffArrange: Bool { ui.page == .song && (session.skiffSong != nil || ui.sloopShell) }
 
     /// The left column under the track box.
     private func leftColumn<C: View>(@ViewBuilder _ content: () -> C) -> some View {
@@ -244,7 +302,7 @@ extension AppView {
             if let c = ui.lastClear {
                 HStack(spacing: 16) {
                     TrackChip(track: c.track)
-                    Text("Cleared track \(c.track + 1)").font(.system(size: 15, weight: .semibold))
+                    Text("Cleared track \(c.track + 1)").font(.lupe(15, .semibold))
                     Button {
                         session.undo(c)
                         ui.lastClear = nil
@@ -371,9 +429,9 @@ struct NotOnThisFirmware: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-            Text(title).font(.system(size: 28, weight: .semibold))
+            Text(title).font(.lupe(28, .semibold))
             Text(detail)
-                .font(.system(size: 17))
+                .font(.lupe(17))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 560)
@@ -394,9 +452,9 @@ struct ConnectionState: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-            Text(title).font(.system(size: 28, weight: .semibold))
+            Text(title).font(.lupe(28, .semibold))
             Text(detail)
-                .font(.system(size: 17))
+                .font(.lupe(17))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 560)
@@ -457,11 +515,48 @@ struct ConnectionState: View {
 }
 
 /// "Looking for the FM-1…" with the system's spinner: the app is retrying, there's nothing to press.
+/// The FM-1 lost while it was in use: a card from under the top bar over the held page (board 42, option A). Lost:
+/// what happened, what to do, that Lupe is looking; found again: "Back", reading it. The two blend.
+struct LostCard: View {
+    let status: ConnectionStatus
+    private var back: Bool { if case .connecting = status { true } else { false } }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            Image(systemName: back ? "cable.connector" : "cable.connector.slash")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(back ? Theme.knob[1] : Theme.caution)
+                .frame(width: 48, height: 48)
+                .contentTransition(.symbolEffect(.replace))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(back ? "Back" : "FM-1 disconnected").font(.lupe(22, .semibold))
+                    .contentTransition(.opacity)
+                Text(back ? "Reading the FM-1. A second." : "Plug it back in, or check it’s switched on. Lupe picks up where you were: nothing here is lost.")
+                    .font(.lupe(15)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentTransition(.opacity)
+                if back {
+                    ProgressView().progressViewStyle(.linear).tint(Theme.text).padding(.top, 4)
+                        .transition(.opacity)
+                } else {
+                    LookingForFM1().transition(.opacity)
+                }
+            }
+        }
+        .padding(24)
+        .frame(width: 520, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Theme.control).elevationShadow(.held))
+        .animation(.easeOut(duration: 0.15), value: back)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
 struct LookingForFM1: View {
     var body: some View {
         HStack(spacing: 8) {
             ProgressView().tint(Theme.textSecondary)
-            Text("Looking for the FM-1…").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+            Text("Looking for the FM-1…").font(.lupe(15)).foregroundStyle(Theme.textSecondary)
         }
         .accessibilityElement(children: .combine)
     }
@@ -478,9 +573,9 @@ struct RecordingKnobsBar: View {
             HStack(spacing: 12) {
                 Image(systemName: "record.circle").foregroundStyle(Theme.rec).accessibilityHidden(true)
                 Text("Recording knob moves on T\(session.selectedTrack + 1): every change, here or on the FM-1, goes into its steps.")
-                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                    .font(.lupe(13)).fixedSize(horizontal: false, vertical: true)
                 Button { session.toggleRec() } label: {
-                    Text("Stop recording").font(.system(size: 13, weight: .semibold))
+                    Text("Stop recording").font(.lupe(13, .semibold))
                         .padding(.horizontal, 12).frame(minHeight: 44).raisedKey()
                         .contentShape(Rectangle())
                 }

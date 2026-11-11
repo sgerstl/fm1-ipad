@@ -47,6 +47,20 @@ enum Handedness: String, CaseIterable, Identifiable {
     }
 }
 
+/// Every pad's pattern drawn, not only the ones played (Scott, 2026-11-09): while stopped, Lupe reads the FM-1's
+/// pattern pool for the pictures. A trial: on by default; still on at its review (2026-11-16), it stays.
+enum PadPreviews {
+    static let key = "padPreviews"
+    static var on: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+}
+
+/// Lupe's tracks in the FM-1's THEME colours (Scott, 2026-11-09): on by default; only the six track colours, Lupe's
+/// own surfaces and greys stay (they're tuned for contrast).
+enum ThemeColours {
+    static let key = "themeTrackColours"
+    static var on: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+}
+
 /// The value loupe's switch (ValueLoupe.swift). On by default; off, LoupeState.show does nothing.
 enum Magnifier {
     static let key = "magnifier"

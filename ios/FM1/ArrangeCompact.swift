@@ -43,9 +43,11 @@ struct LaneMarks: View {
                         }
                         if m.playing == b.id, m.ends { badge(nil, "END").frame(width: w, height: h, alignment: .bottomTrailing) }
                         if m.queued == b.id {
-                            let pulse = reduceMotion ? 1 : 0.55 + 0.45 * abs(sin(tl.date.timeIntervalSinceReferenceDate * .pi))
-                            RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.text, lineWidth: 2).opacity(pulse).padding(1)
-                            badge(Image(systemName: "timer"), Self.countdown(m.launchIn, session.launchMode)).frame(width: w, height: h, alignment: .bottomLeading)
+                            // waiting, as the pads now draw it (2026-11-10, board 48): the time to its launch traced round
+                            // it in the track's colour, closing as it lands; no countdown numbers
+                            LaunchTrace(left: { session.ticksToLaunch(track) }, colour: Theme.track[track], radius: 6, width: 2.5)
+                                .frame(width: w, height: h)
+                                .transition(.opacity)
                         }
                     }
                     .frame(width: w, height: h)
@@ -64,7 +66,7 @@ struct LaneMarks: View {
     private func badge(_ icon: Image?, _ text: String) -> some View {
         HStack(spacing: 2) {
             icon?.font(.system(size: 9, weight: .bold))
-            if !text.isEmpty { Text(text).font(.system(size: 10, weight: .bold)).monospacedDigit() }
+            if !text.isEmpty { Text(text).font(.lupe(10, .bold)).monospacedDigit() }
         }
         .foregroundStyle(Theme.text)
         .padding(.horizontal, 4).frame(height: 14)
@@ -144,5 +146,20 @@ struct RowTab: Shape {
         p.closeSubpath()
         guard !down else { return p.offsetBy(dx: 0, dy: rect.minY) }
         return p.applying(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: rect.minY + h))
+    }
+}
+
+/// A launch's countdown, read from the counted clock about 30 times a second on its own timeline: the 4 Hz one the pads
+/// and blocks draw on put the count up to a quarter of a second behind the beat, half a beat at 120 (Scott, 2026-11-10:
+/// "the countdown… isn't very accurate"). Only this text redraws that often.
+struct LaunchCountdown: View {
+    let session: DeviceSession
+    let track: Int
+    var prefix = ""
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30)) { _ in
+            Text(prefix + LaneMarks.countdown(session.ticksToLaunch(track), session.launchMode))
+        }
     }
 }

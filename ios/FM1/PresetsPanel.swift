@@ -19,7 +19,7 @@ struct PresetsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
                 TrackChip(track: t, size: 28)
-                Text(Self.header(session, track: t, entry: entry)).font(.system(size: 22, weight: .semibold))
+                Text(Self.header(session, track: t, entry: entry)).font(.lupe(22, .semibold))
                     .lineLimit(1).minimumScaleFactor(0.8)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
@@ -33,8 +33,9 @@ struct PresetsPanel: View {
             // an entry that keeps the sound playing, unchecked to choose: the browser waits until then (Scott, 2026-11-09)
             let resting = entry != nil && !choosing && entryHasNoSound(entry)
             HStack(alignment: .top, spacing: 16) {
-                if !session.isDrums(t) || entry != nil { LibraryEngines(session: session, ui: ui, entry: entry != nil).frame(width: 260) }
-                LibraryPage(session: session, ui: ui, columns: 2, entry: entry)
+                // three columns of presets (2026-11-10: the Sounds tab's four went with the tab), the engines narrower for them
+                if !session.isDrums(t) || entry != nil { LibraryEngines(session: session, ui: ui, entry: entry != nil).frame(width: 200) }
+                LibraryPage(session: session, ui: ui, columns: 3, entry: entry)
             }
             .disabled(resting)
             .opacity(resting ? 0.4 : 1)
@@ -45,6 +46,8 @@ struct PresetsPanel: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(RoundedRectangle(cornerRadius: 20).fill(Theme.well)
             .shadow(color: .black.opacity(0.5), radius: 14, x: -6))
+        // no dimming behind it any more, so Escape and the two-finger scrub close it too
+        .accessibilityAction(.escape) { ui.presetsPanel = false }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Self.header(session, track: t, entry: ui.soundEntry.flatMap { $0.ref.track == t ? $0 : nil }))
         .onChange(of: ui.soundEntry) { _, _ in choosing = false }
@@ -103,9 +106,9 @@ private struct EntrySoundNone: View {
                         Text("Starting this \(what) doesn't change the track's sound: the track keeps the one it has, its own or an earlier \(what)'s. Uncheck to give it a sound.")
                     }
                 }
-                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-                if let why { Text(why).font(.system(size: 12)).foregroundStyle(Theme.text) }
+                if let why { Text(why).font(.lupe(12)).foregroundStyle(Theme.text) }
             }
             Spacer(minLength: 0)
             Button {

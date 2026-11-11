@@ -12,5 +12,16 @@
 		<key>UIImageRespectsSafeAreaInsets</key>
 		<false/>
 	</dict>
+	<!-- Lupe's type: Barlow, the FM-1's screen face (Scott, 2026-11-09, board 45); SIL OFL, Fonts/OFL.txt -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Barlow-Regular.ttf</string>
+		<string>Barlow-Medium.ttf</string>
+		<string>Barlow-SemiBold.ttf</string>
+		<string>Barlow-Bold.ttf</string>
+		<string>BarlowCondensed-Medium.ttf</string>
+		<string>BarlowCondensed-SemiBold.ttf</string>
+		<string>BarlowCondensed-Bold.ttf</string>
+	</array>
 </dict>
 </plist>

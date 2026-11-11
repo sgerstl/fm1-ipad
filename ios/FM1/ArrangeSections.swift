@@ -25,12 +25,12 @@ struct SectionBar: View {
         let _ = BodyCounter.tick("SectionBar")
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                Text("Bars \(range.from + 1)–\(range.to)").font(.system(size: 15, weight: .semibold)).fixedSize()
-                Text("from").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text("Bars \(range.from + 1)–\(range.to)").font(.lupe(15, .semibold)).fixedSize()
+                Text("from").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 StepperKeys(label: "First bar", value: range.from + 1, range: 1...max(1, range.to), step: 1) {
                     set(SectionRange(from: $0 - 1, to: range.to))
                 }
-                Text("to").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text("to").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 StepperKeys(label: "Last bar", value: range.to, range: (range.from + 1)...max(range.from + 1, songBars + 16), step: 1) {
                     set(SectionRange(from: range.from, to: $0))
                 }
@@ -38,7 +38,7 @@ struct SectionBar: View {
                 key("Clear") { apply(.clear) }
                 ForEach(plans.filter { !$0.exact && $0.from != nil }, id: \.track) { p in
                     HStack(spacing: 6) {
-                        Text("T\(p.track + 1):").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        Text("T\(p.track + 1):").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                         SegmentedKeys(label: "Track \(p.track + 1) in this section", options: ["Snap to its passes", "Leave it out"],
                                       selected: leftOut.contains(p.track) ? 1 : 0) { k in
                             if k == 1 { leftOut.insert(p.track) } else { leftOut.remove(p.track) }
@@ -46,7 +46,7 @@ struct SectionBar: View {
                     }
                 }
                 Button(action: cancel) {
-                    Text("Cancel").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                    Text("Cancel").font(.lupe(15)).foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, 12).frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)
@@ -60,7 +60,7 @@ struct SectionBar: View {
 
     private func key(_ title: String, primary: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 15, weight: primary ? .semibold : .regular))
+            Text(title).font(.lupe(15, primary ? .semibold : .regular))
                 .foregroundStyle(primary ? Theme.onColour : Theme.text)
                 .padding(.horizontal, 14).frame(minHeight: 44)
                 .raisedKey(9, primary: primary)

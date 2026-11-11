@@ -14,6 +14,14 @@ enum Page: String, CaseIterable, Identifiable {
     static let sloopTabs: [Page] = [.sequencer, .sound, .song, .library]
     /// The tabs on Skiff: Song · Mix · Sounds.
     static let skiffTabs: [Page] = [.song, .mixer, .library]
+    /// The iPad's tabs on Skiff since 2026-11-10 (Scott): Song · Mix. The Sounds tab's browser is the sounds panel
+    /// (PresetsPanel), opened from SAVE, the track controls' sound key, the sound panel and the menus. The phone keeps
+    /// Sounds (skiffTabs) until its Song tab exists.
+    static let skiffPadTabs: [Page] = [.song, .mixer]
+    /// SLOOP on the iPad, in the same tabs (2026-11-10, proposed): Song · Mix.
+    static let sloopPadTabs: [Page] = [.song, .mixer]
+    /// Whether this is the iPad, where Skiff has no Sounds tab.
+    @MainActor static var padHasNoSoundsTab: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     /// A tab's name: Skiff's are Song · Mix · Sounds (2026-11-06).
     func title(skiff: Bool) -> String {
         guard skiff else { return rawValue }
@@ -44,8 +52,14 @@ final class EditorUI {
         // And there's no Shape tab (Scott, 2026-11-06): whatever asks for Shape brings the button's pages in on the
         // sound panel, over the tab that was up
         didSet {
-            if songTab, page == .sequencer { page = .song }
-            if songTab, page == .sound {
+            if shell, page == .sequencer { page = .song }
+            // the iPad has no Sounds tab on Skiff: whatever asks for it (the FM-1's SAVE, a launch flag) gets the sounds
+            // panel over the tab that was up
+            if shell, page == .library, Page.padHasNoSoundsTab {
+                page = oldValue == .library ? .song : oldValue
+                presetsPanel = true
+            }
+            if shell, page == .sound {
                 page = oldValue == .sound ? .song : oldValue
                 if SoundPanelControl.families.contains(soundFamily) { soundPanel = SoundPanelState(family: soundFamily) }
             }
@@ -53,7 +67,18 @@ final class EditorUI {
     }
     /// Skiff: the Song tab (Arrange's lanes over the pattern editor) stands for Sequence and Arrange.
     var songTab = false {
-        didSet { if songTab, page == .sequencer || page == .sound { page = .song } }
+        didSet { if songTab { enterShell() } }
+    }
+    /// SLOOP on the iPad in the Skiff tabs (the SLOOP design pass, 2026-11-10, boards S1–S5): Song · Mix, the sound panel
+    /// for Shape, the sounds panel for Browse, the Song tab holding SLOOP's sections, its order and the editor.
+    var sloopShell = false {
+        didSet { if sloopShell { enterShell() } }
+    }
+    /// The Song · Mix layout, whichever firmware: Skiff's Song tab, or SLOOP's in the same tabs. (`songTab` stays Skiff's
+    /// own: its song store, the pool, its playback mode.)
+    var shell: Bool { songTab || sloopShell }
+    private func enterShell() {
+        if page == .sequencer || page == .sound || (page == .library && Page.padHasNoSoundsTab) { page = .song }
     }
     /// The Song tab as pads (PadsPage.swift) or a timeline. Pads first (Scott, 2026-11-09: the pads are how a song is
     /// built; the timeline is where it's cut). -song-timeline opens on the timeline (screenshots).
@@ -62,8 +87,12 @@ final class EditorUI {
     var pinnedEntry: EntryRef?
     /// Each pattern's drawing for the pads (PadThumb), as seen while a track was on it: kept for the session.
     var padThumbs: [Int: PadThumb] = [:]
+    /// The Song tab's Timeline: bars across the lanes, set by the top bar's zoom (nil: fitted to the song).
+    var timelineZoom: Int?
+    /// The Pads: a stored scene held, its preview on the pads (and, when Lupe hasn't seen it, a line under the top bar).
+    var previewScene: Int?
     /// The Song tab: the pattern pool's drawer is open.
-    var poolOpen = false
+    var poolOpen = LaunchArgs.all.contains("-pool-open")      // (-pool-open: the Patterns drawer up, for captures)
     /// A pattern being dragged from the pool (set as the drag starts), shared by the drawer and the lanes.
     var dragPattern: Int?
     /// Step editing: the notes picked (a tap, or a lasso) and the steps picked (along the step numbers), on this
@@ -79,6 +108,8 @@ final class EditorUI {
     var menu: AppMenu?
     /// A sound waiting on its name before it goes to a user slot (Skiff's SAVE > USER).
     var saveSound: SaveSoundRequest?
+    /// A name asked for in place (TextPromptLayer at the root).
+    var textPrompt: TextPrompt?
     var selectedLane = 0
     var keptRows: [Int: Set<Int>] = [:]
     var knobGrab: KnobGrab?
@@ -114,7 +145,8 @@ final class EditorUI {
     var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user : .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs. Closed, it chooses for the track
     /// again next time.
-    var presetsPanel = false { didSet { if !presetsPanel { soundEntry = nil } } }
+    /// -presets-panel opens it at launch (the before/after screenshots, qa/top-row-2026-11-10).
+    var presetsPanel = LaunchArgs.all.contains("-presets-panel") { didSet { if !presetsPanel { soundEntry = nil } } }
     /// The sound panel choosing an entry's own sound (a pad's, a Timeline block's) instead of the track's (Scott,
     /// 2026-11-08: "Select sound" opens the panel; its header says what it's choosing for). Nil: the track.
     var soundEntry: SoundEntryTarget?

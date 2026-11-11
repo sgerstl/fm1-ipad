@@ -18,16 +18,47 @@ struct TopBar: View {
         let _ = BodyCounter.tick("TopBar")
         Group {
             if ui.songTab, let store = session.skiffSong {
-                // Skiff: the playback mode sits beside play and stop, so the bar is one row (centred tabs would
-                // collide with it)
+                // Skiff: everything above the pads in one row (Scott, 2026-11-10, board 47 direction b): where you are
+                // (the FM-1 and its menu, the tabs, Pads / Timeline), what launches (the Song tab's tools), the transport.
+                // Projects and the iPad's audio are in the FM-1 menu; the playback mode is under the tempo, its word in
+                // the readout. The fixed parts keep their size; the tools give way in their own order (SongTools).
                 HStack(spacing: 12) {
-                    connection
-                    skiffProjectsKey
-                    Spacer(minLength: 12)
-                    tabs
-                    Spacer(minLength: 12)
-                    SongModeKeys(store: store).fixedSize()
-                    transport
+                    connection.fixedSize()
+                    // Pads · Timeline · Mix (Scott, 2026-11-10: the phone's split, in place of Song · Mix and the
+                    // Pads / Timeline switch); the tools after them follow the tab
+                    if store.performs { songTabs } else { tabs }
+                    if ui.page == .song {
+                        SongTools(session: session, store: store, ui: ui)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .layoutPriority(-1)
+                    } else {
+                        Spacer(minLength: 12)
+                    }
+                    skiffTransport
+                }
+                // under the row: a refusal, an unseen scene, lanes ending apart, until it's dealt with
+                .overlay(alignment: .top) {
+                    SongStrip(session: session, store: store, ui: ui)
+                        .padding(.top, 64 + 4)
+                }
+            } else if ui.sloopShell {
+                // SLOOP in the same row (2026-11-10, after board 47 b): the FM-1 key (with Projects and the iPad's audio),
+                // Pads · Timeline · Mix, SLOOP's tools, Keys and the transport; Loop · Song in the tempo panel, its word in
+                // the readout; refusals in the strip under the row
+                HStack(spacing: 12) {
+                    connection.fixedSize()
+                    songTabs
+                    if ui.page == .song {
+                        SloopTools(session: session, ui: ui)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .layoutPriority(-1)
+                    } else {
+                        Spacer(minLength: 12)
+                    }
+                    skiffTransport
+                }
+                .overlay(alignment: .top) {
+                    SloopStrip(session: session, ui: ui).padding(.top, 64 + 4)
                 }
             } else {
                 // the tabs sit in the middle of the bar whatever the two sides hold
@@ -46,7 +77,7 @@ struct TopBar: View {
         .frame(height: 64)
         .zIndex(1)              // the play key's "Playing from the start" tag hangs below the bar, over the page
         .sheet(isPresented: projectsOpen) { ProjectsSheet(store: projects, session: session) }
-        .namePrompt($naming, store: projects)
+        .namePrompt($naming, store: projects, into: Binding(get: { ui.textPrompt }, set: { ui.textPrompt = $0 }))
     }
 
     /// Skiff's folder: the Projects sheet, its 4 slots on the FM-1 beside the iPad's projects (SAVE > PROJECT).
@@ -72,8 +103,10 @@ struct TopBar: View {
                 WaitingDot(on: session.isConnected, waiting: session.skiffSong?.busy == true)
                 // a real FM-1 is just the dot; words for the demo and for trouble (the version is in the menu)
                 if let s = shortStatus {
-                    Text(s).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                    Text(s).font(.lupe(15, .semibold)).lineLimit(1)
                 }
+                // Skiff: its menu holds Projects and the iPad's audio too, so it says it opens
+                if ui.shell { Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary) }
             }
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
@@ -83,6 +116,18 @@ struct TopBar: View {
         .accessibilityLabel("\(statusLine), \(versionLine)")
         .accessibilityHint("Choose the FM-1 or a demo, install firmware, or open Settings")
         .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
+    }
+
+    /// Skiff's keys after the tools: Keys, then REC, play / stop and the readout (the iPad's audio is in the FM-1 menu).
+    private var skiffTransport: some View {
+        HStack(spacing: 8) {
+            IconKey(label: "Keys", symbol: "pianokeys", onSymbol: "pianokeys.inverse", on: ui.keyboardOpen, enabled: session.isConnected) {
+                ui.keyboardOpen.toggle()
+            }
+            .accessibilityHint("Shows the FM-1's keyboard")
+            transportGroup.padding(.leading, 4)
+        }
+        .fixedSize()
     }
 
     /// The connection menu (Lupe's own, 2026-11-05). Scott, 2026-11-06, cut to four things: one line of status, the
@@ -96,9 +141,13 @@ struct TopBar: View {
             [MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !demo) { useDemo = false },
              MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: demo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
              MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: demo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }],
+            // Skiff: what's set once moved here from the top bar (Scott, 2026-11-10, board 47): Projects, the iPad's audio
+            ui.shell ? [MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true },
+                          MenuItem(title: "Play through the iPad", icon: through.enabled ? "speaker.wave.2.fill" : "speaker.wave.2",
+                                   checked: through.enabled) { through.enabled.toggle() }] : [],
             [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true },
              MenuItem(title: "Settings…", icon: "gearshape") { settingsOpen = true }],
-        ]
+        ].filter { !$0.isEmpty }
     }
 
 
@@ -119,7 +168,7 @@ struct TopBar: View {
                 HStack(spacing: 8) {
                     Image(systemName: "folder").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
                     Text(projectName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.lupe(15, .semibold))
                         .foregroundStyle(projectNamed ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).truncationMode(.tail)
                         .frame(maxWidth: 170, alignment: .leading)
@@ -201,31 +250,87 @@ struct TopBar: View {
 
     // MARK: Tabs (three raised keys were tried 2026-11-01 and didn't work: back to the tabs)
 
+    /// The page tabs as one tab on a line (Scott, 2026-11-09, board 44): the current page's tab rises, grey, from a
+    /// 3 pt line with round ends that runs under them all; picking another, the old tab sinks into the line as the new
+    /// one rises out of it, together.
     private var tabs: some View {
-        HStack(spacing: 4) {
-            ForEach(ui.songTab ? Page.skiffTabs : Page.sloopTabs) { p in
-                let current = ui.page == p
-                Button {
-                    ui.page = p
-                    Self.driveDevice(session: session, ui: ui, to: p)
-                } label: {
-                    Text(p.title(skiff: ui.songTab))
-                        .fontWeight(current ? .semibold : .regular)
-                        .foregroundStyle(current ? Theme.text : Theme.textSecondary)
-                        .padding(.horizontal, 18)
-                        .frame(height: 44)
-                        .background { if current { Color.clear.selectedKey() } }
-                        .contentShape(Rectangle())
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(ui.songTab ? Page.skiffPadTabs : ui.sloopShell ? Page.sloopPadTabs : Page.sloopTabs) { p in
+                    let current = ui.page == p
+                    Button {
+                        ui.page = p
+                        Self.driveDevice(session: session, ui: ui, to: p)
+                    } label: {
+                        Text(p.title(skiff: ui.shell))
+                            .fontWeight(current ? .semibold : .regular)
+                            .foregroundStyle(current ? Theme.text : Theme.textSecondary)
+                            .padding(.horizontal, 18)
+                            .frame(height: 44)
+                            .background(alignment: .bottom) {
+                                TabRise(rise: current ? 1 : 0).fill(Self.tabGrey)
+                                    .animation(reduceMotionTabs ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.3), value: current)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(current ? [.isSelected] : [])
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(current ? [.isSelected] : [])
             }
+            .padding(.horizontal, TabRise.fillet)      // (the line runs a fillet past the outer tabs, so their curves land on it)
+            Capsule().fill(Self.tabGrey).frame(height: 3)
         }
-        .padding(4)
-        .recessed(12)
+        .fixedSize(horizontal: true, vertical: false)      // (the line as long as the tabs, not the bar's room)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pages")
     }
+    /// Skiff on the iPad: Pads · Timeline · Mix, as the phone has them. Pads and Timeline are the Song page's two views,
+    /// so going between them is the same slide as before, the editor staying put under them; the tab line is the same.
+    private var songTabs: some View {
+        let tabs: [(title: String, current: Bool, pick: () -> Void)] = [
+            ("Pads", ui.page == .song && ui.songView == .pads, { pickSong(.pads) }),   // (SLOOP: its sections; the Timeline its order)
+            ("Timeline", ui.page == .song && ui.songView == .timeline, { pickSong(.timeline) }),
+            ("Mix", ui.page == .mixer, { ui.page = .mixer; Self.driveDevice(session: session, ui: ui, to: .mixer) }),
+        ]
+        return VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(tabs.indices, id: \.self) { k in
+                    let t = tabs[k]
+                    Button { t.pick() } label: {
+                        Text(t.title)
+                            .fontWeight(t.current ? .semibold : .regular)
+                            .foregroundStyle(t.current ? Theme.text : Theme.textSecondary)
+                            .padding(.horizontal, 18)
+                            .frame(height: 44)
+                            .background(alignment: .bottom) {
+                                TabRise(rise: t.current ? 1 : 0).fill(Self.tabGrey)
+                                    .animation(reduceMotionTabs ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.3), value: t.current)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(t.current ? [.isSelected] : [])
+                    .accessibilityHint(k == 0 ? "Every track's entries to launch, the scenes under them"
+                                       : k == 1 ? "Every track's entries along the bars" : "Levels, sends and the effects")
+                }
+            }
+            .padding(.horizontal, TabRise.fillet)
+            Capsule().fill(Self.tabGrey).frame(height: 3)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Pages")
+    }
+
+    private func pickSong(_ v: SongView) {
+        if ui.page != .song { ui.page = .song; Self.driveDevice(session: session, ui: ui, to: .song) }
+        ui.songView = v
+    }
+
+    /// The tab and its line: a step lighter than the control grey (on the page, the control grey as a thin line all
+    /// but vanished: board 44).
+    static let tabGrey = Theme.tones[2]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotionTabs
 
     /// A tab tapped on the iPad: the FM-1's screen goes to the same place (HOME, the preset browser,
     /// or the Sound tab's button), when linked and following.
@@ -240,7 +345,10 @@ struct TopBar: View {
         case .song: session.showOnDevice(page: ScreenMap.of(session).song)
         case .sound:
             if let first = SoundPage.shown(session, ui.soundFamily).first { session.showOnDevice(page: first.fw) }
-        case .mixer: session.showOnDevice(page: ui.mixerSection.page)
+        case .mixer:
+            // SLOOP has no MIXER page: GLO's first page (GLOBAL) stands for Mix
+            if session.dialect == .skiff { session.showOnDevice(page: ui.mixerSection.page) }
+            else if let g = SoundPage.pages(session).first(where: { $0.family == .glo }) { session.showOnDevice(page: g.fw) }
         }
     }
 
@@ -350,7 +458,7 @@ struct TopBar: View {
         .overlay(alignment: .top) {
             if fromStartShown {
                 Text("Playing from the start")
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
+                    .font(.lupe(13, .semibold)).foregroundStyle(Theme.text)
                     .fixedSize()
                     .padding(.horizontal, 12).frame(height: 32)
                     .elevated(.held, radius: 8)
@@ -426,9 +534,13 @@ private struct ReadoutLabel: View {
         let pos = session.positions[session.selectedTrack]
         let song = session.song.songMode
         let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
-        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : song ? "SONG" : nil
+        // Skiff: the playback mode's word, always (its keys are in the tempo panel since 2026-11-10, board 47)
+        let skiffMode: String? = session.skiffSong?.song.map { ["Loop", "Song", "Once"][safe: $0.mode.rawValue] ?? "Song" }
+        // SLOOP in the same layout: its song mode's word, always (its keys are in the tempo panel too)
+        let sloopMode: String? = TempoPanel.sloopMode(session) ? (session.song.songMode ? "Song" : "Loop") : nil
+        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : skiffMode ?? sloopMode ?? (song ? "SONG" : nil)
         VStack(alignment: .leading, spacing: 0) {
-            Text(position).font(.system(size: 20, weight: .semibold)).monospacedDigit().lineLimit(1)
+            Text(position).font(.lupe(20, .semibold)).monospacedDigit().lineLimit(1)
                 .foregroundStyle(recording ? Theme.recText : Theme.text)
             HStack(spacing: 4) {
                 if let m = mode {
@@ -437,7 +549,7 @@ private struct ReadoutLabel: View {
                 }
                 Text("\(session.bpm) BPM").monospacedDigit()
             }
-            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            .font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
         }
         .frame(width: 112, alignment: .leading)         // "SONG REC · 120 BPM" at its widest: nothing moves
         .padding(.horizontal, 8)
@@ -472,5 +584,33 @@ struct WaitingDot: View {
             try? await Task.sleep(for: .milliseconds(300))
             if !Task.isCancelled { shown = true }
         }
+    }
+}
+
+
+/// A page tab rising out of the line under it (TopBar.tabs): `rise` 0 flat, 1 its full height; top corners `r`,
+/// concave fillets where its sides meet the line. Animatable, so a tab sinks and another rises.
+struct TabRise: Shape {
+    var rise: CGFloat
+    static let r: CGFloat = 10, fillet: CGFloat = 6
+    var animatableData: CGFloat { get { rise } set { rise = newValue } }
+
+    func path(in rect: CGRect) -> Path {
+        let h = rect.height, w = rect.width, H = h * max(0, min(1, rise))
+        var p = Path()
+        guard H > 0.5 else { return p }
+        let y0 = h - H, r = min(Self.r, H / 2, w / 2), f = min(Self.fillet, H)
+        p.move(to: CGPoint(x: -f, y: h))
+        p.addQuadCurve(to: CGPoint(x: 0, y: h - f), control: CGPoint(x: 0, y: h))
+        p.addLine(to: CGPoint(x: 0, y: y0 + r))
+        p.addArc(tangent1End: CGPoint(x: 0, y: y0), tangent2End: CGPoint(x: r, y: y0), radius: r)
+        p.addLine(to: CGPoint(x: w - r, y: y0))
+        p.addArc(tangent1End: CGPoint(x: w, y: y0), tangent2End: CGPoint(x: w, y: y0 + r), radius: r)
+        p.addLine(to: CGPoint(x: w, y: h - f))
+        p.addQuadCurve(to: CGPoint(x: w + f, y: h), control: CGPoint(x: w, y: h))
+        p.addLine(to: CGPoint(x: w + f, y: h + 0.5))       // (half a point into the line: no hairline)
+        p.addLine(to: CGPoint(x: -f, y: h + 0.5))
+        p.closeSubpath()
+        return p
     }
 }

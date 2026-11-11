@@ -56,6 +56,9 @@ struct MixerPage: View {
 
     private func show(_ t: SkiffButtonMap.MixerTab) {
         if ui.mixerSection != t { ui.mixerSection = t }
+        // (SkiffButtonMap's pages are Skiff's: on SLOOP 30 is the SONG page. SLOOP has no MIXER page, so its strips
+        // touched leave the FM-1 where it is; its cards show their own pages, by their SLOOP numbers)
+        guard session.dialect == .skiff else { return }
         if session.screenLinked, ui.followDevice, !onDevice(t.page) { session.showOnDevice(page: t.page) }
     }
 }
@@ -66,7 +69,8 @@ private struct MixerDeviceEdge: View {
 
     var body: some View {
         let page = SkiffButtonMap.MixerTab.mixer.page
-        DeviceEdge(on: session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == page } == true)
+        // (Skiff's MIXER page; SLOOP has none, and its page 30 is SONG)
+        DeviceEdge(on: session.dialect == .skiff && session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == page } == true)
     }
 }
 
@@ -193,7 +197,7 @@ private struct MixerCards: View {
                 Button { withAnimation(spring) { centred = p.id } } label: {
                     HStack(spacing: 8) {
                         LED(on: on)
-                        Text(p.title.capitalized).font(.system(size: 15, weight: on ? .semibold : .regular))
+                        Text(p.title.capitalized).font(.lupe(15, on ? .semibold : .regular))
                             .foregroundStyle(on ? Theme.text : Theme.textSecondary)
                             .lineLimit(1).minimumScaleFactor(0.8)
                         Spacer(minLength: 0)
@@ -227,7 +231,15 @@ private struct MixerCards: View {
     }
 
     private func commit() {
-        guard let id = centred, let p = pages.first(where: { $0.id == id }), let t = tab(for: p) else { return }
+        guard let id = centred, let p = pages.first(where: { $0.id == id }) else { return }
+        // SLOOP: the card's own page, by SLOOP's number (SkiffButtonMap's sections are Skiff's)
+        if session.dialect != .skiff {
+            if session.screenLinked, ui.followDevice, session.deviceScreen.map({ !$0.home && $0.page == p.fw }) != true {
+                session.showOnDevice(page: p.fw)
+            }
+            return
+        }
+        guard let t = tab(for: p) else { return }
         if ui.mixerSection != t { ui.mixerSection = t }
         guard session.screenLinked, ui.followDevice,
               session.deviceScreen.map({ !$0.home && $0.page == t.page }) != true else { return }
@@ -251,7 +263,8 @@ private struct MixerCards: View {
     /// GLO's five pages as the FM-1 counts them (MIXER first), so a card's "On the FM-1" reads as its screen does:
     /// DELAY 2/5 … GLOBAL 5/5.
     private var glo: [SoundPage] {
-        [SoundPage(fw: SkiffButtonMap.MixerTab.mixer.page, title: "MIXER", family: .glo, scope: 1, ids: [nil, nil, nil, nil])] + pages
+        guard session.dialect == .skiff else { return pages }        // (SLOOP's GLO has no MIXER page to count)
+        return [SoundPage(fw: SkiffButtonMap.MixerTab.mixer.page, title: "MIXER", family: .glo, scope: 1, ids: [nil, nil, nil, nil])] + pages
     }
 
     private func tab(for p: SoundPage) -> SkiffButtonMap.MixerTab? { SkiffButtonMap.MixerTab.allCases.first { $0.pageTitle == p.title } }
@@ -292,7 +305,7 @@ struct MixerStrips: View {
         let id = revID
         HStack(alignment: .top, spacing: 8) {
             ForEach(Array(session.trackIndices), id: \.self) { t in
-                MixerStrip(session: session, row: row(t, id), touched: touched).equatable()
+                MixerStrip(session: session, ui: ui, row: row(t, id), touched: touched).equatable()
             }
         }
         .task(id: id) {
@@ -334,6 +347,7 @@ struct MixerStrips: View {
 /// sticky fader in the track's colour, PAN and the REVERB send across, MUTE a toggle chiclet (down is muted).
 private struct MixerStrip: View, Equatable {
     let session: DeviceSession
+    let ui: EditorUI
     let row: MixRow
     let touched: () -> Void
 
@@ -343,10 +357,16 @@ private struct MixerStrip: View, Equatable {
         let _ = BodyCounter.tick("mixer.strip")
         let t = row.track, colour = Theme.track[t]
         VStack(spacing: 12) {
+            // the Half pads' track head (Scott, 2026-11-10: "the same track headers… just for consistency"): chip, name,
+            // what it plays, the pass bar, Mute and Solo. Its Mute is PERFORM's (at the launch point while playing), so
+            // the strip's own MUTE goes. Without Skiff's song (older firmware): the strip's own name and MUTE.
+            if let store = session.skiffSong {
+                TrackStripRow(session: session, store: store, ui: ui, track: t, preview: nil).frame(height: 44)
+            } else {
             Button { session.select(track: t) } label: {
                 HStack(spacing: 8) {
                     TrackChip(track: t, selected: row.selected).frame(width: 28, height: 28)
-                    Text(row.name).font(.system(size: 13, weight: row.selected ? .semibold : .regular))
+                    Text(row.name).font(.lupe(13, row.selected ? .semibold : .regular))
                         .foregroundStyle(row.selected ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
@@ -357,16 +377,18 @@ private struct MixerStrip: View, Equatable {
             .accessibilityLabel("Track \(t + 1), \(row.name)")
             .accessibilityHint("Selects the track")
             .accessibilityAddTraits(row.selected ? .isSelected : [])
+            }
             Fader(axis: .vertical, spec: levelSpec, tint: row.mute ? Theme.textTertiary : colour, nudge: 2,
                   detent: MixerStrips.unity, touched: touched,
                   meter: AnyView(LevelLine(meters: session.meters, track: t, muted: row.mute, tint: colour)))
                 .frame(maxHeight: .infinity)
             Fader(axis: .horizontal, spec: panSpec, tint: colour, touched: touched)
             if row.rev != nil { Fader(axis: .horizontal, spec: revSpec, tint: colour, touched: touched) }
+            if session.skiffSong == nil {
             Button { session.set(track: t, param: Param.mute, to: row.mute ? 0 : 1) } label: {
                 HStack(spacing: 6) {
                     LED(on: row.mute)
-                    Text("MUTE").font(.system(size: 13, weight: .semibold))
+                    Text("MUTE").font(.lupe(13, .semibold))
                         .foregroundStyle(row.mute ? Theme.text : Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
@@ -378,8 +400,9 @@ private struct MixerStrip: View, Equatable {
             .accessibilityLabel("Mute track \(t + 1)")
             .accessibilityAddTraits(.isToggle)
             .accessibilityValue(row.mute ? "muted" : "playing")
+            }
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
+        .padding(.horizontal, session.skiffSong == nil ? 10 : 6).padding(.vertical, 8)   // (6: room for the head's name)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 12).fill(row.selected ? colour.opacity(0.12) : Theme.well))
         .accessibilityElement(children: .contain)

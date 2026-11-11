@@ -7,7 +7,23 @@ import Observation
 /// that has the 2.0 song (INFO `58 01` bit 0) and keeps it, offline, when the device goes away.
 @MainActor @Observable
 public final class SkiffSongStore {
-    public private(set) var song: SkiffSong?
+    public private(set) var song: SkiffSong? { didSet { noticeLaunches(oldValue) } }
+    /// A launch staged on a track (true), or one taken back or cancelled before it landed (false): the session's
+    /// counted clock starts the track's new pass where Skiff will (CountedPlayhead.relaunch).
+    @ObservationIgnored public var onLaunch: @MainActor (Int, Bool) -> Void = { _, _ in }
+    /// A track came onto another entry (a launch landed, the song moved on): the session takes its pattern's LEN and
+    /// DIV at once, not at its next round of reads (every 15 s for a track not selected).
+    @ObservationIgnored public var onArrive: @MainActor (Int) -> Void = { _ in }
+    private func noticeLaunches(_ old: SkiffSong?) {
+        guard isPlaying(), let s = song else { return }
+        for (t, l) in s.tracks.enumerated() {
+            if let o = old?.tracks[safe: t]?.entryOn, let e = l.entryOn, o != e || old?.tracks[safe: t]?.patternOn != l.patternOn { onArrive(t) }
+            let was = old?.tracks[safe: t]?.staged
+            if let st = l.staged, st != was || old?.tracks[safe: t]?.entryOn != l.entryOn,
+               marks(t, launchIn: nil).queued != nil { onLaunch(t, true) }     // (a launch, not the song's own next)
+            else if l.staged == nil, was != nil, old?.tracks[safe: t]?.entryOn == l.entryOn { onLaunch(t, false) }
+        }
+    }
     public private(set) var pool: PatternPool?
     /// Each pattern's DIV, as seen while a track played it (POOL gives LEN, not DIV); unknown ones take
     /// their track's.
@@ -92,11 +108,15 @@ public final class SkiffSongStore {
         } catch {}
     }
 
-    /// About once a second while a view shows the song (as Skiff's own editor does).
+    /// Seconds to the next launch the session's clock expects (nil: none waiting).
+    @ObservationIgnored public var nextLanding: @MainActor () -> Double? = { nil }
+    /// About once a second while a view shows the song (as Skiff's own editor does), and just after a launch's line, so
+    /// the pad it brings in lights then, not up to a second later (Scott, 2026-11-10: the hand-off)
     public func follow() async {
         while !Task.isCancelled {
             await refresh()
-            try? await Task.sleep(for: .seconds(1))
+            let wait = nextLanding().map { min(1, max(0.03, $0 + 0.06)) } ?? 1
+            try? await Task.sleep(for: .seconds(wait))
         }
     }
 
@@ -263,9 +283,43 @@ public final class SkiffSongStore {
         if undoStack.count > 32 { undoStack.removeFirst() }
     }
 
+    /// Pads launched whose PLAY hasn't been answered yet: track → entry. Drawn as waiting at once (Scott, 2026-11-10:
+    /// several fingers at once, each queued).
+    public private(set) var launching: [Int: Int] = [:]
+    @ObservationIgnored private var launchOrder: [Int] = []
+    @ObservationIgnored private var draining = false
+
+    /// A pad's launch (PLAY), queued: several in a row (fingers on three pads) go one after another, as SloopClient
+    /// takes one request at a time, never refused for the one before still going in. One a track: a later touch on
+    /// the same track replaces one not sent yet (as tapping one pad after another in a row does).
+    public func launch(track t: Int, entry e: Int) {
+        launching[t] = e
+        if !launchOrder.contains(t) { launchOrder.append(t) }
+        guard !draining else { return }
+        draining = true
+        Task { await drainLaunches() }
+    }
+
+    private func drainLaunches() async {
+        var sent = false
+        while let t = launchOrder.first {
+            // an edit going in: wait for it (up to a second), the launch after it
+            var waited = 0
+            while busy, waited < 50 { try? await Task.sleep(for: .milliseconds(20)); waited += 1 }
+            launchOrder.removeFirst()
+            guard let e = launching[t] else { continue }
+            _ = await send(.play(track: t, entry: e), readPool: false)
+            sent = true
+            if launching[t] == e { launching[t] = nil }      // (else touched again meanwhile: queued again by launch)
+        }
+        draining = false
+        // the pool once for the lot (a launch can file what went out as a new pattern), not once a launch
+        if sent, let d = driver, let p = try? await d.pool(), pool != p { pool = p }
+    }
+
     /// One op that the rewrite can't express (NEW, COPY, COPY+, PLAY, SONG): sent, then read back.
     @discardableResult
-    public func send(_ op: ListOp) async -> Bool {
+    public func send(_ op: ListOp, readPool: Bool = true) async -> Bool {
         guard !busyRefusal(op.track) else { return false }
         guard let d = driver, let before = song else {
             refusal = Refusal(track: op.track, entry: op.entry, text: "The FM-1 is disconnected: editing is off until it's back")
@@ -289,7 +343,7 @@ public final class SkiffSongStore {
             }
             refusal = nil
             switch op { case .play, .song: break; default: record(before) }     // undo is for the lists
-            pool = try? await d.pool()
+            if readPool { pool = try? await d.pool() }
             return true
         } catch {
             refusal = Refusal(track: op.track, entry: op.entry, text: "The FM-1 didn't answer; the song is as it says now")
@@ -407,6 +461,9 @@ public final class SkiffSongStore {
             case .store(let s), .recall(let s): learnScene(s)
             default: break
             }
+            if case .recall = op { soloed = []; mutesBeforeSolo = nil; soloStaged = [:] }      // (the scene's mutes now: the solo is over)
+            if case .recall(let s) = op, isPlaying() { recallStaged = (s, Set(song?.tracks.indices ?? 0..<0)) }
+            if case .cancel = op { soloStaged = [:]; recallStaged = nil }
             refusal = nil
             return true
         } catch {
@@ -414,6 +471,57 @@ public final class SkiffSongStore {
             if let p = try? await d.perform().state { perform = p }
             return false
         }
+    }
+
+    // MARK: Solo (Scott, 2026-11-09, board 43)
+
+    /// The tracks soloed. Skiff's editor protocol has no solo (the FM-1 solos only from GLO's black keys), so Lupe
+    /// does it with PERFORM's mutes: while any track is soloed every other one is muted (staged to the launch point
+    /// while playing, as a mute is), and the mutes from before the first solo come back when the last one is let go.
+    /// Until a firmware SOLO op exists, a scene stored meanwhile keeps the soloed mutes.
+    public private(set) var soloed: Set<Int> = []
+    /// What waits for the launch point because of a key, drawn round that key until it lands (Scott, 2026-11-10): a
+    /// Solo's staged mutes (solo track → the tracks still waiting), a recalled scene's tracks. Only the ones still
+    /// staged; gone when none are.
+    public var soloWaiting: [Int: Set<Int>] { soloStaged.compactMapValues { let w = stillStaged($0); return w.isEmpty ? nil : w } }
+    public var recallWaiting: (scene: Int, tracks: Set<Int>)? {
+        guard let r = recallStaged else { return nil }
+        let w = stillStaged(r.tracks)
+        return w.isEmpty ? nil : (r.scene, w)
+    }
+    private var soloStaged: [Int: Set<Int>] = [:]
+    private var recallStaged: (scene: Int, tracks: Set<Int>)?
+    /// Of `ks`, the tracks with a mute or a launch waiting.
+    public func stillStaged(_ ks: Set<Int>) -> Set<Int> {
+        guard isPlaying() else { return [] }
+        return ks.filter { k in
+            (perform?.staged[safe: k] ?? .none) != .none || launching[k] != nil
+                || (song?.tracks[safe: k]?.staged != nil && marks(k, launchIn: nil).queued != nil)
+        }
+    }
+    private var mutesBeforeSolo: [Bool]?
+
+    /// A track's mute as it will be: a staged change already counted.
+    func mutedSoon(_ p: PerformState, _ t: Int) -> Bool {
+        switch p.staged[safe: t] ?? .none { case .mute: true; case .unmute: false; case .none: p.muted[safe: t] ?? false }
+    }
+
+    /// Solo `t` on or off; every track's mute set to match (one MUTE each that differs).
+    @discardableResult
+    public func toggleSolo(_ t: Int) async -> Bool {
+        guard let p = perform else { return false }
+        let n = p.muted.count
+        let now = (0..<n).map { mutedSoon(p, $0) }
+        if soloed.isEmpty { mutesBeforeSolo = now }
+        if soloed.contains(t) { soloed.remove(t) } else { soloed.insert(t) }
+        let target = soloed.isEmpty ? (mutesBeforeSolo ?? now) : (0..<n).map { !soloed.contains($0) }
+        if soloed.isEmpty { mutesBeforeSolo = nil }
+        var ok = true, staged: Set<Int> = []
+        for k in 0..<n where now[k] != target[k] {
+            if await !performOp(.mute(track: k)) { ok = false } else { staged.insert(k) }
+        }
+        if isPlaying() { soloStaged = soloStaged.filter { !stillStaged($0.value).isEmpty }; soloStaged[t] = staged }
+        return ok
     }
 
     /// What each scene holds, as Lupe last saw it: PERFORM says only which scenes are kept, not what's in them, and

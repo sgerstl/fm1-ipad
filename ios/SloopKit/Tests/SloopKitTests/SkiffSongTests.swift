@@ -176,6 +176,29 @@ import Testing
         #expect(PerformOp.mute(track: 5).bytes == [3, 5] && PerformOp.cancel.bytes == [4] && PerformOp.launch(.now).bytes == [5, 3])
     }
 
+    @Test func soloMutesTheOthersAndGivesTheMutesBack() async throws {
+        let (_, fake, s, run) = try await store()
+        defer { run.cancel() }
+        try await waitFor(5) { s.perform != nil }
+        #expect(await s.performOp(.recall(scene: 2)))             // drums (T4, T6) muted
+        let before = s.perform?.muted
+        #expect(before == [false, false, false, true, false, true])
+        // solo T2: every other track muted
+        #expect(await s.toggleSolo(1))
+        #expect(s.soloed == [1] && s.perform?.muted == [true, false, true, true, true, true])
+        // add T4 to the solo: it comes back in
+        #expect(await s.toggleSolo(3))
+        #expect(s.perform?.muted == [true, false, true, false, true, true])
+        // let both go: the mutes from before the solo
+        let a = await s.toggleSolo(1), b = await s.toggleSolo(3)
+        #expect(a && b)
+        #expect(s.soloed.isEmpty && s.perform?.muted == before && fake.muted == before)
+        // a recall ends a solo
+        #expect(await s.toggleSolo(0))
+        #expect(await s.performOp(.recall(scene: 0)))
+        #expect(s.soloed.isEmpty)
+    }
+
     @Test func scenesStoreRecallAndMuteThroughTheFake() async throws {
         let (session, fake, s, run) = try await store()
         #expect(s.performs)
@@ -917,5 +940,22 @@ extension SkiffOnTheDeviceTests {
         try await waitFor(5) { !session.recordingKnobs }
         #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
         run.cancel()
+    }
+}
+
+/// The head's Clear all pads (Scott, 2026-11-10: "clearing a track from the track header doesn't seem to work"; it only
+/// ever cleared the steps of the pattern the track was on, never its pads): every entry on the row emptied through the
+/// fake, the patterns only it used erased with them, confirmed in place.
+extension SkiffSongTests {
+    @Test func clearAllPadsEmptiesTheRow() async throws {
+        let (_, _, s, run) = try await store()
+        defer { run.cancel() }
+        let before = try #require(s.song?.tracks[0].entries)
+        try #require(before.contains { !$0.isEmpty })
+        let none = before.map { _ in SongEntry(pattern: 0) }
+        #expect(s.blocked(track: 0, to: none) == nil)                     // stopped: nothing in the way
+        #expect(await s.rewrite(track: 0, to: none, confirmed: true))
+        try await waitFor(5) { s.song?.tracks[0].entries.allSatisfy(\.isEmpty) == true }
+        #expect(s.song?.tracks[1].entries.contains { !$0.isEmpty } == true)  // the other rows untouched
     }
 }

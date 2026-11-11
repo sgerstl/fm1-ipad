@@ -6,9 +6,9 @@ struct ProjectsSheet: View {
     let store: ProjectStore
     let session: DeviceSession
     @Environment(\.dismiss) private var dismiss
-    @State private var opening: Opening?
     @State private var naming: NamePrompt?
-    @State private var deleting: ProjectFile?
+    /// A name asked for, in the sheet's own layer (TextPromptLayer).
+    @State private var prompt: TextPrompt?
     @State private var tab: Tab = .projects
     /// A row's menu, Lupe's own (the sheet covers the app's root, so it has its own layer).
     @State private var menu: AppMenu?
@@ -37,7 +37,7 @@ struct ProjectsSheet: View {
                 }
                 switch tab {
                 case .projects:
-                    if session.dialect == .skiff { SkiffProjectSlots(session: session) }
+                    if session.dialect == .skiff { SkiffProjectSlots(session: session, menu: $menu, prompt: $prompt) }
                     if ipadProjects {
                         Section {
                             Button { request(nil) } label: { Label("New project", systemImage: "plus") }
@@ -86,29 +86,9 @@ struct ProjectsSheet: View {
             }
         }
         .overlay { AppMenuLayer(menu: $menu) }
+        .overlay { TextPromptLayer(prompt: $prompt) }
         .interactiveDismissDisabled(store.busy != nil)
-        .alert(openTitle, isPresented: Binding(get: { opening != nil }, set: { if !$0 { opening = nil } }),
-               presenting: opening) { o in
-            if store.needsSaving {
-                Button(store.canSaveInPlace ? "Save and open" : "Save as “\(store.nextName())” and open") {
-                    go(o, saveFirst: true)
-                }
-                Button("Open without saving") { go(o, saveFirst: false) }
-            } else {
-                Button("Stop and open") { go(o, saveFirst: false) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: { o in
-            Text(openMessage(o))
-        }
-        .alert("Delete “\(deleting?.name ?? "")”?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-               presenting: deleting) { p in
-            Button("Delete project", role: .destructive) { store.delete(p) }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("It's removed from this iPad. What's on the FM-1 stays as it is.")
-        }
-        .namePrompt($naming, store: store)
+        .namePrompt($naming, store: store, into: $prompt)
     }
 
     /// SLOOP's backup objects make its iPad projects; Skiff's backup commands move one project and its patterns (qa/skiff-projects-2026-11-06).
@@ -131,7 +111,7 @@ struct ProjectsSheet: View {
         .gesture(HoldRecognizer(space: .named("projectRows"), began: { _, g in if store.busy == nil { openMenu(p, g, fromKey: false) } },
                                 changed: { _, _ in }, ended: { _, _, _ in }))
         .swipeActions {
-            Button(role: .destructive) { deleting = p } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { askDelete(p) } label: { Label("Delete", systemImage: "trash") }
             Button { naming = .rename(p) } label: { Label("Rename", systemImage: "pencil") }
         }
     }
@@ -148,7 +128,7 @@ struct ProjectsSheet: View {
                     if let url = try? SloopSongExport(project: p).write() { ShareSheet.present(url, at: at) }
                 })
             }
-            g.append([MenuItem(title: "Delete", icon: "trash") { deleting = p }])
+            g.append([MenuItem(title: "Delete", icon: "trash") { askDelete(p) }])
             return g
         }, at: at, fromKey: fromKey)
     }
@@ -159,16 +139,16 @@ struct ProjectsSheet: View {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(p.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.text)
+                        Text(p.name).font(.lupe(17, .semibold)).foregroundStyle(Theme.text)
                         if onFM1 {
                             Text(store.edited ? "On FM-1 · edited" : "On FM-1")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.lupe(12, .semibold))
                                 .foregroundStyle(Theme.onColour)
                                 .padding(.horizontal, 8).padding(.vertical, 2)
                                 .background(Capsule().fill(Theme.text))
                         }
                     }
-                    Text(detail(p)).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    Text(detail(p)).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer(minLength: 12)
                 if p.skiff == nil { SectionMarks(filled: p.data.sectionsFilled) }
@@ -211,7 +191,29 @@ struct ProjectsSheet: View {
 
     private func request(_ target: ProjectFile?) {
         let o = Opening(target: target)
-        if store.needsSaving || session.playing || session.song.songPlaying { opening = o } else { go(o, saveFirst: false) }
+        if store.needsSaving || session.playing || session.song.songPlaying { menu = openMenu(o) } else { go(o, saveFirst: false) }
+    }
+
+    /// Save first, or stop, before opening: Lupe's choices at the finger, the question and what happens over them
+    /// (2026-11-10: no system alert). Opening without saving isn't lost for good: a safety copy is kept.
+    private func openMenu(_ o: Opening) -> AppMenu {
+        var items: [MenuItem] = []
+        var caption = openTitle + " " + openMessage(o)
+        if store.needsSaving {
+            if !store.canSaveInPlace { caption += " Saving makes “\(store.nextName())”." }
+            items.append(MenuItem(title: store.canSaveInPlace ? "Save, then open" : "Save as new, then open", icon: "square.and.arrow.down") { go(o, saveFirst: true) })
+            items.append(MenuItem(title: "Open without saving", icon: "arrow.right") { go(o, saveFirst: false) })
+        } else {
+            items.append(MenuItem(title: "Stop and open", icon: "stop.fill") { go(o, saveFirst: false) })
+        }
+        items.append(MenuItem(title: "Cancel", icon: "xmark") {})
+        return AppMenu(title: openTitle, groups: { [items] }, at: TouchPoint.last, fan: true, caption: caption)
+    }
+
+    /// Delete: asked once more in place; the iPad's copy goes for good, the FM-1's music stays.
+    private func askDelete(_ p: ProjectFile) {
+        menu = AppMenu.confirm("Delete", confirm: "Delete “\(p.name)” from this iPad",
+                               caption: "It's removed from this iPad for good. What's on the FM-1 stays as it is.") { store.delete(p) }
     }
 
     private func go(_ o: Opening, saveFirst: Bool) {
@@ -253,7 +255,7 @@ struct SectionMarks: View {
             ForEach(0..<4, id: \.self) { k in
                 let on = k < filled.count && filled[k]
                 Text(DeviceSession.sectionName(k))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.lupe(12, .semibold))
                     .foregroundStyle(on ? Theme.onColour : Theme.textSecondary)    // 4.5:1 and up on the sheet
                     .frame(width: 22, height: 22)
                     .background(RoundedRectangle(cornerRadius: 5).fill(on ? Theme.text : Color.clear))
@@ -274,40 +276,30 @@ enum NamePrompt: Identifiable {
 private struct NamePromptModifier: ViewModifier {
     @Binding var prompt: NamePrompt?
     let store: ProjectStore
-    @State private var text = ""
+    /// Where the name card shows: the root's layer, or the Projects sheet's (2026-11-10: no system alert).
+    @Binding var into: TextPrompt?
 
     func body(content: Content) -> some View {
-        content.alert(title, isPresented: Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } }), actions: {
-            TextField("Name", text: $text)
-            Button("Cancel", role: .cancel) {}
-            Button(isRename ? "Rename" : "Save") {
-                let name = text
-                switch prompt {
-                case .rename(let p): store.rename(p, to: name)
-                default: Task { await store.save(as: name) }
-                }
-            }
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)    // an empty name did nothing, silently
-        }, message: {
-            // Skiff: reading the music stops the transport (as a save on the FM-1 does)
-            if !isRename, store.firmware == .skiff { Text("Saving stops the FM-1.") }
-        })
-        .onChange(of: prompt?.id) {
-            switch prompt {
-            case .saveAs(let n): text = n
-            case .rename(let p): text = p.name
-            case nil: break
+        content.onChange(of: prompt?.id) {
+            guard let asked = prompt else { return }
+            prompt = nil
+            let rename: ProjectFile? = if case .rename(let p) = asked { p } else { nil }
+            let start: String = switch asked { case .saveAs(let n): n; case .rename(let p): p.name }
+            into = TextPrompt(title: rename == nil ? "Save project" : "Rename project",
+                              // Skiff: reading the music stops the transport (as a save on the FM-1 does)
+                              message: rename == nil ? (store.firmware == .skiff ? "Saved on this iPad. Saving stops the FM-1." : "Saved on this iPad.") : nil,
+                              text: start, confirm: rename == nil ? "Save" : "Rename") { name in
+                let before = store.message
+                if let p = rename { store.rename(p, to: name) } else { await store.save(as: name) }
+                return store.message != before ? store.message : nil
             }
         }
     }
-
-    private var isRename: Bool { if case .rename = prompt { true } else { false } }
-    private var title: String { isRename ? "Rename project" : "Save project" }
 }
 
 extension View {
-    func namePrompt(_ prompt: Binding<NamePrompt?>, store: ProjectStore) -> some View {
-        modifier(NamePromptModifier(prompt: prompt, store: store))
+    func namePrompt(_ prompt: Binding<NamePrompt?>, store: ProjectStore, into: Binding<TextPrompt?>) -> some View {
+        modifier(NamePromptModifier(prompt: prompt, store: store, into: into))
     }
 }
 

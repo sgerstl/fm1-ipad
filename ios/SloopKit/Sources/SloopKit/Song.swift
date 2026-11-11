@@ -81,6 +81,14 @@ public struct SongOrder: Equatable, Sendable {
         steps = (0..<n).map { k in Step(section: Int(b[4 + 2 * k]) & 3, bars: max(1, min(64, Int(b[5 + 2 * k])))) }
     }
 
+    /// The order with a section added at its end (the Song tab's "Add to the song"); nil when it holds 16 steps already.
+    public func appending(section: Int, bars: Int = 4) -> SongOrder? {
+        guard steps.count < Self.maxSteps, (0..<4).contains(section) else { return nil }
+        var o = self
+        o.steps.append(Step(section: section, bars: max(1, min(64, bars))))
+        return o
+    }
+
     /// The settings object with this order written into it (every other byte kept).
     public func written(into settings: [UInt8]) -> [UInt8] {
         var s = settings

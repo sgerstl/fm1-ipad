@@ -10,7 +10,7 @@ struct SongModePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Mode").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            Text("Mode").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 .accessibilityAddTraits(.isHeader)
             SegmentedKeys(label: "Mode", options: ["Loop", "Song"], selected: session.song.songMode ? 1 : 0) { k in
                 // song mode keeps the loop: PLAY puts it aside, STOP brings it back (arranger_scene.c)
@@ -18,7 +18,7 @@ struct SongModePanel: View {
             }
             Text(session.song.songMode ? "PLAY runs the song. STOP brings your loop back."
                                        : "The tracks loop. A section you tap replaces them.")
-                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
@@ -42,7 +42,6 @@ struct SectionsPanel: View {
     let ui: EditorUI
     /// Where the finger is on a key: a held stored section opens its menu there.
     @State private var pressAt = CGPoint.zero
-    @State private var confirmRec = false
     /// The key just held: its release isn't a tap (a tap loads the section, over the tracks being saved).
     @State private var held: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,15 +49,15 @@ struct SectionsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
-                Text("Sections").font(.system(size: 17, weight: .semibold))
+                Text("Sections").font(.lupe(17, .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Text(session.playing ? "Tap: plays from the next bar, over the tracks. Hold: save the tracks here."
                                      : "Tap: loads it over the tracks. Hold: save the tracks here.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 Spacer(minLength: 0)
                 ToggleKey(name: session.song.songRecording ? "SONG REC: recording" : "SONG REC", on: session.song.songRecording) {
                     // what SONG REC records replaces the whole order: ask when there is one
-                    if !session.song.songRecording, !(session.songOrder?.steps.isEmpty ?? true) { confirmRec = true } else { session.toggleSongRec() }
+                    if !session.song.songRecording, !(session.songOrder?.steps.isEmpty ?? true) { askSongRec() } else { session.toggleSongRec() }
                 }
                 .accessibilityHint("From the next bar, every section you play, and how long, becomes the song")
             }
@@ -69,12 +68,14 @@ struct SectionsPanel: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .panel()
-        .confirmationDialog("SONG REC replaces the song", isPresented: $confirmRec, titleVisibility: .visible) {
-            Button("Record over the song", role: .destructive) { session.toggleSongRec() }
-            Button("Keep the song", role: .cancel) {}
-        } message: {
-            Text("The sections you play, and for how long, become the song's order. Its \(session.songOrder?.steps.count ?? 0) steps now are replaced, and the FM-1 keeps no copy.")
-        }
+    }
+
+    /// SONG REC over a song: asked once more in place (2026-11-10: no system dialog); the old order doesn't come back.
+    private func askSongRec() {
+        let n = session.songOrder?.steps.count ?? 0
+        ui.menu = AppMenu.confirm("Record over the song", confirm: "Record over the song's \(n) steps",
+                                  caption: "The sections you play, and for how long, become the song's order. Its \(n) steps now are replaced, and the FM-1 keeps no copy.",
+                                  icon: "record.circle") { session.toggleSongRec() }
     }
 
     /// What a section key shows: one state per key, each with a look and a word (never colour alone).
@@ -139,8 +140,8 @@ struct SectionsPanel: View {
             }
         } label: {
             VStack(spacing: 2) {
-                Text(DeviceSession.sectionName(k)).font(.system(size: 30, weight: .semibold))
-                Text(state.label).font(.system(size: 12, weight: .semibold))
+                Text(DeviceSession.sectionName(k)).font(.lupe(30, .semibold))
+                Text(state.label).font(.lupe(12, .semibold))
                     .lineLimit(1).minimumScaleFactor(0.85)
             }
             .foregroundStyle(state.inTracks ? Theme.onColour : state == .empty ? Theme.textTertiary : Theme.text)
@@ -203,7 +204,7 @@ struct SectionsPanel: View {
         case .edited:
             Circle().fill(Theme.onColour).frame(width: 8, height: 8).padding(10)
         case .song:
-            Text("SONG").font(.system(size: 10, weight: .semibold))
+            Text("SONG").font(.lupe(10, .semibold))
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Capsule().fill(Theme.onColour.opacity(0.85)))
@@ -211,7 +212,7 @@ struct SectionsPanel: View {
         case .recording:
             HStack(spacing: 4) {
                 Circle().fill(Color(hex: 0xFF2C34)).frame(width: 8, height: 8)
-                Text("REC").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.text)
+                Text("REC").font(.lupe(10, .semibold)).foregroundStyle(Theme.text)
             }
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(Capsule().fill(Theme.onColour.opacity(0.85)))

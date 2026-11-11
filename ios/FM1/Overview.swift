@@ -152,11 +152,11 @@ struct Overview: View {
     private func nameBody(_ t: Int, track: TrackState, selected: Bool) -> some View {
         HStack(spacing: 6) {
             Text(track.displayName)
-                .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                .font(.lupe(15, selected ? .semibold : .regular))
                 .lineLimit(1)
                 .layoutPriority(-1)                 // the name gives way to the tags
             if track.mute {
-                Text("muted").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text("muted").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             }
             // CHORD and ARP, by SLOOP's names, on every page; a tag opens its Sound page
             if !session.isDrums(t), track.chord > 0 { modeTag((session.dialect == .skiff ? SkiffChord.modeNames : Music.chordNames)[safe: track.chord] ?? "CHORD", track: t, family: .sel) }
@@ -233,7 +233,7 @@ struct Overview: View {
     private func motionTag(_ m: TrackMotion) -> some View {
         Label("MOTION", systemImage: "waveform.path")
             .labelStyle(.titleAndIcon)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.lupe(11, .semibold))
             .foregroundStyle(Theme.text)
             .lineLimit(1)
             .fixedSize()
@@ -246,7 +246,7 @@ struct Overview: View {
     /// A small tag after the name: what the track's notes become (a chord, an arpeggio).
     private func modeTag(_ text: String, track t: Int, family: SoundFamily) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.lupe(11, .semibold))
             .foregroundStyle(Theme.text)
             .lineLimit(1)
             .fixedSize()
@@ -341,7 +341,7 @@ struct TrackChip: View {
     var body: some View {
         let lit = !muted && selected != false
         return Text("\(track + 1)")
-            .font(.system(size: size > 28 ? 15 : 13, weight: .semibold))
+            .font(.lupe(size > 28 ? 15 : 13, .semibold))
             .foregroundStyle(muted ? Theme.textSecondary : lit ? Theme.onColour : Theme.text)
             .frame(width: size, height: size)
             .background {

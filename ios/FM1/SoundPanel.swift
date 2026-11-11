@@ -52,9 +52,9 @@ enum SoundPanelControl {
     @MainActor static func follow(_ s: UIState, session: DeviceSession, ui: EditorUI) -> Bool {
         // a button the track's engine has no pages for, pressed on the FM-1: nothing in Lupe, on any tab (the FM-1
         // shows what it shows)
-        if ui.songTab, !s.home, s.layer == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family),
+        if ui.shell, !s.home, s.layer == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family),
            SoundPage.shown(session, page.family).isEmpty { return true }
-        guard ui.followDevice, session.screenLinked, ui.songTab else { return false }
+        guard ui.followDevice, session.screenLinked, ui.shell else { return false }
         if s.home { ui.soundPanel = nil; return false }
         guard s.layer == 0, s.menu == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family) else { return false }
         press(page.family, session: session, ui: ui, fromDevice: true)
@@ -79,7 +79,7 @@ enum SoundPanelControl {
         guard session.screenLinked, ui.followDevice else { return }
         switch ui.page {
         case .mixer, .library: TopBar.driveDevice(session: session, ui: ui, to: ui.page)
-        default: if session.deviceScreen?.home != true { session.showOnDevice(page: SkiffButtonMap.home) }
+        default: if session.deviceScreen?.home != true { session.showOnDevice(page: ScreenMap.of(session).home) }
         }
     }
 }
@@ -96,7 +96,7 @@ struct SoundRail: View {
                 let on = ui.soundPanel?.family == f
                 let none = SoundPage.shown(session, f).isEmpty
                 Button { SoundPanelControl.press(f, session: session, ui: ui) } label: {
-                    Text(f.rawValue).font(.system(size: 12, weight: .semibold)).tracking(0.5)
+                    Text(f.rawValue).font(.lupe(12, .semibold)).tracking(0.5)
                         .foregroundStyle(on ? Theme.text : none ? Theme.textTertiary : Theme.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .background {
@@ -161,9 +161,9 @@ struct SoundPanel: View {
                         ui.focus(p)
                         if session.screenLinked, ui.followDevice { session.showOnDevice(page: p.fw) }
                     } label: {
-                        Text(title).font(.system(size: 13, weight: .semibold)).tracking(0.4).lineLimit(1).hidden()
+                        Text(title).font(.lupe(13, .semibold)).tracking(0.4).lineLimit(1).hidden()
                             .overlay {
-                                Text(title).font(.system(size: 13, weight: on ? .semibold : .regular)).tracking(0.4).lineLimit(1)
+                                Text(title).font(.lupe(13, on ? .semibold : .regular)).tracking(0.4).lineLimit(1)
                                     .foregroundStyle(on ? lit : Theme.textSecondaryRaised)
                                     .shadow(color: on ? lit.opacity(0.55) : .clear, radius: 6)
                             }
@@ -199,9 +199,9 @@ struct SoundPanel: View {
         let pages = SoundPage.shown(session, state.family)
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Text(state.family.rawValue).font(.system(size: 20, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                Text(state.family.rawValue).font(.lupe(20, .semibold)).accessibilityAddTraits(.isHeader)
                 Text("T\(t + 1) \(Entries.trackName(t, session: session)) · \(pages.count) page\(pages.count == 1 ? "" : "s")")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
                 Spacer(minLength: 0)
                 // SAVE > USER: the track's sound to a user slot, its name asked
                 if session.dialect == .skiff { SaveSoundKey(session: session, ui: ui) }
@@ -219,13 +219,13 @@ struct SoundPanel: View {
             HStack(spacing: 10) {
                 TrackChip(track: t, muted: track.mute)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(track.presetName.isEmpty ? track.displayName : track.presetName.capitalized).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                    Text(track.engineName).font(.system(size: 12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
+                    Text(track.presetName.isEmpty ? track.displayName : track.presetName.capitalized).font(.lupe(15, .semibold)).lineLimit(1)
+                    Text(track.engineName).font(.lupe(12)).foregroundStyle(Theme.textSecondaryRaised).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Button { ui.presetsPanel = true } label: {
                     HStack(spacing: 4) {
-                        Text("Sounds").font(.system(size: 13, weight: .semibold))
+                        Text("Sounds").font(.lupe(13, .semibold))
                         Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
                     }
                     .padding(.horizontal, 12).frame(minHeight: 44).raisedKey(8).contentShape(Rectangle())
@@ -239,7 +239,7 @@ struct SoundPanel: View {
             ScrollView {
                 if pages.isEmpty {
                     Text("T\(t + 1)'s engine has no \(state.family.rawValue) pages.")
-                        .font(.system(size: 13)).foregroundStyle(Theme.textSecondaryRaised)
+                        .font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
                 } else {
                     ShapeSection(session: session, ui: ui, marks: marks, family: state.family, columns: 1, showsHeader: false)
@@ -354,7 +354,7 @@ struct SeqKey: View {
 
     var body: some View {
         Button { press() } label: {
-            Text("SEQ").font(.system(size: 12, weight: .semibold)).tracking(0.5)
+            Text("SEQ").font(.lupe(12, .semibold)).tracking(0.5)
                 .foregroundStyle(Theme.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .background { Color.clear.raisedKey(8) }

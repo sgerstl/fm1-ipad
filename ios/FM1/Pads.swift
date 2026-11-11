@@ -59,7 +59,7 @@ struct FunctionPads: View {
         let usable = isUsable(pad)
         return Button { press(pad) } label: {
             Text(pad == .play && session.playing ? "STOP" : pad.rawValue)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.lupe(13, .semibold))
                 .foregroundStyle(on ? Theme.text : usable && hasPages(pad) ? Theme.textSecondary : Theme.textTertiary)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background { if usable { PadSurface(pressed: on) } else { RoundedRectangle(cornerRadius: 9).fill(Theme.control.opacity(0.5)) } }
@@ -86,9 +86,9 @@ struct FunctionPads: View {
         switch pad {
         case .play: return session.playing
         case .rec: return session.recording
-        case .home: return ui.songTab ? ui.soundPanel == nil && session.deviceScreen?.home == true : ui.page == .sequencer
-        case .save: return ui.page == .library || ui.page == .song
-        case .glo where session.dialect == .skiff: return ui.page == .mixer
+        case .home: return ui.shell ? ui.soundPanel == nil && session.deviceScreen?.home == true : ui.page == .sequencer
+        case .save: return ui.presetsPanel || ui.projectsOpen || ui.page == .library || (ui.page == .song && (!ui.shell || ui.poolOpen))
+        case .glo where session.dialect == .skiff || ui.shell: return ui.page == .mixer
         case .seq:
             if session.screenLinked, let s = session.deviceScreen { return !s.home && [ScreenMap.of(session).notes, ScreenMap.of(session).pattern].contains(s.page) && ui.page != .library }
             return ui.page == .sound && ui.soundFamily == .seq
@@ -103,7 +103,7 @@ struct FunctionPads: View {
     /// explanation instead (DrumNoPages) and keep a dim label as a hint.
     /// On Skiff a button with no pages for the selected track's engine (DRUM and DRUM-X: SEL, ENV; FM6: ENV; …) is
     /// disabled, as on the rail: pressed it does nothing (Scott, 2026-11-06). SLOOP's drum track keeps its explanation.
-    private func isUsable(_ pad: Pad) -> Bool { !(ui.songTab && !hasPages(pad)) }
+    private func isUsable(_ pad: Pad) -> Bool { !(ui.shell && !hasPages(pad)) }
     private func hasPages(_ pad: Pad) -> Bool {
         guard let f = pad.family else { return true }
         return !SoundPage.shown(session, f).isEmpty
@@ -119,7 +119,7 @@ struct FunctionPads: View {
         switch pad {
         case .play: session.setPlaying(!session.playing)
         case .rec: session.toggleRec()
-        case .home where ui.songTab:
+        case .home where ui.shell:
             // Skiff: HOME closes the sound panel and takes the FM-1 home (the panel is where these keys live now)
             SoundPanelControl.dismiss(ui, session: session)
         case .home:
@@ -128,9 +128,10 @@ struct FunctionPads: View {
         case .save where session.dialect == .skiff && ui.songTab:
             SkiffNavigator.save(session: session, ui: ui)
         case .save:
-            // as the FM-1's SAVE: the presets first; pressed again, the song (SLOOP's SECTION page)
-            if ui.page == .library { openSong() } else {
-                ui.page = .library
+            // as the FM-1's SAVE: the presets first, in the sounds panel over the page (Scott, 2026-11-10: keep the
+            // place); pressed again, the song (SLOOP's SECTION page)
+            if ui.presetsPanel || ui.page == .library { ui.presetsPanel = false; openSong() } else {
+                ui.chooseSound(session, track: session.selectedTrack)
                 if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).presets) }
             }
         case .glo where session.dialect == .skiff:
@@ -138,6 +139,13 @@ struct FunctionPads: View {
             ui.mixerSection = ui.page == .mixer ? SkiffButtonMap.MixerTab(rawValue: (ui.mixerSection.rawValue + 1) % SkiffButtonMap.MixerTab.allCases.count)! : .mixer
             ui.page = .mixer
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: ui.mixerSection.page) }
+        case .seq where ui.shell && session.dialect != .skiff:
+            // SLOOP in the Song · Mix tabs: SEQ is the Song tab's editor (its NOTES and PATTERN pages on the FM-1)
+            ui.soundPanel = nil
+            if ui.page != .song { ui.page = .song }
+            let map = ScreenMap.of(session)
+            let again = session.deviceScreen.map { !$0.home && $0.page == map.notes } ?? false
+            if session.screenLinked, ui.followDevice { session.showOnDevice(page: again ? map.pattern : map.notes) }
         case .seq where ui.songTab:
             // as the rail's SEQ: the Song tab's places, NOTES first (from Mix or Sounds, the Song tab)
             ui.soundPanel = nil
@@ -164,7 +172,14 @@ struct FunctionPads: View {
         default:
             guard let f = pad.family else { return }
             // the Mixer tab keeps its place: the button's pages come in on the sound panel, as from its rail
-            if ui.songTab, SoundPanelControl.families.contains(f) {
+            // SLOOP in the Song · Mix tabs: GLO's pages are Mix's (Skiff's GLO has its own case above)
+            if ui.shell, f == .glo {
+                ui.soundPanel = nil
+                ui.page = .mixer
+                if session.screenLinked, ui.followDevice, let g = SoundPage.reached(session, .glo).first { session.showOnDevice(page: g.fw) }
+                return
+            }
+            if ui.shell, SoundPanelControl.families.contains(f) {
                 SoundPanelControl.press(f, session: session, ui: ui)
                 return
             }

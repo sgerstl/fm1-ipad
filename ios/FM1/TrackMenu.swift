@@ -25,11 +25,13 @@ struct TrackMenuLayer: View {
             ZStack(alignment: .topLeading) {
                 Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                 if let m = ui.trackMenu {
-                    PlacedMenu(title: "Track \(m.track + 1) · \(Entries.trackName(m.track, session: session))",
-                               groups: Self.groups(session, ui, track: m.track), at: m.at, layer: g.size,
-                               close: { ui.trackMenu = nil })
+                    // the empty pads' fan, in the track's tint (Scott, 2026-11-09: "the track header longpress should
+                    // get the same treatment")
+                    FanMenu(title: "Track \(m.track + 1) · \(Entries.trackName(m.track, session: session))",
+                            items: Self.groups(session, ui, track: m.track).flatMap { $0 }.filter { !$0.note }, at: m.at, layer: g.size,
+                            tint: m.track, close: { ui.trackMenu = nil }, open: { _ in })
                         .id(m.track)
-                        .transition(PlacedMenu.transition(at: m.at, layer: g.size, reduceMotion: reduceMotion))
+                        .transition(.opacity.animation(.easeIn(duration: Labs.menuCloseTime)))
                 }
             }
         }
@@ -40,7 +42,7 @@ struct TrackMenuLayer: View {
         var g: [[MenuItem]] = []
         // the sound, from here: the sound panel slides out over the page (Scott, 2026-11-08: "Select sound"), not on the
         // Sounds tab, where the browser is the page itself
-        if !(ui.songTab && ui.page == .library) {
+        if !(ui.shell && ui.page == .library) {
             g.append([MenuItem(title: "Select sound", icon: "square.grid.2x2") { ui.chooseSound(session, track: t) }])
         }
         var more: [MenuItem] = []
@@ -64,9 +66,29 @@ struct TrackMenuLayer: View {
         }
         if !more.isEmpty { g.append(more) }
         let empty = session.stepIndices.allSatisfy { !session.tracks[t].isOn($0) }
-        g.append([MenuItem(title: empty ? "Clear all steps: none yet" : "Clear all steps", icon: "trash", enabled: !empty) {
+        var clears: [MenuItem] = []
+        // Skiff's song: every pad on the track's row emptied (its list rewritten empty), asked once more in place, with
+        // the count and any pattern that goes with them (Scott, 2026-11-10: "it should probably say clear all pads")
+        if let store = session.skiffSong, let l = store.song?.tracks[safe: t] {
+            let n = l.entries.filter { !$0.isEmpty }.count
+            let none = l.entries.map { _ in SongEntry(pattern: 0) }
+            let why = n > 0 ? store.blocked(track: t, to: none) : nil
+            let gone = n > 0 ? store.erased([t: none]) : []
+            let name = Entries.trackName(t, session: session)
+            let title = n == 0 ? "Clear all pads: none yet" : why.map { $0.hasPrefix("Stop") ? "Clear all pads (stop first)" : "Clear all pads: \($0)" } ?? "Clear all pads"
+            var confirm = "Clear \(n == 1 ? "1 pad" : "all \(n) pads") on T\(t + 1) \(name)"
+            if !gone.isEmpty { confirm += ", erasing \(gone.count == 1 ? "pattern" : "patterns") " + gone.map { String(format: "%02d", $0 + 1) }.joined(separator: ", ") }
+            clears.append(.destructive(title: title, icon: "square.slash", enabled: n > 0 && why == nil, confirm: confirm) {
+                Task { _ = await store.rewrite(track: t, to: none, confirmed: true) }
+            })
+        }
+        // the steps of the pattern it's on (what this always cleared: one pattern, not the pads), with Undo
+        let on = session.skiffSong?.song?.tracks[safe: t]?.patternOn
+        let stepsTitle = on.map { "Clear pattern \(String(format: "%02d", $0 + 1))'s steps" } ?? "Clear all steps"
+        clears.append(MenuItem(title: empty ? stepsTitle + ": none yet" : stepsTitle, icon: "trash", enabled: !empty) {
             ui.lastClear = session.clearAll(track: t)
-        }])
+        })
+        g.append(clears)
         return g
     }
 }

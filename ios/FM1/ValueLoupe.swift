@@ -83,7 +83,7 @@ private struct LoupeFace: View {
                     }
                     .frame(width: 32, height: 32)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(spec.label).font(.system(size: 11)).foregroundStyle(Theme.textSecondaryRaised)
+                        Text(spec.label).font(.lupe(11)).foregroundStyle(Theme.textSecondaryRaised)
                         RollingText(text: spec.shown, size: 15).id(spec.id).foregroundStyle(Theme.text).lineLimit(1)
                     }
                 }

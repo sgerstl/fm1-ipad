@@ -88,7 +88,7 @@ struct Fader: View {
     private var horizontal: some View {
         VStack(spacing: 4) {
             HStack {
-                Text(spec.label).font(.system(size: 11, weight: .semibold)).tracking(0.4).foregroundStyle(Theme.textSecondary)
+                Text(spec.label).font(.lupe(11, .semibold)).tracking(0.4).foregroundStyle(Theme.textSecondary)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 readout(size: 13)
@@ -122,7 +122,7 @@ struct Fader: View {
     /// The value, inverted while held (the knobs' bubble, in place).
     private func readout(size: CGFloat) -> some View {
         let held = startValue != nil
-        return Text(spec.shown).font(.system(size: size, weight: .semibold)).monospacedDigit()
+        return Text(spec.shown).font(.lupe(size, .semibold)).monospacedDigit()
             .lineLimit(1).fixedSize()                   // whole, however narrow the strip: the label gives way
             .foregroundStyle(held ? Theme.onColour : spec.value == spec.range.lowerBound && axis == .vertical ? Theme.textTertiary : Theme.text)
             .padding(.horizontal, held ? 8 : 0).frame(minHeight: size + 9)

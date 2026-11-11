@@ -14,8 +14,8 @@ struct SelectedStepPanel: View {
         let i = ui.selectedStep[t]
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Selected step").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                Text("Step \(i + 1)").font(.system(size: 22, weight: .semibold))
+                Text("Selected step").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
+                Text("Step \(i + 1)").font(.lupe(22, .semibold))
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
@@ -120,7 +120,7 @@ struct SelectedStepPanel: View {
             VStack(alignment: .leading, spacing: 6) {
                 readout(has ? "\(laneName) · step \(i + 1)" : "No \(laneName.lowercased()) on step \(i + 1)", dim: !has)
                 Text(has ? "Tap a lane name to edit another hit." : "Tap the grid to add one, or a lane name to pick another.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -152,7 +152,7 @@ struct SelectedStepPanel: View {
 
     private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            Text(label).font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 .accessibilityHidden(true)       // the controls carry their own labels
             content()
         }
@@ -180,9 +180,9 @@ struct TrackPanel: View {
             HStack(spacing: 10) {
                 TrackChip(track: t, muted: session.tracks[t].mute)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Whole track").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Whole track").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     Text(session.isDrums(t) ? "Drums" : session.tracks[t].displayName)
-                        .font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                        .font(.lupe(15, .semibold)).lineLimit(1)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -190,7 +190,7 @@ struct TrackPanel: View {
             .accessibilityAddTraits(.isHeader)
             KnobRow(session: session, ui: ui)
             Text("Swing sets all \(["one", "two", "three", "four", "five", "six", "seven", "eight"][safe: session.trackCount - 1] ?? "the") tracks.")
-                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

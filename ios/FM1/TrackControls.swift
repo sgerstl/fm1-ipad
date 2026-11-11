@@ -13,9 +13,14 @@ struct TrackKnobBox: View {
     let ui: EditorUI
     /// On the selected row's tab (the Song tab): no card of its own, the tab is its surface.
     var embedded = false
+    /// Which way the box goes back into its lane when it shuts (it hangs above the pad: down): its carets point there.
+    var closesDown = true
     /// The knob last turned on the FM-1, lit as the sound panel lights it (Scott, 2026-11-07: "work exactly like the
     /// ones in the panel").
     @State private var marks = ShapeMarks()
+    /// Pads' and the Timeline's: the box shown on the selected lane (shared). Its close key shuts it, so nobody has to
+    /// remember the head's double tap (Scott, 2026-11-10), which stays.
+    @AppStorage("padControlsOpen") private var controlsOpen = true
 
     /// Two rows (Scott, 2026-11-06): the FM-1's four knobs as HOME has them for this sound, then LEVEL, STEPS, PAN.
     /// Its width on a tab: HOME's four 92 pt columns, their gaps, 8 pt each side.
@@ -23,6 +28,14 @@ struct TrackKnobBox: View {
     /// Two rows of 56 pt boxes, their 4 pt gap, and 8 pt above and below: the same border as its sides on the tint (Scott,
     /// 2026-11-09: 4 pt top and bottom read as no border; 116 had crushed the rows, 2026-11-07).
     static let height: CGFloat = 132
+    /// Its corners on a tab: the tiles' 6 and the 8 pt inset round them (outer = inner + inset), so the tint runs an
+    /// even width round every tile (Scott, 2026-11-09).
+    static let outerRadius: CGFloat = 6 + 8
+    /// Taller by a row of chips while the selected track has an effect applied (Scott, 2026-11-10, board 46).
+    static let chipRow: CGFloat = 22 + 4
+    @MainActor static func height(for session: DeviceSession) -> CGFloat {
+        height + (TrackChips.of(session, session.selectedTrack).isEmpty ? 0 : chipRow)
+    }
     /// KnobSpec.all's LEVEL, STEPS, PAN (0 is SWING, global).
     static let knobs = 1..<4
 
@@ -55,7 +68,10 @@ struct TrackKnobBox: View {
     var body: some View {
         let t = session.selectedTrack
         let home = Self.homeIDs(session)
+        let chips = TrackChips.of(session, t)
         VStack(alignment: .leading, spacing: 4) {
+            // the track's effects in a row above the tiles, as many as fit, the last "+N" (board 46)
+            if !chips.isEmpty { ChipRow(session: session, ui: ui, track: t, chips: chips, width: Self.width - 16) }
             // HOME's four as the columns everywhere else (Scott, 2026-11-06), the track's colour, numbered as the FM-1's
             // knobs; a slide turns one, as on every column (the way Settings says), and it turns that knob's parameter on the FM-1 too
             if !home.isEmpty {
@@ -75,12 +91,18 @@ struct TrackKnobBox: View {
                     KnobControl(ui: ui, column: (number: 0, tint: Theme.track[t], hot: false)) { KnobSpec.all(session)[k] }
                         .frame(width: 92, height: 56)
                 }
+                // the cell beside PAN: a small round close key in its bottom right corner, round and dark so it
+                // reads as a key, not a fifth parameter; its touch the full 44 pt
+                if embedded {
+                    Color.clear.frame(width: 92, height: 56)
+                        .overlay(alignment: .bottomTrailing) { CloseControlsKey(down: closesDown, colour: Theme.track[t]) { controlsOpen = false } }
+                }
             }
         }
         .environment(\.compactColumns, true)
         .padding(.horizontal, embedded ? 8 : 6)
         .padding(.vertical, 8)
-        .frame(height: Self.homeIDs(session).isEmpty ? 72 : Self.height)
+        .frame(height: (Self.homeIDs(session).isEmpty ? 72 : Self.height) + (chips.isEmpty ? 0 : Self.chipRow))
         .background { if !embedded { RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held) } }
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
         .flashRing(ui, .trackPanel)
@@ -129,5 +151,44 @@ private struct MuteChipStyle: ToggleStyle {
         .accessibilityRepresentation {
             Toggle(isOn: configuration.$isOn) { configuration.label }
         }
+    }
+}
+
+/// The track controls' close key (Scott, 2026-11-10): the step tab's carets in the track's colour, two of them for the
+/// box's two positions, pointing the way it goes as it shuts (back into its lane). Only here, in the open box: opening is
+/// the head's double tap and its "Show track controls" action. A 44 pt touch area in the box's bottom right corner; the
+/// track colour on its own tint is 4.45:1 (violet) to 7.3:1 (lime) in the SKIFF theme.
+struct CloseControlsKey: View {
+    var down = true
+    let colour: Color
+    let close: () -> Void
+    var body: some View {
+        Button(action: close) {
+            ZStack(alignment: .bottomTrailing) {
+                Color.clear
+                TabCarets(ups: [!down, !down], colour: colour).frame(width: 36, height: 24)
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .accessibilityLabel("Close track controls")
+        .accessibilityHint("The tab on the track's row opens them again")
+    }
+}
+
+/// The panel tabs' carets: one chevron per position the panel has, each up or down for where a tap takes it (the step
+/// editor's tab, three; the track controls, two).
+struct TabCarets: View {
+    let ups: [Bool]
+    let colour: Color
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(ups.enumerated()), id: \.offset) { _, up in
+                Image(systemName: up ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold))
+            }
+        }
+        .foregroundStyle(colour)
+        .accessibilityHidden(true)
     }
 }

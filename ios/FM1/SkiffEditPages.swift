@@ -114,7 +114,7 @@ struct LaneFaders: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         }
                         if mix { panMark(pans[k], colour: colour) }
-                        Text(SkiffEdit.laneShort[k]).font(.system(size: 11, weight: .semibold))
+                        Text(SkiffEdit.laneShort[k]).font(.lupe(11, .semibold))
                             .foregroundStyle(on ? Theme.onColour : Theme.textSecondary)
                             .frame(width: min(36, w - 6), height: 20)
                             .background(RoundedRectangle(cornerRadius: 4).fill(on ? Theme.text : Theme.control))
@@ -140,7 +140,7 @@ struct LaneFaders: View {
                 RoundedRectangle(cornerRadius: 1).fill(colour).frame(width: 5, height: 8).offset(x: CGFloat(p) * 12 / 64)
             }
             .frame(height: 8)
-            Text(MixerStrips.pan(p)).font(.system(size: 11)).monospacedDigit().foregroundStyle(Theme.textSecondary)
+            Text(MixerStrips.pan(p)).font(.lupe(11)).monospacedDigit().foregroundStyle(Theme.textSecondary)
         }
     }
 }
@@ -159,7 +159,7 @@ struct SheetRows: View {
         VStack(spacing: 6) {
             ForEach(rows.indices, id: \.self) { r in
                 HStack(spacing: 4) {
-                    Text(rows[r].title).font(.system(size: 11, weight: .semibold)).tracking(0.4)
+                    Text(rows[r].title).font(.lupe(11, .semibold)).tracking(0.4)
                         .foregroundStyle(lit == r ? Theme.onColour : Theme.textSecondary)
                         .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.7)
                         .frame(width: 52).frame(maxHeight: .infinity)
@@ -195,8 +195,8 @@ struct PickTiles: View {
                 let on = k == picked
                 Button { pick(k) } label: {
                     VStack(spacing: 2) {
-                        Text(titles[k]).font(.system(size: 13, weight: .semibold))
-                        if let d = details[safe: k] { Text(d).font(.system(size: 11)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7) }
+                        Text(titles[k]).font(.lupe(13, .semibold))
+                        if let d = details[safe: k] { Text(d).font(.lupe(11)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7) }
                     }
                     .foregroundStyle(on ? Theme.onColour : dim.contains(k) ? Theme.textTertiary : Theme.text)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -240,10 +240,10 @@ struct DXSoundPage: View {
             if k != nil {
                 SheetRows(ui: ui, rows: rows(l), lit: litWindow, tint: tint, activate: activate)
             } else {
-                Text("Reading the kit…").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
+                Text("Reading the kit…").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
             }
             Text("The kit is the project's: every DRUM-X track plays it, MORPH blending A into B.")
-                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
         }
         .task(id: l) { await session.skiffEdit?.readKit(lane: l) }
         .onChange(of: session.deviceScreen) { a, b in if SkiffEdit.concerns(page, a, b) { Task { await session.skiffEdit?.readKit(lane: l) } } }
@@ -309,12 +309,12 @@ struct SampleMixPage: View {
                     .frame(height: 64).recessed(8)
                 if m.rc == 2 {
                     Text("This set fills its slot, so the mix plays but isn't kept after the FM-1 is switched off.")
-                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 }
             } else if let slot, m != nil {
-                Text("USR\(slot + 1) has no sounds yet.").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
+                Text("USR\(slot + 1) has no sounds yet.").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
             } else {
-                Text("Reading the set…").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
+                Text("Reading the set…").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(minHeight: 44)
             }
         }
         .task(id: slot) { if let slot { await session.skiffEdit?.readMix(slot: slot) } }
@@ -344,7 +344,7 @@ struct ZoneMap: View {
             let x = { (n: Int) in CGFloat(n - 21) / 88 * (g.size.width - 16) + 8 }
             ZStack(alignment: .topLeading) {
                 ForEach([24, 36, 48, 60, 72, 84, 96, 108], id: \.self) { c in
-                    Text(Music.noteName(c)).font(.system(size: 10)).foregroundStyle(Theme.textTertiary)
+                    Text(Music.noteName(c)).font(.lupe(10)).foregroundStyle(Theme.textTertiary)
                         .position(x: x(c), y: g.size.height - 8)
                 }
                 ForEach(zones.indices, id: \.self) { k in
@@ -371,11 +371,11 @@ struct SlicesNote: View {
     var body: some View {
         HStack(spacing: 12) {
             Text("Slices are moved, split and joined on the FM-1: the editor protocol has no command for them.")
-                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             Spacer(minLength: 0)
             if session.screenLinked {
                 Button { session.showOnDevice(page: page.fw) } label: {
-                    Text("Open on the FM-1").font(.system(size: 13, weight: .semibold))
+                    Text("Open on the FM-1").font(.lupe(13, .semibold))
                         .padding(.horizontal, 12).frame(minHeight: 44).raisedKey().contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink())

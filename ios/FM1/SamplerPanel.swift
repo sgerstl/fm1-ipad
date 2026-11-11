@@ -65,14 +65,14 @@ struct SamplerPanel: View {
         HStack(spacing: 12) {
             TrackChip(track: t)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Record a sample").font(.system(size: 17, weight: .semibold))
-                Text("Track \(t + 1) · \(UIDevice.current.model) microphone").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text("Record a sample").font(.lupe(17, .semibold))
+                Text("Track \(t + 1) · \(UIDevice.current.model) microphone").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             Spacer()
             Button { close() } label: {
-                Text("Cancel").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 16).frame(height: 44)
+                Text("Cancel").font(.lupe(15, .semibold)).padding(.horizontal, 16).frame(height: 44)
                     .background { Color.clear.raisedKey() }.contentShape(Rectangle())
             }
             .buttonStyle(PressSink())
@@ -137,7 +137,7 @@ struct SamplerPanel: View {
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0x0A0A0C))
                 if rec.take.isEmpty {
-                    Text(emptyText).font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                    Text(emptyText).font(.lupe(15)).foregroundStyle(Theme.textSecondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     Canvas { c, size in
@@ -220,7 +220,7 @@ struct SamplerPanel: View {
 
     private var meter: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Input").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            Text("Input").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.well)
@@ -238,7 +238,7 @@ struct SamplerPanel: View {
     /// hear the new setting at once.
     private var drive: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Drive").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
+            Text("Drive").font(.lupe(12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
             StepperKeys(label: "Drive", value: rec.driveDB, range: 0...18, step: 3, enabled: !busy,
                         format: { $0 == 0 ? "Off" : "+\($0) dB" }) { v in
                 rec.driveDB = v
@@ -289,14 +289,14 @@ struct SamplerPanel: View {
         let saving = hasTake && !busy
         return HStack(spacing: 6) {
             Text(saving ? "Save to" : "Slots")
-                .font(.system(size: 12, weight: saving ? .semibold : .regular)).foregroundStyle(saving ? Theme.text : Theme.textSecondary)
+                .font(.lupe(12, saving ? .semibold : .regular)).foregroundStyle(saving ? Theme.text : Theme.textSecondary)
             ForEach(0..<session.sampleSlotCount, id: \.self) { k in
                 let picked = slot == k && busy
                 Button { save(to: k) } label: {
                     VStack(spacing: 2) {
-                        Text(session.sampleSlotName(k)).font(.system(size: 13, weight: .semibold))
+                        Text(session.sampleSlotName(k)).font(.lupe(13, .semibold))
                         Text(k < slots.count && !slots[k].isEmpty ? slots[k].name : "empty")
-                            .font(.system(size: 10)).lineLimit(1)
+                            .font(.lupe(10)).lineLimit(1)
                             .foregroundStyle(Theme.textSecondary)
                     }
                     .foregroundStyle(picked || saving ? Theme.text : Theme.textSecondary)
@@ -335,10 +335,10 @@ struct SamplerPanel: View {
         return ZStack {
             Color.black.opacity(0.45).onTapGesture { asking = nil }.accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 14) {
-                Text("\(session.sampleSlotName(k)) holds “\(name.capitalized)”").font(.system(size: 17, weight: .semibold))
+                Text("\(session.sampleSlotName(k)) holds “\(name.capitalized)”").font(.lupe(17, .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Text("Replacing it erases it from the FM-1, which keeps no other copy.")
-                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 HStack(spacing: 12) {
                     Button { hear(k) } label: {
                         ZStack {
@@ -352,20 +352,20 @@ struct SamplerPanel: View {
                     .accessibilityLabel(playingHeld ? "Stop" : "Hear \(name.capitalized)")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(reading ? "Reading it from the FM-1…" : playingHeld ? "Playing" : "Hear what's there")
-                            .font(.system(size: 15))
+                            .font(.lupe(15))
                         Text(heldProblem ?? (session.playing ? "Reading it stops the song." : "Read from the FM-1, played here."))
-                            .font(.system(size: 12)).foregroundStyle(heldProblem == nil ? Theme.textSecondary : Theme.text)
+                            .font(.lupe(12)).foregroundStyle(heldProblem == nil ? Theme.textSecondary : Theme.text)
                     }
                 }
                 HStack(spacing: 10) {
                     Spacer()
                     Button { rec.stop(); asking = nil } label: {
-                        Text("Keep it").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 16).frame(height: 44)
+                        Text("Keep it").font(.lupe(15, .semibold)).padding(.horizontal, 16).frame(height: 44)
                             .background { Color.clear.raisedKey() }.contentShape(Rectangle())
                     }
                     .buttonStyle(PressSink())
                     Button { rec.stop(); asking = nil; slot = k; upload() } label: {
-                        Text("Replace with your take").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
+                        Text("Replace with your take").font(.lupe(15, .semibold)).foregroundStyle(Theme.onColour)
                             .padding(.horizontal, 16).frame(height: 44).raisedKey(9, primary: true).contentShape(Rectangle())
                     }
                     .buttonStyle(PressSink())

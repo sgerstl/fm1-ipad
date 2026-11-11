@@ -19,6 +19,7 @@ public struct TrackState: Equatable, Sendable {
     public var transpose = 0        // P_TRN, semitones
     public var chord = 0            // P_CHORD: 0 OFF
     public var arpMode = 0          // P_AMODE: 0 OFF
+    public var slicer = 0, duck = 0, follow = 0     // Skiff: SLICER, DUCK's BY, FOLLOW (0 OFF): the head's chips
     public var length = 16          // P_SLEN
     public var division = 2         // P_SDIV, 1/16
     public var pan = 0
@@ -189,6 +190,45 @@ public final class DeviceSession {
     }
     /// How far through its pass track t is (0..1), from the counted clock; nil when not known (stopped, no
     /// Start seen, RAND between notes, or firmware that sends its own positions).
+    /// A launch was staged on track t (SkiffSongStore.onLaunch): at BAR or BEAT the track starts a new pass on the line
+    /// (launch.c launch_at: the next bar or beat of the clock from Start). LOOP lands on the pass end, where a pass
+    /// begins anyway, and NOW goes on where the playhead is: nothing to move.
+    func noteLaunch(_ t: Int) {
+        guard trackIndices.contains(t), counted.running, counted.ticks >= 0 else { return }
+        let k = counted.ticks
+        switch launchMode {
+        case .bar: counted.relaunch(track: t, at: Double((k / 96 + 1) * 96))
+        case .beat: counted.relaunch(track: t, at: Double((k / 24 + 1) * 24))
+        case .loop, .now: counted.relaunch(track: t, at: nil)
+        }
+    }
+    /// The launch on track t taken back or cancelled; not when its line is a step away (the list read just after the
+    /// swap, the clock a pulse or two behind it).
+    /// Track t came onto another pattern: its LEN from the pool (and DIV, when seen before) now, so the counted pass is
+    /// the pattern's, then read from the FM-1 to be sure. Before, a track not selected kept the old pattern's LEN for
+    /// up to 15 s and its pass ended where that one's would: a LOOP launch's line then came before or after Skiff's
+    /// (Scott, 2026-11-10: USR1, longer patterns, onto 55, it switched before the line closed).
+    func arrived(_ t: Int) {
+        guard trackIndices.contains(t), let store = skiffSong, let p = store.song?.tracks[safe: t]?.patternOn else { return }
+        if let len = store.pool?.patterns[safe: p]?.length, len > 0 {
+            let l = max(1, min(stepCount, len))
+            if tracks[t].length != l { tracks[t].length = l }
+        }
+        if let d = store.divisions[p], tracks[t].division != d { tracks[t].division = d }
+        Task { try? await self.readParams(t) }
+    }
+    /// Seconds to the soonest launch waiting on any track, from the counted clock.
+    func secondsToNextLaunch() -> Double? {
+        guard let store = skiffSong, counted.running, bpm > 0 else { return nil }
+        let ticks = trackIndices.compactMap { t -> Double? in
+            store.marks(t, launchIn: nil).queued != nil || (store.perform?.staged[safe: t] ?? .none) != .none ? ticksToLaunch(t) : nil
+        }
+        return ticks.min().map { $0 / 24 * 60 / Double(bpm) }
+    }
+    func dropLaunch(_ t: Int) {
+        guard let at = counted.relaunchAt(t), Double(counted.ticks) < at - 6 else { return }
+        counted.relaunch(track: t, at: nil)
+    }
     public func passProgress(_ t: Int) -> Double? {
         guard trackIndices.contains(t) else { return nil }
         return counted.passProgress(t, at: Double(counted.ticks), length: tracks[t].length)
@@ -255,6 +295,9 @@ public final class DeviceSession {
     public private(set) var screenLinked = false
     /// What the FM-1's screen shows, when screenLinked.
     public private(set) var deviceScreen: UIState?
+    /// The FM-1's track colours under its THEME (Skiff; SkiffTheme), read on connecting and every few seconds while
+    /// connected; nil: none of its own, or not Skiff. The app decides whether to use them (a setting).
+    public private(set) var themeTrackColours: [UInt32]?
     /// Skiff's second screen link build (`56 01 02`): the screen carries the page's cursor (MOD's route, …) and
     /// Lupe can set it. False on the first build (`56 01 01`), which Lupe offers to update.
     public private(set) var screenCursor = false
@@ -423,6 +466,9 @@ public final class DeviceSession {
                         return (self.tracks[t].length, self.tracks[t].division)
                     }, isPlaying: { [weak self] in self?.playing ?? false })
                     skiffSong?.passCount = { [weak self] t in self?.passCount(t) }
+                    skiffSong?.onArrive = { [weak self] t in self?.arrived(t) }
+                    skiffSong?.nextLanding = { [weak self] in self?.secondsToNextLaunch() }
+                    skiffSong?.onLaunch = { [weak self] t, staged in if staged { self?.noteLaunch(t) } else { self?.dropLaunch(t) } }
                 }
                 await skiffSong?.refresh(pool: true)
             } else {
@@ -448,6 +494,7 @@ public final class DeviceSession {
                 group.addTask { await self.clockLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             }
             group.addTask { await self.resyncLoop(c) }
+            if let k = self.driver as? SkiffDriver { group.addTask { await self.themeLoop(k) } }
             group.addTask { await self.noteLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             await group.next()           // any loop ending means the device went away
             group.cancelAll()
@@ -456,6 +503,16 @@ public final class DeviceSession {
         driver = nil
         skiffSong?.detach()
         if !Task.isCancelled { status = .lost("FM-1 disconnected") }
+    }
+
+    /// The FM-1's THEME, followed (a change on its MENU shows up within a few seconds). Never ends on its own.
+    private func themeLoop(_ k: SkiffDriver) async {
+        while !Task.isCancelled {
+            // (an answer replaces it, nil included; a missed one keeps what was read)
+            do { let c = try await k.themeTrackColours(); if c != themeTrackColours { themeTrackColours = c } } catch {}
+            try? await Task.sleep(for: .seconds(5))
+        }
+        try? await Task.sleep(for: .seconds(86400 * 365))
     }
 
     /// Takes the connected device's size: the tracks are rebuilt only when it differs from what the app has.
@@ -1003,6 +1060,9 @@ public final class DeviceSession {
             case ids.swing: tr.swing = v
             default: break
             }
+            if id == ids.slicer { tr.slicer = v }
+            if id == ids.duck { tr.duck = v }
+            if id == ids.follow { tr.follow = v }
         }
         if tr != tracks[t] { tracks[t] = tr }
     }
@@ -1768,6 +1828,12 @@ public final class DeviceSession {
     public func readSkiffProject() async throws -> SkiffProjectData {
         guard let k = driver as? SkiffDriver, let info else { throw ProjectError.notConnected }
         return try await backupTurn { try await SkiffProjectTransfer.read(firmware: info.version, request: SkiffProjectTransfer.request(k)) }
+    }
+    /// The stored patterns in pool chunks `chunks` (SkiffPoolRead): only while stopped; nil when it couldn't (playing,
+    /// another backup turn, not Skiff). For the pads' pictures.
+    public func readSkiffPool(chunks: [Int]) async -> [Int: [UInt8]]? {
+        guard let k = driver as? SkiffDriver, !playing else { return nil }
+        return try? await backupTurn { try await SkiffPoolRead.records(chunks: chunks, request: SkiffProjectTransfer.request(k)) }
     }
     /// An iPad project onto the FM-1 as the music, named `name` (SkiffProject.swift), then everything read again.
     public func writeSkiffProject(_ p: SkiffProjectData, name: String?, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {

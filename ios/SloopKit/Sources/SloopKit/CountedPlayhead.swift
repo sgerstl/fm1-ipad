@@ -24,6 +24,7 @@ public struct CountedPlayhead: Equatable, Sendable {
         var stepTicks = 6.0       // this step's ticks before swing (DIV can change it while it plays)
         var startedAt = 0.0
         var passes = 0            // passes begun since Start (the first is 1): what an entry's REPS counts
+        var restartAt: Double?    // a BAR or BEAT launch staged: the tick of its line (relaunch)
     }
 
     /// Ticks per step for DIV 0..9: 1/4 1/8 1/16 1/32 8T 16T 1/2 1/1 2BAR 4BAR.
@@ -84,6 +85,10 @@ public struct CountedPlayhead: Equatable, Sendable {
                 w.stepTicks = T
             }
             if k >= w.nextAt {
+                if let r = w.restartAt, w.nextAt >= r - T / 2, s.direction != 3 {
+                    w.step = -1; w.count = 0; w.down = false     // (next: the first step in its direction)
+                    w.restartAt = nil
+                }
                 Self.next(&w, s)
                 w.startedAt = w.nextAt
                 w.stepTicks = T
@@ -122,6 +127,17 @@ public struct CountedPlayhead: Equatable, Sendable {
         w.nextAt = w.startedAt + T
         walks[t] = w
     }
+
+    /// A pattern launched at BAR or BEAT (Skiff launch.c): the track's step ending on the line, or less than half a step
+    /// before it, is followed by the first step in its direction, a new pass. Without it the count went on through
+    /// the old pass and was out of phase with the device from the first such launch on (its pass bar, its steps and
+    /// every LOOP countdown after: Scott, 2026-11-10). nil drops one staged (taken back, cancelled).
+    public mutating func relaunch(track t: Int, at tick: Double?) {
+        guard walks.indices.contains(t) else { return }
+        walks[t].restartAt = tick
+    }
+    /// The tick a staged launch of track t lands on (nil: none staged).
+    public func relaunchAt(_ t: Int) -> Double? { walks.indices.contains(t) ? walks[t].restartAt : nil }
 
     /// seq_next: the step after this one, for the track's LENGTH and DIR as they are now.
     static func next(_ w: inout Walk, _ s: Settings) {

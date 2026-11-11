@@ -12,6 +12,8 @@ struct BarPills: View {
     /// Bars played, the fraction of the one playing included (2.4: two full, the third 40 % through).
     let played: Double
     let width: CGFloat
+    /// The pills' ink: the dark text on a solid section colour; the light text on Option A's resting tint.
+    var ink: Color = Theme.onColour
 
     var body: some View {
         let n = max(count, 1)
@@ -33,10 +35,10 @@ struct BarPills: View {
     }
 
     private func pill(width w: CGFloat, fill: Double) -> some View {
-        Capsule().fill(Theme.onColour.opacity(0.22))
+        Capsule().fill(ink.opacity(0.22))
             .overlay(alignment: .leading) {
                 if fill > 0 {
-                    Capsule().fill(Theme.onColour.opacity(0.8)).frame(width: max(6, w * CGFloat(fill)))
+                    Capsule().fill(ink.opacity(0.8)).frame(width: max(6, w * CGFloat(fill)))
                 }
             }
             .frame(width: max(0, w))
@@ -63,7 +65,7 @@ struct BarsControl: View {
                     Capsule().fill(Theme.well).frame(width: w - 24, height: 6).offset(x: 12, y: 13)
                     Capsule().fill(Theme.textSecondary).frame(width: max(6, pos(bars, w) - 12), height: 6).offset(x: 12, y: 13)
                     ForEach(Self.stops, id: \.self) { s in
-                        Text("\(s)").font(.system(size: 11, weight: s == bars ? .semibold : .regular)).monospacedDigit()
+                        Text("\(s)").font(.lupe(11, s == bars ? .semibold : .regular)).monospacedDigit()
                             .foregroundStyle(s == bars ? Theme.text : Theme.textSecondary)
                             .position(x: pos(s, w), y: 38)
                     }
@@ -88,7 +90,7 @@ struct BarsControl: View {
             .frame(height: 48)
             key("plus", "One bar more") { set(min(64, bars + 1)) }
                 .disabled(!enabled || bars >= 64)
-            Text("\(bars) bar\(bars == 1 ? "" : "s")").font(.system(size: 17, weight: .semibold)).monospacedDigit()
+            Text("\(bars) bar\(bars == 1 ? "" : "s")").font(.lupe(17, .semibold)).monospacedDigit()
                 .frame(width: 76, alignment: .leading)
                 .accessibilityHidden(true)
         }

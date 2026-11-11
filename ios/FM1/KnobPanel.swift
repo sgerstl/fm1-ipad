@@ -51,7 +51,7 @@ struct KnobPanel: View {
     var body: some View {
         let spec = make()
         VStack(alignment: .leading, spacing: 12) {
-            Text(spec.label.capitalized).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            Text(spec.label.capitalized).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 .accessibilityAddTraits(.isHeader)
             if let choices = spec.choices {
                 choiceList(spec, choices)
@@ -60,7 +60,7 @@ struct KnobPanel: View {
                 if spec.shown == "\(spec.value)" { field(spec) }
                 if let d = spec.defaultValue, d != spec.value {
                     Button { change(spec, to: d) } label: {
-                        Text("Back to the default").font(.system(size: 15)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
+                        Text("Back to the default").font(.lupe(15)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(PressSink())
@@ -68,13 +68,13 @@ struct KnobPanel: View {
             }
             HStack(spacing: 8) {
                 Button { cancel(spec) } label: {
-                    Text("Cancel").font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
+                    Text("Cancel").font(.lupe(15, .semibold)).frame(maxWidth: .infinity, minHeight: 44).raisedKey()
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink())
                 .accessibilityHint("Puts back the value it had before")
                 Button(action: close) {
-                    Text("Done").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onColour)
+                    Text("Done").font(.lupe(15, .semibold)).foregroundStyle(Theme.onColour)
                         .frame(maxWidth: .infinity, minHeight: 44).raisedKey(primary: true)
                         .contentShape(Rectangle())
                 }
@@ -115,7 +115,7 @@ struct KnobPanel: View {
                 let p = CGPoint(x: sz.width / 2 + r * sin(a), y: sz.height / 2 - r * cos(a))
                 ctx.fill(Path(ellipseIn: CGRect(x: p.x - 13, y: p.y - 13, width: 26, height: 26)), with: .color(Theme.text))
             }
-            Text(spec.shown).font(.system(size: 34, weight: .semibold)).monospacedDigit()
+            Text(spec.shown).font(.lupe(34, .semibold)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.5).frame(width: 2 * r - 40)
         }
         .frame(width: 2 * r + 30, height: 2 * r + 30)
@@ -148,7 +148,7 @@ struct KnobPanel: View {
                         close()
                     } label: {
                         HStack {
-                            Text(names[k]).font(.system(size: 17))
+                            Text(names[k]).font(.lupe(17))
                             Spacer(minLength: 0)
                             if v == spec.value { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)) }
                         }
@@ -171,20 +171,20 @@ struct KnobPanel: View {
             HStack(spacing: 8) {
                 TextField("\(spec.range.lowerBound)–\(spec.range.upperBound)", text: $typed)
                     .keyboardType(.numbersAndPunctuation)
-                    .font(.system(size: 17)).monospacedDigit()
+                    .font(.lupe(17)).monospacedDigit()
                     .onSubmit { setTyped(spec) }
                     .padding(.horizontal, 12).frame(height: 44)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
                     .accessibilityLabel("\(spec.label.capitalized), \(spec.range.lowerBound) to \(spec.range.upperBound)")
                 Button { setTyped(spec) } label: {
-                    Text("Set").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 16).frame(minHeight: 44).raisedKey()
+                    Text("Set").font(.lupe(15, .semibold)).padding(.horizontal, 16).frame(minHeight: 44).raisedKey()
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressSink())
                 .disabled(typed.isEmpty)
             }
             if let p = typedProblem {
-                Label(p, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Theme.text)
+                Label(p, systemImage: "exclamationmark.circle").font(.lupe(13)).foregroundStyle(Theme.text)
             }
         }
     }

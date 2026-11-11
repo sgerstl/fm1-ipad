@@ -18,7 +18,8 @@ struct TempoOverlay: View {
 
     /// The panel's width (TempoPanel's frame) and half the top bar's readout (ReadoutLabel's 112 + 16): where it
     /// grows from. The phone's readout is narrower; a few points off at that size and speed don't show.
-    private static let width: CGFloat = 300, readoutHalf: CGFloat = 64
+    private var width: CGFloat { TempoPanel.width(session) }
+    private static let readoutHalf: CGFloat = 64
 
     var body: some View {
         let open = ui.tempoAt != nil
@@ -27,9 +28,9 @@ struct TempoOverlay: View {
             ZStack(alignment: .topLeading) {
                 Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
                 if let at = ui.tempoAt {
-                    let left = min(max(16, at.x - frame.minX), g.size.width - Self.width - 16)
+                    let left = min(max(16, at.x - frame.minX), g.size.width - width - 16)
                     // the readout's middle, over the panel's top edge
-                    let anchor = UnitPoint(x: min(1, max(0, (at.x - frame.minX + Self.readoutHalf - left) / Self.width)), y: 0)
+                    let anchor = UnitPoint(x: min(1, max(0, (at.x - frame.minX + Self.readoutHalf - left) / width)), y: 0)
                     TempoPanel(session: session, ui: ui) { ui.tempoAt = nil }
                         .fixedSize()
                         .closesOnOutsideTouch { ui.tempoAt = nil }
@@ -59,6 +60,11 @@ struct TempoPanel: View {
     private var range: ClosedRange<Int> { session.bpmRange }
     private var following: String? { session.externalClock }
     static let tapSide: CGFloat = 76
+    /// 300, or wide enough for Loop entry · Play song · Play once on Skiff.
+    @MainActor static func width(_ s: DeviceSession) -> CGFloat { s.skiffSong != nil ? 360 : 300 }
+    /// SLOOP in the Song · Mix layout: its song mode lives here, where Skiff's playback mode does (2026-11-10).
+    @MainActor static func sloopMode(_ s: DeviceSession) -> Bool { s.dialect == .sloop && s.capabilities.contains(.sloopSong) && UIDevice.current.userInterfaceIdiom == .pad
+        && !LaunchArgs.all.contains("-sloop-classic") }
 
     var body: some View {
         let off = following != nil
@@ -72,7 +78,7 @@ struct TempoPanel: View {
                     .opacity(off ? 0.5 : 1)
                     .accessibilityHint("Slide to set it. Tap to type a number")
                 Button(action: tap) {
-                    Text("Tap").font(.system(size: 17, weight: .semibold))
+                    Text("Tap").font(.lupe(17, .semibold))
                         .frame(width: Self.tapSide, height: Self.tapSide).raisedKey()
                         .contentShape(Rectangle())
                 }
@@ -82,21 +88,36 @@ struct TempoPanel: View {
                 .accessibilityHint("Tap in time: the tempo follows the last few taps")
             }
             if typing { keypad }
+            // Skiff's playback mode, here since 2026-11-10 (Scott, board 47): the readout under the tempo says which
+            if let store = session.skiffSong, !typing {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Playback").font(.lupe(12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
+                    SongModeKeys(store: store)
+                }
+            }
+            // SLOOP's song mode (Loop · Song), in the same place: Loop plays the loop and a tapped section replaces it;
+            // Song makes PLAY run the order and STOP bring the loop back
+            if Self.sloopMode(session), !typing {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Song mode").font(.lupe(12)).foregroundStyle(Theme.textSecondary).accessibilityHidden(true)
+                    SloopSongModeKeys(session: session)
+                }
+            }
             if let p = typedProblem {
-                Label(p, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Theme.text)
+                Label(p, systemImage: "exclamationmark.circle").font(.lupe(13)).foregroundStyle(Theme.text)
             }
             if let f = following {
                 Label("Following \(f) clock: the tempo comes from the other device. Set CLOCK to INT on the FM-1 to set it here.",
                       systemImage: "metronome")
-                    .font(.system(size: 13)).foregroundStyle(Theme.text)
+                    .font(.lupe(13)).foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
             } else if !typing {
                 Text("\(range.lowerBound)–\(range.upperBound) BPM · slide, or tap to type")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             }
         }
         .padding(16)
-        .frame(width: 300)
+        .frame(width: Self.width(session))
         // the one level-3 shadow, the panel's: on its shape, not the stack (which would shade every row and key)
         .elevated(.held, radius: 12)
         .task { await session.refreshTempo() }
@@ -127,7 +148,7 @@ struct TempoPanel: View {
                     Group {
                         if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
                     }
-                    .font(.system(size: k == "Set" ? 15 : 19, weight: .semibold)).monospacedDigit()
+                    .font(.lupe(k == "Set" ? 15 : 19, .semibold)).monospacedDigit()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .raisedKey(primary: k == "Set")
                     .contentShape(Rectangle())

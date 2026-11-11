@@ -31,6 +31,8 @@ public struct ParamIDs: Equatable, Sendable {
     public var pan = Param.pan, mute = Param.mute, chord = Param.chord, arpMode = Param.arpMode
     /// Play direction and the track's swing (the counted playhead needs them); nil where unused.
     public var direction: Int?, swing: Int?
+    /// Skiff's per-track effects that get a chip on the head (Scott, 2026-11-10): SLICER, DUCK's BY, FOLLOW; nil elsewhere.
+    public var slicer: Int?, duck: Int?, follow: Int?
     /// The INSERT's type and ENV SYNC, which change how other knobs read on SLOOP's screen.
     public var insertType: Int? = Param.insertType, envSync: Int? = Param.envSync
     public var bpm = Global.bpm, globalSwing = Global.swing
@@ -41,7 +43,7 @@ public struct ParamIDs: Equatable, Sendable {
 
     /// The track parameters read for every track.
     public var trackReads: [Int] {
-        [level, root, scale, quant, transpose, length, division, pan, mute, chord, arpMode] + [direction, swing].compactMap { $0 }
+        [level, root, scale, quant, transpose, length, division, pan, mute, chord, arpMode] + [direction, swing, slicer, duck, follow].compactMap { $0 }
     }
     public var globalReads: [Int] { [bpm, globalSwing] + [drumLevel, otherChannels, drumMap].compactMap { $0 } }
 }

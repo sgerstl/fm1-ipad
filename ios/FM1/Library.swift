@@ -13,9 +13,7 @@ struct LibraryPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// When the user last scrolled the list themselves: the knob's follow leaves them be for a moment.
     @State private var scrolledByHand: Date = .distantPast
-    @State private var clearing: Int?
     /// A user slot waiting on its erase confirm (Skiff's SAVE > USER).
-    @State private var erasing: UserPreset?
     /// The sound panel pushing the page (Browse, 2026-11-06): two columns while it's open, back to four after.
     @Environment(\.soundPanelRoom) private var panelRoom
 
@@ -42,8 +40,8 @@ struct LibraryPage: View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: panelRoom > 0 ? min(2, self.columns) : self.columns)
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                Text(gridTitle).font(.system(size: 22, weight: .semibold))
-                Text(gridDetail).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                Text(gridTitle).font(.lupe(22, .semibold))
+                Text(gridDetail).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 Spacer()
             }
             .accessibilityElement(children: .combine)
@@ -108,13 +106,6 @@ struct LibraryPage: View {
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .panel()
-        .alert("Erase \(erasing.map { SaveSound.slotName($0.slot) } ?? "")?", isPresented: Binding(get: { erasing != nil }, set: { if !$0 { erasing = nil } }),
-               presenting: erasing) { p in
-            Button("Erase sound", role: .destructive) { Task { _ = await session.eraseUserPreset(slot: p.slot) } }
-            Button("Cancel", role: .cancel) {}
-        } message: { p in
-            Text("“\(p.name.capitalized)” is removed from the FM-1. Tracks playing it keep their sound. This can't be undone.")
-        }
     }
 
     private var skiff: Bool { session.dialect == .skiff }
@@ -155,7 +146,7 @@ struct LibraryPage: View {
                             [[MenuItem(title: "Replace with T\(t + 1)'s sound…", icon: "arrow.triangle.2.circlepath") {
                                 ui.saveSound = SaveSoundRequest(slot: k, replacing: p.name)
                              }],
-                             [MenuItem(title: "Erase…", icon: "trash") { erasing = p }]]
+                             [MenuItem(title: "Erase…", icon: "trash") { askErase(p) }]]
                         }, at: at, fromKey: true)
                     }
                 }
@@ -165,7 +156,7 @@ struct LibraryPage: View {
                     Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(SaveSound.slotName(k)).foregroundStyle(Theme.textSecondary)
-                        Text("Empty").font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                        Text("Empty").font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
@@ -211,7 +202,7 @@ struct LibraryPage: View {
                 LED(on: current, colour: Theme.track[session.selectedTrack])
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name.capitalized).fontWeight(current ? .semibold : .regular).lineLimit(1)
-                    if let detail { Text(detail).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1) }
+                    if let detail { Text(detail).font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1) }
                 }
                 Spacer(minLength: 0)
             }
@@ -237,7 +228,7 @@ struct LibraryPage: View {
         let t = session.selectedTrack
         let slots = session.sampleSlots
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Your samples").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+            Text("Your samples").font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary)
                 .padding(.leading, 4).padding(.top, 16)
                 .accessibilityAddTraits(.isHeader)
             LazyVGrid(columns: columns, spacing: 8) {
@@ -254,29 +245,38 @@ struct LibraryPage: View {
                         guard full else { return }
                         ui.menu = AppMenu(title: "\(session.sampleSlotName(k)) · \(s?.name ?? "")", groups: {
                             [[MenuItem(title: "Record over", icon: "mic") { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }],
-                             [MenuItem(title: "Clear", icon: "trash") { clearing = k }]]
+                             [MenuItem(title: "Clear", icon: "trash") { askClear(k) }]]
                         }, at: at)
                     }, changed: { _, _ in }, ended: { _, _, _ in }))
                     .accessibilityAction(named: "Record over") { if full { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) } }
-                    .accessibilityAction(named: "Clear") { if full { clearing = k } }
+                    .accessibilityAction(named: "Clear") { if full { askClear(k) } }
                     .id("usr-\(k)")
                 }
             }
             .padding(4)
         }
         .task { await session.refreshSampleSlots() }
-        .alert("Clear \(session.sampleSlotName(clearing ?? 0))?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
-            Button("Clear \(session.sampleSlotName(clearing ?? 0))", role: .destructive) {
-                if let k = clearing { Task { try? await session.eraseSample(slot: k) } }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The FM-1 keeps no copy of it.")
+    }
+
+    /// Erase a user slot: asked once more in place (2026-11-10: no system alert).
+    private func askErase(_ p: UserPreset) {
+        let slot = SaveSound.slotName(p.slot)
+        ui.menu = AppMenu.confirm("Erase \(slot)", confirm: "Erase \(slot) “\(p.name.capitalized)”",
+                                  caption: "It's removed from the FM-1 for good. Tracks playing it keep their sound.") {
+            Task { _ = await session.eraseUserPreset(slot: p.slot) }
+        }
+    }
+
+    /// Clear a sample slot: asked once more in place; the FM-1 keeps no copy.
+    private func askClear(_ k: Int) {
+        let name = session.sampleSlotName(k)
+        ui.menu = AppMenu.confirm("Clear \(name)", confirm: "Clear \(name)", caption: "The recording is erased from the FM-1, which keeps no copy.") {
+            Task { try? await session.eraseSample(slot: k) }
         }
     }
 
     private func emptyNote(_ text: String) -> some View {
-        Text(text).font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+        Text(text).font(.lupe(15)).foregroundStyle(Theme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .center).padding(.top, 24)
     }
 }
@@ -310,7 +310,7 @@ struct LibraryEngines: View {
         let engines = session.info?.engines ?? []
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {       // 12 engines + user presets fit without scrolling
-                Text("Engines").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text("Engines").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     .padding(.leading, 8).padding(.bottom, 6)
                     .accessibilityAddTraits(.isHeader)
                 ForEach(Array(engines.enumerated()).filter { !entry || Self.offered(session, $0.offset) }, id: \.offset) { e, name in
@@ -354,7 +354,7 @@ struct LibraryEngines: View {
                 LED(on: current)
                 Text(name).fontWeight(browsing ? .semibold : .regular)
                 Spacer()
-                Text(notHere ?? "\(count)").font(.system(size: notHere == nil ? 13 : 11)).foregroundStyle(Theme.textSecondary)
+                Text(notHere ?? "\(count)").font(.lupe(notHere == nil ? 13 : 11)).foregroundStyle(Theme.textSecondary)
             }
             .foregroundStyle(browsing ? Theme.text : Theme.textSecondary)
             .padding(.horizontal, 12)
@@ -402,7 +402,7 @@ private struct SoundRefusalNote: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle").foregroundStyle(Theme.caution).accessibilityHidden(true)
-            Text(refusal.text).font(.system(size: 13)).foregroundStyle(Theme.text)
+            Text(refusal.text).font(.lupe(13)).foregroundStyle(Theme.text)
             Spacer(minLength: 0)
             Button { session.dismissSoundRefusal() } label: {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())

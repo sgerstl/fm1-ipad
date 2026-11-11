@@ -13,8 +13,10 @@ struct SkiffArrangePage: View {
     let store: SkiffSongStore
     let ui: EditorUI
     @State private var selection: EntryRef?
-    @State private var zoomBars: Int?
     @State private var allPatterns = false
+    /// The lanes' sideways scroll: the track controls draw outside the scroll (so they can hang past its foot, over the
+    /// editor at Half) and follow it by this.
+    @State private var lanesScrollX: CGFloat = 0
     /// A pattern being dragged from the bin (set when the drag starts; EditorUI's, so the Song tab's drawer can
     /// start one), and where it would go.
     private var dragPattern: Int? { ui.dragPattern }
@@ -31,8 +33,14 @@ struct SkiffArrangePage: View {
     @State private var section: SectionRange?
     @State private var leftOut: Set<Int> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The track controls open (the Pads' choice, shared: one switch for both views).
+    @AppStorage("padControlsOpen") private var controlsOpen = true
 
     static let headerWidth: CGFloat = 152
+    /// The Song tab's Timeline: the Pads' heads and their width (Scott, 2026-11-09: one set of track heads for both),
+    /// so its lanes start where the pads do.
+    static func headWidth(compact: Bool) -> CGFloat { compact ? PadsPage.compactStrip + 12 : headerWidth }
+    private var headW: CGFloat { Self.headWidth(compact: compact) }
     static let fullLaneHeight: CGFloat = 80
     static let laneGap: CGFloat = 8
     static let binWidth: CGFloat = 272
@@ -41,7 +49,8 @@ struct SkiffArrangePage: View {
         let _ = BodyCounter.tick("SkiffArrangePage")
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                toolRow
+                // the Song tab's tools are the top bar's (Scott, 2026-11-10, board 47); the Arrange page keeps its row
+                if !(compact && store.performs) { toolRow }
                 if store.song == nil {
                     SkeletonLanes(count: session.trackCount)
                 } else if (store.song?.tracks.allSatisfy { $0.used == 0 }) ?? true {
@@ -55,9 +64,9 @@ struct SkiffArrangePage: View {
                                set: { section = $0 }, apply: { applySection($0) }, cancel: { section = nil; leftOut = [] })
                     if let r = store.refusal, r.entry == nil { RefusalLine(refusal: r, session: session, store: store) }
                 } else if let line = dropAt?.text ?? moveAt?.text {
-                    Text(line).font(.system(size: 13)).padding(.horizontal, 12).frame(height: 32)
+                    Text(line).font(.lupe(13)).padding(.horizontal, 12).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
-                        .padding(.leading, Self.headerWidth)
+                        .padding(.leading, headW)
                 } else if let r = store.refusal, r.entry == nil || selection == nil {
                     RefusalLine(refusal: r, session: session, store: store)
                 }
@@ -66,7 +75,7 @@ struct SkiffArrangePage: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             // (the Song tab: the pool is a full-height drawer of the page's, SkiffSongPage)
             if !compact {
-                PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: dragPatternBinding)
+                PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: dragPatternBinding, host: ui)
                     .frame(width: Self.binWidth)
                     .flashRing(ui, .patternBin)          // SAVE > PATTERNS on the FM-1 lands here
             }
@@ -87,15 +96,12 @@ struct SkiffArrangePage: View {
         .onDisappear { menu = nil; lifted = nil; moveAt = nil; dropAt = nil }
         .task(id: store.offline) { if !store.offline { await store.follow() } }
         // a change that would erase a pattern asks first (CLEAR erases one nothing else uses)
-        .confirmationDialog(store.confirmation?.title ?? "", isPresented: Binding(
-            get: { store.confirmation != nil }, set: { if !$0 { store.confirmation = nil } }), titleVisibility: .visible,
-                            presenting: store.confirmation) { c in
-            Button(c.confirmLabel, role: .destructive) {
-                store.confirmation = nil
-                Task { await c.action() }
-            }
-            Button("Cancel", role: .cancel) { store.confirmation = nil }
-        } message: { c in Text(c.message) }
+        // a change that can't be taken back asks once more, in place at the finger (2026-11-10: no system dialog)
+        .onChange(of: store.confirmation?.id) {
+            guard let c = store.confirmation else { return }
+            store.confirmation = nil
+            ui.menu = AppMenu.confirm(c.title, confirm: c.confirmLabel, caption: c.message) { Task { await c.action() } }
+        }
     }
 
     /// The block whose menu is open: it stays lifted, and holds still.
@@ -149,11 +155,12 @@ struct SkiffArrangePage: View {
 
     private var toolRow: some View {
         HStack(spacing: 12) {
-            if compact, store.performs { SongViewSwitch(ui: ui) }
+            // (its place only: the live switch is the Song tab's, over both views, so it stays put as they slide)
+            if compact, store.performs { SongViewSwitch(ui: ui).hidden().accessibilityHidden(true) }
             // the Song tab: the Timeline / Pads switch alone, no "Song · N bars · N tracks" beside it to blur into
             // (Scott, 2026-11-07); the Arrange page keeps it
             if !compact || !store.performs {
-                Text("Song").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                Text("Song").font(.lupe(15, .semibold)).accessibilityAddTraits(.isHeader)
                 Text("\(songBars) bar\(songBars == 1 ? "" : "s") · \(session.trackCount) tracks")
                     .foregroundStyle(Theme.textSecondary).lineLimit(1).fixedSize()
             }
@@ -162,7 +169,7 @@ struct SkiffArrangePage: View {
             if !store.undoStack.isEmpty {
                 // Lupe's own undo: the lists before the last change (a delete, a move, a section)
                 Button { Task { await store.undo() } } label: {
-                    Label("Undo", systemImage: "arrow.uturn.backward").font(.system(size: 15))
+                    Label("Undo", systemImage: "arrow.uturn.backward").font(.lupe(15))
                         .padding(.horizontal, 14).frame(height: 44).raisedKey()
                 }
                 .buttonStyle(PressSink())
@@ -172,7 +179,7 @@ struct SkiffArrangePage: View {
             if let w = loopApartWarning {
                 // the first to give way when the row is narrow (the sound panel's rail beside it): it shortens
                 Label(w, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
+                    .font(.lupe(13)).lineLimit(1).truncationMode(.tail)
                     .foregroundStyle(Theme.text)
                     .padding(.horizontal, 12).frame(height: 32)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
@@ -181,7 +188,7 @@ struct SkiffArrangePage: View {
             }
             if compact {
                 Button { ui.poolOpen.toggle() } label: {
-                    Label("Patterns", systemImage: "square.grid.2x2").font(.system(size: 15))
+                    Label("Patterns", systemImage: "square.grid.2x2").font(.lupe(15))
                         .padding(.horizontal, 14).frame(height: 44).raisedKey()
                 }
                 .buttonStyle(PressSink(latched: ui.poolOpen))
@@ -202,24 +209,27 @@ struct SkiffArrangePage: View {
     }
 
     /// Lanes that end on different bars loop apart in SONG ON (each track moves on at its own pass ends).
-    private var loopApartWarning: String? {
+    private var loopApartWarning: String? { Self.loopApart(store) }
+    @MainActor static func loopApart(_ store: SkiffSongStore) -> String? {
         let ends = store.laneEnds.filter { $0 > 0 }
         guard let lo = ends.min(), let hi = ends.max(), hi - lo >= 0.25 else { return nil }
         func bar(_ b: Double) -> String { b == b.rounded() ? "\(Int(b))" : String(format: "%.1f", b) }
         return "Tracks end at bars \(bar(lo))–\(bar(hi)), so they loop apart"
     }
 
-    private var bars: Int { zoomBars ?? max(8, (songBars + 3) / 4 * 4 + (songBars % 4 == 0 ? 4 : 0)) }
+    private var bars: Int { Self.bars(zoom: ui.timelineZoom, songBars: songBars) }
+    static func bars(zoom: Int?, songBars: Int) -> Int { zoom ?? max(8, (songBars + 3) / 4 * 4 + (songBars % 4 == 0 ? 4 : 0)) }
+    @MainActor static func songBars(_ store: SkiffSongStore) -> Int { Int((store.laneEnds.max() ?? 0).rounded(.up)) }
 
     private var zoom: some View {
         HStack(spacing: 4) {
-            Button { zoomBars = min(128, bars * 2) } label: {
+            Button { ui.timelineZoom = min(128, bars * 2) } label: {
                 Image(systemName: "minus").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).raisedKey()
             }
             .buttonStyle(PressSink()).accessibilityLabel("Zoom out")
-            Text("\(bars) bars").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).frame(width: 64)
+            Text("\(bars) bars").font(.lupe(13)).foregroundStyle(Theme.textSecondary).frame(width: 64)
                 .accessibilityHidden(true)
-            Button { zoomBars = max(4, bars / 2) } label: {
+            Button { ui.timelineZoom = max(4, bars / 2) } label: {
                 Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).raisedKey()
             }
             .buttonStyle(PressSink()).accessibilityLabel("Zoom in")
@@ -232,7 +242,7 @@ struct SkiffArrangePage: View {
 
     private var lanesArea: some View {
         GeometryReader { geo in
-            let laneWidth = geo.size.width - Self.headerWidth
+            let laneWidth = geo.size.width - headW
             let barWidth = laneWidth / CGFloat(bars)
             let contentWidth = max(laneWidth, CGFloat(max(bars, songBars + 1)) * barWidth)
             HStack(alignment: .top, spacing: 0) {
@@ -243,7 +253,7 @@ struct SkiffArrangePage: View {
                         LaneHeader(session: session, store: store, track: t, note: section.flatMap { s in note(t, plans, s) }, ui: ui)
                     }
                 }
-                .frame(width: Self.headerWidth)
+                .frame(width: headW)
                 ScrollView(.horizontal) {
                     VStack(alignment: .leading, spacing: Self.laneGap) {
                         Ruler(bars: Int(contentWidth / barWidth), barWidth: barWidth, section: $section,
@@ -263,9 +273,20 @@ struct SkiffArrangePage: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollDisabled(lifted != nil)
+                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.x }) { _, x in lanesScrollX = x }
+            }
+            // the track controls outside the scroll, which clipped them at its foot (at Half the editor cut the box and
+            // its carets off; Scott, 2026-11-10: "fix the clipping"): moved with the scroll, cut off at the heads' edge
+            // only, free to hang down over the editor (SongTab lets the page's foot give way while they're open)
+            .overlay(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    laneControls(barWidth: barWidth, contentWidth: contentWidth).offset(x: -lanesScrollX)
+                }
+                .frame(width: laneWidth, height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap), alignment: .topLeading)
+                .mask { Rectangle().padding(.vertical, -400) }
+                .offset(x: headW)
             }
             .background(alignment: .topLeading) { selectedRow }
-            .overlay(alignment: .topTrailing) { knobBox }
             .opacity(store.offline ? 0.5 : 1)
         }
         .frame(height: 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap))
@@ -275,6 +296,66 @@ struct SkiffArrangePage: View {
         .background { keyboardShortcuts }
     }
 
+    /// The Song tab: the selected track's controls as on the Pads (Scott, 2026-11-09: "match them"): hanging straight
+    /// off its lane at the block the editor shows (above where there's room), one strip with the lane, sliding out of
+    /// it; they scroll with the blocks. Open or shut is the Pads' choice too.
+    @ViewBuilder private func laneControls(barWidth: CGFloat, contentWidth: CGFloat) -> some View {
+        let t = session.selectedTrack
+        let list = store.song?.tracks[safe: t]
+        let entry = ui.pinnedEntry.flatMap { $0.track == t ? $0.entry : nil } ?? list?.entryOn
+        let block = entry.flatMap { e in store.blocks(t).first { $0.entries.contains(e) } }
+        let total = 24 + CGFloat(session.trackCount) * (laneHeight + Self.laneGap)
+        ZStack(alignment: .topLeading) {
+            if compact, controlsOpen, dragPattern == nil, lifted == nil, let b = block {
+                let h = laneHeight, gap = Self.laneGap
+                let laneTop = 24 + gap + CGFloat(t) * (h + gap)
+                let bx = CGFloat(b.start / SongPlacement.ticksPerBar) * barWidth + 2
+                let bw = max(8, CGFloat(b.length / SongPlacement.ticksPerBar) * barWidth - 4)
+                let tab = CGSize(width: TrackKnobBox.width, height: TrackKnobBox.height(for: session))
+                let up = laneTop - tab.height >= 0
+                let right = bx + tab.width > contentWidth
+                let x = right ? max(0, bx + bw - tab.width) : bx
+                let y = up ? laneTop - tab.height : laneTop + h
+                let s = PadsPage.SelectedGeometry(frame: CGRect(x: bx, y: laneTop, width: bw, height: h), tab: tab, drop: 0, up: up, right: right,
+                                                  tabAt: CGPoint(x: x, y: y), knobsAt: CGPoint(x: x, y: y), border: 0, inner: .zero,
+                                                  padRadius: 8, earL: gap, earR: gap, col: 1)
+                ZStack(alignment: .topLeading) {
+                    LaneTabShape(box: CGRect(origin: s.knobsAt, size: tab), earL: gap, earR: gap, r: TrackKnobBox.outerRadius, up: up)
+                        .fill(SelectionTint.fill(t))
+                    TrackKnobBox(session: session, ui: ui, embedded: true, closesDown: up)
+                        .frame(width: tab.width, height: tab.height, alignment: .topLeading)
+                        .offset(x: x, y: y)
+                }
+                // scrolled partly under the heads, its hidden part would take their taps (it draws outside the scroll)
+                .allowsHitTesting(x - lanesScrollX >= 0)
+                .frame(width: contentWidth, height: total, alignment: .topLeading)
+                .id("lanebox\(t).\(b.id)")
+                .transition(reduceMotion ? .opacity : Emerge.transition(s, row: false, slide: true))
+            }
+            // shut: the Pads' open tab on the selected lane (Scott, 2026-11-10: "Yes, add it"), right-aligned to the block
+            // the editor shows (the Timeline's selected pad), on the edge the controls would open from
+            if compact, !controlsOpen, dragPattern == nil, lifted == nil, let b = block {
+                let h = laneHeight, gap = Self.laneGap
+                let laneTop = 24 + gap + CGFloat(t) * (h + gap)
+                let bx = CGFloat(b.start / SongPlacement.ticksPerBar) * barWidth + 2
+                let bw = max(8, CGFloat(b.length / SongPlacement.ticksPerBar) * barWidth - 4)
+                let up = laneTop - TrackKnobBox.height(for: session) >= 0
+                let w = PadsPage.openTabWidth, th = PadsPage.openTabHeight
+                OpenControlsTab(track: t, up: up, width: w, height: th,
+                                hint: "Opens the selected track's knobs at its block") { controlsOpen = true }
+                    .offset(x: max(0, bx + bw - w), y: up ? laneTop - th : laneTop + h)
+                    .allowsHitTesting(max(0, bx + bw - w) - lanesScrollX >= -11)
+                    .id("lanetab\(t).\(b.id)")
+                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
+            }
+        }
+        .frame(width: contentWidth, height: total, alignment: .topLeading)
+        .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: block?.id)
+        .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: t)
+        .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: controlsOpen)
+    }
+
+    /// (The old box at the timeline's right end, before the Pads' was shared; kept for the Arrange page's look.)
     /// The Song tab: the selected track's LEVEL, STEPS and PAN at the timeline's right end, just under its lane, or
     /// just above it where it would run past the last lane (Scott, 2026-11-06). Over the lanes, outside their
     /// horizontal scroll; out of the way while a pattern or a block is carried, so the drop reaches the lane.
@@ -286,15 +367,15 @@ struct SkiffArrangePage: View {
             let below = top + laneHeight + 4
             // under the row unless that runs well past the last lane (over the divider is fine): above it, it rose
             // over the ruler on short lanes (Scott, 2026-11-07, Clarinet on T3)
-            let down = below + TrackKnobBox.height <= total + 24
+            let down = below + TrackKnobBox.height(for: session) <= total + 24
             // a sound panel over the page: the box steps left of it, so it stays in view (2026-11-06), and hangs free
             let panel = ui.soundPanel != nil
             // a tab of the selected row's own colour, hanging from its right end (above it on the last rows): the knobs
             // part of the track, not floating over the next one (Scott, 2026-11-07)
-            TrackKnobBox(session: session, ui: ui, embedded: true)
+            TrackKnobBox(session: session, ui: ui, embedded: true, closesDown: !down)
                 .background { RowTab(down: down, flushRight: !panel).fill(SelectionTint.fill(t)) }
                 .offset(x: panel ? -(SoundPanel.width + 12) : 0,
-                        y: down ? below : max(0, top - 4 - TrackKnobBox.height))
+                        y: down ? below : max(0, top - 4 - TrackKnobBox.height(for: session)))
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
         }
     }
@@ -303,15 +384,27 @@ struct SkiffArrangePage: View {
     /// name). Behind the blocks; the name's weight still marks it without colour.
     @ViewBuilder private var selectedRow: some View {
         if compact {
-            let t = session.selectedTrack
-            RoundedRectangle(cornerRadius: 8).fill(SelectionTint.fill(t))
-                .frame(height: laneHeight + Self.laneGap)
-                .offset(y: 24 + Self.laneGap / 2 + CGFloat(t) * (laneHeight + Self.laneGap))
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: t)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            // each track's lane, as on the Pads (board 41): a tag behind its head joined to a band under its blocks,
+            // the selected one in its tint, the others the panel grey (Scott, 2026-11-09: one look for both views)
+            GeometryReader { g in
+                ZStack(alignment: .topLeading) {
+                    ForEach(0..<session.trackCount, id: \.self) { t in
+                        let tall = laneHeight >= Self.cardHeads
+                        LaneShape(tag: CGSize(width: headW, height: tall ? min(laneHeight, PadsPage.laneTag) : laneHeight),
+                                  height: laneHeight, tagR: tall ? 19 : 10, padR: 8)
+                            .fill(t == session.selectedTrack ? SelectionTint.fill(t) : Theme.panel)
+                            .frame(width: g.size.width, height: laneHeight)
+                            .offset(y: 24 + Self.laneGap + CGFloat(t) * (laneHeight + Self.laneGap))
+                    }
+                }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: session.selectedTrack)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
+    /// From this lane height the Timeline's heads are the Pads' full ones (H1); under it, the one-line heads.
+    static let cardHeads: CGFloat = 96
 
     private var keyboardShortcuts: some View {
         let keys: [(KeyEquivalent, String)] = [(.leftArrow, "Previous entry"), (.rightArrow, "Next entry"), (.upArrow, "Track above"),
@@ -421,7 +514,7 @@ struct SkiffArrangePage: View {
                            list: song.tracks[sel.track])
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Text("No entry selected").font(.system(size: 15, weight: .semibold))
+                Text("No entry selected").font(.lupe(15, .semibold))
                 Text("Tap a block to see its pattern and how many times it plays. Double-tap opens it in Sequence.")
                     .foregroundStyle(Theme.textSecondary)
             }

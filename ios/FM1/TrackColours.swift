@@ -18,7 +18,14 @@ enum TrackColours {
     private static var colours: [UInt32] {
         guard Thread.isMainThread else { return cached }
         let c = MainActor.assumeIsolated { session?.shape.trackColours } ?? DeviceShape.sloopColours
-        cached = c.isEmpty ? DeviceShape.sloopColours : c
+        let own = c.isEmpty ? DeviceShape.sloopColours : c
+        // the FM-1's THEME's track colours, where it has its own and Lupe can draw on them (SkiffTheme.guarded:
+        // contrast on Lupe's page and for the numbers on them); the rest Lupe's (Scott, 2026-11-09)
+        if ThemeColours.on, let t = MainActor.assumeIsolated({ session?.themeTrackColours }) {
+            cached = SkiffTheme.guarded(t, fallback: own)
+        } else {
+            cached = own
+        }
         return cached
     }
 

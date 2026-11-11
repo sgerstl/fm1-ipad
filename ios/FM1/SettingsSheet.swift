@@ -10,8 +10,13 @@ struct SettingsSheet: View {
     let session: DeviceSession
     @Environment(AudioThrough.self) private var through
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(Labs.holdToMenu.key) private var holdToMenu = Labs.holdToMenu.standard
+    @AppStorage(Labs.columnTravel.key) private var columnTravel = Labs.columnTravel.standard
+    @AppStorage(PadsPage.confirmClearKey) private var confirmPadClear = true
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
+    @AppStorage(PadPreviews.key) private var padPreviews = true
+    @AppStorage(ThemeColours.key) private var themeColours = true
     @AppStorage(SoundButtons.key) private var soundButtons = SoundButtons.standard
     @AppStorage(Handedness.key) private var handedness = Handedness.right
 
@@ -45,10 +50,53 @@ struct SettingsSheet: View {
                          : "Menus open to the right of your finger, so your hand doesn't cover them. The sound buttons sit on the left.")
                 }
 
+                // Touch (Scott, 2026-11-10): what you set once to suit your hands, out of Labs for good
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Hold before a menu")
+                            Spacer()
+                            Text(String(format: "%.2f s", holdToMenu)).monospacedDigit().foregroundStyle(Theme.textSecondary)
+                        }
+                        Slider(value: Binding(get: { holdToMenu }, set: { holdToMenu = ($0 / 0.05).rounded() * 0.05 }), in: Labs.holdToMenu.range)
+                            .accessibilityLabel("Hold before a menu")
+                            .accessibilityValue(String(format: "%.2f seconds", holdToMenu))
+                        Text("How long you press a pad, block or track before its menu opens. Shorter is quicker but easier to set off by accident.")
+                            .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Slide for a full turn")
+                        Picker("Slide for a full turn", selection: Binding(get: { SlideLength.nearest(columnTravel) }, set: { columnTravel = $0.rawValue })) {
+                            ForEach(SlideLength.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Slide for a full turn")
+                        Text("How far you slide a value across its whole range. Fine is longer and more exact.")
+                            .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
+                    }
+                    Toggle("Confirm before clearing a pad", isOn: $confirmPadClear)
+                } header: {
+                    Text("Touch")
+                } footer: {
+                    Text("Clearing a pad whose pattern nothing else uses erases that pattern, and it can't be undone. With the confirm on, Lupe asks first; \u{201C}Don't ask again\u{201D} turns it off.")
+                }
+
                 Section {
                     Toggle("Sound buttons", isOn: $soundButtons)
                 } footer: {
                     Text("Off, pages open from the FM-1's own buttons, and an open panel shows all twelve along its foot, laid out as on the FM-1. On, the FX to SEQ buttons stay down the side so you can open a page from the screen, and the panel leaves them out.")
+                }
+
+                Section {
+                    Toggle("Track colours from the FM-1's theme", isOn: $themeColours)
+                } footer: {
+                    Text("The tracks take the colours the FM-1's theme gives them (SKIFF, CRYPT, NEON, QUARK or your custom set). A colour too dark to read on Lupe's page keeps Lupe's own. HI-CON and PAPER have no track colours of their own, so Lupe keeps its.")
+                }
+
+                Section {
+                    Toggle("Show every pattern on the pads", isOn: $padPreviews)
+                } footer: {
+                    Text("While the song is stopped, Lupe reads the FM-1's stored patterns so each pad shows its pattern before you play it. Off, a pad shows its pattern once it has played. A trial until 16 November.")
                 }
 
                 Section {

@@ -20,6 +20,9 @@ struct SongPage: View {
     var compact = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The order alone, as the Song tab's Timeline (SLOOP in the Skiff tabs, 2026-11-10): no section keys over it.
+    var lane = false
+
     /// A step in the order, with an identity that survives moves (two blocks can hold the same step).
     struct Slot: Identifiable, Equatable {
         var id = UUID()
@@ -73,7 +76,7 @@ struct SongPage: View {
     static let rowsSpace = "songRows"
     /// Points per bar: the song fills the row's width when it fits on one, never under 30 (then the blocks wrap).
     static let minUnit: CGFloat = 30
-    private var blockHeight: CGFloat { compact ? 96 : Self.blockHeight }
+    private var blockHeight: CGFloat { compact || lane ? 96 : Self.blockHeight }
     private var addWidth: CGFloat { compact ? 44 : Self.addWidth }
     private var minBlock: CGFloat { compact ? 72 : Self.minBlock }
     private var minUnit: CGFloat { compact ? 16 : Self.minUnit }
@@ -99,6 +102,9 @@ struct SongPage: View {
                 .scrollIndicators(.hidden)
                 .frame(minWidth: 0, maxWidth: .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
+            } else if lane {
+                // the Song tab's Timeline (SLOOP in the Skiff tabs): the order alone; the sections are the Pads' side
+                orderPanel
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     SectionsPanel(session: session, ui: ui)
@@ -137,15 +143,28 @@ struct SongPage: View {
 
     private var orderPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // (as the Song tab's Timeline the tool row carries the position, Loop the song and the messages)
+            if !lane { orderHeader }
+            arrangement(width: rowWidth)
+                // minWidth 0: without it the frame is never narrower than the rows it holds, so the rows
+                // could only grow (the phone stayed at the first guess, 900 pt, 2026-11-04)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+        }
+        .padding(lane ? 12 : 16)
+        .panel()
+    }
+
+    @ViewBuilder private var orderHeader: some View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Song").font(.system(size: 22, weight: .semibold))
+                Text("Song").font(.lupe(22, .semibold))
                     .accessibilityAddTraits(.isHeader)
-                Text(position(session.song)).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).monospacedDigit()
+                Text(position(session.song)).font(.lupe(13)).foregroundStyle(Theme.textSecondary).monospacedDigit()
                 Spacer()
                 if session.orderWaitingForStop {
-                    Text("Saves to the FM-1 when you stop").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Saves to the FM-1 when you stop").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 } else if saving || draft != nil {
-                    Text("Saving to the FM-1…").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("Saving to the FM-1…").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                 }
                 ToggleKey(name: "Loop the song", on: loop, enabled: editable) {
                     loopDraft = !loop
@@ -153,18 +172,10 @@ struct SongPage: View {
                 }
             }
             if let m = session.songMessage {
-                Text(m).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
+                Text(m).font(.lupe(13, .semibold)).foregroundStyle(Theme.text)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Capsule().fill(.white.opacity(0.08)))
             }
-            arrangement(width: rowWidth)
-                // minWidth 0: without it the frame is never narrower than the rows it holds, so the rows
-                // could only grow (the phone stayed at the first guess, 900 pt, 2026-11-04)
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-        }
-        .padding(16)
-        .panel()
     }
 
     private func position(_ s: SongState) -> String {
@@ -322,31 +333,47 @@ struct SongPage: View {
     private func block(_ n: Int, _ step: SongOrder.Step, width w: CGFloat, open: Bool) -> some View {
         let s = session.song
         let live = s.songPlaying && s.songStep == n
+        // the Song tab's Timeline (lane) as Skiff's option A (board 48 A, Scott 2026-11-10): at rest a 32% tint of the
+        // section's colour with a 1.5 pt edge in it and the light text; full colour only while it plays; its menu open,
+        // the Pads' selected look (flat grey, a 3 pt outline in its colour). Arrange's own page keeps every block solid.
+        let solid = !lane || live
+        let ink = solid ? Theme.onColour : Theme.text
+        let shape = RoundedRectangle(cornerRadius: 12)
         return VStack(alignment: .leading, spacing: 2) {
-            Text(DeviceSession.sectionName(step.section)).font(.system(size: 22, weight: .semibold))
+            Text(DeviceSession.sectionName(step.section)).font(.lupe(22, .semibold))
             Text(live ? "bar \(s.songBar + 1) of \(step.bars)" : "\(step.bars) bar\(step.bars == 1 ? "" : "s")")
-                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                .font(.lupe(12, .semibold)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.75)
             Spacer(minLength: 0)
             if live {
                 // the bar playing fills at the tempo (4 beats a bar, as SLOOP counts them), beat by beat with Reduce Motion
                 TimelineView(.animation(minimumInterval: reduceMotion ? 60 / Double(max(session.bpm, 20)) : nil)) { tl in
-                    BarPills(count: step.bars, played: Double(s.songBar) + barFraction(at: tl.date), width: w - 20)
+                    BarPills(count: step.bars, played: Double(s.songBar) + barFraction(at: tl.date), width: w - 20, ink: ink)
                 }
             } else {
-                BarPills(count: step.bars, played: s.songPlaying && n < s.songStep ? Double(step.bars) : 0, width: w - 20)
+                BarPills(count: step.bars, played: s.songPlaying && n < s.songStep ? Double(step.bars) : 0, width: w - 20, ink: ink)
             }
         }
-        .foregroundStyle(Theme.onColour)
+        .foregroundStyle(ink)
         .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 10)
         .frame(width: w, height: blockHeight, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 12)
-            .fill(Theme.pad(step.section)))
+        .background {
+            if solid { shape.fill(Theme.pad(step.section)) }
+            else if open { shape.fill(Theme.control) }
+            else {
+                shape.fill(SelectionTint.fill(step.section, percent: SelectionTint.restingBlock))
+                    .overlay { shape.stroke(Theme.track[step.section], lineWidth: 1.5).padding(0.75) }
+            }
+        }
         // the edge you drag for length
         .overlay(alignment: .trailing) {
-            Capsule().fill(Theme.onColour.opacity(0.35)).frame(width: 4, height: 28).padding(.trailing, 4)
+            Capsule().fill(solid ? Theme.onColour.opacity(0.35) : Theme.textSecondary).frame(width: 4, height: 28).padding(.trailing, 4)
         }
-        .overlay { if open { RoundedRectangle(cornerRadius: 15).stroke(Theme.text, lineWidth: 2).padding(-4) } }
+        .overlay {
+            if open, lane { shape.stroke(Theme.track[step.section], lineWidth: 3).padding(live ? -3 : 1.5) }
+            else if open { RoundedRectangle(cornerRadius: 15).stroke(Theme.text, lineWidth: 2).padding(-4) }
+        }
+        .animation(.easeOut(duration: 0.15), value: live)
     }
 
     /// How far through the bar playing the song is, from when the iPad saw the bar begin. Held at the
@@ -449,13 +476,13 @@ struct SongPage: View {
         ZStack(alignment: .leading) {
             if let u = undo {
                 HStack(spacing: 12) {
-                    Text(u.text).font(.system(size: 13, weight: .semibold))
+                    Text(u.text).font(.lupe(13, .semibold))
                     Button("Undo") {
                         slots = u.slots
                         undo = nil
                         commit()
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.lupe(13, .semibold))
                     .padding(.horizontal, 14).frame(height: 36).raisedKey()
                     .buttonStyle(PressSink())
                 }
@@ -466,7 +493,7 @@ struct SongPage: View {
                 Text(editable ? (compact ? "Tap a block to change it. Press and drag to move it, drag its right edge for length."
                                          : "Tap a block to change it. Press and drag to move it, flick it up to delete it, drag its right edge for length.")
                               : "Stop the song to change its order, as on the FM-1.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     .padding(.leading, Self.inset)
                     .transition(.opacity)
             }
@@ -518,7 +545,7 @@ struct SongPage: View {
         return Button {
             change { $0[i].step.section = k }
         } label: {
-            Text(DeviceSession.sectionName(k)).font(.system(size: 17, weight: .semibold))
+            Text(DeviceSession.sectionName(k)).font(.lupe(17, .semibold))
                 .foregroundStyle(stored ? Theme.onColour : Theme.textTertiary)
                 .frame(width: 48, height: 44)
                 .background {
