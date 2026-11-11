@@ -181,7 +181,7 @@ def actions(x, y, w, confirm=False):
 def board49():
     parts = []
     W = 40 * 2 + 3 * 1376 + 2 * 64
-    parts.append(tx(40, 32, '49 · FREE TAKE in Lupe: play stopped, keep it, land on the Timeline (the flow, and what needs the firmware)', 30, TEXT, 700))
+    parts.append(tx(40, 32, '49 · FREE TAKE in Lupe: play stopped, keep it, land on the Timeline (the flow, and what needs the firmware) · decided 2026-11-11: form A', 30, TEXT, 700))
     parts.append(wrap(40, 78, 2400,
         'Skiff 2.5: with the transport stopped you play (the FM-1’s keys, MIDI, Lupe’s keyboard, the arp), pause 2.5 s, and SHIFT + SAVE opens its picker. '
         'Three moments on the iPad, at 1:1, T3 Pulse Ld selected, the Timeline in option A: <b style="color:#EDEDF0">1</b> the take offered, <b style="color:#EDEDF0">2</b> the picker (its three forms on board 50), '
@@ -236,7 +236,7 @@ def board49():
     parts.append(screen(xs[2], Y, '3 · Kept: the Timeline, the new pattern selected, Undo (level 1 can do this)', s3))
     parts.append(wrap(xs[2], Y + 1032 + 20, 1376,
         'Lupe reads the pattern and the tempo again and opens the Timeline on the selected track, the kept block selected (the Pads’ outline), the editor on it (batch list item 4: '
-        'captures land on the Timeline). The strip says what changed and keeps <b style="color:#EDEDF0">Undo</b> until the next edit or 30 s. Undo is Skiff’s own (SAVE held); the iPad’s key needs a way to send it (to check: an undo request in the editor protocol, else the strip says “Hold SAVE on the FM-1”). '
+        'captures land on the Timeline). The strip says what changed and keeps <b style="color:#EDEDF0">Undo</b> until the next edit or 30 s. Undo is Skiff’s own (SAVE held); Skiff 2.5.1 has no editor undo request (checked 2026-11-11), so until the firmware adds one the strip says “Hold SAVE on the FM-1” where Undo is drawn here. '
         'Pattern 08’s other entries change too: they name the same pattern. That’s said here, not discovered later.', 14, T2))
 
     # levels table
@@ -244,11 +244,11 @@ def board49():
     parts.append(tx(40, LY, 'What needs the firmware', 24, TEXT, 700))
     rows = [
         ('The take offered (1)', 'Yes, by Lupe’s own ear: it sees the notes over MIDI while stopped, and the 2.5 s pause. It can’t know Skiff’s guess; the strip says “Press SHIFT + SAVE on the FM-1”.', 'Skiff’s guess in the strip; Keep that starts the take from the iPad.'),
-        ('Keep that (3, the button)', 'No: nothing in the screen link presses SHIFT + SAVE.', 'A command: start the take.'),
+        ('Keep that (the button)', 'No: nothing in the screen link presses SHIFT + SAVE.', 'Level 3: a command to start the take.'),
         ('The picker (2)', 'Lupe knows only that the FM-1 left its page (SCREEN doesn’t report the picker, fr.on). It can say “Choose on the FM-1” and show the phrase as played.', 'SCREEN flags bit 3 (picker open, “56 01 7”), the four values (tempo guess index and the three tempos, bars, first beat, SET or KEEP), and commands to change each, Listen, Keep and Put back.'),
         ('Re-gridding the notes', 'No values to grid by.', 'From the four values and Lupe’s own record of the notes; the same arithmetic as Skiff’s (it quantises to 16ths): a preview, exact once kept.'),
         ('Landing on the Timeline (3)', 'Yes: a new pattern on the track and a tempo change are seen; Lupe re-reads both and opens the Timeline.', '(the same, and sooner: the keep is reported)'),
-        ('Undo', 'SAVE held on the FM-1 works; an Undo key on the iPad only if the editor protocol has an undo request (to check). Else the strip says “Hold SAVE on the FM-1”.', 'An undo command, if there isn’t one.'),
+        ('Undo', 'SAVE held on the FM-1. Skiff 2.5.1 has no editor-protocol undo request (checked 2026-11-11: undo_step in ui.c is reached only from the panel), so the strip says “Hold SAVE on the FM-1”, no Undo key.', 'An UNDO request (a command calling undo_step), with level 2 or 3: then the strip’s Undo key.'),
     ]
     ty = LY + 44
     parts.append(tx(40, ty, 'Moment', 13, T2, 600)); parts.append(tx(420, ty, 'Level 1: today’s screen link and reads', 13, T2, 600)); parts.append(tx(1700, ty, 'Level 2: a screen link v7 (firmware)', 13, T2, 600))
@@ -259,7 +259,7 @@ def board49():
         ty += 66
     parts.append(wrap(40, ty + 10, 3100, 'Flash: the release build has about 3.2 KB left (rebase write-up, “Size”). The picker report and its commands are small (a flags bit, eight bytes, five commands), '
                  'but the captured notes themselves shouldn’t go over the link: Lupe keeps its own record from MIDI, so level 2 sends values only. Level 1 alone gives an honest guide and a good landing; '
-                 'the picker on the iPad needs level 2.', 14, NOTE))
+                 'the picker on the iPad needs level 2, Keep that from the iPad level 3. <b>Decided 2026-11-11: form A (board 50).</b> The build waits for the open Lupe branches to merge and for Skiff-Lupe 2.5.1 on the device.', 14, NOTE))
     H = ty + 120
     return W, H, ''.join(parts)
 
@@ -267,7 +267,7 @@ def board49():
 def board50():
     parts = []
     W = 40 * 2 + 3 * 1376 + 2 * 64
-    parts.append(tx(40, 32, '50 · The FREE TAKE picker: in the editor’s place (A), in the track’s lane (B), or a panel (C), and the notes re-gridding live', 30, TEXT, 700))
+    parts.append(tx(40, 32, '50 · The FREE TAKE picker: in the editor’s place (A, decided 2026-11-11), in the track’s lane (B), or a panel (C); the notes re-gridding live', 30, TEXT, 700))
     parts.append(wrap(40, 78, 2600,
         'Each at 1:1 with the same take on T3 Pulse Ld. Every form has the same four choices (Skiff’s knobs), the notes, Listen, Put back and Keep it, and every one keeps the Timeline in view. '
         'Under them: one form re-gridding as you change the tempo, the bars and the 1, and Keep’s in-place confirm. Pick a form; nothing is built.', 15, T2))
@@ -283,7 +283,7 @@ def board50():
     a.append(notes_view(36, edtop + 84, 860, 300))
     c, _ = controls(930, edtop + 84, 400); a.append(c)
     a.append(actions(36, 1032 - 12 - 68, 1300))
-    parts.append(screen(xs[0], Y, 'A · In the editor’s place (where the sampler comes in)', topbar(0, 0, 1376) + f'<div style="position:absolute;left:0;top:0">{inner}{"".join(a)}</div>'))
+    parts.append(screen(xs[0], Y, 'A · In the editor’s place (where the sampler comes in) · DECIDED 2026-11-11', topbar(0, 0, 1376) + f'<div style="position:absolute;left:0;top:0">{inner}{"".join(a)}</div>'))
     parts.append(wrap(xs[0], Y + 1052, 1376, '<b style="color:#EDEDF0">For:</b> the editor’s own place and size, so nothing moves; the notes get the most room; the sampler already does this. '
                  '<b style="color:#EDEDF0">Against:</b> at No grid the editor is shut, so it opens to Half first (one slide). Controls 44 pt, all in reach of the right hand.', 14, T2))
 
@@ -371,7 +371,7 @@ def board50():
         parts.append(tx(110, KY + 31 + i * 24, n + (f' (needs {need:g}:1)' if need > 1 else ' (decoration: the beat lines carry no meaning alone)'), 13, '#C8C8CF'))
     R = KY + 30 + len(pairs) * 24 + 30
     parts.append(box(40, R, 1700, 210, f'background:{PANEL};border-radius:14px;'))
-    parts.append(tx(64, R + 20, 'My pick: A, in the editor’s place', 20, TEXT, 700))
+    parts.append(tx(64, R + 20, 'Decided 2026-11-11: A, in the editor’s place (my pick, and Scott’s)', 20, TEXT, 700))
     parts.append(wrap(64, R + 56, 1640,
         'It moves nothing: the picker takes the editor’s own place and size, the way the sampler already does, and the Timeline stays where it was, so the take’s block lands in view. '
         'The notes get the most room, which matters because re-gridding is how you judge the guess. B is the most LCARS and names the track without words, but it moves every lane below '
