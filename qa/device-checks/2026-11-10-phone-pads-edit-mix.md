@@ -47,3 +47,5 @@ The iPad is meant to be unchanged. A pad's hold menu wraps into a second column 
 - **VoiceOver:** on the phone it waits for the release pass. The simulator audit's results are in `qa/accessibility-2026-11-10/README.md` › iPhone › Third run.
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device".
+
+**Result, 2026-11-11:** Scott marked checks 4 and 15 passed (the two that apply on the iPad; the iPhone itself not checked).

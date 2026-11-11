@@ -88,3 +88,5 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 **Not covered here** (needs skiff-sim, the iPhone, VoiceOver or a later round): the phone (Skiff's Song isn't on the phone yet, so board 40 waits); a chain drawn as one wide pad (board 35) is not built: chained entries still show as separate pads saying "Chained on"; VoiceOver labels now start with the track name ("Lead, entry C…"): release pass.
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device".
+
+**Result, 2026-11-11:** Scott marked checks 50–71 passed and working on the iPad (merged trunk, then the skiff-2.5.1-support build). Checks 1–19 are not recorded here.

@@ -50,3 +50,5 @@ Settings › Accessibility on the iPad. Change one, look at Lupe, change it back
 **Not covered here** (needs the iPhone, a second person, or a later round): the iPhone walk-through (same checks, phone tabs: Pads · Timeline · Mix · Sounds); Switch Control; Voice Control ("tap Mute track 2" should work because the labels now name the track); Zoom at 200 %; a full VoiceOver pass of Mix, Sounds and the sound panel pages (the audit's findings for them are in the README).
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device", and VoiceOver ones straight to "VoiceOver".
+
+**Result, 2026-11-11:** Scott marked checks A–C passed on the iPad.
