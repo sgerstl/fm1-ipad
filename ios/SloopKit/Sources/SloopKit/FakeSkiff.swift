@@ -55,6 +55,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var busy = false
     var dropped = 0
     var requests: [UInt8] = []               // commands received, in order
+    var starts = 0                           // times the transport started (a stop and a PLAY after it count one)
     /// Requests this fake doesn't model, as (command, arguments): no reply, as the device, but tests expect this
     /// empty. Teach the fake from skiff-sim, a capture or Skiff's source, never from what the app happens to send.
     public private(set) var unanswered: [(cmd: UInt8, args: [UInt8])] = []
@@ -557,6 +558,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     private func setPlaying(_ on: Bool) {
         guard on != playing || (on && clockTimer == nil) else { return }
         playing = on
+        if on { starts += 1 }
         clockTimer?.cancel(); clockTimer = nil
         if on {
             clockSink.yield(.start)
@@ -613,10 +615,17 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     /// SMP_BEGIN / WRITE / END / ERASE / INFO (Skiff editor.c 896–951): as SLOOP's, but END has no rc 6 (a slot not
     /// open is rc 5, failed). Nil: not a sample command.
+    /// As the firmware: BEGIN and ERASE take exactly one byte and INFO none, or there's no reply (ed_args_ok, editor.c
+    /// 578); BEGIN, ERASE and every WRITE stop the transport first (ed_flash_stop, editor.c 542: transport_req = 2), so a
+    /// song playing stops for the whole upload.
     private func sampleAnswer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
+        let shape = cmd == Cmd.smpInfo ? a.isEmpty : (cmd == Cmd.smpBegin || cmd == Cmd.smpErase) ? a.count == 1 : true
+        guard shape else { unanswered.append((cmd, a)); return nil }
+        if cmd == Cmd.smpBegin || cmd == Cmd.smpErase || cmd == Cmd.smpWrite, let k = a.first, Int(k) < sampleSlots.count { setPlaying(false) }
         switch cmd {
         case Cmd.smpBegin, Cmd.smpErase:
-            guard let k = a.first.map(Int.init), k < sampleSlots.count else { return [a.first ?? 0, 1] }
+            // past the last slot: no reply at all (editor.c 898, `return`)
+            guard let k = a.first.map(Int.init), k < sampleSlots.count else { unanswered.append((cmd, a)); return nil }
             sampleSlots[k] = FakeSloop.SampleSlotState(open: cmd == Cmd.smpBegin)
             slotHeaders[k] = nil
             return [a[0], 0]
@@ -675,7 +684,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     private func backupAnswer(_ cmd: UInt8, _ a: [UInt8]) -> [UInt8]? {
         switch cmd {
         case 65:
-            playing = false
+            setPlaying(false)                                // (LIST stops the transport, editor_backup.c; the clock with it)
             backupListed = true
             let objs = (0..<16).map { (16 + $0, bankObject($0)) } + sampleSlots.indices.map { (32 + $0, sampleObject($0)) }
             var b: [UInt8] = [1, 0, UInt8(objs.count)]

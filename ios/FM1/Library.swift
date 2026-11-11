@@ -28,7 +28,9 @@ struct LibraryPage: View {
             if entry != nil {
                 if entryNow?.isUser == true { ui.librarySection = .user }
                 else { ui.librarySection = .engine(entryNow?.engine ?? session.tracks[session.selectedTrack].engine) }
-            } else if !session.selectedIsDrums, ui.librarySection != .user { ui.librarySection = .engine(session.tracks[session.selectedTrack].engine) }
+            } else if !session.selectedIsDrums, ui.librarySection != .user, ui.librarySection != .samples {
+                ui.librarySection = .engine(session.tracks[session.selectedTrack].engine)
+            }
         }
     }
 
@@ -63,6 +65,8 @@ struct LibraryPage: View {
                             }
                             .id("preset-\(e)-\(i)")
                         }
+                    } else if ui.librarySection == .samples {
+                        EmptyView()                 // (the slots go under the grid, as rows: SampleSlotList)
                     } else if skiff, entry != nil {
                         // an entry's own sound from the saved slots: only the kept ones (saving belongs to the track's panel)
                         ForEach(session.userPresets.filter { LibraryEngines.offered(session, $0.engine) }) { p in
@@ -85,7 +89,8 @@ struct LibraryPage: View {
                     }
                 }
                 .padding(4)
-                if entry == nil, !session.isDrums(t), session.capabilities.contains(.samples), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples(columns) }
+                if showsSamples { SampleSlotList(session: session, ui: ui) }
+                else if entry == nil, !session.isDrums(t), session.capabilities.contains(.samples), case .engine(let e) = ui.librarySection, e == sampleEngine { userSamples }
             }
             .scrollIndicators(.hidden)
             .onScrollPhaseChange { _, phase in if phase.isScrolling { scrolledByHand = Date() } }
@@ -109,6 +114,10 @@ struct LibraryPage: View {
     }
 
     private var skiff: Bool { session.dialect == .skiff }
+    /// The "Your samples" section (Select sound's user slots, 2026-11-11): a synth track's own sound only.
+    private var showsSamples: Bool {
+        ui.librarySection == .samples && entry == nil && !session.selectedIsDrums && session.capabilities.contains(.samples)
+    }
 
     /// The entry's own sound now (nil: none, the track's carries on).
     private var entryNow: EntrySound? {
@@ -177,11 +186,16 @@ struct LibraryPage: View {
         switch ui.librarySection {
         case .engine(let e): return engineName(e)
         case .user: return "User presets"
+        case .samples: return "Your samples"
         }
     }
 
     private var gridDetail: String {
         let t = session.selectedTrack
+        if !session.isDrums(t), ui.librarySection == .samples {
+            let used = session.sampleSlots.filter { !$0.isEmpty }.count
+            return "\(used) of \(session.sampleSlotCount) slots used"
+        }
         let n = session.isDrums(t) ? session.kitNames.count : {
             if case .engine(let e) = ui.librarySection { return session.namesCache[e]?.count ?? 0 }
             return session.userPresets.count
@@ -218,44 +232,18 @@ struct LibraryPage: View {
         .accessibilityHint(current ? "" : "Loads onto track \(session.selectedTrack + 1)")
     }
 
-    // MARK: The FM-1's four user sample slots (under the Sample engine)
+    // MARK: The FM-1's user sample slots (under the Sample engine, as in "Your samples")
 
     private var sampleEngine: Int? { session.info?.engines.firstIndex(of: "SAMPLE") }
 
-    /// The user sample slots (SLOOP SMPL1–4, Skiff USR1–3), as sections work: an empty slot records (the sampler slides up), a full one plays on the
-    /// track at a tap, and a long press offers Record over and Clear.
-    private func userSamples(_ columns: [GridItem]) -> some View {
-        let t = session.selectedTrack
-        let slots = session.sampleSlots
-        return VStack(alignment: .leading, spacing: 8) {
+    /// Under the Sample engine's sets: the same slot rows as the "Your samples" section, under a heading.
+    private var userSamples: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Your samples").font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary)
                 .padding(.leading, 4).padding(.top, 16)
                 .accessibilityAddTraits(.isHeader)
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(0..<session.sampleSlotCount, id: \.self) { k in
-                    let s = k < slots.count ? slots[k] : nil
-                    let full = s.map { !$0.isEmpty } ?? false
-                    let current = full && session.tracks[t].engine == sampleEngine && session.tracks[t].presetName == session.sampleSlotName(k)
-                    presetKey(full ? s!.name : "Empty", detail: full ? "\(session.sampleSlotName(k)) · \(s!.kib) KB" : "\(session.sampleSlotName(k)) · Tap to record", current: current) {
-                        if full { Task { await session.useSample(slot: k, onTrack: t) } }
-                        else { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }
-                    }
-                    // a long press on a recorded slot: Lupe's menu at the finger (it was the system's)
-                    .gesture(HoldRecognizer(space: .named(AppView.space), began: { _, at in
-                        guard full else { return }
-                        ui.menu = AppMenu(title: "\(session.sampleSlotName(k)) · \(s?.name ?? "")", groups: {
-                            [[MenuItem(title: "Record over", icon: "mic") { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) }],
-                             [MenuItem(title: "Clear", icon: "trash") { askClear(k) }]]
-                        }, at: at)
-                    }, changed: { _, _ in }, ended: { _, _, _ in }))
-                    .accessibilityAction(named: "Record over") { if full { ui.sampler = SamplerRequest(track: t, slot: k, fromBrowse: true) } }
-                    .accessibilityAction(named: "Clear") { if full { askClear(k) } }
-                    .id("usr-\(k)")
-                }
-            }
-            .padding(4)
+            SampleSlotList(session: session, ui: ui)
         }
-        .task { await session.refreshSampleSlots() }
     }
 
     /// Erase a user slot: asked once more in place (2026-11-10: no system alert).
@@ -264,14 +252,6 @@ struct LibraryPage: View {
         ui.menu = AppMenu.confirm("Erase \(slot)", confirm: "Erase \(slot) “\(p.name.capitalized)”",
                                   caption: "It's removed from the FM-1 for good. Tracks playing it keep their sound.") {
             Task { _ = await session.eraseUserPreset(slot: p.slot) }
-        }
-    }
-
-    /// Clear a sample slot: asked once more in place; the FM-1 keeps no copy.
-    private func askClear(_ k: Int) {
-        let name = session.sampleSlotName(k)
-        ui.menu = AppMenu.confirm("Clear \(name)", confirm: "Clear \(name)", caption: "The recording is erased from the FM-1, which keeps no copy.") {
-            Task { try? await session.eraseSample(slot: k) }
         }
     }
 
@@ -323,6 +303,11 @@ struct LibraryEngines: View {
                 row("User presets", count: session.userPresets.count, current: false,
                     browsing: ui.librarySection == .user) { ui.librarySection = .user }
                     .padding(.top, 4)
+                // the user sample slots as a section of their own (batch list 3): a synth track's own sound only
+                if !entry, !session.selectedIsDrums, session.capabilities.contains(.samples) {
+                    row("Your samples", count: session.sampleSlots.filter { !$0.isEmpty }.count, current: false,
+                        browsing: ui.librarySection == .samples, countWord: "recorded") { ui.librarySection = .samples }
+                }
             }
         }
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 1 } action: { _, v in past.above = v }
@@ -347,7 +332,7 @@ struct LibraryEngines: View {
     }
 
     /// A list row: raised while it's the one being browsed; an LED marks the track's own engine.
-    private func row(_ name: String, count: Int, current: Bool, browsing: Bool, notHere: String? = nil,
+    private func row(_ name: String, count: Int, current: Bool, browsing: Bool, notHere: String? = nil, countWord: String = "presets",
                      _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
@@ -365,7 +350,7 @@ struct LibraryEngines: View {
         .buttonStyle(PressSink())
         .disabled(notHere != nil)
         .opacity(notHere == nil ? 1 : 0.5)
-        .accessibilityLabel("\(name), \(notHere ?? "\(count) presets")\(current ? ", the track's engine" : "")")
+        .accessibilityLabel("\(name), \(notHere ?? "\(count) \(countWord)")\(current ? ", the track's engine" : "")")
         .accessibilityAddTraits(browsing ? .isSelected : [])
     }
 
@@ -374,6 +359,7 @@ struct LibraryEngines: View {
 enum LibrarySection: Equatable {
     case engine(Int)
     case user
+    case samples            // the FM-1's user sample slots (USR1–3 on Skiff), Select sound's section (2026-11-11)
 }
 
 /// A user slot's ⋯: its menu (replace, erase) under it, a 44 pt target at the key's right.

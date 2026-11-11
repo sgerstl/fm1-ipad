@@ -89,6 +89,8 @@ Launch arguments only work in Debug builds (`LaunchArgs`); a Release build ignor
 | `-demo-fw 2.5.1` | The demo Skiff is 2.5.1 (its fixture, recorded from skiff-sim on Skiff-Lupe 2.5.1): FX › DELAY and REVERB, STRUM, DLY MODE, KEEP SENDS. |
 | `-demo-free-take` | 3 s in, the demo FM-1 keeps a FREE TAKE on the selected track (on 2.5.1 Lupe lands on the Timeline). |
 | `-settings` | Opens on Settings. |
+| `-library-samples` | The sound panel (with `-presets-panel`) opens on Your samples, the user sample slots. |
+| `-sampler-file PATH` | Opens the sampler from the sound panel with that sound file imported (Import file… without the Files picker). |
 | `-demo-link`, `-demo-meter`, `-demo-scope` | The demo Skiff has the screen link: buttons, then levels too, then the scope too. |
 | `-demo-stopped`, `-demo-still` | The demo starts stopped, or makes no edits of its own (screenshots, recordings). |
 | `-demo-notes-walk`, `-demo-mod-walk` | The demo turns the FM-1's cursor through SEQ's steps or MOD's routes. |

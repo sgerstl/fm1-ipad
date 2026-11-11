@@ -2075,6 +2075,19 @@ extension DeviceSession {
     public func sampleSlotName(_ k: Int) -> String { (dialect == .skiff ? "USR" : "SMPL") + "\(k + 1)" }
     public func sampleSlot(forSet v: Int) -> Int? { (firstUserSet..<(firstUserSet + sampleSlotCount)).contains(v) ? v - firstUserSet : nil }
 
+    /// Skiff stops the song for any sample write (SMP_BEGIN, WRITE and ERASE call ed_flash_stop, editor.c 542) and for
+    /// the read-back (BACKUP_LIST stops the transport, editor_backup.c), and its audio goes quiet while flash is
+    /// erased. The sampler says so before it starts.
+    public var sampleWorkStopsSong: Bool { dialect == .skiff }
+
+    /// Runs a sample write or read on Skiff and, when the song was playing before it, starts the song again after
+    /// (TRANSPORT op 1, as PLAY), whether the work went through or not. SLOOP plays on through its own writes.
+    private func resumingSong<T>(_ body: () async throws -> T) async rethrows -> T {
+        let resume = sampleWorkStopsSong && playing
+        defer { if resume { setPlaying(true) } }
+        return try await body()
+    }
+
     /// Reads the slots again (SMP_INFO). A failed read leaves what was there.
     public func refreshSampleSlots() async {
         guard let c = sampleClient, let s = try? await c.sampleSlots() else { return }
@@ -2093,7 +2106,7 @@ extension DeviceSession {
         guard (0..<sampleSlotCount).contains(slot) else { throw SampleError.refused(stage: "begin", rc: 1) }
         do {
             // a backup operation's turn: neither interleaves its frames with the other's
-            try await backupTurn {
+            try await resumingSong { try await backupTurn {
                 progress(0)
                 var rc = try await c.sampleBegin(slot: slot)
                 guard rc == 0 else { throw SampleError.refused(stage: "begin", rc: rc) }
@@ -2107,7 +2120,7 @@ extension DeviceSession {
                 }
                 rc = try await c.sampleEnd(slot: slot, header: header)
                 guard rc == 0 else { throw SampleError.refused(stage: "end", rc: rc) }
-            }
+            } }
         } catch ClientError.closed {
             throw SampleError.notConnected
         } catch {
@@ -2121,7 +2134,7 @@ extension DeviceSession {
     /// sample commands only write). The read stops the transport. Nil: empty, or this firmware can't read it back.
     public func storedSample(slot: Int) async throws -> (samples: [Int16], rate: Double)? {
         guard dialect == .skiff, let d = driver else { return nil }
-        let obj = try await backupTurn { try await BackupCapture.object(32 + slot, driver: d) }
+        let obj = try await resumingSong { try await backupTurn { try await BackupCapture.object(32 + slot, driver: d) } }
         return obj.flatMap(UserSample.stored)
     }
 
@@ -2129,7 +2142,7 @@ extension DeviceSession {
     public func eraseSample(slot: Int) async throws {
         guard let c = sampleClient else { throw SampleError.notConnected }
         let rc: Int
-        do { rc = try await backupTurn { try await c.sampleErase(slot: slot) } }
+        do { rc = try await resumingSong { try await backupTurn { try await c.sampleErase(slot: slot) } } }
         catch ClientError.closed { throw SampleError.notConnected }
         await refreshSampleSlots()
         guard rc == 0 else { throw SampleError.refused(stage: "erase", rc: rc) }

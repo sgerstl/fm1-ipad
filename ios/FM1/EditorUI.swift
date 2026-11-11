@@ -153,7 +153,8 @@ final class EditorUI {
     var trackPicker: CGPoint?                    // the phone's one chip tapped (more than four tracks): the tracks, there
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: DeviceSession.ClearedTrack?   // offered for undo for a few seconds
-    var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user : .engine(0)
+    var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user
+        : LaunchArgs.all.contains("-library-samples") ? .samples : .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs. Closed, it chooses for the track
     /// again next time.
     /// -presets-panel opens it at launch (the before/after screenshots, qa/top-row-2026-11-10).
@@ -169,7 +170,9 @@ final class EditorUI {
         presetsPanel = true
     }
     /// The sampler is open: flipped in place of the grid (from a track's menu) or up from the bottom (Browse).
-    var sampler: SamplerRequest?
+    /// (-sampler-file PATH: the sampler open from the sound panel with that file imported, for captures and tests of
+    /// Import file… past the Files picker the simulator can't drive)
+    var sampler: SamplerRequest? = LaunchArgs.all.contains("-sampler-file") ? SamplerRequest(track: 0, slot: 0, fromBrowse: true) : nil
     /// The last page change came from the FM-1 (its button pressed), not from a tab or pad here.
     var pageFromDevice = false
     /// Skiff's GLO pages: the Mixer tab's section (the strips, Delay, Reverb, Chorus, Global), as GLO steps them.

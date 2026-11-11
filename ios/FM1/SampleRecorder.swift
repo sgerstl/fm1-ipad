@@ -20,6 +20,11 @@ final class SampleRecorder {
 
     /// The longest take that still fits a slot once it's resampled to 22,050 Hz.
     var maxSeconds: Double { UserSample.maxSeconds - 0.05 }
+    /// The longest trimmed stretch, in the take's samples: an imported file can be longer than a slot, and the handles
+    /// keep what's between them to this.
+    var maxLength: Int { Int(maxSeconds * rate) }
+    /// Where the take came from: nil the microphone, else the imported file's name.
+    private(set) var fileName: String?
     var seconds: Double { Double(take.count) / rate }
     var trimmedSeconds: Double { Double(max(0, end - start)) / rate }
     /// The trimmed take's peak, in dBFS (before the upload's normalising).
@@ -80,10 +85,30 @@ final class SampleRecorder {
     @ObservationIgnored private var player: AVAudioPlayerNode?
     @ObservationIgnored private var collected: [Float] = []
 
+    // MARK: A file instead (Import file…)
+
+    /// An imported file as the take (already mono at 22,050 Hz, SampleFile): the handles go round its sound, and no
+    /// further apart than a slot holds, so a long file starts trimmed to its first 7.4 s of sound.
+    func load(_ x: [Float], rate hz: Double, fileName name: String) {
+        stop()
+        collected = []
+        rate = hz
+        take = x
+        fileName = name
+        (start, end) = Self.sound(in: take, rate: rate)
+        end = min(end, start + maxLength)
+        state = .idle
+    }
+
+    /// Moves a trim handle, keeping the two at least 50 ms and at most a slot apart.
+    func setStart(_ v: Int) { start = min(max(0, v, end - maxLength), end - Int(0.05 * rate)) }
+    func setEnd(_ v: Int) { end = max(min(take.count, v, start + maxLength), start + Int(0.05 * rate)) }
+
     // MARK: Recording
 
     func record() async {
         stop()
+        fileName = nil
         guard await AVAudioApplication.requestRecordPermission() else { state = .denied; return }
         do {
             let s = AVAudioSession.sharedInstance()

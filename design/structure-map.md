@@ -20,6 +20,8 @@ Where everything lives (CLAUDE.md, rule 4). Change this first, get Scott's OK, t
 
 It closes with Done, SAVE's next press, another tab or Escape.
 
+**Your samples** (batch list 3, built 2026-11-11, for Scott to agree): the FM-1's user sample slots have their own row in the Sounds panel's engine list, under User presets (a synth track's own sound only; not for a pad's or block's sound). Skiff's USR1–3, SLOOP's SMPL1–4. Each slot is a key that puts the track on it, ▶ to hear it (Skiff only: read back from the FM-1), and under it Record…, Import file… (WAV, AIFF, M4A from Files) and Clear…. Both open the sampler, which slides up from the bottom. The same rows sit under the Sample engine's sets. The track menu keeps Record sample…, which opens the sampler in the editor's place.
+
 **The iPad's tabs are Pads · Timeline · Mix** (Scott, 2026-11-10: the phone's split). Pads and Timeline are the Song page's two views: going between them is the same slide as before, the editor staying put under them, and the tools after the tabs follow the tab. The Pads / Timeline switch went. SLOOP's top bar still has its own tabs: it follows later.
 
 The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · Timeline · Mix · Sounds (decided 2026-11-08, phone only). Section "The phone" below has what each tab holds there and what's built.

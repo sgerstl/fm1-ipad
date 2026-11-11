@@ -1,12 +1,15 @@
 import SloopKit
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// Where the sampler was opened from: a track's long-press menu (the grid flips over to it) or an empty
-/// USR slot on Browse (it slides up from the bottom). `slot` nil: the next empty one, or ask.
+/// Where the sampler was opened from: a track's long-press menu (the grid flips over to it) or a slot's Record… or
+/// Import file… in the sound panel (it slides up from the bottom). `slot` nil: the next empty one, or ask. `importing`:
+/// the Files picker opens at once (Import file…).
 struct SamplerRequest: Equatable {
     var track: Int
     var slot: Int?
     var fromBrowse = false
+    var importing = false
 }
 
 /// Record a sample with the iPad's microphone and put it in a sample slot: the take as one big waveform in
@@ -29,19 +32,29 @@ struct SamplerPanel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var progress: Double?
     @State private var message: String?
+    /// The Files picker (Import file…), and a file it couldn't read.
+    @State private var picking = false
+    @State private var askedAt = Date.distantPast
+    @State private var loading = false
 
     private var t: Int { request.track }
     private var colour: Color { Theme.track[t] }
     private var slots: [SampleSlot] { session.sampleSlots }
     private var name: String { "\(session.sampleSlotName(slot ?? 0))" }
     private var hasTake: Bool { rec.end > rec.start && rec.state != .recording }
-    private var busy: Bool { progress != nil }
+    private var busy: Bool { progress != nil || loading }
+    /// Import file… takes these three (Scott, 2026-11-08); no drag and drop.
+    static let fileTypes: [UTType] = [.wav, .aiff, .mpeg4Audio]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
             screen
-            controls
+            if hasTake, session.sampleWorkStopsSong, asking == nil { StopsSongNote(session: session, what: "Saving to a slot") }
+            ZStack {
+                if let k = asking { replaceConfirm(k).transition(.opacity.combined(with: .move(edge: .bottom))) }
+                else { controls.transition(.opacity) }
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -49,13 +62,18 @@ struct SamplerPanel: View {
         .onAppear {
             through.suspended = true
             slot = request.slot ?? slots.firstIndex(where: \.isEmpty)
+            if request.importing { picking = true }
+            let a = LaunchArgs.all
+            if let i = a.firstIndex(of: "-sampler-file"), a.indices.contains(i + 1) { load(URL(fileURLWithPath: a[i + 1])) }
+        }
+        .fileImporter(isPresented: $picking, allowedContentTypes: Self.fileTypes) { result in
+            if case .success(let url) = result { load(url) }
         }
         .onDisappear {
             rec.close()
             through.suspended = false
         }
         .task { if slots.isEmpty { await session.refreshSampleSlots(); if slot == nil { slot = request.slot ?? slots.firstIndex(where: \.isEmpty) } } }
-        .overlay { if let k = asking { replaceDialog(k) } }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: asking)
     }
 
@@ -65,8 +83,9 @@ struct SamplerPanel: View {
         HStack(spacing: 12) {
             TrackChip(track: t)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Record a sample").font(.lupe(17, .semibold))
-                Text("Track \(t + 1) · \(UIDevice.current.model) microphone").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
+                Text(rec.fileName == nil ? "Record a sample" : "Import a sound").font(.lupe(17, .semibold))
+                Text("Track \(t + 1) · \(rec.fileName ?? "\(UIDevice.current.model) microphone")").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1).truncationMode(.middle)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
@@ -93,7 +112,9 @@ struct SamplerPanel: View {
                 Text(busy ? "SAVING TO \(name)" : hasTake ? "TAKE · SAVE IT TO A SLOT" : "TAKE")
                 Spacer()
                 Text(rec.state == .recording ? String(format: "%.1fs / %.1fs", rec.seconds, rec.maxSeconds)
-                                             : hasTake ? String(format: "%.1fs", rec.trimmedSeconds) : "")
+                                             : hasTake ? (rec.take.count > rec.maxLength
+                                                          ? String(format: "%.1fs OF %.1fs · A SLOT HOLDS %.1fs", rec.trimmedSeconds, rec.seconds, rec.maxSeconds)
+                                                          : String(format: "%.1fs", rec.trimmedSeconds)) : "")
             }
             .font(.system(size: 13, weight: .semibold, design: .monospaced))
             .foregroundStyle(Theme.trackTop[t])
@@ -152,9 +173,9 @@ struct SamplerPanel: View {
                         }
                     }
                     if hasTake {
-                        handle(at: rec.start, of: span, width: w, height: h) { rec.start = min(max(0, $0), rec.end - Int(0.05 * rec.rate)) }
+                        handle(at: rec.start, of: span, width: w, height: h) { rec.setStart($0) }
                             .accessibilityLabel("Start").accessibilityValue(String(format: "%.2f seconds", Double(rec.start) / rec.rate))
-                        handle(at: rec.end, of: span, width: w, height: h) { rec.end = max(min(rec.take.count, $0), rec.start + Int(0.05 * rec.rate)) }
+                        handle(at: rec.end, of: span, width: w, height: h) { rec.setEnd($0) }
                             .accessibilityLabel("End").accessibilityValue(String(format: "%.2f seconds", Double(rec.end) / rec.rate))
                     }
                 }
@@ -168,7 +189,7 @@ struct SamplerPanel: View {
         switch rec.state {
         case .denied: "Lupe can't use the microphone. Turn it on in Settings › Lupe."
         case .failed(let why): why
-        default: String(format: "Tap the red key and play. Up to %.0f seconds.", rec.maxSeconds)
+        default: loading ? "Reading the file…" : String(format: "Tap the red key and play, or import a file. Up to %.0f seconds.", rec.maxSeconds)
         }
     }
 
@@ -210,6 +231,7 @@ struct SamplerPanel: View {
         HStack(spacing: 16) {
             recKey
             playKey
+            importKey
             // the input meter while there's nothing to shape; Drive once there's a take (same place)
             if hasTake { drive } else { meter }
             Spacer(minLength: 12)
@@ -326,60 +348,108 @@ struct SamplerPanel: View {
     /// A tap on a slot after a take: an empty one saves at once; a full one asks first.
     private func save(to k: Int) {
         rec.stop()
-        if k < slots.count, !slots[k].isEmpty { heldProblem = nil; asking = k } else { slot = k; upload() }
+        if k < slots.count, !slots[k].isEmpty { heldProblem = nil; askedAt = Date(); asking = k } else { slot = k; upload() }
     }
 
-    /// Before a full slot is replaced: what's there, a way to hear it, keep it or replace it.
-    private func replaceDialog(_ k: Int) -> some View {
-        let name = slotName(k), playingHeld = rec.state == .playing && held[k] != nil
-        return ZStack {
-            Color.black.opacity(0.45).onTapGesture { asking = nil }.accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 14) {
-                Text("\(session.sampleSlotName(k)) holds “\(name.capitalized)”").font(.lupe(17, .semibold))
-                    .accessibilityAddTraits(.isHeader)
-                Text("Replacing it erases it from the FM-1, which keeps no other copy.")
-                    .font(.lupe(13)).foregroundStyle(Theme.textSecondary)
-                HStack(spacing: 12) {
-                    Button { hear(k) } label: {
-                        ZStack {
-                            if reading { ProgressView().tint(Theme.text) }
-                            else { Image(systemName: playingHeld ? "stop.fill" : "play.fill").font(.system(size: 18, weight: .semibold)) }
-                        }
-                        .frame(width: 52, height: 52).background { Color.clear.raisedKey(12) }.contentShape(Rectangle())
-                    }
-                    .buttonStyle(PressSink())
-                    .disabled(reading)
-                    .accessibilityLabel(playingHeld ? "Stop" : "Hear \(name.capitalized)")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(reading ? "Reading it from the FM-1…" : playingHeld ? "Playing" : "Hear what's there")
-                            .font(.lupe(15))
-                        Text(heldProblem ?? (session.playing ? "Reading it stops the song." : "Read from the FM-1, played here."))
-                            .font(.lupe(12)).foregroundStyle(heldProblem == nil ? Theme.textSecondary : Theme.text)
-                    }
+    /// Before a full slot is replaced, in place of the keys (no dialog, no dimming): what's there by name, a ▶ to hear
+    /// it, Keep it, and the red-outlined Replace that names what goes (house rule: in-place confirms, 2026-11-10).
+    private func replaceConfirm(_ k: Int) -> some View {
+        let name = slotName(k).capitalized, playingHeld = rec.state == .playing && held[k] != nil
+        let stops = session.sampleWorkStopsSong && session.playing
+        return HStack(spacing: 12) {
+            if session.dialect == .skiff {
+            Button { hear(k) } label: {
+                ZStack {
+                    if reading { ProgressView().tint(Theme.text) }
+                    else { Image(systemName: playingHeld ? "stop.fill" : "play.fill").font(.system(size: 18, weight: .semibold)) }
                 }
-                HStack(spacing: 10) {
-                    Spacer()
-                    Button { rec.stop(); asking = nil } label: {
-                        Text("Keep it").font(.lupe(15, .semibold)).padding(.horizontal, 16).frame(height: 44)
-                            .background { Color.clear.raisedKey() }.contentShape(Rectangle())
-                    }
-                    .buttonStyle(PressSink())
-                    Button { rec.stop(); asking = nil; slot = k; upload() } label: {
-                        Text("Replace with your take").font(.lupe(15, .semibold)).foregroundStyle(Theme.onColour)
-                            .padding(.horizontal, 16).frame(height: 44).raisedKey(9, primary: true).contentShape(Rectangle())
-                    }
-                    .buttonStyle(PressSink())
-                }
+                .foregroundStyle(Theme.text)
+                .frame(width: 56, height: 56).background { Color.clear.raisedKey(12) }.contentShape(Rectangle())
             }
-            .padding(20)
-            .frame(width: 420)
-            .elevated(.held, radius: 14)
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(.isModal)
-            // a modal needs a way out without finding its button: the two-finger scrub, as the scrim's tap (2026-11-10)
-            .accessibilityAction(.escape) { asking = nil }
+            .buttonStyle(PressSink())
+            .disabled(reading)
+            .accessibilityLabel(reading ? "Reading \(name) from the FM-1" : playingHeld ? "Stop" : "Hear \(name)")
+            .accessibilityHint(stops ? "Reading it stops the song for a moment; it starts again after" : "Read from the FM-1, played on the iPad")
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(session.sampleSlotName(k)) holds “\(name)”").font(.lupe(15, .semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Text(heldProblem ?? (reading ? "Reading it from the FM-1…"
+                                     : stops ? "The FM-1 keeps no other copy. Hearing it or replacing it stops the song; Lupe starts it again after."
+                                             : session.dialect == .skiff ? "The FM-1 keeps no other copy. ▶ hears it first." : "The FM-1 keeps no other copy."))
+                    .font(.lupe(13)).foregroundStyle(heldProblem == nil ? Theme.textSecondary : Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            Button { rec.stop(); asking = nil } label: {
+                Text("Keep it").font(.lupe(15, .semibold)).foregroundStyle(Theme.text)
+                    .padding(.horizontal, 16).frame(height: 56)
+                    .background { Color.clear.raisedKey(12) }.contentShape(Rectangle())
+            }
+            .buttonStyle(PressSink())
+            .accessibilityHint("Leaves \(session.sampleSlotName(k)) as it is")
+            Button {
+                // Replace sits where the slot was tapped: a double tap mustn't reach it (as the menus' confirms, 0.4 s)
+                guard Date().timeIntervalSince(askedAt) > 0.4 else { return }
+                rec.stop(); asking = nil; slot = k; upload()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.recText).accessibilityHidden(true)
+                    Text("Replace “\(name)”").font(.lupe(15, .semibold)).lineLimit(1).minimumScaleFactor(0.85)
+                }
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 16).frame(height: 56)
+                .background {
+                    RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface)
+                        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.recText, lineWidth: 3) }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSink())
+            .accessibilityLabel("Replace \(name) with your take")
+            .accessibilityHint("Can't be undone")
         }
-        .transition(.opacity)
+        .frame(height: 88)
+        .accessibilityElement(children: .contain)
+        // the scrub leaves it as Keep it does
+        .accessibilityAction(.escape) { rec.stop(); asking = nil }
+    }
+
+    /// Import file…: a WAV, AIFF or M4A from Files as the take, mono at 22,050 Hz, then trimmed as a recording is.
+    private var importKey: some View {
+        Button { rec.stop(); message = nil; picking = true } label: {
+            HStack(spacing: 8) {
+                if loading { ProgressView().tint(Theme.text) }
+                else { Image(systemName: "square.and.arrow.down").font(.system(size: 16, weight: .semibold)).accessibilityHidden(true) }
+                Text("Import file…").font(.lupe(15, .semibold))
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 14).frame(height: 56)
+            .background { Color.clear.raisedKey(12) }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressSink())
+        .disabled(busy || rec.state == .recording)
+        .accessibilityHint("WAV, AIFF or M4A from Files; a long one is trimmed to what a slot holds")
+    }
+
+    private func load(_ url: URL) {
+        loading = true
+        message = nil
+        Task {
+            defer { loading = false }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let x = try await Task.detached(priority: .userInitiated) { try SampleFile.read(url) }.value
+                rec.load(x, rate: Double(UserSample.rate), fileName: url.lastPathComponent)
+            } catch SampleFile.Problem.silent {
+                message = "THAT FILE IS SILENT"
+            } catch {
+                message = "LUPE CAN'T READ THAT FILE: WAV, AIFF OR M4A"
+            }
+        }
     }
 
     /// Plays what a slot holds (read back once, then kept), or stops it.
@@ -411,7 +481,7 @@ struct SamplerPanel: View {
         message = nil
         Task {
             do {
-                try await session.uploadSample(slot: k, name: name, samples: samples) { progress = $0 }
+                try await session.uploadSample(slot: k, name: uploadName, samples: samples) { progress = $0 }
                 await session.useSample(slot: k, onTrack: t)
                 progress = nil
                 close()
@@ -420,6 +490,13 @@ struct SamplerPanel: View {
                 message = Self.describe(error)
             }
         }
+    }
+
+    /// What the slot is called on the FM-1: an imported file's name (its first eight letters, as the FM-1 shows), else the slot's.
+    private var uploadName: String {
+        guard let f = rec.fileName else { return name }
+        let stem = (f as NSString).deletingPathExtension.trimmingCharacters(in: .whitespaces)
+        return stem.isEmpty ? name : stem
     }
 
     private func close() {

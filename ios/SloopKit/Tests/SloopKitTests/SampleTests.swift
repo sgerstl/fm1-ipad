@@ -133,6 +133,52 @@ import Testing
         try await waitFor { fake.params[0][info.firstEngineParam] == base + 2 && fake.params[0][info.firstEngineParam + 3] == 0 }
     }
 
+    @Test func skiffStopsTheSongForSampleWorkAndLupeStartsItAgain() async throws {
+        // Skiff stops the transport for every sample write and for the read-back (ed_flash_stop; BACKUP_LIST): the
+        // song playing before starts again after, through a read, an upload and an erase
+        let fake = FakeSkiff(try SkiffFixture.load())
+        var once = false
+        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
+        session.resyncInterval = .seconds(60)
+        let run = Task { await session.run() }
+        defer { #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught"); run.cancel() }
+        try await waitFor(10) { if case .connected = session.status { true } else { false } }
+        #expect(session.sampleWorkStopsSong)
+        session.setPlaying(true)
+        try await waitFor { fake.playing }
+
+        func stoppedThenResumed(_ what: String, _ work: () async throws -> Void) async throws {
+            let before = fake.starts
+            try await work()
+            // stopped by the work, started again by Lupe after it: one more start, and playing
+            try await waitFor { fake.starts == before + 1 && fake.playing }
+            #expect(session.playing, "\(what)")
+        }
+        try await stoppedThenResumed("read back") { _ = try await session.storedSample(slot: 0) }
+        let x = UserSample.toInt16(UserSample.resample(UserSampleTests.signal(48000), from: 48000, to: UserSample.rate))
+        var sawStop = false
+        try await stoppedThenResumed("upload") {
+            try await session.uploadSample(slot: 1, name: "LIVE", samples: x) { _ in if !fake.playing { sawStop = true } }
+        }
+        #expect(sawStop, "the fake stopped for the writes, as the firmware does")
+        try await stoppedThenResumed("erase") { try await session.eraseSample(slot: 1) }
+        #expect(session.sampleSlots[1].isEmpty)
+    }
+
+    @Test func skiffRefusesShortSampleFormsWithoutAReply() async throws {
+        // ed_args_ok: BEGIN and ERASE take exactly one byte, INFO none; past the last slot there's no reply either
+        let fake = FakeSkiff(try SkiffFixture.load())
+        fake.send(Frame.encode(Cmd.smpBegin, []))
+        try await Task.sleep(for: .milliseconds(50))
+        fake.send(Frame.encode(Cmd.smpErase, [0, 0]))
+        try await Task.sleep(for: .milliseconds(50))
+        fake.send(Frame.encode(Cmd.smpInfo, [0]))
+        try await Task.sleep(for: .milliseconds(50))
+        fake.send(Frame.encode(Cmd.smpBegin, [3]))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(fake.unansweredCommands == [Cmd.smpBegin, Cmd.smpErase, Cmd.smpInfo, Cmd.smpBegin])
+    }
+
     @Test func adpcmDecodesWhatItEncodes() {
         // the round trip stays close to the signal (4-bit ADPCM: within a few percent of full scale once settled)
         let x = UserSample.toInt16(UserSample.resample(UserSampleTests.signal(48000), from: 48000, to: UserSample.rate))
