@@ -162,9 +162,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             if a.contains("-demo-usr") { params[selected][pCount - 8] = 3 }   // SAMPLE on USR1 (E0: 138 on 2.2, 140 on 2.5.1)
             // -demo-insert N: the selected track's INSERT TYPE (121; 9 FILTR on 2.5.1), for the INSERT card's screenshots
             if let i = a.firstIndex(of: "-demo-insert"), a.indices.contains(i + 1), let n = Int(a[i + 1]) { params[selected][121] = n; params[selected][125] = 127 }
-            // -demo-free-take: 3 s in, a FREE TAKE kept on the FM-1 on the selected track (2.5.1: Lupe lands on the Timeline)
+            // -demo-free-take: 6 s in (after the demo has connected), a FREE TAKE kept on the FM-1 on the selected track (2.5.1: Lupe lands on the Timeline)
             if a.contains("-demo-free-take") {
-                DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in
+                DispatchQueue.global().asyncAfter(deadline: .now() + 6) { [weak self] in
                     guard let self else { return }
                     self.freeTakeOnDevice(track: self.selected, notes: [60, 63, 67, 70, 72, 70, 67, 63], length: 32, bpm: 96)
                 }
@@ -176,6 +176,12 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             }
             // -demo-chord N: the selected track's CHORD (81: 1 DIA3 … 9 POW), for the SEL pages' screenshots
             if let i = a.firstIndex(of: "-demo-chord"), a.indices.contains(i + 1), let c = Int(a[i + 1]) { params[selected][81] = c }
+            // -demo-strum MS DIR (2.5.1): the selected track's STRUM (138, ms) and its DIR (139: 0 DOWN, 1 UP, 2 ALT)
+            if firmware.hasDelayMode, let i = a.firstIndex(of: "-demo-strum"), a.indices.contains(i + 2),
+               let ms = Int(a[i + 1]), let d = Int(a[i + 2]) { params[selected][138] = ms; params[selected][139] = d }
+            // -demo-dmode N (2.5.1): GLO › DELAY's MODE (G_DMODE, GSID 27: 0 MONO, 1 STEREO, 2 PING)
+            if firmware.hasDelayMode, let i = a.firstIndex(of: "-demo-dmode"), a.indices.contains(i + 1), let m = Int(a[i + 1]),
+               globals.indices.contains(27) { globals[27] = m }
             // -demo-mod-walk: MOD opened on the FM-1, then KNOB 1 walks its routes, a route every 1.5 s
             if a.contains("-demo-mod-walk") {
                 DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in

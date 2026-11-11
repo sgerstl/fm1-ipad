@@ -35,7 +35,7 @@ struct ColumnFace: View {
         // light changing never resizes the words (Scott, 2026-11-08: "no jumpy size changes")
         let inset: CGFloat = compact ? 8 : 10
         let (value, unit) = splitUnit(spec.shown)
-        let ink = dim ? Theme.textTertiary : Theme.text
+        let ink = dim || spec.dead ? Theme.textTertiary : Theme.text
         let label = Theme.textSecondary
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {

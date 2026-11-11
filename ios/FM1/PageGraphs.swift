@@ -52,6 +52,7 @@ struct PageGraph: View {
     /// Drawn in the panel under the cards on Skiff, shorter than the graphs drawn from the panel's top.
     static let short: Set<String> = ["FX", "SLICER", "DUCK", "SCALE"]
     @Environment(\.graphsDeferred) private var deferred
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let _ = BodyCounter.tick("PageGraph")
@@ -69,23 +70,36 @@ struct PageGraph: View {
             case "DRIVE": Canvas { ctx, sz in DriveDrawing(v: values).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Drive transfer curve", "\(valueName(1)), drive \(values[0])")
             case "DELAY" where page.family == .fx:
-                Canvas { ctx, sz in DelayDrawing(v: sendPageValues).draw(ctx, Space(size: sz), colour) }
-                    .graphLabel("Echoes", "every \(valueName(1)), feedback \(values[2]), this track's send \(values[0])")
+                // (Skiff 2.5, ui_pgraph.c graph_delay on GR_FXDLY) the track's echoes: the bus's MIX times its send
+                let d = DelayDrawing(v: [values[1], values[2], values[3], delayBus.mix], send: values[0], mode: delayBus.mode)
+                Canvas { ctx, sz in d.draw(ctx, Space(size: sz), colour) }
+                    .graphLabel("This track's echoes", "every \(valueName(1)), feedback \(values[2]), send \(values[0])\(delayBus.spokenMode)")
             case "REVERB" where page.family == .fx:
-                Canvas { ctx, sz in ReverbDrawing(v: sendPageValues).draw(ctx, Space(size: sz), colour) }
-                    .graphLabel("Reverb tail", "\(valueName(1)), size \(values[2]), this track's send \(values[0])")
-            case "DELAY": Canvas { ctx, sz in DelayDrawing(v: values).draw(ctx, Space(size: sz), colour) }
-                .graphLabel("Echoes", "every \(valueName(0)), feedback \(values[1])")
+                // (graph_reverb on GR_FXREV) the track's reflections and tail, as loud as its send
+                let d = ReverbDrawing(v: [values[1], values[2], values[3]], send: values[0])
+                Canvas { ctx, sz in d.draw(ctx, Space(size: sz), colour) }
+                    .graphLabel("This track's reverb", "\(valueName(1)), size \(values[2]), send \(values[0])")
+            case "DELAY":
+                let d = DelayDrawing(v: values, mode: delayBus.mode)
+                Canvas { ctx, sz in d.draw(ctx, Space(size: sz), colour) }
+                    .graphLabel("Echoes", "every \(valueName(0)), feedback \(values[1])\(delayBus.spokenMode)")
             case "REVERB": Canvas { ctx, sz in ReverbDrawing(v: values).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Reverb tail", "\(valueName(0)), size \(values[1])")
             case "CHORUS": Canvas { ctx, sz in ChorusDrawing(v: values).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Chorus", valueName(2))
-            case "VOICE": Canvas { ctx, sz in VoiceDrawing(v: values, glide: glideText).draw(ctx, Space(size: sz), colour) }
+            case "VOICE": Canvas { ctx, sz in VoiceDrawing(v: values, glide: glideText, uniVoices: uniVoices).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Voice", valueName(0))
             case "FX": Canvas { ctx, sz in FXDrawing(v: values).draw(ctx, Space(size: sz, gh: 96), colour) }
                 .graphLabel("Sends", "distortion \(values[0]), chorus \(values[1]), delay \(values[2]), reverb \(values[3])")
-            case "INSERT", "INSERT 2": Canvas { ctx, sz in InsertDrawing(v: insertValues).draw(ctx, Space(size: sz), colour) }
-                .graphLabel("Insert", insertName)
+            case "INSERT", "INSERT 2":
+                let d = InsertDrawing(v: insertValues, mixCard: mixCard, cutoffText: insertCutoffText)
+                // FILTR and the curves are different pictures: one blends into the other (nothing pops)
+                ZStack {
+                    Canvas { ctx, sz in d.draw(ctx, Space(size: sz), colour) }
+                        .id(d.isFilter).transition(.opacity)
+                }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: d.isFilter)
+                .graphLabel(d.isFilter ? "Filter response" : "Insert", d.isFilter ? filterSpoken : insertName)
             case "SLICER": Canvas { ctx, sz in SlicerDrawing(v: values).draw(ctx, Space(size: sz, gh: 96), colour) }
                 .graphLabel("Slicer pattern", "\(valueName(0)), pattern \(values[1])")
             case "DUCK": Canvas { ctx, sz in duck.draw(ctx, Space(size: sz, gh: 96), colour) }
@@ -96,8 +110,13 @@ struct PageGraph: View {
                 .graphLabel("The scale on the 12 keys", "\(SkiffChord.noteNames[((values[0] % 12) + 12) % 12]) scale")
             case "CHORD":
                 let d = chordDrawing
-                Canvas { ctx, sz in d.draw(ctx, Space(size: sz, gh: 120), colour) }
-                    .graphLabel("The chord a key plays", d.spoken)
+                // STRUM on (Skiff 2.5): the notes in time instead of on the keys, the one view blending into the other
+                ZStack {
+                    Canvas { ctx, sz in d.draw(ctx, Space(size: sz, gh: 120), colour) }
+                        .id(d.strum == nil).transition(.opacity)
+                }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: d.strum == nil)
+                .graphLabel(d.strum == nil ? "The chord a key plays" : "The chord a key plays, strummed", d.spoken)
             case "FOLLOW":
                 let d = followDrawing
                 Canvas { ctx, sz in d.draw(ctx, Space(size: sz, gh: 120), colour) }
@@ -140,8 +159,13 @@ struct PageGraph: View {
         guard let c = SkiffChord.make(note: 60 + root, mode: mode, voicing: voicing, root: root, scale: scale, oneVoice: oneVoice) else {
             return ChordDrawing(note: ("CHORD KEYS OFF", nil))
         }
-        return ChordDrawing(name: SkiffChord.name(root: c.root, mask: c.mask), caption: oneVoice ? "ROOT ONLY" : "ON ROOT",
-                            notes: c.notes, accent: c.root % 12, keysColour: nil)
+        var d = ChordDrawing(name: SkiffChord.name(root: c.root, mask: c.mask), caption: oneVoice ? "ROOT ONLY" : "ON ROOT",
+                             notes: c.notes, accent: c.root % 12, keysColour: nil)
+        // (Skiff 2.5, ui_graph.c graph_strum) STRUM on, on a POLY track: the notes in time. Knobs 3 and 4: STRUM, DIR
+        if session.skiffFirmware?.hasDelayMode == true, (value("VOICE", 0) ?? 0) == 0, let ms = values[safe: 2], ms > 0 {
+            d.strum = (min(ms, 100), min(max(values[safe: 3] ?? 0, 0), 2))
+        }
+        return d
     }
 
     /// FOLLOW: the track it follows and how. The chord that track plays live isn't sent to an editor, so Lupe draws
@@ -183,6 +207,38 @@ struct PageGraph: View {
         return v.count >= 5 ? Array(v.prefix(5)) : v + Array(repeating: 127, count: max(0, 5 - v.count))
     }
     private var insertName: String { InsertDrawing.names[safe: insertValues[0]] ?? "OFF" }
+    private var on25: Bool { session.skiffFirmware?.hasDelayMode == true }
+    /// INSERT's knob ids, then INSERT 2's MIX, from the merged card's rows.
+    private var insertIDs: [Int?] { (rows.isEmpty ? [page] : rows).flatMap(\.ids) }
+    /// (Skiff 2.5) INSERT's MIX on the PRESETS card at the graph's top right, where the TYPE's name was (pr_mix_card).
+    private var mixCard: PresetsCard? {
+        guard on25, let id = insertIDs[safe: 4] ?? nil else { return nil }
+        let v = session.cell(id).value
+        return PresetsCard(job: "MIX", value: formatValue(session.trackDesc(id), v, skiff: true).shown, pos: min(max(v, 0), 127), count: 128)
+    }
+    /// FILTR's CUTOFF as the knob shows it ("710 Hz"), written by its line.
+    private var insertCutoffText: String {
+        guard let id = insertIDs[safe: 1] ?? nil else { return "" }
+        return formatValue(session.trackDesc(id), session.cell(id).value, skiff: true).shown
+    }
+    private var filterSpoken: String {
+        let v = insertValues, sh = v[3]
+        let shape = sh <= 32 ? "low pass" : sh < 96 ? "band pass" : "high pass"
+        return "\(shape), cutoff \(insertCutoffText), resonance \(v[2] * 100 / 127) percent"
+    }
+    /// GLO › DELAY's MIX and MODE (the bus): FX › DELAY's graph reads them (its page has the send, TIME, FEEDBACK,
+    /// COLOR), and both delay graphs draw MODE on their PRESETS card (Skiff 2.5).
+    private var delayBus: (mix: Int, mode: PresetsCard?, spokenMode: String) {
+        let glo = SoundPage.pages(session).first { $0.title == "DELAY" && $0.family != .fx && $0.scope == 1 }
+        let mix = (glo?.ids[safe: 3] ?? nil).map { session.globalCell($0).value } ?? 127
+        guard on25, let mid = glo?.settings.first ?? nil else { return (mix, nil, "") }
+        let names = session.globalDescs[mid]?.names ?? []
+        let n = max(names.count, 3), m = min(max(session.globalCell(mid).value, 0), n - 1)
+        let name = names[safe: m] ?? ["MONO", "STEREO", "PING"][safe: m] ?? "\(m)"
+        return (mix, PresetsCard(job: "MODE", value: name, pos: m, count: n), ", mode \(name.lowercased())")
+    }
+    /// VOICE's UNI line: Skiff 2.5's UNISON stacks 8 of its 16 voices ("ALL VOICES" on 2.2).
+    private var uniVoices: String { on25 ? "8 VOICES" : "ALL VOICES" }
 
     /// DUCK's source: its steps over a bar at the tempo.
     private var duck: DuckDrawing {
@@ -212,8 +268,6 @@ struct PageGraph: View {
         guard let id = page.ids[k] else { return nil }
         return page.scope(of: k) == 0 ? session.trackDesc(id) : session.globalDescs[id]
     }
-    /// FX › DELAY and REVERB (Skiff 2.5): the bus's three values, then the track's send where GLO's page has its 4th.
-    private var sendPageValues: [Int] { let v = values; return [v[1], v[2], v[3], v[0]] }
     private func valueName(_ k: Int) -> String { formatValue(desc(k), values[k]).shown }
     private var glideText: String { values[1] == 0 ? "NO GLIDE" : valueName(1) }
 }
@@ -493,6 +547,10 @@ private struct DriveDrawing {
 
 private struct DelayDrawing {
     let v: [Int]                                  // TIME, FEEDBACK, COLOR, MIX
+    /// (Skiff 2.5) FX › DELAY: the track's send, which scales its first echo with MIX; GLO › DELAY: all of it.
+    var send = 127
+    /// (Skiff 2.5) MODE on the PRESETS card, top right.
+    var mode: PresetsCard?
 
     func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
         let sixths = [24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36]
@@ -511,9 +569,10 @@ private struct DelayDrawing {
             if x + w > 228 { break }
             let col = i == 0 ? Theme.text : c.opacity(1 - Double(15 + 50 * (i - 1) / 6) / 100)
             ctx.fill(Path(roundedRect: s.r(x, 120 - h, w, h), cornerRadius: 2), with: .color(col))
-            lvl = i > 0 ? lvl * v[1] * 230 / 32768 : v[3] * 1000 / 127
+            lvl = i > 0 ? lvl * v[1] * 230 / 32768 : v[3] * 1000 / 127 * send / 127
         }
         s.text(ctx, "DRY", 14, 16, midColour)
+        mode?.draw(ctx, s, c, right: 228, top: 3)
     }
 }
 
@@ -521,9 +580,12 @@ private struct DelayDrawing {
 
 private struct ReverbDrawing {
     let v: [Int]                                  // TYPE, SIZE, DAMP
+    /// (Skiff 2.5) FX › REVERB: the track's send, which scales its reflections and tail; GLO › REVERB: all of it.
+    var send = 127
 
     func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
-        let er: [Double] = [84, 60, 72, 46, 52]
+        let amp = min(max(send, 0), 127)
+        let er: [Double] = [84, 60, 72, 46, 52].map { Double(Int($0) * amp / 127) }
         let hall = v[0] == 2
         let len = Double((40 + v[1] * 144 / 127) * (hall ? 2 : 1)), k = 1 - 3 / len
         let dim = Double(20 + v[2] * 60 / 127) / 100
@@ -533,7 +595,7 @@ private struct ReverbDrawing {
         var tops: [(Double, Double)] = [], mids: [(Double, Double)] = []
         var e = 1.0
         for x in 44...229 {
-            let h = 84 * e
+            let h = Double(84 * amp / 127) * e
             tops.append((Double(x), 126 - h)); mids.append((Double(x), 126 - h + h * dim))
             e *= k
         }
@@ -619,9 +681,11 @@ private struct ChorusDrawing {
 private struct VoiceDrawing {
     let v: [Int]                                  // VOICE, GLIDE, GLIDE MODE, PRIORITY
     let glide: String
+    /// UNISON's voices: "ALL VOICES" on Skiff 2.2, "8 VOICES" (of 16) on 2.5.
+    var uniVoices = "ALL VOICES"
 
     func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
-        let says = ["POLY: A VOICE A NOTE", "MONO: ONE VOICE, NEW ATTACK", "LEG: ONE VOICE, NO NEW ATTACK", "UNI: ALL VOICES, ONE NOTE"]
+        let says = ["POLY: A VOICE A NOTE", "MONO: ONE VOICE, NEW ATTACK", "LEG: ONE VOICE, NO NEW ATTACK", "UNI: \(uniVoices), ONE NOTE"]
         let g = v[1], w = Double(g != 0 ? 6 + g * 90 / 127 : 0)
         s.text(ctx, says[v[0] & 3], 12, 16, midColour)
         ctx.fill(Path(roundedRect: s.r(12, 92, 88, 11), cornerRadius: 2), with: .color(midColour))
@@ -676,18 +740,12 @@ private func curveGraph(_ ctx: GraphicsContext, _ s: Space, _ c: Color, at: (Int
 
 private struct InsertDrawing {
     let v: [Int]                                  // TYPE, A, B, C, MIX
+    /// (Skiff 2.5) MIX on the PRESETS card at the top right, in place of the TYPE's name (INSERT 2's page is gone).
+    var mixCard: PresetsCard?
+    /// FILTR's CUTOFF as its knob shows it, written by the cutoff's line.
+    var cutoffText = ""
     static let names = ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR", "FILTR"]
-
-    /// (Skiff 2.5) FILTR: its response across the width, low notes left: CUTOFF (A) where it turns, RES (B) the peak
-    /// there, SHAPE (C) from low-pass through band-pass (64) to high-pass. A picture of the filter, not fx.c's maths.
-    static func filter(_ x: Int, cutoff a: Int, res b: Int, shape c: Int) -> Int {
-        let f = Double(x + 32768) / 65536, fc = Double(min(max(a, 0), 127)) / 127, d = (f - fc) * 12
-        let lp = 1 / (1 + exp(d)), hp = 1 - lp, peak = Double(min(max(b, 0), 127)) / 127 * exp(-d * d)
-        let bp = exp(-d * d * 0.5)
-        let k = Double(min(max(c, 0), 127))
-        let g = (k <= 64 ? lp + (bp - lp) * k / 64 : bp + (hp - bp) * (k - 64) / 63) + peak * 0.6
-        return Int((min(g, 1.4) / 1.4 * 2 - 1) * 28000)
-    }
+    var isFilter: Bool { v[0] == 9 }
 
     static func sine(_ ph: UInt32) -> Int { Int(32767 * sin(Double(ph) / 4_294_967_296 * 2 * .pi)) }
     static func tri(_ q: UInt32) -> Int { let t = q >> 16; return Int(t < 32768 ? t << 1 : (65535 - t) << 1) }
@@ -706,8 +764,7 @@ private struct InsertDrawing {
     /// pg_ins_curve: the drives' transfer blended by MIX; the swept ones' sweep over a cycle.
     func at(_ x: Int) -> Int {
         let ty = v[0], a = v[1], b = v[2], c = v[3], mix = Self.mixq(v[4])
-        guard ty > 0, mix > 0 else { return x }
-        if ty == 9 { return x + Int((Int64(Self.filter(x, cutoff: a, res: b, shape: c) - x) * Int64(mix)) >> 15) }
+        guard ty > 0, ty < 9, mix > 0 else { return x }
         if ty >= 6 {
             let ph = UInt32(truncatingIfNeeded: x + 32768) << 16
             var s = ty == 8 ? Self.sine(ph) : Self.tri(ph) - 32768
@@ -741,8 +798,106 @@ private struct InsertDrawing {
     }
 
     func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        if isFilter { drawFilter(ctx, s, c); return }
         curveGraph(ctx, s, c, at: at, wave: wave())
-        s.text(ctx, Self.names[safe: v[0]] ?? "OFF", 140, 26, v[0] != 0 && v[4] != 0 ? c : dimColour, size: 13, weight: .semibold)
+        if let mixCard {
+            mixCard.draw(ctx, s, c, right: 228, top: 3)
+        } else {
+            s.text(ctx, Self.names[safe: v[0]] ?? "OFF", 140, 26, v[0] != 0 && v[4] != 0 ? c : dimColour, size: 13, weight: .semibold)
+        }
+    }
+
+    /// (Skiff 2.5, ui_pgraph.c graph_ins_filter) FILTR: the filter across the panel as ANALOG's FLT draws it, low pass
+    /// into band pass into high pass by SHAPE; LP BP HP top left with SHAPE's place marked; the cutoff's value by its
+    /// line, clear of the shape's row and MIX's card; MIX's card top right.
+    private func drawFilter(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
+        let cut = min(max(v[1], 0), 127), res = min(max(v[2], 0), 127), sh = min(max(v[3], 0), 127)
+        let xc = 12 + Double(cut * 1000 / 127 * 216 / 1000)
+        FilterCurve.draw(ctx, s, c, cut: cut, res: res, shape: sh)
+        s.text(ctx, "LP", 12, 18, sh <= 32 ? Theme.text : dimColour)
+        s.text(ctx, "BP", 46, 18, sh > 32 && sh < 96 ? Theme.text : dimColour)
+        s.text(ctx, "HP", 80, 18, sh >= 96 ? Theme.text : dimColour)
+        ctx.fill(Path(s.r(12, 24, 81, 1)), with: .color(lineColour))
+        let mark = s.p(12 + Double(sh * 80 / 127) + 2.5, 24.5)
+        ctx.fill(Path(ellipseIn: CGRect(x: mark.x - 4, y: mark.y - 4, width: 8, height: 8)), with: .color(Theme.text))
+        // the cutoff's value: top, by its line, where the shape's row and MIX's card leave room; else low, over the fill
+        let w = Double(ctx.resolve(Text(cutoffText).font(.lupe(11))).measure(in: CGSize(width: 400, height: 40)).width)
+            / max(1, Double(s.size.width)) * gw
+        if xc + 5 > 96, xc + 5 + w < 142 { s.text(ctx, cutoffText, xc + 5, 20, Theme.text) }
+        else if xc - 4 - w > 96, xc - 4 < 142 { s.text(ctx, cutoffText, xc - 4, 20, Theme.text, anchor: .bottomTrailing) }
+        else if xc + 5 + w < 226 { s.text(ctx, cutoffText, xc + 5, 114, Theme.text) }
+        else { s.text(ctx, cutoffText, xc - 4, 114, Theme.text, anchor: .bottomTrailing) }
+        mixCard?.draw(ctx, s, c, right: 228, top: 3)
+    }
+}
+
+// MARK: The filter curve (Skiff 2.5 ui_pgraph.c flt_level, flt_curve): ANALOG's FLT, and FILTR's LP into BP into HP
+
+enum FilterCurve {
+    /// A share w / 64 as a level: 20 log10, about 27 a dB (−1000: none).
+    static func off(_ w: Int) -> Int {
+        let t = [-1000, -482, -321, -227, -161, -109, -67, -31, 0], i = w >> 3
+        return i >= 8 ? 0 : t[i] + (t[i + 1] - t[i]) * (w & 7) / 8
+    }
+    /// The filter's level at d (the cutoff's place minus this one, on a 0…1000 pitch axis), 0…1000 (620: as it came
+    /// in): LP flat, a peak at the cutoff as high as RES, falling after; HP its mirror; BP a peak at the cutoff as high as
+    /// LP's flat part, falling both ways (faster with RES); shape (0 LP, 64 BP, 127 HP) blends the two beside it, the
+    /// louder of the two at its share.
+    static func level(_ d: Int, res: Int, shape: Int) -> Int {
+        let ad = abs(d), bump = ad < 60 ? (380 * res / 127) * (3600 - ad * ad) / 3600 : 0
+        let peak = 620 + 380 * res / 127, lp = d >= 0 ? 620 + bump : peak + d * 32 / 10
+        let hp = d <= 0 ? 620 + bump : peak - d * 32 / 10, bp = 620 - ad * (16 + res / 8) / 10
+        let a: Int, b: Int
+        if shape <= 64 { a = lp + off(64 - shape); b = bp + off(shape) }
+        else { a = bp + off((127 - shape) * 64 / 63); b = hp + off((shape - 64) * 64 / 63) }
+        return max(0, max(a, b))
+    }
+    /// The curve across the panel: the cutoff's line, the curve over its fill.
+    fileprivate static func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color, cut: Int, res: Int, shape: Int) {
+        let fc = cut * 1000 / 127, xc = 12 + Double(fc * 216 / 1000)
+        ctx.fill(Path(s.r(xc, 8, 1, 114)), with: .color(dimColour))
+        let pts = (0...216).map { x in (12 + Double(x), 120 - Double(level(fc - x * 1000 / 216, res: res, shape: shape) * 104 / 1000)) }
+        var under = s.line(pts)
+        under.addLine(to: s.p(228, 120)); under.addLine(to: s.p(12, 120)); under.closeSubpath()
+        ctx.fill(under, with: .color(c.opacity(0.25)))
+        ctx.stroke(s.line(pts), with: .color(c), style: StrokeStyle(lineWidth: 3, lineJoin: .round))
+    }
+}
+
+// MARK: The PRESETS card (Skiff 2.5 ui_graph.c pr_card, pr_knob)
+
+/// A setting the FM-1's PRESETS encoder turns on this page, as a card at the graph's top right: PRESETS and a small
+/// knob (its ring, the arc to the value, a pointer), the value, and what it sets. DELAY's MODE, INSERT's MIX.
+struct PresetsCard {
+    let job: String
+    let value: String
+    let pos: Int
+    let count: Int
+
+    fileprivate func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color, right: Double, top: Double) {
+        let r0 = s.p(right, top)
+        let w = max(84 / gw * Double(s.size.width), 118), h = 50.0
+        let card = CGRect(x: r0.x - w, y: r0.y, width: w, height: h)
+        ctx.fill(Path(roundedRect: card, cornerRadius: 6), with: .color(Theme.tones[2]))
+        let ink = Theme.textSecondaryRaised
+        ctx.draw(Text("PRESETS").font(.lupe(10, .medium)).tracking(0.5).foregroundColor(ink),
+                 at: CGPoint(x: card.minX + 8, y: card.minY + 6), anchor: .topLeading)
+        ctx.draw(Text(value).font(.lupe(15, .semibold)).foregroundColor(Theme.text),
+                 at: CGPoint(x: card.minX + 8, y: card.maxY - 6), anchor: .bottomLeading)
+        ctx.draw(Text(job).font(.lupe(10, .medium)).tracking(0.5).foregroundColor(ink),
+                 at: CGPoint(x: card.maxX - 8, y: card.maxY - 6), anchor: .bottomTrailing)
+        // the knob: −135° to +135° from straight up, the arc to the value in the track's colour, a pointer to it
+        let r: CGFloat = 8, ctr = CGPoint(x: card.maxX - 8 - r, y: card.minY + 8 + r)
+        let a = count > 1 ? -135 + Double(min(max(pos, 0), count - 1)) * 270 / Double(count - 1) : 0
+        var ring = Path()
+        ring.addArc(center: ctr, radius: r, startAngle: .degrees(-225), endAngle: .degrees(45), clockwise: false)
+        ctx.stroke(ring, with: .color(Theme.tones[4]), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        var arc = Path()
+        arc.addArc(center: ctr, radius: r, startAngle: .degrees(-225), endAngle: .degrees(a - 90), clockwise: false)
+        ctx.stroke(arc, with: .color(c), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        let rad = (a - 90) * .pi / 180
+        ctx.stroke(Path { $0.move(to: ctr); $0.addLine(to: CGPoint(x: ctr.x + cos(rad) * (r - 2), y: ctr.y + sin(rad) * (r - 2))) },
+                   with: .color(Theme.text), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
     }
 }
 
@@ -801,6 +956,8 @@ private struct ChordDrawing {
     var keysColour: Color?
     var note: (String, String?)?
     var noteColour: Color?
+    /// (Skiff 2.5) STRUM on, on a POLY track: its time (ms, 1…100) and DIR (0 DOWN, 1 UP, 2 ALT).
+    var strum: (ms: Int, dir: Int)?
 
     init(name: String, caption: String, notes: [Int], accent: Int, keysColour: Color?) {
         self.name = name; self.caption = caption; self.notes = notes; self.accent = accent; self.keysColour = keysColour
@@ -809,7 +966,39 @@ private struct ChordDrawing {
 
     var spoken: String {
         if let note { return [note.0, note.1].compactMap { $0 }.joined(separator: ", ").lowercased() }
-        return "\(name), \(notes.map { Music.spokenNoteName($0) }.joined(separator: ", "))"
+        let ns = notes.map { Music.spokenNoteName($0) }.joined(separator: ", ")
+        if let strum {
+            let how = strum.dir == 2 ? "down, then up, alternating" : strum.dir == 1 ? "up" : "down"
+            return "\(name), strummed \(how) over \(strum.ms) milliseconds, \(ns)"
+        }
+        return "\(name), \(ns)"
+    }
+
+    /// The strum's caption, top right, as the FM-1 writes it.
+    var strumCaption: String {
+        guard let strum else { return "" }
+        return strum.dir == 2 ? "ALT: DOWN, THEN UP" : "\(strum.dir == 1 ? "UP" : "DOWN") \(strum.ms) ms"
+    }
+
+    /// (ui_graph.c graph_strum) the chord's notes in time: a row a note (low at the bottom, named), its bar from when
+    /// the strum plays it (0…120 ms across), the root white; the stroke a line through their starts in the order
+    /// played. ALT draws the downstroke.
+    private func drawStrum(_ ctx: GraphicsContext, _ s: Space, _ c: Color, ms: Int, dir: Int) {
+        s.text(ctx, name, 14, 26, Theme.text, size: 17, weight: .semibold)
+        s.text(ctx, strumCaption, 226, 26, midColour, anchor: .bottomTrailing)
+        let n = notes.count
+        let pitch = min(n > 1 ? 64 / (n - 1) : 0, 20), th = pitch >= 14 ? 10 : max(4, pitch - 4)
+        ctx.fill(Path(s.r(43, 30, 1, 82)), with: .color(lineColour))        // when the chord is played: 0 ms
+        var starts = [CGPoint](repeating: .zero, count: n)
+        for i in 0..<n {
+            let o = dir == 1 ? n - 1 - i : i, d = n > 1 ? ms * o / (n - 1) : 0
+            let y = Double(104 - i * pitch - th / 2), xs = Double(44 + d * 182 / 120)
+            let col: Color = notes[i] % 12 == accent ? Theme.text : c
+            if th >= 8 || i % 2 == 0 { s.text(ctx, Music.noteName(notes[i]), 12, y + Double(th) - 1, midColour, size: 10) }
+            ctx.fill(Path(roundedRect: s.r(xs, y, 226 - xs, Double(th)), cornerRadius: 3), with: .color(col))
+            starts[o] = s.p(xs, y + Double(th) / 2)
+        }
+        if n > 1 { ctx.stroke(Path { $0.addLines(starts) }, with: .color(Theme.text), lineWidth: 1.5) }
     }
 
     func draw(_ ctx: GraphicsContext, _ s: Space, _ c: Color) {
@@ -818,6 +1007,7 @@ private struct ChordDrawing {
             if let b = note.1 { s.text(ctx, b, 120, 76, midColour, anchor: .bottom) }
             return
         }
+        if let strum { drawStrum(ctx, s, c, ms: strum.ms, dir: strum.dir); return }
         guard let first = notes.first, let last = notes.last else { return }
         s.text(ctx, name, 14, 26, Theme.text, size: 17, weight: .semibold)
         s.text(ctx, caption, 226, 26, midColour, anchor: .bottomTrailing)

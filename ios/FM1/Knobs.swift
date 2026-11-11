@@ -12,12 +12,14 @@ struct KnobSpec {
     let range: ClosedRange<Int>
     let stepperStep: Int
     let shown: String
-    let spoken: String
+    var spoken: String
     let bipolar: Bool
     /// The parameter's default (DESC), for a double-tap; nil: none known.
     var defaultValue: Int? = nil
     /// Named choices (DESC format 8: waveforms, modes), for the value range's lowest up: the tap opens a list.
     var choices: [String]? = nil
+    /// Turns, but does nothing as things stand (Skiff's card_dead: DIR while STRUM is OFF): shown dim.
+    var dead = false
     let set: (Int) -> Void
 
     var fraction: Double {
@@ -243,6 +245,7 @@ struct KnobDial: View {
                 .frame(width: size, height: size)
             Text(spec.label).font(.lupe(size > 40 ? 12 : 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             Text(spec.shown).font(.lupe(size > 40 ? 15 : 13, .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                .opacity(spec.dead ? 0.5 : 1)
         }
         .frame(width: size > 40 ? 88 : 56)
     }

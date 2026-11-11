@@ -752,17 +752,30 @@ struct GridViewBox<G: Gesture>: View {
 
 // MARK: - FREE TAKE (Skiff 2.5, level 1)
 
-/// A take the FM-1 put into a track while stopped (DeviceSession.freeTake): what it became and how to undo it. The
-/// editor protocol has no undo, so the FM-1's own is named (SAVE held, then OCT−), with its depth. RefusalLine's box:
-/// the neutral lift, dismissed with its ✕ or by the next take.
+/// A take the FM-1 put into a track while stopped (DeviceSession.freeTake): what it became, and the FM-1's FREE TAKE
+/// picker mirrored (Skiff 2.5 ui_take.c, ui_draw.c fr_columns, draw_foot): its four knobs and its three keys, so the
+/// picker on the FM-1's screen reads the same here. The screen link doesn't report the picker's state, so its knobs are
+/// named, not valued; each turn rewrites the track and Lupe re-reads it. Then the undo: the editor protocol has none,
+/// so the FM-1's own is named (SAVE held), with its depth. RefusalLine's box: the neutral lift, dismissed with its ✕ or
+/// by the next take.
 struct FreeTakeLine: View {
     let take: FreeTake
     let session: DeviceSession
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform.badge.plus").font(.system(size: 17, weight: .semibold)).accessibilityHidden(true)
-            Text(text).font(.lupe(15)).fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "waveform.badge.plus").font(.system(size: 17, weight: .semibold))
+                .padding(.top, 13).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(.lupe(15, .semibold)).fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 16) { knobs; keys }
+                    VStack(alignment: .leading, spacing: 8) { knobs; keys }
+                }
+                Text("Once it's kept, hold SAVE on the FM-1 to undo it (it keeps the last \(take.undoLevels) changes).")
+                    .font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 12)
             Spacer(minLength: 0)
             Button { session.dismissFreeTake() } label: {
                 Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 44, height: 44)
@@ -774,14 +787,49 @@ struct FreeTakeLine: View {
         .padding(.leading, 14)
         .frame(minHeight: 44)
         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.tones[2]))
+        .fixedSize(horizontal: false, vertical: true)    // its own height: the lanes above don't squeeze it
         .accessibilityElement(children: .contain)
     }
 
-    private var text: String {
+    /// The picker's four knobs, as its cards name them (fr_columns: GUESS, BARS, FROM, TEMPO).
+    private var knobs: some View {
+        HStack(spacing: 6) {
+            FMKey(name: "KNOBS 1–4")
+            Text("guess · bars · first note · tempo").font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("On the FM-1, knobs 1 to 4 pick the tempo guess, the bars, the first note and whether the tempo is set")
+    }
+
+    /// The picker's footer (draw_foot): OCT+ KEEP, OCT− BACK, PLAY LISTEN.
+    private var keys: some View {
+        HStack(spacing: 12) {
+            ForEach([("OCT+", "keep"), ("OCT−", "put back"), ("PLAY", "listen")], id: \.0) { k in
+                HStack(spacing: 6) {
+                    FMKey(name: k.0)
+                    Text(k.1).font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("On the FM-1, OCT plus keeps it, OCT minus puts the track back, PLAY listens")
+    }
+
+    private var title: String {
         let t = session.tracks[safe: take.track]
         let bars = max(1, (t?.division == 1 ? take.length / 8 : take.length / 16))
         let entry = take.entry.map { " (entry \(Entries.letter($0)))" } ?? ""
-        return "New take on T\(take.track + 1)\(entry): \(bars) bar\(bars == 1 ? "" : "s") at \(take.bpm) BPM. "
-            + "To undo it, hold SAVE on the FM-1 (it keeps the last \(take.undoLevels) changes)."
+        return "Free take on T\(take.track + 1)\(entry): \(bars) bar\(bars == 1 ? "" : "s") at \(take.bpm) BPM"
+    }
+}
+
+/// An FM-1 control named on screen, as its own key hints draw them (gfx.c cv_key_hint): the name in a key's outline.
+/// A label, not a button.
+private struct FMKey: View {
+    let name: String
+    var body: some View {
+        Text(name).font(.lupe(12, .semibold)).tracking(0.4)
+            .padding(.horizontal, 6).frame(height: 22)
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.textSecondaryRaised, lineWidth: 1))
     }
 }

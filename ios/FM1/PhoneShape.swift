@@ -124,7 +124,9 @@ struct PhoneShape: View {
                 ForEach(0..<4, id: \.self) { slot in
                     if let id = p.ids[slot] {
                         KnobControl(ui: ui, size: 56) {
-                            KnobSpec.param(session, scope: p.scope(of: slot), id: id, slot: slot, label: p.knobLabels[safe: slot] ?? nil)
+                            var k = KnobSpec.param(session, scope: p.scope(of: slot), id: id, slot: slot, label: p.knobLabels[safe: slot] ?? nil)
+                            if SoundCard.deadWhileStrumOff(session, p, slot) { k.dead = true; k.spoken += ", does nothing while STRUM is off" }
+                            return k
                         }
                             .frame(maxWidth: .infinity)
                     } else {

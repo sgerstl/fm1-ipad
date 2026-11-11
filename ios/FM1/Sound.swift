@@ -534,12 +534,23 @@ struct SoundCard: View, Equatable {
                 let sc = p.scope(of: slot)
                 KnobControl(ui: ui, activate: { touch(p) },
                             column: (slot + 1, sc == 1 ? Theme.text : Theme.track[session.selectedTrack], marks.key == p.key(slot))) {   // (shared: white)
-                    KnobSpec.param(session, scope: sc, id: id, slot: slot, label: p.knobLabels[safe: slot] ?? nil)
+                    var k = KnobSpec.param(session, scope: sc, id: id, slot: slot, label: p.knobLabels[safe: slot] ?? nil)
+                    if Self.deadWhileStrumOff(session, p, slot) {
+                        k.dead = true
+                        k.spoken += ", does nothing while STRUM is off"
+                    }
+                    return k
                 }
             } else {
                 EmptyColumn()
             }
         }
+    }
+
+    /// (Skiff 2.5, ui_draw.c card_dead) SCL › CHORD's DIR (knob 4) does nothing while STRUM (knob 3) is OFF.
+    static func deadWhileStrumOff(_ session: DeviceSession, _ p: SoundPage, _ slot: Int) -> Bool {
+        guard slot == 3, p.title == "CHORD", session.skiffFirmware?.hasDelayMode == true, let strum = p.ids[2] ?? nil else { return false }
+        return session.cell(strum).value == 0
     }
 
     private func onDevice(_ p: SoundPage) -> Bool { Self.onDevice(session, p) }
