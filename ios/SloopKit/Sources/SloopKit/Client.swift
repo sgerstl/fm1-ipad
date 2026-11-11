@@ -29,7 +29,19 @@ public actor SloopClient {
         let timeout: Duration
         var attemptsLeft: Int
         let continuation: CheckedContinuation<[UInt8], Error>
+        var background = false
     }
+
+    /// Requests sent while this is true wait in a back queue, served only when nothing else is waiting: Lupe's own
+    /// reads (a track's steps again after it moves on, its parameters, motion, the pool's pictures). A poll of where the
+    /// song is, or a write the user made, always goes next (Scott, 2026-11-11: with lots of pattern changes the pads
+    /// fell progressively behind the FM-1, and a write after stop waited behind the reads still going).
+    @TaskLocal public static var background = false
+    /// Off: one queue, first in first out, as before (the tests' "before" numbers).
+    nonisolated(unsafe) public static var prioritise = true
+    private var backQueue: [Pending] = []
+    /// Requests the back queue gave way to (stats for the tests).
+    public private(set) var overtaken = 0
 
     private let transport: SysExTransport
     private var queue: [Pending] = []
@@ -65,24 +77,26 @@ public actor SloopClient {
         reader?.cancel()
         inFlight?.continuation.resume(throwing: ClientError.closed)
         inFlight = nil
-        for p in queue { p.continuation.resume(throwing: ClientError.closed) }
-        queue = []
+        for p in queue + backQueue { p.continuation.resume(throwing: ClientError.closed) }
+        queue = []; backQueue = []
         pushSink.finish()
     }
 
     /// Sends a request and returns the matching reply's body.
     public func send(_ request: Request, timeout: Duration = .milliseconds(300), retries: Int = 1) async throws -> [UInt8] {
         if closed { throw ClientError.closed }
+        let bg = Self.background && Self.prioritise
         return try await withCheckedThrowingContinuation { c in
             nextID += 1
-            queue.append(Pending(id: nextID, request: request, timeout: timeout, attemptsLeft: retries + 1, continuation: c))
+            let p = Pending(id: nextID, request: request, timeout: timeout, attemptsLeft: retries + 1, continuation: c, background: bg)
+            if bg { backQueue.append(p) } else { queue.append(p); if !backQueue.isEmpty { overtaken += 1 } }
             pump()
         }
     }
 
     private func pump() {
-        guard inFlight == nil, !queue.isEmpty else { return }
-        var p = queue.removeFirst()
+        guard inFlight == nil, !queue.isEmpty || !backQueue.isEmpty else { return }
+        var p = queue.isEmpty ? backQueue.removeFirst() : queue.removeFirst()
         p.attemptsLeft -= 1
         inFlight = p
         transport.send(p.request.bytes)
@@ -96,7 +110,7 @@ public actor SloopClient {
     private func timedOut(id: Int, attemptsLeft: Int) {
         guard let p = inFlight, p.id == id, p.attemptsLeft == attemptsLeft else { return }
         inFlight = nil
-        if p.attemptsLeft > 0 { queue.insert(p, at: 0) }
+        if p.attemptsLeft > 0 { if p.background { backQueue.insert(p, at: 0) } else { queue.insert(p, at: 0) } }
         else { p.continuation.resume(throwing: ClientError.timeout(p.request.description)) }
         pump()
     }

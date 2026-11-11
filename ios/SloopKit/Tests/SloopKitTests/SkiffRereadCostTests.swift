@@ -6,7 +6,9 @@ import Testing
 /// was slow. Each change of the selected track's entry or pattern re-reads its steps (SongTab's two onChange →
 /// rereadSteps), one TRACK_STEP request a step, on the one-at-a-time queue the list polls also wait in.
 @Suite(.serialized) @MainActor struct SkiffRereadCostTests {
-    @Test func oneArrivalCostsTwoFullStepReads() async throws {
+    // Before the fix (2026-11-11) this was 128: two full 64-step reads. Now SongTab has one trigger, and a second reread
+    // cancels the first, reading only the pattern's LENGTH steps.
+    @Test func oneArrivalReadsThePatternOnce() async throws {
         let fake = try #require(FakeSkiff(demo: true))
         var once = false
         let s = DeviceSession(transport: { if once { return nil }; once = true; return fake })
@@ -23,6 +25,7 @@ import Testing
         let sent = fake.requests[before...]
         let steps = sent.filter { $0 == SkiffCmd.trackStep }.count
         print("REREAD stepCount \(s.stepCount); one arrival sent \(steps) TRACK_STEP of \(sent.count) requests")
-        #expect(steps == 2 * s.stepCount)
+        let len = max(1, min(s.stepCount, s.tracks[s.selectedTrack].length))
+        #expect(steps <= len + 2, "\(steps) step reads for a \(len)-step pattern")
     }
 }

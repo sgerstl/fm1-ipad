@@ -62,6 +62,9 @@ struct PadThumb: Equatable {
     @MainActor static func fromPool(_ session: DeviceSession, _ store: SkiffSongStore, _ ui: EditorUI) async {
         guard PadPreviews.on, !session.playing, !store.offline, ui.songView == .pads, !poolReading,
               let pool = store.pool?.patterns, pool.count == 64 else { return }
+        // not the moment play stops, nor while the user is changing things: 3 s quiet first (2026-11-11: the first read
+        // on a connection sends BACKUP_LIST, which writes the tracks' patterns to flash, and the next edit waited for it)
+        guard Date().timeIntervalSince(max(session.stoppedAt, store.lastChange)) >= 3 else { return }
         let sig = pool.map { "\($0.length).\($0.uses)" }
         let chunks = (0..<16).filter { c in (0..<4).contains { sig[4 * c + $0] != poolSeen[safe: 4 * c + $0] } }
         guard !chunks.isEmpty else { return }

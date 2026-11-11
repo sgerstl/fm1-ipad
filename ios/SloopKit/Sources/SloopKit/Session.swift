@@ -86,9 +86,14 @@ public final class DeviceSession {
     public private(set) var pageLayout: [PageSpec]?
     public private(set) var tracks = (0..<DeviceShape.sloop.trackCount).map { TrackState(index: $0) }
     public private(set) var selectedTrack = 0
+    /// When the transport last stopped (the pool's pictures wait a few seconds after it, 2026-11-11).
+    public private(set) var stoppedAt = Date.distantPast
     public private(set) var playing = false {
         // stopped (from the FM-1 or the iPad): the song order the iPad kept for now goes to the FM-1
-        didSet { if oldValue, !playing, pendingOrder != nil { drainSettings() } }
+        didSet {
+            if oldValue, !playing { stoppedAt = Date() }
+            if oldValue, !playing, pendingOrder != nil { drainSettings() }
+        }
     }
     /// The song: sections A–D, the mode, the position (LIVE), and the order (the settings object).
     public private(set) var song = SongState()
@@ -215,7 +220,14 @@ public final class DeviceSession {
             if tracks[t].length != l { tracks[t].length = l }
         }
         if let d = store.divisions[p], tracks[t].division != d { tracks[t].division = d }
-        Task { try? await self.readParams(t) }
+        // the count recounted from the pass's start with these, not just resized at the step it's on: a pattern of
+        // another LEN or DIV, seen up to a poll late, left the count steps off the FM-1 from then on (2026-11-11)
+        rebaseCount(t)
+        Task {
+            let was = (self.tracks[t].length, self.tracks[t].division)
+            try? await self.inBackground { try await self.readParams(t) }
+            if (self.tracks[t].length, self.tracks[t].division) != was { self.rebaseCount(t) }
+        }
     }
     /// Seconds to the soonest launch waiting on any track, from the counted clock.
     func secondsToNextLaunch() -> Double? {
@@ -228,6 +240,12 @@ public final class DeviceSession {
     func dropLaunch(_ t: Int) {
         guard let at = counted.relaunchAt(t), Double(counted.ticks) < at - 6 else { return }
         counted.relaunch(track: t, at: nil)
+    }
+    /// Track t's count walked again from the start of its pass with its settings now (CountedPlayhead.rebase).
+    func rebaseCount(_ t: Int) {
+        guard trackIndices.contains(t) else { return }
+        let tr = tracks[t]
+        counted.rebase(track: t, .init(length: tr.length, division: tr.division, direction: tr.direction, swing: tr.swing), globalSwing: swing)
     }
     public func passProgress(_ t: Int) -> Double? {
         guard trackIndices.contains(t) else { return nil }
@@ -993,16 +1011,29 @@ public final class DeviceSession {
     /// Reads a track's steps again now (Skiff's Song tab: the track moved on to another entry, so its pattern changed).
     public func rereadSteps(track t: Int) async {
         guard trackIndices.contains(t) else { return }
-        _ = try? await readSteps(t)
+        // one at a time per track: a newer change cancels the read in flight; only the pattern's LENGTH steps (the
+        // rest come with the resync); in the client's back queue, so the song's polls and the user's writes go first
+        // (Scott, 2026-11-11: 128 requests a change, two full reads, and the pads fell further behind each change)
+        rereads[t]?.cancel()
+        let n = max(1, min(stepCount, tracks[t].length))
+        let task = Task { await SloopClient.$background.withValue(true) { _ = try? await self.readSteps(t, count: n) } }
+        rereads[t] = task
+        await task.value
+    }
+    @ObservationIgnored private var rereads: [Int: Task<Void, Never>] = [:]
+    /// Lupe's own reads, in the client's back queue (SloopClient.background).
+    func inBackground<T>(_ body: () async throws -> T) async rethrows -> T {
+        try await SloopClient.$background.withValue(true) { try await body() }
     }
 
     /// Reads all of a track's steps; returns how many differed from what the app had.
     /// `deviceWins`: after a section loaded over the tracks, the device's steps replace even ones the
     /// iPad just wrote.
-    private func readSteps(_ t: Int, deviceWins: Bool = false) async throws -> Int {
+    func readSteps(_ t: Int, deviceWins: Bool = false, count: Int? = nil) async throws -> Int {
         guard let c = driver, trackIndices.contains(t) else { return 0 }
         var fixes = 0
-        for i in stepIndices {
+        for i in stepIndices.prefix(count ?? stepIndices.count) {
+            try Task.checkCancellation()
             if isDrums(t) {
                 let s = try await c.drumStep(index: i)
                 if tracks[t].drumSteps[i] != s, deviceWins || !recentlyWritten("s\(stepKey(t, i))") { tracks[t].drumSteps[i] = s; fixes += 1 }
@@ -1223,8 +1254,8 @@ public final class DeviceSession {
             // every track every 6 s, as Skiff's web editor polls it
             if let k = c as? SkiffDriver {
                 if n % 5 == 1, let l = try? await k.launchMode(), l != launchMode { launchMode = l }
-                if recordingKnobs || n % 2 == 0 { await readMotion(track: selectedTrack) }
-                if n % 6 == 0 { for t in trackIndices where t != selectedTrack { await readMotion(track: t) } }
+                if recordingKnobs || n % 2 == 0 { await inBackground { await readMotion(track: selectedTrack) } }
+                if n % 6 == 0 { for t in trackIndices where t != selectedTrack { await inBackground { await readMotion(track: t) } } }
             }
             do {
                 try await c.ping()
@@ -1319,14 +1350,17 @@ public final class DeviceSession {
                 let sel = selectedTrack
                 // Skiff pushes its step changes (WATCH bit 0): the full read is a backstop, every fourth pass (64
                 // requests each time); SLOOP's every pass
-                if !(c is SkiffDriver) || pass % 4 == 0 { _ = try await readSteps(sel) }
-                if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
-                    let n = trackCount
-                    let other = (sel + 1 + (pass / 3) % max(1, n - 1)) % n
-                    if other == 0 { try await readTrackList(); try await readGlobals() }
-                    try await readParams(sel)
-                    try await readParams(other)
-                    _ = try await readSteps(other)
+                // (all in the client's back queue: a backstop never delays a poll or a write)
+                try await inBackground {
+                    if !(c is SkiffDriver) || pass % 4 == 0 { _ = try await readSteps(sel) }
+                    if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
+                        let n = trackCount
+                        let other = (sel + 1 + (pass / 3) % max(1, n - 1)) % n
+                        if other == 0 { try await readTrackList(); try await readGlobals() }
+                        try await readParams(sel)
+                        try await readParams(other)
+                        _ = try await readSteps(other)
+                    }
                 }
             } catch ClientError.closed { return } catch {}
             pass += 1
@@ -1833,7 +1867,8 @@ public final class DeviceSession {
     /// another backup turn, not Skiff). For the pads' pictures.
     public func readSkiffPool(chunks: [Int]) async -> [Int: [UInt8]]? {
         guard let k = driver as? SkiffDriver, !playing else { return nil }
-        return try? await backupTurn { try await SkiffPoolRead.records(chunks: chunks, request: SkiffProjectTransfer.request(k)) }
+        // background, no retries: it runs again a second later anyway, and a retrying GET held up the next write
+        return try? await backupTurn { try await inBackground { try await SkiffPoolRead.records(chunks: chunks, request: SkiffProjectTransfer.request(k, getRetries: 0)) } }
     }
     /// An iPad project onto the FM-1 as the music, named `name` (SkiffProject.swift), then everything read again.
     public func writeSkiffProject(_ p: SkiffProjectData, name: String?, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {

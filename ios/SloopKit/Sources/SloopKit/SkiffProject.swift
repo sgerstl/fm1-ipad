@@ -296,11 +296,11 @@ public enum SkiffProjectTransfer {
     }
 
     /// Through a connected Skiff driver: LIST and the PUT commits get time (a stop, a flash write), and none is sent twice.
-    public static func request(_ d: SkiffDriver) -> BackupRequest {
+    public static func request(_ d: SkiffDriver, getRetries: Int = 2) -> BackupRequest {
         { cmd, args, match in
             let slow = cmd == list || (cmd == put && args.first != 1)
             return try await d.request(cmd, args, match: match, cmd == list ? "BACKUP_LIST" : cmd == get ? "BACKUP_GET" : "BACKUP_PUT",
-                                       timeout: .milliseconds(slow ? 5000 : 1500), retries: cmd == get ? 2 : 0)
+                                       timeout: .milliseconds(slow ? 5000 : 1500), retries: cmd == get ? getRetries : 0)
         }
     }
 }
