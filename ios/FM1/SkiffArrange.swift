@@ -414,10 +414,11 @@ struct SkiffArrangePage: View {
             ForEach(keys.indices, id: \.self) { i in
                 Button(keys[i].1) { _ = key(keys[i].0) }
                     .keyboardShortcut(keys[i].0, modifiers: [])
+                    .modifier(ShortcutOnly())
             }
             // ⌥← ⌥→ move the selected block one place, as Move earlier and Move later do
-            Button("Move earlier") { moveSelected(by: -1) }.keyboardShortcut(.leftArrow, modifiers: .option)
-            Button("Move later") { moveSelected(by: 1) }.keyboardShortcut(.rightArrow, modifiers: .option)
+            Button("Move earlier") { moveSelected(by: -1) }.keyboardShortcut(.leftArrow, modifiers: .option).modifier(ShortcutOnly())
+            Button("Move later") { moveSelected(by: 1) }.keyboardShortcut(.rightArrow, modifiers: .option).modifier(ShortcutOnly())
         }
         .opacity(0)
         .allowsHitTesting(false)
@@ -528,3 +529,14 @@ struct SkiffArrangePage: View {
 // MARK: - Header and lane
 
 // MARK: - The Song tab's compact Arrange (canvas boards 19, 20)
+
+/// A button that's only there for its keyboard shortcut: hidden from VoiceOver and out of Full Keyboard Access's Tab
+/// order on itself, not only on its container (2026-11-10: the audit found the Timeline's nine invisible shortcut
+/// buttons in the accessibility tree, each 19 pt tall at one spot, though their ZStack was hidden). The shortcut still
+/// works: it doesn't go through focus.
+struct ShortcutOnly: ViewModifier {
+    func body(content: Content) -> some View {
+        // (accessibilityHidden alone left them in the tree, each at its full size: at no size there's nothing to land on)
+        content.frame(width: 0, height: 0).clipped().accessibilityHidden(true).focusable(false)
+    }
+}

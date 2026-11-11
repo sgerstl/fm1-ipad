@@ -92,10 +92,10 @@ Automated checks don't cover these. Run once per pass:
 3. Larger Text at the largest size: nothing clipped.
 4. Reduce Motion on: the timeline and tab changes don't animate.
 
-Status: **not run** this pass.
+Status: **not run** this pass. 2026-11-10: an automated audit and a code review ran (`qa/accessibility-2026-11-10/README.md`), and the walk-through above is written as a device check (`qa/device-checks/2026-11-10-accessibility.md`); the human pass itself is still owed.
 
 ## 7. Not covered yet
 
-- No UI tests (XCUITest). The gestures (slide, grip, two-finger pan, the knob ring) are checked by hand.
+- One UI test target (2026-11-10): `FM1UITests`, the accessibility audit on each main screen (simulator, the Skiff demo). No UI tests of behaviour: the gestures (slide, grip, two-finger pan, the knob ring) are checked by hand.
 - No crash reporting from the iPad (TestFlight would give it).
 - Long sessions: memory and battery over an hour of playing.

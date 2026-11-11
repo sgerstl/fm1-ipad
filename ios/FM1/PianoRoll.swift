@@ -314,7 +314,15 @@ struct PianoRollContent: View {
                         .accessibilityLabel(StepLabels.synth(track: track, index: i, t))
                         .accessibilityAddTraits(i == selected ? [.isButton, .isSelected] : .isButton)
                         .accessibilityAction { ui.selectedStep[track] = i }
+                        .accessibilityValue(ui.stepSel.contains(i) ? "picked" : "")
                         .accessibilityActions {
+                            // picking steps was a drag along the step numbers or a hold-drag lasso, so the selection
+                            // bar (duplicate, copy, move, transpose, delete) was out of VoiceOver's reach (2026-11-10,
+                            // WCAG 2.1.1): pick and unpick a step at a time, as the step numbers' drag does
+                            Button(ui.stepSel.contains(i) ? "Unpick step" : "Pick step") {
+                                ui.stepSel.formSymmetricDifference([i])
+                                if !ui.stepSel.isEmpty { ui.noteSel = [] }
+                            }
                             ForEach(rows, id: \.self) { n in
                                 let has = t.steps[i].time == .note && t.steps[i].notes.contains(n)
                                 Button("\(has ? "Remove" : "Add") \(Music.spokenNoteName(n))") {

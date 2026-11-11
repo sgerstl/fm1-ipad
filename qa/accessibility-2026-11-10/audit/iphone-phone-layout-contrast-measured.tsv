@@ -1,0 +1,115 @@
+screen	label	frame	audit	measured
+iPhone-connection-menu	Pads	122,10,97x36	Contrast failed	10.73
+iPhone-edit-step-panel	Edit	221,10,97x36	Contrast failed	10.73
+iPhone-edit-step-panel	Step 1	654,66,35x15	Contrast failed	12.54
+iPhone-edit-step-panel	Velocity	726,58,77x28	Contrast failed	12.43
+iPhone-edit	Edit	221,10,97x36	Contrast failed	10.73
+iPhone-firmware-installing	05	254,116,17x20	Contrast failed	1.36
+iPhone-firmware-installing	05	505,116,17x20	Contrast failed	1.36
+iPhone-firmware-installing	06	338,116,17x20	Contrast failed	1.36
+iPhone-firmware-installing	07	422,116,17x20	Contrast failed	1.36
+iPhone-firmware-installing	A	156,259,8x15	Contrast failed	4.02
+iPhone-firmware-installing	B	240,118,8x15	Contrast failed	1.36
+iPhone-firmware-installing	C	324,118,8x15	Contrast failed	1.36
+iPhone-firmware-installing	D	408,118,8x15	Contrast failed	1.36
+iPhone-firmware-installing	E	492,118,7x15	Contrast failed	1.36
+iPhone-firmware-installing	REST	170,260,22x14	Contrast failed	1.77
+iPhone-firmware-picker	01	170,69,17x20	Contrast failed	1.25
+iPhone-firmware-picker	08	170,163,17x20	Contrast failed	1.58
+iPhone-firmware-picker	08	338,163,17x20	Contrast failed	1.15
+iPhone-firmware-picker	09	254,163,17x20	Contrast failed	1.15
+iPhone-firmware-picker	1	70,59,34x40	Contrast failed	1.53
+iPhone-firmware-picker	1.4.4	686,11,30x17	Contrast failed	2.22
+iPhone-firmware-picker	120 BPM	686,30,44x14	Contrast failed	1.60
+iPhone-firmware-picker	14	170,304,17x20	Contrast failed	1.66
+iPhone-firmware-picker	2	70,106,34x39	Contrast failed	1.68
+iPhone-firmware-picker	3	70,153,34x40	Contrast failed	1.90
+iPhone-firmware-picker	4	70,200,34x40	Contrast failed	1.50
+iPhone-firmware-picker	5	70,247,34x39	Contrast failed	1.58
+iPhone-firmware-picker	6	70,294,34x40	Contrast failed	1.98
+iPhone-firmware-picker	A	156,118,8x15	Contrast failed	2.20
+iPhone-firmware-picker	A	156,165,8x15	Contrast failed	1.87
+iPhone-firmware-picker	A	156,212,8x15	Contrast failed	2.20
+iPhone-firmware-picker	A	156,259,8x15	Contrast failed	2.20
+iPhone-firmware-picker	A	156,306,8x15	Contrast failed	1.95
+iPhone-firmware-picker	A	156,71,8x15	Contrast failed	1.47
+iPhone-firmware-picker	B	240,165,8x15	Contrast failed	1.15
+iPhone-firmware-picker	C	324,165,8x15	Contrast failed	1.15
+iPhone-firmware-picker	D	408,165,8x15	Contrast failed	1.15
+iPhone-firmware-picker	Pads	122,10,97x36	Contrast failed	2.02
+iPhone-firmware-picker	REST	170,119,22x14	Contrast failed	1.34
+iPhone-firmware-picker	REST	170,213,22x14	Contrast failed	1.34
+iPhone-firmware-picker	REST	170,260,22x14	Contrast failed	1.34
+iPhone-firmware-picker	REST	422,166,22x14	Contrast failed	1.15
+iPhone-firmware-picker	Store	74,344,80x34	Contrast failed	1.86
+iPhone-launch-menu	Cancel waiting	552,317,114x22	Contrast failed	1.50
+iPhone-launch-menu	E	492,118,7x15	Contrast failed	4.36
+iPhone-launch-menu	E	492,259,7x15	Contrast failed	4.36
+iPhone-launch-menu	E	492,71,7x15	Contrast failed	4.36
+iPhone-launch-menu	Launch at	516,35,59x17	Contrast nearly passed	4.13
+iPhone-launch-menu	Nothing waiting	516,277,95x17	Contrast nearly passed	4.13
+iPhone-launch-menu	Pads	122,10,97x36	Contrast failed	10.73
+iPhone-launch-menu	Sounds	419,10,97x36	Contrast failed	7.01
+iPhone-mix-delay	Delay	70,110,112x44	Contrast failed	10.73
+iPhone-mix-delay	Mix	320,10,97x36	Contrast failed	10.73
+iPhone-mix	1	202,68,28x28	Contrast failed	4.77
+iPhone-mix	Drum Kit	202,216,92x44	Contrast failed	3.46
+iPhone-mix	Drum Kit	202,320,92x44	Contrast failed	5.35
+iPhone-mix	Mix	320,10,97x36	Contrast failed	10.73
+iPhone-mix	Mixer	70,58,112x44	Contrast failed	10.73
+iPhone-mix	PAN	568,110,84x48	Contrast failed	16.13
+iPhone-mix	PAN	568,162,84x48	Contrast failed	16.13
+iPhone-mix	PAN	568,214,84x48	Contrast failed	16.13
+iPhone-mix	PAN	568,266,84x48	Contrast failed	16.13
+iPhone-mix	PAN	568,318,84x48	Contrast failed	16.13
+iPhone-mix	PAN	568,58,84x48	Contrast failed	12.17
+iPhone-mix	Pad	202,112,92x44	Contrast failed	1.25
+iPhone-mix	Piano	202,268,92x44	Contrast failed	2.75
+iPhone-mix	Pulse Ld	202,164,92x44	Contrast failed	5.00
+iPhone-mix	REVERB	662,162,84x48	Contrast failed	16.13
+iPhone-mix	REVERB	662,214,84x48	Contrast failed	16.13
+iPhone-mix	REVERB	662,266,84x48	Contrast failed	16.13
+iPhone-mix	REVERB	662,318,84x48	Contrast failed	16.13
+iPhone-mix	REVERB	662,58,84x48	Contrast failed	12.17
+iPhone-pad-hold-menu	02	254,69,17x20	Contrast failed	4.46
+iPhone-pad-hold-menu	02	422,69,17x20	Contrast failed	6.57
+iPhone-pad-hold-menu	03	338,69,17x20	Contrast failed	4.46
+iPhone-pad-hold-menu	05	254,116,17x20	Contrast failed	1.02
+iPhone-pad-hold-menu	06	338,116,17x20	Contrast failed	1.02
+iPhone-pad-hold-menu	07	422,116,17x20	Contrast failed	1.21
+iPhone-pad-hold-menu	08	170,163,17x20	Contrast failed	10.74
+iPhone-pad-hold-menu	10	254,210,17x20	Contrast failed	1.27
+iPhone-pad-hold-menu	11	338,210,17x20	Contrast failed	1.27
+iPhone-pad-hold-menu	12	254,257,17x20	Contrast failed	3.34
+iPhone-pad-hold-menu	12	422,257,17x20	Contrast failed	5.06
+iPhone-pad-hold-menu	13	338,257,17x20	Contrast failed	3.29
+iPhone-pad-hold-menu	14	170,304,17x20	Contrast failed	12.02
+iPhone-pad-hold-menu	B	240,118,8x15	Contrast failed	1.01
+iPhone-pad-hold-menu	B	240,259,8x15	Contrast failed	1.30
+iPhone-pad-hold-menu	B	240,71,8x15	Contrast failed	2.35
+iPhone-pad-hold-menu	C	324,118,8x15	Contrast failed	1.01
+iPhone-pad-hold-menu	C	324,259,8x15	Contrast failed	1.30
+iPhone-pad-hold-menu	C	324,71,8x15	Contrast failed	2.31
+iPhone-pad-hold-menu	D	408,118,8x15	Contrast failed	1.01
+iPhone-pad-hold-menu	D	408,259,8x15	Contrast failed	1.29
+iPhone-pad-hold-menu	D	408,71,8x15	Contrast failed	2.38
+iPhone-pad-hold-menu	Pads	122,10,97x36	Contrast failed	10.89
+iPhone-pad-hold-menu	REST	170,119,22x14	Contrast failed	6.69
+iPhone-pad-hold-menu	REST	422,166,22x14	Contrast failed	1.28
+iPhone-pad-hold-menu	Sounds	419,10,97x36	Contrast failed	6.36
+iPhone-song-pads-half	Pads	122,10,97x36	Contrast failed	10.73
+iPhone-song-pads-max	Pads	122,10,97x36	Contrast failed	10.73
+iPhone-song-pads-nogrid	Pads	122,10,97x36	Contrast failed	10.73
+iPhone-song-timeline	Pads	122,10,97x36	Contrast failed	10.73
+iPhone-sound-panel	08	338,163,17x20	Contrast failed	1.03
+iPhone-sound-panel	C	324,165,8x15	Contrast failed	1.03
+iPhone-sound-panel	C	324,259,8x15	Contrast failed	1.45
+iPhone-sound-panel	Pads	122,10,97x36	Contrast failed	10.73
+iPhone-sounds	8	248,325,7x17	Contrast nearly passed	3.91
+iPhone-sounds	9	248,369,7x17	Contrast failed	1.14
+iPhone-sounds	Bone Flute	312,382,150x56	Contrast failed	1.59
+iPhone-sounds	Dark Strings	629,382,150x56	Contrast failed	1.01
+iPhone-sounds	Sounds	419,10,97x36	Contrast failed	10.73
+iPhone-sounds	Trio	110,367,27x19	Contrast failed	1.14
+iPhone-sounds	Voice	110,324,38x19	Contrast failed	3.64
+iPhone-sounds	War Horn	470,382,150x56	Contrast failed	1.59

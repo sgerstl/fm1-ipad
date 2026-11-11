@@ -27,6 +27,10 @@ struct AppView: View {
                     .allowsHitTesting(!held)
                     .grayscale(held ? 0.85 : 0)
                     .opacity(held ? 0.45 : 1)
+                    // ...and out of VoiceOver's reach while held: allowsHitTesting stops fingers, not VoiceOver's
+                    // double-tap, so the read-only page could still be pressed (2026-11-10, WCAG 4.1.2). The card
+                    // (the overlay, below) stays readable.
+                    .accessibilityHidden(held)
                     .animation(.easeOut(duration: held ? 0.3 : 0.25), value: held)
                     .overlay(alignment: .top) {
                         if held {
@@ -82,6 +86,12 @@ struct AppView: View {
         // SLOOP in the same tabs (the SLOOP design pass, 2026-11-10); -sloop-classic keeps the old four tabs, for comparing
         .onChange(of: session.dialect == .sloop && session.capabilities.contains(.sloopSong), initial: true) { _, on in
             ui.sloopShell = on && !LaunchArgs.all.contains("-sloop-classic")
+        }
+        // the card is said when it comes and when the FM-1 is back, once each (4.1.3: a status message reaches
+        // VoiceOver without moving focus; the card's own line blends, which VoiceOver doesn't hear)
+        .onChange(of: held) { was, now in
+            if now, !was { AccessibilityNotification.Announcement("FM-1 disconnected. Plug it back in; nothing is lost.").post() }
+            else if was, !now, session.isConnected { AccessibilityNotification.Announcement("FM-1 back").post() }
         }
         // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
         // follows the playback mode to the timeline: Pads are the default, the timeline is the user's to pick, 2026-11-09)
@@ -202,6 +212,10 @@ extension AppView {
                     .frame(height: PianoRoll.panelHeight)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+                    // over a dimmed page: VoiceOver stays in it, and the scrub closes it (2026-11-10, 1.3.1, 2.4.3)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityAddTraits(.isModal)
+                    .accessibilityAction(.escape) { ui.sampler = nil }
                     .zIndex(5)
             }
             if ui.presetsPanel {
@@ -547,8 +561,8 @@ struct LostCard: View {
         .frame(width: 520, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 16).fill(Theme.control).elevationShadow(.held))
         .animation(.easeOut(duration: 0.15), value: back)
+        // (no .updatesFrequently: the card changes twice, and AppView announces each change; 2026-11-10)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.updatesFrequently)
     }
 }
 

@@ -40,6 +40,8 @@ struct LaneHeader: View {
             .frame(width: SkiffArrangePage.headWidth(compact: true) - 12, height: laneHeight, alignment: .topLeading)
             // double-tapped: the track controls in or out, as on the Pads
             .simultaneousGesture(TapGesture(count: 2).onEnded { session.select(track: track); controlsOpen.toggle() })
+            // the double-tap's way in for VoiceOver and Switch Control, as on the Pads (2026-11-10, WCAG 2.1.1)
+            .accessibilityAction(named: controlsOpen ? "Hide track controls" : "Show track controls") { session.select(track: track); controlsOpen.toggle() }
         } else {
             legacyCompactBody
         }
@@ -153,7 +155,15 @@ struct Ruler: View {
                 section = SectionRange(from: max(0, min(a, bars - 1)), to: max(a + 1, min(b, bars)))
             }
             .onEnded { v in if abs(v.translation.width) < 4 { section = nil } })
-        .accessibilityHidden(true)
+        // the drag was the only way to start a bar range, and the ruler was hidden from VoiceOver (2026-11-10, WCAG
+        // 2.1.1): an action starts one (the first 4 bars, one phrase), which the section bar's two steppers then move
+        .accessibilityElement()
+        .accessibilityLabel("Bar ruler")
+        .accessibilityValue(section.map { "bars \($0.from + 1) to \($0.to) selected" } ?? "\(bars) bars")
+        .accessibilityHint("Drag along it, or use the action, to pick bars across every track")
+        .accessibilityAction(named: section == nil ? "Select bars" : "Clear the bar selection") {
+            if section == nil { selectBlock(); section = SectionRange(from: 0, to: min(4, max(1, bars))) } else { section = nil }
+        }
     }
 }
 

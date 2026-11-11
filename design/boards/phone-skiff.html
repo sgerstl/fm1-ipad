@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lupe phone, Skiff</title>
+<!-- Boards 46–50: the phone with a Skiff FM-1 (design/structure-map.md › "The phone with a Skiff FM-1"). A mock, 2026-11-10. -->
+<style>
+@font-face { font-family: Barlow; src: url(../../ios/FM1/Fonts/Barlow-Regular.ttf); font-weight: 400; }
+@font-face { font-family: Barlow; src: url(../../ios/FM1/Fonts/Barlow-SemiBold.ttf); font-weight: 600; }
+@font-face { font-family: 'Barlow Condensed'; src: url(../../ios/FM1/Fonts/BarlowCondensed-SemiBold.ttf); font-weight: 600; }
+:root {
+  --page: #0D0D0F; --well: #111114; --panel: #1A1A1E; --control: #26262B; --edge: #0A0A0C; --empty: #2A2A30;
+  --text: #EDEDF0; --text2: #A1A1AA; --text2r: #C4C4CC; --text3: #71717A; --on: #101012; --outline: #4A4A52;
+}
+body { margin: 0; background: #2A2A2E; font-family: Barlow, -apple-system, sans-serif; color: var(--text); font-variant-numeric: tabular-nums; padding: 24px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+.lede { color: var(--text2r); font-size: 14px; margin: 0 0 24px; max-width: 70ch; line-height: 1.5; }
+.board { margin-bottom: 40px; width: 852px; }
+.screen { position: relative; width: 852px; height: 393px; background: var(--page); overflow: hidden; border-radius: 28px; }
+.safe { position: absolute; top: 0; bottom: 0; width: 59px; background: repeating-linear-gradient(45deg, #121215 0 6px, #0D0D0F 6px 12px); }
+.ann { background: #EDEDF0; color: #101012; padding: 16px 20px; border-radius: 0 0 12px 12px; margin-top: -12px; padding-top: 24px; }
+.ann h2 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
+.ann ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.45; columns: 2; column-gap: 28px; }
+.ann li { break-inside: avoid; margin-bottom: 6px; }
+.abs { position: absolute; box-sizing: border-box; }
+.key { background: var(--control); border-radius: 8px; box-shadow: 0 2px 0 var(--edge); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--text); }
+.rec { background: var(--well); border-radius: 10px; }
+.lab { font-family: 'Barlow Condensed', 'Barlow', -apple-system, sans-serif; font-weight: 600; font-size: 11px; letter-spacing: 0.04em; color: var(--text2r); }
+.num { position: absolute; width: 18px; height: 18px; border-radius: 9px; background: #EDEDF0; color: #101012; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+<h1>Lupe on the phone with a Skiff FM-1: Pads, Edit and Mix</h1>
+<p class="lede">852 × 393, landscape; the hatched strips are the side safe areas (59 each). Four tabs, Pads · Edit · Mix · Sounds; Timeline is left out until it's designed. Numbers in white discs match the notes under each screen. Track names and colours as the demo.</p>
+<div id="boards"></div>
+
+<script>
+const COL = ['#FF5A36', '#22C3B4', '#FFBF00', '#9580FF', '#FF6FAE', '#A3E635'];
+const NAMES = ['Acid', 'Pad', 'Pulse Ld', 'Drum Kit', 'Piano', 'Drum Kit'];
+const L = 'ABCDEFGHIJKLMNOP';
+const el = (cls, x, y, w, h, style = '', html = '') => `<div class="abs ${cls}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;${style}">${html}</div>`;
+const disc = (n, x, y) => `<div class="num" style="left:${x}px;top:${y}px">${n}</div>`;
+
+// the phone's top bar (PhoneTopBar): one track chip, the tabs, [Launch], REC, play, the position, ⋯
+function topBar(tab, opts = {}) {
+  const sel = opts.sel ?? 4;
+  let h = '';
+  h += el('', 67, 6, 40, 44, `background:${COL[sel]};border-radius:8px;box-shadow:inset 0 0 0 2px #EDEDF0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#101012;font-size:15px;font-weight:600`,
+    `${sel + 1}<span style="width:16px;height:3px;border-radius:2px;background:rgba(16,16,18,.5)"></span>`);
+  const tabs = ['Pads', 'Edit', 'Mix', 'Sounds'], tw = opts.launch ? 320 : 360;
+  h += el('rec', 115, 6, tw, 44, 'padding:4px;display:flex;gap:2px');
+  tabs.forEach((t, i) => {
+    const w = (tw - 8 - 6) / 4, on = t === tab;
+    h += el(on ? 'key' : '', 119 + i * (w + 2), 10, w, 36, on ? '' : 'display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text2)', t);
+  });
+  let x = 115 + tw + 8;
+  if (opts.launch) {
+    const lit = opts.menu;
+    h += el('key', x, 6, 96, 44, `gap:6px;${lit ? 'background:#EDEDF0;color:#101012' : ''}`,
+      `Bar<span style="font-weight:400;color:${lit ? '#101012' : 'var(--text2r)'}">· 2 wait</span>`);
+    x += 104;
+  }
+  const tw2 = 793 - 8 - 44 - x;
+  h += el('rec', x, 6, tw2, 44, 'display:flex;align-items:center;gap:2px;padding-right:4px',
+    `<span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center"><span style="width:14px;height:14px;border-radius:7px;background:#FF2C34"></span></span>
+     <span class="key" style="width:40px;height:36px">■</span>
+     <span style="padding-left:6px;line-height:1.15"><span style="font-size:13px;font-weight:600">10.3.1</span><br><span style="font-size:11px;color:var(--text2)">120 BPM</span></span>`);
+  h += el('key', 793 - 44, 6, 44, 44, 'font-size:17px', '⋯');
+  return h;
+}
+
+// Pads (board 40): heads 72, pads 78 × 40, 8 columns in view, scenes 34
+const SONG = [
+  [['01',4],['02',4,'play',[2,4,.6]],['02',2],['03',4],['04',4,'wait','bar 11']],
+  [['REST',4],['05',1,'play',[1,1,.3]],['07',2,'chain'],null,['05',4]],
+  [['08',8,'play',[3,8,.8],'snd'],['09',4,null,null,'snd'],['08',8]],
+  [['10',12,'play',[5,12,.4]],['11',8]],
+  [['REST',8],['12',4,'play',[1,4,.5]],['13',4,'wait','bar 11'],['12',4],null,null,null,null,['14',2]],
+  [['14',2],['14',2],['15',2],['14',2,'play',[2,2,.55]],['14',2],['15',2],['14',2],['16',6]],
+];
+const MUTED = [false, false, false, false, false, true];
+function pads(sel = 4) {
+  let h = '';
+  const gy = 58, rh = 40, rg = 4, px = 137, pw = 78, pg = 4;
+  for (let r = 0; r < 6; r++) {
+    const y = gy + r * (rh + rg), c = COL[r];
+    // the selected track's lane tint behind its row
+    if (r === sel) h += el('', 59, y - 2, 734, rh + 4, `background:#3B2532;border-radius:10px`);
+    h += el('', 63, y, 32, rh, `display:flex;align-items:center;justify-content:center`,
+      `<span style="width:28px;height:28px;border-radius:7px;background:${c};color:#101012;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;${r === sel ? 'box-shadow:0 0 0 2px #EDEDF0' : ''}">${r + 1}</span>`);
+    h += el('key', 97, y + 3, 34, 34, MUTED[r] ? 'background:#EDEDF0;color:#101012' : 'color:var(--text2r)', 'M');
+    let i = 0;
+    while (i < 9) {
+      const e = SONG[r][i], x = px + i * (pw + pg);
+      if (x > 793) break;
+      const clipR = x + pw > 789 ? 'clip-path:inset(0 ' + (x + pw - 789) + 'px 0 0);' : '';
+      if (!e) { h += el('', x, y, pw, rh, `border-radius:8px;box-shadow:inset 0 0 0 1px var(--empty);${clipR}`); i++; continue; }
+      const span = e[2] === 'chain' ? 2 : 1, w = span * pw + (span - 1) * pg;
+      const rest = e[0] === 'REST', play = e[2] === 'play', wait = e[2] === 'wait', snd = e[4] === 'snd';
+      const fill = play && !MUTED[r];
+      let s = 'border-radius:8px;display:flex;align-items:center;gap:5px;padding:0 6px;' + clipR;
+      s += fill ? `background:${c};` : play ? `background:var(--control);box-shadow:inset 0 0 0 2px ${c};` : rest ? 'box-shadow:inset 0 0 0 1px var(--outline);' : 'background:var(--control);';
+      if (wait) s += `outline:2px dashed ${c};outline-offset:-2px;`;
+      if (snd) s += 'clip-path:polygon(0 0,calc(100% - 8px) 0,calc(100% - 8px) 8px,100% 8px,100% 100%,0 100%);';
+      const ink = fill ? '#101012' : rest ? 'var(--text2)' : 'var(--text)', sub = fill ? '#101012' : 'var(--text2)';
+      let inner = `<span style="font-size:${rest ? 11 : 15}px;font-weight:600;color:${ink}">${rest ? 'REST' : e[0]}</span><span style="font-size:11px;color:${sub}">${span > 1 ? 'chain ' : ''}×${e[1]}</span>`;
+      if (play) {
+        const p = e[3];
+        if (p[1] > 1) inner += `<span style="margin-left:auto;font-size:11px;font-weight:600;color:${fill ? '#101012' : 'var(--text)'}">${p[0]}/${p[1]}</span>`;
+        inner += `<span style="position:absolute;left:6px;right:6px;bottom:4px;height:3px;border-radius:2px;background:${fill ? 'rgba(16,16,18,.3)' : '#3A3A42'}"><span style="display:block;height:3px;border-radius:2px;width:${p[2] * 100}%;background:${fill ? '#101012' : c}"></span></span>`;
+      }
+      if (wait) inner += `<span style="margin-left:auto;padding:0 4px;border-radius:5px;background:#EDEDF0;color:#101012;font-size:10px;font-weight:600">b11</span>`;
+      h += el('', x, y, w, rh, s, inner);
+      i += span;
+    }
+  }
+  // the next column, cut by the safe area: there's more to the right
+  h += el('', 779, gy, 14, 6 * rh + 5 * rg, 'background:linear-gradient(90deg,rgba(13,13,15,0),#0D0D0F)');
+  // scenes: Store + 16
+  const sy = 330, sw = (734 - 52 - 4 - 15 * 4) / 16;
+  h += el('key', 59, sy, 52, 34, 'font-size:12px', 'Store');
+  for (let k = 0; k < 16; k++) {
+    const kept = [0, 1, 2, 3, 5, 6].includes(k), last = k === 1;
+    h += el('key', 59 + 56 + k * (sw + 4), sy, sw, 34, `font-size:12px;${last ? 'background:#EDEDF0;color:#101012' : kept ? '' : 'background:transparent;box-shadow:inset 0 0 0 1px var(--empty);color:var(--text3)'}`, k + 1);
+  }
+  return h;
+}
+
+function launchMenu() {
+  let h = el('', 0, 0, 852, 393, 'background:rgba(0,0,0,.35)');
+  const x = 423, y = 56, w = 232;
+  h += el('', x, y, w, 196, 'background:#2D2D33;border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.6);padding:12px', `
+    <div class="lab" style="margin-bottom:6px">LAUNCH AT</div>
+    <div class="rec" style="display:flex;gap:2px;padding:3px;height:44px;box-sizing:border-box">
+      ${['Loop', 'Bar', 'Beat', 'Now'].map(t => `<span class="${t === 'Bar' ? 'key' : ''}" style="flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;${t === 'Bar' ? '' : 'color:var(--text2)'}">${t}</span>`).join('')}
+    </div>
+    <div style="margin:12px 0 6px;font-size:13px;color:var(--text2r)">2 waiting · Piano C, Acid E · bar 11</div>
+    <div class="key" style="height:44px">Cancel waiting</div>`);
+  return h;
+}
+
+// Mix: selector 112 + one page, 610 wide
+function selector(cur) {
+  let h = '';
+  ['Mixer', 'Delay', 'Reverb', 'Chorus', 'Global'].forEach((t, i) => {
+    const on = t === cur;
+    h += el('key', 59, 58 + i * 52, 112, 44, `justify-content:flex-start;padding-left:12px;gap:8px;${on ? 'box-shadow:0 2px 0 var(--edge),inset 0 0 0 2px #EDEDF0' : 'color:var(--text2r)'}`,
+      `<span style="width:6px;height:6px;border-radius:3px;background:${on ? '#EDEDF0' : '#45454D'}"></span>${t}`);
+  });
+  h += el('', 59, 322, 112, 30, 'font-size:11px;color:var(--text2);line-height:1.3;padding-left:2px', 'GLO steps<br>these, as the FM-1');
+  return h;
+}
+const LEVEL = [.72, .72, .72, .72, .72, .72], REV = [.12, .55, .16, .16, .28, .16];
+function mixer(sel = 0) {
+  let h = el('', 183, 52, 610, 306, 'background:var(--panel);border-radius:14px');
+  for (let r = 0; r < 6; r++) {
+    const y = 60 + r * 49, c = COL[r];
+    if (r === sel) h += el('', 189, y - 2, 598, 48, 'background:#3D2420;border-radius:10px');
+    h += el('', 195, y, 96, 44, 'display:flex;align-items:center;gap:8px',
+      `<span style="width:28px;height:28px;border-radius:7px;background:${c};color:#101012;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;${r === sel ? 'box-shadow:0 0 0 2px #EDEDF0' : ''}">${r + 1}</span><span style="font-size:13px;color:${r === sel ? 'var(--text)' : 'var(--text2r)'};white-space:nowrap;overflow:hidden">${NAMES[r]}</span>`);
+    // LEVEL: a horizontal fader in the track colour, the dB after it
+    const fx = 299, fw = 172;
+    h += el('', fx, y + 20, fw, 4, 'background:#34343B;border-radius:2px');
+    h += el('', fx, y + 20, fw * LEVEL[r], 4, `background:${c};border-radius:2px`);
+    h += el('', fx + fw * LEVEL[r] - 5, y + 9, 10, 26, 'background:#EDEDF0;border-radius:3px;box-shadow:0 2px 4px rgba(0,0,0,.5)');
+    h += el('', fx + fw * .78, y + 12, 1, 20, 'background:#71717A');
+    h += el('', 479, y, 44, 44, 'display:flex;align-items:center;font-size:13px;font-weight:600', '−4 dB');
+    // PAN and REVERB: label and value over a short slider
+    [[531, 'PAN', 'C', .5, false], [631, 'REVERB', Math.round(REV[r] * 100) + '%', REV[r], true]].forEach(([x, lab, v, f, fillTo]) => {
+      h += el('', x, y + 4, 88, 12, 'display:flex;justify-content:space-between', `<span class="lab">${lab}</span><span style="font-size:11px;font-weight:600">${v}</span>`);
+      h += el('', x, y + 28, 88, 3, 'background:#34343B;border-radius:2px');
+      if (fillTo) h += el('', x, y + 28, 88 * f, 3, `background:${c};border-radius:2px`);
+      h += el('', x + 88 * f - 4, y + 21, 8, 16, 'background:#EDEDF0;border-radius:2px');
+    });
+    h += el('key', 735, y + 3, 44, 38, `font-size:12px;${r === 3 ? 'background:#EDEDF0;color:#101012' : 'color:var(--text2r)'}`, 'M');
+  }
+  return h;
+}
+function delay() {
+  let h = el('', 183, 52, 610, 306, 'background:var(--panel);border-radius:14px');
+  h += el('', 199, 62, 400, 24, 'display:flex;align-items:baseline;gap:8px', `<span style="width:6px;height:6px;border-radius:3px;background:#EDEDF0;align-self:center"></span><span style="font-size:15px;font-weight:600;letter-spacing:.04em">DELAY</span><span style="font-size:12px;color:var(--text2)">all tracks · on the FM-1: 2/5</span>`);
+  const cols = [['TIME', '1/8', '', .5], ['FEEDBACK', '50', '%', .5], ['COLOR', '55', '%', .55], ['MIX', '71', '%', .71]];
+  cols.forEach(([lab, v, u, f], i) => {
+    const x = 199 + i * 146;
+    h += el('', x, 94, 140, 72, 'background:var(--control);border-radius:10px;box-shadow:0 2px 0 var(--edge)',
+      `<span class="lab" style="position:absolute;left:12px;top:10px">${lab}</span>
+       <span style="position:absolute;right:10px;top:8px;width:16px;height:16px;border-radius:8px;background:#34343B;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--text2r)">${i + 1}</span>
+       <span style="position:absolute;left:12px;top:30px;font-size:24px;font-weight:600">${v}<span style="font-size:12px;color:var(--text2)">${u}</span></span>
+       <span style="position:absolute;left:12px;right:12px;bottom:8px;height:3px;border-radius:2px;background:#3A3A42"><span style="display:block;height:3px;width:${f * 100}%;background:#EDEDF0;border-radius:2px"></span></span>`);
+  });
+  // the taps graph
+  h += el('rec', 199, 176, 578, 168, '', `<span class="lab" style="position:absolute;left:24px;top:8px">DRY</span>` +
+    [1, .62, .32, .16, .08, .04, .02].map((a, k) => `<span style="position:absolute;left:${28 + k * 78}px;bottom:18px;width:30px;height:${a * 120}px;background:${k ? '#8A8A92' : '#EDEDF0'};border-radius:2px"></span>`).join(''));
+  return h;
+}
+
+
+// Edit (board 50): the ruler, the selected pad's pattern a bar wide, the step panel in from the Step key
+function edit() {
+  const c = COL[4];
+  let h = '';
+  h += el('', 59, 58, 734, 28, 'display:flex;align-items:center;gap:8px',
+    `<span style="width:22px;height:22px;border-radius:6px;background:${c};color:#101012;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center">5</span>
+     <span style="font-size:13px;font-weight:600">Piano · B</span>
+     <span class="key" style="height:28px;padding:0 10px;font-size:12px;gap:6px"><span style="font-weight:400;color:var(--text2r)">pattern</span>12 ▾</span>
+     <span style="font-size:12px;color:var(--text2)">C minor · 16 steps</span>
+     <span style="flex:1"></span>
+     <span class="key" style="height:28px;padding:0 10px;font-size:12px;background:#EDEDF0;color:#101012">Step 5</span>
+     <span class="key" style="height:28px;padding:0 10px;font-size:12px;gap:6px;color:var(--text2r)"><span style="width:6px;height:6px;border-radius:3px;background:#45454D"></span>Velocity</span>`);
+  // the piano roll: note names 44 wide, 16 steps of 43
+  const gx = 105, gy = 92, sw = 43, rh = 44, notes = ['D#4', 'D4', 'C4', 'A#3', 'G#3', 'G3'];
+  h += el('rec', gx, gy, 16 * sw, 6 * rh, 'border-radius:8px;overflow:hidden');
+  for (let k = 0; k < 16; k += 4) h += el('', gx + k * sw, gy, 4 * sw, 6 * rh, `background:${(k / 4) % 2 ? '#141417' : '#111114'}`);
+  notes.forEach((n, r) => {
+    h += el('', 59, gy + r * rh, 42, rh, 'display:flex;align-items:center;justify-content:flex-end;font-size:12px;color:var(--text2)', n);
+    h += el('', gx, gy + r * rh + rh - 1, 16 * sw, 1, 'background:#1E1E22');
+  });
+  [[0, 2, 2], [2, 4, 1], [4, 2, 2], [6, 3, 1], [8, 4, 2], [10, 1, 1], [12, 2, 3]].forEach(([st, r, len]) => {
+    const sel = st === 4;
+    h += el('', gx + st * sw + 2, gy + r * rh + 4, len * sw - 4, rh - 8, `background:${c};border-radius:6px;${sel ? 'box-shadow:0 0 0 2px #EDEDF0' : ''}`);
+  });
+  h += el('', gx + 6.4 * sw, gy, 2, 6 * rh, 'background:#EDEDF0;opacity:.7');
+  // the step panel, 320 wide, over the grid's right side
+  const px = 793 - 320, py = 92;
+  h += el('', px, py, 320, 266, 'background:var(--panel);border-radius:14px;box-shadow:0 14px 28px rgba(0,0,0,.55);padding:12px', `
+    <div style="font-size:11px;color:var(--text2)">T5 Piano · C4</div>
+    <div style="font-size:20px;font-weight:600;margin-top:2px">Step 5</div>`);
+  h += el('key', px + 176, py + 8, 40, 36, '', '‹') + el('key', px + 220, py + 8, 40, 36, '', '›') + el('key', px + 268, py + 8, 44, 36, 'font-size:13px', '✕');
+  const cell = (x, y, w, hh, lab, v, n, f) => el('', x, y, w, hh, 'background:var(--control);border-radius:8px;box-shadow:0 2px 0 var(--edge)',
+    `<span class="lab" style="position:absolute;left:10px;top:7px">${lab}</span>${n ? `<span style="position:absolute;right:8px;top:6px;width:15px;height:15px;border-radius:8px;background:#34343B;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--text2r)">${n}</span>` : ''}
+     <span style="position:absolute;left:10px;top:22px;font-size:18px;font-weight:600">${v}</span>
+     <span style="position:absolute;left:10px;right:10px;bottom:5px;height:3px;border-radius:2px;background:#3A3A42"><span style="display:block;height:3px;width:${f * 100}%;background:${c};border-radius:2px"></span></span>`);
+  const x0 = px + 12, cw = (296 - 6) / 2;
+  h += cell(x0, py + 56, cw, 50, 'PITCH', 'C4', 1, .5) + cell(x0 + cw + 6, py + 56, cw, 50, 'MOVE', 'Step 5', 2, .3);
+  h += cell(x0, py + 112, cw, 50, 'LENGTH', '2 steps', 3, .2) + cell(x0 + cw + 6, py + 112, cw, 50, 'VELOCITY', '100', 4, .78);
+  const fw = (296 - 18) / 4;
+  [['CHANCE', '100%', 1], ['RATCHET', '×1', 0], ['COND', '--', 0], ['NUDGE', '0', .5]].forEach(([l, v, f], i) => h += cell(x0 + i * (fw + 6), py + 170, fw, 48, l, v, 0, f));
+  h += el('', x0, py + 224, 296, 34, 'display:flex;align-items:center;justify-content:space-between',
+    `<span style="font-size:13px;font-weight:600">Sound at this step ▾</span><span class="key" style="height:34px;padding:0 12px;font-size:13px">Lock</span>`);
+  return h;
+}
+
+const BOARDS = [
+  { title: '46 · Pads: the grid on the phone (board 40, with the Launch key)', html: topBar('Pads', { launch: true }) + pads() +
+      disc(1, 452, 2) + disc(2, 66, 50) + disc(3, 101, 50) + disc(4, 470, 50) + disc(5, 772, 120) + disc(6, 60, 322),
+    notes: ['Four tabs: Pads · Edit · Mix · Sounds. Edit holds the selected pad\'s pattern and the step panel (board 50); Timeline is left out until it\'s designed.',
+      'Row heads 72 wide: the number in the track\'s colour (tap: select the track; Piano is selected, its lane tinted). No name; VoiceOver reads it.',
+      'Mute, 34 pt. The row\'s stop, as on the iPad. Track 6 is muted: its playing pad is outlined, not filled.',
+      'Pads 78 × 40, the iPad\'s Half faces: number and passes on one line, the pass bar along the foot, a dashed outline and "b11" while waiting, the corner cut for a sound. A tap launches; a hold opens the menu.',
+      '8 columns in view, A–H; I and on are to the right. Two fingers pan sideways (one finger stays a tap or hold). Not shown: a pan indicator.',
+      'Store and the 16 scenes at 34. Scene 2 was last recalled (lit); unkept scenes are outlined. Held: the grid outlines each track\'s pad.',
+      'Launch key (new, in the top bar): the launch point and how many wait. Tapped, its menu (next board).'] },
+  { title: '47 · Pads: the Launch key\'s menu', html: topBar('Pads', { launch: true, menu: true }) + pads() + launchMenu() + disc(1, 650, 50) + disc(2, 650, 200),
+    notes: ['Launch at: LOOP BAR BEAT NOW, the setting for the whole FM-1 (as the iPad\'s tool row). 44 pt keys.',
+      'What waits, and Cancel waiting (takes back every launch; the FM-1 has no per-track cancel). Shown only while something waits. A tap outside closes the menu.'] },
+  { title: '48 · Mix: Mixer, the six tracks as rows', html: topBar('Mix', { launch: true, sel: 0 }) + selector('Mixer') + mixer(0) +
+      disc(1, 160, 50) + disc(2, 190, 52) + disc(3, 380, 52) + disc(4, 600, 52) + disc(5, 760, 52),
+    notes: ['Down the left, GLO\'s five pages in the FM-1\'s order: Mixer, Delay, Reverb, Chorus, Global, 44 pt each. The lit one is on screen and, linked, on the FM-1. GLO on the FM-1 steps them.',
+      'A row a track, like the Pads rows: the number and name (tap: select; Acid is selected).',
+      'LEVEL on a horizontal fader in the track\'s colour, sticky at 0 dB (the tick), and its dB.',
+      'PAN and the REVERB send, each a short slider with its value.',
+      'Mute. Track 4 is muted. Rows 44 tall, 5 between; the whole mixer fits without scrolling.'] },
+  { title: '49 · Mix: Delay, one effect card filling the page', html: topBar('Mix', { launch: true, sel: 0 }) + selector('Delay') + delay() + disc(1, 160, 102) + disc(2, 580, 86) + disc(3, 760, 170),
+    notes: ['Delay lit: its card fills the page. Reverb, Chorus and Global look the same, each its own card.',
+      'The iPad\'s card: the four columns (the FM-1\'s knobs 1–4), a slide on one turns it. No swipe between pages, so the columns get the whole finger.',
+      'The graph at the phone\'s width.'] },
+  { title: '50 · Edit: the selected pad\'s pattern, the step panel open', html: topBar('Edit', { launch: true }) + edit() +
+      disc(1, 52, 52) + disc(2, 640, 52) + disc(3, 100, 200) + disc(4, 460, 86) + disc(5, 466, 318),
+    notes: ['The ruler: the track and entry the editor shows (Piano · B, the pad selected on Pads), the pattern a menu, the scale and length.',
+      'The Step key (lit: the panel is open) and Velocity, which swaps a velocity lane in under the grid. As the SLOOP phone\'s Sequence tab.',
+      'The pattern a bar wide, the phone\'s piano roll (a kit: its drum grid). Two fingers pan; a tap on a note selects its step. No motion lanes on the phone.',
+      'The step panel, 320 wide, in from the right over the grid: the Skiff step inspector. ‹ › step along; ✕ closes it (so does the Step key).',
+      'NOTES two by two (the FM-1\'s knobs 1–4), FEEL across, Sound at this step and Lock. SEQ on the FM-1 lands here with the panel open.'] },
+];
+document.getElementById('boards').innerHTML = BOARDS.map(b => `
+  <section class="board" aria-label="${b.title}">
+    <div class="screen">
+      <div class="safe" style="left:0"></div><div class="safe" style="right:0"></div>
+      ${b.html}
+    </div>
+    <div class="ann"><h2>${b.title}</h2><ol>${b.notes.map(n => `<li>${n}</li>`).join('')}</ol></div>
+  </section>`).join('');
+</script>
+</body>
+</html>

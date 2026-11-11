@@ -89,7 +89,7 @@ struct KnobPanel: View {
         .sensoryFeedback(.impact(weight: .light), trigger: tick)
         .onKeyPress(.escape) { cancel(spec); return .handled }
         .background {
-            Button("Cancel") { cancel(spec) }.keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+            Button("Cancel") { cancel(spec) }.keyboardShortcut(.cancelAction).opacity(0).modifier(ShortcutOnly())
         }
         .onAppear { if opened == nil { opened = spec.value } }
         .accessibilityElement(children: .contain)

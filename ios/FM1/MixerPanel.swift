@@ -298,7 +298,7 @@ struct MixerStrips: View {
     let ui: EditorUI
     var touched: () -> Void = {}
 
-    private var revID: Int? { SoundPage.pages(session).first { $0.title == "FX" }?.ids[safe: 3] ?? nil }
+    var revID: Int? { SoundPage.pages(session).first { $0.title == "FX" }?.ids[safe: 3] ?? nil }
 
     var body: some View {
         let _ = BodyCounter.tick("mixer.strips")
@@ -317,7 +317,7 @@ struct MixerStrips: View {
         }
     }
 
-    private func row(_ t: Int, _ id: Int?) -> MixRow {
+    func row(_ t: Int, _ id: Int?) -> MixRow {
         let tr = session.tracks[t]
         var r = MixRow(track: t, name: Entries.trackName(t, session: session), level: tr.level,
                        levelDefault: session.trackDesc(Param.level)?.defaultValue, pan: tr.pan, mute: tr.mute,
@@ -378,12 +378,12 @@ private struct MixerStrip: View, Equatable {
             .accessibilityHint("Selects the track")
             .accessibilityAddTraits(row.selected ? .isSelected : [])
             }
-            Fader(axis: .vertical, spec: levelSpec, tint: row.mute ? Theme.textTertiary : colour, nudge: 2,
+            Fader(axis: .vertical, spec: row.levelSpec(session), tint: row.mute ? Theme.textTertiary : colour, nudge: 2,
                   detent: MixerStrips.unity, touched: touched,
                   meter: AnyView(LevelLine(meters: session.meters, track: t, muted: row.mute, tint: colour)))
                 .frame(maxHeight: .infinity)
-            Fader(axis: .horizontal, spec: panSpec, tint: colour, touched: touched)
-            if row.rev != nil { Fader(axis: .horizontal, spec: revSpec, tint: colour, touched: touched) }
+            Fader(axis: .horizontal, spec: row.panSpec(session), tint: colour, touched: touched)
+            if row.rev != nil { Fader(axis: .horizontal, spec: row.revSpec(session), tint: colour, touched: touched) }
             if session.skiffSong == nil {
             Button { session.set(track: t, param: Param.mute, to: row.mute ? 0 : 1) } label: {
                 HStack(spacing: 6) {
@@ -407,23 +407,26 @@ private struct MixerStrip: View, Equatable {
         .background(RoundedRectangle(cornerRadius: 12).fill(row.selected ? colour.opacity(0.12) : Theme.well))
         .accessibilityElement(children: .contain)
     }
+}
 
-    private var levelSpec: KnobSpec {
-        let t = row.track, v = row.level
+/// A strip's controls as knob specs, shared by the iPad's strips and the phone's rows (PhoneMix).
+@MainActor extension MixRow {
+    func levelSpec(_ session: DeviceSession) -> KnobSpec {
+        let t = track, v = level
         return KnobSpec(id: "mix.level\(t)", colour: Theme.track[t], label: "LEVEL", value: v, range: 0...127, stepperStep: 2,
                         shown: MixerStrips.dB(v), spoken: v == 0 ? "off" : MixerStrips.dB(v).replacingOccurrences(of: "dB", with: "decibels"),
-                        bipolar: false, defaultValue: row.levelDefault ?? MixerStrips.unity) { session.set(track: t, param: Param.level, to: $0) }
+                        bipolar: false, defaultValue: levelDefault ?? MixerStrips.unity) { session.set(track: t, param: Param.level, to: $0) }
     }
-    private var panSpec: KnobSpec {
-        let t = row.track, p = row.pan
+    func panSpec(_ session: DeviceSession) -> KnobSpec {
+        let t = track, p = pan
         return KnobSpec(id: "mix.pan\(t)", colour: Theme.track[t], label: "PAN", value: p, range: -64...63, stepperStep: 4,
                         shown: MixerStrips.pan(p), spoken: p == 0 ? "centre" : p < 0 ? "\(-p) left" : "\(p) right",
                         bipolar: true, defaultValue: 0) { session.set(track: t, param: Param.pan, to: $0) }
     }
-    private var revSpec: KnobSpec {
-        let t = row.track, id = row.revID ?? 0
-        return KnobSpec(id: "mix.rev\(t)", colour: Theme.track[t], label: "REVERB", value: row.rev ?? 0, range: row.revRange,
-                        stepperStep: 4, shown: row.revShown, spoken: row.revSpoken, bipolar: false, defaultValue: row.revDefault) { session.set(track: t, param: id, to: $0) }
+    func revSpec(_ session: DeviceSession) -> KnobSpec {
+        let t = track, id = revID ?? 0
+        return KnobSpec(id: "mix.rev\(t)", colour: Theme.track[t], label: "REVERB", value: rev ?? 0, range: revRange,
+                        stepperStep: 4, shown: revShown, spoken: revSpoken, bipolar: false, defaultValue: revDefault) { session.set(track: t, param: id, to: $0) }
     }
 }
 

@@ -22,11 +22,15 @@ enum Page: String, CaseIterable, Identifiable {
     static let sloopPadTabs: [Page] = [.song, .mixer]
     /// Whether this is the iPad, where Skiff has no Sounds tab.
     @MainActor static var padHasNoSoundsTab: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    /// The phone's tabs on Skiff: Song split into Pads and Edit (the pattern and its step panel), then Mix and Sounds
+    /// (design/structure-map.md › "The phone with a Skiff FM-1", Scott 2026-11-10).
+    static let phoneSkiffTabs: [Page] = [.song, .sequencer, .mixer, .library]
     /// A tab's name: Skiff's are Song · Mix · Sounds (2026-11-06).
-    func title(skiff: Bool) -> String {
+    func title(skiff: Bool, phone: Bool = false) -> String {
         guard skiff else { return rawValue }
         switch self {
-        case .song: return "Song"
+        case .song: return phone ? "Pads" : "Song"
+        case .sequencer where phone: return "Edit"
         case .mixer: return "Mix"
         case .library: return "Sounds"
         default: return rawValue
@@ -46,13 +50,14 @@ final class EditorUI {
     var page: Page = {
         let a = LaunchArgs.all
         guard let i = a.firstIndex(of: "-page"), i + 1 < a.count else { return .sequencer }
-        return ["sound": .sound, "song": .song, "library": .library, "mixer": .mixer][a[i + 1]] ?? .sequencer
+        return ["sound": .sound, "song": .song, "library": .library, "mixer": .mixer, "edit": .sequencer][a[i + 1]] ?? .sequencer
     }() {
         // Skiff: Sequence and Arrange are one Song tab; whatever asks for Sequence (HOME, SEQ, a tab) lands there.
         // And there's no Shape tab (Scott, 2026-11-06): whatever asks for Shape brings the button's pages in on the
         // sound panel, over the tab that was up
         didSet {
-            if shell, page == .sequencer { page = .song }
+            // (the phone keeps Sequence: it's the phone's Edit tab)
+            if shell, page == .sequencer, !phone { page = .song }
             // the iPad has no Sounds tab on Skiff: whatever asks for it (the FM-1's SAVE, a launch flag) gets the sounds
             // panel over the tab that was up
             if shell, page == .library, Page.padHasNoSoundsTab {
@@ -78,7 +83,13 @@ final class EditorUI {
     /// own: its song store, the pool, its playback mode.)
     var shell: Bool { songTab || sloopShell }
     private func enterShell() {
-        if page == .sequencer || page == .sound || (page == .library && Page.padHasNoSoundsTab) { page = .song }
+        // (turning on, the phone too opens on Pads, unless -page edit asked for Edit)
+        if (page == .sequencer && !(phone && LaunchArgs.all.contains("edit"))) || page == .sound
+            || (page == .library && Page.padHasNoSoundsTab) { page = .song }
+    }
+    /// The phone layout (FM1App): on Skiff its Song is two tabs, Pads (`.song`) and Edit (`.sequencer`).
+    var phone = false {
+        didSet { if !phone, songTab, page == .sequencer { page = .song } }
     }
     /// The Song tab as pads (PadsPage.swift) or a timeline. Pads first (Scott, 2026-11-09: the pads are how a song is
     /// built; the timeline is where it's cut). -song-timeline opens on the timeline (screenshots).

@@ -556,9 +556,13 @@ private struct ReadoutLabel: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
+        // a fixed label and the moving part as the value, marked as changing often: VoiceOver reads it when asked
+        // instead of chasing it eight times a second (2026-11-10)
+        .accessibilityLabel("Position")
+        .accessibilityValue([mode.map { $0 == "REC" ? "Recording" : $0 == "SONG REC" ? "Song recording" : "Song mode" },
                              session.playing ? "bar \(pos.step / 16 + 1), step \(pos.step % 16 + 1)" : "stopped",
                              "\(session.bpm) BPM"].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(session.playing ? .updatesFrequently : [])
     }
 }
 

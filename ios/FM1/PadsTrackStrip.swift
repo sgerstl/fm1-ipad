@@ -68,8 +68,11 @@ struct TrackStripCard: View {
                 }
                 .buttonStyle(.plain)
                 .trackMenuPress(session: session, ui: ui, track: t)
-                .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))\(selected ? ", selected" : "")")
+                // selected as a trait, not words in the label (2026-11-10): VoiceOver says it the system's way, and
+                // the rotor and Switch Control see it
+                .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue([lines.plays, lines.next].filter { !$0.isEmpty }.joined(separator: ", "))
+                .accessibilityAddTraits(selected ? .isSelected : [])
                 .accessibilityHint(selected ? "" : "Selects it: the editor and the FM-1's knobs follow")
                 VStack(spacing: 6) {
                     muteKey(muted: muted, staged: staged).frame(height: 32)
@@ -130,6 +133,7 @@ struct TrackStripCard: View {
         .buttonStyle(PressSink())
         .disabled(store.offline)
         .accessibilityLabel("Mute track \(track + 1)")
+        .accessibilityAddTraits(.isToggle)
         .accessibilityValue(staged == .mute ? "mutes \(cd)" : staged == .unmute ? "unmutes \(cd)" : muted ? "muted" : "playing")
         .accessibilityHint(staged != .none ? "Takes the waiting change back" : session.playing ? "At the launch point" : "")
     }
@@ -231,8 +235,10 @@ struct TrackStripRow: View {
                     }
                     .buttonStyle(PressSink())
                     .disabled(store.offline)
-                    .accessibilityLabel(muted ? "Unmute" : "Mute")
-                    .accessibilityValue(staged == .none ? "" : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
+                    // which track's, said on every row (it was "Mute" six times), and its state as a toggle (2026-11-10)
+                    .accessibilityLabel("Mute track \(t + 1)")
+                    .accessibilityValue(staged == .none ? (muted ? "muted" : "playing") : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
+                    .accessibilityAddTraits(.isToggle)
                     SoloKey(store: store, track: t, compact: true).frame(width: 30, height: 34)
                 }
             }
@@ -241,6 +247,58 @@ struct TrackStripRow: View {
             // (no tint of its own: its lane runs behind it; PadsPage.lanes)
             .overlay { if preview != nil { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
         }
+    }
+}
+
+/// The phone's row head (board 40, 46): the track's number (tap: select it; held: its menu) and Mute, the row's stop.
+/// The name and what it plays are VoiceOver's (no room); the pads beside it show what plays.
+struct PhonePadHead: View {
+    let session: DeviceSession
+    let store: SkiffSongStore
+    let ui: EditorUI
+    let track: Int
+    let preview: SkiffSongStore.SceneTrack?
+
+    var body: some View {
+        let t = track
+        let selected = session.selectedTrack == t
+        let list = store.song?.tracks[safe: t]
+        let perf = store.perform
+        let muted = perf?.muted[safe: t] ?? session.tracks[t].mute
+        let staged = perf?.staged[safe: t] ?? PerformState.Staged.none
+        let m = store.marks(t, launchIn: nil)
+        let lines = TrackStripCard.lines(list, m, playing: session.playing, launch: session.launchMode)
+        HStack(spacing: 4) {
+            Button { session.select(track: t) } label: {
+                BigTrackChip(track: t, muted: muted, side: 30)
+                    .overlay {
+                        if selected { RoundedRectangle(cornerRadius: 9.5).strokeBorder(Theme.text, lineWidth: 2).padding(-2) }
+                    }
+                    .frame(width: 34, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .trackMenuPress(session: session, ui: ui, track: t)
+            .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
+            .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
+            .accessibilityHint("Selects the track")
+            .accessibilityAddTraits(selected ? [.isSelected] : [])
+            Button { Task { await store.performOp(.mute(track: t)) } } label: {
+                Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(muted ? Theme.onColour : Theme.text)
+                    .frame(width: 34, height: 34)
+                    .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none) }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressSink())
+            .disabled(store.offline)
+            .accessibilityLabel("Mute track \(t + 1)")
+            .accessibilityValue(staged == .none ? (muted ? "muted" : "playing") : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
+            .accessibilityAddTraits(.isToggle)
+        }
+        .frame(maxHeight: .infinity)
+        .overlay { if preview != nil { RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -326,6 +384,7 @@ struct SoloKey: View {
         .buttonStyle(PressSink())
         .disabled(store.offline)
         .accessibilityLabel("Solo track \(track + 1)")
+        .accessibilityAddTraits(.isToggle)
         .accessibilityValue(on ? "on" : "off")
         .accessibilityHint("Mutes every other track; again, the mutes come back as they were")
     }

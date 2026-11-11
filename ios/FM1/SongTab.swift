@@ -236,7 +236,9 @@ struct SkiffSongPage: View {
         .accessibilityValue(position == .none ? "closed" : position == .half ? "half" : "largest")
         .accessibilityHint(position == .none ? "Opens the pattern editor" : position == .half ? "Closes the pattern editor" : "Makes the pattern editor smaller")
         .accessibilityAdjustableAction { d in
-            let order: [SongPosition] = [.max, .half, .none]
+            // increment (swipe up) makes the editor larger, as its value reads: closed, half, largest (2026-11-10:
+            // it went the other way, swipe up closed it)
+            let order: [SongPosition] = [.none, .half, .max]
             let i = order.firstIndex(of: position) ?? 1
             let j = d == .increment ? min(2, i + 1) : max(0, i - 1)
             withAnimation(spring) { positionRaw = order[j].rawValue; layout = nil }
@@ -301,7 +303,7 @@ struct SkiffSongPage: View {
                                               removal: .move(edge: .trailing).animation(.easeIn(duration: 0.22))))
                     .background {
                         Button("Close the patterns") { ui.poolOpen = false; ui.dragPattern = nil }
-                            .keyboardShortcut(.cancelAction).opacity(0).accessibilityHidden(true)
+                            .keyboardShortcut(.cancelAction).opacity(0).modifier(ShortcutOnly())
                     }
                     .accessibilityAddTraits(.isModal)
                     .accessibilityAction(.escape) { ui.poolOpen = false }

@@ -1,0 +1,746 @@
+screen	label	frame	audit	measured
+iPad-connection-menu	Cancel waiting	1213,103,128x43	Contrast nearly passed	3.02
+iPad-connection-menu	1	36,494,27x27	Contrast failed	4.70
+iPad-connection-menu	4	627,549,53x19	Contrast failed	1.00
+iPad-connection-menu	10	946,549,53x19	Contrast failed	2.10
+iPad-connection-menu	12	1052,549,53x19	Contrast failed	1.66
+iPad-connection-menu	14	1158,549,53x19	Contrast failed	1.27
+iPad-connection-menu	16	1264,549,53x19	Contrast failed	2.20
+iPad-connection-menu	17	1318,549,53x19	Contrast failed	1.37
+iPad-connection-menu	Velocity	405,851,47x16	Contrast failed	5.99
+iPad-connection-menu	1	32,162,29x29	Contrast nearly passed	2.42
+iPad-connection-menu	Patterns	783,115,83x19	Contrast failed	12.54
+iPad-connection-menu	Loop	967,105,59x39	Contrast failed	4.74
+iPad-connection-menu	Beat	1082,105,56x39	Contrast failed	5.15
+iPad-connection-menu	Store	270,434,79x31	Contrast failed	5.24
+iPad-connection-menu	F	950,169,7x15	Contrast nearly passed	5.88
+iPad-connection-menu	05	423,213,16x20	Contrast failed	1.25
+iPad-connection-menu	C	544,215,7x15	Contrast failed	1.25
+iPad-connection-menu	06	558,213,16x20	Contrast failed	4.24
+iPad-connection-menu	D	680,215,7x15	Contrast failed	5.88
+iPad-connection-menu	E	814,215,7x15	Contrast failed	5.88
+iPad-connection-menu	B	409,261,7x15	Contrast failed	4.58
+iPad-connection-menu	09	423,258,16x20	Contrast failed	6.07
+iPad-connection-menu	C	544,261,7x15	Contrast failed	1.32
+iPad-connection-menu	B	409,306,7x15	Contrast failed	1.32
+iPad-connection-menu	10	423,304,16x20	Contrast failed	1.33
+iPad-connection-menu	C	544,306,7x15	Contrast failed	1.32
+iPad-connection-menu	B	409,352,7x15	Contrast failed	5.88
+iPad-connection-menu	E	814,352,7x15	Contrast failed	5.88
+iPad-connection-menu	pattern	125,499,44x16	Contrast failed	5.53
+iPad-connection-menu	Motion	237,499,41x16	Contrast failed	5.40
+iPad-connection-menu	A♯3	381,623,79x45	Contrast failed	1.28
+iPad-connection-menu	A3	381,668,79x45	Contrast failed	1.00
+iPad-connection-menu	G♯3	381,714,79x45	Contrast failed	1.47
+iPad-connection-menu	F♯3	381,760,79x45	Contrast nearly passed	1.27
+iPad-connection-menu	D3	381,851,79x45	Contrast failed	2.87
+iPad-connection-menu	C3	381,896,79x45	Contrast failed	2.61
+iPad-connection-menu	B2	381,942,79x45	Contrast failed	2.53
+iPad-connection-menu	A♯2	381,988,79x45	Contrast failed	1.37
+iPad-connection-menu	Sounds	446,32,87x43	Contrast failed	4.37
+iPad-connection-menu	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-connection-menu	Play once	898,35,89x39	Contrast failed	5.36
+iPad-connection-menu	FM-1	40,108,28x17	Contrast nearly passed	4.13
+iPad-connection-menu	1	345,216,6x14	Contrast failed	5.74
+iPad-connection-menu	Hz	310,239,12x14	Contrast failed	1.00
+iPad-connection-menu	%	397,239,9x14	Contrast failed	5.08
+iPad-connection-menu	ATTACK	472,216,40x14	Contrast nearly passed	6.18
+iPad-connection-menu	ms	496,239,15x14	Contrast failed	7.18
+iPad-connection-menu	RELEASE	567,216,48x14	Contrast failed	5.36
+iPad-connection-menu	4	631,216,6x14	Contrast failed	5.88
+iPad-connection-menu	ms	591,239,15x14	Contrast failed	6.84
+iPad-connection-menu	STEPS	377,275,34x14	Contrast failed	4.94
+iPad-connection-menu	PAN	472,275,21x14	Contrast nearly passed	6.84
+iPad-connection-menu	T1 Analog · Acid · C3	51,557,109x15	Contrast failed	5.62
+iPad-connection-menu	4	315,690,6x14	Contrast failed	5.88
+iPad-connection-menu	%	98,791,9x14	Contrast nearly passed	5.50
+iPad-connection-menu	RATCHET	134,766,44x11	Contrast nearly passed	6.03
+iPad-connection-menu	COND	206,765,31x14	Contrast failed	6.67
+iPad-connection-menu	3	282,233,8x22	Contrast failed	1.00
+iPad-connection-menu	CHORUS	395,903,43x14	Contrast failed	5.55
+iPad-connection-menu	Demo FM-1 · v2.2	40,133,100x17	Contrast nearly passed	4.13
+iPad-firmware-installing	B3	381,577,79x45	Contrast nearly passed	3.85
+iPad-firmware-picker	Launch at	892,116,59x16	Contrast failed	1.57
+iPad-firmware-picker	Cancel waiting	1213,103,128x43	Contrast failed	1.25
+iPad-firmware-picker	1	36,494,27x27	Contrast failed	1.58
+iPad-firmware-picker	Acid	73,498,31x19	Contrast failed	2.14
+iPad-firmware-picker	1	468,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	2	521,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	3	574,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	4	627,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	5	681,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	6	734,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	7	787,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	8	840,549,53x19	Contrast failed	1.31
+iPad-firmware-picker	9	893,549,53x19	Contrast failed	1.15
+iPad-firmware-picker	10	946,549,53x19	Contrast failed	1.15
+iPad-firmware-picker	11	999,549,53x19	Contrast failed	1.09
+iPad-firmware-picker	12	1052,549,53x19	Contrast failed	1.10
+iPad-firmware-picker	13	1105,549,53x19	Contrast failed	1.28
+iPad-firmware-picker	14	1158,549,53x19	Contrast failed	1.04
+iPad-firmware-picker	15	1211,549,53x19	Contrast failed	1.11
+iPad-firmware-picker	16	1264,549,53x19	Contrast failed	1.16
+iPad-firmware-picker	17	1318,549,53x19	Contrast failed	1.08
+iPad-firmware-picker	Velocity	405,851,47x16	Contrast failed	1.52
+iPad-firmware-picker	1	32,162,29x29	Contrast failed	1.46
+iPad-firmware-picker	Acid	69,164,31x19	Contrast failed	2.14
+iPad-firmware-picker	A · 01	147,166,29x15	Contrast failed	1.67
+iPad-firmware-picker	2	32,208,29x29	Contrast failed	1.68
+iPad-firmware-picker	Pad	69,210,26x19	Contrast failed	1.77
+iPad-firmware-picker	A · REST	131,212,45x15	Contrast failed	1.64
+iPad-firmware-picker	3	32,254,29x29	Contrast failed	1.89
+iPad-firmware-picker	Pulse Ld	69,255,59x19	Contrast failed	1.77
+iPad-firmware-picker	A · 08	147,257,29x15	Contrast failed	1.74
+iPad-firmware-picker	4	32,299,29x29	Contrast failed	1.50
+iPad-firmware-picker	Drum Kit	69,301,60x19	Contrast failed	1.80
+iPad-firmware-picker	A · REST	150,304,26x12	Contrast failed	1.64
+iPad-firmware-picker	5	32,345,29x29	Contrast failed	1.58
+iPad-firmware-picker	Piano	69,347,39x19	Contrast failed	1.80
+iPad-firmware-picker	A · REST	131,349,45x15	Contrast failed	1.64
+iPad-firmware-picker	6	32,390,29x29	Contrast failed	1.98
+iPad-firmware-picker	Drum Kit	69,392,60x19	Contrast failed	1.80
+iPad-firmware-picker	A · 14	147,394,29x15	Contrast failed	1.69
+iPad-firmware-picker	Patterns	783,115,83x19	Contrast failed	2.11
+iPad-firmware-picker	Loop	967,105,59x39	Contrast failed	1.40
+iPad-firmware-picker	Bar	1030,105,48x39	Contrast failed	2.11
+iPad-firmware-picker	Beat	1082,105,56x39	Contrast failed	1.44
+iPad-firmware-picker	Now	1143,105,54x39	Contrast failed	1.39
+iPad-firmware-picker	Store	270,434,79x31	Contrast failed	1.67
+iPad-firmware-picker	A	274,169,8x15	Contrast failed	1.53
+iPad-firmware-picker	01	288,167,16x20	Contrast failed	2.15
+iPad-firmware-picker	B	409,169,7x15	Contrast failed	1.53
+iPad-firmware-picker	02	423,167,16x20	Contrast failed	2.15
+iPad-firmware-picker	C	544,169,7x15	Contrast failed	1.53
+iPad-firmware-picker	03	558,167,16x20	Contrast failed	2.13
+iPad-firmware-picker	D	680,169,7x15	Contrast failed	1.53
+iPad-firmware-picker	02	693,167,16x20	Contrast failed	2.15
+iPad-firmware-picker	E	814,169,7x15	Contrast failed	1.53
+iPad-firmware-picker	03	828,167,16x20	Contrast failed	2.15
+iPad-firmware-picker	F	950,169,7x15	Contrast failed	1.53
+iPad-firmware-picker	04	963,167,16x20	Contrast failed	2.15
+iPad-firmware-picker	A	274,215,8x15	Contrast failed	1.02
+iPad-firmware-picker	REST	288,216,21x14	Contrast failed	1.51
+iPad-firmware-picker	B	409,215,7x15	Contrast failed	1.01
+iPad-firmware-picker	05	423,213,16x20	Contrast failed	1.00
+iPad-firmware-picker	A	274,261,8x15	Contrast failed	1.40
+iPad-firmware-picker	08	288,258,16x20	Contrast failed	1.47
+iPad-firmware-picker	B	409,261,7x15	Contrast failed	1.39
+iPad-firmware-picker	09	423,258,16x20	Contrast failed	1.00
+iPad-firmware-picker	C	544,261,7x15	Contrast failed	1.15
+iPad-firmware-picker	08	558,258,16x20	Contrast failed	1.15
+iPad-firmware-picker	D	680,261,7x15	Contrast failed	1.15
+iPad-firmware-picker	REST	693,261,21x14	Contrast failed	1.15
+iPad-firmware-picker	A	274,306,8x15	Contrast failed	1.47
+iPad-firmware-picker	REST	288,307,21x14	Contrast failed	1.47
+iPad-firmware-picker	B	409,306,7x15	Contrast failed	1.06
+iPad-firmware-picker	10	423,304,16x20	Contrast failed	1.00
+iPad-firmware-picker	A	274,352,8x15	Contrast failed	1.57
+iPad-firmware-picker	REST	288,352,21x14	Contrast failed	1.57
+iPad-firmware-picker	B	409,352,7x15	Contrast failed	1.51
+iPad-firmware-picker	12	423,350,16x20	Contrast failed	1.00
+iPad-firmware-picker	C	544,352,7x15	Contrast failed	1.15
+iPad-firmware-picker	13	558,350,16x20	Contrast failed	1.15
+iPad-firmware-picker	D	680,352,7x15	Contrast failed	1.15
+iPad-firmware-picker	12	693,350,16x20	Contrast failed	1.15
+iPad-firmware-picker	E	814,352,7x15	Contrast failed	1.15
+iPad-firmware-picker	12	828,350,16x20	Contrast failed	1.15
+iPad-firmware-picker	A	274,398,8x15	Contrast failed	1.53
+iPad-firmware-picker	14	288,395,16x20	Contrast failed	2.15
+iPad-firmware-picker	B	409,398,7x15	Contrast failed	1.51
+iPad-firmware-picker	14	423,395,16x20	Contrast failed	1.00
+iPad-firmware-picker	pattern	125,499,44x16	Contrast failed	1.51
+iPad-firmware-picker	01	173,498,17x19	Contrast failed	2.15
+iPad-firmware-picker	Motion	237,499,41x16	Contrast failed	1.48
+iPad-firmware-picker	7/64	283,498,33x19	Contrast failed	2.15
+iPad-firmware-picker	Follow	1249,488,80x43	Contrast failed	2.01
+iPad-firmware-picker	B3	381,577,79x45	Contrast failed	1.52
+iPad-firmware-picker	A♯3	381,623,79x45	Contrast failed	1.09
+iPad-firmware-picker	A3	381,668,79x45	Contrast failed	1.67
+iPad-firmware-picker	G♯3	381,714,79x45	Contrast failed	1.09
+iPad-firmware-picker	F♯3	381,760,79x45	Contrast failed	1.09
+iPad-firmware-picker	E3	381,805,79x45	Contrast failed	1.02
+iPad-firmware-picker	D3	381,851,79x45	Contrast failed	1.23
+iPad-firmware-picker	C3	381,896,79x45	Contrast failed	1.20
+iPad-firmware-picker	B2	381,942,79x45	Contrast failed	1.20
+iPad-firmware-picker	A♯2	381,988,79x45	Contrast failed	1.06
+iPad-firmware-picker	Demo	24,33,64x43	Contrast failed	2.27
+iPad-firmware-picker	Song	307,32,71x43	Contrast failed	1.97
+iPad-firmware-picker	Mix	383,32,59x43	Contrast failed	1.17
+iPad-firmware-picker	Sounds	446,32,87x43	Contrast failed	1.38
+iPad-firmware-picker	Loop entry	701,35,98x39	Contrast failed	1.45
+iPad-firmware-picker	Play song	804,35,90x39	Contrast failed	2.15
+iPad-firmware-picker	Play once	898,35,89x39	Contrast failed	1.45
+iPad-firmware-picker	Play from the start	1168,36,34x38	Contrast failed	2.25
+iPad-firmware-picker	– · –	1218,34,33x25	Contrast failed	2.25
+iPad-firmware-picker	120 BPM	1218,60,47x15	Contrast failed	1.53
+iPad-firmware-picker	CUTOFF	282,216,41x14	Contrast failed	1.47
+iPad-firmware-picker	1	345,216,6x14	Contrast failed	1.53
+iPad-firmware-picker	Hz	310,239,12x14	Contrast failed	1.60
+iPad-firmware-picker	RES	377,216,21x14	Contrast failed	1.45
+iPad-firmware-picker	%	397,239,9x14	Contrast failed	1.43
+iPad-firmware-picker	LEVEL	282,275,34x14	Contrast failed	1.49
+iPad-firmware-picker	STEPS	377,275,34x14	Contrast failed	1.42
+iPad-firmware-picker	T1 Analog · Acid · C3	51,557,109x15	Contrast failed	1.48
+iPad-firmware-picker	Step 1	51,575,59x25	Contrast failed	2.20
+iPad-firmware-picker	PITCH	61,620,33x14	Contrast failed	1.45
+iPad-firmware-picker	1	170,620,6x14	Contrast failed	1.53
+iPad-firmware-picker	MOVE	206,620,31x14	Contrast failed	1.51
+iPad-firmware-picker	2	315,620,6x14	Contrast failed	1.53
+iPad-firmware-picker	LENGTH	61,690,46x14	Contrast failed	1.53
+iPad-firmware-picker	3	170,690,6x14	Contrast failed	1.53
+iPad-firmware-picker	VELOCITY	206,690,55x14	Contrast failed	1.51
+iPad-firmware-picker	4	315,690,6x14	Contrast failed	1.53
+iPad-firmware-picker	CHANCE	61,765,44x13	Contrast failed	1.49
+iPad-firmware-picker	%	98,791,9x14	Contrast failed	1.47
+iPad-firmware-picker	RATCHET	134,766,44x11	Contrast failed	1.51
+iPad-firmware-picker	COND	206,765,31x14	Contrast failed	1.56
+iPad-firmware-picker	NUDGE	279,765,39x14	Contrast failed	1.53
+iPad-firmware-picker	Sound at this step	51,842,109x16	Contrast failed	2.20
+iPad-firmware-picker	Lock	258,829,79x43	Contrast failed	1.95
+iPad-firmware-picker	3	282,233,8x22	Contrast failed	2.25
+iPad-firmware-picker	5	291,233,8x22	Contrast failed	2.25
+iPad-firmware-picker	5	299,233,8x22	Contrast failed	2.25
+iPad-firmware-picker	7	377,233,8x22	Contrast failed	2.25
+iPad-firmware-picker	9	386,233,8x22	Contrast failed	2.25
+iPad-firmware-picker	8	282,291,8x22	Contrast failed	2.25
+iPad-firmware-picker	1	291,291,8x22	Contrast failed	2.25
+iPad-firmware-picker	1	377,291,8x22	Contrast failed	2.25
+iPad-firmware-picker	6	386,291,8x22	Contrast failed	2.25
+iPad-firmware-picker	C	61,638,10x29	Contrast failed	2.25
+iPad-firmware-picker	3	72,638,11x29	Contrast failed	2.25
+iPad-firmware-picker	S	206,638,10x29	Contrast failed	2.25
+iPad-firmware-picker	t	217,638,6x29	Contrast failed	2.25
+iPad-firmware-picker	e	223,638,9x29	Contrast failed	2.25
+iPad-firmware-picker	p	233,638,10x29	Contrast failed	2.25
+iPad-firmware-picker	 	243,638,4x29	Contrast failed	1.11
+iPad-firmware-picker	1	248,638,11x29	Contrast failed	2.25
+iPad-firmware-picker	1	61,707,11x29	Contrast failed	2.25
+iPad-firmware-picker	 	73,707,4x29	Contrast failed	1.00
+iPad-firmware-picker	s	77,707,9x29	Contrast failed	2.25
+iPad-firmware-picker	t	87,707,6x29	Contrast failed	2.25
+iPad-firmware-picker	e	93,707,9x29	Contrast failed	2.25
+iPad-firmware-picker	p	103,707,10x29	Contrast failed	2.25
+iPad-firmware-picker	1	206,707,11x29	Contrast failed	2.25
+iPad-firmware-picker	0	218,707,11x29	Contrast failed	2.25
+iPad-firmware-picker	0	229,707,11x29	Contrast failed	2.25
+iPad-firmware-picker	1	61,779,11x29	Contrast failed	2.25
+iPad-firmware-picker	0	73,779,11x29	Contrast failed	2.25
+iPad-firmware-picker	0	84,779,11x29	Contrast failed	2.25
+iPad-firmware-picker	×	134,779,8x29	Contrast failed	2.25
+iPad-firmware-picker	1	143,779,11x29	Contrast failed	2.25
+iPad-firmware-picker	-	206,780,7x29	Contrast failed	2.22
+iPad-firmware-picker	-	214,780,7x29	Contrast failed	2.22
+iPad-firmware-picker	0	279,780,11x29	Contrast failed	2.25
+iPad-firmware-picker	CHORUS	395,903,43x14	Contrast failed	1.48
+iPad-firmware-picker	REVERB	396,943,42x14	Contrast failed	1.50
+iPad-mix	Delay	24,761,130x43	Contrast failed	10.73
+iPad-mix	Reverb	24,812,130x43	Contrast failed	1.79
+iPad-mix	Chorus	24,864,130x43	Contrast failed	1.59
+iPad-mix	Global	24,915,130x43	Contrast failed	1.68
+iPad-mix	Song	307,32,70x43	Contrast failed	3.56
+iPad-mix	Sounds	446,32,87x43	Contrast failed	4.37
+iPad-mix	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-mix	Play once	898,35,89x39	Contrast failed	5.36
+iPad-mix	1	49,134,27x27	Contrast failed	4.84
+iPad-mix	PAN	49,498,188x57	Contrast failed	3.65
+iPad-mix	REVERB	49,567,188x57	Contrast failed	5.84
+iPad-mix	Pad	265,127,187x43	Contrast failed	1.25
+iPad-mix	PAN	265,498,187x57	Contrast failed	4.18
+iPad-mix	Pulse Ld	481,127,188x43	Contrast failed	1.25
+iPad-mix	PAN	481,498,188x57	Contrast failed	4.85
+iPad-mix	REVERB	481,567,188x57	Contrast failed	11.40
+iPad-mix	Drum Kit	696,127,188x43	Contrast failed	1.25
+iPad-mix	PAN	696,498,188x57	Contrast failed	4.22
+iPad-mix	REVERB	696,567,188x57	Contrast failed	7.35
+iPad-mix	Piano	912,127,187x43	Contrast failed	1.25
+iPad-mix	PAN	912,498,187x57	Contrast failed	4.37
+iPad-mix	REVERB	912,567,187x57	Contrast failed	7.35
+iPad-mix	Drum Kit	1128,127,188x43	Contrast failed	1.30
+iPad-mix	PAN	1128,498,188x57	Contrast failed	4.49
+iPad-mix	REVERB	1128,567,188x57	Contrast failed	12.50
+iPad-mix	all tracks	563,746,50x15	Contrast failed	5.84
+iPad-mix	all tracks	1160,755,46x14	Contrast failed	5.84
+iPad-mix	TIME	504,783,27x14	Contrast failed	5.36
+iPad-mix	FEEDBACK	636,783,60x14	Contrast failed	5.58
+iPad-mix	%	661,812,9x14	Contrast failed	5.29
+iPad-mix	COLOR	768,783,38x14	Contrast failed	5.15
+iPad-mix	%	793,812,9x14	Contrast failed	5.50
+iPad-mix	MIX	900,783,19x14	Contrast failed	5.29
+iPad-mix	4	996,783,6x14	Contrast failed	5.88
+iPad-mix	%	925,812,9x14	Contrast failed	5.80
+iPad-mix	TYPE	1096,789,26x13	Contrast failed	5.43
+iPad-mix	SIZE	1217,789,23x13	Contrast failed	5.87
+iPad-mix	%	1240,816,9x13	Contrast failed	5.08
+iPad-mix	DAMP	1338,789,29x13	Contrast failed	1.62
+iPad-mix	4	1338,805,10x26	Contrast failed	16.62
+iPad-pad-hold-menu	Cancel waiting	1213,103,128x43	Contrast nearly passed	3.02
+iPad-pad-hold-menu	1	36,162,43x43	Contrast failed	4.90
+iPad-pad-hold-menu	Acid	36,210,30x19	Contrast failed	7.40
+iPad-pad-hold-menu	2	36,289,43x43	Contrast failed	7.45
+iPad-pad-hold-menu	A	89,289,10x19	Contrast failed	1.01
+iPad-pad-hold-menu	REST	106,289,28x19	Contrast failed	1.01
+iPad-pad-hold-menu	Pad	36,337,26x19	Contrast failed	8.98
+iPad-pad-hold-menu	3	36,416,43x43	Contrast failed	9.80
+iPad-pad-hold-menu	A	89,425,10x19	Contrast failed	1.01
+iPad-pad-hold-menu	08	106,416,24x29	Contrast failed	12.17
+iPad-pad-hold-menu	Pulse Ld	36,464,59x19	Contrast failed	7.86
+iPad-pad-hold-menu	4	36,543,43x43	Contrast failed	5.33
+iPad-pad-hold-menu	Drum Kit	36,591,60x19	Contrast failed	8.42
+iPad-pad-hold-menu	Piano	36,718,39x19	Contrast failed	8.90
+iPad-pad-hold-menu	A	89,806,10x19	Contrast failed	6.45
+iPad-pad-hold-menu	14	106,797,24x29	Contrast failed	13.93
+iPad-pad-hold-menu	Drum Kit	36,845,60x19	Contrast failed	9.19
+iPad-pad-hold-menu	Patterns	783,115,83x19	Contrast failed	12.54
+iPad-pad-hold-menu	Loop	967,105,59x39	Contrast failed	4.74
+iPad-pad-hold-menu	Beat	1082,105,56x39	Contrast failed	5.15
+iPad-pad-hold-menu	Store	270,916,79x55	Contrast failed	2.33
+iPad-pad-hold-menu	last	381,947,16x12	Contrast failed	10.95
+iPad-pad-hold-menu	4	570,928,8x19	Contrast failed	6.21
+iPad-pad-hold-menu	empty	560,947,29x12	Contrast failed	5.82
+iPad-pad-hold-menu	5	632,928,8x19	Contrast failed	6.96
+iPad-pad-hold-menu	empty	621,947,29x12	Contrast failed	6.13
+iPad-pad-hold-menu	6	693,928,8x19	Contrast failed	7.04
+iPad-pad-hold-menu	empty	683,947,29x12	Contrast failed	6.45
+iPad-pad-hold-menu	7	755,928,8x19	Contrast failed	6.78
+iPad-pad-hold-menu	empty	744,947,29x12	Contrast failed	6.61
+iPad-pad-hold-menu	empty	806,947,29x12	Contrast failed	6.46
+iPad-pad-hold-menu	9	878,928,8x19	Contrast failed	7.13
+iPad-pad-hold-menu	empty	867,947,29x12	Contrast failed	6.61
+iPad-pad-hold-menu	10	935,928,16x19	Contrast failed	7.30
+iPad-pad-hold-menu	empty	929,947,29x12	Contrast failed	6.87
+iPad-pad-hold-menu	11	997,928,16x19	Contrast failed	7.30
+iPad-pad-hold-menu	empty	990,947,29x12	Contrast failed	6.79
+iPad-pad-hold-menu	12	1058,928,16x19	Contrast failed	7.30
+iPad-pad-hold-menu	empty	1052,947,29x12	Contrast failed	6.79
+iPad-pad-hold-menu	13	1120,928,16x19	Contrast failed	7.31
+iPad-pad-hold-menu	empty	1113,947,29x12	Contrast failed	6.96
+iPad-pad-hold-menu	14	1181,928,16x19	Contrast failed	7.31
+iPad-pad-hold-menu	empty	1175,947,29x12	Contrast failed	6.79
+iPad-pad-hold-menu	empty	1236,947,29x12	Contrast failed	6.53
+iPad-pad-hold-menu	empty	1298,947,29x12	Contrast failed	6.62
+iPad-pad-hold-menu	A	276,164,9x16	Contrast failed	5.59
+iPad-pad-hold-menu	Next	411,213,26x15	Contrast failed	5.26
+iPad-pad-hold-menu	×1	546,213,12x15	Contrast failed	5.13
+iPad-pad-hold-menu	×7	682,213,12x15	Contrast failed	5.07
+iPad-pad-hold-menu	×1	816,213,12x15	Contrast failed	4.34
+iPad-pad-hold-menu	F	952,164,7x16	Contrast failed	5.88
+iPad-pad-hold-menu	×4	952,213,12x15	Contrast failed	4.40
+iPad-pad-hold-menu	A	276,291,9x16	Contrast failed	1.01
+iPad-pad-hold-menu	REST	276,310,41x27	Contrast failed	4.70
+iPad-pad-hold-menu	Next	411,340,26x15	Contrast failed	1.33
+iPad-pad-hold-menu	C	546,291,8x16	Contrast failed	1.25
+iPad-pad-hold-menu	06	546,310,22x27	Contrast failed	1.33
+iPad-pad-hold-menu	Chained on	546,340,61x15	Contrast failed	1.33
+iPad-pad-hold-menu	×2	682,340,12x15	Contrast failed	5.07
+iPad-pad-hold-menu	×8	816,340,12x15	Contrast failed	4.69
+iPad-pad-hold-menu	F	952,291,7x16	Contrast failed	7.35
+iPad-pad-hold-menu	08	276,437,22x27	Contrast failed	4.65
+iPad-pad-hold-menu	Next	411,467,26x15	Contrast failed	5.26
+iPad-pad-hold-menu	×2	546,467,12x15	Contrast failed	5.01
+iPad-pad-hold-menu	Empty	816,437,36x15	Contrast failed	6.26
+iPad-pad-hold-menu	F	952,418,7x16	Contrast failed	7.35
+iPad-pad-hold-menu	Empty	952,437,36x15	Contrast nearly passed	6.10
+iPad-pad-hold-menu	REST	276,564,41x27	Contrast failed	2.81
+iPad-pad-hold-menu	Next	411,594,26x15	Contrast failed	5.26
+iPad-pad-hold-menu	×8	546,594,12x15	Contrast failed	5.19
+iPad-pad-hold-menu	E	816,545,8x16	Contrast failed	7.35
+iPad-pad-hold-menu	Empty	816,564,36x15	Contrast failed	6.26
+iPad-pad-hold-menu	F	952,545,7x16	Contrast failed	7.35
+iPad-pad-hold-menu	REST	276,691,41x27	Contrast failed	1.35
+iPad-pad-hold-menu	On it	276,721,25x15	Contrast failed	1.52
+iPad-pad-hold-menu	Next	411,721,26x15	Contrast failed	5.26
+iPad-pad-hold-menu	×4	546,721,12x15	Contrast failed	5.13
+iPad-pad-hold-menu	D	682,672,8x16	Contrast failed	5.88
+iPad-pad-hold-menu	×4	682,721,12x15	Contrast failed	5.07
+iPad-pad-hold-menu	E	816,672,8x16	Contrast failed	5.88
+iPad-pad-hold-menu	×4	816,721,12x15	Contrast failed	4.75
+iPad-pad-hold-menu	F	952,672,7x16	Contrast failed	7.35
+iPad-pad-hold-menu	Empty	1087,691,36x15	Contrast failed	6.26
+iPad-pad-hold-menu	A	276,799,9x16	Contrast failed	5.08
+iPad-pad-hold-menu	On it	276,848,25x15	Contrast failed	5.07
+iPad-pad-hold-menu	Next	411,848,26x15	Contrast failed	5.20
+iPad-pad-hold-menu	Empty	546,818,36x15	Contrast failed	6.59
+iPad-pad-hold-menu	Empty	682,818,36x15	Contrast failed	6.35
+iPad-pad-hold-menu	E	816,799,8x16	Contrast failed	7.35
+iPad-pad-hold-menu	Empty	816,818,36x15	Contrast failed	6.26
+iPad-pad-hold-menu	F	952,799,7x16	Contrast failed	7.35
+iPad-pad-hold-menu	Empty	952,818,36x15	Contrast failed	6.03
+iPad-pad-hold-menu	Empty	1087,818,36x15	Contrast failed	6.26
+iPad-pad-hold-menu	Empty	1222,818,36x15	Contrast failed	6.43
+iPad-pad-hold-menu	Sounds	446,32,87x43	Contrast failed	4.37
+iPad-pad-hold-menu	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-pad-hold-menu	Play once	898,35,89x39	Contrast failed	5.36
+iPad-pad-hold-menu	CUTOFF	282,291,41x14	Contrast failed	1.37
+iPad-pad-hold-menu	Hz	310,315,12x14	Contrast failed	5.52
+iPad-pad-hold-menu	RES	377,291,21x14	Contrast nearly passed	5.36
+iPad-pad-hold-menu	ATTACK	472,291,40x14	Contrast nearly passed	6.27
+iPad-pad-hold-menu	RELEASE	567,291,48x14	Contrast nearly passed	5.58
+iPad-pad-hold-menu	4	631,291,6x14	Contrast failed	5.88
+iPad-pad-hold-menu	ms	591,315,15x14	Contrast failed	7.01
+iPad-pad-hold-menu	LEVEL	282,351,34x14	Contrast failed	1.08
+iPad-pad-hold-menu	STEPS	377,351,34x14	Contrast failed	5.01
+iPad-pad-hold-menu	PAN	472,351,21x14	Contrast nearly passed	6.83
+iPad-pad-hold-menu	3	282,308,8x22	Contrast failed	4.52
+iPad-pad-hold-menu	5	291,308,8x22	Contrast failed	4.93
+iPad-pad-hold-menu	5	299,308,8x22	Contrast failed	5.99
+iPad-pad-hold-menu	8	282,366,8x22	Contrast failed	4.20
+iPad-pad-hold-menu	1	291,366,8x22	Contrast failed	4.37
+iPad-projects	On the FM-1	413,246,540x39	Contrast nearly passed	1.00
+iPad-projects	Saving here or opening stops the FM-1. A project keeps its patterns with it; user sounds and samples stay on the FM-1.	413,810,540x53	Contrast failed	6.59
+iPad-projects	No projects yet. Save what's on the FM-1 to make your first one.	413,880,540x52	Contrast failed	1.29
+iPad-settings	Track colours from the FM-1's theme	433,842,252x19	Contrast failed	1.93
+iPad-song-pads-half	Cancel waiting	1213,103,128x43	Contrast nearly passed	3.02
+iPad-song-pads-half	1	36,494,27x27	Contrast failed	4.70
+iPad-song-pads-half	4	627,549,53x19	Contrast failed	1.00
+iPad-song-pads-half	10	946,549,53x19	Contrast failed	2.10
+iPad-song-pads-half	12	1052,549,53x19	Contrast failed	1.66
+iPad-song-pads-half	14	1158,549,53x19	Contrast failed	1.27
+iPad-song-pads-half	16	1264,549,53x19	Contrast failed	2.20
+iPad-song-pads-half	17	1318,549,53x19	Contrast failed	1.37
+iPad-song-pads-half	Velocity	405,851,47x16	Contrast failed	5.99
+iPad-song-pads-half	A · 01	147,166,29x15	Contrast failed	7.10
+iPad-song-pads-half	A · REST	131,212,45x15	Contrast nearly passed	7.61
+iPad-song-pads-half	A · 08	147,257,29x15	Contrast failed	8.71
+iPad-song-pads-half	A · REST	150,304,26x12	Contrast failed	7.43
+iPad-song-pads-half	A · REST	131,349,45x15	Contrast failed	7.69
+iPad-song-pads-half	A · 14	147,394,29x15	Contrast failed	8.24
+iPad-song-pads-half	Patterns	783,115,83x19	Contrast failed	12.54
+iPad-song-pads-half	Loop	967,105,59x39	Contrast failed	4.74
+iPad-song-pads-half	Beat	1082,105,56x39	Contrast failed	5.15
+iPad-song-pads-half	Store	270,434,79x31	Contrast failed	7.45
+iPad-song-pads-half	F	950,169,7x15	Contrast nearly passed	5.88
+iPad-song-pads-half	A	274,215,8x15	Contrast failed	1.08
+iPad-song-pads-half	REST	288,216,21x14	Contrast failed	6.19
+iPad-song-pads-half	05	423,213,16x20	Contrast failed	1.25
+iPad-song-pads-half	C	544,215,7x15	Contrast failed	1.25
+iPad-song-pads-half	06	558,213,16x20	Contrast failed	4.24
+iPad-song-pads-half	D	680,215,7x15	Contrast failed	5.88
+iPad-song-pads-half	E	814,215,7x15	Contrast failed	5.88
+iPad-song-pads-half	A	274,261,8x15	Contrast failed	4.58
+iPad-song-pads-half	08	288,258,16x20	Contrast failed	6.07
+iPad-song-pads-half	B	409,261,7x15	Contrast failed	4.58
+iPad-song-pads-half	09	423,258,16x20	Contrast failed	6.07
+iPad-song-pads-half	C	544,261,7x15	Contrast failed	1.32
+iPad-song-pads-half	A	274,306,8x15	Contrast failed	6.07
+iPad-song-pads-half	B	409,306,7x15	Contrast failed	1.32
+iPad-song-pads-half	10	423,304,16x20	Contrast failed	1.33
+iPad-song-pads-half	C	544,306,7x15	Contrast failed	1.32
+iPad-song-pads-half	B	409,352,7x15	Contrast failed	5.88
+iPad-song-pads-half	E	814,352,7x15	Contrast failed	5.88
+iPad-song-pads-half	pattern	125,499,44x16	Contrast failed	5.53
+iPad-song-pads-half	Motion	237,499,41x16	Contrast failed	5.40
+iPad-song-pads-half	A♯3	381,623,79x45	Contrast failed	1.28
+iPad-song-pads-half	A3	381,668,79x45	Contrast failed	1.00
+iPad-song-pads-half	G♯3	381,714,79x45	Contrast failed	1.47
+iPad-song-pads-half	F♯3	381,760,79x45	Contrast nearly passed	1.27
+iPad-song-pads-half	D3	381,851,79x45	Contrast failed	2.87
+iPad-song-pads-half	C3	381,896,79x45	Contrast failed	2.61
+iPad-song-pads-half	B2	381,942,79x45	Contrast failed	2.53
+iPad-song-pads-half	A♯2	381,988,79x45	Contrast failed	1.37
+iPad-song-pads-half	Sounds	446,32,87x43	Contrast failed	4.37
+iPad-song-pads-half	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-song-pads-half	Play once	898,35,89x39	Contrast failed	5.36
+iPad-song-pads-half	CUTOFF	282,216,41x14	Contrast failed	5.50
+iPad-song-pads-half	Hz	310,239,12x14	Contrast failed	7.35
+iPad-song-pads-half	%	397,239,9x14	Contrast failed	5.08
+iPad-song-pads-half	ATTACK	472,216,40x14	Contrast nearly passed	6.18
+iPad-song-pads-half	ms	496,239,15x14	Contrast failed	7.18
+iPad-song-pads-half	RELEASE	567,216,48x14	Contrast failed	5.36
+iPad-song-pads-half	4	631,216,6x14	Contrast failed	5.88
+iPad-song-pads-half	ms	591,239,15x14	Contrast failed	6.84
+iPad-song-pads-half	LEVEL	282,275,34x14	Contrast failed	5.87
+iPad-song-pads-half	STEPS	377,275,34x14	Contrast failed	4.94
+iPad-song-pads-half	PAN	472,275,21x14	Contrast nearly passed	6.84
+iPad-song-pads-half	T1 Analog · Acid · C3	51,557,109x15	Contrast failed	5.62
+iPad-song-pads-half	4	315,690,6x14	Contrast failed	5.88
+iPad-song-pads-half	%	98,791,9x14	Contrast nearly passed	5.50
+iPad-song-pads-half	RATCHET	134,766,44x11	Contrast nearly passed	6.03
+iPad-song-pads-half	COND	206,765,31x14	Contrast failed	6.67
+iPad-song-pads-half	CHORUS	395,903,43x14	Contrast failed	5.55
+iPad-song-pads-max	Cancel waiting	1213,103,128x43	Contrast nearly passed	3.02
+iPad-song-pads-max	4	627,301,53x19	Contrast failed	1.00
+iPad-song-pads-max	6	734,301,53x19	Contrast failed	1.12
+iPad-song-pads-max	9	893,301,53x19	Contrast failed	1.91
+iPad-song-pads-max	10	946,301,53x19	Contrast failed	2.10
+iPad-song-pads-max	14	1158,301,53x19	Contrast failed	1.27
+iPad-song-pads-max	16	1264,301,53x19	Contrast failed	2.20
+iPad-song-pads-max	17	1318,301,53x19	Contrast failed	1.37
+iPad-song-pads-max	Velocity	405,851,47x16	Contrast failed	5.99
+iPad-song-pads-max	Patterns	783,115,83x19	Contrast failed	12.54
+iPad-song-pads-max	Loop	967,105,59x39	Contrast failed	4.74
+iPad-song-pads-max	Beat	1082,105,56x39	Contrast failed	5.15
+iPad-song-pads-max	F	610,160,7x16	Contrast failed	5.88
+iPad-song-pads-max	1	40,246,27x27	Contrast failed	4.66
+iPad-song-pads-max	pattern	158,251,44x16	Contrast failed	5.53
+iPad-song-pads-max	Motion	270,251,41x16	Contrast failed	5.53
+iPad-song-pads-max	B3	381,329,79x45	Contrast failed	1.00
+iPad-song-pads-max	A♯3	381,375,79x45	Contrast failed	1.34
+iPad-song-pads-max	A3	381,420,79x45	Contrast failed	1.00
+iPad-song-pads-max	G♯3	381,466,79x45	Contrast failed	1.49
+iPad-song-pads-max	E3	381,557,79x45	Contrast nearly passed	1.00
+iPad-song-pads-max	D3	381,603,79x45	Contrast failed	1.00
+iPad-song-pads-max	C3	381,648,79x45	Contrast failed	1.00
+iPad-song-pads-max	A♯2	381,740,79x45	Contrast failed	1.23
+iPad-song-pads-max	A2	381,785,79x45	Contrast nearly passed	1.00
+iPad-song-pads-max	Sounds	446,32,87x43	Contrast failed	4.37
+iPad-song-pads-max	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-song-pads-max	Play once	898,35,89x39	Contrast failed	5.36
+iPad-song-pads-max	T1 Analog · Acid	51,309,86x15	Contrast failed	5.92
+iPad-song-pads-max	PITCH	61,416,33x14	Contrast nearly passed	5.01
+iPad-song-pads-max	MOVE	206,416,31x14	Contrast failed	5.65
+iPad-song-pads-max	LENGTH	61,486,46x14	Contrast nearly passed	5.72
+iPad-song-pads-max	4	315,486,6x14	Contrast failed	5.88
+iPad-song-pads-max	CHANCE	61,563,44x13	Contrast failed	5.65
+iPad-song-pads-max	%	98,589,9x14	Contrast failed	5.43
+iPad-song-pads-max	RATCHET	134,563,44x11	Contrast failed	5.72
+iPad-song-pads-max	COND	206,562,31x14	Contrast failed	6.67
+iPad-song-pads-max	NUDGE	279,562,39x14	Contrast failed	6.34
+iPad-song-pads-max	CHORUS	77,646,51x16	Contrast failed	13.67
+iPad-song-pads-max	REVERB	77,672,50x16	Contrast failed	12.69
+iPad-song-pads-max	12%	306,671,30x19	Contrast failed	14.85
+iPad-song-pads-max	-	206,577,7x29	Contrast failed	15.99
+iPad-song-pads-max	-	214,577,7x29	Contrast failed	15.99
+iPad-song-pads-max	CHORUS	395,903,43x14	Contrast failed	5.55
+iPad-song-pads-nogrid	Cancel waiting	1213,103,128x43	Contrast nearly passed	3.02
+iPad-song-pads-nogrid	pass 2 of 4	89,194,58x15	Contrast nearly passed	4.77
+iPad-song-pads-nogrid	Acid	36,213,30x19	Contrast nearly passed	7.80
+iPad-song-pads-nogrid	pass 2 of 4	89,307,58x15	Contrast failed	6.14
+iPad-song-pads-nogrid	pass 2 of 2	89,448,58x15	Contrast failed	5.77
+iPad-song-pads-nogrid	Pulse Ld	36,467,59x19	Contrast failed	9.19
+iPad-song-pads-nogrid	pass 4 of 4	89,561,58x15	Contrast failed	5.99
+iPad-song-pads-nogrid	Drum Kit	36,591,60x19	Contrast failed	9.19
+iPad-song-pads-nogrid	pass 6 of 8	89,688,58x15	Contrast failed	5.98
+iPad-song-pads-nogrid	Piano	36,718,39x19	Contrast failed	9.19
+iPad-song-pads-nogrid	pass 7 of 16	89,829,64x15	Contrast failed	5.91
+iPad-song-pads-nogrid	Patterns	783,115,83x19	Contrast failed	12.54
+iPad-song-pads-nogrid	Loop	967,105,59x39	Contrast failed	4.74
+iPad-song-pads-nogrid	Beat	1082,105,56x39	Contrast failed	5.15
+iPad-song-pads-nogrid	Store	270,916,79x55	Contrast failed	2.33
+iPad-song-pads-nogrid	last	381,947,16x12	Contrast failed	10.95
+iPad-song-pads-nogrid	4	570,928,8x19	Contrast failed	6.21
+iPad-song-pads-nogrid	empty	560,947,29x12	Contrast failed	5.82
+iPad-song-pads-nogrid	5	632,928,8x19	Contrast failed	6.96
+iPad-song-pads-nogrid	empty	621,947,29x12	Contrast failed	6.13
+iPad-song-pads-nogrid	6	693,928,8x19	Contrast failed	7.04
+iPad-song-pads-nogrid	empty	683,947,29x12	Contrast failed	6.45
+iPad-song-pads-nogrid	7	755,928,8x19	Contrast failed	6.78
+iPad-song-pads-nogrid	empty	744,947,29x12	Contrast failed	6.61
+iPad-song-pads-nogrid	empty	806,947,29x12	Contrast failed	6.46
+iPad-song-pads-nogrid	9	878,928,8x19	Contrast failed	7.13
+iPad-song-pads-nogrid	empty	867,947,29x12	Contrast failed	6.61
+iPad-song-pads-nogrid	10	935,928,16x19	Contrast failed	7.30
+iPad-song-pads-nogrid	empty	929,947,29x12	Contrast failed	6.87
+iPad-song-pads-nogrid	11	997,928,16x19	Contrast failed	7.30
+iPad-song-pads-nogrid	empty	990,947,29x12	Contrast failed	6.79
+iPad-song-pads-nogrid	12	1058,928,16x19	Contrast failed	7.30
+iPad-song-pads-nogrid	empty	1052,947,29x12	Contrast failed	6.79
+iPad-song-pads-nogrid	13	1120,928,16x19	Contrast failed	7.31
+iPad-song-pads-nogrid	empty	1113,947,29x12	Contrast failed	6.96
+iPad-song-pads-nogrid	14	1181,928,16x19	Contrast failed	7.31
+iPad-song-pads-nogrid	empty	1175,947,29x12	Contrast failed	6.79
+iPad-song-pads-nogrid	empty	1236,947,29x12	Contrast failed	6.53
+iPad-song-pads-nogrid	empty	1298,947,29x12	Contrast failed	6.62
+iPad-song-pads-nogrid	Pass 2/4	276,213,47x15	Contrast failed	5.34
+iPad-song-pads-nogrid	Next	411,213,26x15	Contrast failed	5.26
+iPad-song-pads-nogrid	×1	546,213,12x15	Contrast failed	5.13
+iPad-song-pads-nogrid	×7	682,213,12x15	Contrast failed	5.07
+iPad-song-pads-nogrid	×1	816,213,12x15	Contrast failed	4.34
+iPad-song-pads-nogrid	F	952,164,7x16	Contrast failed	5.88
+iPad-song-pads-nogrid	×4	952,213,12x15	Contrast failed	4.40
+iPad-song-pads-nogrid	A	276,291,9x16	Contrast failed	4.06
+iPad-song-pads-nogrid	Pass 3/4	276,340,47x15	Contrast failed	1.33
+iPad-song-pads-nogrid	Next	411,340,26x15	Contrast failed	1.33
+iPad-song-pads-nogrid	C	546,291,8x16	Contrast failed	1.25
+iPad-song-pads-nogrid	06	546,310,22x27	Contrast failed	1.33
+iPad-song-pads-nogrid	Chained on	546,340,61x15	Contrast failed	1.33
+iPad-song-pads-nogrid	×2	682,340,12x15	Contrast failed	5.07
+iPad-song-pads-nogrid	×8	816,340,12x15	Contrast failed	4.69
+iPad-song-pads-nogrid	F	952,291,7x16	Contrast failed	7.35
+iPad-song-pads-nogrid	Pass 1/2	276,467,47x15	Contrast nearly passed	9.07
+iPad-song-pads-nogrid	Next	411,467,26x15	Contrast failed	5.26
+iPad-song-pads-nogrid	×2	546,467,12x15	Contrast failed	5.01
+iPad-song-pads-nogrid	Empty	816,437,36x15	Contrast failed	6.26
+iPad-song-pads-nogrid	F	952,418,7x16	Contrast failed	7.35
+iPad-song-pads-nogrid	Empty	952,437,36x15	Contrast nearly passed	6.10
+iPad-song-pads-nogrid	Pass 1/4	276,594,47x15	Contrast failed	11.39
+iPad-song-pads-nogrid	Next	411,594,26x15	Contrast failed	5.26
+iPad-song-pads-nogrid	×8	546,594,12x15	Contrast failed	5.19
+iPad-song-pads-nogrid	E	816,545,8x16	Contrast failed	7.35
+iPad-song-pads-nogrid	Empty	816,564,36x15	Contrast failed	6.26
+iPad-song-pads-nogrid	F	952,545,7x16	Contrast failed	7.35
+iPad-song-pads-nogrid	Pass 6/8	276,721,47x15	Contrast failed	11.61
+iPad-song-pads-nogrid	Next	411,721,26x15	Contrast failed	5.26
+iPad-song-pads-nogrid	×4	546,721,12x15	Contrast failed	5.13
+iPad-song-pads-nogrid	D	682,672,8x16	Contrast failed	5.88
+iPad-song-pads-nogrid	×4	682,721,12x15	Contrast failed	5.07
+iPad-song-pads-nogrid	E	816,672,8x16	Contrast failed	5.88
+iPad-song-pads-nogrid	×4	816,721,12x15	Contrast failed	4.75
+iPad-song-pads-nogrid	F	952,672,7x16	Contrast failed	7.35
+iPad-song-pads-nogrid	Empty	1087,691,36x15	Contrast failed	6.26
+iPad-song-pads-nogrid	Pass 15/16	276,848,61x15	Contrast failed	9.64
+iPad-song-pads-nogrid	Next	411,848,26x15	Contrast failed	5.20
+iPad-song-pads-nogrid	Empty	546,818,36x15	Contrast failed	6.59
+iPad-song-pads-nogrid	Empty	682,818,36x15	Contrast failed	6.35
+iPad-song-pads-nogrid	E	816,799,8x16	Contrast failed	7.35
+iPad-song-pads-nogrid	Empty	816,818,36x15	Contrast failed	6.26
+iPad-song-pads-nogrid	F	952,799,7x16	Contrast failed	7.35
+iPad-song-pads-nogrid	Empty	952,818,36x15	Contrast failed	6.03
+iPad-song-pads-nogrid	Empty	1087,818,36x15	Contrast failed	6.26
+iPad-song-pads-nogrid	Empty	1222,818,36x15	Contrast failed	6.43
+iPad-song-pads-nogrid	Sounds	446,32,87x43	Contrast failed	4.37
+iPad-song-pads-nogrid	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-song-pads-nogrid	Play once	898,35,89x39	Contrast failed	5.36
+iPad-song-pads-nogrid	CUTOFF	282,291,41x14	Contrast failed	5.50
+iPad-song-pads-nogrid	Hz	310,315,12x14	Contrast failed	7.35
+iPad-song-pads-nogrid	RES	377,291,21x14	Contrast nearly passed	5.36
+iPad-song-pads-nogrid	ATTACK	472,291,40x14	Contrast nearly passed	6.27
+iPad-song-pads-nogrid	RELEASE	567,291,48x14	Contrast nearly passed	5.58
+iPad-song-pads-nogrid	4	631,291,6x14	Contrast failed	5.88
+iPad-song-pads-nogrid	ms	591,315,15x14	Contrast failed	7.01
+iPad-song-pads-nogrid	LEVEL	282,351,34x14	Contrast nearly passed	5.87
+iPad-song-pads-nogrid	STEPS	377,351,34x14	Contrast failed	5.01
+iPad-song-pads-nogrid	PAN	472,351,21x14	Contrast nearly passed	6.83
+iPad-song-timeline	Previous entry	633,277,99x19	Contrast failed	3.62
+iPad-song-timeline	Next entry	646,277,72x19	Contrast nearly passed	3.62
+iPad-song-timeline	Track above	641,277,82x19	Contrast failed	3.62
+iPad-song-timeline	Track below	641,277,82x19	Contrast failed	3.62
+iPad-song-timeline	Play once more	630,277,104x19	Contrast failed	3.62
+iPad-song-timeline	Play once less	634,277,96x19	Contrast failed	3.62
+iPad-song-timeline	Delete entry	640,277,84x19	Contrast failed	3.62
+iPad-song-timeline	Edit pattern	641,277,82x19	Contrast failed	3.62
+iPad-song-timeline	Deselect	652,277,61x19	Contrast failed	3.62
+iPad-song-timeline	Move earlier	641,277,83x19	Contrast failed	3.62
+iPad-song-timeline	Move later	647,277,70x19	Contrast failed	3.62
+iPad-song-timeline	1	36,494,27x27	Contrast failed	4.70
+iPad-song-timeline	4	627,549,53x19	Contrast failed	1.00
+iPad-song-timeline	10	946,549,53x19	Contrast failed	2.10
+iPad-song-timeline	12	1052,549,53x19	Contrast failed	1.66
+iPad-song-timeline	14	1158,549,53x19	Contrast failed	1.27
+iPad-song-timeline	16	1264,549,53x19	Contrast failed	2.20
+iPad-song-timeline	17	1318,549,53x19	Contrast failed	1.37
+iPad-song-timeline	Velocity	405,796,47x16	Contrast failed	6.06
+iPad-song-timeline	Stop the song to edit motion. Each entry brings its own motion when it starts, so a change now wouldn't last.	505,854,639x16	Contrast failed	13.52
+iPad-song-timeline	Patterns	1073,115,83x19	Contrast failed	12.66
+iPad-song-timeline	A · REST	132,232,44x14	Contrast failed	7.96
+iPad-song-timeline	Pulse Ld	69,270,59x19	Contrast nearly passed	9.00
+iPad-song-timeline	A · REST	150,313,26x12	Contrast failed	7.51
+iPad-song-timeline	A · REST	132,352,44x14	Contrast failed	7.78
+iPad-song-timeline	A · 14	148,392,28x14	Contrast failed	8.14
+iPad-song-timeline	pattern	125,499,44x16	Contrast failed	5.53
+iPad-song-timeline	Motion	237,499,41x16	Contrast failed	5.40
+iPad-song-timeline	A♯3	381,623,79x45	Contrast failed	1.28
+iPad-song-timeline	A3	381,668,79x45	Contrast failed	1.00
+iPad-song-timeline	G♯3	381,714,79x45	Contrast failed	1.47
+iPad-song-timeline	C3	381,896,79x45	Contrast failed	2.61
+iPad-song-timeline	B2	381,942,79x45	Contrast failed	2.53
+iPad-song-timeline	A♯2	381,988,79x45	Contrast failed	1.37
+iPad-song-timeline	Sounds	446,32,87x43	Contrast failed	4.37
+iPad-song-timeline	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-song-timeline	Play once	898,35,89x39	Contrast failed	5.36
+iPad-song-timeline	T1 Analog · Acid · C3	51,557,109x15	Contrast failed	5.62
+iPad-song-timeline	4	315,690,6x14	Contrast failed	5.88
+iPad-song-timeline	%	98,791,9x14	Contrast nearly passed	5.50
+iPad-song-timeline	RATCHET	134,766,44x11	Contrast nearly passed	6.03
+iPad-song-timeline	COND	206,765,31x14	Contrast failed	6.67
+iPad-song-timeline	1	272,158,6x15	Contrast nearly passed	4.25
+iPad-song-timeline	9	579,158,6x15	Contrast failed	5.76
+iPad-song-timeline	13	733,158,13x15	Contrast nearly passed	5.69
+iPad-song-timeline	17	886,158,13x15	Contrast failed	5.62
+iPad-song-timeline	21	1040,158,13x15	Contrast failed	5.62
+iPad-song-timeline	25	1194,158,13x15	Contrast failed	5.99
+iPad-song-timeline	1/4	390,194,332x16	Contrast failed	3.30
+iPad-song-timeline	1/4	390,234,332x15	Contrast failed	6.10
+iPad-song-timeline	2/2	543,274,179x16	Contrast failed	6.69
+iPad-song-timeline	2/4	351,314,486x16	Contrast failed	5.88
+iPad-song-timeline	6/8	543,354,179x15	Contrast failed	5.66
+iPad-song-timeline	14/16	839,394,344x16	Contrast nearly passed	3.21
+iPad-song-timeline	CHORUS	395,903,43x14	Contrast failed	5.55
+iPad-song-timeline	B · 02 ×8	422,192,303x20	Contrast failed	2.73
+iPad-song-timeline	03 ×1	729,192,34x20	Contrast failed	2.59
+iPad-song-timeline	D · 02 ×7	767,192,264x20	Contrast failed	2.19
+iPad-song-timeline	03 ×1	1036,192,34x20	Contrast failed	2.58
+iPad-song-timeline	F · 04 ×4	1074,192,149x20	Contrast failed	2.20
+iPad-song-timeline	CUTOFF	284,234,41x14	Contrast failed	5.80
+iPad-song-timeline	RES	379,234,21x14	Contrast failed	5.58
+iPad-song-timeline	2	442,234,6x14	Contrast failed	5.88
+iPad-song-timeline	%	399,258,9x14	Contrast failed	5.01
+iPad-song-timeline	ATTACK	474,234,40x14	Contrast failed	6.18
+iPad-song-timeline	ms	498,258,15x14	Contrast failed	7.09
+iPad-song-timeline	RELEASE	569,234,48x14	Contrast failed	5.72
+iPad-song-timeline	4	633,234,6x14	Contrast nearly passed	5.88
+iPad-song-timeline	ms	593,258,15x14	Contrast failed	6.92
+iPad-song-timeline	LEVEL	284,294,34x14	Contrast nearly passed	5.95
+iPad-song-timeline	STEPS	379,294,34x14	Contrast nearly passed	5.29
+iPad-song-timeline	PAN	474,294,21x14	Contrast nearly passed	6.75
+iPad-song-timeline	A · REST ×4	268,232,149x19	Contrast failed	4.88
+iPad-song-timeline	B · 05 ×8	422,232,303x19	Contrast failed	7.35
+iPad-song-timeline	C–D · 06→07 ×2	729,232,149x19	Contrast failed	2.98
+iPad-song-timeline	E · 05 ×8	882,232,303x19	Contrast failed	2.95
+iPad-song-timeline	A · 08 ×2	268,272,303x20	Contrast failed	5.18
+iPad-song-timeline	B · 09 ×1	575,272,149x20	Contrast failed	6.69
+iPad-song-timeline	C · 08 ×2	729,272,303x20	Contrast failed	2.83
+iPad-song-timeline	D · REST ×1	1036,272,149x20	Contrast failed	2.71
+iPad-song-timeline	B · 10 ×16	383,312,456x20	Contrast failed	5.88
+iPad-song-timeline	C · 11 ×8	844,312,303x20	Contrast failed	2.41
+iPad-song-timeline	B · 12 ×4	575,352,149x19	Contrast failed	2.99
+iPad-song-timeline	C · 13 ×4	729,352,149x19	Contrast failed	2.65
+iPad-song-timeline	D · 12 ×4	882,352,149x19	Contrast failed	2.65
+iPad-song-timeline	E · 12 ×4	1036,352,149x19	Contrast failed	2.65
+iPad-song-timeline	A · 14 ×16	268,392,610x20	Contrast failed	9.52
+iPad-song-timeline	B · 14 ×8	882,392,303x20	Contrast nearly passed	3.46
+iPad-sounds	25 presets · Tap one to load it onto track 1; its pattern, mix and key stay.	456,132,422x16	Contrast failed	5.99
+iPad-sounds	Song	307,32,70x43	Contrast failed	3.56
+iPad-sounds	Loop entry	701,35,98x39	Contrast failed	5.22
+iPad-sounds	Play once	898,35,89x39	Contrast failed	5.36
+iPad-sounds	Engines	43,333,44x15	Contrast failed	5.48
+iPad-sounds	1	28,111,43x29	Contrast failed	5.24
+iPad-sounds	2	28,142,43x29	Contrast failed	2.59
+iPad-sounds	3	28,174,43x29	Contrast failed	2.33
+iPad-sounds	4	28,205,43x29	Contrast failed	1.29
+iPad-sounds	5	28,236,43x29	Contrast failed	3.28
+iPad-sounds	6	28,268,43x29	Contrast failed	3.99
+iPad-sounds	Analog	63,366,49x19	Contrast failed	10.57
+iPad-sounds	25	302,368,14x16	Contrast failed	4.59
+iPad-sounds	-	63,410,6x19	Contrast failed	3.09
+iPad-sounds	0	310,411,7x16	Contrast failed	6.21
+iPad-sounds	Phase	63,454,42x19	Contrast failed	6.29
+iPad-sounds	9	310,455,7x16	Contrast failed	6.15
+iPad-sounds	10	302,542,14x16	Contrast failed	5.77
+iPad-sounds	Voice	63,585,38x19	Contrast failed	6.13
+iPad-sounds	8	310,586,7x16	Contrast failed	5.91
+iPad-sounds	Wheel	63,672,43x19	Contrast failed	6.29
+iPad-sounds	8	310,673,7x16	Contrast failed	5.84
+iPad-sounds	Grain	63,716,36x19	Contrast failed	6.22
+iPad-sounds	8	310,717,7x16	Contrast failed	5.84
+iPad-sounds	11	302,761,14x16	Contrast failed	6.45
+iPad-sounds	Drum	63,803,37x19	Contrast failed	6.53
+iPad-sounds	13	302,804,14x16	Contrast failed	5.84
+iPad-sounds	8	310,848,7x16	Contrast failed	5.77
+iPad-sounds	Fm6	63,890,30x19	Contrast failed	6.61
+iPad-sounds	14	302,892,14x16	Contrast failed	5.84
+iPad-sounds	Slice	63,934,34x19	Contrast failed	2.42
+iPad-sounds	9	310,935,7x16	Contrast failed	2.62
+iPad-sounds	Drum-X	63,978,53x19	Contrast failed	1.13
+iPad-sounds	10	302,979,14x16	Contrast failed	1.13
+iPad-sounds	Saw Lead	381,171,228x55	Contrast failed	1.03
+iPad-sounds	Soft Pad	617,171,228x55	Contrast failed	1.00
+iPad-sounds	Sqr Bass	853,171,228x55	Contrast failed	1.01
+iPad-sounds	Pwm Str	1089,171,228x55	Contrast failed	1.00
+iPad-sounds	Sine Key	617,234,228x55	Contrast failed	1.00
+iPad-sounds	Rave	853,234,228x55	Contrast failed	1.00
+iPad-sounds	Sub Bass	1089,234,228x55	Contrast failed	1.03
+iPad-sounds	Synth Pluck	381,298,228x55	Contrast failed	1.27
+iPad-sounds	Synth Brass	617,298,228x55	Contrast failed	1.41
+iPad-sounds	Wind Sweep	853,298,228x55	Contrast failed	1.59
+iPad-sounds	Strings	1089,298,228x55	Contrast failed	1.00
+iPad-sounds	Bone Flute	381,361,228x55	Contrast failed	1.11
+iPad-sounds	War Horn	617,361,228x55	Contrast failed	1.00
+iPad-sounds	Dark Strings	853,361,228x55	Contrast failed	1.56
+iPad-sounds	Night Bass	1089,361,228x55	Contrast failed	1.25
+iPad-sounds	Neon Lead	381,425,228x55	Contrast failed	1.10
+iPad-sounds	Sunset Pad	617,425,228x55	Contrast failed	1.25
+iPad-sounds	Hero Brass	853,425,228x55	Contrast failed	1.15
+iPad-sounds	Syn Tom	1089,425,228x55	Contrast failed	1.00
+iPad-sounds	Quanta	381,488,228x55	Contrast failed	1.00
+iPad-sounds	Hard Sync	1089,488,228x55	Contrast failed	1.05
+iPad-sounds	Sub Saw	381,552,228x55	Contrast failed	1.00

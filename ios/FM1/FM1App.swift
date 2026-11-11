@@ -62,6 +62,10 @@ struct RootView: View {
             }
         }
         .background(Theme.page)
+        // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05). Set here, over both layouts: it was in the
+        // iPad's AppView only, so the phone showed SLOOP's tabs on a Skiff FM-1 (found in the 2026-11-10 accessibility pass)
+        .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.phone = compact; ui.songTab = on }
+        .onChange(of: compact, initial: true) { _, c in ui.phone = c }
         .environment(firmware)
         .overlay { TempoOverlay(session: session, ui: ui) }
         .overlay { AppMenuLayer(menu: $ui.menu) }
