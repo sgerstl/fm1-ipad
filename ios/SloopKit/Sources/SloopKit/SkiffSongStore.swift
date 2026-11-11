@@ -113,12 +113,20 @@ public final class SkiffSongStore {
     /// About once a second while a view shows the song (as Skiff's own editor does), and just after a launch's line, so
     /// the pad it brings in lights then, not up to a second later (Scott, 2026-11-10: the hand-off)
     public func follow() async {
+        var overdueUntil = Date.distantPast
         while !Task.isCancelled {
             await refresh()
-            let wait = nextLanding().map { min(1, max(0.03, $0 + 0.06)) } ?? 1
+            let next = nextLanding()
+            // a landing expected now: if the list doesn't show it yet, ask every 0.1 s for a second (not a whole second
+            // later), so a launch that lands a little after the count expects lights within 0.1 s (2026-11-11)
+            if let n = next, n < 0.15 { overdueUntil = Date().addingTimeInterval(max(0, n) + 1) }
+            let waiting = song?.tracks.contains { $0.staged != nil } ?? false
+            let wait = Date() < overdueUntil && waiting ? 0.1 : next.map { min(1, max(0.03, $0 + 0.06)) } ?? 1
             try? await Task.sleep(for: .seconds(wait))
         }
     }
+    /// When the user last changed the song (a send, a rewrite): the pool's pictures wait until it's been quiet a while.
+    public private(set) var lastChange = Date.distantPast
 
     private func learnDivisions(_ s: SkiffSong) {
         for (t, l) in s.tracks.enumerated() {
@@ -215,6 +223,7 @@ public final class SkiffSongStore {
     @discardableResult
     public func rewrite(track t: Int, to entries: [SongEntry], focus: Int? = nil, confirmed: Bool = false) async -> Bool {
         guard !busyRefusal(t) else { return false }
+        lastChange = Date()
         guard driver != nil, let before = song, song?.tracks[safe: t] != nil else {
             refusal = Refusal(track: t, entry: focus, text: offline ? "The FM-1 is disconnected: editing is off until it's back" : "No song yet")
             return false
@@ -321,6 +330,7 @@ public final class SkiffSongStore {
     @discardableResult
     public func send(_ op: ListOp, readPool: Bool = true) async -> Bool {
         guard !busyRefusal(op.track) else { return false }
+        lastChange = Date()
         guard let d = driver, let before = song else {
             refusal = Refusal(track: op.track, entry: op.entry, text: "The FM-1 is disconnected: editing is off until it's back")
             return false

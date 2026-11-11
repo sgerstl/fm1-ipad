@@ -410,8 +410,8 @@ struct PatternPane: View {
             .environment(\.arrangeCompact, true)
         }
         // following: the track moved on to another entry, so the editor reads its pattern now, not at the next resync
-        .onChange(of: list?.entryOn) { _, _ in Task { await session.rereadSteps(track: t) } }
-        .onChange(of: list?.patternOn) { _, _ in Task { await session.rereadSteps(track: t) } }
+        // (one trigger for a change of entry and pattern together: two had read the whole track twice, 2026-11-11)
+        .onChange(of: "\(list?.entryOn ?? -1).\(list?.patternOn ?? -1)") { _, _ in Task { await session.rereadSteps(track: t) } }
         // stopped while pinned to another entry: the track goes there (LIST op 3), and its pattern opens
         .onChange(of: session.playing) { _, on in
             guard !on, let p = pinned, list?.entryOn != p.entry else { return }

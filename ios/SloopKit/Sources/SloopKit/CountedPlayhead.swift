@@ -25,6 +25,7 @@ public struct CountedPlayhead: Equatable, Sendable {
         var startedAt = 0.0
         var passes = 0            // passes begun since Start (the first is 1): what an entry's REPS counts
         var restartAt: Double?    // a BAR or BEAT launch staged: the tick of its line (relaunch)
+        var passStartAt = 0.0     // the tick the pass playing began on (rebase walks again from here)
     }
 
     /// Ticks per step for DIV 0..9: 1/4 1/8 1/16 1/32 8T 16T 1/2 1/1 2BAR 4BAR.
@@ -91,6 +92,7 @@ public struct CountedPlayhead: Equatable, Sendable {
                 }
                 Self.next(&w, s)
                 w.startedAt = w.nextAt
+                if w.count == 1 { w.passStartAt = w.startedAt }
                 w.stepTicks = T
                 let sw = Double(min(100, max(0, s.swing + globalSwing)))
                 w.nextAt += T * (1 + (w.step >= 0 && w.step & 1 == 1 ? -sw : sw) / 250)
@@ -114,6 +116,30 @@ public struct CountedPlayhead: Equatable, Sendable {
             let s = walks[t].startedAt
             walks[t].nextAt = max(s, k + walks[t].stepTicks - (k - s) * Double(b2) / Double(b1))
         }
+    }
+
+    /// Track t walked again from the start of its pass with `s` (2026-11-11): a pattern of another LEN or DIV came in, or
+    /// a read corrected them, and the steps already counted at the old ones were off the FM-1 from then on (a DIV change
+    /// only resized the step playing). Each correction is exact from the pass's start, so errors don't pile up.
+    public mutating func rebase(track t: Int, _ s: Settings, globalSwing: Int) {
+        guard running, walks.indices.contains(t), ticks >= 0, walks[t].passes > 0 else { return }
+        let k = Double(ticks)
+        let T = Self.divisionTicks[max(0, min(9, s.division))]
+        var w = walks[t]
+        let start = w.passStartAt
+        w.step = -1; w.count = 0; w.down = false
+        w.passes -= 1                          // (the pass's first step counts it again)
+        w.nextAt = start; w.stepTicks = T
+        var guardSteps = 0
+        while w.nextAt <= k && guardSteps < 4096 {
+            Self.next(&w, s)
+            w.startedAt = w.nextAt
+            if w.count == 1 { w.passStartAt = w.startedAt }
+            let sw = Double(min(100, max(0, s.swing + globalSwing)))
+            w.nextAt += T * (1 + (w.step >= 0 && w.step & 1 == 1 ? -sw : sw) / 250)
+            guardSteps += 1
+        }
+        walks[t] = w
     }
 
     /// A track placed from a note it played (RAND, which no count can predict): `step` starts now and
