@@ -5,6 +5,12 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 **Setup:** Skiff-Lupe 2.2 on the FM-1 · Lupe from branch `perform-grid-map` · a song with patterns on at least three tracks, one track with four or more entries · headphones.
 **Back up first?** No. Nothing here writes the FM-1's flash (launches, mutes and scene recalls only; check 9 drags a pad, which rewrites a list in RAM, as before).
 
+**2026-11-11: the iPad now runs the merged trunk** (`lupe-batch-2026-11-06` at bc9f1b7: perform-grid-map, sloop-design-pass, the phone branch and the accessibility pass; `qa/merge-2026-11-11/README.md`), installed and launched with devicectl. Every check in this file applies to it as written. These from the other branches now apply on the iPad too:
+- **`2026-11-10-accessibility.md`, all of it** (Part A 1–14, Part B 15–20, Part C 21–23 and 22a–22b). Read "Song › Pads" as the **Pads** tab and "Song › Timeline" as the **Timeline** tab (the iPad's tabs are Pads · Timeline · Mix since 2026-11-10).
+- **`2026-11-10-phone-skiff-tabs.md`, check 4** (the iPad's side of it). It expects "Song · Mix · Sounds as before": on this build the iPad shows **Pads · Timeline · Mix**, and Sounds is the sounds panel, not a tab. Pass it if those come up and nothing on the iPad changed otherwise.
+- **`2026-11-10-phone-pads-edit-mix.md`, check 15** (the iPad, same FM-1). Read "Song, Mix and Sounds" the same way: Pads, Timeline, Mix, and the sounds panel from a track's name.
+- The rest of the two phone files (their checks 1–3 and 1–14) need an iPhone with this build, not the iPad. `2026-11-09-song-grid-panel-tint.md` came in with the history but that branch was superseded: skip it.
+
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
 | 1 | Song › Pads, editor shut (No grid). | Six rows, one per track, the track heads on the left lined up with them; columns A to one past the last entry used (at least 8); the 16 scenes underneath. | – | ☐ pass ☐ fail: |
