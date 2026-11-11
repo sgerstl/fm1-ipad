@@ -279,7 +279,7 @@ final class ProjectStore {
             }
             let fp: String
             if firmware == .skiff {
-                let target = p?.skiff ?? .blank
+                let target = p?.skiff ?? .blank(for: s.skiffFirmware)
                 // the FM-1 shows the project's name; a safety copy or a fresh start goes on unnamed
                 try await s.writeSkiffProject(target, name: p.flatMap { $0.isSafetyCopy ? nil : $0.name } ?? "", progress: progress)
                 fp = target.fingerprint

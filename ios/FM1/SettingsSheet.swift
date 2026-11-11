@@ -99,6 +99,17 @@ struct SettingsSheet: View {
                     Text("While the song is stopped, Lupe reads the FM-1's stored patterns so each pad shows its pattern before you play it. Off, a pad shows its pattern once it has played. A trial until 16 November.")
                 }
 
+                // MENU › CONTROL on the FM-1 (Skiff 2.5): shown only when the FM-1 offers it (editor menu id 21)
+                if let keep = session.keepSends {
+                    Section {
+                        Toggle("Keep sends when loading a sound", isOn: Binding(get: { keep }, set: { session.setKeepSends($0) }))
+                    } header: {
+                        Text("FM-1 · Control")
+                    } footer: {
+                        Text("KEEP SENDS on the FM-1. On, loading a sound keeps the track's chorus, delay and reverb sends, as it keeps its level and pan. Off, the sound brings its own.")
+                    }
+                }
+
                 Section {
                     Toggle("Magnifier", isOn: $magnifier)
                 } footer: {

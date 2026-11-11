@@ -30,7 +30,14 @@ import Testing
         #expect(pages.first { $0.title == "CHORUS" }?.ids == [10, 11, 25, 26])
         let e = try await d.desc(scope: 0, id: 138)               // scope 2 on the wire
         #expect(e.label == "WAVE" && e.id == 138)
-        if ProcessInfo.processInfo.environment["SKIFF_RECORD"] == "1" { try await record(d) }
+        await d.close()
+    }
+
+    /// SKIFF_RECORD=1: writes the fixture FakeSkiff answers with, named by the sim's firmware (skiff-2.2.json, or
+    /// skiff-2.5.1.json from a skiff-sim built on Skiff-Lupe 2.5.1).
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SKIFF_RECORD"] == "1")) func recordsTheFixture() async throws {
+        let d = try await driver()
+        try await record(d)
         await d.close()
     }
 
@@ -233,8 +240,11 @@ import Testing
         f.dump = try await raw(4, [], 0)
         f.userList = try await raw(16, [0, 16], 1)
         f.transport = try await raw(76, [], 0)
+        var menu: [String: [UInt8]] = [:]
+        for i in 0..<(d.skiff.menuCount ?? 0) { menu["\(i)"] = try await raw(72, [UInt8(i)], 1) }
+        f.menu = menu.isEmpty ? nil : menu
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .appendingPathComponent("../../Sources/SloopKit/Resources/skiff-2.2.json").standardized
+            .appendingPathComponent("../../Sources/SloopKit/Resources/skiff-\(d.firmware.short).json").standardized
         let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
         try enc.encode(f).write(to: url)
     }

@@ -11,14 +11,16 @@ public struct SkiffFixture: Codable, Sendable {
     var dump: [UInt8] = []
     var userList: [UInt8] = []
     var transport: [UInt8] = []
+    /// MENU_DESC by index, the whole list (recorded from 2.5.1 on; the 2.2 fixture has none).
+    var menu: [String: [UInt8]]? = nil
 
-    public static func load() throws -> SkiffFixture {
-        guard let url = Bundle.module.url(forResource: "skiff-2.2", withExtension: "json") else { throw CocoaError(.fileNoSuchFile) }
+    public static func load(_ firmware: SkiffFirmware = .v2_2) throws -> SkiffFixture {
+        guard let url = Bundle.module.url(forResource: "skiff-\(firmware.short)", withExtension: "json") else { throw CocoaError(.fileNoSuchFile) }
         return try JSONDecoder().decode(SkiffFixture.self, from: Data(contentsOf: url))
     }
 }
 
-/// A pretend Skiff 2.2, built on what the sim answered: the recorded INFO, DESC and NAMES as they are, and
+/// A pretend Skiff 2.2 or 2.5.1 (the fixture it's built on says which), built on what the sim answered: the recorded INFO, DESC and NAMES as they are, and
 /// steps, parameters, the selection and the transport kept as state from the recorded starting point. Like
 /// the device, it holds one request at a time: a frame that arrives before the last is answered is dropped.
 /// While playing it sends MIDI clock at its BPM, as Skiff's CLOCK OUT does (`-demo-skiff` in the app).
@@ -26,6 +28,16 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     public let frames: AsyncStream<[UInt8]>
     private let sink: AsyncStream<[UInt8]>.Continuation
     public let notes: AsyncStream<NoteEvent>
+    private let notesSink: AsyncStream<NoteEvent>.Continuation
+    /// 2.2 or 2.5.1, from the fixture's INFO. The page numbers on the wire are this release's (SkiffPageMap); the fake
+    /// keeps its screen in Lupe's numbers, so a test names a page once for both.
+    public let firmware: SkiffFirmware
+    /// The fixture's INFO without a screen link tag of its own (2.5.1's sim carries `56 01 06`): `screenLink` decides.
+    private let infoBody: [UInt8]
+    /// MENU settings set here, by id (from the recorded list: 2.5.1's), on top of the recorded values.
+    var menuValues: [Int: Int] = [:]
+    /// SCREEN_GOTO's page bytes as they came (this release's numbers), for the tests of the page map.
+    var gotoWire: [Int] = []
     public let clock: AsyncStream<ClockEvent>
     let clockSink: AsyncStream<ClockEvent>.Continuation
     private var clockTimer: DispatchSourceTimer?
@@ -131,7 +143,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
     public convenience init?(demo: Bool) {
-        guard let fx = try? SkiffFixture.load() else { return nil }
+        // -demo-fw 2.5.1: the 2.5.1 fixture (Skiff-Lupe 2.5.1's sim), else 2.2's
+        let a0 = LaunchArgs.all
+        let fw = a0.firstIndex(of: "-demo-fw").flatMap { a0.indices.contains($0 + 1) ? SkiffFirmware(version: "FELUCCA v" + a0[$0 + 1]) : nil }
+        guard let fx = try? SkiffFixture.load(fw ?? .v2_2) else { return nil }
         self.init(fx)
         if demo {
             seedDemo()
@@ -144,7 +159,16 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             // -demo-track N: track N selected (1…6), -demo-engine E: on engine E (DRUM-X 14, SLICE 13: none in the fixture)
             if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
             if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }
-            if a.contains("-demo-usr") { params[selected][138] = 3 }      // SAMPLE on USR1
+            if a.contains("-demo-usr") { params[selected][pCount - 8] = 3 }   // SAMPLE on USR1 (E0: 138 on 2.2, 140 on 2.5.1)
+            // -demo-insert N: the selected track's INSERT TYPE (121; 9 FILTR on 2.5.1), for the INSERT card's screenshots
+            if let i = a.firstIndex(of: "-demo-insert"), a.indices.contains(i + 1), let n = Int(a[i + 1]) { params[selected][121] = n; params[selected][125] = 127 }
+            // -demo-free-take: 3 s in, a FREE TAKE kept on the FM-1 on the selected track (2.5.1: Lupe lands on the Timeline)
+            if a.contains("-demo-free-take") {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in
+                    guard let self else { return }
+                    self.freeTakeOnDevice(track: self.selected, notes: [60, 63, 67, 70, 72, 70, 67, 63], length: 32, bpm: 96)
+                }
+            }
             // -demo-user-sounds: three of USER's slots hold sounds, and P1 and P2 hold projects (the SAVE pages' screenshots)
             if a.contains("-demo-user-sounds") {
                 userSlots[0] = (0, "WARM PAD"); userSlots[1] = (2, "ACID LINE"); userSlots[4] = (0, "GLASS KEYS")
@@ -184,9 +208,13 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     public init(_ fx: SkiffFixture) {
         self.fx = fx
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self)
-        (notes, _) = AsyncStream.makeStream(of: NoteEvent.self)
+        (notes, notesSink) = AsyncStream.makeStream(of: NoteEvent.self)
         (clock, clockSink) = AsyncStream.makeStream(of: ClockEvent.self)
         let info = SkiffInfo(fx.info)!
+        firmware = info.firmware ?? .v2_2
+        var body = fx.info
+        if body.count >= 3, body[body.count - 3] == 0x56, body[body.count - 2] == 1 { body.removeLast(3) }
+        infoBody = body
         pCount = info.paramCount; gCount = info.globalCount
         let tl = try! TrackList(fx.track)
         selected = tl.selected
@@ -391,7 +419,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     }
 
     private func screenBytes() -> [UInt8] {
-        let b: [UInt8] = [screen.home ? 1 : 0, UInt8(screen.page), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
+        let wire = firmware.pageMap.device(screen.page) ?? screen.page
+        let b: [UInt8] = [screen.home ? 1 : 0, UInt8(wire), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
         guard screenLinkVersion >= 2 else { return b }
         let c: UInt8 = !screen.home && Self.cursorRange[screen.page] != nil ? UInt8(cursor) : 127
         // NOTES and FEEL: the second is the selection's last step (one step here, so the same)
@@ -416,6 +445,44 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         let b = screenBytes(), on = screenWatched
         lock.unlock()
         if on { push(90, b) }
+    }
+
+    /// FREE TAKE on the FM-1 (Skiff 2.5, ui_take.c), stopped: `notes` played on `track` (its notes out over MIDI, as
+    /// NOTES OUT sends them), then SHIFT + SAVE: the picker writes the phrase into the track (fr_render: every step, LENGTH,
+    /// DIV 1/16, BPM unless another track has notes) and the live sync pushes what changed, as editor.c ed_sync does for
+    /// the selected track (STEP_CHANGED, then CHANGED of LENGTH, DIV and BPM). The picker isn't reported (SCREEN doesn't).
+    func freeTakeOnDevice(track t: Int, notes: [Int], length: Int, bpm: Int?) {
+        for n in notes {
+            notesSink.yield(NoteEvent(on: true, channel: UInt8(t), note: UInt8(n)))
+            notesSink.yield(NoteEvent(on: false, channel: UInt8(t), note: UInt8(n), velocity: 0))
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            guard !self.playing else { self.lock.unlock(); return }
+            var changed: [Int] = []
+            let per = max(1, length / max(1, notes.count))
+            for i in 0..<self.steps[t].count {
+                let k = i / per
+                var b = self.steps[t][i]
+                if i < length, i % per == 0, k < notes.count {
+                    b[0] = 1; b[1] = UInt8(notes[k]); b[2] = 0; b[3] = 0; b[4] = 0; b[5] = 0; b[7] = 100   // one note (ST_NOTE 0)
+                } else {
+                    b[0] = 0; b[1] = 0; b[2] = 0; b[3] = 0; b[4] = 0; b[5] = 2                             // ST_REST
+                }
+                if b != self.steps[t][i] { self.steps[t][i] = b; changed.append(i) }
+            }
+            let lenID = 29, divID = 30                                       // P_SLEN, P_SDIV (core.h, both releases)
+            self.params[t][lenID] = length; self.params[t][divID] = 2
+            if let bpm { self.globals[0] = bpm }
+            let sel = t == self.selected
+            self.lock.unlock()
+            guard sel else { return }                                        // (the sync pushes the selected track's only)
+            for i in changed { self.push(Cmd.stepChanged, [UInt8(i), UInt8(t)]) }
+            self.push(Cmd.changed, [0, UInt8(lenID)] + v14(length))
+            self.push(Cmd.changed, [0, UInt8(divID)] + v14(2))
+            if let bpm { self.push(Cmd.changed, [1, 0] + v14(bpm)) }
+        }
     }
 
     /// A clock tick while playing: each track's level jumps on a step with a note and falls as the FM-1's meter does
@@ -633,16 +700,19 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         if (Cmd.smpBegin...Cmd.smpInfo).contains(cmd) { return sampleAnswer(cmd, a) }
         if cmd == 65 || cmd == 66 { return backupAnswer(cmd, a) }
         switch (cmd, a.count) {
-        case (1, 0): return screenLink ? fx.info + [0x56, 1, UInt8(screenLinkVersion)] : fx.info
+        case (1, 0): return screenLink ? infoBody + [0x56, 1, UInt8(screenLinkVersion)] : infoBody
         case (90, 0) where screenLink: return screenBytes()
         case (91, 1) where screenLink, (91, 2) where screenLink && screenLinkVersion >= 2:
-            // always answered: a refused page (or a cursor for a page or HOME with none) answers the screen unchanged
-            let p = Int(a[0])
+            // always answered: a refused page (or a cursor for a page or HOME with none) answers the screen unchanged.
+            // The page is this release's (NPAGES 46 on 2.2, 47 on 2.5.1), kept here in Lupe's numbers
+            let wire = Int(a[0]), npages = firmware == .v2_2 ? 46 : 47
+            gotoWire.append(wire)
+            let p = wire == 127 ? 127 : firmware.pageMap.lupe(wire)
             if a.count == 2 {
-                guard p != 127, let top = Self.cursorRange[p], p < 46, !refusedPages.contains(p) else { return screenBytes() }
+                guard wire != 127, let top = Self.cursorRange[p], wire < npages, !refusedPages.contains(p) else { return screenBytes() }
                 screen = (false, p, 0, 0, 0); cursor = min(top, Int(a[1]))
-            } else if p == 127 { screen.home = true; screen.layer = 0; screen.menu = 0 }
-            else if p < 46, !refusedPages.contains(p) { if p != screen.page || screen.home { cursor = 0 }; screen = (false, p, 0, 0, 0) }
+            } else if wire == 127 { screen.home = true; screen.layer = 0; screen.menu = 0 }
+            else if wire < npages, !refusedPages.contains(p) { if p != screen.page || screen.home { cursor = 0 }; screen = (false, p, 0, 0, 0) }
             return screenBytes()
         case (34, 0):
             // UI_STATE: caps, palette, font, monitor, filter, favoriteSig u28, bankSig u28
@@ -652,6 +722,21 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let c = customColours ?? Array(repeating: 0, count: 11)
             let bytes = c.flatMap { [UInt8($0 & 0xFF), UInt8($0 >> 8)] }
             return [0, customColours == nil ? 0 : (themePalette == 6 ? 3 : 1), 0] + Pack7.encode(bytes)
+        case (72, 1) where fx.menu != nil:
+            // MENU_DESC from the recorded list (editor_menu.c: index, id, kind, value, min, max, name, names, tab), the
+            // value as set here; past the list: id 127
+            guard var b = fx.menu?["\(a[0])"], b.count >= 9 else { return [a[0], 127] }
+            let id = Int(b[1])
+            if let v = id == SkiffMenu.usbLevel ? usbLevel : menuValues[id] { b.replaceSubrange(3..<5, with: v14(v)) }
+            return b
+        case (73, 3) where fx.menu != nil:
+            // MENU_SET: an id in the list takes the value clamped to its names (rc 0, saved); another rc 1, as editor_menu.c
+            let v = (Int(a[1]) | Int(a[2]) << 7) - 8192, id = Int(a[0])
+            guard let row = fx.menu?.values.first(where: { $0.count >= 9 && Int($0[1]) == id }) else { return [1, a[0]] + v14(v) }
+            let top = (Int(row[7]) | Int(row[8]) << 7) - 8192
+            let took = max(0, min(top, v))
+            if id == SkiffMenu.usbLevel { usbLevel = took } else { menuValues[id] = took }
+            return [0, a[0]] + v14(took)
         case (72, 1):
             // MENU_DESC: index → index, id, kind, value, min, max, … (the rest isn't read); past the list: id 127
             return a[0] == 0 ? [0, UInt8(SkiffMenu.usbLevel), 0] + v14(usbLevel) + v14(0) + v14(1) : [a[0], 127]
@@ -660,9 +745,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             guard Int(a[0]) == SkiffMenu.usbLevel else { return [1, a[0]] + v14(v) }
             usbLevel = max(0, min(1, v))
             return [0, a[0]] + v14(usbLevel)
-        case (5, 2) where a == [2, 10] && engines[selected].engine == 4:
-            // SAMPLE's SET: the built-in sets, then the user's (eng_sample.c SMP_ALL_NAMES)
-            return [2, 10, 8] + v14(0) + v14(5) + v14(0) + Array("SET".utf8) + [0, 0]
+        case (5, 2) where a == SkiffDriver.wire(pCount - 8) && engines[selected].engine == 4:
+            // SAMPLE's SET (E0: 138 on 2.2, 140 on 2.5.1): the built-in sets, then the user's (eng_sample.c SMP_ALL_NAMES)
+            return a + [8] + v14(0) + v14(5) + v14(0) + Array("SET".utf8) + [0, 0]
                 + ["PIANO", "STRINGS", "CHOIR", "USR1", "USR2", "USR3"].flatMap { Array($0.utf8) + [0] }
         case (68, 2) where a[0] == 0 && Int(a[1]) < fm6.count: return [0, a[1], 0] + fm6[Int(a[1])].bytes
         case (69, 130) where a[0] == 0 && Int(a[1]) < fm6.count:
@@ -779,7 +864,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             // a recorded change (3) or a lock (5): a new record, or the one on that step and id becomes this
             let t = Int(a[0]), step = Int(a[2] & 63), id = Int(a[3]) | Int(a[2] >> 6 & 1) << 7
             let v = (Int(a[4]) | Int(a[5]) << 7) - 8192
-            guard SkiffMotion.recordable(id) else { return motionReply(t, rc: 1, kinds: a[1] == 5) }   // as motion_param
+            guard SkiffMotion.recordable(id, paramCount: pCount) else { return motionReply(t, rc: 1, kinds: a[1] == 5) }   // as motion_param
             let total = motion.reduce(0) { $0 + $1.count }
             if let k = motion[t].firstIndex(where: { $0.step == step && $0.id == id }) {
                 motion[t][k] = (step, id, v, a[1] == 5)

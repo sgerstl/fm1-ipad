@@ -252,7 +252,7 @@ public final class DeviceSession {
         return counted.passProgress(t, at: Double(counted.ticks), length: tracks[t].length)
     }
 
-    private var driver: FirmwareDriver?
+    private(set) var driver: FirmwareDriver?
     /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
     private var sloop: SloopClient? { (driver as? SloopDriver)?.client }
     /// The client that carries the user-sample commands (11–15): SLOOP's and Skiff's take the same bytes.
@@ -308,6 +308,14 @@ public final class DeviceSession {
     /// DESC of every parameter: label, range, format, enum names. The engine's P_E0..P_E7 are re-read
     /// whenever the selected track or its engine changes.
     public private(set) var trackDescs: [Int: ParamDesc] = [:]
+    /// Skiff's release (2.2 or 2.5.1), nil on SLOOP: the pages, settings and undo depth that differ.
+    public private(set) var skiffFirmware: SkiffFirmware?
+    /// MENU › CONTROL › KEEP SENDS (Skiff 2.5, editor menu id 21): a sound load keeps the track's CHORUS, DELAY and
+    /// REVERB sends. nil: this firmware doesn't offer it, or it hasn't been read yet.
+    public internal(set) var keepSends: Bool?
+    /// FREE TAKE (Skiff 2.5), level 1: a take the FM-1 put into a track while stopped, seen from here (FreeTakeWatch).
+    public internal(set) var freeTake: FreeTake?
+    @ObservationIgnored var freeTakeWatch = FreeTakeWatch()
     public private(set) var globalDescs: [Int: ParamDesc] = [:]
     /// fm1-ipad firmware (SLOOP 2.8.4 plus the UI push): the FM-1 reports its page and the iPad can set it.
     public private(set) var screenLinked = false
@@ -449,6 +457,8 @@ public final class DeviceSession {
             info = i
             dialect = c.dialect
             capabilities = c.capabilities
+            skiffFirmware = (c as? SkiffDriver)?.firmware
+            keepSends = nil; freeTake = nil; freeTakeWatch = FreeTakeWatch()
             ids = c.params
             pageLayout = c.pageLayout
             adopt(c.shape)
@@ -492,6 +502,7 @@ public final class DeviceSession {
             } else {
                 skiffSong = nil
             }
+            if let k = c as? SkiffDriver, k.firmware.hasDelayMode { Task { await self.readKeepSends(k) } }
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
             stats = Stats()
         } catch {
@@ -1098,7 +1109,7 @@ public final class DeviceSession {
         if tr != tracks[t] { tracks[t] = tr }
     }
 
-    private func applyGlobal(id: Int, value v: Int) {
+    func applyGlobal(id: Int, value v: Int) {
         // (each set only when it changes, as `apply`)
         if id < globals.count, globals[id] != v { globals[id] = v }
         switch id {
@@ -1123,6 +1134,7 @@ public final class DeviceSession {
             case .stepChanged(let i, let t):
                 guard trackIndices.contains(t), stepIndices.contains(i) else { break }
                 Task { await self.readStep(t, i) }
+                takeSignal(track: t)
             case .reload(_, _, let t):
                 soundLoadedAt = Date()
                 guard trackIndices.contains(t) else { break }
@@ -1137,6 +1149,7 @@ public final class DeviceSession {
             case .changed(let scope, let id, let v):
                 if scope == 0 { apply(track: selectedTrack, id: id, value: v) } else { applyGlobal(id: id, value: v) }
                 deviceTouched(scope: scope, id: id)
+                if scope == 0 ? [ids.length, ids.division].contains(id) : id == ids.bpm { takeSignal(track: selectedTrack) }
             case .trackChanged(let t, let id, let v):
                 apply(track: t, id: id, value: v)
             case .ui(let s):
@@ -1519,6 +1532,7 @@ public final class DeviceSession {
             lfoClock.note(track: track, note: n, on: e.on, at: Date())
             if trackIndices.contains(track) { meters.note(track: track, note: n, on: e.on, velocity: Int(e.velocity)) }
             if track == selectedTrack { if e.on { deviceNotes.insert(n) } else { deviceNotes.remove(n) } }
+            if e.on, !playing, trackIndices.contains(track) { freeTakeWatch.heard(track: track) }
             if e.on, trackIndices.contains(track), tracks[track].direction == 3 { anchorRandom(track: track, note: n) }
         }
     }

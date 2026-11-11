@@ -24,6 +24,15 @@ import Testing
     /// Counts the chunk writes a request makes (PUT begins of ids 16…31).
     final class Counter: @unchecked Sendable { var chunkPuts = 0, projectPuts = 0 }
 
+    /// SKIFF_RECORD=1 on a new unit (no flash file): the music as BACKUP_LIST snapshots it, base64, to SKF4_OUT. How
+    /// SkiffProjectData.blank (2.2) and .blank251 were captured.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SKF4_OUT"] != nil)) func capturesANewUnitsRecord() async throws {
+        let d = try await driver()
+        let p = try await SkiffProjectTransfer.read(firmware: d.info.version, request: SkiffProjectTransfer.request(d))
+        try p.record.base64EncodedString().write(toFile: ProcessInfo.processInfo.environment["SKF4_OUT"]!, atomically: true, encoding: .utf8)
+        await d.close()
+    }
+
     @Test func roundTrip() async throws {
         let d = try await driver()
         _ = try await d.transport(play: false)

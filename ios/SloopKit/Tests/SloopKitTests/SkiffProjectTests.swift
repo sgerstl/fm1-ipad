@@ -111,7 +111,7 @@ import Testing
     }
 }
 
-private extension Array where Element == UInt8 {
+extension Array where Element == UInt8 {
     /// The SKF4 checksum made right.
     func withSealed() -> [UInt8] {
         var b = self

@@ -68,6 +68,12 @@ struct PageGraph: View {
             case "LFO DEST": LFODestGraph(session: session, page: page, colour: colour, hot: hot)
             case "DRIVE": Canvas { ctx, sz in DriveDrawing(v: values).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Drive transfer curve", "\(valueName(1)), drive \(values[0])")
+            case "DELAY" where page.family == .fx:
+                Canvas { ctx, sz in DelayDrawing(v: sendPageValues).draw(ctx, Space(size: sz), colour) }
+                    .graphLabel("Echoes", "every \(valueName(1)), feedback \(values[2]), this track's send \(values[0])")
+            case "REVERB" where page.family == .fx:
+                Canvas { ctx, sz in ReverbDrawing(v: sendPageValues).draw(ctx, Space(size: sz), colour) }
+                    .graphLabel("Reverb tail", "\(valueName(1)), size \(values[2]), this track's send \(values[0])")
             case "DELAY": Canvas { ctx, sz in DelayDrawing(v: values).draw(ctx, Space(size: sz), colour) }
                 .graphLabel("Echoes", "every \(valueName(0)), feedback \(values[1])")
             case "REVERB": Canvas { ctx, sz in ReverbDrawing(v: values).draw(ctx, Space(size: sz), colour) }
@@ -198,15 +204,16 @@ struct PageGraph: View {
 
     /// The page's four values (0 for an empty slot), the track's or the globals.
     private var values: [Int] {
-        // the track's from their cells: this graph redraws when its own parameters change
-        if page.scope == 0 { return page.ids.map { id in id.map { session.cell($0).value } ?? 0 } }
-        // the globals' own cells: this graph redraws when its own globals change, not when any does
-        return page.ids.map { id in id.map { session.globalCell($0).value } ?? 0 }
+        // each knob from its own cell, the track's or the global's (FX › DELAY mixes them): this graph redraws when its
+        // own values change, not when any does
+        page.ids.indices.map { k in page.ids[k].map { page.scope(of: k) == 0 ? session.cell($0).value : session.globalCell($0).value } ?? 0 }
     }
     private func desc(_ k: Int) -> ParamDesc? {
         guard let id = page.ids[k] else { return nil }
-        return page.scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
+        return page.scope(of: k) == 0 ? session.trackDesc(id) : session.globalDescs[id]
     }
+    /// FX › DELAY and REVERB (Skiff 2.5): the bus's three values, then the track's send where GLO's page has its 4th.
+    private var sendPageValues: [Int] { let v = values; return [v[1], v[2], v[3], v[0]] }
     private func valueName(_ k: Int) -> String { formatValue(desc(k), values[k]).shown }
     private var glideText: String { values[1] == 0 ? "NO GLIDE" : valueName(1) }
 }
@@ -669,7 +676,18 @@ private func curveGraph(_ ctx: GraphicsContext, _ s: Space, _ c: Color, at: (Int
 
 private struct InsertDrawing {
     let v: [Int]                                  // TYPE, A, B, C, MIX
-    static let names = ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"]
+    static let names = ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR", "FILTR"]
+
+    /// (Skiff 2.5) FILTR: its response across the width, low notes left: CUTOFF (A) where it turns, RES (B) the peak
+    /// there, SHAPE (C) from low-pass through band-pass (64) to high-pass. A picture of the filter, not fx.c's maths.
+    static func filter(_ x: Int, cutoff a: Int, res b: Int, shape c: Int) -> Int {
+        let f = Double(x + 32768) / 65536, fc = Double(min(max(a, 0), 127)) / 127, d = (f - fc) * 12
+        let lp = 1 / (1 + exp(d)), hp = 1 - lp, peak = Double(min(max(b, 0), 127)) / 127 * exp(-d * d)
+        let bp = exp(-d * d * 0.5)
+        let k = Double(min(max(c, 0), 127))
+        let g = (k <= 64 ? lp + (bp - lp) * k / 64 : bp + (hp - bp) * (k - 64) / 63) + peak * 0.6
+        return Int((min(g, 1.4) / 1.4 * 2 - 1) * 28000)
+    }
 
     static func sine(_ ph: UInt32) -> Int { Int(32767 * sin(Double(ph) / 4_294_967_296 * 2 * .pi)) }
     static func tri(_ q: UInt32) -> Int { let t = q >> 16; return Int(t < 32768 ? t << 1 : (65535 - t) << 1) }
@@ -689,6 +707,7 @@ private struct InsertDrawing {
     func at(_ x: Int) -> Int {
         let ty = v[0], a = v[1], b = v[2], c = v[3], mix = Self.mixq(v[4])
         guard ty > 0, mix > 0 else { return x }
+        if ty == 9 { return x + Int((Int64(Self.filter(x, cutoff: a, res: b, shape: c) - x) * Int64(mix)) >> 15) }
         if ty >= 6 {
             let ph = UInt32(truncatingIfNeeded: x + 32768) << 16
             var s = ty == 8 ? Self.sine(ph) : Self.tri(ph) - 32768

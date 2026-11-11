@@ -58,6 +58,11 @@ struct SkiffArrangePage: View {
                 } else {
                     lanesArea
                 }
+                if let k = session.freeTake {
+                    FreeTakeLine(take: k, session: session)
+                        .padding(.leading, headW)
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                }
                 if let s = section {
                     SectionBar(range: s, songBars: max(songBars, 1), plans: sectionPlans(.duplicateAfter),
                                leftOut: $leftOut, busy: store.busy || store.offline,
@@ -73,6 +78,12 @@ struct SkiffArrangePage: View {
                 if !compact { inspector }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.freeTake?.id)
+            // FREE TAKE landed (Skiff 2.5): its block selected, so it's where the chopping starts
+            .onChange(of: session.freeTake?.id, initial: true) { _, _ in
+                guard let k = session.freeTake, let e = k.entry else { return }
+                selection = EntryRef(track: k.track, entry: e)
+            }
             // (the Song tab: the pool is a full-height drawer of the page's, SkiffSongPage)
             if !compact {
                 PatternBin(session: session, store: store, all: $allPatterns, selection: selection, dragPattern: dragPatternBinding, host: ui)

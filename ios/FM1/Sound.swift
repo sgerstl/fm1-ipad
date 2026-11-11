@@ -26,7 +26,16 @@ struct SoundPage: Identifiable {
     var routes: [[Int?]] = []    // Skiff's MOD: its eleven routes' parameters (PageSpec.routes)
     var engines: [Int] = []      // Skiff's engine pages: only on these engines (PageSpec.engines)
     var picks: [[Int?]] = []     // Skiff's LANES, LANE MIX: a lane's knobs 2–4 (PageSpec.picks)
+    var scopes: [Int] = []       // Skiff 2.5's FX › DELAY, REVERB: each knob's scope (PageSpec.scopes)
+    var knobLabels: [String?] = []   // … and KNOB 1's own name, SEND (PageSpec.knobLabels)
+    var settings: [Int] = []     // GLO › DELAY's MODE: settings that aren't knobs, in the page's scope (PageSpec.settings)
     var id: String { "\(family.rawValue).\(title)" }
+    /// Knob k's scope: 0 the track's, 1 shared by every track.
+    func scope(of k: Int) -> Int { k < scopes.count ? scopes[k] : scope }
+    /// The key a knob's marks go by ("s1.4"), with its own scope.
+    func key(_ k: Int) -> String? { ids[safe: k].flatMap { $0 }.map { "s\(scope(of: k)).\($0)" } }
+    /// Some knobs the track's, some every track's (FX › DELAY: the send, then the bus).
+    var mixed: Bool { Set(ids.indices.map(scope(of:))).count > 1 }
 
     static let all: [SoundPage] = [
         SoundPage(fw: 5, title: "FX", family: .fx, scope: 0, ids: [33, 34, 35, 36]),
@@ -71,9 +80,10 @@ struct SoundPage: Identifiable {
             // Skiff's own PAGES index where one of its pages is this one (the screen link reports and opens
             // those); the rest past every table, never the screen link's
             var fw = 100 + k
-            if session.dialect == .skiff, let d = skiffPages[p.title], !used.contains(d) { fw = d; used.insert(d) }
+            if session.dialect == .skiff, let d = skiffPagesByID["\(p.family).\(p.title)"] ?? skiffPages[p.title], !used.contains(d) { fw = d; used.insert(d) }
             return SoundPage(fw: fw, title: p.title, family: SoundFamily(rawValue: p.family) ?? .edit, scope: p.scope,
-                             ids: p.ids, engineEdit: p.engineEdit, routes: p.routes, engines: p.engines, picks: p.picks)
+                             ids: p.ids, engineEdit: p.engineEdit, routes: p.routes, engines: p.engines, picks: p.picks,
+                             scopes: p.scopes, knobLabels: p.knobLabels, settings: p.settings)
         }
     }
 
@@ -86,6 +96,17 @@ struct SoundPage: Identifiable {
         "VOICE": 28, "VOICE 2": 29, "DELAY": 31, "REVERB": 32, "CHORUS": 33, "GLOBAL": 34, "ARP": 39, "ARP 2": 40,
         "PATTERN": 43,
     ]
+
+    /// Pages whose title another family's page shares: Skiff 2.5's FX › DELAY and FX › REVERB beside GLO's, at Lupe's
+    /// numbers for them (SkiffPageMap; the driver gives the FM-1 its own).
+    static let skiffPagesByID: [String: Int] = ["FX.DELAY": SkiffPageMap.fxDelay, "FX.REVERB": SkiffPageMap.fxReverb]
+
+    /// A button's pages as the FM-1's screen counts them ("FX 5/7"): on Skiff 2.5 INSERT 2 is Lupe's row only (its MIX
+    /// is INSERT's PRESETS card there), so it isn't one of the FM-1's.
+    @MainActor static func counted(_ pages: [SoundPage], _ session: DeviceSession) -> [SoundPage] {
+        guard session.skiffFirmware?.hasSendPages == true else { return pages }
+        return pages.filter { !($0.family == .fx && $0.title == "INSERT 2") }
+    }
 
     @MainActor
     static func shown(_ session: DeviceSession, _ family: SoundFamily) -> [SoundPage] {
@@ -165,7 +186,11 @@ struct SoundPage: Identifiable {
     /// The page a parameter is on, the first one when it appears on several (as MIDI's channels do).
     @MainActor
     static func page(_ session: DeviceSession, scope: Int, id: Int) -> SoundPage? {
-        pages(session).first { $0.scope == scope && ($0.ids.contains(id) || $0.routes.joined().contains(id)) && !$0.analogOnly }
+        // (a send page holds the bus's globals too, but the GLO page is theirs: a knob turned there follows it)
+        pages(session).first { p in
+            !p.analogOnly && (p.ids.indices.contains { p.ids[$0] == id && p.scope(of: $0) == scope && !(p.mixed && p.scope(of: $0) != p.scope) }
+                || (p.scope == scope && p.routes.joined().contains(id)))
+        }
     }
 
     @MainActor
@@ -207,6 +232,13 @@ func formatValue(_ d: ParamDesc?, _ v: Int, skiff: Bool = false) -> (shown: Stri
         let s = "\(x < 0 ? "-" : x > 0 ? "+" : "")\(abs(x) / 10).\(abs(x) % 10)"
         return ("\(s) st", "\(s) semitones")
     case 14: let p = 50 + v / 4; return ("\(p)%", "\(p) percent swing")
+    // Skiff 2.5's F_SHAPE (FILTR's SHAPE): LP, BP, HP, between two "30 BP"
+    case 15 where skiff:
+        let (t, u) = SkiffDisplay.shape(v)
+        let names = ["LP": "low pass", "BP": "band pass", "HP": "high pass"]
+        return u.isEmpty ? (t, names[t] ?? t) : ("\(t) \(u)", "\(t) percent toward \(names[u] ?? u)")
+    // Skiff 2.5's STRUM (U_MS): 0 is OFF, the chord at once
+    case 0 where skiff && d.unit.lowercased() == "ms" && v == 0: return ("OFF", "off")
     case 15:
         if v == 0 { return ("OFF", "off") }
         let p = Int((Double(abs(v)) * 100 / 64).rounded())
@@ -218,7 +250,7 @@ func formatValue(_ d: ParamDesc?, _ v: Int, skiff: Bool = false) -> (shown: Stri
 extension KnobSpec {
     /// Any parameter of the selected track (scope 0) or a global (scope 1), as a knob.
     @MainActor
-    static func param(_ session: DeviceSession, scope: Int, id: Int, slot: Int) -> KnobSpec {
+    static func param(_ session: DeviceSession, scope: Int, id: Int, slot: Int, label: String? = nil) -> KnobSpec {
         let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
         // locking knob turns to a step (Skiff): the knob shows that step's lock, if it has one
         let locked = scope == 0 ? session.lockStep.flatMap { s in session.motion[session.selectedTrack]?.events.first { $0.lock && $0.step == s && $0.id == id }?.value } : nil
@@ -227,9 +259,10 @@ extension KnobSpec {
         let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
         let f = formatValue(d, v, skiff: session.dialect == .skiff)
         let t = session.selectedTrack
-        return KnobSpec(id: "s\(scope).\(id)", colour: Theme.knob[slot % 4], label: d?.label ?? "–", value: v,
+        let skiff = session.dialect == .skiff
+        return KnobSpec(id: "s\(scope).\(id)", colour: Theme.knob[slot % 4], label: label ?? d?.label ?? "–", value: v,
                         range: lo...hi, stepperStep: max(1, (hi - lo) / 16), shown: f.shown, spoken: f.spoken,
-                        bipolar: d?.format == 2 || d?.format == 15 || (lo < 0 && hi > 0),
+                        bipolar: d?.format == 2 || (d?.format == 15 && !skiff) || (lo < 0 && hi > 0),
                         defaultValue: d.map { min(max($0.defaultValue, lo), hi) },
                         choices: d?.format == 8 && !(d?.names.isEmpty ?? true) ? d?.names : nil) { nv in
             if scope == 0 { session.set(track: t, param: id, to: nv) } else { session.set(global: id, to: nv) }
@@ -478,6 +511,7 @@ struct SoundCard: View, Equatable {
                     .environment(\.knobsRecording, session.recordingKnobs && p.scope == 0)
                 }
             }
+            ForEach(first.settings, id: \.self) { id in PageSetting(session: session, scope: first.scope, id: id) }
             if session.dialect == .skiff, first.title == "SLICES" { SlicesNote(session: session, page: first) }
             graph(for: first, rows: rows)
         }
@@ -497,9 +531,10 @@ struct SoundCard: View, Equatable {
     private func columns(_ p: SoundPage) -> some View {
         ForEach(0..<4, id: \.self) { slot in
             if let id = p.ids[slot] {
+                let sc = p.scope(of: slot)
                 KnobControl(ui: ui, activate: { touch(p) },
-                            column: (slot + 1, p.scope == 1 ? Theme.text : Theme.track[session.selectedTrack], marks.key == "s\(p.scope).\(id)")) {   // (shared: white)
-                    KnobSpec.param(session, scope: p.scope, id: id, slot: slot)
+                            column: (slot + 1, sc == 1 ? Theme.text : Theme.track[session.selectedTrack], marks.key == p.key(slot))) {   // (shared: white)
+                    KnobSpec.param(session, scope: sc, id: id, slot: slot, label: p.knobLabels[safe: slot] ?? nil)
                 }
             } else {
                 EmptyColumn()
@@ -531,8 +566,8 @@ struct SoundCard: View, Equatable {
     /// The page's graph, as Skiff draws it under the cards (PageGraph): ENV's curve, the LFO running, DRIVE…
     @ViewBuilder private func graph(for p: SoundPage, rows: [SoundPage]) -> some View {
         // the knob being turned, here or on the FM-1 (marked), lights its point
-        let turning = ui.knobGrab.flatMap { g in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == g.id } }
-            ?? marks.key.flatMap { m in p.ids.firstIndex { $0.map { "s\(p.scope).\($0)" } == m } }
+        let turning = ui.knobGrab.flatMap { g in p.ids.indices.first { p.key($0) == g.id } }
+            ?? marks.key.flatMap { m in p.ids.indices.first { p.key($0) == m } }
         if PageGraph.has(p, session) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: modRoute(p)) }
     }
 
@@ -570,20 +605,25 @@ private struct CardHeader: View {
         let first = rows[0]
         let onDeviceRow = rows.firstIndex { SoundCard.onDevice(session, $0) }
         let marked = marks.key
-        let lit = rows.contains { p in marked != nil && (p.ids + p.routes.joined()).contains { id in id.map { "s\(p.scope).\($0)" } == marked } }
+        let lit = rows.contains { p in marked != nil && (p.ids.indices.contains { p.key($0) == marked }
+            || p.routes.joined().contains { id in id.map { "s\(p.scope).\($0)" } == marked }) }
         HStack(spacing: 8) {
             LED(on: session.screenLinked ? onDeviceRow != nil : lit)
             Text(rows.count > 1 ? rows.map { $0.title(session) }.joined(separator: " · ") : first.title(session))
                 .font(.lupe(15, .semibold))
-            if let r = onDeviceRow, let k = pages.firstIndex(where: { $0.fw == rows[r].fw }) {
+            if let r = onDeviceRow, case let counted = SoundPage.counted(pages, session),
+               let k = counted.firstIndex(where: { $0.fw == rows[r].fw }) {
                 // the page the FM-1 shows, counted as its screen counts them ("FX 1/7")
-                Text("On the FM-1 · \(k + 1)/\(pages.count)")
+                Text("On the FM-1 · \(k + 1)/\(counted.count)")
                     .font(.lupe(12, .semibold))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(.white.opacity(0.10)))
             }
             if first.scope == 1 {
                 Text("all tracks").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
+            } else if first.mixed {
+                // FX › DELAY, REVERB: the send is this track's, the bus every track's (white columns, as GLO's)
+                Text("send: this track · bus: all tracks").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
             }
             Spacer()
         }
@@ -815,4 +855,34 @@ struct KeyMapStrip: View {
         let what = "chord keys: every key plays its \(SkiffChord.modeNames[safe: t.chord] ?? "chord") chord, \(SkiffChord.voicingNames[safe: value("CHORD", 1)] ?? "CLOSE")"
         return oneVoice ? what + " (one voice: the root only)" : what
     }
+}
+
+/// A page's setting that isn't a knob (Skiff 2.5's GLO › DELAY: DLY MODE, MONO STEREO PING), as the FM-1 has it on
+/// the page's PRESETS card: its name, then its choices as segmented keys, under the page's columns. Its own view, so a
+/// change redraws this row alone.
+struct PageSetting: View {
+    let session: DeviceSession
+    let scope: Int
+    let id: Int
+
+    var body: some View {
+        let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
+        let v = scope == 0 ? session.cell(id).value : session.globalCell(id).value
+        let names = d?.names ?? []
+        if !names.isEmpty {
+            HStack(spacing: 12) {
+                Text(Self.title(d?.label ?? "")).font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary)
+                    .accessibilityHidden(true)
+                SegmentedKeys(label: Self.title(d?.label ?? ""), options: names, selected: v - (d?.min ?? 0), minWidth: 72) { k in
+                    let nv = k + (d?.min ?? 0)
+                    if scope == 0 { session.set(track: session.selectedTrack, param: id, to: nv) } else { session.set(global: id, to: nv) }
+                }
+                .font(.lupe(13))
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// "DLY MODE" on a DELAY card says MODE: the card already names the delay.
+    static func title(_ label: String) -> String { label.hasPrefix("DLY ") ? String(label.dropFirst(4)) : label }
 }

@@ -8,7 +8,8 @@ import Foundation
 
 /// INFO's reply on Skiff: SLOOP's fields, then NTRK, CHAIN_ROWS and the tagged capability blocks.
 public struct SkiffInfo: Equatable, Sendable {
-    public static let expectedVersion = "FELUCCA v2.2"
+    /// The first Skiff Lupe spoke, and what a project made on the iPad says it came from (SkiffProjectData.blank).
+    public static let expectedVersion = SkiffFirmware.v2_2.rawValue
 
     public var version: String
     public var engines: [String]
@@ -48,6 +49,11 @@ public struct SkiffInfo: Equatable, Sendable {
 
     /// TRANSPORT (57 bit 0) and the wide ids: what this driver relies on.
     public var isSupported: Bool { (tags[0x57]?.first ?? 0) & 1 != 0 && tags[0x49] != nil && trackCount >= 1 }
+    /// Which release (2.2 or 2.5.1), from the version string; nil for one Lupe doesn't know.
+    public var firmware: SkiffFirmware? { SkiffFirmware(version: version) }
+    /// MENU's settings the editor can describe and set (`4E 01 count`: Skiff 2.2's release 16, 2.5.1's 17 with
+    /// KEEP SENDS). Read, never assumed: MENU_DESC past it answers the list's end.
+    public var menuCount: Int? { tags[0x4E]?.first.map(Int.init) }
     /// Tracks that can't play some engines, and which (`54 01 tracks e0 e1 e2`).
     public var lightTracks: Int { Int(tags[0x54]?.first ?? 0) }
     public var lightEngines: Int {
@@ -137,9 +143,13 @@ public enum MotionRC: Int, Sendable { case done = 0, invalid = 1, full = 2, song
 /// routes, the LFO and its routes (0–16), GATE (32), the FX sends (33–36), GLIDE, PAN, DETUNE, the FM operators
 /// (61–80), and from the DRUM lanes (83) up all but DIR, the duck's source, LFO SYNC TRIG POLARITY, ENV SYNC and the
 /// chord follow. Any other id is refused (rc 1): never offered as a lane.
+/// Skiff 2.5 adds STRUM and DIR (138, 139) before the engine's eight, which move to 140–147: motion_param takes both (they
+/// are past P_LN0 and none of its exceptions), so on 2.5.1 every id from 138 to P_COUNT − 1 records.
 public enum SkiffMotion {
-    public static func recordable(_ id: Int) -> Bool {
-        guard (0..<146).contains(id) else { return false }
+    public static func recordable(_ id: Int) -> Bool { recordable(id, paramCount: 146) }
+    /// `paramCount`: INFO's P_COUNT (146 on 2.2, 148 on 2.5.1).
+    public static func recordable(_ id: Int, paramCount: Int) -> Bool {
+        guard (0..<paramCount).contains(id) else { return false }
         if id <= 16 || id == 32 || (33...36).contains(id) || [38, 39, 44].contains(id) || (61...80).contains(id) { return true }
         return id >= 83 && id != 91 && id != 92 && !(117...119).contains(id) && id != 126 && !(135...137).contains(id)
     }
@@ -150,6 +160,9 @@ public enum SkiffMenu {
     /// MENU > USB LEVEL: 0 MASTER (USB audio follows the MASTER knob), 1 FIXED (USB at the full level, MASTER
     /// after it: the speaker can go down while the iPad keeps the sound). fx.c fx_usb_fixed.
     public static let usbLevel = 10
+    /// MENU > CONTROL > KEEP SENDS (Skiff 2.5): with ON a sound load keeps the track's CHORUS, DELAY and REVERB sends, as
+    /// it keeps LEVEL and PAN. 0 OFF, 1 ON.
+    public static let keepSends = 21
 }
 
 public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
@@ -158,6 +171,8 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     public let info: DeviceInfo
     public var dialect: FirmwareDialect { .skiff }
     public let shape: DeviceShape
+    /// 2.2 or 2.5.1 (INFO's version string): the page numbers, the pages and settings each has.
+    public let firmware: SkiffFirmware
     /// Samples too (cmds 11–15, byte for byte SLOOP's; three slots, SET's USR1..USR3 at 5..7).
     public var capabilities: FirmwareCapabilities { [.userPresets, .recording, .samples] }
     public let pushes: AsyncStream<Push>
@@ -177,10 +192,11 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         info = s.deviceInfo
         shape = DeviceShape(trackCount: s.trackCount, stepCount: s.stepCount, drumTrack: nil,
                             lightTracks: s.lightTracks, lightEngines: s.lightEngines, trackColours: DeviceShape.skiffColours)
+        firmware = s.firmware ?? .v2_2
         (pushes, pushSink) = AsyncStream.makeStream(of: Push.self, bufferingPolicy: .bufferingNewest(256))
-        let source = client.pushes, sink = pushSink
+        let source = client.pushes, sink = pushSink, map = firmware.pageMap
         pushTask = Task {
-            for await p in source { if let q = Self.normalize(p) { sink.yield(q) } }
+            for await p in source { if let q = Self.normalize(p, pages: map) { sink.yield(q) } }
             sink.finish()
         }
     }
@@ -199,9 +215,11 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     /// TRACK_PARAM's first two bytes: the id's bit 7 rides in bit 6 of the track byte.
     static func trackID(_ t: Int, _ id: Int) -> [UInt8] { [UInt8(t | (id >> 7 & 1) << 6), UInt8(id & 127)] }
 
-    /// Pushes in the session's terms: scope 2 is a track parameter from 128, TRACK_CHANGED's bit 6 the id's bit 7.
-    static func normalize(_ p: Push) -> Push? {
+    /// Pushes in the session's terms: scope 2 is a track parameter from 128, TRACK_CHANGED's bit 6 the id's bit 7, and
+    /// SCREEN's page in Lupe's numbers (SkiffPageMap).
+    static func normalize(_ p: Push, pages: SkiffPageMap = .identity) -> Push? {
         switch p {
+        case .ui(let s): return .ui(pages.lupe(s))
         case .changed(2, let id, let v): return .changed(scope: 0, id: id + 128, value: v)
         case .trackChanged(let t, let id, let v): return .trackChanged(track: t & 0x3F, id: id | (t >> 6 & 1) << 7, value: v)
         default: return p
@@ -247,7 +265,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         let track = (0..<info.firstEngineParam).compactMap { descCache[$0] }
         let globals = (0..<info.globalCount).compactMap { descCache[1000 + $0] }
         params = Self.findIDs(track: track, globals: globals)
-        pageLayout = SkiffPages.build(track: track, globals: globals, firstEngineParam: info.firstEngineParam)
+        pageLayout = SkiffPages.build(track: track, globals: globals, firstEngineParam: info.firstEngineParam, firmware: firmware)
     }
 
     /// The ids by DESC label, falling back to Felucca's numbers where a label isn't found.
@@ -341,16 +359,19 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     /// SCREEN (90, the screen link patch): home, page (Skiff's PAGES), layer, menu, the selected track, flags, and
     /// on `56 01 02` the page's two cursors.
     public func screen() async throws -> UIState {
-        try UIState(await request(SkiffCmd.screen, [], match: 0, "SCREEN"))
+        firmware.pageMap.lupe(try UIState(await request(SkiffCmd.screen, [], match: 0, "SCREEN")))
     }
 
     /// SCREEN_GOTO (91): a page of Skiff's PAGES, or 127 for HOME, and on `56 01 02` the page's cursor (clamped
     /// to its range). Always answered: a request refused (past the table, a page the track's engine doesn't show,
     /// a dialog open, a cursor for a page with none) answers the state unchanged.
+    /// `page` is Lupe's number (SkiffPageMap): a page this firmware lacks (FX › DELAY on 2.2) isn't asked for, and the
+    /// screen as it is comes back, as Skiff answers a refused page.
     public func screenGoto(_ page: Int, cursor: Int? = nil) async throws -> UIState {
-        var a = [UInt8(page & 127)]
+        guard let d = firmware.pageMap.device(page) else { return try await screen() }
+        var a = [UInt8(d & 127)]
         if let cursor, skiff.hasScreenCursor { a.append(UInt8(max(0, min(126, cursor)))) }
-        return try UIState(await request(SkiffCmd.screenGoto, a, match: 0, "SCREEN_GOTO", retries: 0))
+        return firmware.pageMap.lupe(try UIState(await request(SkiffCmd.screenGoto, a, match: 0, "SCREEN_GOTO", retries: 0)))
     }
     /// PERFORM's state (80, no args): op, rc, LAUNCH (0 LOOP, 1 BAR, 2 BEAT, 3 NOW), … Only LAUNCH is read.
     public func launchMode() async throws -> SongPlayback.Launch {
@@ -511,7 +532,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     /// A MENU setting's value, by its id: MENU_DESC walks the list (index → index, id, kind, value v14, …;
     /// id 127: the list has ended). nil when this firmware doesn't offer it.
     public func menuValue(id: Int) async throws -> Int? {
-        for i in 0..<64 {
+        for i in 0..<(skiff.menuCount ?? 64) {
             let b = try await request(SkiffCmd.menuDesc, [UInt8(i)], match: 1, "MENU_DESC")
             guard b.count >= 2, b[1] != 127 else { return nil }
             if Int(b[1]) == id {
@@ -576,10 +597,16 @@ public enum SkiffPages {
         let title: String, family: String, scope: Int
         let labels: [String?]
         var nth = 1
+        /// per knob, where they differ (FX › DELAY and REVERB)
+        var scopes: [Int] = []
+        var knobLabels: [String?] = []
+        /// the page's settings that aren't knobs, by DESC label (GLO › DELAY's DLY MODE)
+        var settings: [String] = []
     }
 
     /// In Skiff's PAGES order (params.c), button by button: ENV, LFO, FX, SCL, EDIT, GLO, ARP, SEQ. The fixed MOD
-    /// routes' and the matrix slots' pages aren't shown: they make up MOD (`modSources`).
+    /// routes' and the matrix slots' pages aren't shown: they make up MOD (`modSources`). Skiff 2.2's; `specs(for:)`
+    /// gives a release's.
     static let specs: [Spec] = [
         Spec(title: "ENV", family: "ENV", scope: 0, labels: ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"]),
         Spec(title: "ENV 2", family: "ENV", scope: 0, labels: ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"], nth: 2),
@@ -607,6 +634,31 @@ public enum SkiffPages {
         Spec(title: "PATTERN 2", family: "SEQ", scope: 0, labels: ["DIR", nil, nil, nil]),
     ]
 
+    /// A release's pages. Skiff 2.5 (params.c): FX › DELAY and FX › REVERB after FX, KNOB 1 the track's send (labelled
+    /// SEND on the FM-1), 2–4 the bus's globals; SCL › CHORD gains STRUM and its DIR; GLO › DELAY's MODE on its PRESETS
+    /// card. Lupe keeps INSERT 2 (INSERT's MIX) as a row of INSERT's card: 2.5 moved MIX to INSERT's PRESETS card.
+    static func specs(for firmware: SkiffFirmware) -> [Spec] {
+        guard firmware.hasSendPages else { return specs }
+        var out: [Spec] = []
+        for s in specs {
+            switch (s.family, s.title) {
+            case ("SEL", "CHORD"):
+                out.append(Spec(title: "CHORD", family: "SEL", scope: 0, labels: ["CHORD", "VOICING", "STRUM", "DIR"]))
+            case ("GLO", "DELAY"):
+                var d = s; d.settings = ["DLY MODE"]; out.append(d)
+            default:
+                out.append(s)
+            }
+            if s.family == "FX", s.title == "FX" {
+                out.append(Spec(title: "DELAY", family: "FX", scope: 0, labels: ["DELAY", "TIME", "FEEDBACK", "COLOR"],
+                                scopes: [0, 1, 1, 1], knobLabels: ["SEND", nil, nil, nil]))
+                out.append(Spec(title: "REVERB", family: "FX", scope: 0, labels: ["REVERB", "TYPE", "SIZE", "DAMP"],
+                                scopes: [0, 1, 1, 1], knobLabels: ["SEND", nil, nil, nil]))
+            }
+        }
+        return out
+    }
+
     /// Where MOD's routes come from (ui.c MOD_FIXED, then the slots): LFO DEST's and ENV DEST's of before, by label.
     static let modSources: [Spec] = [
         Spec(title: "LFO DEST", family: "LFO", scope: 0, labels: ["PITCH", "CUTOFF", "SHAPE", "AMP"], nth: 2),
@@ -617,28 +669,32 @@ public enum SkiffPages {
         Spec(title: "MOD 4", family: "LFO", scope: 0, labels: ["SRC4", "DEST4", "AMT4", nil]),
     ]
 
-    public static func build(track: [ParamDesc], globals: [ParamDesc], firstEngineParam e0: Int) -> [PageSpec] {
+    public static func build(track: [ParamDesc], globals: [ParamDesc], firstEngineParam e0: Int,
+                             firmware: SkiffFirmware = .v2_2) -> [PageSpec] {
         func ids(_ s: Spec) -> [Int?] {
-            let ds = s.scope == 0 ? track : globals
-            var prev = -1
+            var prev = [-1, -1]                                             // the knob before, by scope
             var ids: [Int?] = []
             for (k, label) in s.labels.enumerated() {
                 guard let label else { ids.append(nil); continue }
-                let hits = ds.filter { $0.label == label }.map(\.id)
+                let sc = k < s.scopes.count ? s.scopes[k] : s.scope
+                let hits = (sc == 0 ? track : globals).filter { $0.label == label }.map(\.id)
                 let id: Int?
                 if k == 0 { id = hits.count >= s.nth ? hits[s.nth - 1] : nil }
-                else { id = hits.first { $0 > prev } ?? hits.first }        // after the knob before, else the first
-                if let id { prev = id }
+                else { id = hits.first { $0 > prev[sc] } ?? hits.first }    // after the knob before, else the first
+                if let id { prev[sc] = id }
                 ids.append(id)
             }
             return ids
         }
         var pages: [PageSpec] = []
         let src = modSources.map(ids)
-        for s in specs {
+        for s in specs(for: firmware) {
             let k = ids(s)
             guard k.contains(where: { $0 != nil }) else { continue }
-            var page = PageSpec(title: s.title, family: s.family, scope: s.scope, ids: k)
+            // a send page whose bus values aren't all there isn't the page the FM-1 shows: left out
+            if !s.scopes.isEmpty, k.contains(where: { $0 == nil }) { continue }
+            var page = PageSpec(title: s.title, family: s.family, scope: s.scope, ids: k, scopes: s.scopes, knobLabels: s.knobLabels,
+                                settings: s.settings.compactMap { l in (s.scope == 0 ? track : globals).first { $0.label == l }?.id })
             if s.title == "MOD" {
                 // the fixed routes: LFO → PITCH CUT SHAPE AMP, ENV → PITCH CUT SHAPE (ENV DEST lists CUTOFF first)
                 let lfo = src[0], env = src[1]

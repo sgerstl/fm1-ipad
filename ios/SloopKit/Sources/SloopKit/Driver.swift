@@ -8,19 +8,19 @@ import Foundation
 /// A firmware Lupe knows how to talk to, found from INFO.
 public enum FirmwareDialect: Equatable, Sendable {
     case sloop
-    /// Skiff 2.2 (github.com/illuminus5/skiff): Felucca's command numbers, six tracks, INFO's tags.
+    /// Skiff 2.2 or 2.5.1 (github.com/illuminus5/skiff): Felucca's command numbers, six tracks, INFO's tags.
     case skiff
 
     /// The dialect INFO reports, or nil for firmware Lupe doesn't know (it refuses to connect). `body` is
     /// INFO's whole reply, for the tags Skiff ends it with.
     public static func detect(_ info: DeviceInfo, body: [UInt8] = []) -> FirmwareDialect? {
         if info.version == DeviceInfo.expectedVersion, info.protocolVersion == DeviceInfo.expectedProtocol { return .sloop }
-        if info.version == SkiffInfo.expectedVersion, let s = SkiffInfo(body), s.isSupported { return .skiff }
+        if SkiffFirmware(version: info.version) != nil, let s = SkiffInfo(body), s.isSupported { return .skiff }
         return nil
     }
 
     /// Every firmware and version Lupe speaks, for the "other firmware" message.
-    public static let known = "FELUCCA SLOOP 2.8.4 (protocol 12) or Skiff 2.2 (FELUCCA v2.2)"
+    public static let known = "FELUCCA SLOOP 2.8.4 (protocol 12), Skiff 2.2 (FELUCCA v2.2) or Skiff 2.5.1 (FELUCCA v2.5.1)"
 }
 
 /// The parameter ids the session itself reads and follows (the Sound tab reads every one by DESC). Most
@@ -75,11 +75,22 @@ public struct PageSpec: Equatable, Sendable {
     public var engines: [Int] = []
     /// Skiff's LANES and LANE MIX: KNOB 1 picks a lane, and these are its knobs 2–4, a lane a row.
     public var picks: [[Int?]] = []
+    /// Each knob's scope where they differ (Skiff 2.5's FX › DELAY and REVERB: KNOB 1 the track's send, 2–4 the bus's
+    /// globals); empty: every knob is `scope`.
+    public var scopes: [Int] = []
+    /// A knob's label where the FM-1's page names it apart from DESC (FX › DELAY's KNOB 1 is SEND, page_desc).
+    public var knobLabels: [String?] = []
+    /// The page's settings that aren't knobs (the FM-1 puts them on the page's PRESETS card: GLO › DELAY's MODE), in
+    /// the page's scope.
+    public var settings: [Int] = []
     public init(title: String, family: String, scope: Int, ids: [Int?], engineEdit: Int = 0, routes: [[Int?]] = [],
-                engines: [Int] = [], picks: [[Int?]] = []) {
+                engines: [Int] = [], picks: [[Int?]] = [], scopes: [Int] = [], knobLabels: [String?] = [], settings: [Int] = []) {
         self.title = title; self.family = family; self.scope = scope; self.ids = ids; self.engineEdit = engineEdit
         self.routes = routes; self.engines = engines; self.picks = picks
+        self.scopes = scopes; self.knobLabels = knobLabels; self.settings = settings
     }
+    /// Knob `k`'s scope: 0 the track's, 1 a global.
+    public func scope(of k: Int) -> Int { k < scopes.count ? scopes[k] : scope }
 }
 
 /// The device's size: tracks, steps, and which tracks play what.

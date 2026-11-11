@@ -39,7 +39,9 @@ struct MotionLanes: View {
     }
 
     /// A parameter the firmware records as motion: on Skiff only motion_param's (SkiffMotion), else any.
-    static func recordable(_ session: DeviceSession, _ id: Int) -> Bool { session.dialect != .skiff || SkiffMotion.recordable(id) }
+    static func recordable(_ session: DeviceSession, _ id: Int) -> Bool {
+        session.dialect != .skiff || SkiffMotion.recordable(id, paramCount: session.info?.paramCount ?? 146)
+    }
 
     /// Skiff refused a write on this track in the last few seconds: what to say on the lanes.
     static func refusal(_ session: DeviceSession, track: Int) -> String? {

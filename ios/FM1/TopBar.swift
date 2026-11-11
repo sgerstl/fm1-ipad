@@ -12,7 +12,7 @@ struct TopBar: View {
     private var projectsOpen: Binding<Bool> { Binding(get: { ui.projectsOpen }, set: { ui.projectsOpen = $0 }) }
     @State private var naming: NamePrompt?
     @State private var readoutFrame: CGRect = .zero
-    @State private var settingsOpen = false
+    @State private var settingsOpen = LaunchArgs.all.contains("-settings")      // (-settings: open on Settings, for captures)
 
     var body: some View {
         let _ = BodyCounter.tick("TopBar")

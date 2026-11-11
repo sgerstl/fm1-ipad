@@ -110,6 +110,20 @@ public enum SkiffDisplay {
     static let lofiDecays = ["CONST"] + (0...15).map { "D\($0)" } + (1...15).map { "L\($0)" }
     static let noiseLong = ["L23", "L20", "L17", "L15", "L13", "L11", "L9", "L7"]
     static let noiseMeta = ["127", "127B", "93", "63", "63B", "31", "15", "7"]
+    /// params.c N_ITYPE: SLOOP's nine, then (2.5) FILTR, the TYPE's tenth (a 2.2 FM-1 plays one saved as CHOR).
+    static let insertTypes = DeviceDisplay.insertTypes + ["FILTR"]
+    /// INS_DESC's fourth row (2.5): FILTR's CUTOFF, RES and SHAPE (F_SHAPE, `shapeFormat`).
+    static let insertDesc = DeviceDisplay.insertDesc + [[("CUTOFF", DeviceDisplay.Format.cutoff, [], ""),
+                                                         ("RES", DeviceDisplay.Format.pct, [], ""),
+                                                         ("SHAPE", shapeFormat, [], "")]]
+    /// Skiff's F_SHAPE (core.h, 2.5): 0 LP, 64 BP, 127 HP; in between the way to the next ("30 BP": 30 % from LP to BP).
+    public static let shapeFormat = 15
+    public static func shape(_ v: Int) -> (text: String, unit: String) {
+        if v <= 0 { return ("LP", "") }
+        if v == 64 { return ("BP", "") }
+        if v >= 127 { return ("HP", "") }
+        return v < 64 ? ("\((v * 100 + 32) / 64)", "BP") : ("\(((v - 64) * 100 + 31) / 63)", "HP")
+    }
 
     /// The engine's own label (and format, names, unit) for its EDIT knob k (0…7), given its values E0, E1; nil:
     /// DESC's is right.
@@ -150,8 +164,8 @@ extension DeviceSession {
         let ins = page("INSERT"), env = page("ENV"), lfo2 = page("LFO 2")
         if let k = ins.dropFirst().firstIndex(of: id), let typeID = ins.first ?? nil {
             let type = cell(typeID).value
-            if type > 0, type < DeviceDisplay.insertTypes.count {
-                let x = DeviceDisplay.insertDesc[type < 5 ? 0 : type == 5 ? 1 : 2][k - 1]
+            if type > 0, type < SkiffDisplay.insertTypes.count {
+                let x = SkiffDisplay.insertDesc[type < 5 ? 0 : type == 5 ? 1 : type < 9 ? 2 : 3][k - 1]
                 d.label = x.label; d.format = x.format; d.names = x.names; d.unit = x.unit
                 d.min = 0; d.max = 127
             }

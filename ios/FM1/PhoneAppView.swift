@@ -121,7 +121,7 @@ struct PhoneTopBar: View {
     @Environment(FirmwareCentre.self) private var firmware
     @State private var moreFrame: CGRect = .zero
     /// Settings (Sound buttons, Handedness, Labs…): on the phone too, from ⋯ (2026-11-10: the rail's setting needs a way in)
-    @State private var settingsOpen = false
+    @State private var settingsOpen = LaunchArgs.all.contains("-settings")      // (-settings: open on Settings, for captures)
 
     private var recording: Bool { session.isRecordingAnything }
     @State private var chipFrames: [Int: CGRect] = [:]

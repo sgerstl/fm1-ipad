@@ -4,6 +4,8 @@ Lupe installs the FM-1 firmware it speaks, so testers don't need a computer, and
 
 **Since 2026-11-08 the two GPL builds are named Skiff-Lupe and SLOOP-Lupe and aren't in the app.** Lupe downloads the chosen one from its GitHub release (`lupe-firmware-1`), checks the SHA-256 before anything else sees it, and keeps it in Application Support (`FirmwareStore.swift`). So an App Store or TestFlight build carries no GPL firmware. The files and their release notes live in `firmware/releases/`. Stock V15 (Apache-2.0) stays in the app, in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
 
+**Skiff-Lupe 2.5.1 is staged (2026-11-11), not yet tested on an FM-1:** `firmware/releases/Skiff-Lupe-2.5.1.fwsc`, 610,429 bytes, SHA-256 `80b21b33d05ccaa384636261e229eb94efdac847c93cc1f534d69082ff71302c`, identity `FM-1_725` (loader `ota-FM-1_725`), pinned as `LupeFirmware.skiff251`, to be released as `lupe-firmware-2`. See `firmware/releases/Skiff-Lupe-2.5.1.md`. Lupe speaks both 2.2 and 2.5.1.
+
 | | Skiff-Lupe 2.2 (Skiff 2.2 + screen link) | SLOOP-Lupe 2.8.4 (SLOOP 2.8.4 + screen link) | Stock V15 |
 |---|---|---|---|
 | File | `firmware/releases/Skiff-Lupe-2.2.fwsc` (downloaded) | `firmware/releases/SLOOP-Lupe-2.8.4.fwsc` (downloaded) | `FM-1_015.fwsc` (in the app) |

@@ -749,3 +749,39 @@ struct GridViewBox<G: Gesture>: View {
         ui.viewJump = ViewJump(bar: b, id: (ui.viewJump?.id ?? 0) + 1)
     }
 }
+
+// MARK: - FREE TAKE (Skiff 2.5, level 1)
+
+/// A take the FM-1 put into a track while stopped (DeviceSession.freeTake): what it became and how to undo it. The
+/// editor protocol has no undo, so the FM-1's own is named (SAVE held, then OCT−), with its depth. RefusalLine's box:
+/// the neutral lift, dismissed with its ✕ or by the next take.
+struct FreeTakeLine: View {
+    let take: FreeTake
+    let session: DeviceSession
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "waveform.badge.plus").font(.system(size: 17, weight: .semibold)).accessibilityHidden(true)
+            Text(text).font(.lupe(15)).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button { session.dismissFreeTake() } label: {
+                Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.leading, 14)
+        .frame(minHeight: 44)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.tones[2]))
+        .accessibilityElement(children: .contain)
+    }
+
+    private var text: String {
+        let t = session.tracks[safe: take.track]
+        let bars = max(1, (t?.division == 1 ? take.length / 8 : take.length / 16))
+        let entry = take.entry.map { " (entry \(Entries.letter($0)))" } ?? ""
+        return "New take on T\(take.track + 1)\(entry): \(bars) bar\(bars == 1 ? "" : "s") at \(take.bpm) BPM. "
+            + "To undo it, hold SAVE on the FM-1 (it keeps the last \(take.undoLevels) changes)."
+    }
+}

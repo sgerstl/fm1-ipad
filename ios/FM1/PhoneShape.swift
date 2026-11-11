@@ -106,13 +106,14 @@ struct PhoneShape: View {
             HStack(spacing: 8) {
                 LED(on: lit)
                 Text(p.title(session)).font(.lupe(15, .semibold))
-                if onDevice, let k = pages.firstIndex(where: { $0.fw == p.fw }) {
-                    Text("On the FM-1 · \(k + 1)/\(pages.count)")
+                if onDevice, case let counted = SoundPage.counted(pages, session), let k = counted.firstIndex(where: { $0.fw == p.fw }) {
+                    Text("On the FM-1 · \(k + 1)/\(counted.count)")
                         .font(.lupe(12, .semibold))
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(.white.opacity(0.10)))
                 }
                 if p.scope == 1 { Text("all tracks").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
+                else if p.mixed { Text("bus: all tracks").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
                 Spacer(minLength: 0)
             }
             .frame(height: 24)
@@ -122,7 +123,9 @@ struct PhoneShape: View {
             HStack(spacing: 0) {
                 ForEach(0..<4, id: \.self) { slot in
                     if let id = p.ids[slot] {
-                        KnobControl(ui: ui, size: 56) { KnobSpec.param(session, scope: p.scope, id: id, slot: slot) }
+                        KnobControl(ui: ui, size: 56) {
+                            KnobSpec.param(session, scope: p.scope(of: slot), id: id, slot: slot, label: p.knobLabels[safe: slot] ?? nil)
+                        }
                             .frame(maxWidth: .infinity)
                     } else {
                         Color.clear.frame(maxWidth: .infinity, maxHeight: 1).accessibilityHidden(true)
@@ -130,6 +133,7 @@ struct PhoneShape: View {
                 }
             }
             .frame(maxHeight: .infinity)
+            ForEach(p.settings, id: \.self) { id in PageSetting(session: session, scope: p.scope, id: id) }
         }
         .padding(12)
         .frame(maxHeight: .infinity, alignment: .top)

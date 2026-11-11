@@ -93,6 +93,13 @@ struct AppView: View {
             if now, !was { AccessibilityNotification.Announcement("FM-1 disconnected. Plug it back in; nothing is lost.").post() }
             else if was, !now, session.isConnected { AccessibilityNotification.Announcement("FM-1 back").post() }
         }
+        // FREE TAKE kept on the FM-1 (Skiff 2.5, level 1): the Timeline, where a take gets chopped, even though Pads are
+        // the default (batch list item 4); the block is selected there and the strip says how to undo it
+        .onChange(of: session.freeTake?.id) { _, id in
+            guard id != nil, ui.songTab, ui.followDevice else { return }
+            if ui.songView != .timeline { ui.songView = .timeline }
+            if ui.page != .song { ui.pageFromDevice = true; ui.page = .song }
+        }
         // ARP held on the FM-1 (PERFORM) shows the Pads while it's held (Scott, 2026-11-07). (The view no longer
         // follows the playback mode to the timeline: Pads are the default, the timeline is the user's to pick, 2026-11-09)
         .onChange(of: session.screenLinked && session.deviceScreen?.layer == SkiffButtonMap.performLayer) { _, held in

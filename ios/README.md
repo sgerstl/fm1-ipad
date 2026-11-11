@@ -86,6 +86,9 @@ Launch arguments only work in Debug builds (`LaunchArgs`); a Release build ignor
 |---|---|
 | `-demo` | Starts on the demo FM-1 (SLOOP unless `-demo-skiff`). |
 | `-demo-skiff` | The demo is Skiff 2.2 (`FakeSkiff`). |
+| `-demo-fw 2.5.1` | The demo Skiff is 2.5.1 (its fixture, recorded from skiff-sim on Skiff-Lupe 2.5.1): FX › DELAY and REVERB, STRUM, DLY MODE, KEEP SENDS. |
+| `-demo-free-take` | 3 s in, the demo FM-1 keeps a FREE TAKE on the selected track (on 2.5.1 Lupe lands on the Timeline). |
+| `-settings` | Opens on Settings. |
 | `-demo-link`, `-demo-meter`, `-demo-scope` | The demo Skiff has the screen link: buttons, then levels too, then the scope too. |
 | `-demo-stopped`, `-demo-still` | The demo starts stopped, or makes no edits of its own (screenshots, recordings). |
 | `-demo-notes-walk`, `-demo-mod-walk` | The demo turns the FM-1's cursor through SEQ's steps or MOD's routes. |
@@ -97,7 +100,7 @@ Launch arguments only work in Debug builds (`LaunchArgs`); a Release build ignor
 | `-show-touches` | Draws a circle under each finger and logs touches (screen recordings). |
 | `-count-bodies` | Debug builds only: prints how often each counted view's body runs. |
 
-The rest (`-demo-chord`, `-demo-engine`, `-demo-song`, `-demo-track`, `-demo-turn`, `-demo-usr`, `-demo-user-sounds`,
+The rest (`-demo-chord`, `-demo-insert`, `-demo-engine`, `-demo-song`, `-demo-track`, `-demo-turn`, `-demo-usr`, `-demo-user-sounds`,
 `-demo-link-v1`, `-family`, `-sound-panel`, `-motion-lane`, `-motion-locks`, `-motion-paint`, `-library-user`,
 `-intro-at`) set up particular screens for screenshots. Each is described where it's read: `FakeSkiff.swift`,
 `EditorUI.swift`, `MotionLanes.swift`, `LaunchIntro.swift`.

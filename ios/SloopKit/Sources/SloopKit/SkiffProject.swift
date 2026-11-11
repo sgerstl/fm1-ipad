@@ -24,6 +24,57 @@ public struct SKF4: Equatable, Sendable {
         self.bytes = bytes
     }
 
+    // After the lists (project.c proj_pack4): each track's entry, the scenes (82), sel, SONG, the DRUM-X kit (1 + 8 × 11),
+    // the FM6 patches (6 × 128); then the globals by GSID (a count, then 16-bit values) and each track's engine, preset,
+    // user slot and parameters by SID (a count, then value + 64). The counts are the record's: Skiff 2.0–2.2 wrote 27
+    // globals and 146 SIDs, 2.5 writes 28 (G_DMODE) and 148 (STRUM 146, DIR 147).
+    static let globalsAt = entriesAt + tracks * entries * 4 + tracks + 82 + 2 + (1 + 8 * 11) + tracks * 128
+    /// GSID 27, the delay's MODE (2.5): MONO 0, STEREO 1, PING 2.
+    public static let delayModeGSID = 27
+    /// SIDs 146 and 147 (2.5): SCL › CHORD's STRUM (0–100 ms) and its DIR (DOWN UP ALT).
+    public static let strumSID = 146, strumDirSID = 147
+
+    /// The globals by GSID, as many as the record holds (Skiff 2.2: 27); nil when the block doesn't fit.
+    public var globals: [Int]? {
+        let at = Self.globalsAt
+        guard at < Self.nameAt else { return nil }
+        let n = Int(bytes[at])
+        guard at + 1 + 2 * n <= Self.nameAt else { return nil }
+        return (0..<n).map { k in Int(Int16(bitPattern: UInt16(bytes[at + 1 + 2 * k]) | UInt16(bytes[at + 2 + 2 * k]) << 8)) }
+    }
+
+    /// The delay's MODE as Skiff 2.5 loads it: the record's, or MONO for one written before 2.5 (27 globals), as it
+    /// played (project.c proj_unpack4).
+    public var delayMode: Int {
+        guard let g = globals, g.count > Self.delayModeGSID else { return 0 }
+        return g[Self.delayModeGSID]
+    }
+
+    /// Each track's engine, preset, user slot and its parameters by SID (as stored: value, not + 64); nil when a block
+    /// doesn't fit or holds a byte no record holds (past 191), as Skiff refuses the record.
+    public var trackParams: [(engine: Int, preset: Int, user: Int, sids: [Int])]? {
+        guard let g = globals else { return nil }
+        var pos = Self.globalsAt + 1 + 2 * g.count
+        var out: [(Int, Int, Int, [Int])] = []
+        for _ in 0..<Self.tracks {
+            guard pos + 4 <= Self.nameAt else { return nil }
+            let e = Int(bytes[pos]), p = Int(bytes[pos + 1]), u = Int(bytes[pos + 2]), n = Int(bytes[pos + 3])
+            pos += 4
+            guard pos + n <= Self.nameAt else { return nil }
+            let v = bytes[pos..<(pos + n)]
+            guard !v.contains(where: { $0 > 191 }) else { return nil }
+            out.append((e, p, u, v.map { Int($0) - 64 }))
+            pos += n
+        }
+        return out
+    }
+
+    /// Track t's STRUM and DIR (SIDs 146, 147); nil in a record from before 2.5 (it loads them as OFF and DOWN).
+    public func strum(track t: Int) -> (ms: Int, dir: Int)? {
+        guard let p = trackParams?[safe: t], p.sids.count > Self.strumDirSID else { return nil }
+        return (p.sids[Self.strumSID], p.sids[Self.strumDirSID])
+    }
+
     /// The pattern ids (0…63) its entries name, in entry order, each once.
     public var patternIDs: [Int] {
         var seen = Set<Int>(), out: [Int] = []
@@ -90,6 +141,14 @@ public struct SkiffProjectData: Codable, Equatable, Sendable {
     public static let blank = SkiffProjectData(record: Array(Data(base64Encoded: blankBase64, options: .ignoreUnknownCharacters)!),
                                                patterns: [:], firmware: SkiffInfo.expectedVersion)
 
+    /// Skiff 2.5.1's fresh start: 28 globals (the delay STEREO, as a new 2.5 project has it) and 148 SIDs a track
+    /// (STRUM, DIR). Captured from skiff-sim built on Skiff-Lupe 2.5.1 (737e3fb), a new unit, 2026-11-11
+    /// (SkiffProjectSimTests.capturesANewUnitsRecord).
+    public static let blank251 = SkiffProjectData(record: Array(Data(base64Encoded: blank251Base64, options: .ignoreUnknownCharacters)!),
+                                                  patterns: [:], firmware: SkiffFirmware.v2_5_1.rawValue)
+    /// The fresh start for the FM-1's release: a 2.2 record on 2.5 would load with the delay MONO.
+    public static func blank(for firmware: SkiffFirmware?) -> SkiffProjectData { firmware == .v2_5_1 ? blank251 : blank }
+
     public var project: SKF4? { SKF4(Array(record)) }
     /// How many patterns its tracks play.
     public var patternCount: Int { patterns.count }
@@ -113,6 +172,39 @@ public struct SkiffProjectData: Codable, Equatable, Sendable {
         return ([String(CRC32.of(b), radix: 16)] + pats).joined(separator: "-")
     }
 
+    private static let blank251Base64 = """
+        NEZLUwAKAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY2NjY2NjYwAnAAAAOAAA
+        AgBjY2NjY2NjACcAAAA4AAACAGNjY2NjY2MAJwAAADgAAAIAY2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcAAAA4AAACAGNjY2NjY2MAJwAAADgA
+        YwIAY2NjYzIyMjIACCMAAAAxGElOSVQgVk9JQ0UjHigoVVpVACcAAAA4ADICACYeKChjX1oAJwAAADgAUAQAHhkoKFBaVQAnAAAAOAQ3BAAoHigo
+        Y19aACcAAABQAFwCACMeKChVWlAAJwAAADgEPAIAKB4oKGNfWgAnAAAAKABcAgBjY2NjMjIyMgQKHjwEACkYU09GVCBQQUQgIGNjY2NjY2MAJwAA
+        ADgAAAIAY2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcAAAA4AAACAGNjY2NjY2MAJwAAADgAAAIAY2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcA
+        AAA4AGMCAGNjY2MyMjIyAAgjAAAAMRhJTklUIFZPSUNFY2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcAAAA4AAACAGNjY2NjY2MAJwAAADgAAAIA
+        Y2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcAAAA4AAACAGNjY2NjY2MAJwAAADgAYwIAY2NjYzIyMjIACCMAAAAxGElOSVQgVk9JQ0VjY2NjY2Nj
+        ACcAAAA4AAACAGNjY2NjY2MAJwAAADgAAAIAY2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcAAAA4AAACAGNjY2NjY2MAJwAAADgAAAIAY2NjY2Nj
+        YwAnAAAAOABjAgBjY2NjMjIyMgAIIwAAADEYSU5JVCBWT0lDRWNjY2NjY2MAJwAAADgAAAIAY2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcAAAA4
+        AAACAGNjY2NjY2MAJwAAADgAAAIAY2NjY2NjYwAnAAAAOAAAAgBjY2NjY2NjACcAAAA4AGMCAGNjY2MyMjIyAAgjAAAAMRhJTklUIFZPSUNFHHgA
+        AAAAAAAAAQA8AEYAWgBaADwAKAA8AAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAQAlKhAd1RecEBAQHxAQEBAQEBAQEJBgEC/QEBA
+        QEBAUEJAv1RAbU9CQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAv7+/v7+/v79AQKCJQEBAfEBogICAgICAgIBA
+        QEBAQEBAQEBAQEBAgKCgv0BAQEBAcqRZgEBAQEBAQEBAQEBAQEAMBACUqEBAv0BAQEBAfEBAQEBAQEBAQkGAQL9AQEBAQEBQQkC/QHxehkBAQEBA
+        QEBoQEFBv0BAQEBAQEBAQEBAQEBAv0C/QEC/QL9AQL9Av0BAv0C/QEC/v7+/v7+/v0BAoIlAQEB8QGiAgICAgICAgEBAQEBAQEBAQEBAQECAoKC/
+        QEBAQEBAQF5EQEBAQEBAQEBAQEBAQAMAAJSoQHyaXkBAQEB8QEBAQEBAQEBCQYBAv0BAQEBAQFBCQL9AQGhUQkBAQEBAQGhAQUG/QEBAQEBAQEBA
+        QEBAQEC/QL9AQL9Av0BAv0C/QEC/QL9AQL+/v7+/v7+/QECgiUBAQHxAaICAgICAgICAQEBAQEBAQEBAQEBAQICgoL9AQEBgQEBUQL9AQEBAQEBA
+        QEBAQEBACgAAlKhApL+kQEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAv0BAQFRAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/
+        QL9AQL9Av0BAv7+/v7+/v79AQKCJQEBAfEBogICAgICAgIBAQEBAQEBAQEBAQEBAgKCgv0BAgIaAgKRAQEBAQEBAQEBAQEBAQEAEAACUqEC/v4ZA
+        QEBAfEBAQEBAQEBAQkGAQL9AQEBAQEBQQkC/QFhcZEBAQEBAQEBoQEFBv0BAQEBAQEBAQEBAQEBAv0C/QEC/QL9AQL9Av0BAv0C/QEC/v7+/v7+/
+        v0BAoIlAQEB8QGiAgICAgICAgEBAQEBAQEBAQEBAQECAoKC/QEBAQEG/QEBAQEBAQEBAQEBAQEBAQAoAAJSoQKS/pEBAQEB8QEBAQEBAQEBCQYBA
+        v0BAQEBAQFBCQL9AQEBUQEBAQEBAQGhAQUG/QEBAQEBAQEBAQEBAQEC/QL9AQL9Av0BAv0C/QEC/QL9AQL+/v7+/v7+/QECgiUBAQHxAaICAgICA
+        gICAQEBAQEBAQEBAQEBAQICgoL9AQICGgICkQEBAQEBAQEBAQEBAQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAt5qL+Q==
+        """
     private static let blankBase64 = """
         NEZLUwAKAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
