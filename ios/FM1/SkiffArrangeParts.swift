@@ -750,7 +750,7 @@ struct GridViewBox<G: Gesture>: View {
     }
 }
 
-// MARK: - FREE TAKE (Skiff 2.5, level 1)
+// MARK: - FREE TAKE (Skiff 2.5, level 1; the Undo key on screen link v7)
 
 /// A take the FM-1 put into a track while stopped (DeviceSession.freeTake): what it became, and the FM-1's FREE TAKE
 /// picker mirrored (Skiff 2.5 ui_take.c, ui_draw.c fr_columns, draw_foot): its four knobs and its three keys, so the
@@ -768,15 +768,32 @@ struct FreeTakeLine: View {
                 .padding(.top, 13).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
                 Text(title).font(.lupe(15, .semibold)).fixedSize(horizontal: false, vertical: true)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 16) { knobs; keys }
-                    VStack(alignment: .leading, spacing: 8) { knobs; keys }
+                if take.undoFromHere {
+                    // (v7) kept from the picker here or on the FM-1; Undo is the FM-1's own, asked for from here
+                    Text(take.undone ? "Undone: the track is as it was before the take. Redo puts the take back."
+                                     : "Undo brings back what was there (the FM-1 keeps the last \(take.undoLevels) changes).")
+                        .font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 16) { knobs; keys }
+                        VStack(alignment: .leading, spacing: 8) { knobs; keys }
+                    }
+                    Text("Once it's kept, hold SAVE on the FM-1 to undo it (it keeps the last \(take.undoLevels) changes).")
+                        .font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised).fixedSize(horizontal: false, vertical: true)
                 }
-                Text("Once it's kept, hold SAVE on the FM-1 to undo it (it keeps the last \(take.undoLevels) changes).")
-                    .font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 12)
             Spacer(minLength: 0)
+            if take.undoFromHere {
+                Button { session.undoFreeTake() } label: {
+                    Label(take.undone ? "Redo" : "Undo", systemImage: take.undone ? "arrow.uturn.forward" : "arrow.uturn.backward")
+                        .font(.lupe(15, .semibold)).padding(.horizontal, 16).frame(minHeight: 44)
+                        .raisedKey().contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .padding(.vertical, 12)
+                .accessibilityHint(take.undone ? "Puts the take back on the FM-1" : "Puts the track back as it was before the take, on the FM-1")
+            }
             Button { session.dismissFreeTake() } label: {
                 Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 44, height: 44)
             }

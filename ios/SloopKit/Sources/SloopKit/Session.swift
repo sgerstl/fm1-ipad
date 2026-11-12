@@ -316,6 +316,11 @@ public final class DeviceSession {
     /// FREE TAKE (Skiff 2.5), level 1: a take the FM-1 put into a track while stopped, seen from here (FreeTakeWatch).
     public internal(set) var freeTake: FreeTake?
     @ObservationIgnored var freeTakeWatch = FreeTakeWatch()
+    /// Levels 2 and 3 (Skiff-Lupe's screen link v7): the FM-1's FREE TAKE picker while it's open (TakePicker), a
+    /// phrase heard while stopped offered as a take (TakeOffer), and whether the link reports them (`takeLinked`).
+    public internal(set) var takePicker: TakePicker?
+    public internal(set) var takeOffer: TakeOffer?
+    public private(set) var takeLinked = false
     public private(set) var globalDescs: [Int: ParamDesc] = [:]
     /// fm1-ipad firmware (SLOOP 2.8.4 plus the UI push): the FM-1 reports its page and the iPad can set it.
     public private(set) var screenLinked = false
@@ -458,7 +463,7 @@ public final class DeviceSession {
             dialect = c.dialect
             capabilities = c.capabilities
             skiffFirmware = (c as? SkiffDriver)?.firmware
-            keepSends = nil; freeTake = nil; freeTakeWatch = FreeTakeWatch()
+            keepSends = nil; freeTake = nil; freeTakeWatch = FreeTakeWatch(); takePicker = nil; takeOffer = nil
             ids = c.params
             pageLayout = c.pageLayout
             adopt(c.shape)
@@ -473,7 +478,9 @@ public final class DeviceSession {
             screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
             screenScope = screenLinked && (c as? SkiffDriver)?.skiff.hasScope == true
             screenCurrent = screenLinked && (c as? SkiffDriver)?.skiff.isCurrentLink == true
+            takeLinked = screenLinked && (c as? SkiffDriver)?.skiff.hasTakeLink == true
             try await c.watch(screenLink: screenLinked, scope: !scopeViewers.isEmpty)
+            if takeLinked { await readTakePicker() }
             if let s = c as? SkiffDriver {
                 if let store = skiffEdit { store.attach(s) } else {
                     let store = SkiffEditStore(driver: s)
@@ -1129,7 +1136,7 @@ public final class DeviceSession {
 
     private func pushLoop(_ c: FirmwareDriver) async {
         for await p in c.pushes {
-            switch p { case .ui, .meter, .scope: break; default: onEdit?() }     // (levels and the scope aren't edits)
+            switch p { case .ui, .meter, .scope, .take: break; default: onEdit?() }     // (levels and the scope aren't edits)
             switch p {
             case .stepChanged(let i, let t):
                 guard trackIndices.contains(t), stepIndices.contains(i) else { break }
@@ -1156,10 +1163,14 @@ public final class DeviceSession {
                 screenLinked = true
                 if s != deviceScreen { deviceScreen = s }
                 adoptTrack(from: s)
+                // (v7) SCREEN's flags bit 3 is the picker: one seen without its state (a push lost) reads it
+                if takeLinked, let f = s.flags, (f & 8 != 0) != (takePicker != nil) { Task { await self.readTakePicker() } }
             case .meter(let v):
                 meters.measure(v)
             case .scope(let f):
                 if !scopeViewers.isEmpty { scope.take(f) }       // (one last frame after the scope left: dropped)
+            case .take(let p):
+                takeReported(p)
             }
         }
     }
@@ -1532,7 +1543,7 @@ public final class DeviceSession {
             lfoClock.note(track: track, note: n, on: e.on, at: Date())
             if trackIndices.contains(track) { meters.note(track: track, note: n, on: e.on, velocity: Int(e.velocity)) }
             if track == selectedTrack { if e.on { deviceNotes.insert(n) } else { deviceNotes.remove(n) } }
-            if e.on, !playing, trackIndices.contains(track) { freeTakeWatch.heard(track: track) }
+            if e.on, !playing, trackIndices.contains(track) { takeNoteHeard(track: track, note: n) }
             if e.on, trackIndices.contains(track), tracks[track].direction == 3 { anchorRandom(track: track, note: n) }
         }
     }
@@ -1567,6 +1578,7 @@ public final class DeviceSession {
         let ch = Self.keyChannel(driver?.dialect, track: selectedTrack)
         held[key] = (note, ch)
         driver?.sendMIDI([0x90 | ch, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
+        if !playing { takeNoteHeard(track: selectedTrack, note: note) }   // (FREE TAKE: Lupe's keys play into it too)
     }
 
     /// A piano-roll row: that exact note, held while touched (drum lanes go through keyDown).

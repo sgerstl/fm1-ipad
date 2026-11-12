@@ -48,8 +48,10 @@ import Testing
             #expect(p.flashSpan?.size == 0x93000)
             #expect(p.isOfficial == f.isStock)
             #expect(p.image.count == f.size - 20)
-            #expect(LupeFirmware.matching(identity: f.product) == f)
-            #expect(LupeFirmware.matching(identity: "ota-" + f.product) == f)
+            // an identity names a release family: Skiff-Lupe 2.5.1 and its take build are both FM-1_725 (INFO's 56 01
+            // tag tells them apart after boot, the pin before install), and it reads as the first of them
+            #expect(LupeFirmware.matching(identity: f.product)?.product == f.product)
+            #expect(LupeFirmware.matching(identity: "ota-" + f.product)?.product == f.product)
         }
         #expect(LupeFirmware.matching(identity: "FM-1_016") == nil)
     }

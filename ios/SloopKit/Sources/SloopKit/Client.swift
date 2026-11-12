@@ -122,7 +122,7 @@ public actor SloopClient {
             return
         }
         // UI (fm1-ipad firmware) is both a reply and a push: every one updates the screen state
-        if cmd == Cmd.ui, let push = try? Push(cmd: cmd, body: body) { pushSink.yield(push) }
+        if cmd == Cmd.ui || cmd == Cmd.take, let push = try? Push(cmd: cmd, body: body) { pushSink.yield(push) }
         guard let p = inFlight, p.request.cmd == cmd, p.request.matches(body) else { return }
         inFlight = nil
         p.continuation.resume(returning: body)

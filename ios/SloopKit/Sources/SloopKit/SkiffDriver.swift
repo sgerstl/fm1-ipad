@@ -80,6 +80,9 @@ public struct SkiffInfo: Equatable, Sendable {
     /// The sixth (`56 01 06`): SCOPE 30 times a second (fifth), read before MASTER under USB LEVEL FIXED, so
     /// listening on the iPad with MASTER down no longer flattens it. The build Lupe carries.
     public var isCurrentLink: Bool { (tags[0x56]?.first ?? 0) >= 6 }
+    /// The seventh (`56 01 07`, FREE TAKE levels 2 and 3): TAKE (94) reports and drives the FM-1's FREE TAKE picker
+    /// (pushed with WATCH bit 5, SCREEN's flags bit 3 while it's open) and starts a take; UNDO (95) is the panel's undo.
+    public var hasTakeLink: Bool { (tags[0x56]?.first ?? 0) >= 7 }
 
     public var deviceInfo: DeviceInfo {
         DeviceInfo(version: version, engines: engines, paramCount: paramCount, globalCount: globalCount, stepCount: stepCount,
@@ -95,7 +98,7 @@ enum SkiffCmd {
     static let transport: UInt8 = 76
     static let pool: UInt8 = 78, list2: UInt8 = 82
     static let menuDesc: UInt8 = 72, menuSet: UInt8 = 73
-    static let screen: UInt8 = 90, screenGoto: UInt8 = 91
+    static let screen: UInt8 = 90, screenGoto: UInt8 = 91, take: UInt8 = 94, undo: UInt8 = 95
     static let motion: UInt8 = 64
 }
 
@@ -352,7 +355,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
     /// and, while a scope is on show (`scope`), SCOPE (bit 4).
     public func watch(screenLink: Bool, scope: Bool) async throws {
         let bits = (screenLink && skiff.hasScreenLink ? 7 : 3) | (screenLink && skiff.hasMeter ? 8 : 0)
-            | (screenLink && scope && skiff.hasScope ? 16 : 0)
+            | (screenLink && scope && skiff.hasScope ? 16 : 0) | (screenLink && skiff.hasTakeLink ? 32 : 0)
         _ = try await request(SkiffCmd.watch, [UInt8(bits)], match: 0, "WATCH")
     }
 
@@ -372,6 +375,22 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         var a = [UInt8(d & 127)]
         if let cursor, skiff.hasScreenCursor { a.append(UInt8(max(0, min(126, cursor)))) }
         return firmware.pageMap.lupe(try UIState(await request(SkiffCmd.screenGoto, a, match: 0, "SCREEN_GOTO", retries: 0)))
+    }
+    /// TAKE (94, `56 01 07`): the FREE TAKE picker as it is, or one op and the picker after it. rc 1: refused (an op on
+    /// a closed picker; a take with the MENU, a dialog or NAME open on the FM-1).
+    public func take(_ op: TakeOp? = nil) async throws -> (rc: Int, picker: TakePicker) {
+        let a = op?.bytes ?? []
+        let b = try await request(SkiffCmd.take, a, match: 0, "TAKE" + (op == nil ? "" : " op \(a[0])"),
+                                  timeout: .milliseconds(op == nil ? 300 : 800), retries: op == nil ? 1 : 0)
+        guard b.count >= TakePicker.length + 1 else { throw DecodeError.short(cmd: SkiffCmd.take) }
+        return (Int(b[TakePicker.length]), try TakePicker(b))
+    }
+    /// UNDO (95, `56 01 07`): the FM-1's own undo, back or (`redo`) forward, as SAVE held and OCT+ in its window.
+    /// rc 1: refused (the MENU, a dialog or the picker open). `back`: how many copies back it now is.
+    public func undo(redo: Bool = false) async throws -> (rc: Int, copies: Int, back: Int) {
+        let b = try await request(SkiffCmd.undo, [redo ? 1 : 0], match: 0, redo ? "UNDO redo" : "UNDO", timeout: .milliseconds(800), retries: 0)
+        guard b.count >= 3 else { throw DecodeError.short(cmd: SkiffCmd.undo) }
+        return (Int(b[0]), Int(b[1]), Int(b[2]))
     }
     /// PERFORM's state (80, no args): op, rc, LAUNCH (0 LOOP, 1 BAR, 2 BEAT, 3 NOW), … Only LAUNCH is read.
     public func launchMode() async throws -> SongPlayback.Launch {
