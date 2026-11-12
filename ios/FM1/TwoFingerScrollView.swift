@@ -104,6 +104,10 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         private var downAt: CGPoint?
         /// The first finger's landing, in the grid's points, and when.
         private var landed: (p: CGPoint, t: TimeInterval)?
+        /// Whether that finger may pan, decided as it lands. Asked again on each move, a grip drag lost its grip
+        /// as soon as the note it was sizing grew or shrank a step (its end moved away from where the finger landed),
+        /// and the pan took the touch: a note could only be sized one step at a time (Scott, 2026-11-13).
+        private var landedCanPan = true
         /// A one-finger pan moved by hand: where it began (window points), the offset then, its last point and time,
         /// and its speed (points a second, for the throw).
         struct HandPan { var from: CGPoint, offset: CGPoint, last: CGPoint, at: TimeInterval, speed: CGPoint = .zero }
@@ -120,6 +124,7 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
                 guard let v = host?.view else { return }
                 let p = t.location(in: v)
                 landed = (p, t.timestamp)
+                landedCanPan = panFrom?(p) ?? true
                 guard let hold = holdRing else { return }
                 downAt = p
                 ring.start(at: p, in: v.layer, duration: hold)
@@ -136,12 +141,12 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
                 if let d = drag { follow(d, w, t.timestamp); return }
                 guard let (l, at) = landed, hypot(p.x - l.x, p.y - l.y) > Labs.panStart else { return }
                 if let hold = holdRing, t.timestamp - at >= hold { return }
-                guard panFrom?(l) ?? true, let sv = v.superview as? UIScrollView, !sv.isDragging, !sv.isDecelerating else { return }
+                guard landedCanPan, let sv = v.superview as? UIScrollView, !sv.isDragging, !sv.isDecelerating else { return }
                 drag = HandPan(from: w, offset: sv.contentOffset, last: w, at: t.timestamp)
                 cancelGrid()
                 NotificationCenter.default.post(name: .gridPannedByHand, object: nil)
             }
-            w.up = { [unowned self] in ring.cancel(); downAt = nil; landed = nil; if let d = drag { drag = nil; settle(d) } }
+            w.up = { [unowned self] in ring.cancel(); downAt = nil; landed = nil; landedCanPan = true; if let d = drag { drag = nil; settle(d) } }
             // Two fingers: a pan. A gesture the grid began on the first finger, a few milliseconds before the second
             // landed, made iOS refuse the pan for the whole touch (2026-11-06). Cancel it.
             w.second = { [unowned self] in cancelGrid() }
@@ -149,9 +154,9 @@ struct TwoFingerScrollView<Content: View>: UIViewRepresentable {
         /// One finger pans unless it began on a grip, or stayed still through the hold (the ring filled: the drag is
         /// the hold's paint, carry or box). Two fingers always pan.
         func shouldPan(_ g: UIPanGestureRecognizer) -> Bool {
-            guard g.numberOfTouches < 2, let (p, t) = landed else { return true }
+            guard g.numberOfTouches < 2, let (_, t) = landed else { return true }
             if let hold = holdRing, ProcessInfo.processInfo.systemUptime - t >= hold { return false }
-            return panFrom?(p) ?? true
+            return landedCanPan
         }
         private func follow(_ d: HandPan, _ w: CGPoint, _ t: TimeInterval) {
             guard let sv = host?.view.superview as? UIScrollView else { return }
