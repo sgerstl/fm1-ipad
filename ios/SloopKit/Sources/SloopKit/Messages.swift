@@ -33,6 +33,8 @@ public enum Cmd {
     public static let meter: UInt8 = 92
     /// Skiff's SCOPE (the screen link's `56 01 04`): a push only, while WATCH bit 4 asks for it.
     public static let scope: UInt8 = 93
+    /// Skiff-Lupe's FREE TAKE picker (TAKE, the screen link's `56 01 07`): both a reply and a push, as SCREEN is.
+    public static let take: UInt8 = 94
     public static let pushes: Set<UInt8> = [changed, reload, stepChanged, trackChanged, meter, scope]
 }
 
@@ -643,6 +645,8 @@ public enum Push: Equatable, Sendable {
     /// Skiff's SCOPE (93, the screen link's `56 01 04`): the FM-1's output as ui_graph.c graph_scope draws it, 120
     /// samples 0…127 (64 the centre line), triggered on a rising zero crossing and auto-scaled by the device.
     case scope([UInt8])
+    /// Skiff-Lupe's TAKE (94, `56 01 07`): the FREE TAKE picker, as a reply or pushed while WATCH bit 5 asks for it.
+    case take(TakePicker)
 
     public init?(cmd: UInt8, body: [UInt8]) throws {
         var r = ByteReader(body, cmd: cmd)
@@ -654,6 +658,7 @@ public enum Push: Equatable, Sendable {
         case Cmd.ui: self = .ui(try UIState(body))
         case Cmd.meter: self = .meter(body.map(Int.init))
         case Cmd.scope: self = .scope(body.map { min($0, 127) })
+        case Cmd.take: self = .take(try TakePicker(body))
         default: return nil
         }
     }

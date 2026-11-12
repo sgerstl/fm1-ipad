@@ -95,6 +95,12 @@ struct AppView: View {
         }
         // FREE TAKE kept on the FM-1 (Skiff 2.5, level 1): the Timeline, where a take gets chopped, even though Pads are
         // the default (batch list item 4); the block is selected there and the strip says how to undo it
+        // the FREE TAKE picker opened (v7): the Song tab's Timeline too, where it lands, with the picker in the editor's place
+        .onChange(of: session.takePicker != nil) { _, open in
+            guard open, ui.songTab, ui.followDevice else { return }
+            if ui.songView != .timeline { ui.songView = .timeline }
+            if ui.page != .song { ui.pageFromDevice = true; ui.page = .song }
+        }
         .onChange(of: session.freeTake?.id) { _, id in
             guard id != nil, ui.songTab, ui.followDevice else { return }
             if ui.songView != .timeline { ui.songView = .timeline }

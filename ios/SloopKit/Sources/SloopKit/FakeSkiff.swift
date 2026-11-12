@@ -114,6 +114,15 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// The pages with a cursor and its top (skiff/README.md): MOD's routes, the lanes, the samples, USER's slots.
     static let cursorRange: [Int: Int] = [4: 10, 16: 5, 18: 7, 19: 7, 20: 7, 22: 15, 36: 31, 37: 63, 41: 63, 42: 63]
     var screenWatched = false
+    /// FREE TAKE levels 2 and 3 (the screen link's seventh build, `screenLinkVersion` 7; ui_take.c and editor.c's TAKE
+    /// and UNDO on branch lupe-skiff-2.5.1-freetake): the picker, pushed with WATCH bit 5 (32).
+    var takeWatched = false
+    var take = FakeTake()
+    /// Notes played on each track since the stop (take.c free_ev from free_n0): what a free take is made of.
+    var heard: [Int: [Int]] = [:]
+    /// The undo ring (ui.c undo_ring, UNDO_N 6 on 2.5): each copy a track's steps, LENGTH and DIV; how far back.
+    var undoCopies: [(track: Int, steps: [[UInt8]], len: Int, div: Int)] = []
+    var undoBack = 0
     /// METER (the screen link's third build, `screenLinkVersion` 3): asked with WATCH bit 3, pushed while playing.
     var meterWatched = false
     private var meterLevels = [Double](repeating: 0, count: 8)
@@ -169,6 +178,31 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
                     guard let self else { return }
                     self.freeTakeOnDevice(track: self.selected, notes: [60, 63, 67, 70, 72, 70, 67, 63], length: 32, bpm: 96)
                 }
+            }
+            // -demo-take (FREE TAKE levels 2 and 3, the screen link's v7): 6 s in, a phrase played on the selected track,
+            // then: -demo-take-picker the picker opened (SHIFT + SAVE), -demo-take-kept opened and kept (the landing),
+            // neither: just the phrase (Lupe offers it after the 2.5 s pause)
+            if a.contains("-demo-take") {
+                screenLink = true; screenLinkVersion = 7
+                takeGuesses = [96, 48, 192]                                  // (a phrase's, for the screenshots)
+                func whenStopped(_ tries: Int, _ go: @escaping () -> Void) {   // (the demo stops once it's connected)
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        guard let self else { return }
+                        self.lock.lock(); let p = self.playing; self.lock.unlock()
+                        if p && tries > 0 { whenStopped(tries - 1, go) } else { go() }
+                    }
+                }
+                DispatchQueue.global().asyncAfter(deadline: .now() + 5.5) { whenStopped(40) { [weak self] in
+                    guard let self else { return }
+                    self.playOnDevice(track: self.selected, notes: [67, 70, 72, 70, 67, 65, 67, 67, 70, 72, 75, 74, 72, 70])
+                    guard a.contains("-demo-take-picker") || a.contains("-demo-take-kept") else { return }
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+                        self.shiftSaveOnDevice()
+                        if a.contains("-demo-take-kept") {
+                            DispatchQueue.global().asyncAfter(deadline: .now() + 1) { self.takeKeyOnDevice(keep: true) }
+                        }
+                    }
+                } }
             }
             // -demo-user-sounds: three of USER's slots hold sounds, and P1 and P2 hold projects (the SAVE pages' screenshots)
             if a.contains("-demo-user-sounds") {
@@ -427,7 +461,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     private func screenBytes() -> [UInt8] {
         let wire = firmware.pageMap.device(screen.page) ?? screen.page
-        let b: [UInt8] = [screen.home ? 1 : 0, UInt8(wire), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(screen.flags)]
+        let flags = screen.flags | (screenLinkVersion >= 7 && take.open ? 8 : 0)   // (56 01 7) bit 3: the picker open
+        let b: [UInt8] = [screen.home ? 1 : 0, UInt8(wire), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(flags)]
         guard screenLinkVersion >= 2 else { return b }
         let c: UInt8 = !screen.home && Self.cursorRange[screen.page] != nil ? UInt8(cursor) : 127
         // NOTES and FEEL: the second is the selection's last step (one step here, so the same)
@@ -490,6 +525,160 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             self.push(Cmd.changed, [0, UInt8(divID)] + v14(2))
             if let bpm { self.push(Cmd.changed, [1, 0] + v14(bpm)) }
         }
+    }
+
+    // MARK: FREE TAKE, levels 2 and 3
+
+    /// Notes played on the FM-1 with the transport stopped: out over MIDI (NOTES OUT), and kept for a free take.
+    func playOnDevice(track t: Int, notes: [Int]) {
+        lock.lock(); let stopped = !playing && !take.open; if stopped { heard[t, default: []] += notes }; lock.unlock()
+        for n in notes {
+            notesSink.yield(NoteEvent(on: true, channel: UInt8(t), note: UInt8(n)))
+            notesSink.yield(NoteEvent(on: false, channel: UInt8(t), note: UInt8(n), velocity: 0))
+        }
+    }
+    /// SHIFT + SAVE on the FM-1 (ui_input.c take_commit on the selected track); pushed when watched.
+    func shiftSaveOnDevice() { onDevice { _ = $0.takeOp(8, 0, fromEditor: false) } }
+    /// One of the picker's knobs turned on the FM-1 (KNOB 1…4: guess, BARS, first beat, TEMPO), `by` steps.
+    func turnTakeKnobOnDevice(_ k: Int, by d: Int) {
+        onDevice { f in
+            guard f.take.open else { return }
+            let cur = [f.take.guess, f.take.bars, f.take.first, f.take.set ? 1 : 0][k]
+            _ = f.takeOp(k + 1, k == 3 ? (d > 0 ? 1 : 0) : max(0, cur + d), fromEditor: false)
+        }
+    }
+    /// OCT+ (keep) or OCT− (put back) on the FM-1 with the picker open.
+    func takeKeyOnDevice(keep: Bool) { onDevice { _ = $0.takeOp(keep ? 6 : 7, 0, fromEditor: false) } }
+
+    /// The lock taken, the change made, then the device's pushes: SCREEN and TAKE where they changed (watched), then the
+    /// selected track's steps and LENGTH, DIV, BPM, as editor.c ed_sync sends them.
+    private func onDevice(_ body: (FakeSkiff) -> Void) {
+        lock.lock()
+        let screen0 = screenBytes(), take0 = takeBytes(), steps0 = steps, len0 = params.map { [$0[29], $0[30]] }, bpm0 = globals[0]
+        body(self)
+        let screen1 = screenBytes(), take1 = takeBytes()
+        lock.unlock()
+        if screenWatched, screen1 != screen0 { push(90, screen1) }
+        if takeWatched, take1 != take0 { push(Cmd.take, take1) }
+        syncPushes(steps0, len0, bpm0)
+    }
+    /// What changed since (the steps, LENGTH, DIV of the selected track, BPM): pushed as the live sync does.
+    private func syncPushes(_ steps0: [[[UInt8]]], _ len0: [[Int]], _ bpm0: Int) {
+        lock.lock()
+        let t = selected
+        let changed = steps[t].indices.filter { steps[t][$0] != steps0[t][$0] }
+        let ld = [29, 30].enumerated().filter { params[t][$0.element] != len0[t][$0.offset] }.map { ($0.element, params[t][$0.element]) }
+        let bpm = globals[0]
+        lock.unlock()
+        for i in changed { push(Cmd.stepChanged, [UInt8(i), UInt8(t)]) }
+        for (id, v) in ld { push(Cmd.changed, [0, UInt8(id)] + v14(v)) }
+        if bpm != bpm0 { push(Cmd.changed, [1, 0] + v14(bpm)) }
+    }
+
+    /// TAKE's 21 bytes (editor.c ed_take_now). The lock held.
+    func takeBytes() -> [UInt8] {
+        let k = take
+        var b: [UInt8] = [k.open ? 1 : 0, UInt8(k.end), UInt8(k.track), UInt8(k.pattern ?? 127), UInt8(k.guesses.count), UInt8(k.guess)]
+        for i in 0..<4 { let g = i < k.guesses.count ? k.guesses[i] : 0; b += [UInt8(g & 127), UInt8(g >> 7 & 127)] }
+        b += [UInt8(k.bars), UInt8(k.first), UInt8(k.firsts), k.set ? 1 : 0, UInt8(k.bpm0 & 127), UInt8(k.bpm0 >> 7 & 127),
+              globals.count > 2 && globals[2] != 0 ? 1 : 0]
+        return b
+    }
+
+    /// TAKE op (editor.c): 1…4 set a choice to `v` as its knob would (clamped; TEMPO SET not on an external clock),
+    /// 5 PLAY, 6 keep, 7 put back (the picker open only, else rc 1), 8 SHIFT + SAVE. → rc. The lock held.
+    func takeOp(_ op: Int, _ v: Int, fromEditor: Bool) -> UInt8 {
+        if op == 8 {
+            if fromEditor, screen.menu != 0 { return 1 }                  // (SHIFT + SAVE's own conditions)
+            if take.open { takeClose(keep: true); return 0 }
+            // stopped with notes on the selected track: a free take. (Playing, SHIFT + SAVE takes the last loop: not
+            // modelled here; nothing played: the FM-1 says so on its screen, and nothing opens)
+            guard !playing, let notes = heard[selected], !notes.isEmpty else { return 0 }
+            takeOpen(track: selected, notes: notes)
+            return 0
+        }
+        guard take.open else { return 1 }
+        switch op {
+        case 1: take.guess = max(0, min(take.guesses.count - 1, v))
+        case 2: take.bars = max(0, min(3, v))
+        case 3: take.first = max(0, min(take.firsts - 1, v))
+        case 4: take.set = v != 0 && !(globals.count > 2 && globals[2] != 0)
+        case 5: setPlaying(!playing); return 0
+        case 6, 7: takeClose(keep: op == 6); return 0
+        default: return 1
+        }
+        takeRender()
+        return 0
+    }
+
+    /// free_open: the guesses (a fixed set here: `takeGuesses`), BARS from the phrase's length, the first beat on the
+    /// first note, TEMPO SET unless another track has notes or the clock is external; one undo copy; the track
+    /// rewritten (fr_render).
+    private func takeOpen(track t: Int, notes: [Int]) {
+        let other = steps.indices.contains { $0 != t && steps[$0].contains { $0.first ?? 0 != 0 } }
+        pushUndo(track: t)
+        take = FakeTake(open: true, end: 0, track: t, pattern: entryOn[t] < 16 && (1...64).contains(lists[t][entryOn[t]].p) ? lists[t][entryOn[t]].p - 1 : nil,
+                        guesses: takeGuesses, guess: 0, bars: notes.count > 16 ? 2 : notes.count > 8 ? 1 : 0, first: 0,
+                        firsts: min(8, notes.count), set: !other && !(globals.count > 2 && globals[2] != 0), bpm0: globals[0],
+                        from: steps[t], len0: params[t][29], div0: params[t][30], notes: notes)
+        takeRender()
+    }
+    /// The guesses a take opens with (the FM-1 finds them in the phrase's timing, which the fake doesn't have): what
+    /// skiff-sim built from the firmware branch answered for eight quarter notes at 120 BPM (FreeTakeSimTests).
+    var takeGuesses = [90, 60, 120, 150]
+
+    /// fr_render: the notes from the first beat on, evenly over the bars (the earlier ones as a pickup at the loop's end),
+    /// every step past them a rest; LENGTH, DIV (1/8 at 8 bars), the tempo.
+    private func takeRender() {
+        let t = take.track, bars = [1, 2, 4, 8][take.bars], len = bars >= 8 ? 64 : 16 * bars
+        let n = take.notes.count, order = Array(take.notes[take.first...] + take.notes[..<take.first])
+        let per = max(1, len / max(1, n))
+        for i in steps[t].indices {
+            var b = steps[t][i]
+            if i < len, i % per == 0, i / per < order.count {
+                b[0] = 1; b[1] = UInt8(order[i / per]); b[2] = 0; b[3] = 0; b[4] = 0; b[5] = 0; b[7] = 100
+            } else {
+                b[0] = 0; b[1] = 0; b[2] = 0; b[3] = 0; b[4] = 0; b[5] = 2
+            }
+            steps[t][i] = b
+        }
+        params[t][29] = len; params[t][30] = bars >= 8 ? 1 : 2
+        if !(globals.count > 2 && globals[2] != 0) { globals[0] = take.set ? take.guesses[take.guess] : take.bpm0 }
+    }
+
+    /// fr_close: kept (the next take starts after this one), or the track and tempo put back (unless another pattern
+    /// came onto the track meanwhile: not modelled).
+    private func takeClose(keep: Bool) {
+        guard take.open else { return }
+        take.open = false
+        take.end = keep ? 1 : 2
+        if keep {
+            heard = [:]
+        } else {
+            let t = take.track
+            steps[t] = take.from; params[t][29] = take.len0; params[t][30] = take.div0
+            if !(globals.count > 2 && globals[2] != 0) { globals[0] = take.bpm0 }
+        }
+    }
+
+    private func pushUndo(track t: Int) {
+        undoCopies.removeLast(undoBack)
+        undoBack = 0
+        undoCopies.append((t, steps[t], params[t][29], params[t][30]))
+        if undoCopies.count > 6 { undoCopies.removeFirst() }
+    }
+    /// ui.c undo_step: back one copy, or forward one; each swaps the track's steps, LENGTH and DIV with the copy (the
+    /// tempo stays). The device's pushes follow, for the selected track.
+    private func undoStep(redo: Bool) {
+        if redo ? undoBack == 0 : undoBack >= undoCopies.count { return }       // (NOTHING TO UNDO / REDO)
+        if redo { undoBack -= 1 }
+        let i = undoCopies.count - 1 - undoBack
+        let c = undoCopies[i], t = c.track
+        let steps0 = steps, len0 = params.map { [$0[29], $0[30]] }, bpm0 = globals[0]
+        undoCopies[i] = (t, steps[t], params[t][29], params[t][30])
+        steps[t] = c.steps; params[t][29] = c.len; params[t][30] = c.div
+        if !redo { undoBack += 1 }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.01) { [weak self] in self?.syncPushes(steps0, len0, bpm0) }
     }
 
     /// A clock tick while playing: each track's level jumps on a step with a note and falls as the FM-1's meter does
@@ -821,8 +1010,32 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             screenWatched = screenLink && a[0] & 4 != 0
             meterWatched = screenLink && screenLinkVersion >= 3 && a[0] & 8 != 0
             scopeWatched = screenLink && screenLinkVersion >= 4 && a[0] & 16 != 0
-            return [a[0] & (screenLink ? (screenLinkVersion >= 4 ? 31 : screenLinkVersion >= 3 ? 15 : 7) : 3)]
+            let wasTake = takeWatched
+            takeWatched = screenLink && screenLinkVersion >= 7 && a[0] & 32 != 0
+            if takeWatched && !wasTake {                                 // newly asked: the state at once
+                let b = takeBytes()
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.01) { [weak self] in self?.push(Cmd.take, b) }
+            }
+            return [a[0] & (screenLink ? (screenLinkVersion >= 7 ? 63 : screenLinkVersion >= 4 ? 31 : screenLinkVersion >= 3 ? 15 : 7) : 3)]
         case (25, 0): return [0]
+        case (94, 0) where screenLink && screenLinkVersion >= 7: return takeBytes() + [0]
+        case (94, 2) where screenLink && screenLinkVersion >= 7:
+            guard (1...8).contains(a[0]) else { return nil }               // (editor.c ed_args_ok: no reply)
+            // what it changed goes out after the reply, as ed_sync's pushes: SCREEN (its flags), the steps, LENGTH,
+            // DIV, BPM; TAKE itself isn't pushed back (the reply told it)
+            let screen0 = screenBytes(), steps0 = steps, len0 = params.map { [$0[29], $0[30]] }, bpm0 = globals[0]
+            let rc = takeOp(Int(a[0]), Int(a[1]), fromEditor: true)
+            let screen1 = screenBytes(), sw = screenWatched
+            DispatchQueue.global().asyncAfter(deadline: .now() + replyDelay + 0.01) { [weak self] in
+                if sw, screen1 != screen0 { self?.push(90, screen1) }
+                self?.syncPushes(steps0, len0, bpm0)
+            }
+            return takeBytes() + [rc]
+        case (95, 1) where screenLink && screenLinkVersion >= 7:
+            guard a[0] <= 1 else { return nil }
+            let refused = screen.menu != 0 || take.open                    // (as SAVE: not with the MENU or the picker)
+            if !refused { undoStep(redo: a[0] == 1) }
+            return [refused ? 1 : 0, UInt8(undoCopies.count), UInt8(undoBack)]
         case (16, 2):
             // UP_LIST: start, count, total, then per slot used, engine, name
             let st = Int(a[0]), n = min(Int(a[1]), 32 - st)
@@ -916,6 +1129,17 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             return nil                                       // as the device: no reply
         }
     }
+}
+
+/// FakeSkiff's FREE TAKE picker (ui_take.c `fr`), with the notes it was made from.
+struct FakeTake {
+    var open = false, end = 0, track = 0
+    /// (before any take the firmware's `fr` is all zeros: pattern 0, as skiff-sim answers)
+    var pattern: Int? = 0
+    var guesses: [Int] = [], guess = 0, bars = 0, first = 0, firsts = 0
+    var set = false, bpm0 = 120
+    var from: [[UInt8]] = [], len0 = 16, div0 = 2
+    var notes: [Int] = []
 }
 
 /// One entry of FakeSkiff's lists, as LIST2 sends it.

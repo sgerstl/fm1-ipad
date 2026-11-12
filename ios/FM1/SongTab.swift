@@ -105,6 +105,16 @@ struct SkiffSongPage: View {
                 // both halves pinned to the page's width: left loose, swapping the panel's contents (the sampler for
                 // the editor) re-centred the top half 12 pt to the left (Scott, 2026-11-09)
                 .frame(width: g.size.width, height: top)
+                // a phrase played while stopped, offered as a take (FREE TAKE): at the foot of the lanes or pads, right of
+                // the panel's tab, where the landing strip will say what it became (the top row's toasts keep the top)
+                .overlay(alignment: .bottomTrailing) {
+                    if let o = session.takeOffer, !session.playing, session.takePicker == nil {
+                        TakeOfferLine(offer: o, session: session)
+                            .padding(.bottom, PadsPage.tabHeight + 12).padding(.trailing, 16)
+                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.2), value: session.takeOffer)
                 // (Timeline / Pads: the switch is in the top bar since 2026-11-10, board 47, still while they slide)
                 // clipped at the foot only: a key on the top row (Cancel waiting) draws its raised edge a point
                 // above the page and was cut (Scott, 2026-11-08). At Max on Pads the selected pad's track controls
@@ -140,6 +150,16 @@ struct SkiffSongPage: View {
                                     .geometryGroup()    // one piece: its keys' highlights don't trail it
                                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
                                     .zIndex(1)          // above the tint while it leaves too, or it drops behind it and vanishes
+                            } else if let p = session.takePicker {
+                                // the FM-1's FREE TAKE picker (screen link v7): form A, in the editor's place, in from the
+                                // right as the sampler comes (boards 49–50); the editor back from the left once it closes
+                                FreeTakePicker(session: session, store: store, picker: p)
+                                    .frame(width: max(0, g.size.width - 2 * (Self.panelEdge + Self.inset)))
+                                    .padding(.vertical, Self.inset)
+                                    .padding(.horizontal, Self.panelEdge + Self.inset)
+                                    .geometryGroup()
+                                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                                    .zIndex(1)
                             } else {
                                 PatternPane(session: session, store: store, ui: ui, height: bottom - 2 * Self.inset, trackMenu: pads && shown == .row)
                                     // the grid's steps give up the panel's edges, so a bar still fits across inside the tint
@@ -171,10 +191,12 @@ struct SkiffSongPage: View {
                 // cut to the panel's own shape (its tab included): what slides in and out shows only on the tint
                 .mask { EditorPanelShape(tab: CGSize(width: PadsPage.panelTabWidth, height: PadsPage.tabHeight), inset: Self.panelEdge) }
                 .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9), value: ui.sampler)
+                .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9), value: session.takePicker != nil)
             }
             .frame(height: total, alignment: .top)
             .mask(alignment: .bottom) { Rectangle().padding(.top, -24) }
             .overlay(alignment: .topLeading) { tab(top: top, tops: tops, pads: pads) }
+
             .overlay { drawer }
             .animation(reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.3), value: ui.poolOpen)
         }
@@ -191,6 +213,10 @@ struct SkiffSongPage: View {
         .onChange(of: ui.openEditor) { _, v in
             guard v > 0 else { return }
             if position == .none { withAnimation(spring) { positionRaw = SongPosition.half.rawValue; layout = nil } }
+        }
+        // the FREE TAKE picker opened with the editor shut: it opens to Half to hold it, as for the sampler
+        .onChange(of: session.takePicker != nil) { _, open in
+            if open, position == .none { withAnimation(spring) { positionRaw = SongPosition.half.rawValue; layout = nil } }
         }
         // the sampler asked for with the editor shut: it opens to Half to hold it
         .onChange(of: ui.sampler) { _, r in

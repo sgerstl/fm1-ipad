@@ -1,0 +1,14 @@
+# Skiff-Lupe 2.5.1 take
+
+Skiff-Lupe 2.5.1 with the screen link's seventh version: FREE TAKE driven from the iPad, and the FM-1's undo. Everything else is Skiff-Lupe 2.5.1 (`Skiff-Lupe-2.5.1.md`), which is Skiff 2.5.1 as released plus Lupe's screen link.
+
+- **Skiff** is by illuminus5 (<https://github.com/illuminus5/skiff>), a fork of **Felucca** by Leo Kuroshita, Hügelton Instruments (<https://github.com/hugelton/Felucca>). All credit for the firmware is theirs.
+- **Lupe adds** to Skiff-Lupe 2.5.1 (INFO `56 01 07`, was `06`):
+  - **TAKE (94):** the FREE TAKE picker's state (open; how the last one closed: kept or put back; its track and pattern; the tempo guesses; BARS; the first beat; TEMPO SET or KEEP; the tempo it opened with; external clock). Each choice is set as its knob sets it. LISTEN (PLAY), KEEP (OCT+) and PUT BACK (OCT−), and a take on the selected track as SHIFT + SAVE. Pushed with WATCH bit 5, and SCREEN's flags bit 3 is set while the picker is open.
+  - **UNDO (95):** the panel's undo (`undo_step`), back or forward. It's refused while the MENU, a dialog or the picker is open.
+  - About 100 lines in `editor.c` and 3 in `ui_take.c`; the rest of the diff is `tests/editor_test.c` and `web/EDITOR_PROTOCOL.md`.
+- **Licence:** GPL-3.0-only, as Skiff. Source: skiff-src branch `lupe-skiff-2.5.1-freetake` at `5e10a37` (on top of `lupe-skiff-2.5.1-screen-link` 737e3fb). **Not pushed yet**, so the source must go up to <https://github.com/sgerstl/skiff> before this build is distributed.
+- **File:** `Skiff-Lupe-2.5.1-take.fwsc`, 610,429 bytes, SHA-256 `3266e2b6247f8452b209a1ed4b1d8f08b8b31db9b37de838d1c885a2727aa689`. Identity `FM-1_725`, as Skiff-Lupe 2.5.1 (Lupe tells them apart by INFO's `56 01` tag after boot and by the pin before install). Pinned as `LupeFirmware.skiff251Take`; release `lupe-firmware-3`, not made. The installer's default is unchanged.
+- **Built** 2026-11-11 with `FELUCCA_CDC=0 venv/bin/python tools/build.py --release 2.5.1` (Python 3.12 venv). Skiff's build isn't byte-for-byte reproducible, so the pin is this file's.
+- **Flash:** the release build fits with **3,484 bytes to spare** (578,080 of 581,564 B; Skiff-Lupe 2.5.1 had 3,204). The new code costs 690 bytes in `editor.c`. In the same link, the UI drawing code came out about 970 bytes smaller (compiler layout; the UI render tests show the screens unchanged), so the image shrank by 280 B overall. **The development build with the USB serial console still doesn't fit:** it overflows the XIP region by 832 bytes (it was 92 on Skiff-Lupe 2.5.1).
+- **Tests:** Skiff's host tests pass except the two known web tests that need Node 20+ (in the `skiff-tests` image, Node 18). `editor_test.c` now covers TAKE, UNDO, WATCH bit 5 and the flags bit, in both the default and the release build. Against skiff-sim built from `5e10a37`: Lupe's `FreeTakeSimTests` passes. Nothing has run on an FM-1.
