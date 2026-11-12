@@ -1,0 +1,969 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0"><title>Lupe Liquid Motion</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: the Pads grid at No grid (one row a track) on the left, the lever panel on the right; stacks under 1100px.
+   Single dark look on purpose: Lupe is dark-only. Values are Lupe's tokens (tokens/tokens.json v2) and the live board (design/boards/live.py). */
+:root {
+  --page: #0D0D0F;
+  --well: #111114;
+  --panel: #1A1A1E;
+  --control: #26262B;
+  --lifted: #34343B;
+  --edge: #0A0A0C;
+  --line: #2A2A30;
+  --text: #EDEDF0;
+  --text-2: #A1A1AA;
+  --text-raised: #C4C4CC;
+  --on-colour: #101012;
+  --font: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+html, body { background: var(--page); color: var(--text); }
+body { font-family: var(--font); font-size: 14px; line-height: 1.5; }
+.page {
+  max-width: 1240px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 24px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 0; color: var(--text-2); max-width: 72ch; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+@media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Stage */
+.stage-outer { width: 100%; overflow-x: auto; overflow-y: hidden; }
+.stage { position: relative; width: 844px; height: 676px; transform-origin: 0 0; }
+.toolrow { position: absolute; left: 12px; top: 12px; width: 820px; height: 44px; display: flex; align-items: center; gap: 12px; z-index: 3; }
+.toolrow .lab { font-size: 13px; color: var(--text-2); }
+.toolrow .pos { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; margin-left: auto; }
+.head { position: absolute; box-sizing: border-box; border-radius: 10px; background: var(--panel); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start; z-index: 0; }
+.chip { width: 26px; height: 26px; border-radius: 7px; color: var(--on-colour); font-weight: 600; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.chip.sel { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--text); }
+.head .name { font-size: 15px; font-weight: 600; line-height: 26px; }
+.head .tag { font-size: 12px; color: var(--text-2); line-height: 26px; margin-left: auto; }
+#gl { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; }
+#hits { position: absolute; inset: 0; z-index: 2; }
+.hit { position: absolute; box-sizing: border-box; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.hit:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--page), 0 0 0 4px var(--text); }
+.hit.waiting { outline: 2px dashed var(--c); outline-offset: -2px; }
+.sel-ring { position: absolute; left: 0; top: 0; width: 100px; height: 92px; border-radius: 8px; box-shadow: 0 0 0 2px var(--text); z-index: 2; pointer-events: none; transition: transform 220ms cubic-bezier(.2, .8, .2, 1), opacity 90ms linear; }
+@media (prefers-reduced-motion: reduce) { .sel-ring { transition: opacity 90ms linear; } }
+.nogl { position: absolute; inset: 72px 12px 12px 192px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-2); background: var(--well); border-radius: 12px; padding: 24px; z-index: 4; }
+
+/* Keys and segments */
+.key { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--control); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 2px 0 var(--edge); cursor: pointer; }
+.key:hover { background: var(--lifted); }
+.key:active { transform: translateY(2px); box-shadow: none; }
+.key[aria-pressed="true"] { background: var(--text); color: var(--on-colour); }
+.key:focus-visible, .seg button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.toolrow .key { height: 44px; padding: 0 16px; }
+.seg { display: flex; padding: 3px; gap: 2px; border-radius: 12px; background: var(--well); }
+.seg button { flex: 1; height: 38px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer; }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--control); color: var(--text); font-weight: 600; }
+
+/* Readout under the stage */
+.readout { display: flex; flex-wrap: wrap; gap: 8px 32px; margin-top: 16px; }
+.stat { display: flex; flex-direction: column; gap: 2px; min-width: 96px; }
+.stat span { font-size: 12px; color: var(--text-2); }
+.stat b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hint { margin: 12px 0 0; font-size: 13px; color: var(--text-2); max-width: 72ch; }
+.note { margin: 12px 0 0; font-size: 13px; color: var(--text); background: var(--panel); border-radius: 10px; padding: 10px 12px; max-width: 72ch; }
+
+/* Lever panel */
+.controls { background: var(--panel); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 24px; }
+@media (min-width: 1101px) { .controls { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; } }
+.sec { display: flex; flex-direction: column; gap: 16px; }
+.sec h2 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0; }
+.ctl { display: flex; flex-direction: column; gap: 4px; }
+.ctl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ctl label { font-size: 13px; }
+.ctl output { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ctl input[type="range"] { width: 100%; height: 24px; margin: 0; accent-color: var(--text); }
+.ctl input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 4px; }
+.help { font-size: 12px; color: var(--text-2); margin: 0; line-height: 1.4; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; min-height: 24px; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 0; accent-color: var(--text); }
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.status { font-size: 12px; color: var(--text-2); }
+#copyBox { width: 100%; box-sizing: border-box; min-height: 120px; background: var(--well); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font: 12px ui-monospace, Menlo, monospace; padding: 8px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+
+<div class="page">
+  <header>
+    <h1>Lupe liquid motion</h1>
+    <p>The play colour behaves like liquid pressed between two sheets. It has a fixed amount, so it can only move: launching a pad pours that track's colour out of the old pad and into the new one, and muting squeezes it into the ring. Tap pads and Mute, drag across a full pad to push its bubbles, and pull the levers.</p>
+  </header>
+
+  <main class="layout">
+    <section aria-label="Pads mockup">
+      <div class="stage-outer" id="stageOuter">
+        <div class="stage" id="stage">
+          <div class="toolrow">
+            <button class="key" id="playBtn" type="button" aria-pressed="true">Stop</button>
+            <span class="lab" id="launchLab">Launch at</span>
+            <div class="seg" role="group" aria-labelledby="launchLab" id="quantSeg">
+              <button type="button" data-v="now">Now</button>
+              <button type="button" data-v="beat">Beat</button>
+              <button type="button" data-v="bar">Bar</button>
+            </div>
+            <button class="key" id="autoBtn" type="button" aria-pressed="false">Autoplay</button>
+            <span class="pos" id="pos">Bar 1.1 · 120 BPM</span>
+          </div>
+          <div id="heads"></div>
+          <canvas id="gl" aria-hidden="true"></canvas>
+          <div id="hits"></div>
+          <div class="sel-ring" id="selRing" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="readout" aria-label="Timing of the last change">
+        <div class="stat"><span>Reads at</span><b id="mRead">–</b></div>
+        <div class="stat"><span>Liquid settles at</span><b id="mSettle">–</b></div>
+        <div class="stat"><span>Bubbles clear at</span><b id="mClear">–</b></div>
+        <div class="stat"><span>Spring alone, predicted</span><b id="mPredict">–</b></div>
+      </div>
+      <p class="hint">Times are for the last change at 1× speed, whatever the slow-motion setting. "Reads at" is when most of the colour, or the instant tint, has landed: the moment you'd know the state on stage. Lupe's state-change budget is about 150 ms.</p>
+      <p class="note" id="rmNote" hidden>Your device asks for reduced motion, so this opened on Fade, which is what Lupe does under Reduce Motion. Switch to Liquid to see the effect.</p>
+    </section>
+
+    <aside class="controls" aria-label="Motion levers">
+      <div class="sec">
+        <h2>Compare</h2>
+        <div class="seg" role="group" aria-label="Motion style" id="modeSeg">
+          <button type="button" data-v="liquid">Liquid</button>
+          <button type="button" data-v="fade">Fade (today)</button>
+        </div>
+        <div class="seg" role="group" aria-label="Playback speed" id="speedSeg">
+          <button type="button" data-v="1">1×</button>
+          <button type="button" data-v="0.5">½×</button>
+          <button type="button" data-v="0.25">¼×</button>
+        </div>
+      </div>
+      <div class="sec">
+        <h2>Presets</h2>
+        <div class="presets" id="presets">
+          <button class="key" type="button" data-p="stage">Stage-safe</button>
+          <button class="key" type="button" data-p="water">Water</button>
+          <button class="key" type="button" data-p="honey">Honey</button>
+          <button class="key" type="button" data-p="mercury">Mercury</button>
+        </div>
+      </div>
+      <div id="levers"></div>
+      <div class="sec">
+        <h2>Keep what you like</h2>
+        <div class="row-btns">
+          <button class="key" type="button" id="copyBtn">Copy settings</button>
+          <button class="key" type="button" id="resetBtn">Reset to Stage-safe</button>
+          <span class="status" id="copyStatus" role="status"></span>
+        </div>
+        <textarea id="copyBox" aria-label="Settings to copy" hidden readonly></textarea>
+      </div>
+    </aside>
+  </main>
+  <div class="sr" id="live" aria-live="polite"></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const W = 844, H = 676, X0 = 12, HEADW = 168, PADX = 192, PW = 100, PG = 8, RH = 92, RG = 8, GRIDY = 72, COLS = 6, ROWS = 6;
+const K = 5, KM = 3, SEL_ROW = 4, MAXB = 64;
+const FONT = '-apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif';
+const COL = ['#FF5A36', '#22C3B4', '#FFBF00', '#9580FF', '#FF6FAE', '#A3E635'];
+const NAMES = ['Drums', 'Bass', 'Keys', 'Pad', 'Lead', 'Perc'];
+const LET = 'ABCDEF';
+const SONG = [
+  [['01', 8], ['02', 8], ['03', 4], ['04', 4], ['05', 2], null],
+  [['14', 2], ['14', 2], ['15', 2], ['16', 6], null, null],
+  [['21', 4], ['22', 4], ['23', 4], ['24', 8], ['25', 2], ['26', 2]],
+  [['31', 16], ['32', 8], ['33', 8], null, null, null],
+  [['10', 12], ['11', 8], ['12', 4], ['13', 4], ['12', 4], null],
+  [['40', 4], ['41', 4], ['42', 2], ['43', 2], ['44', 1], ['45', 1]],
+];
+const START = [[0, false], [1, false], [2, false], [0, false], [1, false], [3, true]];
+
+const PRESETS = {
+  stage:   { pull: 10,  visc: 40, stagger: 12, bloom: true,  flow: 60,  tension: 2.2, size: 1.0,  meniscus: 50, trapped: 3, rest: 0, bsize: 7,  leave: 140, push: true, tint: 35, land: 80,  grav: 40,  tilt: 0, slosh: 35, pool: 40 },
+  water:   { pull: 7,   visc: 22, stagger: 22, bloom: true,  flow: 80,  tension: 2.0, size: 1.0,  meniscus: 70, trapped: 7, rest: 2, bsize: 8,  leave: 90,  push: true, tint: 0,  land: 120, grav: 70,  tilt: 0, slosh: 75, pool: 60 },
+  honey:   { pull: 3.5, visc: 95, stagger: 55, bloom: true,  flow: 100, tension: 1.5, size: 1.15, meniscus: 60, trapped: 4, rest: 2, bsize: 11, leave: 35,  push: true, tint: 0,  land: 200, grav: 100, tilt: 0, slosh: 15, pool: 80 },
+  mercury: { pull: 9,   visc: 55, stagger: 8,  bloom: false, flow: 40,  tension: 3.4, size: 0.9,  meniscus: 90, trapped: 0, rest: 0, bsize: 6,  leave: 120, push: true, tint: 20, land: 60,  grav: 60,  tilt: 0, slosh: 55, pool: 30 },
+};
+const gdir = () => { const a = S.tilt * Math.PI / 180; return { x: Math.sin(a), y: Math.cos(a) }; };
+const gravOn = () => S.grav > 0;
+function sortSpots(spots, origin) {
+  if (gravOn()) { const g = gdir(); return spots.sort((a, b) => (b.x * g.x + b.y * g.y) - (a.x * g.x + a.y * g.y)); }
+  return spots.sort((a, b) => dist(a, origin) - dist(b, origin));
+}
+const SCHEMA = [
+  { sec: 'Flow', items: [
+    { id: 'pull', label: 'Pull', min: 1, max: 10, step: 0.5, fmt: v => v.toFixed(1), help: 'How hard the colour is drawn to where it is going.' },
+    { id: 'visc', label: 'Viscosity', min: 0, max: 100, step: 1, fmt: v => v + '%', help: 'Low wobbles and overshoots. High oozes in and stops dead.' },
+    { id: 'stagger', label: 'Stream gap', min: 0, max: 120, step: 2, fmt: v => v + ' ms', help: 'Delay between drops leaving, so the colour pours in a line instead of jumping as one.' },
+    { id: 'bloom', type: 'check', label: 'Pour in at the finger' },
+    { id: 'flow', label: 'Visible between pads', min: 0, max: 100, step: 5, fmt: v => v + '%', help: 'How much of the liquid shows while it crosses gaps and other pads. 0 hides the journey.' },
+  ] },
+  { sec: 'Surface', items: [
+    { id: 'tension', label: 'Surface tension', min: 1.2, max: 4, step: 0.1, fmt: v => v.toFixed(1), help: 'Low stretches drops into strings. High keeps them round and snaps them apart.' },
+    { id: 'size', label: 'Drop size', min: 0.6, max: 1.6, step: 0.05, fmt: v => '×' + v.toFixed(2) },
+    { id: 'meniscus', label: 'Meniscus', min: 0, max: 100, step: 5, fmt: v => v + '%', help: 'The lighter edge where liquid meets air, round bubbles too.' },
+  ] },
+  { sec: 'Gravity', items: [
+    { id: 'grav', label: 'Gravity', min: 0, max: 100, step: 5, fmt: v => v + '%', help: 'Drops sag as they cross, pads fill from the bottom up, bubbles float to the top. 0 is the weightless version.' },
+    { id: 'tilt', label: 'Which way is down', min: -30, max: 30, step: 1, fmt: v => (v > 0 ? '+' : '') + v + '°', help: 'Straight down is the iPad on its stand. Lean it to see the level tilt.' },
+    { id: 'slosh', label: 'Slosh', min: 0, max: 100, step: 5, fmt: v => v + '%', help: 'How much the level overshoots and waves when colour lands or leaves.' },
+    { id: 'pool', label: 'Ring pools at the bottom', min: 0, max: 100, step: 5, fmt: v => v + '%', help: 'Muted, the ring thickens along the bottom edge and thins at the top.' },
+  ] },
+  { sec: 'Bubbles', items: [
+    { id: 'trapped', label: 'Trapped on arrival', min: 0, max: 12, step: 1, fmt: v => String(v) },
+    { id: 'rest', label: 'Stay behind', min: 0, max: 4, step: 1, fmt: v => String(v), help: 'Bubbles that never leave on their own. Drag them out with a finger.' },
+    { id: 'bsize', label: 'Bubble size', min: 3, max: 16, step: 1, fmt: v => v + ' px' },
+    { id: 'leave', label: 'Leave speed', min: 10, max: 200, step: 5, fmt: v => v + ' px/s' },
+    { id: 'push', type: 'check', label: 'Dragging pushes bubbles' },
+  ] },
+  { sec: 'Reading it on stage', items: [
+    { id: 'tint', label: 'Instant tint', min: 0, max: 60, step: 5, fmt: v => v + '%', help: 'A flat wash of the colour that lands first, so the state reads before the liquid gets there.' },
+    { id: 'land', label: 'Tint lands in', min: 0, max: 300, step: 10, fmt: v => v + ' ms' },
+  ] },
+];
+
+const KEY = 'lupe-liquid-v1';
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let S = Object.assign({ mode: 'liquid', speed: 1, quant: 'now', autoplay: false, preset: 'stage' }, PRESETS.stage);
+let savedMode = false;
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+  if (saved && typeof saved === 'object') { Object.assign(S, saved); savedMode = 'mode' in saved; }
+} catch (e) {}
+S.autoplay = false;
+if (reduced && !savedMode) { S.mode = 'fade'; $('#rmNote').hidden = false; }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+const hexRGB = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const PALETTE = COL.map(hexRGB).concat(COL.map(() => hexRGB('#EDEDF0')));
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const rand = (a, b) => a + Math.random() * (b - a);
+
+/* ---------- model ---------- */
+const rows = START.map(([play, muted]) => ({ play, muted, waiting: null, staged: null, launchBeat: 0 }));
+const cells = [];
+const padIdx = (r, c) => r * COLS + c, muteIdx = r => ROWS * COLS + r;
+const rowY = r => GRIDY + r * (RH + RG);
+for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+  cells.push({ x: PADX + c * (PW + PG), y: rowY(r), w: PW, h: RH, rad: 8, group: r, kind: SONG[r][c] ? 0 : 1, row: r, col: c,
+    fill: 0, ringL: 0, ringF: 0, fade: 0, under: 0, staged: 0, progress: -1, spawned: true, origin: null, level: 0, lv: 0, amp: 0 });
+}
+for (let r = 0; r < ROWS; r++) {
+  cells.push({ x: X0 + 12, y: rowY(r) + RH - 12 - 36, w: 144, h: 36, rad: 8, group: 6 + r, kind: 2, row: r, col: -1,
+    fill: 0, ringL: 0, ringF: 0, fade: 0, under: 0, staged: 0, progress: -1, spawned: true, origin: null, level: 0, lv: 0, amp: 0 });
+}
+const PAD_SPOTS = [[.27, .3], [.73, .3], [.5, .52], [.27, .74], [.73, .74]];
+const padSpots = c => PAD_SPOTS.map(([u, v]) => ({ x: c.x + u * c.w, y: c.y + v * c.h, r: 25 * S.size }));
+const muteSpots = c => [.2, .5, .8].map(u => ({ x: c.x + u * c.w, y: c.y + c.h / 2, r: 22 * S.size }));
+function ringSpots(c) {
+  const ins = 2.5, x0 = c.x + ins, y0 = c.y + ins, w = c.w - 2 * ins, h = c.h - 2 * ins, per = 2 * (w + h), out = [];
+  for (let i = 0; i < K; i++) {
+    let d = (i + 0.5) / K * per, x, y;
+    if (d < w) { x = x0 + d; y = y0; }
+    else if ((d -= w) < h) { x = x0 + w; y = y0 + d; }
+    else if ((d -= h) < w) { x = x0 + w - d; y = y0 + h; }
+    else { d -= w; x = x0; y = y0 + h - d; }
+    out.push({ x, y, r: 0 });
+  }
+  return out;
+}
+const mkBlob = (group, ci) => ({ x: 0, y: 0, vx: 0, vy: 0, r: 0, vr: 0, tx: 0, ty: 0, tr: 0, p1: null, start: 0, group, src: ci, dst: ci, transit: false });
+const rowBlobs = [], muteBlobs = [], allBlobs = [];
+for (let r = 0; r < ROWS; r++) {
+  rowBlobs[r] = []; muteBlobs[r] = [];
+  for (let i = 0; i < K; i++) { const b = mkBlob(r, padIdx(r, rows[r].play)); rowBlobs[r].push(b); allBlobs.push(b); }
+  for (let i = 0; i < KM; i++) { const b = mkBlob(6 + r, muteIdx(r)); muteBlobs[r].push(b); allBlobs.push(b); }
+}
+let bubbles = [];
+let simT = 0;
+
+function assignGreedy(arr, spots, fromCurrent) {
+  const free = spots.slice();
+  for (const b of arr) {
+    const rx = fromCurrent ? b.x : b.tx, ry = fromCurrent ? b.y : b.ty;
+    let bi = 0, bd = Infinity;
+    free.forEach((s, i) => { const d = (s.x - rx) ** 2 + (s.y - ry) ** 2; if (d < bd) { bd = d; bi = i; } });
+    const s = free.splice(bi, 1)[0]; b.tx = s.x; b.ty = s.y; b.tr = s.r;
+  }
+}
+function placeRow(r, snap) {
+  const row = rows[r], home = cells[padIdx(r, row.play)], mc = cells[muteIdx(r)];
+  assignGreedy(rowBlobs[r], row.muted ? ringSpots(home) : padSpots(home), false);
+  if (row.muted) assignGreedy(muteBlobs[r], muteSpots(mc), false);
+  else muteBlobs[r].forEach(b => { b.tx = mc.x + mc.w / 2; b.ty = mc.y + mc.h / 2; b.tr = 0; });
+  if (snap) allBlobsOf(r).forEach(b => { b.x = b.tx; b.y = b.ty; b.r = b.tr; b.vx = b.vy = b.vr = 0; });
+}
+const allBlobsOf = r => rowBlobs[r].concat(muteBlobs[r]);
+
+function initState() {
+  rows.forEach((row, r) => {
+    // first lay targets in the home pad so greedy has a reference
+    padSpots(cells[padIdx(r, row.play)]).forEach((s, i) => { const b = rowBlobs[r][i]; b.tx = s.x; b.ty = s.y; });
+    muteSpots(cells[muteIdx(r)]).forEach((s, i) => { const b = muteBlobs[r][i]; b.tx = s.x; b.ty = s.y; });
+    placeRow(r, true);
+    const home = cells[padIdx(r, row.play)], mc = cells[muteIdx(r)];
+    if (row.muted) { home.ringL = home.ringF = 1; mc.fill = 2; mc.fade = 1; mc.level = 1; }
+    else { home.fill = 2; home.fade = 1; home.under = 1; home.level = 1; }
+  });
+  cells.forEach((c, i) => { if (c.kind === 0 && isFilledHome(i)) spawnRest(i); });
+}
+const isFilledHome = ci => { const c = cells[ci]; return c.kind === 0 && rows[c.row].play === c.col && !rows[c.row].muted; };
+
+/* ---------- bubbles ---------- */
+function spawnBubbles(ci, origin, n, exiting) {
+  const c = cells[ci];
+  for (let i = 0; i < n && bubbles.length < MAXB; i++) {
+    const a = rand(0, Math.PI * 2), d = exiting ? rand(0, 18) : 0;
+    let x = exiting ? origin.x + Math.cos(a) * d : rand(c.x + 14, c.x + c.w - 14);
+    let y = exiting ? origin.y + Math.sin(a) * d : rand(c.y + 14, c.y + c.h - 24);
+    x = Math.min(c.x + c.w - 8, Math.max(c.x + 8, x)); y = Math.min(c.y + c.h - 8, Math.max(c.y + 8, y));
+    const sp = exiting ? rand(40, 100) : 0;
+    bubbles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 0, tr: S.bsize * rand(exiting ? 0.6 : 0.5, exiting ? 1.2 : 0.8), cell: ci, exiting, dying: false });
+  }
+}
+function spawnRest(ci) { spawnBubbles(ci, null, S.rest, false); }
+function killBubbles(ci) { bubbles.forEach(b => { if (b.cell === ci) { b.dying = true; b.tr = 0; } }); }
+function topUpRest() {
+  cells.forEach((c, ci) => {
+    if (!isFilledHome(ci)) return;
+    const mine = bubbles.filter(b => b.cell === ci && !b.exiting && !b.dying);
+    if (mine.length > S.rest) mine.slice(S.rest).forEach(b => { b.dying = true; b.tr = 0; });
+    else spawnBubbles(ci, null, S.rest - mine.length, false);
+  });
+}
+
+/* ---------- actions ---------- */
+function launch(r, c, origin, fromUser) {
+  const row = rows[r], from = row.play, dstI = padIdx(r, c), srcI = padIdx(r, from), cell = cells[dstI];
+  row.launchBeat = beatsNow();
+  if (from === c) {
+    if (isFilledHome(dstI)) spawnBubbles(dstI, origin, Math.max(2, S.trapped), true);
+    announce(`${NAMES[r]}: pattern ${SONG[r][c][0]} again.`);
+    return;
+  }
+  row.play = c;
+  const spots = sortSpots(row.muted ? ringSpots(cell) : padSpots(cell), origin);
+  const order = rowBlobs[r].slice().sort((a, b) => dist(a, origin) - dist(b, origin));
+  order.forEach((b, i) => {
+    const s = spots[i];
+    b.tx = s.x; b.ty = s.y; b.tr = s.r;
+    b.start = simT + i * S.stagger / 1000;
+    b.src = b.dst === dstI ? srcI : b.dst; b.dst = dstI;
+    b.p1 = (S.bloom && !row.muted) ? { x: origin.x + rand(-6, 6), y: origin.y + rand(-6, 6) } : null;
+  });
+  killBubbles(srcI);
+  cell.spawned = false; cell.origin = origin;
+  startMeasure(r, dstI);
+  updateHit(srcI); updateHit(dstI);
+  announce(`${NAMES[r]}: pattern ${SONG[r][c][0]} playing${row.muted ? ', still muted' : ''}.`);
+}
+
+function applyMute(r, m, origin) {
+  const row = rows[r];
+  row.muted = m; row.staged = null;
+  const hi = padIdx(r, row.play), home = cells[hi], mc = cells[muteIdx(r)];
+  const pb = rowBlobs[r];
+  if (m) {
+    assignGreedy(pb, ringSpots(home), true);
+    pb.forEach(b => { b.p1 = null; b.start = simT; b.src = b.dst = hi; });
+    killBubbles(hi);
+    const spots = sortSpots(muteSpots(mc), origin);
+    muteBlobs[r].forEach((b, i) => {
+      b.x = origin.x; b.y = origin.y; b.vx = b.vy = 0; b.r = 0; b.vr = 0; b.p1 = null;
+      b.tx = spots[i].x; b.ty = spots[i].y; b.tr = spots[i].r; b.start = simT + i * S.stagger / 1000;
+    });
+  } else {
+    assignGreedy(pb, padSpots(home), true);
+    pb.forEach((b, i) => { b.p1 = null; b.start = simT + i * S.stagger / 2000; b.src = b.dst = hi; });
+    home.spawned = false; home.origin = { x: home.x + 20, y: home.y + home.h / 2 };
+    muteBlobs[r].forEach(b => { b.tx = origin.x; b.ty = origin.y; b.tr = 0; b.start = simT; b.p1 = null; });
+  }
+  startMeasure(r, hi);
+  drawText(); updateHit(muteIdx(r)); updateHit(hi);
+  announce(`${NAMES[r]} ${m ? 'muted' : 'unmuted'}.`);
+}
+
+function toggleMute(r, origin) {
+  const row = rows[r];
+  if (row.staged) { row.staged = null; drawText(); updateHit(muteIdx(r)); announce(`${NAMES[r]}: mute change cancelled.`); return; }
+  if (playing && S.quant !== 'now') {
+    row.staged = { muted: !row.muted, origin, at: nextBoundaryLabel() };
+    drawText(); updateHit(muteIdx(r));
+    announce(`${NAMES[r]} ${row.staged.muted ? 'mutes' : 'comes back'} at ${row.staged.at}.`);
+    return;
+  }
+  applyMute(r, !row.muted, origin);
+}
+
+function activate(ci, origin) {
+  const c = cells[ci];
+  if (c.kind === 2) { toggleMute(c.row, origin); return; }
+  if (c.kind !== 0) return;
+  const r = c.row, row = rows[r];
+  if (r === SEL_ROW) moveSel(c.col);
+  if (playing && S.quant !== 'now') {
+    const prev = row.waiting;
+    if (prev) { row.waiting = null; updateHit(padIdx(r, prev.col)); }
+    if (prev && prev.col === c.col) { announce(`${NAMES[r]}: launch taken back.`); return; }
+    row.waiting = { col: c.col, origin };
+    updateHit(ci);
+    announce(`${NAMES[r]}: pattern ${SONG[r][c.col][0]} waiting for ${nextBoundaryLabel()}.`);
+    return;
+  }
+  launch(r, c.col, origin, true);
+}
+
+function processQueue() {
+  rows.forEach((row, r) => {
+    if (row.waiting) { const w = row.waiting; row.waiting = null; updateHit(padIdx(r, w.col)); launch(r, w.col, w.origin); }
+    if (row.staged) applyMute(r, row.staged.muted, row.staged.origin);
+  });
+}
+
+function autoplayStep() {
+  const r = Math.floor(Math.random() * ROWS), row = rows[r];
+  if (Math.random() < 0.15) { const mc = cells[muteIdx(r)]; applyMute(r, !row.muted, { x: rand(mc.x + 20, mc.x + mc.w - 20), y: mc.y + mc.h / 2 }); return; }
+  const opts = SONG[r].map((e, c) => e && c !== row.play ? c : -1).filter(c => c >= 0);
+  if (!opts.length) return;
+  const c = opts[Math.floor(Math.random() * opts.length)], cell = cells[padIdx(r, c)];
+  launch(r, c, { x: rand(cell.x + 16, cell.x + cell.w - 16), y: rand(cell.y + 16, cell.y + cell.h - 16) });
+}
+
+/* ---------- transport ---------- */
+let playing = true, t0 = performance.now(), lastBeats = 0, stopBeats = 0;
+const beatsNow = () => playing ? (performance.now() - t0) / 500 : stopBeats;
+function nextBoundaryLabel() {
+  const b = beatsNow();
+  if (S.quant === 'bar') { const nb = (Math.floor(b / 4) + 1) * 4; return String(nb / 4 + 1); }
+  const nb = Math.floor(b) + 1; return `${Math.floor(nb / 4) + 1}.${nb % 4 + 1}`;
+}
+function transportTick() {
+  const b = beatsNow();
+  if (playing) {
+    if (Math.floor(b) > Math.floor(lastBeats) && S.quant === 'beat') processQueue();
+    if (Math.floor(b / 4) > Math.floor(lastBeats / 4)) { if (S.quant === 'bar') processQueue(); if (S.autoplay) autoplayStep(); }
+    $('#pos').textContent = `Bar ${Math.floor(b / 4) + 1}.${Math.floor(b % 4) + 1} · 120 BPM`;
+  } else $('#pos').textContent = 'Stopped · 120 BPM';
+  lastBeats = b;
+}
+function setPlaying(p) {
+  if (p === playing) return;
+  if (p) { t0 = performance.now(); lastBeats = 0; rows.forEach(row => row.launchBeat = 0); }
+  else { stopBeats = beatsNow(); processQueue(); }
+  playing = p;
+  const btn = $('#playBtn'); btn.textContent = p ? 'Stop' : 'Play'; btn.setAttribute('aria-pressed', String(p));
+  if (!p && S.autoplay) setAutoplay(false);
+}
+function setAutoplay(on) {
+  S.autoplay = on; $('#autoBtn').setAttribute('aria-pressed', String(on));
+  if (on) setPlaying(true);
+}
+
+/* ---------- physics ---------- */
+function spring() { const k = 40 + 11.6 * S.pull * S.pull, z = 0.3 + S.visc / 100 * 1.3, w = Math.sqrt(k); return { k, c: 2 * z * w, z, w }; }
+function predictMs() {
+  const { z, w } = spring();
+  const t = z < 1 ? 4 / (z * w) : 4 / (w * (z - Math.sqrt(z * z - 1)));
+  return t * 1000 + S.stagger * (K - 1);
+}
+function stepBlobs(h, sp) {
+  const G = S.grav / 100 * 2600, g = gdir();
+  for (const b of allBlobs) {
+    if (simT < b.start) { b.transit = false; continue; }
+    let tx = b.tx, ty = b.ty, tr = b.tr;
+    if (b.p1) { tx = b.p1.x; ty = b.p1.y; tr = b.tr * 0.8; if (Math.hypot(b.x - tx, b.y - ty) < 10) b.p1 = null; }
+    // gravity only pulls while a drop is travelling, so it sags on the way and still lands on its spot
+    const far = Math.min(1, Math.max(0, (Math.hypot(b.x - tx, b.y - ty) - 10) / 30));
+    b.vx += (sp.k * (tx - b.x) - sp.c * b.vx + g.x * G * far) * h; b.vy += (sp.k * (ty - b.y) - sp.c * b.vy + g.y * G * far) * h;
+    b.x += b.vx * h; b.y += b.vy * h;
+    b.vr += (sp.k * (tr - b.r) - sp.c * b.vr) * h; b.r += b.vr * h;
+    if (b.r < 0) { b.r = 0; b.vr = 0; }
+    b.transit = Math.hypot(b.x - b.tx, b.y - b.ty) > 10;
+  }
+}
+const arrivedFrac = arr => arr.filter(b => !b.p1 && simT >= b.start && Math.hypot(b.x - b.tx, b.y - b.ty) < 10).length / arr.length;
+function stepCells(dt) {
+  const sp = spring(), fillK = 1 - Math.exp(-dt * (4 + sp.w * 0.5)), dropK = 1 - Math.exp(-dt * 30);
+  const fadeStep = dt * 1000 / 150, underStep = S.land > 0 ? dt * 1000 / S.land : 1;
+  const lin = (v, t, s) => v < t ? Math.min(t, v + s) : Math.max(t, v - s);
+  const b = beatsNow(), grav = gravOn();
+  // the level: a spring towards the share of the colour that has arrived, so it can overshoot and slosh
+  const lk = 260, lc = 2 * (1 - S.slosh / 100 * 0.85) * Math.sqrt(lk), ampDecay = Math.exp(-dt * (2 + (1 - S.slosh / 100) * 8));
+  const insideFrac = (arr, c) => arr.filter(bl => simT >= bl.start && !bl.p1 && bl.x >= c.x && bl.x <= c.x + c.w && bl.y >= c.y && bl.y <= c.y + c.h).length / arr.length;
+  const stepLevel = (c, target) => {
+    c.lv += (lk * (target - c.level) - lc * c.lv) * dt; c.level += c.lv * dt;
+    c.level = Math.max(-0.05, Math.min(1.1, c.level));
+    c.amp = Math.min(6, Math.max(c.amp * ampDecay, Math.abs(c.lv) * 3 * S.slosh / 100));
+  };
+  cells.forEach((c, ci) => {
+    if (c.kind === 1) return;
+    const row = rows[c.row];
+    if (c.kind === 0) {
+      const home = row.play === c.col, want = home && !row.muted, wantRing = home && row.muted;
+      const fr = home ? arrivedFrac(rowBlobs[c.row]) : 0;
+      stepLevel(c, want ? insideFrac(rowBlobs[c.row], c) : 0);
+      if (grav) c.fill = c.level > 0.005 ? 2 : 0;
+      else if (want) c.fill += ((fr >= 0.6 ? 2 : 0) - c.fill) * fillK; else c.fill += (0 - c.fill) * dropK;
+      c.ringL += ((wantRing ? fr : 0) - c.ringL) * (wantRing ? fillK : dropK);
+      c.ringF = lin(c.ringF, wantRing ? 1 : 0, fadeStep);
+      c.fade = lin(c.fade, want ? 1 : 0, fadeStep);
+      c.under = lin(c.under, want ? 1 : 0, underStep);
+      c.progress = home ? (((b - row.launchBeat) / 8) % 1 + 1) % 1 : -1;
+      if (want && !c.spawned && (grav ? c.level > 0.6 : c.fill > 0.5)) {
+        c.spawned = true;
+        spawnBubbles(ci, c.origin || { x: c.x + c.w / 2, y: c.y + c.h / 2 }, S.trapped, true);
+        spawnRest(ci);
+      }
+    } else {
+      const want = row.muted, fr = arrivedFrac(muteBlobs[c.row]);
+      stepLevel(c, want ? insideFrac(muteBlobs[c.row], c) : 0);
+      if (grav) c.fill = c.level > 0.005 ? 2 : 0;
+      else if (want) c.fill += ((fr >= 0.6 ? 2 : 0) - c.fill) * fillK; else c.fill += (0 - c.fill) * dropK;
+      c.fade = lin(c.fade, want ? 1 : 0, fadeStep);
+      c.staged = lin(c.staged, row.staged ? 1 : 0, fadeStep);
+    }
+  });
+}
+let pointer = { down: false, x: 0, y: 0, sx: 0, sy: 0, cell: -1, startCell: -1, moved: false };
+function stepBubbles(dt) {
+  const damp = Math.exp(-4 * dt), grow = 1 - Math.exp(-dt * 14);
+  const G = S.grav / 100, floaty = G > 0.05, g = gdir();
+  for (const u of bubbles) {
+    const c = cells[u.cell];
+    if (!u.dying && !isFilledHome(u.cell)) { u.dying = true; u.tr = 0; }
+    u.r += (u.tr - u.r) * (u.dying ? 1 - Math.exp(-dt * 22) : grow);
+    const dl = u.x - c.x, dr = c.x + c.w - u.x, dtp = u.y - c.y, db = c.y + c.h - u.y, m = Math.min(dl, dr, dtp, db);
+    if (u.exiting) {
+      if (floaty) { u.vx -= g.x * S.leave * 3 * dt; u.vy -= g.y * S.leave * 3 * dt; }
+      else {
+        const dx = m === dl ? -1 : m === dr ? 1 : 0, dy = m === dtp ? -1 : m === db ? 1 : 0;
+        u.vx += dx * S.leave * 3 * dt; u.vy += dy * S.leave * 3 * dt;
+      }
+      const sp = Math.hypot(u.vx, u.vy), cap = S.leave * 1.5; if (sp > cap) { u.vx *= cap / sp; u.vy *= cap / sp; }
+    } else {
+      u.vx += rand(-1, 1) * 40 * dt; u.vy += rand(-1, 1) * 40 * dt;
+      if (floaty) { u.vx -= g.x * G * 160 * dt; u.vy -= g.y * G * 160 * dt; }
+    }
+    if (pointer.down && S.push && pointer.cell === u.cell) {
+      const ddx = u.x - pointer.x, ddy = u.y - pointer.y, d = Math.hypot(ddx, ddy);
+      if (d < 48 && d > 0.01) { const f = (1 - d / 48) * 1600 * dt; u.vx += ddx / d * f; u.vy += ddy / d * f; }
+    }
+    u.vx *= damp; u.vy *= damp;
+    u.x += u.vx * dt; u.y += u.vy * dt;
+    const mg = Math.max(2, u.r * 0.6);
+    if (!u.exiting) {
+      if (u.x < c.x + mg || u.x > c.x + c.w - mg || u.y < c.y + mg || u.y > c.y + c.h - mg) {
+        if (pointer.down && pointer.cell === u.cell) u.exiting = true;
+        else { u.vx *= -0.5; u.vy *= -0.5; }
+      }
+    }
+    u.x = Math.min(c.x + c.w, Math.max(c.x, u.x)); u.y = Math.min(c.y + c.h, Math.max(c.y, u.y));
+    if (u.exiting && !u.dying && Math.min(u.x - c.x, c.x + c.w - u.x, u.y - c.y, c.y + c.h - u.y) < u.r * 0.9) { u.dying = true; u.tr = 0; }
+  }
+  bubbles = bubbles.filter(u => !(u.dying && u.r < 0.3));
+}
+
+/* ---------- measuring the last change ---------- */
+let meas = null;
+const fmtMs = v => v == null ? '…' : Math.round(v) + ' ms';
+function startMeasure(r, ci) {
+  meas = { t0: simT, r, ci, read: null, settle: null, clear: null };
+  $('#mRead').textContent = $('#mSettle').textContent = $('#mClear').textContent = '…';
+}
+function measureTick() {
+  if (!meas) return;
+  const el = (simT - meas.t0) * 1000, c = cells[meas.ci], row = rows[meas.r], arr = rowBlobs[meas.r];
+  const isHome = row.play === c.col;
+  if (!isHome) { meas = null; return; }
+  if (S.mode === 'fade') {
+    const v = row.muted ? c.ringF : c.fade;
+    if (meas.read == null && v >= 0.6) meas.read = el;
+    if (meas.settle == null && v >= 1) { meas.settle = el; meas.clear = el; }
+  } else {
+    const near = arr.filter(b => simT >= b.start && !b.p1 && Math.hypot(b.x - b.tx, b.y - b.ty) < 14).length / K;
+    const tintRead = !row.muted && S.tint >= 25 && c.under >= 0.95;
+    if (meas.read == null && (near >= 0.6 || tintRead)) meas.read = el;
+    const levelStill = !gravOn() || row.muted || (Math.abs(c.level - 1) < 0.01 && Math.abs(c.lv) < 0.05 && c.amp < 0.3);
+    const still = levelStill && arr.every(b => simT >= b.start && !b.p1 && Math.hypot(b.x - b.tx, b.y - b.ty) < 1 && Math.hypot(b.vx, b.vy) < 5 && Math.abs(b.r - b.tr) < 0.5);
+    if (meas.settle == null && still) meas.settle = el;
+    if (meas.settle != null && meas.clear == null && !bubbles.some(u => u.cell === meas.ci && u.exiting)) meas.clear = el;
+  }
+  $('#mRead').textContent = fmtMs(meas.read);
+  $('#mSettle').textContent = fmtMs(meas.settle);
+  $('#mClear').textContent = fmtMs(meas.clear);
+  if (meas.clear != null || el > 6000) meas = null;
+}
+
+/* ---------- DOM: heads, hit targets, selection ---------- */
+const heads = $('#heads'), hits = $('#hits'), selRing = $('#selRing');
+rows.forEach((row, r) => {
+  const d = document.createElement('div');
+  d.className = 'head';
+  Object.assign(d.style, { left: X0 + 'px', top: rowY(r) + 'px', width: HEADW + 'px', height: RH + 'px' });
+  d.innerHTML = `<span class="chip${r === SEL_ROW ? ' sel' : ''}" style="background:${COL[r]}">${r + 1}</span><span class="name">${NAMES[r]}</span>${r === SEL_ROW ? '<span class="tag">Selected</span>' : ''}`;
+  heads.appendChild(d);
+});
+const hitEls = [];
+cells.forEach((c, ci) => {
+  if (c.kind === 1) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'hit'; b.dataset.cell = ci;
+  Object.assign(b.style, { left: c.x + 'px', top: c.y + 'px', width: c.w + 'px', height: c.h + 'px' });
+  b.style.setProperty('--c', COL[c.row]);
+  b.addEventListener('click', e => { if (e.detail === 0) activate(ci, { x: c.x + c.w / 2, y: c.y + c.h / 2 }); });
+  hits.appendChild(b); hitEls[ci] = b;
+});
+function updateHit(ci) {
+  const b = hitEls[ci]; if (!b) return;
+  const c = cells[ci], row = rows[c.row];
+  if (c.kind === 2) {
+    b.setAttribute('aria-pressed', String(row.muted));
+    b.setAttribute('aria-label', `${row.muted ? 'Unmute' : 'Mute'} ${NAMES[c.row]}${row.staged ? `, ${row.staged.muted ? 'mutes' : 'comes back'} at ${row.staged.at}` : ''}`);
+    return;
+  }
+  const e = SONG[c.row][c.col], home = row.play === c.col, wait = row.waiting && row.waiting.col === c.col;
+  b.classList.toggle('waiting', !!wait);
+  b.setAttribute('aria-label', `${NAMES[c.row]}, entry ${LET[c.col]}, pattern ${e[0]}, ${e[1]} ${e[1] === 1 ? 'pass' : 'passes'}${home ? ', playing' : ''}${home && row.muted ? ', muted' : ''}${wait ? ', waiting' : ''}`);
+}
+let selCol = rows[SEL_ROW].play;
+function moveSel(col) {
+  selCol = col;
+  const c = cells[padIdx(SEL_ROW, col)], t = `translate(${c.x}px, ${c.y}px)`;
+  if (reduced) { selRing.style.opacity = '0'; setTimeout(() => { selRing.style.transform = t; selRing.style.opacity = '1'; }, 90); }
+  else selRing.style.transform = t;
+}
+const live = $('#live');
+let liveTimer = 0;
+function announce(t) { if (S.autoplay) return; clearTimeout(liveTimer); liveTimer = setTimeout(() => { live.textContent = t; }, 120); }
+
+/* pointer: tap launches, drag pushes bubbles */
+const stage = $('#stage'), outer = $('#stageOuter');
+let scale = 1;
+function toStage(e) { const rc = stage.getBoundingClientRect(); return { x: (e.clientX - rc.left) / scale, y: (e.clientY - rc.top) / scale }; }
+function hitCell(p) { return cells.findIndex(c => c.kind !== 1 && p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h); }
+hits.addEventListener('pointerdown', e => {
+  if (!e.target.closest('.hit')) return;
+  const p = toStage(e), ci = hitCell(p);
+  pointer = { down: true, x: p.x, y: p.y, sx: p.x, sy: p.y, cell: ci, startCell: ci, moved: false, id: e.pointerId };
+  try { hits.setPointerCapture(e.pointerId); } catch (err) {}
+});
+hits.addEventListener('pointermove', e => {
+  if (!pointer.down || e.pointerId !== pointer.id) return;
+  const p = toStage(e);
+  pointer.x = p.x; pointer.y = p.y; pointer.cell = hitCell(p);
+  if (Math.hypot(p.x - pointer.sx, p.y - pointer.sy) > 8) pointer.moved = true;
+});
+function endPointer(e, cancelled) {
+  if (!pointer.down || e.pointerId !== pointer.id) return;
+  const p = toStage(e);
+  if (!cancelled && !pointer.moved && pointer.startCell >= 0 && hitCell(p) === pointer.startCell) activate(pointer.startCell, p);
+  pointer.down = false;
+}
+hits.addEventListener('pointerup', e => endPointer(e, false));
+hits.addEventListener('pointercancel', e => endPointer(e, true));
+
+function fit() {
+  scale = Math.max(0.5, Math.min(1, outer.clientWidth / W));
+  stage.style.transform = `scale(${scale})`;
+  outer.style.height = H * scale + 'px';
+}
+new ResizeObserver(fit).observe(outer);
+fit();
+
+/* ---------- controls ---------- */
+const levers = $('#levers');
+const outputs = {};
+SCHEMA.forEach(sec => {
+  const s = document.createElement('div'); s.className = 'sec';
+  s.innerHTML = `<h2>${sec.sec}</h2>`;
+  sec.items.forEach(it => {
+    const wrap = document.createElement('div');
+    if (it.type === 'check') {
+      wrap.innerHTML = `<label class="check"><input type="checkbox" id="c-${it.id}"> ${it.label}</label>`;
+      const inp = wrap.querySelector('input');
+      inp.checked = !!S[it.id];
+      inp.addEventListener('change', () => { S[it.id] = inp.checked; changed(it.id); });
+    } else {
+      wrap.className = 'ctl';
+      wrap.innerHTML = `<div class="ctl-head"><label for="c-${it.id}">${it.label}</label><output id="o-${it.id}" for="c-${it.id}"></output></div>
+        <input type="range" id="c-${it.id}" min="${it.min}" max="${it.max}" step="${it.step}"${it.help ? ` aria-describedby="h-${it.id}"` : ''}>
+        ${it.help ? `<p class="help" id="h-${it.id}">${it.help}</p>` : ''}`;
+      const inp = wrap.querySelector('input');
+      inp.value = S[it.id];
+      outputs[it.id] = () => { wrap.querySelector('output').textContent = it.fmt(+S[it.id]); };
+      outputs[it.id]();
+      inp.addEventListener('input', () => { S[it.id] = +inp.value; outputs[it.id](); changed(it.id); });
+    }
+    s.appendChild(wrap);
+  });
+  levers.appendChild(s);
+});
+function syncInputs() {
+  SCHEMA.forEach(sec => sec.items.forEach(it => {
+    const inp = document.getElementById('c-' + it.id);
+    if (it.type === 'check') inp.checked = !!S[it.id]; else { inp.value = S[it.id]; outputs[it.id](); }
+  }));
+}
+function changed(id) {
+  S.preset = null; syncPresetBtns();
+  if (id === 'size') rows.forEach((row, r) => placeRow(r, false));
+  if (id === 'rest') topUpRest();
+  $('#mPredict').textContent = Math.round(predictMs()) + ' ms';
+  save();
+}
+function syncPresetBtns() { document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === S.preset))); }
+function applyPreset(p) {
+  Object.assign(S, PRESETS[p]); S.preset = p;
+  syncInputs(); syncPresetBtns();
+  rows.forEach((row, r) => placeRow(r, false)); topUpRest();
+  $('#mPredict').textContent = Math.round(predictMs()) + ' ms';
+  save();
+}
+document.querySelectorAll('#presets button').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.p)));
+function seg(id, key, conv, after) {
+  const el = document.getElementById(id);
+  const sync = () => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(conv(b.dataset.v) === S[key])));
+  el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S[key] = conv(b.dataset.v); sync(); save(); if (after) after(); }));
+  sync();
+}
+seg('modeSeg', 'mode', v => v);
+seg('speedSeg', 'speed', v => +v);
+seg('quantSeg', 'quant', v => v, () => { if (S.quant === 'now') processQueue(); });
+$('#playBtn').addEventListener('click', () => setPlaying(!playing));
+$('#autoBtn').addEventListener('click', () => setAutoplay(!S.autoplay));
+$('#resetBtn').addEventListener('click', () => applyPreset('stage'));
+$('#copyBtn').addEventListener('click', () => {
+  const keys = ['mode', 'pull', 'visc', 'stagger', 'bloom', 'flow', 'tension', 'size', 'meniscus', 'trapped', 'rest', 'bsize', 'leave', 'push', 'tint', 'land', 'grav', 'tilt', 'slosh', 'pool'];
+  const out = {}; keys.forEach(k => out[k] = S[k]);
+  const text = 'Lupe liquid motion settings\n' + JSON.stringify(out, null, 2);
+  const box = $('#copyBox'), st = $('#copyStatus');
+  const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); st.textContent = 'Select all and copy from the box.'; };
+  try {
+    navigator.clipboard.writeText(text).then(() => { st.textContent = 'Copied. Paste it to Claude.'; box.hidden = true; }, fallback);
+  } catch (e) { fallback(); }
+});
+syncPresetBtns();
+$('#mPredict').textContent = Math.round(predictMs()) + ' ms';
+
+/* ---------- WebGL ---------- */
+const canvas = $('#gl');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+canvas.width = W * DPR; canvas.height = H * DPR;
+canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, alpha: true, antialias: false });
+
+const tc = document.createElement('canvas'); tc.width = W * DPR; tc.height = H * DPR;
+const tx = tc.getContext('2d');
+let textTex = null;
+function muteLabel(row) {
+  if (row.staged) return row.staged.muted ? `Mutes at ${row.staged.at}` : `Back at ${row.staged.at}`;
+  return row.muted ? 'Muted' : 'Mute';
+}
+function drawText() {
+  tx.setTransform(1, 0, 0, 1, 0, 0);
+  tx.globalCompositeOperation = 'source-over'; tx.fillStyle = '#000'; tx.fillRect(0, 0, tc.width, tc.height);
+  tx.setTransform(DPR, 0, 0, DPR, 0, 0); tx.globalCompositeOperation = 'lighter'; tx.textBaseline = 'alphabetic';
+  cells.forEach(c => {
+    if (c.kind === 0) {
+      const e = SONG[c.row][c.col];
+      tx.textAlign = 'left';
+      tx.fillStyle = '#f00'; tx.font = `600 22px ${FONT}`; tx.fillText(e[0], c.x + 10, c.y + 10 + 18);
+      tx.fillStyle = '#0f0'; tx.font = `400 12px ${FONT}`; tx.fillText('×' + e[1], c.x + 10, c.y + 10 + 18 + 18);
+    } else if (c.kind === 2) {
+      const row = rows[c.row];
+      tx.textAlign = 'center'; tx.fillStyle = '#00f'; tx.font = `${row.muted ? 600 : 400} 13px ${FONT}`;
+      tx.fillText(muteLabel(row), c.x + c.w / 2, c.y + c.h / 2 + 4.5);
+    }
+  });
+  if (gl && textTex) {
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, textTex);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tc);
+  }
+}
+
+const VS = `#version 300 es
+in vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }`;
+const FS = `#version 300 es
+precision highp float;
+uniform sampler2D uData; uniform sampler2D uText;
+uniform vec2 uSize; uniform float uDpr;
+uniform int uCells; uniform int uBlobs; uniform int uBubbles;
+uniform float uK; uniform float uFlow; uniform float uMode; uniform float uMen; uniform float uUnder;
+uniform float uGravOn; uniform vec2 uGdir; uniform float uTime; uniform float uPool;
+out vec4 o;
+vec4 D(int i, int r){ return texelFetch(uData, ivec2(i, r), 0); }
+float sdRR(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+float bf(vec2 p, vec4 b){ vec2 d = p - b.xy; float rr = b.z * b.z; if (rr < 0.04) return 0.0; return pow(rr / (dot(d, d) + 0.5), uK * 0.5); }
+const vec3 INK = vec3(0.063, 0.063, 0.071);
+void main(){
+  vec2 p = vec2(gl_FragCoord.x, uSize.y * uDpr - gl_FragCoord.y) / uDpr;
+  int ci = -1; float sd = 1e3; vec4 R = vec4(0.0);
+  for (int i = 0; i < uCells; i++){
+    vec4 r = D(i, 0);
+    if (p.x < r.x - 1.0 || p.y < r.y - 1.0 || p.x > r.x + r.z + 1.0 || p.y > r.y + r.w + 1.0) continue;
+    sd = sdRR(p - (r.xy + r.zw * 0.5), r.zw * 0.5, D(i, 2).w); ci = i; R = r; break;
+  }
+  if (ci < 0){
+    if (uFlow < 0.001 || uMode > 0.5){ o = vec4(0.0); return; }
+    float F = 0.0; vec3 acc = vec3(0.0);
+    for (int j = 0; j < uBlobs; j++){
+      vec4 b = D(j, 3);
+      if (b.w > 5.5) continue;
+      if (D(j, 4).z < 0.5) continue;
+      float f = bf(p, b); F += f; acc += D(int(b.w + 0.5), 6).rgb * f;
+    }
+    if (F < 0.3){ o = vec4(0.0); return; }
+    float aa = clamp(fwidth(F) * 0.75, 1e-3, 0.4);
+    float m = smoothstep(1.0 - aa, 1.0 + aa, F) * uFlow;
+    o = vec4(acc / F * m, m); return;
+  }
+  vec4 A = D(ci, 1); vec4 B = D(ci, 2);
+  float g = A.x; int kind = int(A.y + 0.5);
+  float cov = 1.0 - smoothstep(-0.5, 0.5, sd);
+  if (kind == 1){
+    float line = cov * smoothstep(-1.5, -0.5, sd);
+    o = vec4(vec3(0.165, 0.165, 0.188) * line, line); return;
+  }
+  vec3 gc = D(int(g + 0.5), 6).rgb;
+  // gravity: a level that rises from the bottom, with a wave on its surface
+  vec4 L = D(ci, 7);
+  vec2 cc = R.xy + R.zw * 0.5;
+  float ext = abs(R.z * uGdir.x) + abs(R.w * uGdir.y);
+  float s = dot(p - cc, uGdir);
+  float perp = dot(p - cc, vec2(-uGdir.y, uGdir.x));
+  float surf = ext * 0.5 - L.x * ext * 1.1 + sin(perp * 0.085 + uTime * 6.5 + float(ci) * 1.7) * L.y;
+  float lm = smoothstep(-1.0, 1.0, s - surf);
+  float F = B.x * mix(1.0, lm, uGravOn);
+  for (int j = 0; j < uBlobs; j++){
+    vec4 b = D(j, 3);
+    if (abs(b.w - g) > 0.1) continue;
+    vec4 bb = D(j, 4);
+    bool home = int(bb.x + 0.5) == ci || int(bb.y + 0.5) == ci;
+    float w = home ? 1.0 : (bb.z > 0.5 ? uFlow : 0.0);
+    if (w <= 0.0) continue;
+    F += w * bf(p, b);
+  }
+  float Bf = 0.0;
+  for (int j = 0; j < uBubbles; j++){
+    vec4 u = D(j, 5);
+    if (int(u.w + 0.5) != ci) continue;
+    float rr = u.z * u.z; if (rr < 0.01) continue;
+    vec2 d = p - u.xy; Bf += rr / (dot(d, d) + 0.25);
+  }
+  Bf *= Bf;
+  F -= Bf * max(F, 1.0);
+  float aa = clamp(fwidth(F) * 0.75, 1e-3, 0.4);
+  float m = smoothstep(1.0 - aa, 1.0 + aa, F);
+  float men = (1.0 - smoothstep(0.0, 0.7, F - 1.0)) * m;
+  if (uMode > 0.5){ m = A.w; men = 0.0; }
+  float q = clamp(s / (ext * 0.5), -1.0, 1.0);
+  float th = 2.0 + uPool * (q > 0.0 ? q * q * 3.5 : q * 0.9);
+  float ring = smoothstep(-th - 0.5, -th + 0.5, sd) * A.z;
+  vec3 base = vec3(0.149, 0.149, 0.169);
+  vec3 lc = mix(gc, vec3(1.0), men * uMen * 0.28);
+  vec3 col = mix(base, gc, B.z * uUnder);
+  col = mix(col, lc, max(m, ring));
+  vec3 t = texture(uText, p / uSize).rgb;
+  col = mix(col, mix(vec3(0.929, 0.929, 0.941), INK, m), t.r);
+  col = mix(col, mix(vec3(0.631, 0.631, 0.667), INK, m), t.g);
+  col = mix(col, mix(vec3(0.769, 0.769, 0.800), INK, m), t.b);
+  if (B.y >= 0.0){
+    vec2 c0 = vec2(R.x + 10.0, R.y + R.w - 14.0); vec2 sz = vec2(R.z - 20.0, 4.0);
+    float ba = 1.0 - smoothstep(-0.5, 0.5, sdRR(p - (c0 + sz * 0.5), sz * 0.5, 2.0));
+    if (ba > 0.0){
+      float fx = c0.x + sz.x * B.y;
+      float inF = 1.0 - smoothstep(fx - 0.5, fx + 0.5, p.x);
+      vec3 trk = mix(vec3(0.227, 0.227, 0.259), mix(lc, INK, 0.3), m);
+      vec3 fl = mix(gc, INK, m);
+      col = mix(col, mix(trk, fl, inF), ba);
+    }
+  }
+  o = vec4(col * cov, cov);
+}`;
+
+let render = () => {};
+if (!gl) {
+  const n = document.createElement('div'); n.className = 'nogl';
+  n.textContent = 'This mockup needs WebGL 2, which this browser has turned off. Try Safari or Chrome on a recent iPad or Mac.';
+  stage.appendChild(n);
+  hits.inert = true;
+} else {
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const dataTex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 64, 8, 0, gl.RGBA, gl.FLOAT, null);
+  [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(p => gl.texParameteri(gl.TEXTURE_2D, p, gl.NEAREST));
+  textTex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, textTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const U = {}; ['uData', 'uText', 'uSize', 'uDpr', 'uCells', 'uBlobs', 'uBubbles', 'uK', 'uFlow', 'uMode', 'uMen', 'uUnder', 'uGravOn', 'uGdir', 'uTime', 'uPool'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  gl.uniform1i(U.uData, 0); gl.uniform1i(U.uText, 1);
+  gl.uniform2f(U.uSize, W, H); gl.uniform1f(U.uDpr, DPR);
+  const data = new Float32Array(64 * 8 * 4);
+  const put = (row, i, a, b, c, d) => { const o = (row * 64 + i) * 4; data[o] = a; data[o + 1] = b; data[o + 2] = c; data[o + 3] = d; };
+  PALETTE.forEach((c, g) => put(6, g, c[0], c[1], c[2], 0));
+  render = () => {
+    const fade = S.mode === 'fade';
+    cells.forEach((c, i) => {
+      put(0, i, c.x, c.y, c.w, c.h);
+      put(1, i, c.group, c.kind, Math.max(fade ? c.ringF : c.ringL, c.staged), c.fade);
+      put(2, i, c.fill, c.progress, c.under, c.rad);
+      put(7, i, c.level, c.amp, 0, 0);
+    });
+    const g = gdir();
+    gl.uniform1f(U.uGravOn, gravOn() ? 1 : 0); gl.uniform2f(U.uGdir, g.x, g.y);
+    gl.uniform1f(U.uTime, simT); gl.uniform1f(U.uPool, gravOn() ? S.pool / 100 : 0);
+    allBlobs.forEach((b, i) => { put(3, i, b.x, b.y, Math.max(0, b.r), b.group); put(4, i, b.src, b.dst, b.transit ? 1 : 0, 0); });
+    const nb = Math.min(MAXB, bubbles.length);
+    for (let i = 0; i < nb; i++) { const u = bubbles[i]; put(5, i, u.x, u.y, Math.max(0, u.r), u.cell); }
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 64, 8, gl.RGBA, gl.FLOAT, data);
+    gl.uniform1i(U.uCells, cells.length); gl.uniform1i(U.uBlobs, allBlobs.length); gl.uniform1i(U.uBubbles, nb);
+    gl.uniform1f(U.uK, S.tension); gl.uniform1f(U.uFlow, S.flow / 100); gl.uniform1f(U.uMode, fade ? 1 : 0);
+    gl.uniform1f(U.uMen, S.meniscus / 100); gl.uniform1f(U.uUnder, fade ? 0 : S.tint / 100);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+}
+
+/* ---------- boot ---------- */
+initState();
+drawText();
+cells.forEach((c, ci) => updateHit(ci));
+selRing.style.transform = `translate(${cells[padIdx(SEL_ROW, selCol)].x}px, ${cells[padIdx(SEL_ROW, selCol)].y}px)`;
+let last = performance.now();
+function frame(now) {
+  const real = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = real * S.speed;
+  transportTick();
+  const sp = spring(), steps = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / steps;
+  for (let s = 0; s < steps; s++) { simT += h; stepBlobs(h, sp); }
+  stepBubbles(dt); stepCells(dt); measureTick(); render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.__lupe = { rows, cells, launch, applyMute, S };
+})();
+</script>
+</body></html>
