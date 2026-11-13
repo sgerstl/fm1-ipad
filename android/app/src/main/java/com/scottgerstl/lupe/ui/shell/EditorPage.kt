@@ -1,5 +1,10 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture

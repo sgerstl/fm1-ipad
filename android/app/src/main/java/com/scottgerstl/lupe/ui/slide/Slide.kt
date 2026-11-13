@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -104,8 +105,9 @@ fun Modifier.slideToTurn(
     val loupeOn by rememberUpdatedState(settings.magnifier)
     val density = LocalDensity.current
     val stepPx = with(density) { stepDp.dp.toPx() }
+    // a sideways slide at the screen's edge must not become the system's back gesture (P1's run, 2026-11-13)
     return this.onGloballyPositioned { coords = it }.then(
-        if (!enabled) Modifier else Modifier.pointerInput(dir, stepPx) {
+        if (!enabled) Modifier else Modifier.systemGestureExclusion().pointerInput(dir, stepPx) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 var vertical = false
