@@ -191,5 +191,12 @@ data class PickTile(val tile: Int) : Intent
 
 /** Back to the pattern (decision 19: Android's back gesture, no visible key): SCREEN_GOTO 127, a HOME tap on the FM-1.
  *  JSON `{"intent":"goHome"}`. A write: refused while read-only. The shell's bottom returns to the editor. */
+/**
+ * The block's GLO, SAVE and SEQ: send the FM-1 to that screen (SCREEN_GOTO; the phone opens its own place for it as well: the Mix tab, the
+ * Projects sheet, the editor). [screen] is "GLO", "SAVE" or "SEQ". PROVISIONAL name: P1 decides what the core accepts. A write.
+ */
+@Serializable @SerialName("screenGoto")
+data class ScreenGoto(val screen: String) : Intent
+
 @Serializable @SerialName("goHome")
 data object GoHome : Intent

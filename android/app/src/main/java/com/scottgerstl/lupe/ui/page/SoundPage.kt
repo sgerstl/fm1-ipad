@@ -91,7 +91,7 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
     val hot = remember { mutableStateOf(-1) }
 
     Column(modifier.fillMaxSize()) {
-        FamilyRow(page.family, colour) { core.send(PickPage(it)) }
+        // the family keys live in the button block now (decision 24); this page starts at its page row
         Box(Modifier.fillMaxWidth().height(44.dp)) {
             LupeCrossfade(page.lock, Modifier.fillMaxSize(), Dur.STATE) { lock ->
                 if (lock == null) PageRow(page, colour) { core.send(PickPage(page.family, it)) } else LockBanner(lock, colour)
@@ -159,23 +159,6 @@ private fun TrackLine(page: PageState, colour: Color, modifier: Modifier) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(colour))
         Spacer(Modifier.width(6.dp))
         BasicText("${page.track} ${page.trackName}", style = LupeType.small, maxLines = 1)
-    }
-}
-
-@Composable
-private fun FamilyRow(family: String, colour: Color, onPick: (String) -> Unit) {
-    val edge = lerp(colour, Color.Black, 0.45f)
-    BoxWithConstraints(Modifier.fillMaxWidth().height(48.dp)) {
-        val gap = 4.dp
-        val w = (maxWidth - gap * (PageFamilies.size - 1)) / PageFamilies.size
-        Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
-            PageFamilies.forEach { f ->
-                Key(
-                    onClick = { onPick(f) }, description = "$f page family", width = w, height = 36.dp, on = f == family,
-                    role = Role.Tab, state = if (f == family) "Selected" else null, litTop = colour, litEdge = edge,
-                ) { fg -> KeyLabel(f, fg) }
-            }
-        }
     }
 }
 

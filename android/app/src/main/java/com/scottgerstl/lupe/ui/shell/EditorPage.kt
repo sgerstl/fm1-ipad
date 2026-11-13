@@ -131,8 +131,8 @@ fun EditorPage(
         val lane0 = 162.dp * autoFraction
         // the grid in the editor: what is left above the lane and the strip. With a sound page: no smaller than 36 dp a row, no bigger than 72, and
         // leaving the sound section its four controls first; the section's picture takes what remains (0 at split on a 915 dp phone)
-        val grid0 = (maxHeight - ruler - 12.dp - STRIP_HEIGHT - lane0).coerceAtLeast(MIN_GRID)
-        val grid1 = (maxHeight - ruler - 8.dp - SOUND_IDEAL).coerceIn(MIN_GRID, MAX_GRID)
+        val grid0 = (maxHeight - ruler - 12.dp - STRIP_HEIGHT - lane0 - BLOCK_HEIGHT - 6.dp).coerceAtLeast(MIN_GRID)
+        val grid1 = (maxHeight - ruler - 6.dp - SOUND_IDEAL - BLOCK_HEIGHT - 6.dp).coerceIn(MIN_GRID, MAX_GRID)
         val grid = grid0 + (grid1 - grid0) * s
         Column(Modifier.fillMaxSize()) {
             Ruler(ed, track, core, pick.step != null)
@@ -143,7 +143,7 @@ fun EditorPage(
                 Spacer(Modifier.height(12.dp * laneF))
                 AutoLane(ed, auto, track, core, { drawing = true }, Modifier.height(150.dp * laneF).graphicsLayer { alpha = laneF })
             }
-            Spacer(Modifier.height(12.dp - 4.dp * s))
+            Spacer(Modifier.height(12.dp - 6.dp * s))
             Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                 if (s < 0.999f) Box(Modifier.fillMaxWidth().height(STRIP_HEIGHT).graphicsLayer { alpha = 1f - s }) {
                     LupeCrossfade(pick.step != null, Modifier.fillMaxSize()) { picked ->
@@ -152,13 +152,16 @@ fun EditorPage(
                 }
                 if (s > 0.001f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = s }) { lastSound?.invoke() }
             }
+            // the FM-1's button block, always at the very bottom (decision 24)
+            Spacer(Modifier.height(6.dp))
+            ButtonBlock(core)
         }
     }
 }
 
-private val MIN_GRID = 156.dp          // four rows of 36 dp and three 4 dp gaps
+private val MIN_GRID = 128.dp          // four rows of 29 dp and three 4 dp gaps (the board's miniGrid, about 30)
 private val MAX_GRID = 300.dp          // rows of 72 dp: more room goes to the sound page's picture
-private val SOUND_IDEAL = 322.dp       // family keys 48, page row 44, controls ~120 and a picture of ~110
+private val SOUND_IDEAL = 272.dp       // page row 44, controls ~118 and a picture of ~110
 
 // ---- ruler and lock banner
 
