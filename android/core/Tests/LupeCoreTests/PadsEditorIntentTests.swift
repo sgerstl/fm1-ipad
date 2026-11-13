@@ -221,4 +221,89 @@ import Testing
         try await settle({ blocked.lock.withLock { blocked.n } >= 2 }, "both blocked")
         #expect(fake.muted == muted)
     }
+
+    /// Playing: a tap stages the launch; the phone sees it land without a write of its own (the song store's follow
+    /// loop, as the iPad's Pads page runs it); a take-back stages the entry already on and leaves nothing waiting.
+    /// Scott's run, 2026-11-14: "waiting" stayed for ten bars and take-back taps swapped the pads.
+    @Test func launchesLandAndTakeBackWhilePlaying() async throws {
+        let box = Box()
+        let (core, fake) = try await connected(box)
+        defer { core.stop() }
+        fake.songMode = 0          // SONG off, as on Scott's FM-1: in SONG on a launch to the next entry is the song's own
+        let pad = try #require(padWithPattern(fake))
+        let other = try #require(fake.lists[pad.track].indices.first { $0 != pad.entry && fake.lists[pad.track][$0].p > 0 && fake.lists[pad.track][$0].p <= 64 })
+        send(core, #"{"intent":"padTap","track":\#(pad.track + 1),"entry":\#(pad.entry)}"#)   // stopped: on it at once
+        try await settle({ fake.entryOn[pad.track] == pad.entry }, "on the first"); try await idle(core)
+        send(core, #"{"intent":"play"}"#)
+        try await settle({ core.session.playing && fake.playing }, "playing")
+        // a launch: waiting, then it lands at the fake's launch point (2 s) and the phone sees it unprompted
+        send(core, #"{"intent":"padTap","track":\#(pad.track + 1),"entry":\#(other)}"#)
+        try await settle({ core.padsArea().rows[pad.track].entries[other].play == .waiting }, "waiting shown")
+        #expect(core.topArea().waiting == 1)
+        try await settle({ fake.entryOn[pad.track] == other }, "landed on the FM-1")
+        let end = Date().addingTimeInterval(4)
+        while Date() < end, core.padsArea().rows[pad.track].entries[other].play != .playing { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(core.padsArea().rows[pad.track].entries[other].play == .playing, "the phone missed the landing")
+        #expect(core.topArea().waiting == 0)
+        // take-back: launch the first again, then tap it while it waits: the entry playing is staged instead
+        try await idle(core)
+        send(core, #"{"intent":"padTap","track":\#(pad.track + 1),"entry":\#(pad.entry)}"#)
+        try await settle({ core.padsArea().rows[pad.track].entries[pad.entry].play == .waiting }, "waiting again"); try await idle(core)
+        send(core, #"{"intent":"padTap","track":\#(pad.track + 1),"entry":\#(pad.entry)}"#)
+        try await settle({ fake.stagedEntry[pad.track] == other }, "take-back staged the entry on")
+        try await settle({ core.padsArea().rows[pad.track].entries[pad.entry].play == .idle && core.topArea().waiting == 0 }, "nothing waiting")
+        #expect(core.padsArea().rows[pad.track].entries[other].play == .playing)
+        try await Task.sleep(for: .milliseconds(2500))
+        #expect(fake.entryOn[pad.track] == other)                                          // it stays on the entry playing
+        #expect(fake.unansweredCommands.isEmpty)
+    }
+
+    /// Set pattern names only kept patterns (LIST SET; Scott's run: 60 refused); the pads area lists them.
+    @Test func setPatternTakesOnlyKeptNumbers() async throws {
+        let box = Box()
+        let (core, fake) = try await connected(box)
+        defer { core.stop() }
+        let pad = try #require(padWithPattern(fake))
+        let kept = core.padsArea().kept
+        #expect(!kept.isEmpty && kept.allSatisfy { fake.poolLen[$0 - 1] > 0 })
+        let empty = try #require((1...64).first { !kept.contains($0) })
+        let before = fake.lists[pad.track][pad.entry]
+        send(core, #"{"intent":"padSet","track":\#(pad.track + 1),"entry":\#(pad.entry),"pattern":\#(empty)}"#)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(fake.lists[pad.track][pad.entry] == before)
+        #expect(box.log.contains { $0.contains("holds nothing") })
+        #expect(fake.unansweredCommands.isEmpty)
+    }
+
+    /// Clear empties the entry; the pattern goes only when nothing else names it (LIST CLEAR, as the fake has it).
+    @Test func clearKeepsASharedPattern() async throws {
+        let box = Box()
+        let (core, fake) = try await connected(box)
+        defer { core.stop() }
+        let pad = try #require(padWithPattern(fake))
+        let p = fake.lists[pad.track][pad.entry].p
+        send(core, #"{"intent":"padSet","track":\#(pad.track + 1),"entry":\#(pad.empty),"pattern":\#(p)}"#)   // now two entries name it
+        try await settle({ fake.lists[pad.track][pad.empty].p == p }, "shared"); try await idle(core)
+        send(core, #"{"intent":"padClear","track":\#(pad.track + 1),"entry":\#(pad.empty)}"#)
+        try await settle({ fake.lists[pad.track][pad.empty].p == 0 }, "cleared")
+        #expect(fake.poolLen[p - 1] > 0 && fake.lists[pad.track][pad.entry].p == p)       // the pattern stays
+    }
+
+    /// LENGTH stops at the next note (Session.setLength): the editor says how far it can go, the log says why not.
+    @Test func lengthStopsAtTheNextNote() async throws {
+        let box = Box()
+        let (core, fake) = try await connected(box)
+        defer { core.stop() }
+        let t = core.editorTrack()
+        let steps = core.session.tracks[t].steps
+        // a note, one free step, then a note: LENGTH reaches 2 and no further
+        let i = try #require(steps.indices.first { steps[$0].isOn && $0 + 2 < 16 && !steps[$0 + 1].isOn && steps[$0 + 1].time != .tie && steps[$0 + 2].isOn })
+        #expect(core.editorArea().steps[i].maxLength == 2)
+        send(core, #"{"intent":"stepSelect","step":\#(i)}"#)
+        let blocker = fake.steps[t][i + 2]
+        send(core, #"{"intent":"stepAdjust","field":"length","delta":2}"#)
+        try await settle({ fake.steps[t][i + 1][5] == 1 }, "grew to the cap")          // the free step became a TIE
+        #expect(fake.steps[t][i + 2] == blocker)                                         // the note after stays
+        #expect(box.log.contains { $0.contains("LENGTH can't grow") })
+    }
 }

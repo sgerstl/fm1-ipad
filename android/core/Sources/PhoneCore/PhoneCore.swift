@@ -25,6 +25,7 @@ public final class PhoneCore {
     var pickedLane: String?
     var copiedStep: SynthStep?
     private var motionTask: Task<Void, Never>?
+    private var followTask: Task<Void, Never>?
     /// Whether writes may go to the FM-1 now (the link's read-only switch). Write intents are refused up front
     /// while false, so Session's optimistic copy never shows what the FM-1 didn't get.
     let canWrite: () -> Bool
@@ -74,6 +75,23 @@ public final class PhoneCore {
                 wasReady = ready
             }
         }
+        // The song lists kept current, as the iPad's Pads page does (`.task { await store.follow() }`): LIST read
+        // again on its own pace, closer to a launch point. Without it the phone saw a launch land only after its own
+        // next write (Scott's run, 2026-11-14: "waiting" stuck for ten bars, take-back taps acting on old lists).
+        // A new store comes with each connection: the loop follows whichever is current.
+        followTask = Task { [weak self] in
+            var running: (store: SkiffSongStore, task: Task<Void, Never>)?
+            while !Task.isCancelled {
+                guard let self else { return }
+                let store = self.session.isConnected ? self.session.skiffSong : nil
+                if running?.store !== store || (store?.offline ?? false) {
+                    running?.task.cancel(); running = nil
+                    if let store, !store.offline { running = (store, Task { await store.follow() }) }
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            running?.task.cancel()
+        }
         // The editor's locks and automation (MOTION, a read): the editor's track every 3 s, at once when it changes.
         motionTask = Task { [weak self] in
             var last = -1
@@ -98,6 +116,7 @@ public final class PhoneCore {
         clockTask?.cancel(); clockTask = nil
         projectTask?.cancel(); projectTask = nil
         motionTask?.cancel(); motionTask = nil
+        followTask?.cancel(); followTask = nil
         areas.forEach { $0.stop() }; areas = []
     }
 
@@ -122,7 +141,11 @@ public final class PhoneCore {
         let mode: TopArea.Mode = switch song?.mode ?? .off { case .off: .loop; case .on: .song; case .once: .once }
         let launch: TopArea.Launch = switch s.launchMode { case .loop: .loop; case .bar: .bar; case .beat: .beat; case .now: .now }
         // Launches queued for the launch point (the pads' "waiting"), not the song's own next entries ("next").
-        let waiting = s.trackIndices.filter { s.skiffSong?.marks($0, launchIn: nil).queued != nil }.count
+        // A take-back stages the entry already playing (the FM-1 has no per-track cancel): not a launch waiting.
+        let waiting = s.trackIndices.filter { t in
+            guard let l = s.skiffSong?.song?.tracks[safe: t], l.staged != l.entryOn else { return false }
+            return s.skiffSong?.marks(t, launchIn: nil).queued != nil
+        }.count
         let selectedArmed = s.armedTracks & (1 << s.selectedTrack) != 0
         var bar = 1, beat = 1
         if s.playing, s.clockTicks >= 0 {

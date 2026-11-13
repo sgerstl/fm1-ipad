@@ -104,6 +104,11 @@ extension PhoneCore {
             }
         case .padSet(let t1, let e, let p):
             guard let store else { return }
+            // LIST SET names a kept pattern (or 65, a REST): an empty number is refused by the FM-1 (rc 1)
+            if p != SongEntry.rest, (store.pool?.patterns[safe: p - 1]?.length ?? 0) == 0 {
+                log("pattern \(p) holds nothing on the FM-1: Set pattern takes a kept one (New pattern makes a new one)")
+                return
+            }
             Task { if !(await store.send(.set(track: t1 - 1, entry: e, pattern: p))) { reportRefusal(store) } }
         case .padClear(let t1, let e):
             guard let store else { return }
@@ -206,6 +211,9 @@ extension PhoneCore {
         case "length":
             var len = 1
             while i + len < s.tracks[t].steps.count, s.tracks[t].steps[i + len].time == .tie { len += 1 }
+            var cap = 1
+            while i + cap < s.tracks[t].steps.count, s.tracks[t].steps[i + cap].time != .note { cap += 1 }
+            if len + n > cap { log("LENGTH can't grow past \(cap): step \(i + cap + 1) holds a note") }
             s.setLength(track: t, start: i, steps: max(1, min(16, s.tracks[t].steps.count - i, len + n)))
         case "velocity":
             st.velocity = max(1, min(127, (st.velocity == 0 ? 96 : st.velocity) + n))

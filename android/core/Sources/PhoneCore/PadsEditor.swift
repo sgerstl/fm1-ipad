@@ -52,7 +52,8 @@ extension PhoneCore {
         let scenes = (0..<16).map { i in
             PadsArea.Scene(stored: perf?.kept[safe: i] ?? false, current: perf?.lastScene == i)
         }
-        return PadsArea(rows: rows, scenes: scenes, selected: selectedPad())
+        let kept = (0..<64).filter { (store?.pool?.patterns[safe: $0]?.length ?? 0) > 0 }.map { $0 + 1 }
+        return PadsArea(rows: rows, scenes: scenes, selected: selectedPad(), kept: kept)
     }
 
     /// The pad the editor shows: the one the screen picked (padSelect), else the selected track's current entry.
@@ -89,6 +90,9 @@ extension PhoneCore {
                     var len = 1
                     while i + len < src.count, src[i + len].time == .tie { len += 1 }
                     e.length = len
+                    var cap = 1
+                    while i + cap < tr.steps.count, tr.steps[i + cap].time != .note { cap += 1 }
+                    e.maxLength = min(16, cap)
                 }
             }
             e.velocity = st.velocity == 0 ? 96 : st.velocity       // 0 plays as 96 (seq.c seq_step)

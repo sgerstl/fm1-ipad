@@ -145,6 +145,8 @@ One `stepAdjust` unit is the panel's − / + step (VELOCITY 4, CHANCE 5, the res
 - **The FM-1's keys into the selected step** (decision 5): `Session.onDeviceNote` (new, iPad unused) feeds `keyIntoStep`, which writes through the same call a pitch edit uses. Chord on adds the note (up to four) and keeps the cursor. Chord off replaces the note (CHANCE, COND and NUDGE kept) and moves the cursor on. A kit track takes the key's lane. **It works while stopped only**, because Skiff's sequencer sends its notes on the same channels and they can't be told from the keys. It's a write, so it's refused while read-only.
 - **`editor.chord` is the entry mode** (Chord on/off), no longer the track's CHORD parameter. **`editor.values` and `lanes` come from MOTION**, read for the editor's track every 3 s.
 - **Lock from the phone catches only Lupe's own knob turns**, as on the iPad: fine for now (Scott, 2026-11-14). It waits on P4's `setParam` reaching `Session.set`.
+- **The song lists are kept current:** PhoneCore runs `SkiffSongStore.follow()` while connected, as the iPad's Pads page does. A take-back (staging the entry playing) isn't counted as waiting. FakeSkiff now stages LIST PLAY while playing (lands 2 s on; PERFORM CANCEL drops it), from Skiff's protocol text.
+- **`pads.kept`** lists the pattern numbers Set pattern may name (LIST SET takes a kept pattern). **`step.maxLength`** is LENGTH's cap (the next note). Both were added to the shared schema on 2026-11-14.
 - **Not built:** Select sound.
 
 Device check: `qa/device-checks/2026-11-14-android-p1-writes.md`.

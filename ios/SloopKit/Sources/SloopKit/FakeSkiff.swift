@@ -75,6 +75,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var launch = 1
     var muted: [Bool] = []
     var stagedMute: [Int] = []
+    /// LIST PLAY while playing: the entry staged for the launch point (127 none), landing 2 s on as a staged mute
+    /// does. EDITOR_PROTOCOL.md LIST op 3: "the track to the entry: at once stopped, at the LAUNCH point playing";
+    /// PERFORM 4 CANCEL drops it ("all that is staged: entries, mutes"). Before 2026-11-14 the fake landed every
+    /// launch at once, which hid the phone's stale-lists bug.
+    var stagedEntry: [Int] = []
     /// MENU > USB LEVEL (0 MASTER, 1 FIXED): the one MENU setting the fake offers (MENU_DESC index 0, id 10).
     var usbLevel = 0
     /// Armed tracks, a bit each (song.rec), as TRANSPORT op 4 toggles them: ui_input.c rec_tap.
@@ -274,6 +279,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         entryOn = Array(repeating: 127, count: info.trackCount)
         muted = Array(repeating: false, count: info.trackCount)
         stagedMute = Array(repeating: 0, count: info.trackCount)
+        stagedEntry = Array(repeating: 127, count: info.trackCount)
     }
 
     /// The song on the canvas's board A (vault skiff-arrange-spec.md): six lanes, linked copies, rests,
@@ -341,7 +347,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             }
             lastScene = Int(a[1])
         case 3 where Int(a[1]) < muted.count: stage(Int(a[1]))
-        case 4: stagedMute = stagedMute.map { _ in 0 }
+        case 4: stagedMute = stagedMute.map { _ in 0 }; stagedEntry = stagedEntry.map { _ in 127 }
         case 5 where a[1] < 4: launch = Int(a[1])
         default: return nil
         }
@@ -367,7 +373,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let on = entryOn[t]
             let pat = on < 16 && lists[t][on].p >= 1 && lists[t][on].p <= 64 ? lists[t][on].p - 1 : 127
             // (the song's next is staged in SONG ON and ONCE; in SONG OFF nothing is, until a launch)
-            b += [UInt8(on), on < 16 && playing && songMode != 0 ? UInt8((on + 1) % 16) : 127, UInt8(pat)]
+            let next = on < 16 && playing && songMode != 0 ? UInt8((on + 1) % 16) : 127
+            b += [UInt8(on), t < stagedEntry.count && stagedEntry[t] != 127 ? UInt8(stagedEntry[t]) : next, UInt8(pat)]
             for x in lists[t] { b += [UInt8(x.p), UInt8(x.r), UInt8(x.s0), UInt8(x.s1)] }
         }
         return b
@@ -394,7 +401,16 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             guard (1...64).contains(x.p) else { return listReply(2, 1) }
             guard let n = freePattern(after: x.p - 1) else { return listReply(2, 4) }
             poolLen[n] = poolLen[x.p - 1]; x.p = n + 1
-        case 3: entryOn[t] = i; return listReply(3, 0)
+        case 3:
+            guard playing else { entryOn[t] = i; stagedEntry[t] = 127; return listReply(3, 0) }
+            stagedEntry[t] = i                              // replaces one staged before (a take-back stages the entry on)
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self else { return }
+                self.lock.lock()
+                if self.stagedEntry[t] == i { self.entryOn[t] = i; self.stagedEntry[t] = 127 }
+                self.lock.unlock()
+            }
+            return listReply(3, 0)
         case 4:
             if playing && x.p != 65 { return listReply(4, 3) }
             let old = x.p

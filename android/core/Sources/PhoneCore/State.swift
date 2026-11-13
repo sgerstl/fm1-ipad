@@ -73,6 +73,9 @@ public struct PadsArea: Codable, Equatable, Sendable {
     public var rows: [Row]
     public var scenes: [Scene]
     public var selected: Ref
+    /// The pattern numbers (1…64) the FM-1 holds: the only ones Set pattern can name (LIST SET takes "a kept
+    /// pattern"; an empty number is refused, rc 1). The iPad's picker lists these (Scott's run, 2026-11-14).
+    public var kept: [Int] = []
 }
 
 // MARK: editor (P3's EditorState)
@@ -93,6 +96,8 @@ public struct EditorArea: Codable, Equatable, Sendable {
         public var nudge = 0
         public var pitchText = ""
         public var values: [Value] = []
+        /// How long LENGTH can make it: up to the next step with a note (Session.setLength stops there), at most 16.
+        public var maxLength = 16
     }
     public var track: Int                // 1-based
     public var trackName: String
