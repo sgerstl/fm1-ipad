@@ -1,92 +1,115 @@
 package com.scottgerstl.lupe.ui.timeline
 
-import androidx.compose.runtime.Stable
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.scottgerstl.lupe.core.BlockDelete
+import com.scottgerstl.lupe.core.BlockDuplicate
+import com.scottgerstl.lupe.core.BlockMove
+import com.scottgerstl.lupe.core.BlockSetPattern
+import com.scottgerstl.lupe.core.BlockStretch
+import com.scottgerstl.lupe.core.Intent
+import com.scottgerstl.lupe.core.LupeCore
+import com.scottgerstl.lupe.core.TimelineBlock
+import com.scottgerstl.lupe.core.TimelineState
+import com.scottgerstl.lupe.ui.sounds.LocalSoundsHost
 
-/** One block of the song: a pattern (or a REST) playing on a track for [bars] whole bars from bar [start] (0-based). */
-data class BlockUi(val id: Int, val track: Int, val start: Int, val bars: Int, val pattern: Int?, val rest: Boolean = false) {
-    val end get() = start + bars
+/**
+ * One block of a track's song as the screen draws it. The core's song is a track's list of entries played back to back,
+ * so a block's place in time is where the ones before it end; it has no free position. [id] is its first entry (what
+ * the core's intents name it by), [entries] how many entries it covers (a chain has several).
+ */
+data class BlockUi(
+    val track: Int, val id: Int, val entries: Int,
+    val start: Float, val length: Float, val passBars: Float, val reps: Int,
+    val pattern: Int?, val rest: Boolean, val gap: Boolean,
+    val playing: Boolean = false, val next: Boolean = false,
+) {
+    val end get() = start + length
+    val key get() = track * 100 + id
 }
 
 /** The Timeline as the screen draws it: six tracks as columns, bars running down (decision 6, board 58). */
 data class TimelineUi(
     val blocks: List<BlockUi> = emptyList(),
-    /** How long the song is, in bars (at least the longest track). */
     val totalBars: Int = 16,
+    /** The block selected on screen (not on the FM-1). */
     val selected: Int? = null,
     val selectedTrack: Int = 1,
     /** The patterns the FM-1 holds: what a block can be set to. */
     val kept: List<Int> = emptyList(),
     val trackNames: List<String> = emptyList(),
-    /** The FM-1 refuses changes to the order while the song plays: the strip says so, with Stop. */
-    val playing: Boolean = false,
+    /** How many blocks name each pattern, across every track: a pattern used nowhere else is erased when its block goes. */
+    val uses: Map<Int, Int> = emptyMap(),
 )
 
 class TimelineActions(
-    val select: (id: Int?) -> Unit,
+    val select: (key: Int?) -> Unit,
     val selectTrack: (track: Int) -> Unit,
-    val move: (id: Int, start: Int) -> Unit,
-    val resize: (id: Int, bars: Int) -> Unit,
-    val setPattern: (id: Int, pattern: Int) -> Unit,
-    val duplicate: (id: Int) -> Unit,
-    val delete: (id: Int) -> Unit,
+    /** Reorder: [places] blocks earlier (negative) or later in its track's list. */
+    val moveBy: (BlockUi, places: Int) -> Unit,
+    /** REPS, the passes the block plays (what stretching changes). */
+    val stretch: (BlockUi, reps: Int) -> Unit,
+    val setPattern: (BlockUi, pattern: Int) -> Unit,
+    val duplicate: (BlockUi) -> Unit,
+    val delete: (BlockUi) -> Unit,
     val stop: () -> Unit,
     val openSounds: (track: Int) -> Unit,
 )
 
+private fun TimelineBlock.toUi(track: Int) = BlockUi(
+    track, id, last - first + 1, startBar.toFloat(), lengthBars.toFloat(), passBars.toFloat().coerceAtLeast(0.25f), reps, pattern, kind == "rest", kind == "gap", playing, next,
+)
+
+fun TimelineState.toUi(selected: Int?, selectedTrack: Int) = TimelineUi(
+    blocks = tracks.flatMap { t -> t.blocks.map { it.toUi(t.track) } },
+    totalBars = kotlin.math.ceil(bars).toInt().coerceAtLeast(1),
+    selected = selected, selectedTrack = selectedTrack, kept = kept, trackNames = tracks.map { it.name.substringAfter(" · ") },
+    uses = tracks.flatMap { t -> t.blocks.mapNotNull { it.pattern } }.groupingBy { it }.eachCount(),
+)
+
 /**
- * STAND-IN until P1's `timeline` area lands (board 58's song). The screen only knows [TimelineUi] and
- * [TimelineActions]; the core's state replaces this and nothing above changes. The rules a core enforces are mirrored so
- * a stand-in can't promise what the FM-1 won't do: a block can't overlap its track's neighbours.
+ * The Timeline's state from the core, and what a touch does about it (blocks are reordered and stretched, not placed: see
+ * [BlockUi]). Returns States: the clock moves four times a beat, and reading it only where it is drawn keeps that from
+ * recomposing anything; [ui] changes only when a block does.
  */
-@Stable
-class MockTimeline {
-    private var nextId = 100
-    var ui by mutableStateOf(
-        TimelineUi(
-            blocks = listOf(
-                BlockUi(1, 1, 0, 4, 5), BlockUi(2, 1, 4, 4, 5), BlockUi(3, 1, 8, 8, 7),
-                BlockUi(4, 2, 0, 8, 2), BlockUi(5, 2, 8, 8, 3),
-                BlockUi(6, 3, 0, 4, null, rest = true), BlockUi(7, 3, 4, 4, 11), BlockUi(8, 3, 8, 4, 11), BlockUi(9, 3, 12, 4, 14),
-                BlockUi(10, 4, 0, 4, 1), BlockUi(11, 4, 4, 4, 4), BlockUi(12, 4, 8, 4, 4), BlockUi(13, 4, 12, 4, 6),
-                BlockUi(14, 5, 0, 8, null, rest = true), BlockUi(15, 5, 8, 8, 12),
-                BlockUi(16, 6, 0, 8, 9), BlockUi(17, 6, 8, 8, 10),
-            ),
-            totalBars = 16, selected = null, selectedTrack = 5, kept = listOf(1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 14, 15),
-            trackNames = listOf("Acid", "Pad", "Pulse Ld", "Drum Kit", "Piano", "Perc Kit"),
-        ),
-    )
-        private set
-
-    private fun block(id: Int) = ui.blocks.first { it.id == id }
-    private fun others(b: BlockUi) = ui.blocks.filter { it.track == b.track && it.id != b.id }
-    private fun edit(id: Int, f: (BlockUi) -> BlockUi) { ui = ui.copy(blocks = ui.blocks.map { if (it.id == id) f(it) else it }) }
-
-    val actions = TimelineActions(
-        select = { ui = ui.copy(selected = it) },
-        selectTrack = { ui = ui.copy(selectedTrack = it) },
-        move = { id, start ->
-            val b = block(id); val o = others(b)
-            val lo = o.filter { it.end <= b.start }.maxOfOrNull { it.end } ?: 0
-            val hi = o.filter { it.start >= b.end }.minOfOrNull { it.start } ?: Int.MAX_VALUE
-            edit(id) { it.copy(start = start.coerceIn(lo, (hi - b.bars).coerceAtLeast(lo))) }
-        },
-        resize = { id, bars ->
-            val b = block(id); val hi = others(b).filter { it.start >= b.end }.minOfOrNull { it.start } ?: Int.MAX_VALUE
-            edit(id) { it.copy(bars = bars.coerceIn(1, (hi - b.start).coerceAtMost(64))) }
-        },
-        setPattern = { id, p -> edit(id) { it.copy(pattern = p, rest = false) } },
-        duplicate = { id ->
-            val b = block(id)
-            val free = others(b).none { it.start < b.end + b.bars && it.end > b.end }
-            if (free) ui = ui.copy(blocks = ui.blocks + b.copy(id = nextId++, start = b.end), selected = null)
-        },
-        delete = { id -> ui = ui.copy(blocks = ui.blocks.filter { it.id != id }, selected = null) },
-        stop = { ui = ui.copy(playing = false) },
-        openSounds = { },
-    )
-
-    fun playing(on: Boolean) { ui = ui.copy(playing = on) }
+@Composable
+fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions, State<Double?>> {
+    val st = core.timeline.collectAsStateWithLifecycle()
+    var selected by remember { mutableStateOf<Int?>(null) }
+    var track by remember { mutableStateOf(1) }
+    val sounds = LocalSoundsHost.current
+    val ui = remember(st) { derivedStateOf(structuralEqualityPolicy()) { st.value.toUi(selected, track) } }
+    val head = remember(st) { derivedStateOf { st.value.playheadBar } }
+    val actions = remember(core, sounds, st) {
+        TimelineActions(
+            select = { selected = it },
+            selectTrack = { core.send(Intent.TrackSelect(it)); track = it },
+            moveBy = { b, k ->
+                // one place a time: each move changes the block's own id by the neighbour it passed
+                val blocks = st.value.tracks.firstOrNull { it.track == b.track }?.blocks.orEmpty()
+                var at = blocks.indexOfFirst { it.id == b.id }; var id = b.id
+                repeat(kotlin.math.abs(k)) {
+                    val nb = blocks.getOrNull(at + if (k > 0) 1 else -1) ?: return@repeat
+                    core.send(BlockMove(b.track, id, if (k > 0) 1 else -1))
+                    id += if (k > 0) (nb.last - nb.first + 1) else -(nb.last - nb.first + 1)
+                    at += if (k > 0) 1 else -1
+                }
+                selected = null
+            },
+            stretch = { b, reps -> core.send(BlockStretch(b.track, b.id, reps)) },
+            setPattern = { b, p -> core.send(BlockSetPattern(b.track, b.id, p, confirmed = true)) },
+            duplicate = { core.send(BlockDuplicate(it.track, it.id)) },
+            delete = { core.send(BlockDelete(it.track, it.id, confirmed = true)); selected = null },
+            stop = { core.send(Intent.Stop) },
+            openSounds = { sounds.open(it) },
+        )
+    }
+    return Triple(ui, actions, head)
 }

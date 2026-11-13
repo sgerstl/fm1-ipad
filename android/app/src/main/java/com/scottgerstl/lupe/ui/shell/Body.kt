@@ -226,6 +226,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
     val mix = rememberMix(core)
     val timeline = rememberTimeline(core)   // the song is a stand-in until the core's timeline area lands
     val topState = core.top.collectAsStateWithLifecycle()
+    val automation by core.automation.collectAsStateWithLifecycle()
     val meters = core.meters.collectAsStateWithLifecycle()   // read only while drawing a meter line, so 20 updates a second never recompose the shell
     val soundsHost = LocalSoundsHost.current
     // at top only the bottom half is hidden: the browser glides the divider to split so it can be seen
@@ -253,7 +254,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 .clipToBounds()
                 .graphicsLayer { alpha = (1f - stripAlpha * 2f).coerceIn(0f, 1f) },
         ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { when (it) { Tab.Pads -> PadsPage(pads, core); Tab.Mix -> MixPage(mix.first, mix.second, meters)
-                Tab.Timeline -> TimelinePage(timeline.first, timeline.second, topState); else -> TopPlaceholder(it) } } }
+                Tab.Timeline -> TimelinePage(timeline.first, timeline.second, timeline.third, topState); else -> TopPlaceholder(it) } } }
 
         // bottom half: from 4 dp under the divider band to the bottom; it follows the FM-1's page
         Box(
@@ -278,7 +279,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                     // the Sounds browser opens over the editor or the sound page; Done or Back brings it back
                     SoundsBrowser(core, req, { soundsHost.close() })
                 } else LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
-                    if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+                    if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction, automation) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
                 }
             }
         }

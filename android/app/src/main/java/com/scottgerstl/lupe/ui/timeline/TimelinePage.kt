@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -86,9 +87,9 @@ private val GAP = 4.dp
  * The playhead runs with the clock.
  */
 @Composable
-fun TimelinePage(ui: TimelineUi, actions: TimelineActions, top: State<TopState>, modifier: Modifier = Modifier) {
+fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: State<Double?>, top: State<TopState>, modifier: Modifier = Modifier) {
+    val ui = uiState.value
     val playing by remember { derivedStateOf { top.value.playing } }
-    val density = LocalDensity.current
     Box(modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val headerH = 36.dp
@@ -127,8 +128,8 @@ fun TimelinePage(ui: TimelineUi, actions: TimelineActions, top: State<TopState>,
                             for (t in 1..6) {
                                 val colour = Tok.track[(t - 1) % Tok.track.size]
                                 Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Tok.well)) {
-                                    ui.blocks.filter { it.track == t }.forEach { b ->
-                                        BlockView(b, colour, b.id == ui.selected, barH, bars, ui, actions, !playing)
+                                    ui.blocks.filter { it.track == t && !it.gap }.forEach { b ->
+                                        key(b.key) { BlockView(b, colour, b.key == ui.selected, barH, bars, ui, actions, !playing) }
                                     }
                                 }
                             }
@@ -137,11 +138,8 @@ fun TimelinePage(ui: TimelineUi, actions: TimelineActions, top: State<TopState>,
                         Canvas(Modifier.fillMaxWidth().height(contentH).clearAndSetSemantics { }) {
                             val h = barH.toPx()
                             for (b in 0..bars) drawLine(Tok.control, Offset(0f, b * h), Offset(RULER.toPx() - 2.dp.toPx(), b * h), 1.dp.toPx())
-                            val t = top.value
-                            if (t.playing) {
-                                val y = ((t.bar - 1) + (t.beat - 1) / 4f) * h
-                                drawLine(Tok.text, Offset(0f, y), Offset(size.width, y), 2.dp.toPx())
-                            }
+                            val p = head.value
+                            if (p != null) { val y = p.toFloat() * h; drawLine(Tok.text, Offset(0f, y), Offset(size.width, y), 2.dp.toPx()) }
                         }
                     }
                 }
@@ -158,8 +156,13 @@ fun TimelinePage(ui: TimelineUi, actions: TimelineActions, top: State<TopState>,
     }
 }
 
-private enum class BlockMenu { Root, Pattern, Delete }
+private enum class BlockMenu { Root, Pattern, PatternConfirm, Delete }
 
+/**
+ * One block. A track's song is a list of entries that play back to back, so a block has no free place: dragging it by its
+ * body REORDERS it among its track's blocks (it follows the finger, and lands where it is closest to a slot), and dragging
+ * its foot sets its REPS (whole passes, so whole multiples of its pass). Only a selected block drags.
+ */
 @Composable
 private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androidx.compose.ui.unit.Dp, totalBars: Int, ui: TimelineUi, actions: TimelineActions, editable: Boolean) {
     val density = LocalDensity.current
@@ -167,103 +170,127 @@ private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androi
     val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
     var menuAt by remember { mutableStateOf<Offset?>(null) }
     var menuMode by remember { mutableStateOf(BlockMenu.Root) }
+    var pendingPattern by remember { mutableStateOf(0) }
     var armedAt by remember { mutableStateOf(0L) }
-    // a drag in progress: whole bars moved or added, snapped, clamped to the neighbours on this track
-    var dragBars by remember { mutableIntStateOf(0) }
-    var resizing by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
+    var resizing by remember { mutableStateOf(false) }
     var accPx by remember { mutableFloatStateOf(0f) }
+    var tickKey by remember { mutableIntStateOf(0) }
     val barPx = with(density) { barH.toPx() }
     val edgePx = with(density) { 28.dp.toPx() }
-    val others = ui.blocks.filter { it.track == b.track && it.id != b.id }
-    val lo = others.filter { it.end <= b.start }.maxOfOrNull { it.end } ?: 0
-    val hi = others.filter { it.start >= b.end }.minOfOrNull { it.start } ?: totalBars
-    val shownStart = if (dragging && !resizing) (b.start + dragBars).coerceIn(lo, (hi - b.bars).coerceAtLeast(lo)) else b.start
-    val shownBars = if (dragging && resizing) (b.bars + dragBars).coerceIn(1, (hi - b.start).coerceAtLeast(1)) else b.bars
+    val mine = ui.blocks.filter { it.track == b.track && !it.gap }.sortedBy { it.start }
+    val idx = mine.indexOfFirst { it.id == b.id }
+
+    // where a drag would land it: the slot (a count of places earlier or later) whose centre is nearest its own
+    fun placesFor(offsetBars: Float): Int {
+        val c = b.start + b.length / 2 + offsetBars
+        var best = 0; var bestD = kotlin.math.abs(c - (b.start + b.length / 2))
+        for (k in 1..(mine.size - 1 - idx)) { val centre = b.start + (mine.subList(idx + 1, idx + k + 1).sumOf { it.length.toDouble() }.toFloat()) + b.length / 2; val dd = kotlin.math.abs(c - centre); if (dd < bestD) { best = k; bestD = dd } }
+        for (k in 1..idx) { val centre = b.start - (mine.subList(idx - k, idx).sumOf { it.length.toDouble() }.toFloat()) + b.length / 2; val dd = kotlin.math.abs(c - centre); if (dd < bestD) { best = -k; bestD = dd } }
+        return best
+    }
+    val offsetBars = accPx / barPx
+    val places = if (dragging && !resizing) placesFor(offsetBars) else 0
+    val repsNow = if (dragging && resizing) ((b.length + offsetBars) / b.passBars).let { kotlin.math.floor(it + 0.5f) }.toInt().coerceIn(1, 16) else b.reps
+    val shownStart = if (dragging && !resizing) (b.start + offsetBars).coerceIn(0f, (totalBars - b.length).coerceAtLeast(0f)) else b.start
+    val shownLen = if (dragging && resizing) repsNow * b.passBars else b.length
     val fill = if (b.rest) Tok.page else lerp(Tok.page, colour, 0.45f)
     val name = ui.trackNames.getOrNull(b.track - 1).orEmpty()
     val what = if (b.rest) "rest" else "pattern ${"%02d".format(b.pattern ?: 0)}"
-    val words = "Track ${b.track} $name, bars ${b.start + 1} to ${b.end}, $what"
+    val words = "Track ${b.track} $name, bars ${b.start.toInt() + 1} to ${kotlin.math.ceil(b.end).toInt()}, $what" + if (b.playing) ", playing" else ""
 
     fun openMenu(at: Offset) { if (editable) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuMode = BlockMenu.Root; menuAt = at } }
 
     Box(
         Modifier
             .offset { IntOffset(0, (shownStart * barPx).toInt()) }
-            .fillMaxWidth().height(barH * shownBars - 2.dp)
+            .fillMaxWidth().height(barH * shownLen - 2.dp)
             .graphicsLayer { if (dragging) { shadowElevation = 8.dp.toPx(); shape = RoundedCornerShape(6.dp) } }
             .clip(RoundedCornerShape(6.dp)).background(fill)
             .drawBehind {
                 if (b.rest) drawRoundRect(Tok.outline, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(5.dp.toPx()), style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))))
                 if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(5.dp.toPx()), style = Stroke(2.dp.toPx()))
+                // what the FM-1 is playing on this track now: a bar along the head of the block; what comes next: a thin outline
+                if (b.playing) drawRect(Tok.text, size = Size(size.width, 3.dp.toPx()))
+                else if (b.next) drawRoundRect(Tok.text2, Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(5.dp.toPx()), style = Stroke(1.5.dp.toPx()))
                 // the foot's grip, when it can be stretched
                 if (selected && editable) drawRoundRect(Tok.text.copy(alpha = 0.8f), Offset(size.width / 2 - 14.dp.toPx(), size.height - 8.dp.toPx()), Size(28.dp.toPx(), 3.dp.toPx()), CornerRadius(2.dp.toPx()))
             }
             .semantics(mergeDescendants = true) {
                 role = Role.Button; contentDescription = words; stateDescription = if (selected) "Selected" else ""
-                onClick { actions.select(if (selected) null else b.id); true }
+                onClick { actions.select(if (selected) null else b.key); true }
                 onLongClick("Block menu") { openMenu(Offset(60f, 60f)); true }
                 if (editable) customActions = listOf(
-                    CustomAccessibilityAction("Move a bar later") { actions.move(b.id, b.start + 1); true },
-                    CustomAccessibilityAction("Move a bar earlier") { actions.move(b.id, b.start - 1); true },
-                    CustomAccessibilityAction("One bar longer") { actions.resize(b.id, b.bars + 1); true },
-                    CustomAccessibilityAction("One bar shorter") { actions.resize(b.id, b.bars - 1); true },
-                    CustomAccessibilityAction("Duplicate") { actions.duplicate(b.id); true },
+                    CustomAccessibilityAction("Move one place later") { actions.moveBy(b, 1); true },
+                    CustomAccessibilityAction("Move one place earlier") { actions.moveBy(b, -1); true },
+                    CustomAccessibilityAction("One pass longer") { actions.stretch(b, b.reps + 1); true },
+                    CustomAccessibilityAction("One pass shorter") { actions.stretch(b, b.reps - 1); true },
+                    CustomAccessibilityAction("Duplicate") { actions.duplicate(b); true },
                     CustomAccessibilityAction("Delete…") { menuMode = BlockMenu.Delete; armedAt = System.currentTimeMillis(); menuAt = Offset(60f, 60f); true },
                 )
             }
-            .pointerInput(b.id, editable) { detectTapGestures(onTap = { actions.select(if (selected) null else b.id) }, onLongPress = { openMenu(it) }) }
-            // only a selected block drags (an unselected one's drag is the page's scroll): the body moves it, the foot stretches it
-            .then(if (selected && editable) Modifier.pointerInput(b.id, b.start, b.bars, lo, hi) {
+            .pointerInput(b.key, editable, selected) { detectTapGestures(onTap = { actions.select(if (selected) null else b.key) }, onLongPress = { openMenu(it) }) }
+            // only a selected block drags (an unselected one's drag is the page's scroll)
+            .then(if (selected && editable) Modifier.pointerInput(b.key, b.start, b.reps, mine.size) {
                 detectDragGestures(
-                    onDragStart = { at -> resizing = at.y > size.height - edgePx; dragging = true; dragBars = 0; accPx = 0f },
+                    onDragStart = { at -> resizing = at.y > size.height - edgePx; dragging = true; accPx = 0f; tickKey = 0 },
                     onDragEnd = {
-                        if (resizing) actions.resize(b.id, shownBars) else actions.move(b.id, shownStart)
-                        dragging = false; dragBars = 0
+                        if (resizing) { if (repsNow != b.reps) actions.stretch(b, repsNow) } else if (places != 0) actions.moveBy(b, places)
+                        dragging = false; accPx = 0f
                     },
-                    onDragCancel = { dragging = false; dragBars = 0 },
+                    onDragCancel = { dragging = false; accPx = 0f },
                 ) { change, drag ->
                     change.consume(); accPx += drag.y
-                    val n = (accPx / barPx).let { if (it >= 0) kotlin.math.floor(it + 0.5f) else -kotlin.math.floor(-it + 0.5f) }.toInt()
-                    if (n != dragBars) { dragBars = n; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                    val k = if (resizing) repsNow else places
+                    if (k != tickKey) { tickKey = k; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
                 }
             } else Modifier),
     ) {
-        if (!b.rest) BasicText("%02d".format(b.pattern ?: 0), Modifier.align(Alignment.TopCenter).padding(top = 4.dp), style = LupeType.number.copy(fontSize = 18.sp, color = Tok.text))
-        else BasicText("REST", Modifier.align(Alignment.TopCenter).padding(top = 4.dp), style = LupeType.small.copy(fontSize = 12.sp))
+        if (!b.rest) BasicText("%02d".format(b.pattern ?: 0), Modifier.align(Alignment.TopCenter).padding(top = 6.dp), style = LupeType.number.copy(fontSize = 18.sp, color = Tok.text))
+        else BasicText("REST", Modifier.align(Alignment.TopCenter).padding(top = 6.dp), style = LupeType.small.copy(fontSize = 12.sp))
         // anchored to the block, so the menu opens beside the finger
-        BlockMenuPopup(b, menuAt, menuMode, armedAt, ui, actions, { menuMode = it; if (it == BlockMenu.Delete) armedAt = System.currentTimeMillis() }, { menuAt = null })
+        BlockMenuPopup(b, menuAt, menuMode, armedAt, pendingPattern, ui, actions, { menuMode = it; if (it == BlockMenu.Delete || it == BlockMenu.PatternConfirm) armedAt = System.currentTimeMillis() }, { pendingPattern = it }, { menuAt = null })
     }
 }
 
-/** The block's hold menu, beside the finger: Pattern, Bars (slid), Duplicate, Select sound, Delete… (asked in place). */
+/** The block's hold menu, beside the finger: Pattern, PASSES (slid), Duplicate, Select sound, Delete… (asked in place). */
 @Composable
-private fun BlockMenuPopup(b: BlockUi, at: Offset?, mode: BlockMenu, armedAt: Long, ui: TimelineUi, actions: TimelineActions, setMode: (BlockMenu) -> Unit, close: () -> Unit) {
-    run {
-        LupeMenu(at != null, close, width = 240.dp, at = at) {
-            LupeCrossfade(mode) { m ->
-                Column {
-                    when (m) {
-                        BlockMenu.Root -> {
-                            MenuHeading("Track ${b.track} · bars ${b.start + 1}–${b.end}")
-                            MenuRow(if (b.rest) "Pattern: REST ⌄" else "Pattern ${"%02d".format(b.pattern ?: 0)} ⌄", { setMode(BlockMenu.Pattern) })
-                            // BARS is set by sliding (no − / +): one bar a step, never into the next block
-                            val hi = ui.blocks.filter { it.track == b.track && it.start >= b.end }.minOfOrNull { it.start } ?: (b.start + 64)
-                            MenuSlideRow("BARS", "${b.bars}", b.bars, 1, (hi - b.start).coerceAtLeast(1), "Bars, block on track ${b.track}", stepDp = 22f) { actions.resize(b.id, it) }
-                            MenuRow("Duplicate", { actions.duplicate(b.id); close() })
-                            MenuRow("Select sound", { actions.openSounds(b.track); close() })
-                            MenuRow("Delete…", { setMode(BlockMenu.Delete) })
+private fun BlockMenuPopup(
+    b: BlockUi, at: Offset?, mode: BlockMenu, armedAt: Long, pendingPattern: Int, ui: TimelineUi, actions: TimelineActions,
+    setMode: (BlockMenu) -> Unit, setPending: (Int) -> Unit, close: () -> Unit,
+) {
+    val erases = !b.rest && b.pattern != null && (ui.uses[b.pattern] ?: 0) <= 1
+    LupeMenu(at != null, close, width = 240.dp, at = at) {
+        LupeCrossfade(mode) { m ->
+            Column {
+                when (m) {
+                    BlockMenu.Root -> {
+                        MenuHeading("Track ${b.track} · bars ${b.start.toInt() + 1}–${kotlin.math.ceil(b.end).toInt()}")
+                        MenuRow(if (b.rest) "Pattern: REST ⌄" else "Pattern ${"%02d".format(b.pattern ?: 0)} ⌄", { setMode(BlockMenu.Pattern) })
+                        // how long it plays: its passes, set by sliding (no − / +); the bars follow
+                        MenuSlideRow("PASSES · ${"%g".format(b.length)} bars", "${b.reps}", b.reps, 1, 16, "Passes, block on track ${b.track}", stepDp = 22f) { actions.stretch(b, it) }
+                        MenuRow("Duplicate", { actions.duplicate(b); close() })
+                        MenuRow("Select sound", { actions.openSounds(b.track); close() })
+                        MenuRow("Delete…", { setMode(BlockMenu.Delete) })
+                    }
+                    BlockMenu.Pattern -> {
+                        MenuHeading("Pattern for this block")
+                        ui.kept.forEach { p ->
+                            MenuRow("Pattern ${"%02d".format(p)}", { if (erases && p != b.pattern) { setPending(p); setMode(BlockMenu.PatternConfirm) } else { actions.setPattern(b, p); close() } }, checked = !b.rest && b.pattern == p)
                         }
-                        BlockMenu.Pattern -> {
-                            MenuHeading("Pattern for this block")
-                            ui.kept.forEach { p -> MenuRow("Pattern ${"%02d".format(p)}", { actions.setPattern(b.id, p); close() }, checked = !b.rest && b.pattern == p) }
-                            MenuRow("Back", { setMode(BlockMenu.Root) })
-                        }
-                        BlockMenu.Delete -> {
-                            val words = "Delete ${if (b.rest) "the REST" else "pattern ${"%02d".format(b.pattern ?: 0)}"} (${b.bars} bar${if (b.bars == 1) "" else "s"}) from track ${b.track}?"
-                            ConfirmBox(words, "Confirm: $words", armedAt) { actions.delete(b.id); close() }
-                            MenuRow("Cancel", { setMode(BlockMenu.Root) })
-                        }
+                        MenuRow("Back", { setMode(BlockMenu.Root) })
+                    }
+                    BlockMenu.PatternConfirm -> {
+                        // the old pattern is used nowhere else, so setting another erases it
+                        val words = "Pattern ${"%02d".format(b.pattern ?: 0)} is used nowhere else, so setting ${"%02d".format(pendingPattern)} erases it. Set it?"
+                        ConfirmBox(words, "Confirm: $words", armedAt) { actions.setPattern(b, pendingPattern); close() }
+                        MenuRow("Cancel", { setMode(BlockMenu.Pattern) })
+                    }
+                    BlockMenu.Delete -> {
+                        val gone = if (b.rest) "the REST" else "pattern ${"%02d".format(b.pattern ?: 0)}"
+                        val words = "Delete $gone (${"%g".format(b.length)} bars) from track ${b.track}?" + if (erases) " It is used nowhere else, so it's erased." else ""
+                        ConfirmBox(words, "Confirm: $words", armedAt) { actions.delete(b); close() }
+                        MenuRow("Cancel", { setMode(BlockMenu.Root) })
                     }
                 }
             }
