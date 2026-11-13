@@ -93,6 +93,9 @@ fun Modifier.slideToTurn(
     onStart: () -> Unit = {},
     onSlide: (steps: Int) -> Unit,
     onEnd: () -> Unit = {},
+    /** The steps the value can move from where it is when the slide starts (low..high, around 0), or null for no limit. The slide stops there, with no dead zone to unwind when the finger turns back. */
+    bounds: () -> IntRange? = { null },
+    onLimit: () -> Unit = {},
 ): Modifier {
     val settings = LocalSlideSettings.current
     val magnifier = LocalMagnifier.current
@@ -101,6 +104,8 @@ fun Modifier.slideToTurn(
     val slide by rememberUpdatedState(onSlide)
     val start by rememberUpdatedState(onStart)
     val end by rememberUpdatedState(onEnd)
+    val boundsNow by rememberUpdatedState(bounds)
+    val limit by rememberUpdatedState(onLimit)
     val currentFace by rememberUpdatedState(face)
     val loupeOn by rememberUpdatedState(settings.magnifier)
     val density = LocalDensity.current
@@ -118,11 +123,20 @@ fun Modifier.slideToTurn(
                 } ?: return@awaitEachGesture
                 var acc = if (vertical) -first.y else first.x
                 start()
+                val limits = boundsNow()
+                var atLimit = false
+                fun clampAcc() {
+                    if (limits == null) return
+                    val c = acc.coerceIn(limits.first * stepPx, limits.last * stepPx)
+                    if (c != acc) { if (!atLimit) { atLimit = true; limit() }; acc = c } else atLimit = false
+                }
+                clampAcc()
                 fun finger(c: PointerInputChange) = coords?.takeIf { it.isAttached }?.localToRoot(c.position) ?: c.position
                 if (loupeOn) { magnifier?.face = currentFace; magnifier?.finger = finger(claimed); magnifier?.shown = currentFace != null }
                 drag(claimed.id) { change ->
                     val d = change.positionChange()
                     acc += if (vertical) -d.y else d.x
+                    clampAcc()
                     change.consume()
                     slide((acc / stepPx).toInt())
                     if (magnifier?.shown == true) magnifier.finger = finger(change)

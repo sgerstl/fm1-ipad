@@ -97,4 +97,12 @@ class FakeLupeCoreTest {
         core.send(Intent.SceneStore(10))                     // an empty scene stores at once
         assertTrue(core.pads.value.scenes[10].stored)
     }
+
+    @Test fun lengthStopsAtTheNextNote() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.StepSelect(0))                       // pattern 12: step 1 holds C4, the next note is on step 3
+        assertEquals(2, core.editor.value.steps[0].maxLength)
+        core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Length, 5))
+        assertEquals(2, core.editor.value.steps[0].length)
+    }
 }

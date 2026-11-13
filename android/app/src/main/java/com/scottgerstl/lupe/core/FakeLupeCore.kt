@@ -204,7 +204,12 @@ class FakeLupeCore(
         val drum = e.kind == EditorKind.Drum
         val lane = e.lane
         val lv = model.map { st -> ((st.values.firstOrNull { it.param == lane }?.value ?: (FakeData.baseValue(lane) + if (lane.isEmpty()) 0 else (model.indexOf(st) * 7) % 22 - 8)) * 100 / 127).coerceIn(0, 100) }
-        _editor.value = e.copy(steps = model.map { it.toStep(drum) }, laneValues = lv)
+        // how far each step can grow: up to the next note (or the pattern's end)
+        val steps = model.mapIndexed { i, st ->
+            val next = (i + 1 until 16).firstOrNull { model[it].on } ?: 16
+            st.toStep(drum).copy(maxLength = next - i)
+        }
+        _editor.value = e.copy(steps = steps, laneValues = lv)
     }
 
     private fun adjust(field: StepField, delta: Int) {
@@ -221,7 +226,7 @@ class FakeLupeCore(
                 val tmp = model[to]; model[to] = model[ed.selected]; model[ed.selected] = tmp
                 emitEditor { it.copy(selected = to) }; return
             }
-            StepField.Length -> st.length = (st.length + delta).coerceIn(1, 16)
+            StepField.Length -> { val next = (ed.selected + 1 until 16).firstOrNull { model[it].on } ?: 16; st.length = (st.length + delta).coerceIn(1, next - ed.selected) }
             StepField.Velocity -> st.velocity = (st.velocity + delta * 4).coerceIn(1, 127)
             StepField.Chance -> st.chance = (st.chance + delta * 5).coerceIn(0, 100)
             StepField.Ratchet -> st.ratchet = (st.ratchet + delta).coerceIn(1, 4)

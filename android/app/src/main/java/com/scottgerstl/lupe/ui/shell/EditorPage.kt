@@ -341,8 +341,12 @@ private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelT
                     // MOVE follows the step, so its undo spans the selection changing
                     SlideColumn("MOVE", "$n", "Move", track, key = "move" to ed.pattern, num = n, min = 1, max = 16,
                         dpPerStep = 22f, tick = true, locked = false) { send(StepField.Move, it) }
-                    SlideColumn("LENGTH", "${s.length}", "Length", track, key = "length" to ed.selected, num = s.length, min = 1, max = 16,
-                        dpPerStep = 16f, tick = false, locked = s.isLocked("LENGTH")) { send(StepField.Length, it) }
+                    // LENGTH grows only up to the next note (the core's maxLength): at the limit the slide stops and says where
+                    val cap = s.maxLength.coerceIn(1, 16)
+                    val nextNote = ed.selected + 1 + cap
+                    SlideColumn("LENGTH", "${s.length}", "Length", track, key = "length" to ed.selected, num = s.length, min = 1, max = cap,
+                        dpPerStep = 16f, tick = false, locked = s.isLocked("LENGTH"),
+                        limitWord = if (s.length >= cap) (if (nextNote > 16) "pattern ends here" else "next note at step $nextNote") else null) { send(StepField.Length, it) }
                     SlideColumn("VELOCITY", "${s.velocity}", "Velocity", track, key = "velocity" to ed.selected, num = s.velocity, min = 1, max = 127, unit = 4,
                         dpPerStep = 3f, tick = false, locked = s.isLocked("VELOCITY")) { send(StepField.Velocity, it) }
                 }
@@ -461,7 +465,7 @@ private fun Step.isLocked(param: String) = values.any { it.locked && it.param ==
 @Composable
 private fun SlideColumn(
     label: String, value: String, name: String, tint: Color, key: Any, dpPerStep: Float, tick: Boolean, locked: Boolean,
-    num: Int? = null, min: Int = 0, max: Int = 0, bipolar: Boolean = false, unit: Int = 1, onSteps: (Int) -> Unit,
+    num: Int? = null, min: Int = 0, max: Int = 0, bipolar: Boolean = false, unit: Int = 1, limitWord: String? = null, onSteps: (Int) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     val send by rememberUpdatedState(onSteps)
@@ -479,7 +483,7 @@ private fun SlideColumn(
             .clip(RoundedCornerShape(6.dp)).background(Tok.well)
             .semantics(mergeDescendants = true) {
                 contentDescription = name + if (locked) ", locked on this step" else ""
-                stateDescription = value + range
+                stateDescription = value + range + (limitWord?.let { ", can't grow: $it" } ?: "")
                 role = Role.Button
                 if (num != null) {
                     progressBarRangeInfo = ProgressBarRangeInfo(num.toFloat(), min.toFloat()..max.toFloat(), max - min - 1)
@@ -500,6 +504,9 @@ private fun SlideColumn(
                 onStart = { last = 0; hot = true },
                 onSlide = { total -> step(total - last); last = total },
                 onEnd = { hot = false },
+                // the slide stops at the value's ends (LENGTH: the next note), with a tick as it meets the limit
+                bounds = { num?.let { n -> -((n - min) / unit)..((max - n) / unit) } },
+                onLimit = { haptic.performHapticFeedback(HapticFeedbackType.ContextClick) },
             ),
     ) {
         Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 9.dp)) {
@@ -509,6 +516,7 @@ private fun SlideColumn(
             }
             BasicText(value, Modifier.padding(top = 2.dp), style = LupeType.number.copy(fontSize = 22.sp, lineHeight = 26.sp), maxLines = 1,
                 autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 14.sp, maxFontSize = 22.sp, stepSize = 1.sp))
+            if (limitWord != null) BasicText(limitWord, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 12.sp), maxLines = 1)
         }
         // the gauge along the foot: from the left, or from the middle on a value centred on zero
         if (fraction != null) Canvas(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp)) {
