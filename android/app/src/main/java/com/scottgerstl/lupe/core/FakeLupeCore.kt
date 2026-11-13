@@ -205,6 +205,7 @@ class FakeLupeCore(
             is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
             is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }
+            is AutomationDraw -> { val st = model[intent.step.coerceIn(0, 15)]; st.values.removeAll { it.param == intent.lane }; st.values.add(StepValue(intent.lane, intent.value * 127 / 100, true)); emitEditor() }
             // P5's intents (P5State.kt): mix, sounds, projects
             is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam -> _mix.update { FakeP5.mix(it, intent) }
             is SoundsTargetPick, is SoundsView, is PickPreset, is PickUser, ClearEntrySound, is SaveSound, is EraseUser -> _sounds.update { FakeP5.sounds(it, intent) }
