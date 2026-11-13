@@ -1,5 +1,10 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -323,16 +328,24 @@ private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelT
             when {
                 t == PanelTab.Notes -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     val pitch = if (s.on) s.pitchText else "—"
-                    Stepper(if (ed.kind == EditorKind.Drum) "LANE" else "PITCH", pitch, "Pitch", s, "PITCH", { core.send(Intent.StepAdjust(StepField.Pitch, -1)) }, { core.send(Intent.StepAdjust(StepField.Pitch, 1)) })
-                    Stepper("MOVE", "$n", "Move", s, "MOVE", { core.send(Intent.StepAdjust(StepField.Move, -1)) }, { core.send(Intent.StepAdjust(StepField.Move, 1)) })
-                    Stepper("LENGTH", "${s.length}", "Length", s, "LENGTH", { core.send(Intent.StepAdjust(StepField.Length, -1)) }, { core.send(Intent.StepAdjust(StepField.Length, 1)) })
-                    Stepper("VELOCITY", "${s.velocity}", "Velocity", s, "VELOCITY", { core.send(Intent.StepAdjust(StepField.Velocity, -1)) }, { core.send(Intent.StepAdjust(StepField.Velocity, 1)) })
+                    Stepper(if (ed.kind == EditorKind.Drum) "LANE" else "PITCH", pitch, "Pitch", s, "PITCH", { core.send(Intent.StepAdjust(StepField.Pitch, -1)) }, { core.send(Intent.StepAdjust(StepField.Pitch, 1)) },
+                        range = 48, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Pitch, d)) })
+                    Stepper("MOVE", "$n", "Move", s, "MOVE", { core.send(Intent.StepAdjust(StepField.Move, -1)) }, { core.send(Intent.StepAdjust(StepField.Move, 1)) },
+                        range = 16, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Move, d)) })
+                    Stepper("LENGTH", "${s.length}", "Length", s, "LENGTH", { core.send(Intent.StepAdjust(StepField.Length, -1)) }, { core.send(Intent.StepAdjust(StepField.Length, 1)) },
+                        range = 16, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Length, d)) })
+                    Stepper("VELOCITY", "${s.velocity}", "Velocity", s, "VELOCITY", { core.send(Intent.StepAdjust(StepField.Velocity, -1)) }, { core.send(Intent.StepAdjust(StepField.Velocity, 1)) },
+                        range = 32, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Velocity, d)) })
                 }
                 t == PanelTab.Feel -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Stepper("CHANCE", "${s.chance}", "Chance", s, "CHANCE", { core.send(Intent.StepAdjust(StepField.Chance, -1)) }, { core.send(Intent.StepAdjust(StepField.Chance, 1)) })
-                    Stepper("RATCHET", "${s.ratchet}", "Ratchet", s, "RATCHET", { core.send(Intent.StepAdjust(StepField.Ratchet, -1)) }, { core.send(Intent.StepAdjust(StepField.Ratchet, 1)) })
-                    Stepper("COND", s.cond, "Condition", s, "COND", { core.send(Intent.StepAdjust(StepField.Cond, -1)) }, { core.send(Intent.StepAdjust(StepField.Cond, 1)) })
-                    Stepper("NUDGE", "${s.nudge}", "Nudge", s, "NUDGE", { core.send(Intent.StepAdjust(StepField.Nudge, -1)) }, { core.send(Intent.StepAdjust(StepField.Nudge, 1)) })
+                    Stepper("CHANCE", "${s.chance}", "Chance", s, "CHANCE", { core.send(Intent.StepAdjust(StepField.Chance, -1)) }, { core.send(Intent.StepAdjust(StepField.Chance, 1)) },
+                        range = 20, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Chance, d)) })
+                    Stepper("RATCHET", "${s.ratchet}", "Ratchet", s, "RATCHET", { core.send(Intent.StepAdjust(StepField.Ratchet, -1)) }, { core.send(Intent.StepAdjust(StepField.Ratchet, 1)) },
+                        range = 4, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Ratchet, d)) })
+                    Stepper("COND", s.cond, "Condition", s, "COND", { core.send(Intent.StepAdjust(StepField.Cond, -1)) }, { core.send(Intent.StepAdjust(StepField.Cond, 1)) },
+                        range = 12, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Cond, d)) })
+                    Stepper("NUDGE", "${s.nudge}", "Nudge", s, "NUDGE", { core.send(Intent.StepAdjust(StepField.Nudge, -1)) }, { core.send(Intent.StepAdjust(StepField.Nudge, 1)) },
+                        range = 64, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Nudge, d)) })
                 }
                 c -> Column {
                     val names = s.values.filter { it.locked }.joinToString(", ") { it.param }
@@ -377,11 +390,50 @@ private fun PanelTabs(tab: PanelTab, setTab: (PanelTab) -> Unit) {
     }
 }
 
-/** A value with its − and +: 96 dp wide, the label over the number over two 46 × 36 keys. */
+/**
+ * The iPad's column slide (ios/FM1/Knobs.swift, Scott 2026-11-06; asked for on the phone 2026-11-14): the whole
+ * range in this many dp of sideways travel. The iPad tunes it in Labs (`Labs.columnTravel`, 240 pt); the phone
+ * has no Labs screen yet, so it lives here until one exists (CLAUDE.md rule 3).
+ */
+private const val COLUMN_TRAVEL_DP = 240f
+
+/**
+ * A value with its − and +: 96 dp wide, the label over the number over two 46 × 36 keys. A sideways slide across
+ * the column turns it, a tick a step, [range] steps over [COLUMN_TRAVEL_DP]. A step is one StepAdjust unit, the − / +
+ * key's step (VELOCITY 4, CHANCE 5, the rest 1), so [range] counts those. The first movement's axis decides, so
+ * an up-and-down drag stays the page's. The keys are the non-drag way in (WCAG 2.5.7).
+ */
 @Composable
-private fun Stepper(label: String, value: String, name: String, s: Step, param: String, down: () -> Unit, up: () -> Unit) {
+private fun Stepper(label: String, value: String, name: String, s: Step, param: String, down: () -> Unit, up: () -> Unit,
+                    range: Int, onSlide: (Int) -> Unit) {
     val locked = s.values.any { it.locked && it.param == param }
-    Column(Modifier.width(96.dp)) {
+    val haptic = LocalHapticFeedback.current
+    val slide by rememberUpdatedState(onSlide)
+    var sliding by remember { mutableStateOf(false) }
+    Column(
+        Modifier.width(96.dp)
+            // the right-hand column reaches Android's back-gesture edge: keep a slide there ours (Android allows
+            // up to 200 dp of exclusion per edge; the panel's columns are about 120 dp tall)
+            .systemGestureExclusion()
+            .background(if (sliding) Tok.well else Color.Transparent, RoundedCornerShape(8.dp))
+            .pointerInput(range) {
+                val perStep = COLUMN_TRAVEL_DP.dp.toPx() / range.coerceAtLeast(1)
+                awaitEachGesture {
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    var acc = 0f; var sent = 0
+                    // only a sideways start becomes a slide; anything else is left to the keys and the page
+                    val start = awaitHorizontalTouchSlopOrCancellation(first.id) { change, over -> change.consume(); acc += over } ?: return@awaitEachGesture
+                    sliding = true
+                    fun emit() {
+                        val n = (acc / perStep).toInt()
+                        if (n != sent) { slide(n - sent); sent = n; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                    }
+                    emit()
+                    horizontalDrag(start.id) { change -> acc += change.positionChange().x; change.consume(); emit() }
+                    sliding = false
+                }
+            },
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             BasicText(label, style = LupeType.label.copy(fontFamily = LupeType.number.fontFamily, letterSpacing = 0.5.sp), maxLines = 1)
             if (locked) Diamond(Tok.text, 6.dp)
