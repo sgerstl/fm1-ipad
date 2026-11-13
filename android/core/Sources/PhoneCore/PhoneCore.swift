@@ -207,6 +207,7 @@ public final class PhoneCore {
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects
+            if let p = try P6Intent.decode(json) { handle(p); return }        // P6's timeline, automation
             handle(try PhoneIntent.decode(json))
         } catch { log("intent not understood: \(json) (\(error))") }
     }
@@ -238,6 +239,10 @@ public final class PhoneCore {
             selectedStep = max(0, min(15, i))
             if lockLatched { syncLockStep() }   // a latched lock follows the selection (the iPad's Lock does)
             poke(["editor"])
+        case .setPlaybackMode(let m):
+            guard canWrite() else { log("read-only: setPlaybackMode not sent"); return }
+            let mode: SongMode = switch m { case .loop: .off; case .song: .on; case .once: .once }
+            if let store = session.skiffSong { Task { if !(await store.send(.song(mode))) { self.reportRefusal(store) } } }
         case .cancelWaiting:
             guard canWrite() else { log("read-only: cancelWaiting not sent"); return }
             if let store = session.skiffSong { Task { await store.performOp(.cancel) } }
