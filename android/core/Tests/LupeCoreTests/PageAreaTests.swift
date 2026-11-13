@@ -23,7 +23,7 @@ import Testing
     func readyCore(_ fake: FakeSkiff, _ r: Recorder, writes: Bool = true) async throws -> (PhoneCore, Plug) {
         let plug = Plug(fake)
         plug.gate.readOnly = !writes
-        let core = PhoneCore(session: DeviceSession(transport: { plug.gate.makeTransport() }), publish: r.publish)
+        let core = PhoneCore(session: DeviceSession(transport: { plug.gate.makeTransport() }), publish: r.publish, canWrite: { writes })
         core.start()
         try await Task.sleep(for: .milliseconds(200))
         plug.plugIn()
@@ -177,7 +177,7 @@ import Testing
         core.handle(json: "{\"intent\": \"pickPage\", \"family\": \"ENV\"}")
         core.handle(json: "{\"intent\": \"pickPage\", \"family\": \"ENV\", \"page\": 1}")
         try await Task.sleep(for: .milliseconds(500))
-        #expect(fake.gotoWire.isEmpty, "SCREEN_GOTO was dropped by the guard, never reached the FM-1: \(fake.gotoWire)")
+        #expect(fake.gotoWire.isEmpty, "refused before Session (and the guard behind it): never reached the FM-1: \(fake.gotoWire)")
         #expect(core.session.deviceScreen?.home == true, "the screen is where the FM-1 left it")
     }
 
