@@ -1,5 +1,21 @@
 # Device check: claude/android-p1-core-link-faf639, 2026-11-14 (morning after the overnight run)
 
+## Start here
+
+**This branch (`claude/android-p1-core-link-faf639`) has everything for this morning:** P1's core, P2's shell, P3's Pads and editor (`0dea0a6`), and P4's sound pages (`f6dd305`). One build covers all four checks. It is **already installed on the Pixel** (overnight, read-only) with Lupe open, so skip the install steps in the P2, P3 and P4 checks. If you need to reinstall: `cd android && ./gradlew :app:assembleDebug`, then `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`.
+
+The build starts on the **real core** (the FM-1) and read-only. P3's and P4's checks are written for the **fake core**, so the order switches once:
+
+1. **P1 morning (this file):** checks 1–5 below, FM-1 plugged in, real core. Check 4 is the only one that writes (back up first).
+2. Switch to the fake core (the app restarts): `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --es core fake`
+3. **P2 shell:** `android-p2-shell.md` checks 11–13.
+4. **P3:** `android-p3-pads-editor.md`, all checks.
+5. **P4:** `android-p4-sound-pages.md` checks 1–11. Skip 12: it needs the real core's `page` area, which isn't built yet (`android/notes/p1-page-area-brief.md`).
+6. Back to the real core: `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --es core real`
+
+Tests behind this build: Kotlin 15/15 (FixturesTest 3, FakeLupeCoreTest 6, FakePagesTest 6), core 14/14.
+
+
 Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it with the **Pixel 10 Pro** and the FM-1. It covers what the overnight run couldn't do without a hand, and spot-checks what it did. The branch merges to `main` only after it passes. It replaces checks 1–5 of `2026-11-13-android-p1-core-link.md`; those were run overnight (results below).
 
 **Setup:** FM-1 on its USB port (it reports **Skiff 2.5.1**, "FELUCCA v2.5.1", not 2.2) · Lupe for Android, this branch, already installed on the Pixel overnight · adb over Wi‑Fi (192.168.2.56, port may change) or USB before plugging the FM-1 in.
