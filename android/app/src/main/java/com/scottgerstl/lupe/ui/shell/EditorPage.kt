@@ -130,11 +130,6 @@ private fun Ruler(ed: EditorState, track: Color, core: LupeCore) {
                 BasicText("${ed.track} ${ed.trackName}", style = LupeType.key, maxLines = 1)
                 BasicText("· ${ed.entry} · pattern ${"%02d".format(ed.pattern)}" + if (ed.scale.isNotEmpty()) " · ${ed.scale}" else "", style = LupeType.body.copy(fontSize = 14.sp), maxLines = 1)
             }
-            if (ed.kind == EditorKind.Roll) {
-                Key({ core.send(Intent.ChordToggle) }, "Chord", width = 66.dp, height = 32.dp, minTarget = 40.dp, on = ed.chord, role = Role.Switch,
-                    state = if (ed.chord) "On: a second FM-1 key adds to the step's chord" else "Off") { fg -> KeyLabel("Chord", fg) }
-                Spacer(Modifier.width(6.dp))
-            }
             StepMenuKey(ed, core)
         }
     }

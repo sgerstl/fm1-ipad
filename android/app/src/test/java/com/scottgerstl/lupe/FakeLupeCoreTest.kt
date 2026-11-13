@@ -59,16 +59,6 @@ class FakeLupeCoreTest {
         assertEquals(listOf("DECAY", "RESONANCE"), core.editor.value.steps[5].values.map { it.param })
     }
 
-    @Test fun fm1KeyEntersTheNoteAndChordAdds() = runTest(StandardTestDispatcher()) {
-        val core = fake(this)
-        core.send(Intent.StepSelect(1))
-        core.fm1Key(60)
-        assertEquals("C4", core.editor.value.steps[1].note)
-        assertEquals(2, core.editor.value.selected) // the cursor moves on
-        core.send(Intent.StepSelect(1)); core.send(Intent.ChordToggle); core.fm1Key(63)
-        assertEquals(1, core.editor.value.steps[1].extra)
-    }
-
     @Test fun selectingAnotherPadLoadsItsOwnPattern() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.PadSelect(4, 0))
@@ -79,9 +69,9 @@ class FakeLupeCoreTest {
 
     @Test fun noteNamesUseSloopKitsSharpSign() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
-        core.send(Intent.StepSelect(3)); core.fm1Key(61)
+        core.send(Intent.StepSelect(3)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))   // an empty step starts at C4
         assertEquals("C♯4", core.editor.value.steps[3].note)
-        core.send(Intent.StepSelect(3)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))
+        core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))
         assertEquals("D4", core.editor.value.steps[3].note)
     }
 

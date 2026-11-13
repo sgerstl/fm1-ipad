@@ -96,19 +96,6 @@ class FakeLupeCore(
     /** Set the shell's bottom page as if the FM-1's button had been pressed (what the bottom half follows). */
     fun showBottom(page: BottomPage) = _shell.update { it.copy(bottom = page) }
 
-    /** The FM-1's key pressed: the note goes into the selected step (a chord adds, up to four), then the cursor moves on. */
-    fun fm1Key(midi: Int) {
-        val ed = _editor.value
-        val st = model[ed.selected]
-        if (ed.kind == EditorKind.Drum) {
-            val lane = (midi % 6)
-            st.on = true; st.lanes.add(lane)
-        } else if (ed.chord && st.on) {
-            if (st.extra < 3) st.extra++
-        } else { st.on = true; st.midi = midi; st.extra = 0 }
-        emitEditor { it.copy(selected = if (ed.chord) it.selected else (it.selected + 1) % 16) }
-    }
-
     /** The FM-1's knob [slot] (0…3) turned on a sound page: the phone lights that control (the screen link's job on the real core). */
     fun fm1PageKnob(slot: Int) = _page.update { pageFake.fm1Turn(it, slot) }
 
