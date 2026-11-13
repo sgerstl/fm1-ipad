@@ -14,6 +14,9 @@ public final class PhoneCore {
     private var areas: [AreaWatch] = []
     private var clockTask: Task<Void, Never>?
     private var projectTask: Task<Void, Never>?
+    /// Screen-local choices (nothing sent to the FM-1): the pad the editor shows, the step selected.
+    var pickedPad: PadsArea.Ref?
+    var selectedStep = 0
 
     /// `publish(area, json)` is called on the main actor. `log` gets lines worth keeping (intents not done yet).
     public init(session: DeviceSession, publish: @escaping (String, String) -> Void, log: @escaping (String) -> Void = { _ in }) {
@@ -28,6 +31,9 @@ public final class PhoneCore {
         areas = [
             AreaWatch(name: "link", build: { [unowned self] in AreaJSON.encode(self.linkArea()) }, publish: publish),
             AreaWatch(name: "top", build: { [unowned self] in AreaJSON.encode(self.topArea()) }, publish: publish),
+            // Only once the FM-1 has been read: before that Session holds placeholder tracks, not the FM-1's.
+            AreaWatch(name: "pads", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.padsArea()) : nil }, publish: publish),
+            AreaWatch(name: "editor", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.editorArea()) : nil }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]
         areas.forEach { $0.start() }
@@ -39,7 +45,7 @@ public final class PhoneCore {
                 guard let self else { return }
                 if self.session.playing {
                     self.areas.first { $0.name == "top" }?.poke()
-                    self.areas.first { $0.name == "diag" }?.poke()
+                    for n in ["diag", "pads", "editor"] { self.areas.first { $0.name == n }?.poke() }
                 }
             }
         }
@@ -56,6 +62,8 @@ public final class PhoneCore {
             }
         }
     }
+
+    private func poke(_ names: [String]) { for n in names { areas.first { $0.name == n }?.poke() } }
 
     public func stop() {
         runTask?.cancel(); runTask = nil
@@ -84,7 +92,8 @@ public final class PhoneCore {
         let song = s.skiffSong?.song
         let mode: TopArea.Mode = switch song?.mode ?? .off { case .off: .loop; case .on: .song; case .once: .once }
         let launch: TopArea.Launch = switch s.launchMode { case .loop: .loop; case .bar: .bar; case .beat: .beat; case .now: .now }
-        let waiting = song?.tracks.filter { $0.staged != nil }.count ?? 0
+        // Launches queued for the launch point (the pads' "waiting"), not the song's own next entries ("next").
+        let waiting = s.trackIndices.filter { s.skiffSong?.marks($0, launchIn: nil).queued != nil }.count
         let selectedArmed = s.armedTracks & (1 << s.selectedTrack) != 0
         var bar = 1, beat = 1
         if s.playing, s.clockTicks >= 0 {
@@ -118,6 +127,8 @@ public final class PhoneCore {
             runTask = Task { await s.run() }
         case .play: session.setPlaying(true)
         case .stop: session.setPlaying(false)
+        case .padSelect(let track, let entry): pickedPad = PadsArea.Ref(track: track, entry: entry); poke(["pads", "editor"])
+        case .stepSelect(let i): selectedStep = max(0, min(15, i)); poke(["editor"])
         default: log("intent not handled yet (later phase): \(intent)")
         }
     }
@@ -128,13 +139,14 @@ public final class PhoneCore {
 @MainActor
 final class AreaWatch {
     let name: String
-    private let build: () -> String
+    /// nil: nothing to send yet.
+    private let build: () -> String?
     private let publish: (String, String) -> Void
     private var last: String?
     private var scheduled = false
     private var live = false
 
-    init(name: String, build: @escaping () -> String, publish: @escaping (String, String) -> Void) {
+    init(name: String, build: @escaping () -> String?, publish: @escaping (String, String) -> Void) {
         self.name = name; self.build = build; self.publish = publish
     }
 
@@ -146,7 +158,7 @@ final class AreaWatch {
         let json = withObservationTracking { build() } onChange: { [weak self] in
             Task { @MainActor in self?.changed() }
         }
-        if json != last { last = json; publish(name, json) }
+        if let json, json != last { last = json; publish(name, json) }
     }
 
     /// Rebuild soon even though nothing observed changed (the clock count).

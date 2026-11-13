@@ -120,6 +120,18 @@ Each area is its own `Codable` struct. Swift sends an area again only when it ch
 - **`BridgedLupeCore`** (Kotlin) is P2's `LupeCore` over the bridge. `LupeApp` builds it through `LupeStartup` unless the app preference `core` is `fake`.
 - **Fixtures are recorded, not hand-written:** `RECORD_FIXTURES=1 swift test --filter FixtureRecording` in `android/core` writes `ready`, `searching`, `lost` and `wrongFirmware`. The FM-1 side is FakeSkiff (demo) and, for wrong firmware, FakeSloop reporting 2.9.0, as SloopKit's own test does. Unplugging goes through `LinkGate.lost()`, FM1Link's path.
 
+### pads and editor (P1, 2026-11-13, after P3's schema 7cca10c)
+
+`PhoneCore` publishes `pads` and `editor` (`PadsEditor.swift`), derived as the iPad's Pads page derives them: LIST2's lists, PERFORM's mutes and scenes, `SkiffSongStore.marks`, and the counted clock. Both are sent only once the link is ready, because before that Session holds placeholder tracks. Calls made:
+- The entry a track is on is `playing`, stopped as well, since that's where it starts. `progress` is set only while playing.
+- A staged entry is `waiting` when its launch is queued (with the `bar` it lands on), and `next` when it's the song's own next.
+- `top.waiting` counts queued launches only. *(Corrected: the first recording counted the song's next entries.)*
+- Columns run through the last entry any track uses, plus one empty.
+- The editor shows the selected pad's track and the pattern that track is on. Notes use SloopKit's names (`C♯4`, with the sharp sign).
+- `values`, `lanes` and `lock` stay empty and `off` until MOTION is read (not done yet).
+- Intents: `padSelect` and `stepSelect` are screen-local (nothing is sent to the FM-1). The rest of P3's intents decode and are logged as not done yet.
+- The recorder carries over hand-written frames for areas PhoneCore doesn't publish yet (`shell`), so a re-record doesn't wipe a screen's data. Files with carried frames stay `"provisional": true`.
+
 ### Read-only by default (P1, 2026-11-13)
 
 `LinkGate.readOnly` (on by default) wraps every connection in `GuardedTransport`. Only frames that Skiff's own protocol table (`skiff-src web/EDITOR_PROTOCOL.md`) calls queries reach the FM-1; anything else is dropped and logged ("read-only: blocked cmd N…"). The allowlist is in `ReadOnlyGuard.swift`. Tests show Session and PhoneCore reach ready and keep running over FakeSkiff (with and without the screen link) with nothing blocked. The guard was added for Scott's approved overnight read-only tests on the real FM-1. **There is deliberately no button that turns writes on**: a stray tap from another session's screenshot script hit one on the shared emulator. Writes need `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --ez allowWrites true`. Making it read-only again is one tap. So Play from the phone does nothing until writes are allowed.

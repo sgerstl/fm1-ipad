@@ -33,7 +33,8 @@ public struct TopArea: Codable, Equatable, Sendable {
     public var tempo: Double
     public var mode: Mode
     public var launch: Launch
-    /// How many tracks have a launch waiting for the launch point.
+    /// How many tracks have a launch queued for the launch point (SkiffSongStore.marks' `queued`); the song's
+    /// own next entries don't count (the pads show those as "next").
     public var waiting: Int
     /// The readout's position, 1-based, counted from MIDI clock in 4/4 (1·1 when stopped or unknown).
     public var bar: Int
@@ -43,6 +44,70 @@ public struct TopArea: Codable, Equatable, Sendable {
         self.project = project; self.playing = playing; self.rec = rec; self.tempo = tempo; self.mode = mode
         self.launch = launch; self.waiting = waiting; self.bar = bar; self.beat = beat
     }
+}
+
+// MARK: pads (P3's PadsState)
+
+public struct PadsArea: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Sendable { case empty, pattern, rest }
+    public enum Play: String, Codable, Sendable { case idle, playing, waiting, next }
+    public struct Entry: Codable, Equatable, Sendable {
+        public var kind: Kind = .empty
+        public var pattern: Int?
+        public var play: Play = .idle
+        /// Where a waiting launch lands, 1-based.
+        public var bar: Int?
+        /// REPS (nil when 1) and the pass playing.
+        public var passes: Int?, pass: Int?
+        public var progress: Double?
+        public var hasSound = false
+    }
+    public struct Row: Codable, Equatable, Sendable {
+        public var track: Int            // 1-based
+        public var name: String
+        public var muted: Bool
+        public var entries: [Entry]
+    }
+    public struct Scene: Codable, Equatable, Sendable { public var stored: Bool; public var current: Bool }
+    public struct Ref: Codable, Equatable, Sendable { public var track: Int; public var entry: Int }   // track 1-based, entry 0-based
+    public var rows: [Row]
+    public var scenes: [Scene]
+    public var selected: Ref
+}
+
+// MARK: editor (P3's EditorState)
+
+public struct EditorArea: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Sendable { case roll, drum }
+    public enum Lock: String, Codable, Sendable { case off, held, latched }
+    public struct Value: Codable, Equatable, Sendable { public var param: String; public var value: Int; public var locked: Bool }
+    public struct Step: Codable, Equatable, Sendable {
+        public var on = false
+        public var note = ""
+        public var extra = 0
+        public var length = 1
+        public var velocity = 100
+        public var chance = 100
+        public var ratchet = 1
+        public var cond = "ALWAYS"
+        public var nudge = 0
+        public var pitchText = ""
+        public var values: [Value] = []
+    }
+    public var track: Int                // 1-based
+    public var trackName: String
+    public var entry: String             // "A"…
+    public var pattern: Int
+    public var scale: String
+    public var kind: Kind
+    public var steps: [Step]             // sixteen
+    public var selected: Int
+    public var playhead: Int             // -1 stopped
+    public var chord: Bool
+    public var lock: Lock
+    public var lanes: [String]
+    public var lane: String
+    public var laneValues: [Int]
 }
 
 // MARK: diag
@@ -72,6 +137,10 @@ public enum PhoneIntent: Equatable, Sendable {
     case setPlaybackMode(TopArea.Mode)
     case setTab(String)
     case setDivider(String)
+    case padSelect(track: Int, entry: Int)
+    case stepSelect(Int)
+    /// A P3 intent PhoneCore doesn't do yet (pad launches, edits, locks): its name, logged.
+    case notYet(String)
 
     private struct Wire: Decodable {
         let intent: String
@@ -80,6 +149,9 @@ public enum PhoneIntent: Equatable, Sendable {
         let mode: TopArea.Mode?
         let tab: String?
         let position: String?
+        let track: Int?
+        let entry: Int?
+        let step: Int?
     }
 
     public enum DecodeError: Error { case unknown(String), missing(String) }
@@ -98,6 +170,12 @@ public enum PhoneIntent: Equatable, Sendable {
         case "setPlaybackMode": return .setPlaybackMode(try need(w.mode, "mode"))
         case "setTab": return .setTab(try need(w.tab, "tab"))
         case "setDivider": return .setDivider(try need(w.position, "position"))
+        case "padSelect": return .padSelect(track: try need(w.track, "track"), entry: try need(w.entry, "entry"))
+        case "stepSelect": return .stepSelect(try need(w.step, "step"))
+        case "padTap", "padSelectSound", "padNew", "padSet", "padClear", "trackSelect", "trackMute", "sceneRecall",
+             "sceneStore", "stepHold", "stepAdjust", "chordToggle", "lockToggle", "lockClear", "locksClearAll",
+             "stepAction", "lanePick":
+            return .notYet(w.intent)
         default: throw DecodeError.unknown(w.intent)
         }
     }
