@@ -141,9 +141,11 @@ Each area is its own `Codable` struct. Swift sends an area again only when it ch
 One `stepAdjust` unit is the panel's − / + step (VELOCITY 4, CHANCE 5, the rest 1), as P3's fake has it. Calls made:
 - **Write intents are refused in PhoneCore while read-only** (`canWrite`, from the link's switch) and logged, so Session's optimistic copy never shows a change that the guard then dropped. The guard stays underneath (tested).
 - **The song store takes one op at a time.** An op turned down (busy, stopped only, patterns full) is logged as "FM-1 refused: …". A screen for it is still to come.
-- **Storing over a kept scene** doesn't ask on the phone: P3's Store-then-scene counts as the confirmation. To confirm with Scott (writes sheet, check 4).
+- **Storing over a kept scene asks in place on the screen** (like Clear), and an empty scene stores at once (Scott, 2026-11-14). The screen sends `sceneStore{scene, confirmed: true}` after its row. The core refuses an unconfirmed store over a kept scene (`confirmed` defaults to false). The row itself is P2/P3's.
+- **The FM-1's keys into the selected step** (decision 5): `Session.onDeviceNote` (new, iPad unused) feeds `keyIntoStep`, which writes through the same call a pitch edit uses. Chord on adds the note (up to four) and keeps the cursor. Chord off replaces the note (CHANCE, COND and NUDGE kept) and moves the cursor on. A kit track takes the key's lane. **It works while stopped only**, because Skiff's sequencer sends its notes on the same channels and they can't be told from the keys. It's a write, so it's refused while read-only.
 - **`editor.chord` is the entry mode** (Chord on/off), no longer the track's CHORD parameter. **`editor.values` and `lanes` come from MOTION**, read for the editor's track every 3 s.
-- **Not built:** an FM-1 key into a step (the iPad has no path; Scott to decide), Select sound, and lock from the phone's knobs (that waits on P4's `setParam`).
+- **Lock from the phone catches only Lupe's own knob turns**, as on the iPad: fine for now (Scott, 2026-11-14). It waits on P4's `setParam` reaching `Session.set`.
+- **Not built:** Select sound.
 
 Device check: `qa/device-checks/2026-11-14-android-p1-writes.md`.
 

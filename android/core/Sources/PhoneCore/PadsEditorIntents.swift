@@ -14,7 +14,7 @@ public enum PadEditIntent: Equatable, Sendable {
     case padSelectSound(track: Int, entry: Int)
     case trackSelect(Int)
     case trackMute(Int)
-    case sceneStore(Int)                         // 0-based
+    case sceneStore(Int, confirmed: Bool)        // 0-based; over a kept scene only when confirmed (Scott, 2026-11-14)
     case sceneRecall(Int)
     case stepHold(step: Int, down: Bool)
     case stepAdjust(field: String, delta: Int)
@@ -28,7 +28,7 @@ public enum PadEditIntent: Equatable, Sendable {
     private struct Wire: Decodable {
         let intent: String
         let track: Int?, entry: Int?, pattern: Int?, scene: Int?, step: Int?, down: Bool?
-        let field: String?, delta: Int?, param: String?, action: String?, lane: String?
+        let field: String?, delta: Int?, param: String?, action: String?, lane: String?, confirmed: Bool?
     }
 
     /// nil: not one of these.
@@ -43,7 +43,7 @@ public enum PadEditIntent: Equatable, Sendable {
         case "padSelectSound": return .padSelectSound(track: try need(w.track, "track"), entry: try need(w.entry, "entry"))
         case "trackSelect": return .trackSelect(try need(w.track, "track"))
         case "trackMute": return .trackMute(try need(w.track, "track"))
-        case "sceneStore": return .sceneStore(try need(w.scene, "scene"))
+        case "sceneStore": return .sceneStore(try need(w.scene, "scene"), confirmed: w.confirmed ?? false)
         case "sceneRecall": return .sceneRecall(try need(w.scene, "scene"))
         case "stepHold": return .stepHold(step: try need(w.step, "step"), down: try need(w.down, "down"))
         case "stepAdjust": return .stepAdjust(field: try need(w.field, "field"), delta: try need(w.delta, "delta"))
@@ -115,10 +115,14 @@ extension PhoneCore {
         case .trackMute(let t1):
             guard let store else { return }
             Task { if !(await store.performOp(.mute(track: t1 - 1))) { reportRefusal(store) } }
-        case .sceneStore(let k):
+        case .sceneStore(let k, let confirmed):
             guard let store else { return }
-            // P3's Store is two deliberate steps (Store, then the scene), taken as the confirmation the iPad asks
-            // for before replacing a kept scene (to confirm with Scott: device check)
+            // Over a kept scene the screen confirms in place first, like Clear (Scott, 2026-11-14) and sends
+            // confirmed; an empty scene stores at once. An unconfirmed store over a kept one is refused here.
+            if store.perform?.kept[safe: k] == true, !confirmed {
+                log("scene \(k + 1) is kept: the screen must confirm before replacing it (sceneStore confirmed)")
+                return
+            }
             Task { if !(await store.performOp(.store(scene: k), confirmed: true)) { reportRefusal(store) } }
         case .sceneRecall(let k):
             guard let store else { return }
@@ -220,5 +224,42 @@ extension PhoneCore {
         default:
             log("unknown step field \(field)")
         }
+    }
+
+    // MARK: the FM-1's keys into the selected step (decision 5)
+
+    /// A key on the FM-1 writes the selected step of the editor's track, through the same write a pitch edit uses.
+    /// Chord on: the note joins the step (up to four), the cursor stays. Chord off: the note replaces the step's
+    /// and the cursor moves on. A kit track: the key's lane joins (Chord on) or replaces (off) the step's hits.
+    /// Only while stopped: playing, Skiff's sequencer sends its notes on the same channels and they can't be told
+    /// from the keys. A write: refused while read-only.
+    func keyIntoStep(_ e: NoteEvent) {
+        let s = session, t = editorTrack(), i = selectedStep
+        guard e.on, !s.playing, Int(e.channel) == t, s.isConnected,
+              s.tracks.indices.contains(t), s.tracks[t].steps.indices.contains(i) else { return }
+        guard canWrite() else { log("read-only: key \(Music.noteName(Int(e.note))) not written to step \(i + 1)"); return }
+        let n = Int(e.note)
+        var st = s.tracks[t].steps[i]
+        if s.isKit(t) {
+            let lane = SynthStep.lane(ofNote: n)
+            let base = chordMode ? st.kitLanes : DrumStep.empty
+            st = st.withHits(base.setting(lane, on: true))
+        } else if chordMode, st.isOn {
+            guard !st.notes.contains(n) else { return }
+            guard st.notes.count < 4 else { log("step \(i + 1) already holds four notes"); return }
+            st.notes.append(n)
+            st.levels = Array((st.levels + [0]).prefix(st.notes.count))
+            st.ratchets = Array(repeating: st.ratchets.first ?? 0, count: st.notes.count)
+        } else {
+            let keep = st.extra                    // chance, ratchet, COND, NUDGE stay
+            st = SynthStep(notes: [n], time: .note, accent: st.accent, slide: st.slide, velocity: Int(e.velocity) == 0 ? 100 : Int(e.velocity))
+            st.extra = keep
+        }
+        s.write(track: t, index: i, st)
+        if !chordMode {
+            selectedStep = (i + 1) % min(16, max(1, s.tracks[t].length))
+            if lockLatched { syncLockStep() }
+        }
+        pokeAreas(["editor"])
     }
 }

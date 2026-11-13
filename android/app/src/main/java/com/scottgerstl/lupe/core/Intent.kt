@@ -32,7 +32,9 @@ sealed interface Intent {
     @Serializable @SerialName("trackSelect") data class TrackSelect(val track: Int) : Intent
     @Serializable @SerialName("trackMute") data class TrackMute(val track: Int) : Intent
     @Serializable @SerialName("sceneRecall") data class SceneRecall(val scene: Int) : Intent
-    @Serializable @SerialName("sceneStore") data class SceneStore(val scene: Int) : Intent
+    /** Over a kept scene the screen confirms in place first (like Clear) and sends [confirmed]; the core refuses an
+     *  unconfirmed store over a kept scene (Scott, 2026-11-14). An empty scene stores at once. */
+    @Serializable @SerialName("sceneStore") data class SceneStore(val scene: Int, val confirmed: Boolean = false) : Intent
 
     // ---- P3: editor. Steps are 0-based.
     @Serializable @SerialName("stepSelect") data class StepSelect(val step: Int) : Intent
