@@ -98,3 +98,14 @@ New faults seen:
 | – | Erase menu opened over the finger | A menu with no room on either side opens above the finger. | Hold a used user slot in the right column. |
 
 **Not changed, and why:** the Magnifier doesn't show while sliding PASSES in a block menu (the menu is a window above it; the value is large there, as in the Mix row's menu); the project dot means "playing now", not "changed" (the "changed" word is in the Load confirm); **USER › FLUTE reading "Sample · Piano" and the slot not ticked** is the core's (PickUser sends the slot; check what the FM-1 does with it).
+
+## Recheck of the fixes on build fb7a661, real FM-1, over adb by Claude, 2026-11-13 evening
+
+- ✓ Project button names TESTBED from launch.
+- ✓ Mix faders follow a sideways drag (T6 −5.5 → −16.5 dB and back) with Slide to turn on Up and down.
+- ✓ Mix row names whole ("Deep Drums", "Glitch Kit").
+- ✓ Solo in the row's hold menu: the other five mute; Solo again restores the earlier mutes exactly. ✗ minor: the soloed row shows only a faint "·" after its pan text, easy to miss.
+- ✓ DELAY MODE is MONO · STEREO · PING-PONG; PING-PONG and back reach the FM-1 (raw 2, then 1). ✗ minor: at split the switch is cut off at the divider (needs top only).
+- ✗ **Tempo slide doesn't respond**: the TEMPO · BPM value in the readout popover stays at 82 for up, down, sideways and fast slides; nothing is sent.
+- ✓ Pad › Select sound on a melodic track (T3 Wheel, pad B): "Sound for pad B on track 3", the pad took its own sound with the cut corner, the track kept Gospel; "Use the track's own sound" cleared it.
+- ☐ Save names: not rechecked (Scott).

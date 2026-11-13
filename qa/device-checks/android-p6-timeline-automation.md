@@ -72,3 +72,11 @@ Also: the tempo popover still has −10 / −1 / +1 / +10 steppers (decision 10 
 | 5, 6 | A foot drag or a body drag looked right but wasn't kept, and the blocks below didn't move | The drag's end handler read the numbers from when the gesture began (no movement yet), so it sent nothing. The drag state now lives with the track and the end reads it when the finger lifts, so BlockMove and BlockStretch go out. While you stretch, the blocks after it slide by the change in length; while you move, the ones it passes slide the other way and open a gap at the landing slot, all eased (150 ms; Reduce Motion: near-instant). | Select a block, drag its foot: the blocks below move with it, and on release the length is kept (the FM-1 reads it back). Drag a block past a neighbour: the neighbour slides out of the way, a tick as you pass, the order is kept. |
 
 **Known:** on release the dragged block is drawn back at the core's old state until the FM-1's reply arrives (a beat), then lands; it isn't held at the drop point.
+
+## Recheck of the fixes on build fb7a661, real FM-1, over adb by Claude, 2026-11-13 evening
+
+- ✓ The head ring follows the FM-1's selected track (3).
+- ✓ A 1-bar block's grip is a notch under the number.
+- ✓ The menu reads "TRACK 1 · BAR 7" and "PASSES · 1 BAR"; Insert before… is in the block menu.
+- ✓ An empty pattern shows the lane with "Pick a parameter ⌄" and Draw; the picker says to open a sound page on the FM-1 (its knobs are the parameters).
+- ☐ Grip and body drags (fb7a661), drawing a lane, Chain/Split/New: Scott, by hand.
