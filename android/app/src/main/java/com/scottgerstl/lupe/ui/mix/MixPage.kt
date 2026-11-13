@@ -76,28 +76,28 @@ import kotlin.math.roundToInt
  * turning them changes every track.
  */
 @Composable
-fun MixPage(ui: MixUi, actions: MixActions, modifier: Modifier = Modifier) {
+fun MixPage(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Segmented(ui.pages, ui.page, "Mix page") { actions.page(it) }
         LupeCrossfade(ui.page, Modifier.weight(1f).fillMaxWidth(), Dur.STATE) { p ->
-            if (p == 0) Mixer(ui, actions) else BusPage(ui, p, actions)
+            if (p == 0) Mixer(ui, actions, meters) else BusPage(ui, p, actions)
         }
     }
 }
 
 @Composable
-private fun Mixer(ui: MixUi, actions: MixActions) {
+private fun Mixer(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val gap = 4.dp
         val rows = ui.tracks.size.coerceAtLeast(1)
         val rh = ((maxHeight - gap * (rows - 1)) / rows).coerceAtLeast(36.dp)
         val roomy = rh >= 72.dp      // top only: the meter and the send line show
-        Column(verticalArrangement = Arrangement.spacedBy(gap)) { ui.tracks.forEach { t -> TrackRow(t, rh, roomy, actions) } }
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) { ui.tracks.forEach { t -> TrackRow(t, rh, roomy, actions, meters) } }
     }
 }
 
 @Composable
-private fun TrackRow(t: MixTrackUi, h: androidx.compose.ui.unit.Dp, roomy: Boolean, actions: MixActions) {
+private fun TrackRow(t: MixTrackUi, h: androidx.compose.ui.unit.Dp, roomy: Boolean, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>) {
     val colour = Tok.track[(t.number - 1) % Tok.track.size]
     val haptic = LocalHapticFeedback.current
     var menuAt by remember { mutableStateOf<Offset?>(null) }
@@ -129,9 +129,11 @@ private fun TrackRow(t: MixTrackUi, h: androidx.compose.ui.unit.Dp, roomy: Boole
                     drawRect(Tok.control)
                     drawRect(lerp(colour, Tok.text3, dim.value).copy(alpha = 0.55f), size = Size(size.width * (t.send / 127f), size.height))
                 }
-                if (t.meter != null) Canvas(Modifier.padding(top = 3.dp).fillMaxWidth().height(3.dp).clearAndSetSemantics { }) {
+                // the meter: the core's `meters` area, read while drawing so 20 updates a second redraw only this line
+                Canvas(Modifier.padding(top = 3.dp).fillMaxWidth().height(3.dp).clearAndSetSemantics { }) {
                     drawRect(Tok.control)
-                    drawRect(lerp(colour, Tok.text3, dim.value), size = Size(size.width * t.meter.coerceIn(0f, 1f), size.height))
+                    val m = meters.value.levels.getOrNull(t.number - 1)?.toFloat() ?: 0f
+                    drawRect(lerp(colour, Tok.text3, dim.value), size = Size(size.width * m.coerceIn(0f, 1f), size.height))
                 }
             }
         }

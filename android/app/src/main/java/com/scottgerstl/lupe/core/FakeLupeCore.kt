@@ -67,6 +67,8 @@ class FakeLupeCore(
     private val _mix = MutableStateFlow(MixState())
     private val _sounds = MutableStateFlow(SoundsState())
     private val _projects = MutableStateFlow(ProjectsState())
+    private val _meters = MutableStateFlow(MetersState())
+    override val meters: StateFlow<MetersState> = _meters
     override val mix: StateFlow<MixState> = _mix
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
@@ -333,6 +335,7 @@ class FakeLupeCore(
         _top.update { it.copy(playing = on, bar = if (on) it.bar else 1, beat = if (on) it.beat else 1) }
         if (!on) {
             _editor.update { it.copy(playhead = -1) }
+            _meters.value = MetersState()
             _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map { it.copy(progress = null) }) }) }
         }
         syncTicker(on)
@@ -361,6 +364,8 @@ class FakeLupeCore(
                     if (it.play == PadPlay.Playing) it.copy(progress = (stepCount % 16) / 16f) else it }) }) }
                 recount()
                 _editor.update { it.copy(playhead = stepCount % 16) }
+                // the meters move while it plays: each track near its level, never louder
+                _meters.value = MetersState(_mix.value.rows.mapIndexed { n, r -> if (r.mute) 0.0 else (r.level / 127.0) * (0.55 + 0.45 * kotlin.math.abs(kotlin.math.sin((stepCount + n * 3) * 0.7))) })
             }
         }
     }

@@ -13,7 +13,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 | 3 | Double-tap a fader. | It goes back to what it was when the tab opened. | – | ☐ pass ☐ fail: |
 | 4 | Hold a track row (not the number). | A menu opens beside your finger with PAN and REVERB SEND (large values, each turned by sliding) and "Sounds…". There is no PAN on the row itself (decision 14). | – | ☐ pass ☐ fail: |
 | 5 | Tap Mute on a row, then again. | The key fills while muted, the row's fader greys; the Pads' M for that row follows. | – | ☐ pass ☐ fail: |
-| 6 | Drag the divider to top only. | The rows grow tall; each gains its "LEVEL · send REV n" line and a thin send bar (and a meter when the core sends one). | – | ☐ pass ☐ fail: |
+| 6 | Drag the divider to top only. | The rows grow tall; each gains its "LEVEL · send REV n" line a thin send bar and a level meter that moves while the song plays (the core's `meters` area, about 20 a second; the fake moves it too). | – | ☐ pass ☐ fail: |
 | 7 | Tap Delay, then Reverb, Chorus, Global. | A short picture and four white controls (not a track's colour), the corner words "Shared by every track". Sliding a control changes it (and on the FM-1 the effect). On the real FM-1 the FM-1's GLO button steps the page and the top half follows. | RAM only | ☐ pass ☐ fail: |
 | 7b | On Delay (Skiff 2.5.1) look under the four controls. | A DELAY MODE choice (a three-way switch); tapping a mode changes it (and the FM-1's). Pages without settings show none. | RAM only | ☐ pass ☐ fail: |
 | 8 | On Pads, hold a track's **number**. Or hold a row in Mix › Sounds…. | The Sounds browser replaces the bottom half (the editor): "Choose a sound for track N", Save and Done, the engines down the left (ANALOG … DRUM, then USER), presets in two columns, a tick on what the track plays. At top only the divider glides to split. Back or Done brings the editor back. | – | ☐ pass ☐ fail: |
@@ -35,6 +35,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 **Calls I made without Scott:**
 - **A track's name on a Mix row** is the part after "·" ("Acid" from "Analog · Acid"), because the core names tracks "Engine · Sound" and the row has room for one. TalkBack still reads the whole name where it matters.
 - **Pan is in the hold menu only** (decision 14), as boards 64's note recommends; the row shows level and Mute.
+- **The meter** is read while drawing, so it redraws only its own line; at split the rows are too short for it.
 - **The Magnifier doesn't show inside menus** (the menu is a window above it); the value is large there instead.
 - **Slots show "kept on the FM-1"** for a used slot: the core sends no saved-at time, so the board's "saved today 22:40" is not drawn.
 - **Labs "Pause following" and "Pin"** are real (in `Body.kt`); "Piano" and "Timeline: time across" are switches that are kept and do nothing yet (the Timeline is phase 6, the piano isn't built).
@@ -43,6 +44,6 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 - **Erase a user slot** is a hold on the slot in the browser's USER list (and a TalkBack action), then the in-place confirm.
 - **Haptics** is one gate over every haptic in the app (Settings › Haptics).
 
-**Not covered:** the board's meter on the Mix row (the core sends none yet, so none is drawn), the iPad's Solo (the core has it; no key on the phone row), Sounds' "Samples (USR1–3)" (not in the core's areas), and anything about the FM-1 over Bluetooth.
+**Not covered:** the iPad's Solo (the core has it; no key on the phone row), Sounds' "Samples (USR1–3)" (not in the core's areas), and anything about the FM-1 over Bluetooth.
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device" (TalkBack: release pass).
