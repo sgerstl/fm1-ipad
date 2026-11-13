@@ -49,9 +49,17 @@ class FakePagesTest {
         core.send(PickPage("ENV", 1))
         assertEquals(1, core.page.value.page)
         assertEquals("ENV 2", core.shell.value.bottom.page)
-        core.send(PickPage("FX"))      // a family the scenario never showed: its first page, empty wells
+        core.send(PickPage("FX"))      // a family the scenario never showed: built from the map (FakePageMap)
         assertEquals("FX", core.page.value.family)
-        assertTrue(core.page.value.controls.all { it == null })
+        assertEquals(listOf("DIST", "CHORUS", "DELAY", "REVERB"), core.page.value.controls.map { it!!.label })
+        assertEquals(GraphKind.Fx, core.page.value.graph.kind)
+        assertTrue(core.page.value.trackName.isNotEmpty())
+        for (family in listOf("LFO", "SEL", "EDIT", "ARP")) {       // every family key opens a filled page, with the track's name
+            core.send(PickPage(family))
+            val p = core.page.value
+            assertTrue("$family has controls", p.controls.any { it != null })
+            assertTrue("$family has a name", p.trackName.isNotEmpty())
+        }
     }
 
     @Test fun modRoutePickMovesTheTile() = runTest(StandardTestDispatcher()) {
