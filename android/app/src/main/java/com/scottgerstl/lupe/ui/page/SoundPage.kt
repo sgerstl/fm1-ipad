@@ -88,7 +88,10 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
     // the value each control had when this page opened, for double-tap to put it back (not a factory default: the FM-1 has none per sound)
     val opened = remember(page.track, page.page, page.family) { mutableMapOf<Int, Int>() }
 
-    Column(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+    // On a page with tiles, at split only (the section is short), the header line goes: the underlined page row already names the page
+    val showHeader = !(hasTiles(page.graph) && maxHeight < 240.dp)
+    Column(Modifier.fillMaxSize()) {
         // the family keys live in the button block now (decision 24); this page starts at its page row
         Box(Modifier.fillMaxWidth().height(44.dp)) {
             LupeCrossfade(page.lock, Modifier.fillMaxSize(), Dur.STATE) { lock ->
@@ -97,9 +100,9 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
         }
         // the held notice has its own slim line under the page row (never over a key); it fades in and out
         HeldNotice(notice)
-        PageHeader(page, colour)
+        if (showHeader) PageHeader(page, colour)
         // tiles where a knob picks from a list of names; otherwise the room is left empty (the FM-1 has the detail)
-        Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = if (showHeader) 4.dp else 0.dp)) {
             LupeCrossfade(page.page to page.family, Modifier.fillMaxSize(), Dur.STATE) { _ ->
                 if (hasTiles(page.graph)) PageTilesContent(page.graph, colour, onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) }, modifier = Modifier.fillMaxSize())
                 else if (page.controls.none { it != null }) BasicText("Set this page on the FM-1.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = LupeType.small.copy(color = Tok.text2Raised))
@@ -111,6 +114,7 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
             opened = { slot, c -> opened.getOrPut(slot) { c.raw } },
             onSet = { slot, v -> core.send(SetParam(slot, v)) },
         )
+    }
     }
 }
 

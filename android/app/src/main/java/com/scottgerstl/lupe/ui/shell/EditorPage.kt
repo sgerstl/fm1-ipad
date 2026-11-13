@@ -134,7 +134,8 @@ fun EditorPage(
         // the grid in the editor: what is left above the lane and the strip. With a sound page: no smaller than 36 dp a row, no bigger than 72, and
         // leaving the sound section its four controls first; the section's picture takes what remains (0 at split on a 915 dp phone)
         val grid0 = (maxHeight - ruler - 12.dp - STRIP_HEIGHT - lane0 - BLOCK_HEIGHT - 6.dp).coerceAtLeast(MIN_GRID)
-        val grid1 = (maxHeight - ruler - 6.dp - soundNeeds - BLOCK_HEIGHT - 6.dp).coerceIn(MIN_GRID, MAX_GRID)
+        // a page with tiles lets the grid squeeze to 26 dp rows at split so the tiles have some room
+        val grid1 = (maxHeight - ruler - 6.dp - soundNeeds - BLOCK_HEIGHT - 6.dp).coerceIn(if (soundNeeds > SOUND_IDEAL) MIN_GRID_TILES else MIN_GRID, MAX_GRID)
         val grid = grid0 + (grid1 - grid0) * s
         Column(Modifier.fillMaxSize()) {
             Ruler(ed, track, core, pick.step != null)
@@ -161,6 +162,7 @@ fun EditorPage(
     }
 }
 
+private val MIN_GRID_TILES = 116.dp     // rows of 26 dp
 private val MIN_GRID = 128.dp          // four rows of 29 dp and three 4 dp gaps (the board's miniGrid, about 30)
 private val MAX_GRID = 348.dp          // rows of 84 dp
 internal val SOUND_IDEAL = 160.dp       // page row 44, header 28, dials 88 (decision 25: no picture)
@@ -350,14 +352,14 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
     ) {
         val compact = h < 52.dp   // a sound page is up and the rows are squeezed: the number and the note share one line
         if (compact) {
-            Row(Modifier.align(Alignment.CenterStart).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.align(Alignment.CenterStart).padding(start = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 BasicText("${i + 1}", Modifier.width(18.dp), style = LupeType.small.copy(fontSize = 11.sp, color = if (s.on) Tok.text2Raised else Tok.text2), maxLines = 1)
                 if (s.on) {
                     BasicText(s.note, style = LupeType.number.copy(fontSize = 17.sp, lineHeight = 17.sp, color = Tok.text), maxLines = 1)
                     if (s.extra > 0) BasicText("+${s.extra}", Modifier.padding(start = 3.dp), style = LupeType.small.copy(fontSize = 10.sp))
                 }
             }
-            if (s.on) Box(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 4.dp).width(((w - 16.dp) / 4) * minOf(s.length, 4)).height(2.dp).background(track, RoundedCornerShape(2.dp)))
+            if (s.on) Box(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 2.dp).width(((w - 16.dp) / 4) * minOf(s.length, 4)).height(2.dp).background(track, RoundedCornerShape(2.dp)))
         } else BasicText("${i + 1}", Modifier.padding(start = 8.dp, top = 5.dp), style = LupeType.small.copy(color = if (s.on) Tok.text2Raised else Tok.text2))
         if (s.on && !compact) {
             val size = if (h > 80.dp) 26.sp else if (ed.kind == EditorKind.Drum) 17.sp else 20.sp

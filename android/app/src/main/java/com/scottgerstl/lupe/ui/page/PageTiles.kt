@@ -1,6 +1,7 @@
 package com.scottgerstl.lupe.ui.page
 
 import com.scottgerstl.lupe.core.PageTile
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -76,10 +77,13 @@ import kotlin.math.tanh
 @Composable
 internal fun ModRoutes(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
     val groups = listOf("LFO" to "LFO →", "ENV" to "ENV →", "SLOTS" to "SLOTS")
-    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // at split the room is small: the rows keep 36 dp and the list scrolls, rather than three slivers
+    BoxWithConstraints(modifier.fillMaxSize()) {
+    val squeezed = maxHeight < 140.dp
+    Column(Modifier.fillMaxSize().then(if (squeezed) Modifier.verticalScroll(rememberScrollState()) else Modifier), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         groups.forEach { (key, head) ->
             val rows = g.routes.withIndex().filter { it.value.group == key }
-            Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(if (squeezed) Modifier.height(36.dp).fillMaxWidth() else Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 BasicText(head, Modifier.size(width = 40.dp, height = 16.dp), style = LupeType.number.copy(fontSize = 11.sp, color = Tok.text2Raised))
                 for (slot in 0 until 4) {
                     val r = rows.getOrNull(slot)
@@ -88,6 +92,7 @@ internal fun ModRoutes(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modif
                 }
             }
         }
+    }
     }
 }
 
@@ -113,9 +118,11 @@ private fun Modifier.drawWithOutline(): Modifier = this.then(Modifier.drawWithCo
 
 @Composable
 internal fun PickTiles(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+    val rowH = if (maxHeight < 100.dp) 36.dp else 48.dp   // squeezed at split: shorter tiles, the list scrolls
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(if (rowH < 48.dp) 4.dp else 8.dp)) {
         g.tiles.withIndex().chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { (i, t) ->
                     val on = i == g.picked
                     Box(
@@ -128,6 +135,7 @@ internal fun PickTiles(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modif
                 repeat(4 - row.size) { Box(Modifier.weight(1f)) }
             }
         }
+    }
     }
 }
 
