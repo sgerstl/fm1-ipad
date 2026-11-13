@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import com.scottgerstl.lupe.ui.projects.ProjectsSheet
-import com.scottgerstl.lupe.ui.projects.rememberMockProjects
+import com.scottgerstl.lupe.ui.projects.rememberProjects
 import com.scottgerstl.lupe.ui.settings.SettingsSheet
 import com.scottgerstl.lupe.ui.sheet.LocalSheetHost
 import com.scottgerstl.lupe.ui.sounds.LocalSoundsHost
@@ -112,8 +112,8 @@ fun LupeShell(core: LupeCore) {
         // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
         CompositionLocalProvider(LocalSheetHost provides sheets) {
             SettingsSheet(link)
-            val projects = rememberMockProjects()   // stand-in until the core's projects area lands
-            ProjectsSheet(projects.ui, projects.actions)
+            val projects = rememberProjects(core)
+            ProjectsSheet(projects.first, projects.second)
         }
         // the Magnifier floats over everything, above the finger
         MagnifierHost(magnifier)

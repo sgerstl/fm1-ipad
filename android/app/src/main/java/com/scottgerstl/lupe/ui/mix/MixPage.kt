@@ -129,7 +129,7 @@ private fun TrackRow(t: MixTrackUi, h: androidx.compose.ui.unit.Dp, roomy: Boole
                     drawRect(Tok.control)
                     drawRect(lerp(colour, Tok.text3, dim.value).copy(alpha = 0.55f), size = Size(size.width * (t.send / 127f), size.height))
                 }
-                Canvas(Modifier.padding(top = 3.dp).fillMaxWidth().height(3.dp).clearAndSetSemantics { }) {
+                if (t.meter != null) Canvas(Modifier.padding(top = 3.dp).fillMaxWidth().height(3.dp).clearAndSetSemantics { }) {
                     drawRect(Tok.control)
                     drawRect(lerp(colour, Tok.text3, dim.value), size = Size(size.width * t.meter.coerceIn(0f, 1f), size.height))
                 }

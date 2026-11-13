@@ -21,6 +21,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import com.scottgerstl.lupe.core.ProjectsState
+import com.scottgerstl.lupe.core.ProjectSaveAs
+import com.scottgerstl.lupe.core.ProjectSave
+import com.scottgerstl.lupe.core.ProjectRename
+import com.scottgerstl.lupe.core.ProjectLoad
+import com.scottgerstl.lupe.core.LupeCore
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,8 +74,10 @@ data class ProjectsUi(
 )
 
 class ProjectActions(
-    val load: (slot: Int) -> Unit,
-    val save: (slot: Int) -> Unit,
+    /** [confirmed]: the person has seen what a load would lose (the core refuses an unconfirmed load over changes). */
+    val load: (slot: Int, confirmed: Boolean) -> Unit,
+    /** Save over the music's own slot: only [confirmed] (it replaces what the slot held). */
+    val save: (confirmed: Boolean) -> Unit,
     val saveAs: (slot: Int, name: String) -> Unit,
     val rename: (slot: Int, name: String) -> Unit,
 )
@@ -76,6 +85,8 @@ class ProjectActions(
 private sealed interface Pending {
     /** Load [slot] over the playing project's unsaved changes: confirmed in place. */
     data class Load(val slot: ProjectSlotUi, val armedAt: Long) : Pending
+    /** Save over the playing project's own slot: replaces what it held. */
+    data class Save(val slot: ProjectSlotUi, val armedAt: Long) : Pending
     data class Rename(val slot: ProjectSlotUi) : Pending
 }
 
@@ -99,6 +110,23 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ui.slots.forEach { slot -> SlotRow(slot, pending, { pending = it }, ui, actions) { host.close() } }
         }
+        // a Save over the playing project's own slot replaces what the slot held: asked in place too
+        LupeCrossfade(pending as? Pending.Save, Modifier.fillMaxWidth().padding(top = 16.dp)) { p ->
+            if (p != null) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val words = "Save over ${p.slot.index} ${p.slot.name}? It replaces what the slot held."
+                Box(
+                    Modifier.fillMaxWidth()
+                        .drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Button; contentDescription = "Confirm: $words"
+                            onClick { if (System.currentTimeMillis() - p.armedAt > 400) { actions.save(true); pending = null; true } else false }
+                        }
+                        .pointerInput(p) { detectTapGestures { if (System.currentTimeMillis() - p.armedAt > 400) { actions.save(true); pending = null } } }
+                        .padding(14.dp),
+                ) { BasicText(words, style = LupeType.key) }
+                Key({ pending = null }, "Cancel", Modifier.fillMaxWidth(), height = 44.dp) { fg -> KeyLabel("Cancel", fg) }
+            }
+        }
         // a Load that would lose changes: a red-outlined row naming what goes, Save first and Cancel
         LupeCrossfade(pending as? Pending.Load, Modifier.fillMaxWidth().padding(top = 16.dp)) { p ->
             if (p != null) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -108,14 +136,14 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
                         .drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
                         .semantics(mergeDescendants = true) {
                             role = Role.Button; contentDescription = "Confirm: $words"
-                            onClick { if (System.currentTimeMillis() - p.armedAt > 400) { actions.load(p.slot.index); pending = null; host.close(); true } else false }
+                            onClick { if (System.currentTimeMillis() - p.armedAt > 400) { actions.load(p.slot.index, true); pending = null; host.close(); true } else false }
                         }
-                        .pointerInput(p) { detectTapGestures { if (System.currentTimeMillis() - p.armedAt > 400) { actions.load(p.slot.index); pending = null; host.close() } } }
+                        .pointerInput(p) { detectTapGestures { if (System.currentTimeMillis() - p.armedAt > 400) { actions.load(p.slot.index, true); pending = null; host.close() } } }
                         .padding(14.dp),
                 ) { BasicText(words, style = LupeType.key) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // Save first writes the playing project, then loads the other
-                    Key({ playing?.let { actions.save(it.index) }; actions.load(p.slot.index); pending = null; host.close() }, "Save the playing project first, then load ${p.slot.name}",
+                    Key({ actions.save(true); actions.load(p.slot.index, true); pending = null; host.close() }, "Save the playing project first, then load ${p.slot.name}",
                         Modifier.weight(1f), height = 44.dp) { fg -> KeyLabel("Save first", fg) }
                     Key({ pending = null }, "Cancel", Modifier.weight(1f), height = 44.dp) { fg -> KeyLabel("Cancel", fg) }
                 }
@@ -146,10 +174,10 @@ private fun SlotRow(slot: ProjectSlotUi, pending: Pending?, setPending: (Pending
         }
         if (!renaming) {
             when {
-                slot.current -> Key({ actions.save(slot.index) }, "Save ${slot.name}", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                slot.current -> Key({ setPending(Pending.Save(slot, System.currentTimeMillis())) }, "Save ${slot.name}", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
                 slot.empty -> Key({ actions.saveAs(slot.index, "Project ${slot.index}") }, "Save here as a new project in slot ${slot.index}", width = 92.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save here", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
                 else -> Key({
-                    if (ui.changes != null) setPending(Pending.Load(slot, System.currentTimeMillis())) else { actions.load(slot.index); closeSheet() }
+                    if (ui.changes != null) setPending(Pending.Load(slot, System.currentTimeMillis())) else { actions.load(slot.index, false); closeSheet() }
                 }, "Load ${slot.name}", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Load", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
             }
             Box {
@@ -179,4 +207,26 @@ private fun RenameField(slot: ProjectSlotUi, cancel: () -> Unit, done: (String) 
         )
         Key({ cancel() }, "Cancel renaming", width = 64.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
     }
+}
+
+
+private fun ProjectsState.toUi(): ProjectsUi = ProjectsUi(
+    slots = slots.map { ProjectSlotUi(it.slot + 1, it.name, if (it.used) "kept on the FM-1" else "", it.current, !it.used) },
+    changes = if (changed) "${name.ifEmpty { "This project" }}'s changes since its last save" else null,
+)
+
+/** The Projects sheet's state from the core, and what it does about a touch (slots are 0-based in the core, 1-based on the sheet). */
+@Composable
+fun rememberProjects(core: LupeCore): Pair<ProjectsUi, ProjectActions> {
+    val state by core.projects.collectAsStateWithLifecycle()
+    val ui = remember(state) { state.toUi() }
+    val actions = remember(core) {
+        ProjectActions(
+            load = { s, c -> core.send(ProjectLoad(s - 1, c)) },
+            save = { c -> core.send(ProjectSave(c)) },
+            saveAs = { s, n -> core.send(ProjectSaveAs(s - 1, n)) },
+            rename = { s, n -> core.send(ProjectRename(s - 1, n)) },
+        )
+    }
+    return ui to actions
 }

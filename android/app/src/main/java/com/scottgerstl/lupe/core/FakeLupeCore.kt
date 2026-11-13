@@ -64,6 +64,12 @@ class FakeLupeCore(
     override val pads: StateFlow<PadsState> = _pads
     override val editor: StateFlow<EditorState> = _editor
     override val page: StateFlow<PageState> = _page
+    private val _mix = MutableStateFlow(MixState())
+    private val _sounds = MutableStateFlow(SoundsState())
+    private val _projects = MutableStateFlow(ProjectsState())
+    override val mix: StateFlow<MixState> = _mix
+    override val sounds: StateFlow<SoundsState> = _sounds
+    override val projects: StateFlow<ProjectsState> = _projects
 
     private var replay: Job? = null
     private var ticker: Job? = null
@@ -112,13 +118,27 @@ class FakeLupeCore(
         emitEditor()
     }
 
+    /** Scenarios without recorded mix, sounds or projects get a seed from the pads' track names. */
+    private fun seedP5() {
+        val rows = _pads.value.rows
+        if (_mix.value.rows.isEmpty() && rows.isNotEmpty()) _mix.value = FakeP5.seedMix(rows.map { it.name }, _pads.value.selected.track)
+        if (_sounds.value.engines.isEmpty() && rows.isNotEmpty()) _sounds.value = FakeP5.seedSounds(_pads.value.selected.track, rows.getOrNull(_pads.value.selected.track - 1)?.name.orEmpty())
+        if (_projects.value.slots.isEmpty()) _projects.value = FakeP5.seedProjects()
+    }
+
     private fun apply(area: String, state: JsonElement) {
         when (area) {
             "link" -> _link.value = lupeJson.decodeFromJsonElement(LinkState.serializer(), state)
             "top" -> _top.value = lupeJson.decodeFromJsonElement(TopState.serializer(), state).also { syncTicker(it.playing) }
             "shell" -> _shell.value = lupeJson.decodeFromJsonElement(ShellState.serializer(), state)
             "page" -> { val p = lupeJson.decodeFromJsonElement(PageState.serializer(), state); pageFake.learn(p); _page.value = p }
-            "pads" -> _pads.value = lupeJson.decodeFromJsonElement(PadsState.serializer(), state)
+            "mix" -> _mix.value = lupeJson.decodeFromJsonElement(MixState.serializer(), state)
+            "sounds" -> _sounds.value = lupeJson.decodeFromJsonElement(SoundsState.serializer(), state)
+            "projects" -> _projects.value = lupeJson.decodeFromJsonElement(ProjectsState.serializer(), state)
+            "pads" -> {
+                _pads.value = lupeJson.decodeFromJsonElement(PadsState.serializer(), state)
+                seedP5()
+            }
             "editor" -> {
                 val e = lupeJson.decodeFromJsonElement(EditorState.serializer(), state)
                 model = e.steps.map { FStep.from(it, e.kind == EditorKind.Drum) }.toMutableList()
@@ -148,11 +168,12 @@ class FakeLupeCore(
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is Intent.PadClear -> editEntry(intent.track, intent.entry) { PadEntry() }
             is Intent.TrackSelect -> {
+                _mix.update { FakeP5.mix(it, intent) }
                 val row = _pads.value.rows.firstOrNull { it.track == intent.track } ?: return
                 val at = row.entries.indexOfFirst { it.play == PadPlay.Playing }.takeIf { it >= 0 } ?: row.entries.indexOfFirst { it.kind == PadKind.Pattern }
                 if (at >= 0) selectPad(intent.track, at)
             }
-            is Intent.TrackMute -> _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(muted = !it.muted) else it }) }
+            is Intent.TrackMute -> { _mix.update { FakeP5.mix(it, intent) }; _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(muted = !it.muted) else it }) } }
             is Intent.SceneRecall -> recall(intent.scene)
             is Intent.SceneStore -> if (_pads.value.scenes.getOrNull(intent.scene)?.stored == true && !intent.confirmed) Unit /* the core refuses: must confirm */ else store(intent.scene)
             is Intent.StepSelect -> emitEditor { it.copy(selected = intent.step.coerceIn(0, 15)) }
@@ -182,7 +203,10 @@ class FakeLupeCore(
             is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
             is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }
-            // P5's intents (P5State.kt): the fake ignores them until P2 builds P5's fake (P1, 2026-11-14)
+            // P5's intents (P5State.kt): mix, sounds, projects
+            is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam -> _mix.update { FakeP5.mix(it, intent) }
+            is SoundsTargetPick, is SoundsView, is PickPreset, is PickUser, ClearEntrySound, is SaveSound, is EraseUser -> _sounds.update { FakeP5.sounds(it, intent) }
+            is ProjectLoad, is ProjectSave, is ProjectSaveAs, is ProjectRename -> _projects.update { FakeP5.projects(it, intent) }
             else -> {}
         }
     }
