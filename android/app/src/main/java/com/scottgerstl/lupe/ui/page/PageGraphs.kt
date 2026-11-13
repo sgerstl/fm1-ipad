@@ -197,7 +197,8 @@ private fun EnvGraph(g: PageGraph, colour: Color, hot: Int, onSet: (Int, Int) ->
         val handles = listOf(geo.x1 to geo.top, geo.x1 + geo.d to geo.y(geo.sus), geo.x3 to geo.y(geo.sus))
         handles.forEachIndexed { n, (hx, hy) ->
             val on = grabbed == n || hot == n || (n > 0 && hot == n + 1)
-            s.rect(Tok.well, hx - 7f, hy - 7f * GH / GW * 1.7f, 14f, 14f * GH / GW * 1.7f, 3f)
+            // only the square: the 44 dp target is the drag's hit test above, never drawn. (A dark knockout in graph
+            // units used to sit here; the uneven scale made it a visible block, Scott's run 2026-11-13.)
             val c = s.o(hx, hy)
             drawRoundRect(if (on) Tok.text else colour, Offset(c.x - 6.dp.toPx(), c.y - 6.dp.toPx()), Size(12.dp.toPx(), 12.dp.toPx()), CornerRadius(2.dp.toPx()))
         }
@@ -383,11 +384,13 @@ private fun drawAnalog(s: Sp, g: PageGraph, c: Color) {
     val x0 = 12f; val ow = 104; val cyc = 52.0
     val k = 1 + detune / 1000.0
     if (mix > 0) s.stroke(mid, (0..ow).map { x -> (x0 + x) to (72f - shape(wave, x / cyc * k).toFloat() * 48f) }, 1f)
-    if (mix < 127) s.stroke(c, (0..ow).map { x -> (x0 + x) to (72f - shape(wave, x / cyc).toFloat() * 48f) })
-    for (i in 0 until noise / 3) {
-        val h = (((i + 1).toLong() * 2654435761L) and 0xFFFFFFFFL)
-        s.rect(mid, x0 + (h % ow).toFloat(), 24f + ((h shr 16) % 96).toFloat(), 2f, 2f)
+    // NOISE roughens the wave itself (up to ±10 units at 127), the same each frame. It used to scatter 2 × 2 specks,
+    // which the graph's uneven scale stretched into stray dashes inside the saw (Scott's run, 2026-11-13).
+    fun grain(x: Int): Float {
+        val h = ((x + 1).toLong() * 2654435761L) and 0xFFFFFFFFL
+        return ((h % 1000) / 1000f - 0.5f) * 20f * noise / 127f
     }
+    if (mix < 127) s.stroke(c, (0..ow).map { x -> (x0 + x) to (72f - shape(wave, x / cyc).toFloat() * 48f + grain(x)) })
     g.caption?.let { s.text(it, x0, 16f, mid) }
     s.rect(line, 122f, 8f, 1f, 116f)
     val f0 = 128f; val fw = 100

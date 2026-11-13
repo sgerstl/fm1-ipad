@@ -67,8 +67,10 @@ PAGES["DRIVE"] = [
   page("FX","FX",47,1,"Acid",[num("SEND",40),lst("TYPE",["ROOM","HALL","PLATE"],1),num("SIZE",70),num("DAMP",30)],dict(kind="none")),
   page("FX","FX",6,1,"Acid",[num("DIST",72),lst("TYPE",DRIVE,0),num("TONE",40),None],dict(kind="drive",values=[72,0,40],caption="SOFT",side="drive 72 · tone 40")),
 ]
-PAGES["DRIVE"][1]["controls"][1] = lst("TYPE",["TUBE","HARD","FOLD","CRUSH","FUZZ"],0)
-PAGES["DRIVE"][1]["graph"]["caption"] = "TUBE"
+# by page number, not list position: inserting DELAY and REVERB moved DRIVE, and [1] then hit DELAY (Scott's run, 2026-11-13)
+def page_no(lib, n): return next(p for p in PAGES[lib] if p["page"] == n)
+page_no("DRIVE", 6)["controls"][1] = lst("TYPE",["TUBE","HARD","FOLD","CRUSH","FUZZ"],0)
+page_no("DRIVE", 6)["graph"]["caption"] = "TUBE"
 PAGES["EDIT1"] = [
   page("EDIT-ANALOG","EDIT",14,1,"Acid",[lst("WAVE",WAVES,0),num("DETUNE",22),num("MIX",64),num("NOISE",6)],dict(kind="analog",values=[0,22,64,6,70,30],caption="OSC · SAW · 2 voices",side="FILTER · 710 Hz")),
   page("EDIT-ANALOG","EDIT",15,1,"Acid",[num("CUTOFF",70),num("RESO",30),None,None],dict(kind="analog",values=[0,22,64,6,70,30],caption="OSC · SAW · 2 voices",side="FILTER · 710 Hz")),
@@ -94,8 +96,9 @@ PAGES["ARP"] = [
   page("ARP","ARP",40,5,"Piano",[num("SWING",0),c("CHANCE","100%",127),lst("HOLD",["OFF","ON"],0),lst("ORDER",["UP","DOWN"],0)],dict(kind="arp",values=[1,3,2,76,0,127,0,0],side="UP · 2 oct · 1/16 · gate 60%")),
 ]
 
-def scenario(name, lib, shown, note):
+def scenario(name, lib, shown, note, page=None):
     pages = PAGES[lib]
+    if page is not None: shown = next(i for i, p in enumerate(pages) if p["page"] == page)   # opens on that page number
     frames = [dict(f) for f in base]
     first = pages[shown]
     frames.append(dict(atMs=0, area="shell", state=dict(tab="pads", divider="split", bottom=dict(kind="page", family=first["family"], page=next(t for i,t in [(r["index"],r["title"]) for r in first["pages"]] if i == first["page"])))))
@@ -108,7 +111,7 @@ scenario("page-env","ENV",0,"ENV on a Piano track (board 55).")
 scenario("page-env-lock","ENV-lock",0,"ENV with step 6 held and DECAY locked (board 61).")
 scenario("page-lfo","LFO",0,"LFO.")
 scenario("page-edit1","EDIT1",0,"EDIT 1 on an ANALOG track (board 59 left).")
-scenario("page-drive","DRIVE",1,"FX > DRIVE (board 59 right).")
+scenario("page-drive","DRIVE",0,"FX > DRIVE (board 59 right).", page=6)
 scenario("page-mod","MOD",0,"MOD, LFO → CUTOFF picked (board 60).")
 scenario("page-scale","SCALE",0,"SEL > SCALE (board 61 left).")
 scenario("page-lanes","LANES",0,"EDIT > LANES on a DRUM track (board 62 left).")

@@ -386,7 +386,7 @@
     "bottom": {
      "kind": "page",
      "family": "FX",
-     "page": "DELAY"
+     "page": "DRIVE"
     }
    }
   },
@@ -470,6 +470,86 @@
       30,
       40
      ]
+    },
+    "turned": -1,
+    "turnSeq": 0
+   }
+  },
+  {
+   "atMs": 0,
+   "area": "page",
+   "state": {
+    "family": "FX",
+    "pages": [
+     {
+      "index": 5,
+      "title": "FX"
+     },
+     {
+      "index": 46,
+      "title": "DELAY"
+     },
+     {
+      "index": 47,
+      "title": "REVERB"
+     },
+     {
+      "index": 6,
+      "title": "DRIVE"
+     },
+     {
+      "index": 7,
+      "title": "INSERT"
+     },
+     {
+      "index": 8,
+      "title": "INSERT 2"
+     },
+     {
+      "index": 9,
+      "title": "SLICER"
+     },
+     {
+      "index": 10,
+      "title": "DUCK"
+     }
+    ],
+    "page": 46,
+    "track": 1,
+    "trackName": "Acid",
+    "controls": [
+     {
+      "label": "SEND",
+      "value": "30",
+      "raw": 30,
+      "min": 0,
+      "max": 127
+     },
+     {
+      "label": "TIME",
+      "value": "1/8",
+      "raw": 2,
+      "min": 0,
+      "max": 5,
+      "list": true
+     },
+     {
+      "label": "FEEDBACK",
+      "value": "40",
+      "raw": 40,
+      "min": 0,
+      "max": 127
+     },
+     {
+      "label": "COLOR",
+      "value": "64",
+      "raw": 64,
+      "min": 0,
+      "max": 127
+     }
+    ],
+    "graph": {
+     "kind": "none"
     },
     "turned": -1,
     "turnSeq": 0
@@ -612,13 +692,13 @@
      },
      {
       "label": "TYPE",
-      "value": "SOFT",
+      "value": "TUBE",
       "raw": 0,
       "min": 0,
       "max": 4,
       "list": true,
       "names": [
-       "SOFT",
+       "TUBE",
        "HARD",
        "FOLD",
        "CRUSH",
@@ -641,96 +721,8 @@
       0,
       40
      ],
-     "caption": "SOFT",
+     "caption": "TUBE",
      "side": "drive 72 \u00b7 tone 40"
-    },
-    "turned": -1,
-    "turnSeq": 0
-   }
-  },
-  {
-   "atMs": 0,
-   "area": "page",
-   "state": {
-    "family": "FX",
-    "pages": [
-     {
-      "index": 5,
-      "title": "FX"
-     },
-     {
-      "index": 46,
-      "title": "DELAY"
-     },
-     {
-      "index": 47,
-      "title": "REVERB"
-     },
-     {
-      "index": 6,
-      "title": "DRIVE"
-     },
-     {
-      "index": 7,
-      "title": "INSERT"
-     },
-     {
-      "index": 8,
-      "title": "INSERT 2"
-     },
-     {
-      "index": 9,
-      "title": "SLICER"
-     },
-     {
-      "index": 10,
-      "title": "DUCK"
-     }
-    ],
-    "page": 46,
-    "track": 1,
-    "trackName": "Acid",
-    "controls": [
-     {
-      "label": "SEND",
-      "value": "30",
-      "raw": 30,
-      "min": 0,
-      "max": 127
-     },
-     {
-      "label": "TYPE",
-      "value": "TUBE",
-      "raw": 0,
-      "min": 0,
-      "max": 4,
-      "list": true,
-      "names": [
-       "TUBE",
-       "HARD",
-       "FOLD",
-       "CRUSH",
-       "FUZZ"
-      ]
-     },
-     {
-      "label": "FEEDBACK",
-      "value": "40",
-      "raw": 40,
-      "min": 0,
-      "max": 127
-     },
-     {
-      "label": "COLOR",
-      "value": "64",
-      "raw": 64,
-      "min": 0,
-      "max": 127
-     }
-    ],
-    "graph": {
-     "kind": "none",
-     "caption": "TUBE"
     },
     "turned": -1,
     "turnSeq": 0

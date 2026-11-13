@@ -42,6 +42,11 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -80,14 +85,23 @@ fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, wi
                         (fy - side).coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))
                 }
                 val x = if (alignEnd) anchorBounds.right - popupContentSize.width else anchorBounds.left
-                return IntOffset(x.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)), anchorBounds.bottom + gap)
+                // under the anchor; a menu taller than the room left moves up rather than off the screen
+                val y = (anchorBounds.bottom + gap).coerceAtMost((windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin))
+                return IntOffset(x.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)), y)
             }
         }
     }
+    // At most the window minus the system bars and a margin each end, and it scrolls: P4's page scenarios made
+    // the FM-1 key's menu taller than the screen (Scott's run, 2026-11-13, P4 check 10).
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
+    val bars = WindowInsets.systemBars.getTop(density) + WindowInsets.systemBars.getBottom(density)
+    val maxH = with(density) { (windowH - bars - 2 * margin).coerceAtLeast(margin).toDp() }
     Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         Column(
             Modifier
                 .width(width)
+                .heightIn(max = maxH)
                 .graphicsLayer {
                     alpha = t.value
                     if (!reduce) {
@@ -99,6 +113,7 @@ fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, wi
                     ambientShadowColor = androidx.compose.ui.graphics.Color.Black; spotShadowColor = androidx.compose.ui.graphics.Color.Black
                 }
                 .background(Tok.held, RoundedCornerShape(12.dp))
+                .verticalScroll(rememberScrollState())
                 .padding(vertical = 6.dp),
         ) { content() }
     }

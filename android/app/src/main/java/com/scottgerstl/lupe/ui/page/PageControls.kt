@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,12 +119,18 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
     LaunchedEffect(armed, raw) { if (armed) { delay(3500); armed = false } }
 
     val editable = !c.ringless && !c.fixed
+    // The value right now, read from state rather than from `raw` (fixed at the last recomposition): taps that come
+    // faster than a frame each add their step instead of all adding to the same old value (adb taps lost steps,
+    // 2026-11-13).
+    val latest by rememberUpdatedState(c)   // the gesture blocks outlive recompositions: read the control through this
+    val latestOnSet by rememberUpdatedState(onSet)
+    fun now() = if (optimistic != Int.MIN_VALUE) optimistic else latest.raw
     fun set(v: Int) {
         val n = v.coerceIn(c.min, c.max)
-        if (n == raw) { if (v != n) haptic.performHapticFeedback(HapticFeedbackType.ContextClick) ; return }   // at an end
+        if (n == now()) { if (v != n) haptic.performHapticFeedback(HapticFeedbackType.ContextClick) ; return }   // at an end
         optimistic = n
         if (c.list || n == c.min || n == c.max) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        onSet(n)
+        latestOnSet(n)
     }
 
     val litF = lit.value
@@ -143,8 +150,8 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
                     progressBarRangeInfo = ProgressBarRangeInfo(raw.toFloat(), c.min.toFloat()..c.max.toFloat(), c.max - c.min - 1)
                     setProgress { v -> set(v.roundToInt()); true }
                     customActions = listOf(
-                        CustomAccessibilityAction("Increase $spoken") { set(raw + 1); true },
-                        CustomAccessibilityAction("Decrease $spoken") { set(raw - 1); true },
+                        CustomAccessibilityAction("Increase $spoken") { set(now() + 1); true },
+                        CustomAccessibilityAction("Decrease $spoken") { set(now() - 1); true },
                         CustomAccessibilityAction("Put $spoken back to ${openedRaw}") { set(openedRaw); true },
                     )
                 }
@@ -156,7 +163,7 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
                 .pointerInput(c.max, c.min) {
                     var acc = 0f; var base = 0
                     detectVerticalDragGestures(
-                        onDragStart = { acc = 0f; base = raw; armed = false },
+                        onDragStart = { acc = 0f; base = now(); armed = false },
                         onDragEnd = { }, onDragCancel = { },
                     ) { change, dy ->
                         change.consume()
@@ -191,8 +198,8 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
         // − / + under the value after a tap (board 59): one step at a time
         Row(Modifier.height(48.dp).fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             if (armed && editable) {
-                StepButton("−", "Decrease $spoken") { set(raw - 1); armed = true }
-                StepButton("+", "Increase $spoken") { set(raw + 1); armed = true }
+                StepButton("−", "Decrease $spoken") { set(now() - 1); armed = true }
+                StepButton("+", "Increase $spoken") { set(now() + 1); armed = true }
             }
         }
     }

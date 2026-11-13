@@ -59,6 +59,12 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.LupeType
 import com.scottgerstl.lupe.ui.theme.heightPx
 import com.scottgerstl.lupe.ui.theme.unscaled
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import kotlin.math.abs
 
 private fun Divider.index() = when (this) { Divider.Top -> 0; Divider.Split -> 1; Divider.Bottom -> 2 }
@@ -70,6 +76,7 @@ private const val HEADER_H = 36f   // the tab row
 private const val STRIP_H = 40f    // bottom full: the selected track's pads stay up as a strip
 private const val TOP_OFFSET = HEADER_H + 8f // content starts 8 below the tabs
 private const val BOTTOM_TOP = STRIP_H + GAP // the divider's top at bottom full
+private const val EDITOR_STRIP_H = 40f // top only: the "Editor ⌃" strip that brings the bottom half back
 
 /**
  * Tabs, the top half, the divider, the bottom half. [p] is the divider's place as a number: 0 top only,
@@ -89,8 +96,14 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val hb = with(density) { maxHeight.toPx() }
         fun dp(v: Float) = with(density) { v.dp.toPx() }
-        // the divider's top, in px below the body's top, for each position
-        val stops = floatArrayOf(hb - dp(HANDLE_H), (hb * 350f / 787f).coerceAtLeast(dp(BOTTOM_TOP) + dp(80f)), dp(BOTTOM_TOP))
+        // Android's bottom gesture zone can reach above the body (LupeShell pads it only by the navigation bar).
+        // Nothing that takes a drag may sit in it, or Android takes the upward swipe home (Scott's run, 2026-11-13).
+        val navBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
+        val under = maxOf(navBottom, dp(24f)) + dp(8f)   // LupeShell's padding under the body: keep in step
+        val gestureOverlap = (WindowInsets.systemGestures.getBottom(density) - under).coerceAtLeast(0f)
+        // the divider's top, in px below the body's top, for each position. Top only leaves room for the
+        // Editor strip under the handle, and keeps both clear of the gesture zone.
+        val stops = floatArrayOf(hb - gestureOverlap - dp(EDITOR_STRIP_H) - dp(GAP) - dp(HANDLE_H), (hb * 350f / 787f).coerceAtLeast(dp(BOTTOM_TOP) + dp(80f)), dp(BOTTOM_TOP))
         fun topAt(p: Float): Float {
             val c = p.coerceIn(0f, 2f); val i = c.toInt().coerceAtMost(1); val f = c - i
             return stops[i] + (stops[i + 1] - stops[i]) * f
@@ -129,7 +142,11 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         Box(
             Modifier
                 .fillMaxWidth().height(48.dp)
-                .offset { IntOffset(0, (topAt(if (reduce) shell.divider.index().toFloat() else place.value) + dp(HANDLE_H) / 2 - dp(24f)).toInt()) }
+                .offset {
+                    val centre = topAt(if (reduce) shell.divider.index().toFloat() else place.value) + dp(HANDLE_H) / 2
+                    // never into the gesture zone: the band's bottom stays above it
+                    IntOffset(0, (centre - dp(24f)).coerceAtMost(hb - gestureOverlap - dp(48f)).toInt())
+                }
                 .semantics {
                     role = Role.Button
                     contentDescription = "Divider between the top and bottom halves"
@@ -159,6 +176,28 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
             contentAlignment = Alignment.Center,
         ) {
             Box(Modifier.width(44.dp).height(5.dp).background(Tok.lifted, RoundedCornerShape(3.dp)))
+        }
+
+        // Top only: a visible way back to the editor that needs no drag (WCAG 2.5.7), above the gesture zone.
+        val stripShown = if (reduce) (if (shell.divider == Divider.Top) 1f else 0f) else ((0.6f - place.value) / 0.6f).coerceIn(0f, 1f)
+        if (stripShown > 0f) {
+            val source = remember { MutableInteractionSource() }
+            val focused by source.collectIsFocusedAsState()
+            val pressed by source.collectIsPressedAsState()
+            val shape = RoundedCornerShape(Tok.CHICLET_RADIUS.dp)
+            Box(
+                Modifier
+                    .padding(horizontal = 8.dp)
+                    .fillMaxWidth()
+                    .height(EDITOR_STRIP_H.dp)
+                    .offset { IntOffset(0, (hb - gestureOverlap - dp(EDITOR_STRIP_H)).toInt()) }
+                    .graphicsLayer { alpha = stripShown }
+                    .background(if (pressed) Tok.pressed else Tok.panel, shape)
+                    .border(if (focused) 2.dp else 0.dp, if (focused) Tok.text else Tok.panel, shape)
+                    .clickable(interactionSource = source, indication = null, role = Role.Button,
+                               onClickLabel = "Show the editor") { settle(Divider.Split) },
+                contentAlignment = Alignment.Center,
+            ) { BasicText("Editor ⌃", style = LupeType.key) }
         }
     }
 }
@@ -192,7 +231,9 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 .padding(horizontal = 8.dp)
                 .offset { IntOffset(0, (topAt(p) + dp(HANDLE_H) + dp(GAP)).toInt()) }
                 .heightPx { (hb - topAt(p) - dp(HANDLE_H) - dp(GAP)).toInt() }
-                .clipToBounds(),
+                .clipToBounds()
+                // at top only the Editor strip takes this room: the page fades out under it
+                .graphicsLayer { alpha = (p / 0.4f).coerceIn(0f, 1f) },
         ) {
             // the lane fits only when the bottom half is nearly full height
             val autoFraction = (((hb - topAt(p) - dp(HANDLE_H) - dp(GAP)) - dp(560f)) / dp(100f)).coerceIn(0f, 1f)

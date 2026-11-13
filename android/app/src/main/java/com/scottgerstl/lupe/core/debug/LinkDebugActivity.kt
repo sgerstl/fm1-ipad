@@ -6,6 +6,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -147,7 +149,6 @@ class LinkDebugActivity : ComponentActivity() {
                 BasicText("Mode: ${if (raw) "raw bytes, no Session" else "Session (the real app)"} · " +
                     (if (writes) "WRITES ALLOWED" else "read-only: writes are blocked"), style = LupeType.body)
                 BasicText("Main actor: $mainActor", style = LupeType.body)
-                areas.forEach { (k, v) -> BasicText("$k: $v", style = mono) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (raw) DebugButton("Send version request", Modifier.weight(1f)) { LupeNative.requestVersion() }
@@ -159,6 +160,13 @@ class LinkDebugActivity : ComponentActivity() {
                 // 2026-11-13 and hit one) must never open the FM-1 to writes. Only the adb extra does
                 // (--ez allowWrites true); turning them off is one tap.
                 if (writes) DebugButton("Make read-only", Modifier.weight(1f)) { toggle("allowWrites", false) }
+            }
+            // The readout can be long (pads, editor): its own capped, scrolling box, so the buttons above stay
+            // reachable (Scott's run, 2026-11-13: "Make read-only" was pushed off the screen).
+            if (areas.isNotEmpty()) {
+                SelectionContainer(Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { areas.forEach { (k, v) -> BasicText("$k: $v", style = mono) } }
+                }
             }
             if (devices.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
