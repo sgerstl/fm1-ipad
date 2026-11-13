@@ -198,6 +198,9 @@ data class Step(
     val values: List<StepValue> = emptyList(),
     /** How long LENGTH can make it: up to the next step with a note, at most 16 (P1, 2026-11-14). */
     val maxLength: Int = 16,
+    /** A TIE step: the step (0-based) whose note it holds, else -1. Pasting into it or clearing it shortens that note,
+     *  which the paste and clear confirms should say (Scott's run, 2026-11-14). */
+    val heldFrom: Int = -1,
 ) {
     val locked: Boolean get() = values.any { it.locked }
 }

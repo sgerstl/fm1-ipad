@@ -87,7 +87,8 @@ import Testing
         keys.key(72, channel: t)                                                        // read-only
         try await Task.sleep(for: .milliseconds(300))
         #expect(fake.steps[t][7] == before)
-        #expect(box.log.contains { $0.hasPrefix("read-only: key") })
+        #expect(box.log.contains { $0.contains("not written: read-only") })
+        #expect(box.log.contains { $0.contains("not track") })                         // the other channel, said why
         box.writes = true
         core.handle(json: #"{"intent":"play"}"#)
         try await settle({ core.session.playing }, "playing")
@@ -114,5 +115,22 @@ import Testing
         core.handle(json: #"{"intent":"sceneStore","scene":5,"confirmed":true}"#)    // confirmed: replaced
         try await settle({ fake.scenes[5]?.map(\.mute) != kept }, "replaced")
         #expect(fake.unansweredCommands.isEmpty)
+    }
+
+    /// The FM-1 sounds a step when it's written (STEP PREVIEW): that note coming back isn't a new key.
+    @Test func theStepSoundingBackIsNotAKey() async throws {
+        let box = Box()
+        let (core, fake, keys) = try await connected(box)
+        defer { core.stop() }
+        let t = core.editorTrack()
+        core.handle(json: #"{"intent":"stepSelect","step":8}"#)
+        keys.key(62, channel: t)
+        try await settle({ fake.steps[t][8][1] == 62 }, "D4 into step 9")
+        let next = fake.steps[t][9]
+        keys.key(62, channel: t)                                                        // the preview, at once
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(core.selectedStep == 9 && fake.steps[t][9] == next)
+        #expect(box.log.contains { $0.contains("sounding the step just written") })
+        #expect(box.log.contains { $0.contains("written to T\(t + 1) step 9") })        // and each key is in the log
     }
 }

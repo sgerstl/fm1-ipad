@@ -95,6 +95,7 @@ extension PhoneCore {
                     e.maxLength = min(16, cap)
                 }
             }
+            if !kit, st.time == .tie, let start = (0..<i).last(where: { src[$0].time != .tie }), src[start].isOn { e.heldFrom = start }
             e.velocity = st.velocity == 0 ? 96 : st.velocity       // 0 plays as 96 (seq.c seq_step)
             // Skiff's bytes after the velocity: hits (3), chance, ratchet, FLAM, COND, NUDGE + 32, ties.
             let x = st.extra

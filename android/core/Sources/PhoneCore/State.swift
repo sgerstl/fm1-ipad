@@ -98,6 +98,9 @@ public struct EditorArea: Codable, Equatable, Sendable {
         public var values: [Value] = []
         /// How long LENGTH can make it: up to the next step with a note (Session.setLength stops there), at most 16.
         public var maxLength = 16
+        /// A TIE step: the step (0-based) whose note it holds, else -1. Pasting into it or clearing it shortens
+        /// that note (Skiff's own behaviour; Scott's run, 2026-11-14), which a confirm should say.
+        public var heldFrom = -1
     }
     public var track: Int                // 1-based
     public var trackName: String
@@ -129,6 +132,9 @@ public struct DiagArea: Codable, Equatable, Sendable {
     /// MIDI clock pulses since Start (-1: not running), and whether TRANSPORT says it's playing.
     public var clockTicks: Int
     public var playing: Bool
+    /// Note-ons the FM-1 has sent since start (its keys; on Skiff with NOTES OUT ALL its sequencer too; none from a
+    /// muted track): whether notes reach the phone at all.
+    public var notesIn: Int = 0
 }
 
 // MARK: intents

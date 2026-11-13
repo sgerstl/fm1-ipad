@@ -242,10 +242,21 @@ extension PhoneCore {
     /// Only while stopped: playing, Skiff's sequencer sends its notes on the same channels and they can't be told
     /// from the keys. A write: refused while read-only.
     func keyIntoStep(_ e: NoteEvent) {
+        guard e.on else { return }                                   // (a note-on with velocity 0 is a note-off)
         let s = session, t = editorTrack(), i = selectedStep
-        guard e.on, !s.playing, Int(e.channel) == t, s.isConnected,
-              s.tracks.indices.contains(t), s.tracks[t].steps.indices.contains(i) else { return }
-        guard canWrite() else { log("read-only: key \(Music.noteName(Int(e.note))) not written to step \(i + 1)"); return }
+        let name = Music.noteName(Int(e.note))
+        // every key logged with what became of it (Scott's run, 2026-11-14: a key did nothing and left no trace)
+        func say(_ what: String) { log("FM-1 key \(name) ch \(Int(e.channel) + 1) vel \(e.velocity): \(what)") }
+        guard s.isConnected, s.tracks.indices.contains(t), s.tracks[t].steps.indices.contains(i) else { say("ignored: no editor"); return }
+        guard !s.playing else { say("ignored: playing (the sequencer's notes share the channels)"); return }
+        guard Int(e.channel) == t else {
+            say("ignored: not track \(t + 1)'s channel (keys go out on the track that sounds; the FM-1's selected track is \(s.selectedTrack + 1))")
+            return
+        }
+        // Skiff sounds a step when it's written (STEP PREVIEW goes out through the same funnel): our own write
+        // coming back as a note mustn't be entered into the next step
+        if let w = lastKeyWrite, w.note == Int(e.note), Date().timeIntervalSince(w.at) < 0.3 { say("ignored: the FM-1 sounding the step just written"); return }
+        guard canWrite() else { say("not written: read-only"); return }
         let n = Int(e.note)
         var st = s.tracks[t].steps[i]
         if s.isKit(t) {
@@ -253,8 +264,8 @@ extension PhoneCore {
             let base = chordMode ? st.kitLanes : DrumStep.empty
             st = st.withHits(base.setting(lane, on: true))
         } else if chordMode, st.isOn {
-            guard !st.notes.contains(n) else { return }
-            guard st.notes.count < 4 else { log("step \(i + 1) already holds four notes"); return }
+            guard !st.notes.contains(n) else { say("ignored: step \(i + 1) already has it"); return }
+            guard st.notes.count < 4 else { say("refused: step \(i + 1) already holds four notes"); return }
             st.notes.append(n)
             st.levels = Array((st.levels + [0]).prefix(st.notes.count))
             st.ratchets = Array(repeating: st.ratchets.first ?? 0, count: st.notes.count)
@@ -264,6 +275,8 @@ extension PhoneCore {
             st.extra = keep
         }
         s.write(track: t, index: i, st)
+        lastKeyWrite = (n, Date())
+        say("written to T\(t + 1) step \(i + 1)\(chordMode ? " (chord: \(st.notes.count) notes)" : "")")
         if !chordMode {
             selectedStep = (i + 1) % min(16, max(1, s.tracks[t].length))
             if lockLatched { syncLockStep() }
