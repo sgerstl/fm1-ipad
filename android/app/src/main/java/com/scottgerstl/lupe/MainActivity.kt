@@ -15,7 +15,10 @@ import androidx.compose.runtime.setValue
 import com.scottgerstl.lupe.core.FakeLupeCore
 import androidx.compose.runtime.CompositionLocalProvider
 import com.scottgerstl.lupe.ui.shell.LupeShell
+import com.scottgerstl.lupe.ui.slide.GatedHaptics
+import com.scottgerstl.lupe.ui.slide.LocalPhoneSettings
 import com.scottgerstl.lupe.ui.slide.LocalSlideSettings
+import com.scottgerstl.lupe.ui.slide.PhoneSettings
 import com.scottgerstl.lupe.ui.slide.SlideDirection
 import com.scottgerstl.lupe.ui.slide.SlideSettings
 import com.scottgerstl.lupe.ui.theme.LupeTheme
@@ -49,7 +52,14 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra("slide")?.let { SlideDirection.from(it)?.let(slide::chooseDirection) }
         if (intent.hasExtra("magnifier")) slide.chooseMagnifier(intent.getBooleanExtra("magnifier", true))
 
-        setContent { LupeTheme(reduceMotion) { CompositionLocalProvider(LocalSlideSettings provides slide) { LupeShell(core) } } }
+        val phone = PhoneSettings.from(this)
+        setContent {
+            LupeTheme(reduceMotion) {
+                CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone) {
+                    GatedHaptics(phone) { LupeShell(core) }
+                }
+            }
+        }
     }
 
     override fun onDestroy() {

@@ -13,6 +13,13 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import com.scottgerstl.lupe.ui.projects.ProjectsSheet
+import com.scottgerstl.lupe.ui.projects.rememberProjects
+import com.scottgerstl.lupe.ui.settings.SettingsSheet
+import com.scottgerstl.lupe.ui.sheet.LocalSheetHost
+import com.scottgerstl.lupe.ui.sounds.LocalSoundsHost
+import com.scottgerstl.lupe.ui.sounds.SoundsHost
+import com.scottgerstl.lupe.ui.sheet.SheetHost
 import com.scottgerstl.lupe.ui.slide.LocalMagnifier
 import com.scottgerstl.lupe.ui.slide.MagnifierHost
 import com.scottgerstl.lupe.ui.slide.MagnifierState
@@ -66,12 +73,15 @@ fun LupeShell(core: LupeCore) {
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val magnifier = remember { MagnifierState() }
+    val sheets = remember { SheetHost() }
+    val soundsHost = remember { SoundsHost() }
+    val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost) {
         Column(
             Modifier.fillMaxSize().statusBarsPadding()
                 .greyedBy { grey.value }
-                .then(if (mode != LinkMode.Normal) Modifier.clearAndSetSemantics { } else Modifier),
+                .then(if (mode != LinkMode.Normal || sheetOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
             TopBar(top, core, Modifier.padding(top = 0.dp))
             androidx.compose.foundation.layout.Spacer(Modifier.height(6.dp))
@@ -98,6 +108,12 @@ fun LupeShell(core: LupeCore) {
                     if (!reduce) translationY = -(1f - card.value) * 96.dp.toPx()
                 },
             )
+        }
+        // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
+        CompositionLocalProvider(LocalSheetHost provides sheets) {
+            SettingsSheet(link)
+            val projects = rememberProjects(core)
+            ProjectsSheet(projects.first, projects.second)
         }
         // the Magnifier floats over everything, above the finger
         MagnifierHost(magnifier)

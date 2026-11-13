@@ -22,6 +22,11 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
+import com.scottgerstl.lupe.ui.slide.LocalPhoneSettings
+import com.scottgerstl.lupe.core.BottomPage
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,6 +49,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scottgerstl.lupe.core.BottomKind
+import com.scottgerstl.lupe.ui.mix.MixPage
+import com.scottgerstl.lupe.ui.sounds.LocalSoundsHost
+import com.scottgerstl.lupe.ui.sounds.SoundsBrowser
+import com.scottgerstl.lupe.ui.mix.rememberMix
 import com.scottgerstl.lupe.core.EditorState
 import com.scottgerstl.lupe.core.PadsState
 import com.scottgerstl.lupe.core.Divider
@@ -90,6 +99,12 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    // Labs: the bottom half can hold its page for 3 s after a touch, or be pinned (it stops following the FM-1)
+    val labs = LocalPhoneSettings.current
+    var bottomTouches by remember { mutableIntStateOf(0) }
+    val shown = followedBottom(shell.bottom, labs.pinBottom, labs.pauseFollowing, bottomTouches)
+    val shellShown = if (shown == shell.bottom) shell else shell.copy(bottom = shown)
+    val onBottomTouch = { bottomTouches++ ; Unit }
     val pads by core.pads.collectAsStateWithLifecycle()
     val editor by core.editor.collectAsStateWithLifecycle()
 
@@ -133,9 +148,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         }
 
         if (reduce) {
-            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shell, pads, editor, core, hb, ::topAt) }
+            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, core, hb, ::topAt, onBottomTouch) }
         } else {
-            Layers(place.value, shell, pads, editor, core, hb, ::topAt)
+            Layers(place.value, shellShown, pads, editor, core, hb, ::topAt, onBottomTouch)
         }
 
         // The divider's touch target: 48 dp tall around the 16 dp band, over both halves.
@@ -204,8 +219,18 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 
 /** The picture at one divider place. */
 @Composable
-private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float) {
+private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit) {
     val density = LocalDensity.current
+    val mix = rememberMix(core)
+    val meters = core.meters.collectAsStateWithLifecycle()   // read only while drawing a meter line, so 20 updates a second never recompose the shell
+    val soundsHost = LocalSoundsHost.current
+    // at top only the bottom half is hidden: the browser glides the divider to split so it can be seen
+    androidx.compose.runtime.LaunchedEffect(soundsHost.request) {
+        val r = soundsHost.request ?: return@LaunchedEffect
+        if (shell.divider == Divider.Top) core.send(Intent.SetDivider(Divider.Split))
+        // the browser changes what the core's `sounds` area is about: this track, or this pad's own sound
+        core.send(com.scottgerstl.lupe.core.SoundsTargetPick(r.track, r.pad?.let { it[0] - 'A' }))
+    }
     fun dp(v: Float) = with(density) { v.dp.toPx() }
     // tabs fade out and the strip fades in as the divider goes past split
     val tabsAlpha = ((1.6f - p) / 0.6f).coerceIn(0f, 1f)
@@ -223,7 +248,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 .heightPx { (topAt(p) - dp(GAP) - dp(TOP_OFFSET)).toInt() }
                 .clipToBounds()
                 .graphicsLayer { alpha = (1f - stripAlpha * 2f).coerceIn(0f, 1f) },
-        ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { if (it == Tab.Pads) PadsPage(pads, core) else TopPlaceholder(it) } }
+        ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { when (it) { Tab.Pads -> PadsPage(pads, core); Tab.Mix -> MixPage(mix.first, mix.second, meters); else -> TopPlaceholder(it) } } }
 
         // bottom half: from 4 dp under the divider band to the bottom; it follows the FM-1's page
         Box(
@@ -233,13 +258,38 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 .heightPx { (hb - topAt(p) - dp(HANDLE_H) - dp(GAP)).toInt() }
                 .clipToBounds()
                 // at top only the Editor strip takes this room: the page fades out under it
-                .graphicsLayer { alpha = (p / 0.4f).coerceIn(0f, 1f) },
+                .graphicsLayer { alpha = (p / 0.4f).coerceIn(0f, 1f) }
+                // any new touch down in this half is counted (Labs: pause following), and passes on unconsumed
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) { val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); if (e.changes.any { it.pressed && !it.previousPressed }) onBottomTouch() }
+                    }
+                },
         ) {
             // the lane fits only when the bottom half is nearly full height
             val autoFraction = (((hb - topAt(p) - dp(HANDLE_H) - dp(GAP)) - dp(560f)) / dp(100f)).coerceIn(0f, 1f)
-            LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
-                if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+            LupeCrossfade(soundsHost.request, Modifier.fillMaxSize(), Dur.PANEL) { req ->
+                if (req != null) {
+                    // the Sounds browser opens over the editor or the sound page; Done or Back brings it back
+                    SoundsBrowser(core, req, { soundsHost.close() })
+                } else LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
+                    if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+                }
             }
         }
     }
+}
+
+
+/**
+ * Which page the bottom half shows. It follows the FM-1 ([actual]) unless a Labs trial says otherwise: [pin] stops
+ * following altogether; [pause] holds the page it's on for 3 s after each touch in the bottom half, then catches up.
+ */
+@Composable
+private fun followedBottom(actual: BottomPage, pin: Boolean, pause: Boolean, touches: Int): BottomPage {
+    var shown by remember { mutableStateOf(actual) }
+    var held by remember { mutableStateOf(false) }
+    LaunchedEffect(touches) { if (pause && touches > 0) { held = true; delay(3000); held = false } }
+    LaunchedEffect(actual, pin, held) { if (!pin && !held) shown = actual }
+    return shown
 }

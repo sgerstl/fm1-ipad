@@ -176,6 +176,10 @@ const G = {
     return el('', x + 12, y + 32, w - 24, h - 44, 'border-radius:8px;background:var(--well);display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:6px',
       `<span class="cond" style="font-size:22px;color:var(--text)">OP 2 · RATIO</span><span style="font-size:13px;color:var(--text2r);line-height:1.4">The FM-1's cursor is here. This page is edited on the FM-1 for now; its phone picture comes after v1.</span>`);
   },
+  slices(x, y, w, h, col) {   // SLICES (SLICE engine): the iPad has no picture either (SlicesNote): the markers can't be read
+    return el('', x + 12, y + 32, w - 24, h - 44, 'border-radius:8px;background:var(--well);display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:6px',
+      `<span class="cond" style="font-size:22px;color:var(--text)">SLICES</span><span style="font-size:13px;color:var(--text2r);line-height:1.4">Slices are moved, split and joined on the FM-1: the editor protocol has no command for them.</span>`);
+  },
   arp(x, y, w, h, col) {   // ARP: up, 2 octaves, gate 60, over a bar
     const n = 16, cw = (w - 24) / n; let out = '';
     const seq = [0, 2, 4, 7, 12, 14, 16, 19, 0, 2, 4, 7, 12, 14, 16, 19];
@@ -440,6 +444,17 @@ board2(63, 'ARP at bottom full, and a sound page opened at top only', [
 ], [
   'At bottom full the graph takes all the extra height and the four controls stay exactly where they sit at split, so your thumb finds them in the same place whichever way the divider is.',
   '<span class="q">Open 5:</span> at top only the bottom half is hidden. When the FM-1 opens a sound page, the divider glides to split so following never hides what the FM-1 opened, and glides back when the FM-1 goes HOME. AUTOMATION already moves it to bottom full.',
+]);
+
+board2(70, 'EDIT › SLICES: no picture to port', [
+  { cap: 'EDIT › SLICES (SLICE engine), as built', bottom: (y, h) => soundPage(y, h, {
+      fam: 'EDIT', pages: ['EDIT 1', 'EDIT 2', 'SLICES', 'VOICE', 'VOICE 2'], cur: 2, t: 3, graph: G.slices,
+      knobs: [{ empty: true }, { empty: true }, { empty: true }, { empty: true }] }),
+    label: 'SLICES page: the card that says slices are edited on the FM-1', discs: [[1, 380, 600]] },
+], [
+  '<span class="q">Open 18 (decision 12):</span> Scott asked for pictures on the dense EDIT pages. OPERATOR, ALL OPS and DRUM-X\'s SOUND have iPad pictures and are ported (envelopes and operator tiles, the algorithm chart, the kit\'s windows). <b>SLICES has none on the iPad either</b>: its markers can\'t be read or moved, because the editor protocol has no command for them (SlicesNote on the iPad says so). So there is nothing to port.',
+  'What the phone shows now: the named card, the page row and the family row working, and the words above. The EDIT 1 and EDIT 2 pages already carry SOURCE and DIV as ordinary controls.',
+  'Options: (a) keep the card for release, which needs nothing; (b) add a Skiff editor command that reads the slice markers (firmware work, then a waveform with markers here). Recommended: (a) for release, (b) on the list for a later firmware.',
 ]);
 
 section('P5 · Mix, Sounds, Projects, Settings');
