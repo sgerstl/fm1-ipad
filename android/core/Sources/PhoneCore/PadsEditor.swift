@@ -101,6 +101,22 @@ extension PhoneCore {
             steps.append(e)
         }
         while steps.count < 16 { steps.append(EditorArea.Step()) }
+        // MOTION (read every few seconds): a step's locks and recorded changes as its values; the lanes the track has
+        let m = s.motion[t] ?? TrackMotion()
+        func label(_ id: Int) -> String { s.trackDescs[id]?.label ?? "P\(id)" }
+        for (k, _) in steps.enumerated() {
+            steps[k].values = m.events.filter { $0.step == k }.sorted { ($0.lock ? 0 : 1, label($0.id)) < ($1.lock ? 0 : 1, label($1.id)) }
+                .map { EditorArea.Value(param: label($0.id), value: $0.value, locked: $0.lock) }
+        }
+        let laneIDs = Array(Set(m.events.map(\.id))).sorted { label($0) < label($1) }
+        let lanes = laneIDs.map(label)
+        let lane = pickedLane.flatMap { l in lanes.contains(l) ? l : nil } ?? lanes.first ?? ""
+        var laneValues: [Int] = []
+        if let id = laneIDs.first(where: { label($0) == lane }) {
+            let d = s.trackDescs[id], lo = d?.min ?? 0, hi = max(lo + 1, d?.max ?? 127)
+            let base = t == s.selectedTrack ? s.cell(id).value : lo
+            laneValues = (0..<16).map { k in ((m.value(of: id, at: k, base: base).value - lo) * 100 / (hi - lo)).clamped(0, 100) }
+        }
         var playhead = -1
         if s.playing, let prog = s.passProgress(t) {
             let i = Int(prog * Double(max(1, tr.length)))
@@ -113,9 +129,12 @@ extension PhoneCore {
             pattern: list?.entries[safe: entry]?.pattern ?? 0,
             scale: kit ? "" : "\(Music.noteNames[((tr.root % 12) + 12) % 12]) \(scaleName)",
             kind: kit ? .drum : .roll, steps: steps, selected: selectedStep, playhead: playhead,
-            chord: tr.chord != 0, lock: .off, lanes: [], lane: "", laneValues: [])
+            chord: chordMode, lock: heldStep != nil ? .held : lockLatched ? .latched : .off,
+            lanes: lanes, lane: lane, laneValues: laneValues)
     }
 }
+
+extension Int { func clamped(_ lo: Int, _ hi: Int) -> Int { Swift.max(lo, Swift.min(hi, self)) } }
 
 extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
