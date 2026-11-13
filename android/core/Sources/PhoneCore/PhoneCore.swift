@@ -37,6 +37,7 @@ public final class PhoneCore {
     private var motionTask: Task<Void, Never>?
     private var followTask: Task<Void, Never>?
     private var sendsTask: Task<Void, Never>?
+    private var sheetTask: Task<Void, Never>?
     /// Whether writes may go to the FM-1 now (the link's read-only switch). Write intents are refused up front
     /// while false, so Session's optimistic copy never shows what the FM-1 didn't get.
     let canWrite: () -> Bool
@@ -144,6 +145,16 @@ public final class PhoneCore {
             }
             running?.task.cancel()
         }
+        // A sheet showing (OPERATOR, ALL OPS, SOUND): its patch or sound read again every 300 ms. The FM-1 pushes
+        // neither when its own knobs turn them (EDITOR_PROTOCOL.md "FM6 patches", "DRUM-X kit"), so this is how the
+        // phone's four follow them; the store skips a read within a second of the phone's own edit
+        sheetTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.pollSheet()
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+        }
         // Every track's REVERB send for the Mix rows (TRACK_PARAM reads), every 3 s, as the iPad's Mix strips read it
         sendsTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -180,6 +191,7 @@ public final class PhoneCore {
         motionTask?.cancel(); motionTask = nil
         followTask?.cancel(); followTask = nil
         sendsTask?.cancel(); sendsTask = nil
+        sheetTask?.cancel(); sheetTask = nil
         areas.forEach { $0.stop() }; areas = []
     }
 

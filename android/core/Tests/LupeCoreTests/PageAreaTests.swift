@@ -67,7 +67,11 @@ import Testing
         #expect(got.last?.page == visit.last, "\(scenario): ended on \(String(describing: got.last?.page))")
         #expect(got.last?.track == track)
         #expect(got.last?.controls.count == 4)
-        if let cursor, let first = got.last?.controls.first, let c = first { #expect(c.raw == cursor, "\(scenario): the cursor") }
+        // the cursor: the tiles' pick where the page has tiles (MOD, LANES, SOUND, OPERATOR), else knob 1's value
+        if let cursor, let last = got.last {
+            if let tiles = last.tiles { #expect(tiles.picked == cursor, "\(scenario): the cursor") }
+            else if let first = last.controls.first, let c = first { #expect(c.raw == cursor, "\(scenario): the cursor") }
+        }
         // The scenario opens ready: the last frame of each area at the start (the link's searching and reading steps
         // are `ready.json`'s). Every page frame follows 1 ms apart, the shown one last: the replay lands on it, and the
         // earlier frames only teach the fake the row.
@@ -99,15 +103,15 @@ import Testing
     }
     @Test func recordsOperator() async throws {
         try await recordPages("page-operator", track: 2, engine: 12, family: "EDIT", visit: [17, 16], cursor: 1,
-                              until: { $0.graph.kind == .fm6op }, note: "EDIT › OPERATOR on an FM6 track, operator 2 picked: the algorithm, ratios and envelopes (FakeSkiff's init patch).")
+                              until: { $0.title == "OPERATOR 2" && $0.controls[0] != nil }, note: "EDIT › OPERATOR on an FM6 track, operator 2 picked: the TONE window's four (FakeSkiff's init patch).")
     }
     @Test func recordsAllOps() async throws {
         try await recordPages("page-allops", track: 2, engine: 12, family: "EDIT", visit: [16, 17],
-                              until: { $0.graph.kind == .fm6all }, note: "EDIT › ALL OPS on an FM6 track: the algorithm chart (FakeSkiff's init patch).")
+                              until: { $0.title == "ALL OPS" && $0.controls[0] != nil }, note: "EDIT › ALL OPS on an FM6 track: the ALGO window's four (FakeSkiff's init patch).")
     }
     @Test func recordsDrumXSound() async throws {
         try await recordPages("page-sound", track: 4, engine: 14, family: "EDIT", visit: [20, 19], cursor: 2,
-                              until: { $0.graph.kind == .sound }, note: "EDIT › SOUND on a DRUM-X track, lane 3: the kit's windows (FakeSkiff's DEEP kit).")
+                              until: { $0.title == "SOUND CP" && $0.controls[0] != nil }, note: "EDIT › SOUND on a DRUM-X track, sound 3 (CP): the PITCH window's four (FakeSkiff's DEEP kit).")
     }
     @Test func recordsArp() async throws {
         try await recordPages("page-arp", track: 5, family: "ARP", visit: [40, 39], note: "ARP (board 63 left).")
@@ -125,8 +129,7 @@ import Testing
         #expect(a.family == "ENV" && a.page == 0)
         #expect(a.pages.map(\.title) == ["ENV", "ENV 2"])
         #expect(a.controls.compactMap { $0?.label } == ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"], "\(a.controls)")
-        #expect(a.graph.kind == .env && a.graph.values.count == 4)
-        #expect(a.graph.values == a.controls.compactMap { $0?.raw })
+        #expect(a.title == "ENV" && a.tiles == nil && a.window == nil)
     }
 
     @Test func the25FXRowAndItsNumbers() async throws {
@@ -237,25 +240,74 @@ import Testing
         #expect(!json.contains("tab") && !json.contains("divider"), Comment(rawValue: json))
     }
 
-    @Test func theDensePagesCarryWhatTheirPicturesDraw() async throws {
+    /// Decision 25: a sheet (FM6's OPERATOR and ALL OPS, DRUM-X's SOUND) gives the four the FM-1's knobs turn now: the
+    /// window SELECT is on (the second cursor), of the operator or sound picked (the first). setParam writes the patch or
+    /// the kit back whole; a value the FM-1's own knob changed is read again while the sheet shows.
+    @Test func operatorShowsTheWindowTheFM1sKnobsTurn() async throws {
         let r = Recorder()
         let fake = try linkedFake(track: 2, engine: 12)
         let (core, plug) = try await readyCore(fake, r)
         defer { core.stop(); plug.unplug() }
         try await pick(core, family: "EDIT", page: 16)
-        try await waitFor(5, "the FM6 patch") { core.pageArea()?.graph.kind == .fm6op }
-        let g = try #require(core.pageArea()?.graph)
-        let p = try #require(g.fm6)
-        #expect(p.ops.count == 6 && p.picked == 1 && p.algorithm == 0, "\(p)")
-        #expect(p.ops.allSatisfy { $0.r.count == 4 && $0.l.count == 4 && !$0.ratio.isEmpty })
-        #expect(core.pageArea()?.controls.allSatisfy { $0 == nil } == true, "the picture takes the controls' place")
+        try await waitFor(5, "the patch read") { core.pageArea()?.controls[0] != nil }
+        var a = try #require(core.pageArea())
+        #expect(a.title == "OPERATOR 1" && a.window == PageArea.Window(index: 0, count: 5, title: "TONE"))
+        #expect(a.controls.map { $0?.label } == ["OUTPUT", "RATIO", "FINE", "DETUNE"])
+        #expect(a.tiles?.labels == ["OP1", "OP2", "OP3", "OP4", "OP5", "OP6"] && a.tiles?.picked == 0)
+        // the FM-1's cursor on operator 4, then SELECT down: ENV 1 of operator 4
         fake.turnCursorOnDevice(to: 3)
-        try await waitFor(3, "operator 4 picked") { core.pageArea()?.graph.fm6?.picked == 4 }
-        // pickTile on OPERATOR moves the FM-1's cursor, as the lane tiles do (a write: allowed in this gate)
-        core.handle(json: "{\"intent\": \"pickTile\", \"tile\": 5}")
-        try await waitFor(3, "operator 6 picked") { core.pageArea()?.graph.fm6?.picked == 6 }
-        // SLICES has no picture to draw: the card stays (its markers can't be read)
+        try await waitFor(3, "operator 4") { core.pageArea()?.title == "OPERATOR 4" }
+        fake.selectOnDevice(by: 1)
+        try await waitFor(3, "ENV 1") { core.pageArea()?.window?.title == "ENV 1" }
+        a = try #require(core.pageArea())
+        #expect(a.controls.map { $0?.label } == ["RATE 1", "LEVEL 1", "RATE 2", "LEVEL 2"])
+        let patch = fake.fm6[1]
+        #expect(a.controls[1]?.raw == patch.op(4, .l1) && a.controls[1]?.value == "\(patch.op(4, .l1))")
+        // setParam: LEVEL 1 of operator 4, into the patch (FM6_PUT)
+        core.handle(json: #"{"intent":"setParam","slot":1,"value":42}"#)
+        try await waitFor(3, "written") { fake.fm6[1].op(4, .l1) == 42 }
+        #expect(core.pageArea()?.controls[1]?.raw == 42)
+        // the FM-1's own knob: no push; the phone reads the patch again while the sheet shows
+        try await Task.sleep(for: .milliseconds(1100))                        // (past the store's second after an edit)
+        var p = fake.fm6[1]; p.setOp(4, .r2, 77); fake.fm6[1] = p
+        try await waitFor(3, "the FM-1's turn read") { core.pageArea()?.controls[2]?.raw == 77 }
+        #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
+    }
+
+    @Test func allOpsAlgoIsWhatPlays() async throws {
+        let r = Recorder()
+        let fake = try linkedFake(track: 2, engine: 12)
+        let (core, plug) = try await readyCore(fake, r)
+        defer { core.stop(); plug.unplug() }
         try await pick(core, family: "EDIT", page: 17)
-        try await waitFor(10, "ALL OPS") { core.pageArea()?.graph.kind == .fm6all }   // several page reads; 5 s ran out with four suites in parallel
+        try await waitFor(5, "the patch read") { core.pageArea()?.controls[0] != nil }
+        let a = try #require(core.pageArea())
+        #expect(a.title == "ALL OPS" && a.tiles == nil && a.window?.title == "ALGO")
+        #expect(a.controls.map { $0?.label } == ["ALGO", "FEEDBACK", "TRANSP", nil])
+        // ALGO into the patch, EDIT 1's ALGO to PAT (ui_fm6.c fm_knob)
+        let e0 = try #require(core.session.info?.firstEngineParam)
+        core.session.set(track: 1, param: e0, to: 9)                            // EDIT 1 at ALGO 9: what plays
+        try await waitFor(3, "ALGO 9 shown") { core.pageArea()?.controls[0]?.value == "9" }
+        core.handle(json: #"{"intent":"setParam","slot":0,"value":4}"#)
+        try await waitFor(3, "ALGO 5 in the patch") { fake.fm6[1][.algorithm] == 4 && fake.params[1][e0] == 0 }
+        try await waitFor(3, "shown") { core.pageArea()?.controls[0]?.value == "5" }
+    }
+
+    @Test func soundShowsTheSoundAndWindowPicked() async throws {
+        let r = Recorder()
+        let fake = try linkedFake(track: 4, engine: 14)
+        let (core, plug) = try await readyCore(fake, r)
+        defer { core.stop(); plug.unplug() }
+        try await pick(core, family: "EDIT", page: 19)
+        fake.turnCursorOnDevice(to: 2)
+        try await waitFor(3, "SOUND CP") { core.pageArea()?.title == "SOUND CP" }
+        fake.selectOnDevice(by: 1); fake.selectOnDevice(by: 1)
+        try await waitFor(5, "COLOR · LEVEL") { core.pageArea().map { $0.window?.index == 2 && $0.controls[0] != nil } ?? false }
+        let a = try #require(core.pageArea())
+        #expect(a.controls.map { $0?.label } == ["COLOR A", "COLOR B", "LEVEL", "DRIVE"])
+        #expect(a.controls[0]?.raw == fake.dxKit[2][9] && a.controls[3]?.names == ["OFF", "ON"])
+        core.handle(json: #"{"intent":"setParam","slot":3,"value":1}"#)            // DRIVE on (KIT_PUT)
+        try await waitFor(3, "DRIVE on") { fake.dxKit[2][4] == 1 }
+        #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
 }

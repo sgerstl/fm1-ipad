@@ -52,3 +52,22 @@ out = {"firmware": "FELUCCA v2.5.1",
 json.dump(out, open(sys.argv[2], "w"), separators=(",", ":"))
 PY
 echo "wrote $ENGINES ($(wc -c < "$ENGINES") bytes)"
+# the numbers FM6's sheets show that the phone can't work out from the patch alone (Skiff's own arithmetic, printed
+# by pagedump.c): PhoneCore/SkiffSheetTables.swift
+TABLES="$ANDROID/core/Sources/PhoneCore/SkiffSheetTables.swift"
+python3 - "$OUT" "$TABLES" <<'PY'
+import json, sys
+t = json.load(open(sys.argv[1]))["sheets"]["fm6Tables"]
+def arr(name, doc, xs):
+    rows = [", ".join(str(x) for x in xs[i:i + 20]) for i in range(0, len(xs), 20)]
+    return f"    /// {doc}\n    static let {name}: [Int] = [\n        " + ",\n        ".join(rows) + ",\n    ]\n"
+src = ("// Made by android/scripts/skiff-page-dump.sh from Skiff 2.5.1's own code (android/tools/skiff-pagedump/pagedump.c);\n"
+       "// don't edit by hand. The numbers FM6's sheets show (ui_fm6.c), for Sheets.swift.\n\n"
+       "enum SkiffSheetTables {\n"
+       + arr("fixedHz100", "A fixed operator's frequency in Hz x 100, by coarse & 3 (x 100) and fine (fm_fixed_hz100).", t["fixedHz100"])
+       + arr("lfoHz10", "The LFO's rate in tenths of a Hz, by RATE 0...99 (fm_lfo_hz10).", t["lfoHz10"])
+       + arr("pitchTenths", "A pitch level in tenths of a semitone, by PITCH 0...99 (FM6_PENV_TAB x 15 / 4).", t["pitchTenths"])
+       + "}\n")
+open(sys.argv[2], "w").write(src)
+PY
+echo "wrote $TABLES"

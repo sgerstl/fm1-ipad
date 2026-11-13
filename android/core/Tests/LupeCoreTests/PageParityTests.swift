@@ -31,7 +31,7 @@ import Testing
                 var c = try d.unkeyedContainer()
                 raw = try c.decode(Int.self); text = try c.decode(String.self); unit = try c.decode(String.self)
             }
-            var shown: String { unit.isEmpty ? text : unit == "%" ? "\(text)%" : "\(text) \(unit)" }
+            var shown: String { unit.isEmpty ? text : unit == "%" || unit == "x" ? "\(text)\(unit)" : "\(text) \(unit)" }
         }
         struct Page: Decodable { var index: Int; var title: String; var family: String; var graph: Int; var visible: Bool; var slots: [Slot] }
         struct Home: Decodable { var id: Int; var label: String; var values: [Value] }
@@ -40,6 +40,11 @@ import Testing
         var engines: [Engine]
         var insert: [Insert]
         var envSync: [Page]
+        struct SheetSlot: Decodable { var label: String; var values: [Value]? }
+        struct SheetWindow: Decodable { var window: Int; var slots: [SheetSlot] }
+        struct Fine: Decodable { var mode: Int; var coarse: Int; var values: [Value] }
+        struct SheetDump: Decodable { var `operator`: [SheetWindow]; var allOps: [SheetWindow]; var sound: [SheetWindow]; var fine: [Fine] }
+        var sheets: SheetDump
 
         static func load() throws -> SkiffDump {
             let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../fixtures/skiff/skiff-2.5.1-pages.json")
@@ -172,6 +177,54 @@ import Testing
         print("PARITY: \(checked) pages checked, \(out.count) mismatches")
         for l in out { print("PARITY  \(l)") }
         #expect(out.isEmpty, "\(out.count) mismatches with the FM-1 (printed above)")
+    }
+    /// The sheets (decision 25): each window's four labels (moved there with SELECT on the FM-1, as the FM-1's knobs
+    /// would be) and each card's text at every value, against Skiff's own fm_val and dx_cards; FINE in each mode.
+    @Test func everySheetMatchesTheFM1() async throws {
+        let dump = try SkiffDump.load()
+        var out: [String] = []
+        for (title, engine, track, page, windows) in [("OPERATOR", 12, 2, 16, dump.sheets.`operator`), ("ALL OPS", 12, 2, 17, dump.sheets.allOps),
+                                                      ("SOUND", 14, 4, 19, dump.sheets.sound)] {
+            let r = Recorder()
+            let fake = try linkedFake(track: track, engine: engine)
+            let (core, plug) = try await readyCore(fake, r)
+            defer { core.stop(); plug.unplug() }
+            try await pick(core, family: "EDIT", page: page)
+            try await waitFor(5, "\(title) read") { core.pageArea()?.controls.contains { $0 != nil } ?? false }
+            for want in windows {
+                if want.window > 0 {
+                    fake.selectOnDevice(by: 1)
+                    try await waitFor(3, "\(title) window \(want.window)") { core.pageArea()?.window?.index == want.window }
+                }
+                let area = try #require(core.pageArea())
+                let s = core.session
+                let ctx = PageContext(session: s, page: try #require(SoundPage.page(s, fw: page)), cursor: s.deviceScreen?.cursor)
+                let cards = ctx.sheetCards()
+                for (k, slot) in want.slots.enumerated() {
+                    let place = "\(title) window \(want.window) (\(area.window?.title ?? "")) knob \(k + 1)"
+                    let label = area.controls[k]?.label ?? ""
+                    if label != slot.label { out.append("\(place): label \"\(label)\", the FM-1 \"\(slot.label)\"") }
+                    guard let values = slot.values, k < cards.count, let card = cards[k], label != "FINE" else { continue }
+                    let bad = values.compactMap { v -> String? in
+                        let (t, u) = ctx.sheetText(card, v.raw)
+                        let shown = u.isEmpty ? t : u == "%" || u == "x" ? "\(t)\(u)" : "\(t) \(u)"
+                        return shown == v.shown ? nil : "\(v.raw): \"\(shown)\" ≠ \"\(v.shown)\""
+                    }
+                    if !bad.isEmpty { out.append("\(place) \(slot.label): " + bad.prefix(6).joined(separator: ", ")) }
+                }
+            }
+        }
+        for f in dump.sheets.fine {
+            let bad = f.values.compactMap { v -> String? in
+                let (t, u) = PageContext.fineText(mode: f.mode, coarse: f.coarse, fine: v.raw)
+                let shown = u.isEmpty ? t : "\(t) \(u)"
+                return shown == v.shown ? nil : "\(v.raw): \"\(shown)\" ≠ \"\(v.shown)\""
+            }
+            if !bad.isEmpty { out.append("FINE mode \(f.mode) coarse \(f.coarse): " + bad.prefix(6).joined(separator: ", ")) }
+        }
+        print("PARITY sheets: \(out.count) mismatches")
+        for l in out { print("PARITY  \(l)") }
+        #expect(out.isEmpty, "\(out.count) mismatches with the FM-1's sheets (printed above)")
     }
 }
 
