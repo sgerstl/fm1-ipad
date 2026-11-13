@@ -260,6 +260,7 @@ class FakeLupeCore(
         val e = row.entries.getOrNull(entry) ?: return
         if (e.kind == PadKind.Empty) return
         when {
+            e.play == PadPlay.Playing -> return // already playing: nothing to queue (the real core decides what a re-tap means)
             e.play == PadPlay.Waiting -> setEntryPlay(track, entry, PadPlay.Idle)
             !st.playing || st.launch == LaunchQuantize.Now || st.launch == LaunchQuantize.Beat -> makeCurrent(track, entry)
             else -> {
