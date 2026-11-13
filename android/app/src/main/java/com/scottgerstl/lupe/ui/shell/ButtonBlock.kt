@@ -53,18 +53,49 @@ fun ButtonBlock(core: LupeCore, modifier: Modifier = Modifier) {
     val page by core.page.collectAsStateWithLifecycle()
     val home by core.homeKnobs.collectAsStateWithLifecycle()
     val top by core.top.collectAsStateWithLifecycle()
+    val screen by core.fm1Screen.collectAsStateWithLifecycle()
+    val pads by core.pads.collectAsStateWithLifecycle()
     val sheets = LocalSheetHost.current
-    val lit: BlockKey = when {
-        shell.bottom.kind == BottomKind.Page -> BlockKey.entries.firstOrNull { it.family == page.family } ?: BlockKey.HOME
-        home.fm1Home -> BlockKey.HOME
-        else -> BlockKey.SEQ
+    val sounds = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
+    // The lit key is the FM-1's own: the link's fm1Screen.key ("" under a MENU or a held layer lights none). Until the link has reported
+    // (nothing published yet) it falls back to what the shell shows.
+    val reported = screen.key.isNotEmpty() || screen.menu || screen.layer != 0
+    val lit: BlockKey? = if (reported) BlockKey.entries.firstOrNull { it.name == screen.key }
+        else when {
+            shell.bottom.kind == BottomKind.Page -> BlockKey.entries.firstOrNull { it.family == page.family } ?: BlockKey.HOME
+            home.fm1Home -> BlockKey.HOME
+            else -> BlockKey.SEQ
+        }
+    /** The key's page this press lands on: its first, or the next when the key is already lit (as the FM-1's button steps). */
+    fun target(k: BlockKey): Pair<Int, String>? {
+        val pages = com.scottgerstl.lupe.core.ScreenPages.of(k.name).ifEmpty { return null }
+        val at = if (k == lit) pages.indexOfFirst { it.first == screen.page } else -1
+        return pages[(at + 1).mod(pages.size)]
     }
     fun press(k: BlockKey) {
         when (k) {
             BlockKey.HOME -> core.send(GoHome)
-            BlockKey.GLO -> { core.send(ScreenGoto("GLO")); core.send(Intent.SetTab(Tab.Mix)) }
-            BlockKey.SAVE -> { core.send(ScreenGoto("SAVE")); sheets.show(SheetKind.Projects) }
-            BlockKey.SEQ -> core.send(ScreenGoto("SEQ"))
+            BlockKey.GLO -> target(k)?.let { (n, _) ->
+                core.send(ScreenGoto("GLO", n)); core.send(Intent.SetTab(Tab.Mix))
+                // the Mix tab at the section the FM-1 lands on
+                core.send(com.scottgerstl.lupe.core.MixSectionPick(listOf("mixer", "delay", "reverb", "chorus", "global")[n - 30]))
+            }
+            BlockKey.SAVE -> target(k)?.let { (n, title) ->
+                core.send(ScreenGoto("SAVE", n))
+                when (title) {
+                    "PRESETS", "USER" -> sounds.open(pads.selected.track.coerceAtLeast(1))   // the Sounds browser, for the selected track
+                    "PROJECT" -> sheets.show(SheetKind.Projects)
+                    else -> Unit   // PATTERNS: the FM-1 goes there; the phone has no place for the pattern pool yet (open question)
+                }
+            }
+            BlockKey.SEQ -> target(k)?.let { (n, title) ->
+                core.send(ScreenGoto("SEQ", n))
+                when (title) {
+                    "AUTOMATION" -> core.send(Intent.SetDivider(com.scottgerstl.lupe.core.Divider.Bottom))   // the lane, which fits at bottom full
+                    "SONG" -> core.send(Intent.SetTab(Tab.Timeline))
+                    else -> Unit   // the editor shows for the rest
+                }
+            }
             BlockKey.PLAY -> core.send(if (top.playing) Intent.Stop else Intent.Play)
             BlockKey.REC -> core.send(Intent.Rec)
             else -> {

@@ -43,6 +43,19 @@ class FakeLupeCoreTest {
         assertEquals("15", core.homeKnobs.value.controls[2]!!.value); assertEquals(2, core.homeKnobs.value.hot)
     }
 
+    @Test fun theFm1ScreenFollowsTheBlocksKeys() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        assertEquals("HOME", core.fm1Screen.value.key)
+        core.send(com.scottgerstl.lupe.core.ScreenGoto("SAVE")); advanceTimeBy(10)
+        assertEquals("PRESETS", core.fm1Screen.value.title); assertEquals(35, core.fm1Screen.value.page)
+        core.send(com.scottgerstl.lupe.core.ScreenGoto("SAVE", 38)); advanceTimeBy(10)
+        assertEquals("PROJECT", core.fm1Screen.value.title)
+        core.send(com.scottgerstl.lupe.core.PickPage("ENV")); advanceTimeBy(10)
+        assertEquals("ENV", core.fm1Screen.value.key)
+        core.send(com.scottgerstl.lupe.core.GoHome); advanceTimeBy(10)
+        assertEquals("HOME", core.fm1Screen.value.key)
+    }
+
     @Test fun seqFromTheBlockShowsTheEditor() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(com.scottgerstl.lupe.core.PickPage("FX")); advanceTimeBy(10)

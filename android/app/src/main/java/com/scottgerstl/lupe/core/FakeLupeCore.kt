@@ -64,6 +64,8 @@ class FakeLupeCore(
     override val pads: StateFlow<PadsState> = _pads
     override val editor: StateFlow<EditorState> = _editor
     override val page: StateFlow<PageState> = _page
+    private val _fm1Screen = MutableStateFlow(Fm1ScreenState(key = "HOME"))
+    override val fm1Screen: StateFlow<Fm1ScreenState> = _fm1Screen
     private val _home = MutableStateFlow(FakeHome.seed())
     override val homeKnobs: StateFlow<HomeKnobsState> = _home
     private val _mix = MutableStateFlow(MixState())
@@ -111,7 +113,7 @@ class FakeLupeCore(
     }
 
     /** Set the shell's bottom page as if the FM-1's button had been pressed (what the bottom half follows). */
-    fun showBottom(page: BottomPage) = _shell.update { it.copy(bottom = page) }
+    fun showBottom(page: BottomPage) { _shell.update { it.copy(bottom = page) }; _fm1Screen.value = if (page.kind == BottomKind.Page) Fm1ScreenState(key = page.family.orEmpty(), title = page.family.orEmpty()) else Fm1ScreenState(key = "HOME") }
 
     /** The FM-1's knob [slot] (0…3) turned on a sound page: the phone lights that control (the screen link's job on the real core). */
     fun fm1PageKnob(slot: Int) = _page.update { pageFake.fm1Turn(it, slot) }
@@ -179,8 +181,13 @@ class FakeLupeCore(
             Intent.CancelWaiting -> { _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map { if (it.play == PadPlay.Waiting) it.copy(play = PadPlay.Idle, bar = null) else it }) }) }; recount() }
             is Intent.SetTab -> _shell.update { it.copy(tab = intent.tab) }
             is SetHomeKnob -> _home.update { FakeHome.set(it, intent.slot, intent.value) }
-            is ScreenGoto -> if (intent.screen == "SEQ") _shell.update { it.copy(bottom = BottomPage()) }
-            is com.scottgerstl.lupe.core.GoHome -> _shell.update { it.copy(bottom = BottomPage()) }
+            is ScreenGoto -> {
+                val pages = ScreenPages.of(intent.screen)
+                val (n, title) = pages.firstOrNull { it.first == intent.page } ?: pages.firstOrNull() ?: return
+                _fm1Screen.value = Fm1ScreenState(key = intent.screen, page = n, title = title)
+                if (intent.screen == "SEQ") _shell.update { it.copy(bottom = BottomPage()) }
+            }
+            is com.scottgerstl.lupe.core.GoHome -> { _shell.update { it.copy(bottom = BottomPage()) }; _fm1Screen.value = Fm1ScreenState(key = "HOME") }
             is Intent.SetDivider -> _shell.update { it.copy(divider = intent.position) }
             is Intent.SetPlaybackMode -> _top.update { it.copy(mode = intent.mode) }
             is Intent.PadTap -> launch(intent.track, intent.entry)
@@ -221,7 +228,7 @@ class FakeLupeCore(
                 emitEditor()
             }
             is SetParam -> _page.update { pageFake.setParam(it, intent.slot, intent.value) }
-            is PickPage -> { _page.update { pageFake.pick(it, intent.family, intent.page, _editor.value.track, _editor.value.trackName) }; _shell.update { it.copy(bottom = BottomPage(BottomKind.Page, _page.value.family, _page.value.pages.firstOrNull { r -> r.index == _page.value.page }?.title)) } }
+            is PickPage -> { _fm1Screen.value = Fm1ScreenState(key = intent.family, page = intent.page ?: 0, title = intent.family); _page.update { pageFake.pick(it, intent.family, intent.page, _editor.value.track, _editor.value.trackName) }; _shell.update { it.copy(bottom = BottomPage(BottomKind.Page, _page.value.family, _page.value.pages.firstOrNull { r -> r.index == _page.value.page }?.title)) } }
             is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
             is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }
