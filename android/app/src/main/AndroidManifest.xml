@@ -20,5 +20,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- P1 gate 3, developer only: adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity -->
+        <activity
+            android:name=".core.debug.LinkDebugActivity"
+            android:exported="true"
+            android:label="Lupe link debug"
+            android:screenOrientation="portrait" />
     </application>
 </manifest>

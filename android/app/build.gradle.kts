@@ -30,7 +30,21 @@ android {
 
     // The fixtures live outside app/ so the Swift side (P1) writes to the same folder: assets/state/*.json
     sourceSets.getByName("main").assets.srcDir("../fixtures")
+
+    // P1: libLupeNative.so and the Swift runtime it needs, built by android/scripts/build-native.sh (BRIDGE.md §3).
+    sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("swift/jniLibs"))
+    defaultConfig { ndk { abiFilters += "arm64-v8a" } }   // the Pixel 10 Pro; the Swift build is arm64 only
 }
+
+// P1: builds the Swift core before Gradle packs native libraries. Swift's own build is incremental.
+val buildSwift by tasks.registering(Exec::class) {
+    description = "Builds android/core (LupeNative) for arm64 Android"
+    val out = layout.buildDirectory.dir("swift/jniLibs").get().asFile
+    commandLine(rootProject.file("scripts/build-native.sh").path, out.path, "debug")
+    outputs.dir(out)
+    outputs.upToDateWhen { false }
+}
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach { dependsOn(buildSwift) }
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))

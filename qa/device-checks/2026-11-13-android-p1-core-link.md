@@ -2,7 +2,7 @@
 
 Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it with the **Pixel 10 Pro** and the FM-1; the branch merges to `main` only after it passes. This covers P1's gate 3 (bytes) from `android/BRIDGE.md` §4. Gates 1 and 2 were proven on the Mac and an arm64 Android 16 emulator (below); check 2 repeats gate 2 on the Pixel itself.
 
-**Setup:** FM-1 on Skiff-Lupe 2.2 · Lupe for Android, this branch (debug build) · a USB-C cable from the Pixel to the FM-1 (the one that worked with Skiff's web editor on 2026-11-13) · no launch flags.
+**Setup:** FM-1 on Skiff-Lupe 2.2 · Lupe for Android, this branch (debug build; it includes P2's shell, merged in at 5bf7c67) · a USB-C cable from the Pixel to the FM-1 (the one that worked with Skiff's web editor on 2026-11-13) · no launch flags.
 **Back up first?** No. Nothing here writes the FM-1's flash: the only thing sent is INFO, a read.
 
 **The Pixel has one USB-C port**, so adb and the FM-1 can't both be plugged in. Install over USB first, then swap the cable to the FM-1; everything to read is on the debug screen (text is selectable, or take a screenshot). If you'd rather watch logcat too, use wireless debugging (Settings › System › Developer options › Wireless debugging, then `adb pair` and `adb connect`).
