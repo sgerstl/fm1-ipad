@@ -172,6 +172,8 @@ Nothing changes on the iPad's Mix.
 
 *Boards 53–58: `design/boards/phone-portrait.html` (screenshots in `phone-portrait/`). Board 53: **Select** at the end of the scenes row is the visible way to "Edit steps" (Scott, 2026-11-13); with it on, a pad tap picks the pad for the editor and launches nothing. Board 58 (time down) picked for the Timeline, 2026-11-13.*
 
+*Boards 59–69 (P4 sound pages, P5 Mix · Sounds · Projects · Settings, P6 Timeline editing and automation): `design/boards/phone-portrait-2.html`, screenshots in `phone-portrait-2/`, page-by-page map in `design/phone-sound-pages.md`. Drafted overnight 2026-11-13 → 14 for Scott to correct; eight open questions marked in the notes, each with a recommendation. P4 is being built on those recommendations, provisionally.*
+
 *Scott, 2026-11-12, through the build plan deck (vault `Projects/Dev/fm1-ipad/phone-skiff-decisions-2026-11-12.md`; research in `phone-design-research-2026-11-12.md`; mockup `design/boards/phone-pixel.html`). Skiff only, portrait only for v1. Out: firmware flashing, SLOOP, Bluetooth, landscape, sample import, exports, audio through the phone, sample recording. The landscape iPhone section above stays as it is.*
 
 **Two FM-1 screens stacked.** A top bar, then the **top half** (the play surface: what you're playing) and the **bottom half** (what the FM-1's screen shows), with the iPad's divider between them in three positions: top only · split · bottom full.
