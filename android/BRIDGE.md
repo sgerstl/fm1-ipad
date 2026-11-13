@@ -151,6 +151,16 @@ One `stepAdjust` unit is the panel's − / + step (VELOCITY 4, CHANCE 5, the res
 
 Device check: `qa/device-checks/2026-11-14-android-p1-writes.md`.
 
+### P5 core: mix, sounds, projects (P1, 2026-11-14)
+
+The schema is `P5State.swift` mirrored by `P5State.kt`, the builders `P5Areas.swift` and the intents `P5Intents.swift`, each through the iPad's call:
+- **Mix:** `Session.set(track:param:)` for LEVEL, PAN and the REVERB send (the FX page's knob 4, read for every track every 3 s, as the iPad's Mix strips do), and `set(global:)` for the cards (GLO's DELAY, REVERB, CHORUS and GLOBAL pages, 2.5.1's DELAY MODE as a setting). Solo is `SkiffSongStore.toggleSolo`. Picking a section moves the FM-1's screen when linked, and that part is a write.
+- **Sounds:** `loadPreset`, `loadUserPreset`, `storeUserPreset` (SAVE) and `eraseUserPreset`. A pad's own sound (decision 15) goes through the store's rewrite on the block's first entry, as `ArrangeEdits.setSound` does. Choosing another track as the target selects it first, so PRESET can't land on the previous track. Kits are a drum engine's presets.
+- **Projects:** the FM-1's four slots: `loadSkiffProject`, `saveSkiffProject` (Save, Save as) and `renameSkiffProject`, which is new (PROJ_NAME op 2, in SloopKit's driver and taught to FakeSkiff from EDITOR_PROTOCOL.md). FakeSkiff also gained PROJ_NAME's "changed" byte.
+- **Confirm in place** for anything that loses something: Load while the music has unsaved changes, Save over the music's slot, Save as over a used slot, SAVE over a used user slot, and erase. The core refuses these unconfirmed and logs why.
+
+Device check: `qa/device-checks/2026-11-14-android-p5-core-writes.md`.
+
 ### Read-only by default (P1, 2026-11-13)
 
 `LinkGate.readOnly` (on by default) wraps every connection in `GuardedTransport`. Only frames that Skiff's own protocol table (`skiff-src web/EDITOR_PROTOCOL.md`) calls queries reach the FM-1; anything else is dropped and logged ("read-only: blocked cmd N…"). The allowlist is in `ReadOnlyGuard.swift`. Tests show Session and PhoneCore reach ready and keep running over FakeSkiff (with and without the screen link) with nothing blocked. The guard was added for Scott's approved overnight read-only tests on the real FM-1. **There is deliberately no button that turns writes on**: a stray tap from another session's screenshot script hit one on the shared emulator. Writes need `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --ez allowWrites true`. Making it read-only again is one tap. So Play from the phone does nothing until writes are allowed.

@@ -34,6 +34,8 @@ import com.scottgerstl.lupe.core.LaunchQuantize
 import com.scottgerstl.lupe.core.LupeCore
 import com.scottgerstl.lupe.core.PlaybackMode
 import com.scottgerstl.lupe.core.TopState
+import com.scottgerstl.lupe.ui.sheet.LocalSheetHost
+import com.scottgerstl.lupe.ui.sheet.SheetKind
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.LupeType
 import com.scottgerstl.lupe.ui.theme.Tok
@@ -58,9 +60,10 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
         Box {
             Key({ menu = Menu.Fm1 }, "FM-1 menu, project ${top.project}", width = 80.dp) { fg -> MenuLabel(top.project, fg) }
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
-                MenuRow("Projects…", {}, enabled = false, sub = "Arrives with phase 5")
-                MenuRow("Settings", {}, enabled = false, sub = "Not built yet")
-                MenuRow("Labs", {}, enabled = false, sub = "Not built yet")
+                val sheets = LocalSheetHost.current
+                MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
+                MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
+                MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }
             }
         }

@@ -59,6 +59,7 @@ import com.scottgerstl.lupe.core.PadKind
 import com.scottgerstl.lupe.core.PadPlay
 import com.scottgerstl.lupe.core.PadRow
 import com.scottgerstl.lupe.core.PadsState
+import com.scottgerstl.lupe.ui.sounds.LocalSoundsHost
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
 import com.scottgerstl.lupe.ui.theme.LupeCrossfade
@@ -176,12 +177,14 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
 private fun RowHead(r: PadRow, h: Dp, selected: Boolean, core: LupeCore) {
     val color = Tok.track[(r.track - 1) % Tok.track.size]
     val ring = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
+    val soundsHost = LocalSoundsHost.current
     Row(Modifier.height(h), horizontalArrangement = Arrangement.spacedBy(GAP)) {
         Box(
             Modifier.width(28.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(color)
                 .drawBehind { drawRoundRect(Tok.text.copy(alpha = ring.value), cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(2.dp.toPx() * 2)) }
                 .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Track ${r.track}, ${r.name}"; stateDescription = if (selected) "Selected" else "" }
-                .pointerInput(r.track) { detectTapGestures { core.send(Intent.TrackSelect(r.track)) } },
+                // tap: select the track. Held: its Sounds browser (board 66)
+                .pointerInput(r.track) { detectTapGestures(onLongPress = { soundsHost.open(r.track) }, onTap = { core.send(Intent.TrackSelect(r.track)) }) },
             contentAlignment = Alignment.Center,
         ) { BasicText("${r.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
         val on = r.muted
@@ -288,6 +291,9 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
 
 private fun Color.Companion.lerp(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
 
+/** A drum track (kits, and a pad's own sound). TODO: the core's `sounds` area says so; until then the name does. */
+private fun isDrumTrack(row: PadRow) = row.name.contains("Drum", true) || row.name.contains("Kit", true) || row.name.contains("Perc", true)
+
 private enum class PadMenuMode { Root, Set, ClearConfirm }
 
 /** Where else a pattern is used: "T2 B". Skiff erases a pattern only when no other entry names it (P1, 2026-11-14). */
@@ -312,6 +318,7 @@ private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, pads: PadsState, at: Off
     // start from the root each time it opens
     if (!open && mode != PadMenuMode.Root) mode = PadMenuMode.Root
     val letter = ('A' + idx).toString()
+    val soundsHost = LocalSoundsHost.current
     val others = if (e.kind == PadKind.Pattern && e.pattern != null) otherUsers(pads, row.track, idx, e.pattern) else emptyList()
     LupeMenu(open, { close() }, width = 240.dp, at = at) {
         LupeCrossfade(mode) { m ->
@@ -320,7 +327,8 @@ private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, pads: PadsState, at: Off
                     PadMenuMode.Root -> {
                         if (e.kind == PadKind.Pattern) {
                             MenuRow("Edit steps", { core.send(Intent.PadSelect(row.track, idx)); close() })
-                            MenuRow("Select sound", { core.send(Intent.PadSelectSound(row.track, idx)); close() })
+                            // opens the Sounds browser in the bottom half; on a drum track it's this pad's own sound (decision 15)
+                            MenuRow("Select sound", { core.send(Intent.PadSelectSound(row.track, idx)); close(); soundsHost.open(row.track, if (isDrumTrack(row)) ('A' + idx).toString() else null) })
                         }
                         if (e.kind == PadKind.Empty) MenuRow("New pattern", { core.send(Intent.PadNew(row.track, idx)); close() })
                         MenuRow("Set pattern…", { mode = PadMenuMode.Set })

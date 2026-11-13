@@ -15,6 +15,11 @@ interface LupeCore {
     val editor: StateFlow<EditorState>
     /** The bottom half's sound page (ENV, LFO, FX, SEL, EDIT, ARP): P4. */
     val page: StateFlow<PageState>
+    /** P5 (P1's core publishes them; P5State.kt). Defaults for a core that doesn't yet. */
+    val mix: StateFlow<MixState> get() = P5Defaults.mix
+    val sounds: StateFlow<SoundsState> get() = P5Defaults.sounds
+    val projects: StateFlow<ProjectsState> get() = P5Defaults.projects
+    val meters: StateFlow<MetersState> get() = P5Defaults.meters
 
     fun send(intent: Intent)
 }
