@@ -1,9 +1,445 @@
 {
-  "provisional": true,
-  "note": "Never connected this launch: the full 'looking for your FM-1' page.",
-  "frames": [
-    {"atMs": 0, "area": "link", "state": {"phase": "searching"}},
-    {"atMs": 0, "area": "top", "state": {"project":"Demo","playing":false,"rec":false,"tempo":120.0,"mode":"loop","launch":"bar","waiting":1,"bar":1,"beat":1}},
-    {"atMs": 0, "area": "shell", "state": {"tab":"pads","divider":"split","bottom":{"kind":"editor"}}}
-  ]
+ "provisional": true,
+ "note": "Never connected this launch: the full 'looking for your FM-1' page.",
+ "frames": [
+  {
+   "atMs": 0,
+   "area": "link",
+   "state": {
+    "phase": "searching"
+   }
+  },
+  {
+   "atMs": 0,
+   "area": "top",
+   "state": {
+    "project": "Demo",
+    "playing": false,
+    "rec": false,
+    "tempo": 120.0,
+    "mode": "loop",
+    "launch": "bar",
+    "waiting": 1,
+    "bar": 1,
+    "beat": 1
+   }
+  },
+  {
+   "atMs": 0,
+   "area": "shell",
+   "state": {
+    "tab": "pads",
+    "divider": "split",
+    "bottom": {
+     "kind": "editor"
+    }
+   }
+  },
+  {
+   "atMs": 0,
+   "area": "pads",
+   "state": {
+    "rows": [
+     {
+      "track": 1,
+      "name": "Acid",
+      "muted": false,
+      "entries": [
+       {
+        "kind": "pattern",
+        "pattern": 5,
+        "play": "playing",
+        "progress": 0.6
+       },
+       {
+        "kind": "pattern",
+        "pattern": 7
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       }
+      ]
+     },
+     {
+      "track": 2,
+      "name": "Pad",
+      "muted": false,
+      "entries": [
+       {
+        "kind": "pattern",
+        "pattern": 2,
+        "hasSound": true
+       },
+       {
+        "kind": "pattern",
+        "pattern": 3,
+        "play": "playing",
+        "progress": 0.6
+       },
+       {
+        "kind": "pattern",
+        "pattern": 3
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       }
+      ]
+     },
+     {
+      "track": 3,
+      "name": "Pulse Ld",
+      "muted": false,
+      "entries": [
+       {
+        "kind": "rest"
+       },
+       {
+        "kind": "pattern",
+        "pattern": 11,
+        "play": "playing",
+        "progress": 0.6
+       },
+       {
+        "kind": "pattern",
+        "pattern": 14,
+        "play": "waiting",
+        "bar": 11
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       }
+      ]
+     },
+     {
+      "track": 4,
+      "name": "Drum Kit",
+      "muted": false,
+      "entries": [
+       {
+        "kind": "pattern",
+        "pattern": 1
+       },
+       {
+        "kind": "pattern",
+        "pattern": 4,
+        "play": "playing",
+        "progress": 0.6
+       },
+       {
+        "kind": "pattern",
+        "pattern": 6
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       }
+      ]
+     },
+     {
+      "track": 5,
+      "name": "Piano",
+      "muted": false,
+      "entries": [
+       {
+        "kind": "pattern",
+        "pattern": 12,
+        "hasSound": true
+       },
+       {
+        "kind": "pattern",
+        "pattern": 12,
+        "play": "playing",
+        "progress": 0.6
+       },
+       {
+        "kind": "pattern",
+        "pattern": 15
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       }
+      ]
+     },
+     {
+      "track": 6,
+      "name": "Perc Kit",
+      "muted": true,
+      "entries": [
+       {
+        "kind": "pattern",
+        "pattern": 9,
+        "play": "playing",
+        "progress": 0.6
+       },
+       {
+        "kind": "pattern",
+        "pattern": 10
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       },
+       {
+        "kind": "empty"
+       }
+      ]
+     }
+    ],
+    "scenes": [
+     {
+      "stored": true,
+      "current": false
+     },
+     {
+      "stored": true,
+      "current": false
+     },
+     {
+      "stored": true,
+      "current": true
+     },
+     {
+      "stored": true,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     },
+     {
+      "stored": false,
+      "current": false
+     }
+    ],
+    "selected": {
+     "track": 5,
+     "entry": 1
+    }
+   }
+  },
+  {
+   "atMs": 0,
+   "area": "editor",
+   "state": {
+    "track": 5,
+    "trackName": "Piano",
+    "entry": "B",
+    "pattern": 12,
+    "scale": "C min",
+    "kind": "roll",
+    "steps": [
+     {
+      "on": true,
+      "note": "C4",
+      "extra": 0,
+      "length": 2,
+      "velocity": 100,
+      "pitchText": "C4"
+     },
+     {
+      "on": false
+     },
+     {
+      "on": true,
+      "note": "D#4",
+      "extra": 0,
+      "length": 1,
+      "velocity": 88,
+      "pitchText": "D#4",
+      "values": [
+       {
+        "param": "CUTOFF",
+        "value": 60,
+        "locked": true
+       }
+      ]
+     },
+     {
+      "on": false
+     },
+     {
+      "on": true,
+      "note": "G4",
+      "extra": 0,
+      "length": 1,
+      "velocity": 96,
+      "pitchText": "G4"
+     },
+     {
+      "on": true,
+      "note": "C5",
+      "extra": 1,
+      "length": 3,
+      "velocity": 100,
+      "pitchText": "C5 D#5",
+      "values": [
+       {
+        "param": "CUTOFF",
+        "value": 84,
+        "locked": true
+       },
+       {
+        "param": "DECAY",
+        "value": 30,
+        "locked": true
+       },
+       {
+        "param": "RESONANCE",
+        "value": 40,
+        "locked": false
+       }
+      ]
+     },
+     {
+      "on": false
+     },
+     {
+      "on": false
+     },
+     {
+      "on": true,
+      "note": "A#3",
+      "extra": 0,
+      "length": 2,
+      "velocity": 72,
+      "pitchText": "A#3"
+     },
+     {
+      "on": false
+     },
+     {
+      "on": true,
+      "note": "G4",
+      "extra": 0,
+      "length": 1,
+      "velocity": 110,
+      "pitchText": "G4",
+      "values": [
+       {
+        "param": "CUTOFF",
+        "value": 92,
+        "locked": true
+       }
+      ]
+     },
+     {
+      "on": true,
+      "note": "F4",
+      "extra": 0,
+      "length": 1,
+      "velocity": 64,
+      "pitchText": "F4"
+     },
+     {
+      "on": true,
+      "note": "D#4",
+      "extra": 2,
+      "length": 2,
+      "velocity": 92,
+      "pitchText": "D#4"
+     },
+     {
+      "on": false
+     },
+     {
+      "on": true,
+      "note": "D4",
+      "extra": 0,
+      "length": 1,
+      "velocity": 80,
+      "pitchText": "D4"
+     },
+     {
+      "on": false
+     }
+    ],
+    "selected": 5,
+    "playhead": -1,
+    "lanes": [
+     "CUTOFF",
+     "DECAY",
+     "RESONANCE",
+     "ATTACK"
+    ],
+    "lane": "CUTOFF",
+    "laneValues": [
+     40,
+     42,
+     84,
+     60,
+     58,
+     84,
+     70,
+     66,
+     50,
+     48,
+     92,
+     80,
+     70,
+     64,
+     52,
+     44
+    ]
+   }
+  }
+ ]
 }

@@ -39,6 +39,15 @@ object Tok {
      */
     val rec = Color(0xFFFF4D4D)
 
+    /**
+     * The six track colours from the phone boards (design/boards/phone-portrait.html COL). TOKEN GAP: tokens.json
+     * has four (Skiff has six tracks), so these are the boards' values until tokens.json gets six.
+     */
+    val track = listOf(
+        Color(0xFFFF5A36), Color(0xFF22C3B4), Color(0xFFFFBF00), Color(0xFF9580FF), Color(0xFFFF6FAE), Color(0xFFA3E635),
+    )
+    val stepEmpty = Color(0xFF2A2A30)
+
     const val CHICLET_RADIUS = 8f   // dp
     const val CHICLET_EDGE = 2f     // dp
 }
