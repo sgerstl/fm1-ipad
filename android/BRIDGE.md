@@ -53,9 +53,13 @@ Owns `MidiManager`. One instance for the app's life.
 | Receive | `openOutputPort(0).connect(receiver)`. Each `onSend(bytes, offset, count, timestamp)` calls straight into Swift: `LupeNative.onBytes(bytes, offset, count, timestamp)`. No buffering in Kotlin. |
 | Send | `openInputPort(0).send(bytes, 0, n)`. Frames longer than `getMaxMessageSize()` go out as consecutive sends; SysEx survives being split because the FM-1 reads a byte stream. Today's largest frames fit in 1,024 bytes (the iPad's send buffer), so this is a guard, not the normal path. |
 | Lose it | `onDeviceRemoved` for that device → close both ports, then `LupeNative.onLost()`. |
-| Report | A tiny state for the factory: `none`, `opening`, `open`. |
+| Report | Calls, not a polled state: `LupeNative.onOpening()`, `onOpened(rawMode)`, `onLost()`. Swift's `LinkGate` turns them into the factory's answer (`none`, `opening`, `open`). *(P1, gate 3.)* |
 
 **Watch the names.** Android names ports from the device's side: you *send* to its **input** port and *receive* from its **output** port. The opposite of how it reads.
+
+**Built at gate 3 (2026-11-13):** `core/FM1Link.kt`, `core/LupeNative.kt` and Swift's `LupeNative.swift` (hand-written JNI: `JNI_OnLoad` caches the class and the three Swift→Kotlin methods `send`, `onState`, `onDebug`; Swift-made threads attach on first call). The match is deliberately broad until the Pixel's strings are logged: a USB device with at least one port each way whose name, product, manufacturer, serial or port names contain "Felucca", "FM-1", "FM1" or "M-VAVE". The debug screen (`core/debug/LinkDebugActivity`, opened with `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity`) lists every device's property strings. **The Pixel has one USB-C port**, so adb over USB and the FM-1 can't be plugged in at once: install first, or use wireless debugging.
+
+**Packaging:** Gradle's `buildSwift` task runs `android/scripts/build-native.sh`, which builds `libLupeNative.so` and copies the Swift runtime it needs (followed through ELF NEEDED) into `app/build/swift/jniLibs/arm64-v8a`: 19 libraries, about 100 MB unstripped in debug, 45 MB of it ICU data pulled in by full Foundation. arm64 only. Trimming (FoundationEssentials instead of Foundation, stripping) is a release concern, not P1's.
 
 **Manifest:** `<uses-feature android:name="android.software.midi" android:required="true"/>`. USB MIDI should need no runtime permission (Android's MIDI service owns the USB device), as Chrome needed none beyond its own site prompt. P1 confirms.
 
