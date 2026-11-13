@@ -39,3 +39,22 @@ Pre-flight (design-standards) ran: tokens only, one dial component for the HOME 
 | 10 | OPERATOR, ALL OPS, SOUND on the FM-1 | The header is the FM-1's ("OPERATOR 4"), with the window in grey after it ("ENV 1 · 2 of 5") and four dials for the window's controls. OPERATOR shows OP1 to OP6 as tiles; tapping one moves the FM-1's cursor (pickTile) |
 | 11 | Turn the FM-1's SELECT on a sheet | The window name in the header follows. The phone has no way to change it (the link's second cursor is read-only) |
 | 12 | MOD, LANES, LANE MIX | Tiles from `tiles` (routes, or the eight lane names), the pick lit |
+
+## Decision 27: the FM-1 drives navigation, the phone follows (2026-11-13)
+
+Built (tests pass), not run on a screen. Removed: the scrolling page row and the button block (deleted, no setting). A sound page is now the header, tiles if any, and the four dials, and the header is the only page label, always shown (it is back on tile pages at split; the tiles squeeze instead). Format: family and n/count in grey, then the FM-1's page name in text weight: "FX 1/7 FX", "FX 2/7 DELAY"; a sheet shows its own title ("OPERATOR 4") as the name, then its window. The lock banner takes a line of its own while a step is held.
+
+What the steps get (412 × 915 dp, body about 793 dp; the Pixel 7's 1080 × 2400 is 411 × 914 dp, the same):
+
+| Divider | HOME / editor | A sound page without tiles | A sound page with tiles |
+|---|---|---|---|
+| Split (bottom half about 420 dp) | rows about **58 dp** (was 38) | rows about **59 dp** (was 30) | rows about 30 dp; the tiles get about 120 dp |
+| Bottom full (about 729 dp) | rows about 95 dp, with the lane | rows about 102 dp (the grid's cap) | rows about 72 dp |
+
+Follower bug: a restart on FX opened the Sounds sheet. The follower now takes the first screen it sees after start or a reconnect as a baseline and opens nothing for it, follows only while the link is Ready, and only a screen that stays 300 ms (the link passes through screens while it reads the FM-1). I could not reproduce the exact path (it needs the real link); a test covers the baseline and the reset.
+
+| # | Do | See |
+|---|----|-----|
+| 13 | Press FX on the FM-1, then FX again | The page follows; the header reads "FX 1/7 FX", then "FX 2/7 DELAY"; no page row; the dials; nothing else at the bottom |
+| 14 | Restart the app with the FM-1 on FX (also on SAVE's PRESETS, on GLO) | The app comes up on the editor/sound page the FM-1 is on, with no sheet open and the Mix tab not forced; a later change on the FM-1 follows |
+| 15 | MOD at split | The header shows; the tiles scroll in the space left (about 120 dp) |

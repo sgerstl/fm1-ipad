@@ -25,10 +25,16 @@ class PlaceFollower {
     private var ownSounds = false
     private var ownProjects = false
     private var last: Fm1ScreenState? = null
+    private var primed = false
+
+    /** The link dropped: the next screen it sees is a new baseline. */
+    fun reset() { last = null; primed = false }
 
     fun follow(screen: Fm1ScreenState, tab: Tab, divider: Divider, soundsOpen: Boolean, projectsOpen: Boolean): List<PlaceAction> {
         if (screen == last) return emptyList()
         last = screen
+        // the first screen seen after start or reconnect only sets the baseline: nothing opens for where the FM-1 already was
+        if (!primed) { primed = true; return emptyList() }
         val out = mutableListOf<PlaceAction>()
         fun goTab(t: Tab) { if (savedTab == null) savedTab = tab; if (tab != t) out += PlaceAction.Tab(t) }
         fun sounds(open: Boolean) {

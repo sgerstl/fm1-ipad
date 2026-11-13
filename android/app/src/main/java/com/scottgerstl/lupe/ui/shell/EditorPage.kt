@@ -133,9 +133,9 @@ fun EditorPage(
         val lane0 = 162.dp * autoFraction
         // the grid in the editor: what is left above the lane and the strip. With a sound page: no smaller than 36 dp a row, no bigger than 72, and
         // leaving the sound section its four controls first; the section's picture takes what remains (0 at split on a 915 dp phone)
-        val grid0 = (maxHeight - ruler - 12.dp - STRIP_HEIGHT - lane0 - BLOCK_HEIGHT - 6.dp).coerceAtLeast(MIN_GRID)
+        val grid0 = (maxHeight - ruler - 12.dp - STRIP_HEIGHT - lane0).coerceAtLeast(MIN_GRID)
         // a page with tiles lets the grid squeeze to 26 dp rows at split so the tiles have some room
-        val grid1 = (maxHeight - ruler - 6.dp - soundNeeds - BLOCK_HEIGHT - 6.dp).coerceIn(if (soundNeeds > SOUND_IDEAL) MIN_GRID_TILES else MIN_GRID, MAX_GRID)
+        val grid1 = (maxHeight - ruler - 6.dp - soundNeeds - 6.dp).coerceIn(if (soundNeeds > SOUND_IDEAL) MIN_GRID_TILES else MIN_GRID, MAX_GRID)
         val grid = grid0 + (grid1 - grid0) * s
         Column(Modifier.fillMaxSize()) {
             Ruler(ed, track, core, pick.step != null)
@@ -155,18 +155,15 @@ fun EditorPage(
                 }
                 if (s > 0.001f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = s }) { lastSound?.invoke() }
             }
-            // the FM-1's button block, always at the very bottom (decision 24)
-            Spacer(Modifier.height(6.dp))
-            ButtonBlock(core)
         }
     }
 }
 
 private val MIN_GRID_TILES = 116.dp     // rows of 26 dp
 private val MIN_GRID = 128.dp          // four rows of 29 dp and three 4 dp gaps (the board's miniGrid, about 30)
-private val MAX_GRID = 348.dp          // rows of 84 dp
-internal val SOUND_IDEAL = 160.dp       // page row 44, header 28, dials 88 (decision 25: no picture)
-internal val SOUND_IDEAL_TILES = 300.dp // with tiles to pick from: room for three rows of them
+private val MAX_GRID = 420.dp          // rows of 102 dp
+internal val SOUND_IDEAL = 120.dp       // header 28 and dials 88 (decisions 25 and 27: no picture, no page row, no button block)
+internal val SOUND_IDEAL_TILES = 236.dp // with tiles to pick from: about 116 dp more for them
 
 // ---- ruler and lock banner
 

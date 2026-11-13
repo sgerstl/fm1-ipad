@@ -129,7 +129,14 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val sheetsHost = com.scottgerstl.lupe.ui.sheet.LocalSheetHost.current
     val soundsHost0 = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
     val padsNow by core.pads.collectAsStateWithLifecycle()
-    LaunchedEffect(screenFollowed.key, screenFollowed.page) {
+    val linkNow by core.link.collectAsStateWithLifecycle()
+    val linked = linkNow.phase == com.scottgerstl.lupe.core.LinkPhase.Ready
+    // On a (re)connect the screen link may pass through screens while it reads the FM-1: the follower only follows changes it sees once linked,
+    // and only a screen that stays for 300 ms. The first screen it sees is the baseline (a restart on FX must not open the Sounds sheet).
+    LaunchedEffect(linked) { if (!linked) place.reset() }
+    LaunchedEffect(screenFollowed.key, screenFollowed.page, linked) {
+        if (!linked) return@LaunchedEffect
+        delay(300)
         val actions = place.follow(screenFollowed, shell.tab, shell.divider, soundsHost0.request != null, sheetsHost.open == com.scottgerstl.lupe.ui.sheet.SheetKind.Projects)
         actions.forEach { a ->
             when (a) {

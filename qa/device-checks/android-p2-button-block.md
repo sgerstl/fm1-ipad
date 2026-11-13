@@ -1,3 +1,5 @@
+> **Removed by decision 27 (2026-11-13):** the button block is deleted, and the phone no longer opens sound pages itself; the FM-1's keys do, and the phone follows (sound pages, GLO into Mix, SAVE into Sounds or Projects, SEQ into the editor, HOME back; the back gesture still sends goHome). Only rows 11-16 (the follower) still apply; see `android-p2-sound-dials.md` for the layout.
+
 # Android P2: the FM-1's button block (board 72, decision 24), 2026-11-13
 
 Built (Kotlin tests pass, APK builds); **not run on a screen**. P1's core side (`screenGoto` with its optional page, and the `fm1Screen` area, 0e34e33) is merged; the real core path has **not** been run by me. Nothing here writes the FM-1's flash: no backup needed.

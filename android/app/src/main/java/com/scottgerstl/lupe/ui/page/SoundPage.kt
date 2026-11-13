@@ -89,20 +89,17 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
     val opened = remember(page.track, page.page, page.family) { mutableMapOf<Int, Int>() }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-    // On a page with tiles, at split only (the section is short), the header line goes: the underlined page row already names the page
-    val showHeader = !(page.tiles != null && maxHeight < 240.dp)
     Column(Modifier.fillMaxSize()) {
-        // the family keys live in the button block now (decision 24); this page starts at its page row
-        Box(Modifier.fillMaxWidth().height(44.dp)) {
-            LupeCrossfade(page.lock, Modifier.fillMaxSize(), Dur.STATE) { lock ->
-                if (lock == null) PageRow(page, colour) { core.send(PickPage(page.family, it)) } else LockBanner(lock, colour)
-            }
-        }
+        // The FM-1 drives navigation (decision 27): no page row. While a step is held the lock banner takes a line of its own.
+        val lockUp = animatedFloat(if (page.lock != null) 1f else 0f, Dur.STATE)
+        var lastLock by remember { mutableStateOf(page.lock) }
+        if (page.lock != null) lastLock = page.lock
+        if (lockUp.value > 0.001f) Box(Modifier.fillMaxWidth().height(44.dp * lockUp.value).graphicsLayer { alpha = lockUp.value }.clipToBounds()) { lastLock?.let { LockBanner(it, colour) } }
         // the held notice has its own slim line under the page row (never over a key); it fades in and out
         HeldNotice(notice)
-        if (showHeader) PageHeader(page, colour)
+        PageHeader(page, colour)
         // tiles where a knob picks from a list of names; otherwise the room is left empty (the FM-1 has the detail)
-        Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = if (showHeader) 4.dp else 0.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp)) {
             LupeCrossfade(page.page to page.family, Modifier.fillMaxSize(), Dur.STATE) { _ ->
                 if (page.tiles != null) PageTilesContent(page.tiles, colour, onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) }, modifier = Modifier.fillMaxSize())
                 else if (page.controls.none { it != null }) BasicText("Set this page on the FM-1.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = LupeType.small.copy(color = Tok.text2Raised))
@@ -119,22 +116,24 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
 }
 
 /**
- * The header: the page's title and place ("FX · 1 of 6", or a sheet's own "OPERATOR 4"), the sheet window it is in (read-only: the FM-1's SELECT
- * moves it), and the track line. 28 dp.
+ * The only page label (decision 27), always shown: the family and the page's place in grey, then the page's name in text weight
+ * ("FX 1/7 FX", "FX 2/7 DELAY"), the FM-1's names; a sheet's own title ("OPERATOR 4") stands as its name, with the window it is in after it
+ * (read-only: the FM-1's SELECT moves it). The track line is at the right. 28 dp.
  */
 @Composable
 private fun PageHeader(page: PageState, colour: Color) {
     val at = page.pages.indexOfFirst { it.index == page.page }
-    val title = page.title.ifEmpty { page.family } + if (page.title.isEmpty() && at >= 0 && page.pages.size > 1) " · ${at + 1} of ${page.pages.size}" else ""
-    Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        BasicText(title, Modifier.semantics { heading() }, style = LupeType.key, maxLines = 1)
+    val place = page.family + if (at >= 0) " ${at + 1}/${page.pages.size}" else ""
+    val name = page.title.ifEmpty { page.pages.getOrNull(at)?.title.orEmpty() }
+    Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 4.dp).semantics(mergeDescendants = true) { heading(); contentDescription = "$place $name" }, verticalAlignment = Alignment.CenterVertically) {
+        BasicText(place, style = LupeType.key.copy(color = Tok.text2Raised), maxLines = 1)
+        if (name.isNotEmpty()) BasicText(" $name", style = LupeType.key, maxLines = 1)
         page.window?.let { w -> BasicText("  ${w.title} · ${w.index + 1} of ${w.count}", style = LupeType.small.copy(color = Tok.text2Raised), maxLines = 1) }
         Spacer(Modifier.weight(1f))
         TrackLine(page, colour, Modifier)
     }
 }
 
-/** "The FM-1 is on SEL · held here": 16 dp of its own under the page row, secondary grey, 12 sp; fades with the height. */
 @Composable
 private fun HeldNotice(text: String?) {
     var last by remember { mutableStateOf(text) }
@@ -155,51 +154,6 @@ private fun TrackLine(page: PageState, colour: Color, modifier: Modifier) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(colour))
         Spacer(Modifier.width(6.dp))
         BasicText("${page.track} ${page.trackName}", style = LupeType.small, maxLines = 1)
-    }
-}
-
-/** The family's pages in the FM-1's order. It scrolls when they don't fit (FX, and EDIT on a drum track), keeps the current page in view, and fades at a cut edge. */
-@Composable
-private fun PageRow(page: PageState, colour: Color, onPick: (Int) -> Unit) {
-    val reduce = LocalReduceMotion.current
-    val state = rememberLazyListState()
-    val density = LocalDensity.current
-    val at = page.pages.indexOfFirst { it.index == page.page }
-    LaunchedEffect(page.page, page.pages.size) {
-        if (at < 0) return@LaunchedEffect
-        val vis = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == at }
-        val vp = state.layoutInfo
-        val fully = vis != null && vis.offset >= 0 && vis.offset + vis.size <= vp.viewportEndOffset - vp.afterContentPadding
-        if (!fully) {
-            // park it with the one before peeking in, so you can see where you came from
-            val off = -with(density) { 56.dp.roundToPx() }
-            if (reduce) state.scrollToItem(at, off.coerceAtMost(0)) else state.animateScrollToItem(at, off.coerceAtMost(0))
-        }
-    }
-    Box(Modifier.fillMaxSize()) {
-        LazyRow(state = state, modifier = Modifier.fillMaxSize().selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
-            itemsIndexed(page.pages) { _, r ->
-                val on = r.index == page.page
-                val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
-                Box(
-                    Modifier.fillMaxHeight().padding(horizontal = 4.dp)
-                        .semantics(mergeDescendants = true) { role = Role.Tab; selected = on; contentDescription = "${r.title} page" }
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPick(r.index) }
-                        .padding(horizontal = 8.dp)
-                        .drawBehind {
-                            // the current page's underline grows from the middle (a drawn bar; it needs no width from a scrolling row)
-                            val w = size.width * lit.value
-                            drawRect(Tok.text, Offset((size.width - w) / 2, size.height - 8.dp.toPx()), Size(w, 2.dp.toPx()))
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    BasicText(r.title, style = LupeType.key.copy(color = lerp(Tok.text2, Tok.text, lit.value)), maxLines = 1)
-                }
-            }
-        }
-        // the fade says there is more
-        if (state.canScrollForward) Box(Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight().background(Brush.horizontalGradient(listOf(Color.Transparent, Tok.page))))
-        if (state.canScrollBackward) Box(Modifier.align(Alignment.CenterStart).width(28.dp).fillMaxHeight().background(Brush.horizontalGradient(listOf(Tok.page, Color.Transparent))))
     }
 }
 
