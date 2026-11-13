@@ -180,7 +180,8 @@ public func startCore(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ ra
     MainActor.assumeIsolated {
         let c = PhoneCore(session: DeviceSession(transport: { gate.makeTransport() }),
                           publish: { area, json in publish(area: area, json: json) },
-                          log: { debug($0) })
+                          log: { debug($0) },
+                          canWrite: { !gate.readOnly })
         core = c
         c.start()
     }

@@ -9,7 +9,7 @@ import SloopKit
 public final class PhoneCore {
     public let session: DeviceSession
     private let publish: (String, String) -> Void
-    private let log: (String) -> Void
+    let log: (String) -> Void
     private var runTask: Task<Void, Never>?
     private var areas: [AreaWatch] = []
     private var clockTask: Task<Void, Never>?
@@ -17,10 +17,22 @@ public final class PhoneCore {
     /// Screen-local choices (nothing sent to the FM-1): the pad the editor shows, the step selected.
     var pickedPad: PadsArea.Ref?
     var selectedStep = 0
+    /// The editor's own state (PadsEditorIntents.swift): a step held, Lock latched, Chord entry, the lane shown, the
+    /// step copied. None of it is sent to the FM-1 except through Session.lockStep.
+    var heldStep: Int?
+    var lockLatched = false
+    var chordMode = false
+    var pickedLane: String?
+    var copiedStep: SynthStep?
+    private var motionTask: Task<Void, Never>?
+    /// Whether writes may go to the FM-1 now (the link's read-only switch). Write intents are refused up front
+    /// while false, so Session's optimistic copy never shows what the FM-1 didn't get.
+    let canWrite: () -> Bool
 
     /// `publish(area, json)` is called on the main actor. `log` gets lines worth keeping (intents not done yet).
-    public init(session: DeviceSession, publish: @escaping (String, String) -> Void, log: @escaping (String) -> Void = { _ in }) {
-        self.session = session; self.publish = publish; self.log = log
+    public init(session: DeviceSession, publish: @escaping (String, String) -> Void, log: @escaping (String) -> Void = { _ in },
+                canWrite: @escaping () -> Bool = { true }) {
+        self.session = session; self.publish = publish; self.log = log; self.canWrite = canWrite
     }
 
     /// Starts the session's search loop and the area watches. Each area is published once at once.
@@ -61,14 +73,29 @@ public final class PhoneCore {
                 wasReady = ready
             }
         }
+        // The editor's locks and automation (MOTION, a read): the editor's track every 3 s, at once when it changes.
+        motionTask = Task { [weak self] in
+            var last = -1
+            while !Task.isCancelled {
+                guard let self else { return }
+                if self.session.isConnected, self.session.dialect == .skiff {
+                    let t = self.editorTrack()
+                    await self.session.readMotion(track: t)
+                    if t != last { last = t; self.poke(["editor"]) }
+                }
+                for _ in 0..<30 { try? await Task.sleep(for: .milliseconds(100)); if self.editorTrack() != last { break } }
+            }
+        }
     }
 
     private func poke(_ names: [String]) { for n in names { areas.first { $0.name == n }?.poke() } }
+    func pokeAreas(_ names: [String]) { poke(names) }
 
     public func stop() {
         runTask?.cancel(); runTask = nil
         clockTask?.cancel(); clockTask = nil
         projectTask?.cancel(); projectTask = nil
+        motionTask?.cancel(); motionTask = nil
         areas.forEach { $0.stop() }; areas = []
     }
 
@@ -114,7 +141,10 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        do { handle(try PhoneIntent.decode(json)) } catch { log("intent not understood: \(json) (\(error))") }
+        do {
+            if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
+            handle(try PhoneIntent.decode(json))
+        } catch { log("intent not understood: \(json) (\(error))") }
     }
 
     public func handle(_ intent: PhoneIntent) {
@@ -125,10 +155,28 @@ public final class PhoneCore {
             runTask?.cancel()
             let s = session
             runTask = Task { await s.run() }
-        case .play: session.setPlaying(true)
-        case .stop: session.setPlaying(false)
-        case .padSelect(let track, let entry): pickedPad = PadsArea.Ref(track: track, entry: entry); poke(["pads", "editor"])
-        case .stepSelect(let i): selectedStep = max(0, min(15, i)); poke(["editor"])
+        case .play, .stop:
+            guard canWrite() else { log("read-only: \(intent) not sent (allow writes to send it)"); return }
+            session.setPlaying(intent == .play)
+        case .padSelect(let track, let entry):
+            pickedPad = PadsArea.Ref(track: track, entry: entry)
+            // as the iPad's Edit steps: the track selected and, stopped, put on that entry (Skiff edits only the
+            // pattern a track is on). While read-only only the screen's choice moves.
+            if canWrite() {
+                let t = track - 1
+                session.select(track: t)
+                if !session.playing, let store = session.skiffSong, store.song?.tracks[safe: t]?.entryOn != entry {
+                    Task { await store.send(.play(track: t, entry: entry)) }
+                }
+            }
+            poke(["pads", "editor"])
+        case .stepSelect(let i):
+            selectedStep = max(0, min(15, i))
+            if lockLatched { syncLockStep() }   // a latched lock follows the selection (the iPad's Lock does)
+            poke(["editor"])
+        case .cancelWaiting:
+            guard canWrite() else { log("read-only: cancelWaiting not sent"); return }
+            if let store = session.skiffSong { Task { await store.performOp(.cancel) } }
         default: log("intent not handled yet (later phase): \(intent)")
         }
     }

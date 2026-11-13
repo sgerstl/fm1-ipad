@@ -132,6 +132,21 @@ Each area is its own `Codable` struct. Swift sends an area again only when it ch
 - Intents: `padSelect` and `stepSelect` are screen-local (nothing is sent to the FM-1). The rest of P3's intents decode and are logged as not done yet.
 - The recorder carries over hand-written frames for areas PhoneCore doesn't publish yet (`shell`), so a re-record doesn't wipe a screen's data. Files with carried frames stay `"provisional": true`.
 
+### P3's intents on the real FM-1 (P1, 2026-11-14)
+
+`PadsEditorIntents.swift` sends each pads and editor intent through the call the iPad uses for the same thing:
+- **Pads** go through `SkiffSongStore`: `launch` for a tap (a waiting pad tapped again relaunches the entry playing), LIST `new` / `set` / `clear`, PERFORM `mute` / `store` / `recall` / `cancel`, and `select(track:)`.
+- **The editor** goes through `Session.write(track:index:)` (with Skiff's extra bytes for CHANCE, COND and NUDGE, as StepInspector does), `setLength` for LENGTH, `deleteMotion` and `clearLocks` for the locks, and `lockStep` for Lock held or latched.
+
+One `stepAdjust` unit is the panel's − / + step (VELOCITY 4, CHANCE 5, the rest 1), as P3's fake has it. Calls made:
+- **Write intents are refused in PhoneCore while read-only** (`canWrite`, from the link's switch) and logged, so Session's optimistic copy never shows a change that the guard then dropped. The guard stays underneath (tested).
+- **The song store takes one op at a time.** An op turned down (busy, stopped only, patterns full) is logged as "FM-1 refused: …". A screen for it is still to come.
+- **Storing over a kept scene** doesn't ask on the phone: P3's Store-then-scene counts as the confirmation. To confirm with Scott (writes sheet, check 4).
+- **`editor.chord` is the entry mode** (Chord on/off), no longer the track's CHORD parameter. **`editor.values` and `lanes` come from MOTION**, read for the editor's track every 3 s.
+- **Not built:** an FM-1 key into a step (the iPad has no path; Scott to decide), Select sound, and lock from the phone's knobs (that waits on P4's `setParam`).
+
+Device check: `qa/device-checks/2026-11-14-android-p1-writes.md`.
+
 ### Read-only by default (P1, 2026-11-13)
 
 `LinkGate.readOnly` (on by default) wraps every connection in `GuardedTransport`. Only frames that Skiff's own protocol table (`skiff-src web/EDITOR_PROTOCOL.md`) calls queries reach the FM-1; anything else is dropped and logged ("read-only: blocked cmd N…"). The allowlist is in `ReadOnlyGuard.swift`. Tests show Session and PhoneCore reach ready and keep running over FakeSkiff (with and without the screen link) with nothing blocked. The guard was added for Scott's approved overnight read-only tests on the real FM-1. **There is deliberately no button that turns writes on**: a stray tap from another session's screenshot script hit one on the shared emulator. Writes need `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --ez allowWrites true`. Making it read-only again is one tap. So Play from the phone does nothing until writes are allowed.
