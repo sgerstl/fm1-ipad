@@ -9,6 +9,15 @@ class FakePages {
     private val library = mutableMapOf<String, PageState>()
     private val rows = mutableMapOf<String, List<PageRef>>()
 
+    /** Skiff 2.2's rows for a family the fixtures never showed (EDIT as an ANALOG track has it). */
+    private val defaults = mapOf(
+        "ENV" to listOf(0 to "ENV", 1 to "ENV 2"), "LFO" to listOf(2 to "LFO", 3 to "LFO 2", 4 to "MOD"),
+        "FX" to listOf(5 to "FX", 6 to "DRIVE", 7 to "INSERT", 8 to "INSERT 2", 9 to "SLICER", 10 to "DUCK"),
+        "SEL" to listOf(11 to "SCALE", 12 to "CHORD", 13 to "FOLLOW"),
+        "EDIT" to listOf(14 to "EDIT 1", 15 to "EDIT 2", 28 to "VOICE", 29 to "VOICE 2"),
+        "ARP" to listOf(39 to "ARP", 40 to "ARP 2"),
+    ).mapValues { (_, v) -> v.map { PageRef(it.first, it.second) } }
+
     fun learn(p: PageState) {
         val title = p.pages.firstOrNull { it.index == p.page }?.title ?: return
         library[title] = p
@@ -34,7 +43,7 @@ class FakePages {
     }
 
     fun pick(p: PageState, family: String, page: Int?): PageState {
-        val row = rows[family] ?: library.values.firstOrNull { it.family == family }?.pages ?: emptyList()
+        val row = rows[family] ?: defaults[family] ?: emptyList()
         val ref = (if (page == null) row.firstOrNull() else row.firstOrNull { it.index == page }) ?: return p.copy(family = family)
         library[ref.title]?.let { return it.copy(track = p.track, trackName = p.trackName, lock = p.lock, turned = -1) }
         // a page the fixtures don't carry: the row and the name, four empty wells, no graph

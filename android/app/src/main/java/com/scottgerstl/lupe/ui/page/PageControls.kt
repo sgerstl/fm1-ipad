@@ -94,7 +94,7 @@ fun PageControlsRow(
 @Composable
 private fun EmptyWell(slot: Int) {
     Column(Modifier.width(96.dp).clearAndSetSemantics { }, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.padding(top = 2.dp).size(RING_BOX).clip(CircleShape).background(Tok.well))
+        Box(Modifier.padding(top = 6.dp).size(RING_BOX - 8.dp).clip(CircleShape).background(Tok.well))
     }
 }
 
