@@ -797,11 +797,11 @@ function blockEditor(y0, h0, o = {}) {
     `<span style="width:10px;height:10px;border-radius:5px;background:${COL[SEL]}"></span><span style="font-weight:600">5 Piano</span><span style="color:var(--text2r)">· B · pattern 12 · C min</span>`);
   h += el('key', 340, y0, 64, 32, '', 'Step ⋯', 'aria-label="Step menu"');
   const blockH = 76, under = o.sound ? (o.full ? 360 : 156) : 122;
-  const gy = y0 + 40, gh = h0 - 40 - 8 - blockH - 8 - under;
+  const gy = y0 + 40, gh = h0 - 40 - 8 - under - 8 - blockH;
   h += (gh < 220 ? miniGrid(gy, gh) : grid(gy, gh, { noSel: true }));
-  const by = gy + gh + 12;
-  h += fmBlock(by, o.sound ? 'FX' : 'HOME');
-  const uy = by + blockH + 4;
+  const uy = gy + gh + 12;
+  // the block sits at the very bottom, under the knobs or the sound page (Scott, 2026-11-13)
+  h += fmBlock(y0 + h0 - blockH, o.sound ? 'FX' : 'HOME');
   if (!o.sound) {
     // the HOME knobs (board 70)
     h += el('', 8, uy, 300, 24, 'display:flex;align-items:center;gap:8px;font-size:14px;white-space:nowrap', `<span style="font-weight:600">Sound</span><span style="color:var(--text2r)">ANALOG · the FM-1's four knobs</span>`);
@@ -842,13 +842,13 @@ function headA2(o) {
   h += el('', 0, 132, W, 1, 'background:var(--control)');
   return h;
 }
-board2(72, 'The FM-1\'s button block, under the steps', [
-  { cap: 'HOME: the block, then the HOME knobs', head: headA2, bottom: (y, h) => blockEditor(y, h, {}), label: 'Steps, the button block with HOME lit, the HOME knobs', discs: [[1, 396, 690], [2, 396, 820]] },
+board2(72, 'The FM-1\'s button block, at the bottom', [
+  { cap: 'HOME: the HOME knobs, then the block', head: headA2, bottom: (y, h) => blockEditor(y, h, {}), label: 'Steps, the button block with HOME lit, the HOME knobs', discs: [[1, 396, 818], [2, 396, 704]] },
   { cap: 'FX pressed, at split', head: headA2, bottom: (y, h) => blockEditor(y, h, { sound: true }), label: 'Steps, the block with FX lit, the FX page\'s controls', discs: [[3, 380, 796]] },
   { cap: 'FX at bottom full: the picture comes back', head: headA2, mode: 'bottom', bottom: (y, h) => blockEditor(y, h, { sound: true, full: true }), label: 'Bottom full: steps, block, FX picture and controls', discs: [[4, 380, 560]] },
 ], [
   'The phone copies the FM-1\'s 2 × 6 button block key for key and in its places (decision 24, from Scott\'s photo): FX SEL ENV LFO EDIT GLO over HOME SAVE ARP SEQ PLAY/STOP REC. The lit key is the FM-1\'s current family, as the device lights it; idle keys stay readable. PLAY/STOP and REC are red words, as printed on the FM-1.',
-  'It\'s always there, between the steps and what\'s under them, so HOME and every page are one tap away. Under it: the HOME knobs on HOME (board 70), or the sound page (decision 20c: the dials row gives way, never two sets of dials). <span class="q">Open:</span> the block sits under the steps here; it could sit at the very bottom for the thumb, with the knobs above it.',
+  'It\'s always there, at the very bottom of the screen under the knobs, where the thumb is (Scott: below the step knobs), so HOME and every page are one tap away. Above it: the HOME knobs on HOME (board 70), or the sound page (decision 20c: the dials row gives way, never two sets of dials).',
   'At split a sound page shows its page row and four controls; the steps compress to about 30 dp rows (note and number on one line). <b>The cost:</b> the block\'s 80 dp comes out of the steps, so at split they\'re tight; they\'re roomy at bottom full. Keys that open the phone\'s own place: GLO the Mix tab at the same section, SAVE the Sounds or Projects sheet, SEQ the editor (AUTOMATION and SONG on its pages). Each also sends the FM-1 there.',
   'At bottom full there\'s room for the page\'s picture, and every slider it draws turns its control (decision 22). The header is as built: board 71\'s A with C\'s tabs, the readout left of Record and Play.',
 ]);
