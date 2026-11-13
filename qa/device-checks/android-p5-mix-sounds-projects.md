@@ -140,3 +140,10 @@ Built, unit tests pass, not run on a screen (no emulator of mine was up; the Pix
 | T3 | While sliding | A bigger TEMPO · BPM plate floats above the finger and grows out of it |
 | T4 | Double tap the row | Back to the value it had when the popover opened. Check that the FM-1's tempo follows |
 | T5 | Hold a Mix row, tap Solo | The menu closes and the SOLO pill shows on the row |
+
+## Recheck on b6a7d6a, real FM-1, over adb by Claude, 2026-11-13 evening
+
+- ✓ Tempo slides up and down (the phone's default): 81 → 86 on a short slide, about 9 dp a BPM; the FM-1 reads back each value.
+- ✓ The Magnifier floats above the finger while the tempo slides. Minor: it overlaps the status bar, and the clock and icons show through its label.
+- ✓ Double tap puts the tempo back to its value when the menu opened (86 → 81).
+- ✓ Solo closes the hold menu; the row shows a SOLO pill; Solo off restores the earlier mutes exactly. Minor: the pill shortens the name ("Glitch Kit" → "Glitch").
