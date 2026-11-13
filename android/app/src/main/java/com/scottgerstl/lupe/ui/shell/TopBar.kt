@@ -144,6 +144,10 @@ private fun FakeMenu(core: FakeLupeCore, close: () -> Unit) {
     MenuDivider()
     MenuHeading("Fake core (no FM-1)")
     core.scenarioNames.forEach { MenuRow("Play “$it”", { core.play(it); close() }) }
+    MenuRow("FM-1 key C4", { core.fm1Key(60); close() })
+    MenuRow("FM-1 key E♭4", { core.fm1Key(63); close() })
+    MenuRow("FM-1 knob 1 up (locks CUTOFF)", { core.fm1Knob(1, 1); close() })
+    MenuRow("FM-1 knob 2 up (locks DECAY)", { core.fm1Knob(2, 1); close() })
     MenuRow("Bottom: editor", { core.showBottom(com.scottgerstl.lupe.core.BottomPage()); close() })
     listOf("ENV" to "ENV", "LFO" to "LFO", "FX" to "REVERB").forEach { (fam, page) ->
         MenuRow("Bottom: $fam page", { core.showBottom(com.scottgerstl.lupe.core.BottomPage(com.scottgerstl.lupe.core.BottomKind.Page, fam, page)); close() })
