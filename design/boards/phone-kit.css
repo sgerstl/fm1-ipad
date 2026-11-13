@@ -1,0 +1,28 @@
+@font-face { font-family: Barlow; src: url(../../ios/FM1/Fonts/Barlow-Regular.ttf); font-weight: 400; }
+@font-face { font-family: Barlow; src: url(../../ios/FM1/Fonts/Barlow-SemiBold.ttf); font-weight: 600; }
+@font-face { font-family: 'Barlow Condensed'; src: url(../../ios/FM1/Fonts/BarlowCondensed-SemiBold.ttf); font-weight: 600; }
+:root {
+  --page: #0D0D0F; --well: #111114; --panel: #1A1A1E; --control: #26262B; --lifted: #34343B; --edge: #0A0A0C; --empty: #2A2A30;
+  --text: #EDEDF0; --text2: #A1A1AA; --text2r: #C4C4CC; --text3: #71717A; --on: #101012; --outline: #4A4A52; --rec: #FF4D4D;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #2A2A2E; font-family: Barlow, -apple-system, sans-serif; color: var(--text); font-variant-numeric: tabular-nums; padding: 24px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+.lede { color: var(--text2r); font-size: 14px; margin: 0 0 32px; max-width: 75ch; line-height: 1.5; }
+.board { margin-bottom: 56px; display: inline-block; vertical-align: top; margin-right: 40px; }
+.board > h2 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+.phones { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+@media (max-width: 480px) { body { padding: 0; } .board { margin-right: 0; } .board > h2, .cap, h1, .lede { padding: 0 16px; } .screen { border-radius: 0; outline: none; } .ann { border-radius: 0; } }
+.cap { font-size: 14px; color: var(--text2r); margin: 0 0 8px; }
+.screen { position: relative; width: 412px; height: 915px; background: var(--page); overflow: hidden; border-radius: 32px; outline: 6px solid #3A3A40; }
+.ann { background: #EDEDF0; color: #101012; padding: 20px 24px; border-radius: 12px; margin-top: 24px; max-width: 900px; }
+.ann ol { margin: 0; padding-left: 22px; font-size: 14px; line-height: 1.5; }
+.ann li { margin-bottom: 6px; }
+.ann .q { font-weight: 600; }
+.abs { position: absolute; }
+.key { background: var(--control); border-radius: 8px; box-shadow: 0 2px 0 var(--edge); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--text); }
+.rec { background: var(--well); border-radius: 10px; }
+.lab { font-family: 'Barlow Condensed', Barlow, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.04em; color: var(--text2r); }
+.cond { font-family: 'Barlow Condensed', Barlow, sans-serif; font-weight: 600; }
+.num { position: absolute; min-width: 20px; padding: 0 6px; height: 20px; border-radius: 10px; background: #EDEDF0; color: #101012; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #101012; z-index: 5; }
+.dia { position: absolute; width: 8px; height: 8px; transform: rotate(45deg); }

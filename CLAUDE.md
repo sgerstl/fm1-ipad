@@ -33,3 +33,7 @@ Before designing a new tab, panel or screen, or moving where something lives, up
 ## 6. Accessibility is a release gate
 
 The full accessibility pass (VoiceOver, keyboard, largest text, Reduce Motion; `qa/TEST-PLAN.md` section 6) is the last step before preparing a release. It doesn't happen per batch. Until then, keep the floor: every drag has a non-drag way in (WCAG 2.5.7), new controls get VoiceOver labels and actions, Reduce Motion is respected, and contrast is computed, not eyeballed.
+
+## 7. A component with a reference document: read it first, write back the same session
+
+*Trial from 2026-11-13, on the pattern pad only.* `design/components/` holds one document per component (rules in its `README.md`). Before changing a component that has one, read it: requirements, Ruled out, the decision logs. **If what you're about to build touches a line marked `[open]`, stop and ask Scott**; don't decide it. Anything Scott decides or rejects during the session goes back into the document in the same commit as the work. Never copy into it what `DESIGN.md`, the tokens, Labs or the device checks already hold.

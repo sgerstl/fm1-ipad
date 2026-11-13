@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scottgerstl.lupe.core.LinkPhase
 import com.scottgerstl.lupe.core.LinkState
 import com.scottgerstl.lupe.core.LupeCore
+import com.scottgerstl.lupe.ui.page.FollowFm1Divider
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.EaseIn
 import com.scottgerstl.lupe.ui.theme.EaseOut
@@ -55,6 +56,8 @@ fun LupeShell(core: LupeCore) {
     // keep what the card/page said while they leave
     var lastLink by remember { mutableStateOf(link) }
     if (mode != LinkMode.Normal) lastLink = link
+
+    FollowFm1Divider(shell, core)
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
