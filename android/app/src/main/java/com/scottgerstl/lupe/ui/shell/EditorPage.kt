@@ -100,8 +100,15 @@ private enum class PanelTab(val label: String) { Notes("NOTES"), Feel("FEEL"), S
  * automation lane when there is room (bottom full), and the step panel in the strip under the grid. Notes go in
  * from the FM-1's keys only, so there is no piano. [autoFraction] is 0..1: how much of the lane fits.
  */
+/**
+ * Which step the person has picked, or none (decision 21): with none, the grid shows no selected step and the strip under
+ * it is HOME's four sound knobs; a tap picks a step and the strip becomes its controls. Kept above the editor so a sound page
+ * (or the FM-1 changing page) can clear it. OPEN, left to Scott: it stays picked when the pattern changes.
+ */
+class StepPick { var step by mutableStateOf<Int?>(null) }
+
 @Composable
-fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, auto: com.scottgerstl.lupe.core.AutomationState = com.scottgerstl.lupe.core.AutomationState(), modifier: Modifier = Modifier) {
+fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, auto: com.scottgerstl.lupe.core.AutomationState = com.scottgerstl.lupe.core.AutomationState(), modifier: Modifier = Modifier, pick: StepPick = remember { StepPick() }) {
     var tab by rememberSaveable { mutableStateOf(PanelTab.Notes) }
     // the whole bottom half for one lane (board 69): drawn on with a finger. Done, or Back, returns to the editor
     var drawing by rememberSaveable { mutableStateOf(false) }
@@ -109,23 +116,25 @@ fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, auto: com.s
     if (ed.steps.isEmpty()) { Placeholder("No pattern", "Pick a pad: hold it, then Edit steps", modifier); return }
     if (drawing && auto.lane.isNotEmpty()) { AutomationFull(ed, auto, core, track, { drawing = false }, modifier); return }
     Column(modifier.fillMaxSize()) {
-        Ruler(ed, track, core)
+        Ruler(ed, track, core, pick.step != null)
         Spacer(Modifier.height(0.dp))
-        Grid(ed, track, core, Modifier.weight(1f).padding(top = 0.dp))
+        Grid(ed, track, core, Modifier.weight(1f).padding(top = 0.dp), pick.step) { pick.step = it }
         // the lane shows for every pattern: with no locks or recorded motion yet it is a parameter picker, so a fresh pattern has a way in
         if (autoFraction > 0.02f) {
             Spacer(Modifier.height(12.dp * autoFraction))
             AutoLane(ed, auto, track, core, { drawing = true }, Modifier.height(150.dp * autoFraction).graphicsLayer { alpha = autoFraction })
         }
         Spacer(Modifier.height(12.dp))
-        StepPanel(ed, track, core, tab, { tab = it })
+        LupeCrossfade(pick.step != null, Modifier.fillMaxWidth().height(STRIP_HEIGHT)) { picked ->
+            if (picked) StepPanel(ed, track, core, tab, { tab = it }, pick) else HomeKnobsStrip(ed, core)
+        }
     }
 }
 
 // ---- ruler and lock banner
 
 @Composable
-private fun Ruler(ed: EditorState, track: Color, core: LupeCore) {
+private fun Ruler(ed: EditorState, track: Color, core: LupeCore, stepPicked: Boolean) {
     val locking = ed.lock != LockMode.Off
     LupeCrossfade(locking, Modifier.fillMaxWidth().height(40.dp)) { l ->
         if (l) LockBanner(ed, track) else Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -135,7 +144,7 @@ private fun Ruler(ed: EditorState, track: Color, core: LupeCore) {
                 BasicText("${ed.track} ${ed.trackName}", style = LupeType.key, maxLines = 1)
                 BasicText("· ${ed.entry} · pattern ${"%02d".format(ed.pattern)}" + if (ed.scale.isNotEmpty()) " · ${ed.scale}" else "", style = LupeType.body.copy(fontSize = 14.sp), maxLines = 1)
             }
-            StepMenuKey(ed, core)
+            StepMenuKey(ed, core, stepPicked)
         }
     }
 }
@@ -165,7 +174,7 @@ internal fun DrawScope.diamond(color: Color, cx: Float, cy: Float, r: Float) =
 private enum class StepMenuMode { Root, ClearConfirm, PasteConfirm }
 
 @Composable
-private fun StepMenuKey(ed: EditorState, core: LupeCore) {
+private fun StepMenuKey(ed: EditorState, core: LupeCore, enabled: Boolean) {
     var open by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(StepMenuMode.Root) }
     var armedAt by remember { mutableStateOf(0L) }
@@ -179,7 +188,7 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore) {
         "$verb here shortens step ${from + 1} (${owner.pitchText.ifEmpty { owner.note }}) to $left step${if (left == 1) "" else "s"}."
     }
     Box {
-        Key({ open = true; mode = StepMenuMode.Root }, "Step menu", width = 64.dp, height = 32.dp, minTarget = 40.dp) { fg ->
+        Key({ open = true; mode = StepMenuMode.Root }, "Step menu", width = 64.dp, height = 32.dp, minTarget = 40.dp, enabled = enabled, state = if (enabled) null else "Pick a step first") { fg ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 KeyLabel("Step", fg)
                 Canvas(Modifier.size(14.dp, 4.dp)) { for (i in 0..2) drawCircle(fg, 1.5.dp.toPx(), Offset(2.dp.toPx() + i * 5.dp.toPx(), 2.dp.toPx())) }
@@ -236,7 +245,7 @@ fun ConfirmBox(text: String, description: String, armedAt: Long, modifier: Modif
 // ---- the grid
 
 @Composable
-internal fun Grid(ed: EditorState, track: Color, core: LupeCore, modifier: Modifier) {
+internal fun Grid(ed: EditorState, track: Color, core: LupeCore, modifier: Modifier, picked: Int? = ed.selected, onPick: (Int?) -> Unit = {}) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val gap = 4.dp
         val cw = (maxWidth - gap * 3) / 4
@@ -245,7 +254,7 @@ internal fun Grid(ed: EditorState, track: Color, core: LupeCore, modifier: Modif
             for (r in 0 until 4) Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                 for (c in 0 until 4) {
                     val i = r * 4 + c
-                    StepCell(i, ed.steps.getOrNull(i) ?: Step(), ed, track, cw, ch, core)
+                    StepCell(i, ed.steps.getOrNull(i) ?: Step(), ed, track, cw, ch, core, picked, onPick)
                 }
             }
         }
@@ -253,9 +262,10 @@ internal fun Grid(ed: EditorState, track: Color, core: LupeCore, modifier: Modif
 }
 
 @Composable
-private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: Dp, core: LupeCore) {
-    val selected = ed.selected == i
-    val held = ed.lock == LockMode.Held && selected
+private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: Dp, core: LupeCore, picked: Int?, onPick: (Int?) -> Unit) {
+    val selected = picked == i
+    val held = ed.lock == LockMode.Held && ed.selected == i
+    val pickNow by rememberUpdatedState(picked)
     val now = ed.playhead == i
     val onF = animatedFloat(if (s.on) 1f else 0f, Dur.STATE)
     val vel = animatedFloat(s.velocity / 127f, Dur.STATE)
@@ -279,9 +289,9 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
                 role = Role.Button
                 contentDescription = "Step ${i + 1}, " + (if (s.on) s.note + (if (s.extra > 0) " plus ${s.extra}" else "") + ", length ${s.length}" else "empty") + (if (s.locked) ", has a lock" else "")
                 stateDescription = if (selected) "Selected" else ""
-                onClick { core.send(Intent.StepSelect(i)); true }
+                onClick { if (pickNow == i) onPick(null) else { onPick(i); core.send(Intent.StepSelect(i)) }; true }
                 customActions = listOf(
-                    CustomAccessibilityAction("Lock knob turns to this step") { core.send(Intent.StepSelect(i)); core.send(Intent.LockToggle); true },
+                    CustomAccessibilityAction("Lock knob turns to this step") { onPick(i); core.send(Intent.StepSelect(i)); core.send(Intent.LockToggle); true },
                     CustomAccessibilityAction("Copy step") { core.send(Intent.StepAction(i, StepActionKind.Copy)); true },
                 )
             }
@@ -290,8 +300,9 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
                 awaitEachGesture {
                     awaitFirstDown()
                     val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation() }
-                    if (up != null) core.send(Intent.StepSelect(i))
+                    if (up != null) { if (pickNow == i) onPick(null) else { onPick(i); core.send(Intent.StepSelect(i)) } }   // tapping the picked step again lets it go
                     else {
+                        onPick(i)
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         core.send(Intent.StepHold(i, true))
                         waitForUpOrCancellation()
@@ -315,7 +326,7 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
 // ---- the step panel
 
 @Composable
-private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelTab, setTab: (PanelTab) -> Unit) {
+private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelTab, setTab: (PanelTab) -> Unit, pick: StepPick) {
     val s = ed.steps.getOrNull(ed.selected) ?: Step()
     val n = ed.selected + 1
     var confirm by remember { mutableStateOf(false) }
@@ -323,12 +334,19 @@ private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelT
     val lockedCount = s.values.count { it.locked }
     // leaving the SOUND tab, or the step, closes a pending confirm
     if (confirm && (tab != PanelTab.Sound || lockedCount == 0)) confirm = false
-    Column(Modifier.fillMaxWidth().height(122.dp)) {
+    Column(Modifier.fillMaxWidth().height(STRIP_HEIGHT)) {
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText("Step $n", Modifier.width(62.dp).semantics { heading() }, style = LupeType.key)
-            Key({ core.send(Intent.StepSelect(Math.floorMod(ed.selected - 1, 16))) }, "Previous step", width = 28.dp, height = 28.dp, minTarget = 32.dp) { fg -> Chevron90(fg, true) }
+            // "Step 6 ✕": the way back to the sound knobs (also: tap the step again, or the FM-1 changes page)
+            Key({ if (ed.lock == LockMode.Latched) core.send(Intent.LockToggle); pick.step = null }, "Step $n: close and show the sound knobs", width = 72.dp, height = 28.dp, minTarget = 32.dp) { fg ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    KeyLabel("Step $n", fg, style = LupeType.key.copy(fontSize = 13.sp))
+                    Canvas(Modifier.size(9.dp)) { val w = 1.5.dp.toPx(); drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), w, StrokeCap.Round); drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), w, StrokeCap.Round) }
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Key({ val to = Math.floorMod(ed.selected - 1, 16); pick.step = to; core.send(Intent.StepSelect(to)) }, "Previous step", width = 28.dp, height = 28.dp, minTarget = 32.dp) { fg -> Chevron90(fg, true) }
             Spacer(Modifier.width(4.dp))
-            Key({ core.send(Intent.StepSelect(Math.floorMod(ed.selected + 1, 16))) }, "Next step", width = 28.dp, height = 28.dp, minTarget = 32.dp) { fg -> Chevron90(fg, false) }
+            Key({ val to = Math.floorMod(ed.selected + 1, 16); pick.step = to; core.send(Intent.StepSelect(to)) }, "Next step", width = 28.dp, height = 28.dp, minTarget = 32.dp) { fg -> Chevron90(fg, false) }
             Spacer(Modifier.width(10.dp))
             PanelTabs(tab, setTab)
             Spacer(Modifier.weight(1f))

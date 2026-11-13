@@ -211,7 +211,8 @@ class PictureControls(val controls: List<PageControl?>, val colour: Color, val o
  * tap back to where the page opened, the same steps per dp, the same TalkBack range and actions. Draws nothing.
  */
 @Composable
-fun PictureSlider(slot: Int, pc: PictureControls, modifier: Modifier = Modifier, width: androidx.compose.ui.unit.Dp = 44.dp, height: androidx.compose.ui.unit.Dp = 44.dp) {
+fun PictureSlider(slot: Int, pc: PictureControls, modifier: Modifier = Modifier, width: androidx.compose.ui.unit.Dp = 44.dp, height: androidx.compose.ui.unit.Dp = 44.dp, onHot: (Boolean) -> Unit = {}) {
+    val hotNow by rememberUpdatedState(onHot)
     val c = pc.controls.getOrNull(slot) ?: return
     if (c.ringless || c.fixed) return
     val haptic = LocalHapticFeedback.current
@@ -246,8 +247,9 @@ fun PictureSlider(slot: Int, pc: PictureControls, modifier: Modifier = Modifier,
             .slideToTurn(
                 enabled = true, stepDp = stepDp(c),
                 face = remember(c.label, colour) { MagnifierFace(c.label, { latest.value }, { val l = latest; if (l.max > l.min) (now() - l.min).toFloat() / (l.max - l.min) else 0f }, ring = true, tint = colour) },
-                onStart = { base = now() },
+                onStart = { base = now(); hotNow(true) },
                 onSlide = { steps -> set(base + steps) },
+                onEnd = { hotNow(false) },
             ),
     )
 }

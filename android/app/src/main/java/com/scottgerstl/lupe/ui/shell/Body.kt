@@ -114,6 +114,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val onBottomTouch = { bottomTouches++ ; Unit }
     val pads by core.pads.collectAsStateWithLifecycle()
     val editor by core.editor.collectAsStateWithLifecycle()
+    // the picked step (decision 21): none shows HOME's knobs. The FM-1 changing page (or a sound page opening) puts the knobs back
+    val pick = remember { StepPick() }
+    LaunchedEffect(shell.bottom) { pick.step = null }
 
     // Decision 19: while a sound page shows (and only then), the back gesture is HOME on the FM-1. Registered before the
     // content, so the Sounds browser's own BackHandler (composed later) wins while it is open.
@@ -141,7 +144,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val hb = with(density) { maxHeight.toPx() }
         if (labs.soundStack && stackUp && !soundsOpen) {
-            StackBody(shellShown, shell.divider, if (shown.kind == BottomKind.Page) shown else lastPage, core, pads, editor, stackScroll, hb, onBottomTouch, frozen)
+            StackBody(shellShown, shell.divider, if (shown.kind == BottomKind.Page) shown else lastPage, core, pads, editor, stackScroll, hb, onBottomTouch, frozen, pick)
             return@BoxWithConstraints
         }
         fun dp(v: Float) = with(density) { v.dp.toPx() }
@@ -182,9 +185,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         }
 
         if (reduce) {
-            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen) }
+            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen, pick) }
         } else {
-            Layers(place.value, shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen)
+            Layers(place.value, shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen, pick)
         }
 
         // The divider's touch target: 48 dp tall around the 16 dp band, over both halves.
@@ -258,7 +261,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
  * Back sends HOME (ShellBody's handler) and the scroll goes back down. The divider has no place here.
  */
 @Composable
-private fun StackBody(shell: ShellState, divider: Divider, page: BottomPage, core: LupeCore, pads: PadsState, editor: EditorState, scroll: androidx.compose.foundation.ScrollState, hb: Float, onBottomTouch: () -> Unit, frozen: Boolean) {
+private fun StackBody(shell: ShellState, divider: Divider, page: BottomPage, core: LupeCore, pads: PadsState, editor: EditorState, scroll: androidx.compose.foundation.ScrollState, hb: Float, onBottomTouch: () -> Unit, frozen: Boolean, pick: StepPick) {
     val density = LocalDensity.current
     val topH = with(density) { (hb * 350f / 787f).toDp() }
     val bottomH = with(density) { hb.toDp() } - topH
@@ -274,7 +277,7 @@ private fun StackBody(shell: ShellState, divider: Divider, page: BottomPage, cor
                 Box(Modifier.padding(top = TOP_OFFSET.dp).fillMaxSize().clipToBounds()) { TopContent(shell.tab, pads, core) }
             }
             Box(Modifier.fillMaxWidth().height(bottomH).padding(top = GAP.dp).clipToBounds()) {
-                EditorPage(editor, core, 0f, automation)
+                EditorPage(editor, core, 0f, automation, pick = pick)
                 com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
             }
             Box(Modifier.fillMaxWidth().height(bottomH).padding(top = GAP.dp).clipToBounds()) { HeldSoundPage(page, core, frozen) }
@@ -295,7 +298,7 @@ private fun TopContent(tab: Tab, pads: PadsState, core: LupeCore) {
 
 /** The picture at one divider place. */
 @Composable
-private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit, frozen: Boolean = false) {
+private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit, frozen: Boolean = false, pick: StepPick = remember { StepPick() }) {
     val density = LocalDensity.current
     val automation by core.automation.collectAsStateWithLifecycle()
     val soundsHost = LocalSoundsHost.current
@@ -352,7 +355,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                     when (page.kind) {
                         // the offer and the landing sit on top of the editor; the FM-1's picker takes its place
                         BottomKind.Editor -> Box(Modifier.fillMaxSize()) {
-                            EditorPage(editor, core, autoFraction, automation)
+                            EditorPage(editor, core, autoFraction, automation, pick = pick)
                             com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
                         }
                         BottomKind.FreeTake -> com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)

@@ -32,6 +32,17 @@ class FakeLupeCoreTest {
         assertEquals(com.scottgerstl.lupe.core.BottomKind.Editor, core.shell.value.bottom.kind)
     }
 
+    @Test fun homeKnobsAreTheEnginesFourAndTurn() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        val k = core.homeKnobs.value
+        assertEquals("ANALOG", k.engine)
+        assertEquals(listOf("CUTOFF 84", "RES 40", "ATTACK 12", "RELEASE 64"), k.controls.map { "${it!!.label} ${it.value}" })
+        core.send(com.scottgerstl.lupe.core.SetHomeKnob(0, 200)); advanceTimeBy(10)
+        assertEquals("127", core.homeKnobs.value.controls[0]!!.value)   // stops at the range's end
+        core.fm1HomeKnob(2, 3); advanceTimeBy(10)
+        assertEquals("15", core.homeKnobs.value.controls[2]!!.value); assertEquals(2, core.homeKnobs.value.turned)
+    }
+
     @Test fun launchWaitsWhilePlayingAndCountsInTheTopBar() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.Play); advanceTimeBy(10)

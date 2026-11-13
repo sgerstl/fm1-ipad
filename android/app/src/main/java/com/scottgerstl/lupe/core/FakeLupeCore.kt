@@ -64,6 +64,8 @@ class FakeLupeCore(
     override val pads: StateFlow<PadsState> = _pads
     override val editor: StateFlow<EditorState> = _editor
     override val page: StateFlow<PageState> = _page
+    private val _home = MutableStateFlow(FakeHome.seed())
+    override val homeKnobs: StateFlow<HomeKnobsState> = _home
     private val _mix = MutableStateFlow(MixState())
     private val _freeTake = MutableStateFlow(FreeTakeState())
     private val _sounds = MutableStateFlow(SoundsState())
@@ -114,6 +116,9 @@ class FakeLupeCore(
     /** The FM-1's knob [slot] (0…3) turned on a sound page: the phone lights that control (the screen link's job on the real core). */
     fun fm1PageKnob(slot: Int) = _page.update { pageFake.fm1Turn(it, slot) }
 
+    /** The FM-1's HOME knob [slot] (0…3) turned by [delta]: the phone's knob follows and lights. */
+    fun fm1HomeKnob(slot: Int, delta: Int) = _home.update { FakeHome.set(it, slot, (it.controls.getOrNull(slot)?.raw ?: 0) + delta).copy(turned = slot, turnSeq = it.turnSeq + 1) }
+
     /** One of the FM-1's four knobs turned: with a step held (or Lock latched), the value locks to that step. */
     fun fm1Knob(knob: Int, delta: Int) {
         val ed = _editor.value
@@ -141,6 +146,7 @@ class FakeLupeCore(
             "link" -> _link.value = lupeJson.decodeFromJsonElement(LinkState.serializer(), state)
             "top" -> _top.value = lupeJson.decodeFromJsonElement(TopState.serializer(), state).also { syncTicker(it.playing) }
             "shell" -> _shell.value = lupeJson.decodeFromJsonElement(ShellState.serializer(), state)
+            "homeKnobs" -> _home.value = lupeJson.decodeFromJsonElement(HomeKnobsState.serializer(), state)
             "page" -> { val p = lupeJson.decodeFromJsonElement(PageState.serializer(), state); pageFake.learn(p); _page.value = p }
             "freetake" -> _freeTake.value = lupeJson.decodeFromJsonElement(FreeTakeState.serializer(), state)
             "mix" -> _mix.value = lupeJson.decodeFromJsonElement(MixState.serializer(), state)
@@ -172,6 +178,7 @@ class FakeLupeCore(
             is Intent.SetLaunch -> _top.update { it.copy(launch = intent.quantize) }
             Intent.CancelWaiting -> { _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map { if (it.play == PadPlay.Waiting) it.copy(play = PadPlay.Idle, bar = null) else it }) }) }; recount() }
             is Intent.SetTab -> _shell.update { it.copy(tab = intent.tab) }
+            is SetHomeKnob -> _home.update { FakeHome.set(it, intent.slot, intent.value) }
             is Intent.GoHome -> _shell.update { it.copy(bottom = BottomPage()) }
             is Intent.SetDivider -> _shell.update { it.copy(divider = intent.position) }
             is Intent.SetPlaybackMode -> _top.update { it.copy(mode = intent.mode) }
@@ -408,5 +415,15 @@ class FakeLupeCore(
                 _meters.value = MetersState(_mix.value.rows.mapIndexed { n, r -> if (r.mute) 0.0 else (r.level / 127.0) * (0.55 + 0.45 * kotlin.math.abs(kotlin.math.sin((stepCount + n * 3) * 0.7))) })
             }
         }
+    }
+}
+
+/** The fake's HOME knobs: ANALOG's CUTOFF 84, RES 40, ATTACK 12, RELEASE 64 (board 70). */
+internal object FakeHome {
+    fun seed() = HomeKnobsState("ANALOG", listOf("CUTOFF" to 84, "RES" to 40, "ATTACK" to 12, "RELEASE" to 64).map { (l, v) -> PageControl(l, "$v", v, 0, 127) })
+    fun set(s: HomeKnobsState, slot: Int, value: Int): HomeKnobsState {
+        val c = s.controls.getOrNull(slot) ?: return s
+        val v = value.coerceIn(c.min, c.max)
+        return s.copy(controls = s.controls.mapIndexed { i, x -> if (i == slot) c.copy(raw = v, value = "$v") else x })
     }
 }

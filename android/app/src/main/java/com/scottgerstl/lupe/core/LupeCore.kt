@@ -26,5 +26,8 @@ interface LupeCore {
     val timeline: StateFlow<TimelineState> get() = P6Defaults.timeline
     val automation: StateFlow<AutomationState> get() = P6Defaults.automation
 
+    /** HOME's four sound knobs under the step grid (HomeKnobsState.kt). */
+    val homeKnobs: StateFlow<HomeKnobsState> get() = HomeKnobsDefaults.state
+
     fun send(intent: Intent)
 }
