@@ -193,10 +193,10 @@ data class PickTile(val tile: Int) : Intent
  *  JSON `{"intent":"goHome"}`. A write: refused while read-only. The shell's bottom returns to the editor. */
 /**
  * The block's GLO, SAVE and SEQ: send the FM-1 to that screen (SCREEN_GOTO; the phone opens its own place for it as well: the Mix tab, the
- * Projects sheet, the editor). [screen] is "GLO", "SAVE" or "SEQ". PROVISIONAL name: P1 decides what the core accepts. A write.
+ * Projects sheet, the editor). [screen] is "GLO", "SAVE" or "SEQ"; [page] (optional) is one of that key's pages in Lupe's numbers for a second press of a lit key (GLO 30-34, SAVE 35-38, SEQ 41-45). P1 fixed the shape. A write.
  */
 @Serializable @SerialName("screenGoto")
-data class ScreenGoto(val screen: String) : Intent
+data class ScreenGoto(val screen: String, val page: Int? = null) : Intent
 
 @Serializable @SerialName("goHome")
 data object GoHome : Intent
