@@ -76,6 +76,8 @@ class MagnifierState {
     var face by mutableStateOf<MagnifierFace?>(null)
     var shown by mutableStateOf(false)
     var finger by mutableStateOf(Offset.Zero)
+    /** True when the finger is reported in screen coordinates (a control inside a pop-up window, whose own root isn't the activity's). */
+    var screenSpace = false
 }
 
 /**
@@ -133,7 +135,7 @@ fun Modifier.slideToTurn(
                     if (c != acc) { if (!atLimit) { atLimit = true; limit() }; acc = c } else atLimit = false
                 }
                 clampAcc()
-                fun finger(c: PointerInputChange) = coords?.takeIf { it.isAttached }?.localToRoot(c.position) ?: c.position
+                fun finger(c: PointerInputChange) = coords?.takeIf { it.isAttached }?.let { if (magnifier?.screenSpace == true) it.localToScreen(c.position) else it.localToRoot(c.position) } ?: c.position
                 if (loupeOn) { magnifier?.face = currentFace; magnifier?.finger = finger(claimed); magnifier?.shown = currentFace != null }
                 drag(claimed.id) { change ->
                     val d = change.positionChange()
@@ -215,5 +217,39 @@ private fun MagnifierPlate(face: MagnifierFace) {
                 drawRect(face.tint, Offset(minOf(from, x), 0f), Size(maxOf(abs(x - from), if (face.bipolar) 2f else 0f), size.height))
             }
         }
+    }
+}
+
+/**
+ * The Magnifier for a control inside a pop-up window (a menu row): the activity's Magnifier layer is behind that
+ * window, so this floats the plate in a small non-focusable pop-up of its own, above the finger (screen coordinates).
+ */
+@Composable
+fun MagnifierPopup(state: MagnifierState) {
+    val reduce = LocalReduceMotion.current
+    val t = animatedFloat(if (state.shown) 1f else 0f, if (state.shown) Dur.FINGER else Dur.EXIT)
+    val face = state.face
+    if (face == null || (t.value <= 0.001f && !state.shown)) return
+    val density = LocalDensity.current
+    val lift = with(density) { 72.dp.roundToPx() }
+    val margin = with(density) { 12.dp.roundToPx() }
+    val f = state.finger
+    val provider = remember(f) {
+        object : androidx.compose.ui.window.PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize, layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize) =
+                androidx.compose.ui.unit.IntOffset(
+                    (f.x - popupContentSize.width / 2f).toInt().coerceIn(margin, (windowSize.width - margin - popupContentSize.width).coerceAtLeast(margin)),
+                    (f.y - lift - popupContentSize.height).toInt().coerceAtLeast(margin))
+        }
+    }
+    androidx.compose.ui.window.Popup(provider, properties = androidx.compose.ui.window.PopupProperties(focusable = false, clippingEnabled = false)) {
+        Box(
+            Modifier.clearAndSetSemantics { }
+                .graphicsLayer {
+                    alpha = t.value
+                    if (!reduce) { val s = 0.2f + 0.8f * t.value; scaleX = s; scaleY = s; transformOrigin = TransformOrigin(0.5f, 1f) }
+                }
+                .background(Tok.held, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+        ) { MagnifierPlate(face) }
     }
 }

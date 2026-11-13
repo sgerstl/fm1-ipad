@@ -124,7 +124,7 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
             LupeMenu(menu == Menu.Readout, { menu = null }, alignEnd = true, width = 240.dp) {
                 // the tempo is a value you slide (decision 10: no steppers anywhere); double tap puts it back to what it was when the menu opened
                 val opened = remember(menu == Menu.Readout) { top.tempo.roundToInt() }
-                com.scottgerstl.lupe.ui.slide.MenuSlideRow("TEMPO · BPM", top.tempoText(), top.tempo.roundToInt(), 20, 300, "Tempo", stepDp = 1.5f, revertTo = opened) { core.send(Intent.SetTempo(it.toDouble())) }
+                com.scottgerstl.lupe.ui.slide.MenuSlideRow("TEMPO · BPM", top.tempoText(), top.tempo.roundToInt(), 20, 300, "Tempo", stepDp = 9f, revertTo = opened) { core.send(Intent.SetTempo(it.toDouble())) }
                 MenuDivider()
                 MenuHeading("Playback")
                 PlaybackMode.entries.forEach { m ->

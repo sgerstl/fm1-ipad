@@ -128,3 +128,15 @@ Core 68 tests in 8 suites pass, Kotlin tests pass.
 - ✗ Double tap didn't revert the tempo (176 stayed 176) when tapped by adb; recheck by hand.
 - ✓ DELAY MODE is whole above the divider at split.
 - ? Solo: on, then off, worked; once, after several toggles, track 4 came back unmuted when it had been muted before the solo. It may have been my taps landing while the menu was still open; Scott to watch for it. The hold menu stays open after tapping Solo, so the row's new SOLO pill is hidden until the menu closes.
+
+## Fixes for the tempo follow-up (to re-check; 2026-11-13)
+
+Built, unit tests pass, not run on a screen (no emulator of mine was up; the Pixel was left alone).
+
+| # | Do | See |
+|---|----|-----|
+| T1 | Tap the tempo readout, slide up or down on TEMPO · BPM | The value moves whichever way you slide (the row now takes both axes, whatever Slide-to-turn says) |
+| T2 | Slide 450 px sideways, or about 4 cm | About 1 BPM per 9 dp: roughly 20–25 BPM, not 94 |
+| T3 | While sliding | A bigger TEMPO · BPM plate floats above the finger and grows out of it |
+| T4 | Double tap the row | Back to the value it had when the popover opened. Check that the FM-1's tempo follows |
+| T5 | Hold a Mix row, tap Solo | The menu closes and the SOLO pill shows on the row |

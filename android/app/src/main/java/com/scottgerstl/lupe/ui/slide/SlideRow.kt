@@ -48,10 +48,15 @@ fun MenuSlideRow(
     stepDp: Float = 2f, bipolarAt: Int? = null, revertTo: Int? = null, onSet: (Int) -> Unit,
 ) {
     val latest by rememberUpdatedState(raw)
+    val shownText by rememberUpdatedState(text)
+    val shownRaw by rememberUpdatedState(raw)
     val send by rememberUpdatedState(onSet)
     var base by remember { mutableIntStateOf(0) }
     fun set(v: Int) { val n = v.coerceIn(min, max); if (n != latest) send(n) }
-    CompositionLocalProvider(LocalMagnifier provides null) {
+    val loupe = remember { MagnifierState().also { it.screenSpace = true } }
+    val face = remember(label, min, max, bipolarAt) { MagnifierFace(label, { shownText }, { if (max > min) (shownRaw - min).toFloat() / (max - min) else 0f }, bipolar = bipolarAt != null) }
+    CompositionLocalProvider(LocalMagnifier provides loupe) {
+        MagnifierPopup(loupe)
         Column(
             modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(Tok.well)
                 .semantics(mergeDescendants = true) {
@@ -61,7 +66,7 @@ fun MenuSlideRow(
                     customActions = listOf(CustomAccessibilityAction("Increase $name") { set(latest + 1); true }, CustomAccessibilityAction("Decrease $name") { set(latest - 1); true })
                 }
                 .then(if (revertTo != null) Modifier.pointerInput(revertTo) { detectTapGestures(onDoubleTap = { set(revertTo) }) } else Modifier)
-                .slideToTurn(enabled = true, stepDp = stepDp, face = null, onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (min - latest)..(max - latest) })
+                .slideToTurn(enabled = true, stepDp = stepDp, face = face, forceDirection = SlideDirection.Both, onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (min - latest)..(max - latest) })
                 .padding(10.dp),
         ) {
             BasicText(label, style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2, letterSpacing = 0.5.sp))
