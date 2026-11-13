@@ -17,11 +17,14 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _shell = MutableStateFlow(ShellState())
     private val _pads = MutableStateFlow(PadsState())
     private val _editor = MutableStateFlow(EditorState())
+    /** P4's page: not published by PhoneCore yet (android/notes/p1-page-area-brief.md), so it stays at its default. */
+    private val _page = MutableStateFlow(PageState())
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
     override val pads: StateFlow<PadsState> = _pads
     override val editor: StateFlow<EditorState> = _editor
+    override val page: StateFlow<PageState> = _page
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -37,6 +40,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "shell" -> _shell.value = lupeJson.decodeFromString(ShellState.serializer(), json)
                 "pads" -> _pads.value = lupeJson.decodeFromString(PadsState.serializer(), json)
                 "editor" -> _editor.value = lupeJson.decodeFromString(EditorState.serializer(), json)
+                "page" -> _page.value = lupeJson.decodeFromString(PageState.serializer(), json)
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {
