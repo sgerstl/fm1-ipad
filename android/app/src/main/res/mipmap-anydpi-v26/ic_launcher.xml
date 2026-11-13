@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lupe's icon (design/brand/lupe-icon-1024.png, the FM Lissajous on a scope): the art fills 84 of the 108 dp layer (the beam head stays inside the 66 dp safe circle),
+     every launcher mask crops only the dark scope margin; the background matches the art's own black. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
