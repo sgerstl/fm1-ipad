@@ -47,3 +47,15 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 **Not covered:** the iPad's Solo (the core has it; no key on the phone row), Sounds' "Samples (USR1–3)" (not in the core's areas), and anything about the FM-1 over Bluetooth.
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device" (TalkBack: release pass).
+
+## Fixes since the run on build 641fba7 (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| 7b | DELAY MODE did nothing on the fake | The fake core forwards `SetMixSetting`. | Tap PING-PONG: it lights and the value changes. |
+| 13 | Cancel cut to "Can…"; Rename's keyboard covered the field, only the keyboard's ✓ finished it | Keys that sit under a confirm fill their row (they can't cut their label); the sheet lifts with the keyboard; Rename has a visible Done and Cancel. | Every confirm's Cancel reads in full; Rename shows its field above the keyboard with Done beside Cancel. |
+| 15 | Labs row opened Settings at the top; the last row's second line was cut | The sheet scrolls to the Labs heading when opened from the Labs row; room at the foot. | Labs row: Settings opens at Labs; scroll to the end: the last sentence is whole. |
+| 17 | Pause following: no 3 s hold, and a held page still changed content | The page is frozen as it was while held (pin or pause): if the FM-1 moves on, the old page stays, read-only, with "The FM-1 is on LFO · held here"; on the same page it stays live. | Touch the editor, press ENV then LFO on the FM-1 within 3 s: the page doesn't change until 3 s after your last touch, then it catches up. |
+| 10 | A saved user slot was named "ANALOG ·" | Named for the sound ("ACID", 8 characters). | Save a sound: the slot carries its name, not the engine's. |
+| 11 | After a pad's Select sound › Done an empty ENV card showed | The fake no longer sends the bottom half to a SEL page for it; Done returns to what was there. | Select sound › Done returns to the editor. |
+| – | FM-1 key cut ("SONG…"); DRUM cut by the hint; Off switches too faint; Settings said "connected over USB" on the fake | The key is wider (names to 12 characters show); the engine list has room at its foot; an Off switch has a 2 dp outline and a lighter thumb (about 6:1, the 3:1 rule); the fake says "A fake core: no FM-1 is connected". | Eyeball each. |

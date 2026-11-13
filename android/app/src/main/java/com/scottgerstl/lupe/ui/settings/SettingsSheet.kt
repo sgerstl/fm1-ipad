@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,17 +67,18 @@ import com.scottgerstl.lupe.ui.theme.unscaled
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SettingsSheet(link: LinkState) {
+fun SettingsSheet(link: LinkState, fake: Boolean = false) {
     val host = LocalSheetHost.current
     val slide = LocalSlideSettings.current
     val phone = LocalPhoneSettings.current
     val scroll = rememberScrollState()
-    val labs = remember { BringIntoViewRequester() }
-    LaunchedEffect(host.open, host.toLabs) { if (host.open == SheetKind.Settings && host.toLabs) { kotlinx.coroutines.delay(320); labs.bringIntoView() } }
+    // the Labs heading's place in the scrolling content, so the FM-1 menu's Labs row can open the sheet scrolled to it
+    var labsY by remember { androidx.compose.runtime.mutableStateOf(-1) }
+    LaunchedEffect(host.open, host.toLabs, labsY) { if (host.open == SheetKind.Settings && host.toLabs && labsY >= 0) { kotlinx.coroutines.delay(350); scroll.animateScrollTo(labsY) } }
     LupeSheet(host.open == SheetKind.Settings, "Settings", { host.close() }, scroll = scroll) {
         Section("FM-1")
         Plain(
-            "FM-1", when (link.phase) { LinkPhase.Ready -> "Skiff, connected over USB"; LinkPhase.WrongFirmware -> "Connected, but not running Skiff"; else -> "Not connected" },
+            "FM-1", if (fake) "A fake core: no FM-1 is connected" else when (link.phase) { LinkPhase.Ready -> "Skiff, connected over USB"; LinkPhase.WrongFirmware -> "Connected, but not running Skiff"; else -> "Not connected" },
         )
         Plain("Theme", "Follows the FM-1 (SKIFF)")
 
@@ -91,7 +93,7 @@ fun SettingsSheet(link: LinkState) {
         SwitchRow("Magnifier", "A bigger copy of the value floats above your finger as you slide", slide.magnifier) { slide.chooseMagnifier(it) }
         SwitchRow("Haptics", "On pads and value steps", phone.haptics) { phone.chooseHaptics(it) }
 
-        Column(Modifier.bringIntoViewRequester(labs)) {
+        Column(Modifier.onGloballyPositioned { labsY = it.positionInParent().y.toInt() }) {
             Spacer(Modifier.height(12.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(Tok.lifted))
             Spacer(Modifier.height(16.dp))
@@ -158,9 +160,11 @@ fun LupeSwitch(on: Boolean) {
             .drawBehind {
                 val r = CornerRadius(size.height / 2)
                 drawRoundRect(lerp(Tok.control, Tok.primaryTop, t.value), cornerRadius = r)
-                val pad = 4.dp.toPx(); val d = size.height - 2 * pad
+                // off: a 2 dp outline in text2 (about 6:1 on the sheet), so the control's edge and state read without colour alone
+                if (t.value < 1f) drawRoundRect(Tok.text2.copy(alpha = 1f - t.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                val pad = 5.dp.toPx(); val d = size.height - 2 * pad
                 val x = if (reduce) (if (on) size.width - pad - d else pad) else pad + (size.width - 2 * pad - d) * t.value
-                drawRoundRect(lerp(Tok.held, Tok.onColour, t.value), Offset(x, pad), Size(d, d), CornerRadius(d / 2))
+                drawRoundRect(lerp(Tok.text2, Tok.onColour, t.value), Offset(x, pad), Size(d, d), CornerRadius(d / 2))
             },
     )
 }

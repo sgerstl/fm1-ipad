@@ -58,7 +58,7 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
     ) {
         // FM-1 key: Projects…, Settings, Labs. Later phases fill them in (P5, Labs); none exist yet, so they say so.
         Box {
-            Key({ menu = Menu.Fm1 }, "FM-1 menu, project ${top.project}", width = 80.dp) { fg -> MenuLabel(top.project, fg) }
+            Key({ menu = Menu.Fm1 }, "FM-1 menu, project ${top.project}", width = 128.dp) { fg -> MenuLabel(top.project, fg, textMax = 98.dp) }
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
                 val sheets = LocalSheetHost.current
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })

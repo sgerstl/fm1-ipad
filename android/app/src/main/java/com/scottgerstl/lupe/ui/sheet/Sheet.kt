@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -111,7 +112,8 @@ fun LupeSheet(visible: Boolean, title: String, onDismiss: () -> Unit, modifier: 
                 .background(Tok.panel)
                 .pointerInput(Unit) { detectTapGestures { } }   // taps on the sheet don't reach the scrim
                 .semantics { paneTitle = title; isTraversalGroup = true }
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .imePadding(),   // the keyboard (Rename) lifts the sheet instead of covering its field
         ) {
             // the header: the grab handle, the title and ✕. Dragging it down closes the sheet
             Column(
@@ -141,7 +143,7 @@ fun LupeSheet(visible: Boolean, title: String, onDismiss: () -> Unit, modifier: 
                     }
                 }
             }
-            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 24.dp), content = content)
+            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 48.dp), content = content)
         }
     }
 }

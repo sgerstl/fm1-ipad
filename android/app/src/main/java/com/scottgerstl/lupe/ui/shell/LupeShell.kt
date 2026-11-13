@@ -111,7 +111,7 @@ fun LupeShell(core: LupeCore) {
         }
         // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
         CompositionLocalProvider(LocalSheetHost provides sheets) {
-            SettingsSheet(link)
+            SettingsSheet(link, fake = core is com.scottgerstl.lupe.core.FakeLupeCore)
             val projects = rememberProjects(core)
             ProjectsSheet(projects.first, projects.second)
         }

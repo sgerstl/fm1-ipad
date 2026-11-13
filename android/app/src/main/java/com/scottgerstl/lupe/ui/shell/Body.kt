@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.delay
 import com.scottgerstl.lupe.ui.slide.LocalPhoneSettings
@@ -104,7 +105,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     // Labs: the bottom half can hold its page for 3 s after a touch, or be pinned (it stops following the FM-1)
     val labs = LocalPhoneSettings.current
     var bottomTouches by remember { mutableIntStateOf(0) }
-    val shown = followedBottom(shell.bottom, labs.pinBottom, labs.pauseFollowing, bottomTouches)
+    val followed = followedBottom(shell.bottom, labs.pinBottom, labs.pauseFollowing, bottomTouches)
+    val shown = followed.first
+    val frozen = followed.second
     val shellShown = if (shown == shell.bottom) shell else shell.copy(bottom = shown)
     val onBottomTouch = { bottomTouches++ ; Unit }
     val pads by core.pads.collectAsStateWithLifecycle()
@@ -150,9 +153,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         }
 
         if (reduce) {
-            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, core, hb, ::topAt, onBottomTouch) }
+            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen) }
         } else {
-            Layers(place.value, shellShown, pads, editor, core, hb, ::topAt, onBottomTouch)
+            Layers(place.value, shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen)
         }
 
         // The divider's touch target: 48 dp tall around the 16 dp band, over both halves.
@@ -221,7 +224,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 
 /** The picture at one divider place. */
 @Composable
-private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit) {
+private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit, frozen: Boolean = false) {
     val density = LocalDensity.current
     val mix = rememberMix(core)
     val timeline = rememberTimeline(core)   // the song is a stand-in until the core's timeline area lands
@@ -279,7 +282,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                     // the Sounds browser opens over the editor or the sound page; Done or Back brings it back
                     SoundsBrowser(core, req, { soundsHost.close() })
                 } else LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
-                    if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction, automation) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+                    if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction, automation) else HeldSoundPage(page, core, frozen)
                 }
             }
         }
@@ -288,14 +291,41 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
 
 
 /**
- * Which page the bottom half shows. It follows the FM-1 ([actual]) unless a Labs trial says otherwise: [pin] stops
- * following altogether; [pause] holds the page it's on for 3 s after each touch in the bottom half, then catches up.
+ * Which page the bottom half shows, and whether it is held. It follows the FM-1 ([actual]) unless a Labs trial says
+ * otherwise: [pin] stops following altogether; [pause] holds the page it's on for 3 s after each touch in the bottom half,
+ * then catches up to the FM-1's.
  */
 @Composable
-private fun followedBottom(actual: BottomPage, pin: Boolean, pause: Boolean, touches: Int): BottomPage {
+private fun followedBottom(actual: BottomPage, pin: Boolean, pause: Boolean, touches: Int): Pair<BottomPage, Boolean> {
     var shown by remember { mutableStateOf(actual) }
     var held by remember { mutableStateOf(false) }
     LaunchedEffect(touches) { if (pause && touches > 0) { held = true; delay(3000); held = false } }
     LaunchedEffect(actual, pin, held) { if (!pin && !held) shown = actual }
-    return shown
+    return shown to (pin || held)
+}
+
+/**
+ * A sound page while the bottom half is held (Labs: pin, or pause after a touch). The core's `page` area follows the FM-1, so
+ * if the FM-1 has moved on, the page that was shown is frozen as it was and read-only (a value set now would land on the
+ * FM-1's page, not this one), with a word saying so; while both are on the same page it stays live.
+ */
+@Composable
+private fun HeldSoundPage(page: BottomPage, core: LupeCore, frozen: Boolean) {
+    val live by core.page.collectAsStateWithLifecycle()
+    var snap by remember { mutableStateOf(live) }
+    LaunchedEffect(live, frozen) { if (!frozen) snap = live }
+    val moved = frozen && (snap.family != live.family || snap.page != live.page)
+    Box(Modifier.fillMaxSize()) {
+        com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, if (moved) remember(snap) { HeldPageCore(core, snap) } else core)
+        if (moved) BasicText("The FM-1 is on ${live.family} · held here", Modifier.align(Alignment.TopEnd).padding(8.dp), style = LupeType.small.copy(fontSize = 12.sp))
+    }
+}
+
+private class HeldPageCore(private val base: LupeCore, snapshot: com.scottgerstl.lupe.core.PageState) : LupeCore by base {
+    override val page: kotlinx.coroutines.flow.StateFlow<com.scottgerstl.lupe.core.PageState> = kotlinx.coroutines.flow.MutableStateFlow(snapshot)
+    override fun send(intent: Intent) {
+        // this page is not the FM-1's any more: what would change its values, or pick things on it, is dropped
+        if (intent is com.scottgerstl.lupe.core.SetParam || intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile) return
+        base.send(intent)
+    }
 }

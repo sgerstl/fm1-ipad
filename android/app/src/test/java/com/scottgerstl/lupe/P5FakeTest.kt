@@ -11,6 +11,8 @@ import com.scottgerstl.lupe.core.SetLevel
 import com.scottgerstl.lupe.core.SetPan
 import com.scottgerstl.lupe.core.SoundsTargetPick
 import com.scottgerstl.lupe.ui.mix.toUi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -18,6 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The fake's answers for P5's areas copy P1's core's refusals, and the screens' mapping of them. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class P5FakeTest {
     private val names = listOf("Acid", "Pad", "Pulse Ld", "Drum Kit", "Piano", "Perc Kit")
 
@@ -79,5 +82,21 @@ class P5FakeTest {
         var s = FakeP5.seedSounds(5, "Piano")
         s = FakeP5.sounds(s, com.scottgerstl.lupe.core.EraseUser(0)); assertTrue(s.user[0].used); assertNotNull(s.refusal)
         s = FakeP5.sounds(s, com.scottgerstl.lupe.core.EraseUser(0, confirmed = true)); assertFalse(s.user[0].used)
+    }
+
+    @Test fun aSavedSoundSlotIsNamedForTheSoundNotTheEngine() {
+        assertEquals("ACID", com.scottgerstl.lupe.ui.sounds.saveName("Analog · Acid"))
+        assertEquals("PULSE LD", com.scottgerstl.lupe.ui.sounds.saveName("Lofi · Pulse Ld"))
+        assertEquals("LONGNAME", com.scottgerstl.lupe.ui.sounds.saveName("Sample · Longname here"))   // 8 characters, as the FM-1 keeps
+        assertEquals("PIANO", com.scottgerstl.lupe.ui.sounds.saveName("Piano"))
+        assertEquals("SOUND", com.scottgerstl.lupe.ui.sounds.saveName(""))
+    }
+
+    @org.junit.Test fun theFakeCoreForwardsMixSettings() = kotlinx.coroutines.test.runTest(kotlinx.coroutines.test.StandardTestDispatcher()) {
+        val dir = java.io.File("../fixtures/state")
+        val scenarios = dir.listFiles { f -> f.extension == "json" }!!.associate { it.nameWithoutExtension to com.scottgerstl.lupe.core.Scenario.parse(it.nameWithoutExtension, it.readText()) }
+        val core = com.scottgerstl.lupe.core.FakeLupeCore(this, scenarios, "searching"); testScheduler.advanceTimeBy(10)
+        core.send(MixSectionPick("delay")); core.send(com.scottgerstl.lupe.core.SetMixSetting(0, 1))
+        assertEquals("PING-PONG", core.mix.value.card!!.settings.single().value)
     }
 }

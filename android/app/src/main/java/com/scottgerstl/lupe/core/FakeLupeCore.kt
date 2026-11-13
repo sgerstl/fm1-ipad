@@ -173,7 +173,7 @@ class FakeLupeCore(
             is Intent.SetPlaybackMode -> _top.update { it.copy(mode = intent.mode) }
             is Intent.PadTap -> launch(intent.track, intent.entry)
             is Intent.PadSelect -> selectPad(intent.track, intent.entry)
-            is Intent.PadSelectSound -> { selectPad(intent.track, intent.entry); showBottom(BottomPage(BottomKind.Page, "SEL", "SOUNDS")) }
+            is Intent.PadSelectSound -> selectPad(intent.track, intent.entry)   // the Sounds browser is the screen for it (Done returns to whatever the bottom half was on)
             is Intent.PadNew -> padNew(intent.track, intent.entry)
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is Intent.PadClear -> editEntry(intent.track, intent.entry) { PadEntry() }
@@ -230,7 +230,7 @@ class FakeLupeCore(
             }
             is ClearLane -> if (intent.confirmed) { model.forEach { m -> m.values.removeAll { it.param == intent.param } }; emitEditor() }
             // P5's intents (P5State.kt): mix, sounds, projects
-            is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam -> _mix.update { FakeP5.mix(it, intent) }
+            is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam, is SetMixSetting -> _mix.update { FakeP5.mix(it, intent) }
             is SoundsTargetPick, is SoundsView, is PickPreset, is PickUser, ClearEntrySound, is SaveSound, is EraseUser -> _sounds.update { FakeP5.sounds(it, intent) }
             is ProjectLoad, is ProjectSave, is ProjectSaveAs, is ProjectRename -> _projects.update { FakeP5.projects(it, intent) }
             else -> {}
