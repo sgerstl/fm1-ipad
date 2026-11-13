@@ -96,11 +96,13 @@ fun Modifier.slideToTurn(
     /** The steps the value can move from where it is when the slide starts (low..high, around 0), or null for no limit. The slide stops there, with no dead zone to unwind when the finger turns back. */
     bounds: () -> IntRange? = { null },
     onLimit: () -> Unit = {},
+    /** A control drawn as a line (a fader) follows the finger along its own axis whatever the setting; the setting is for knobs and value boxes. */
+    forceDirection: SlideDirection? = null,
 ): Modifier {
     val settings = LocalSlideSettings.current
     val magnifier = LocalMagnifier.current
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val dir = settings.direction
+    val dir = forceDirection ?: settings.direction
     val slide by rememberUpdatedState(onSlide)
     val start by rememberUpdatedState(onStart)
     val end by rememberUpdatedState(onEnd)

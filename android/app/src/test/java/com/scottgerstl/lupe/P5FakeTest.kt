@@ -63,8 +63,8 @@ class P5FakeTest {
         var m = FakeP5.seedMix(names, 1)
         m = FakeP5.mix(m, MixSectionPick("delay"))
         assertEquals("STEREO", m.toUi().settings.single().value)
-        m = FakeP5.mix(m, com.scottgerstl.lupe.core.SetMixSetting(0, 1))
-        assertEquals("PING-PONG", m.toUi().settings.single().value); assertEquals(1, m.card!!.settings.single().raw)
+        m = FakeP5.mix(m, com.scottgerstl.lupe.core.SetMixSetting(0, 2))
+        assertEquals("PING-PONG", m.toUi().settings.single().value); assertEquals(2, m.card!!.settings.single().raw)
         assertTrue(FakeP5.mix(FakeP5.mix(m, MixSectionPick("chorus")), Intent.TrackSelect(1)).toUi().settings.isEmpty())   // chorus has none
     }
 
@@ -96,7 +96,7 @@ class P5FakeTest {
         val dir = java.io.File("../fixtures/state")
         val scenarios = dir.listFiles { f -> f.extension == "json" }!!.associate { it.nameWithoutExtension to com.scottgerstl.lupe.core.Scenario.parse(it.nameWithoutExtension, it.readText()) }
         val core = com.scottgerstl.lupe.core.FakeLupeCore(this, scenarios, "searching"); testScheduler.advanceTimeBy(10)
-        core.send(MixSectionPick("delay")); core.send(com.scottgerstl.lupe.core.SetMixSetting(0, 1))
+        core.send(MixSectionPick("delay")); core.send(com.scottgerstl.lupe.core.SetMixSetting(0, 2))
         assertEquals("PING-PONG", core.mix.value.card!!.settings.single().value)
     }
 }

@@ -80,7 +80,12 @@ fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, wi
                 if (at != null) {
                     val fx = anchorBounds.left + at.x.toInt(); val fy = anchorBounds.top + at.y.toInt()
                     val side = gap * 3
-                    val x = if (fx + side + popupContentSize.width + margin <= windowSize.width) fx + side else fx - side - popupContentSize.width
+                    val right = fx + side + popupContentSize.width + margin <= windowSize.width
+                    val leftX = fx - side - popupContentSize.width
+                    // no room beside the finger on either side: above it (never over it)
+                    if (!right && leftX < margin) return IntOffset((fx - popupContentSize.width / 2).coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)),
+                        (fy - side * 2 - popupContentSize.height).coerceAtLeast(margin))
+                    val x = if (right) fx + side else leftX
                     return IntOffset(x.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)),
                         (fy - side).coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))
                 }

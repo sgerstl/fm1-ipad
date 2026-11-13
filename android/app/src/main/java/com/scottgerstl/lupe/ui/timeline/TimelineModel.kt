@@ -83,14 +83,15 @@ fun TimelineState.toUi(selected: Int?, selectedTrack: Int) = TimelineUi(
 fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions, State<Double?>> {
     val st = core.timeline.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<Int?>(null) }
-    var track by remember { mutableStateOf(1) }
+    // the FM-1's selected track (the timeline area carries none): the pads' selection
+    val pads = core.pads.collectAsStateWithLifecycle()
     val sounds = LocalSoundsHost.current
-    val ui = remember(st) { derivedStateOf(structuralEqualityPolicy()) { st.value.toUi(selected, track) } }
+    val ui = remember(st) { derivedStateOf(structuralEqualityPolicy()) { st.value.toUi(selected, pads.value.selected.track) } }
     val head = remember(st) { derivedStateOf { st.value.playheadBar } }
     val actions = remember(core, sounds, st) {
         TimelineActions(
             select = { selected = it },
-            selectTrack = { core.send(Intent.TrackSelect(it)); track = it },
+            selectTrack = { core.send(Intent.TrackSelect(it)) },
             moveBy = { b, k ->
                 // one place a time: each move changes the block's own id by the neighbour it passed
                 val blocks = st.value.tracks.firstOrNull { it.track == b.track }?.blocks.orEmpty()

@@ -26,6 +26,8 @@ data class MixTrackUi(
     val send: Int,
     val sendText: String,
     val muted: Boolean = false,
+    /** Lupe's solo (the iPad's, through PERFORM's mutes). */
+    val solo: Boolean = false,
     /** 0..1 level meter, or null when the core has none to show (no meter is drawn). */
     val meter: Float? = null,
     val selected: Boolean = false,
@@ -51,6 +53,7 @@ class MixActions(
     val select: (track: Int) -> Unit,
     val setBus: (slot: Int, raw: Int) -> Unit,
     val setSetting: (index: Int, raw: Int) -> Unit,
+    val solo: (track: Int) -> Unit,
 )
 
 fun MixState.toUi(): MixUi {
@@ -59,7 +62,7 @@ fun MixState.toUi(): MixUi {
     return MixUi(
         pages = titles, page = keys.indexOf(section).coerceAtLeast(0),
         // the core names a track "Engine · Sound" ("Analog · Acid"); the row has room for the sound's name
-        tracks = rows.map { MixTrackUi(it.track, it.name.substringAfter(" · "), it.level, it.levelText, it.pan + 64, it.panText, it.reverb ?: 0, it.reverbText ?: "…", it.mute, null, it.selected) },
+        tracks = rows.map { MixTrackUi(it.track, it.name.substringAfter(" · "), it.level, it.levelText, it.pan + 64, it.panText, it.reverb ?: 0, it.reverbText ?: "…", it.mute, it.solo, null, it.selected) },
         bus = card?.controls.orEmpty(), settings = card?.settings.orEmpty(),
     )
 }
@@ -80,6 +83,7 @@ fun rememberMix(core: LupeCore): Pair<MixUi, MixActions> {
             select = { core.send(Intent.TrackSelect(it)) },
             setBus = { s, v -> core.send(SetMixParam(s, v)) },
             setSetting = { i, v -> core.send(com.scottgerstl.lupe.core.SetMixSetting(i, v)) },
+            solo = { core.send(com.scottgerstl.lupe.core.TrackSolo(it)) },
         )
     }
     return ui to actions

@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.roundToInt
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,7 +61,9 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
     ) {
         // FM-1 key: Projects…, Settings, Labs. Later phases fill them in (P5, Labs); none exist yet, so they say so.
         Box {
-            Key({ menu = Menu.Fm1 }, "FM-1 menu, project ${top.project}", width = 128.dp) { fg -> MenuLabel(top.project, fg, textMax = 98.dp) }
+            val projects by core.projects.collectAsStateWithLifecycle()
+            val project = top.project.ifEmpty { projects.name.ifEmpty { "FM-1" } }   // the core's top.project stays empty until a save or load; projects knows it
+            Key({ menu = Menu.Fm1 }, "FM-1 menu, project $project", width = 128.dp) { fg -> MenuLabel(project, fg, textMax = 98.dp) }
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
                 val sheets = LocalSheetHost.current
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
@@ -114,17 +119,12 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.Center,
             ) {
                 BasicText("${top.bar}·${top.beat}", style = LupeType.number)
-                BasicText("${top.tempoText()} BPM", style = LupeType.small)
+                BasicText(if (top.mode == PlaybackMode.Loop) "${top.tempoText()} BPM" else "${top.tempoText()} ${top.mode.word.uppercase()}", style = LupeType.small, maxLines = 1)
             }
             LupeMenu(menu == Menu.Readout, { menu = null }, alignEnd = true, width = 240.dp) {
-                MenuHeading("Tempo")
-                Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TempoKey("−10", "Tempo down ten") { core.send(Intent.SetTempo(top.tempo - 10)) }
-                    TempoKey("−1", "Tempo down one") { core.send(Intent.SetTempo(top.tempo - 1)) }
-                    BasicText(top.tempoText(), Modifier.weight(1f), style = LupeType.number.copy(textAlign = TextAlign.Center))
-                    TempoKey("+1", "Tempo up one") { core.send(Intent.SetTempo(top.tempo + 1)) }
-                    TempoKey("+10", "Tempo up ten") { core.send(Intent.SetTempo(top.tempo + 10)) }
-                }
+                // the tempo is a value you slide (decision 10: no steppers anywhere); double tap puts it back to what it was when the menu opened
+                val opened = remember(menu == Menu.Readout) { top.tempo.roundToInt() }
+                com.scottgerstl.lupe.ui.slide.MenuSlideRow("TEMPO · BPM", top.tempoText(), top.tempo.roundToInt(), 20, 300, "Tempo", stepDp = 1.5f, revertTo = opened) { core.send(Intent.SetTempo(it.toDouble())) }
                 MenuDivider()
                 MenuHeading("Playback")
                 PlaybackMode.entries.forEach { m ->
@@ -134,10 +134,6 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
         }
     }
 }
-
-@Composable
-private fun TempoKey(text: String, description: String, onClick: () -> Unit) =
-    Key(onClick, description) { fg -> KeyLabel(text, fg, Modifier.padding(horizontal = 0.dp)) }
 
 private enum class Menu { Fm1, Launch, Readout }
 

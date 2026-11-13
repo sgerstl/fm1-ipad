@@ -1,6 +1,7 @@
 package com.scottgerstl.lupe.ui.slide
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -43,7 +45,7 @@ import kotlin.math.roundToInt
 @Composable
 fun MenuSlideRow(
     label: String, text: String, raw: Int, min: Int, max: Int, name: String, modifier: Modifier = Modifier,
-    stepDp: Float = 2f, bipolarAt: Int? = null, onSet: (Int) -> Unit,
+    stepDp: Float = 2f, bipolarAt: Int? = null, revertTo: Int? = null, onSet: (Int) -> Unit,
 ) {
     val latest by rememberUpdatedState(raw)
     val send by rememberUpdatedState(onSet)
@@ -58,6 +60,7 @@ fun MenuSlideRow(
                     setProgress { v -> set(v.roundToInt()); true }
                     customActions = listOf(CustomAccessibilityAction("Increase $name") { set(latest + 1); true }, CustomAccessibilityAction("Decrease $name") { set(latest - 1); true })
                 }
+                .then(if (revertTo != null) Modifier.pointerInput(revertTo) { detectTapGestures(onDoubleTap = { set(revertTo) }) } else Modifier)
                 .slideToTurn(enabled = true, stepDp = stepDp, face = null, onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (min - latest)..(max - latest) })
                 .padding(10.dp),
         ) {

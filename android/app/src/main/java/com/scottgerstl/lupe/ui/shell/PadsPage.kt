@@ -291,9 +291,6 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
 
 private fun Color.Companion.lerp(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
 
-/** A drum track (kits, and a pad's own sound). TODO: the core's `sounds` area says so; until then the name does. */
-private fun isDrumTrack(row: PadRow) = row.name.contains("Drum", true) || row.name.contains("Kit", true) || row.name.contains("Perc", true)
-
 private enum class PadMenuMode { Root, Set, ClearConfirm }
 
 /** Where else a pattern is used: "T2 B". Skiff erases a pattern only when no other entry names it (P1, 2026-11-14). */
@@ -327,8 +324,8 @@ private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, pads: PadsState, at: Off
                     PadMenuMode.Root -> {
                         if (e.kind == PadKind.Pattern) {
                             MenuRow("Edit steps", { core.send(Intent.PadSelect(row.track, idx)); close() })
-                            // opens the Sounds browser in the bottom half; on a drum track it's this pad's own sound (decision 15)
-                            MenuRow("Select sound", { core.send(Intent.PadSelectSound(row.track, idx)); close(); soundsHost.open(row.track, if (isDrumTrack(row)) ('A' + idx).toString() else null) })
+                            // opens the Sounds browser in the bottom half, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
+                            MenuRow("Select sound", { core.send(Intent.PadSelectSound(row.track, idx)); close(); soundsHost.open(row.track, ('A' + idx).toString()) })
                         }
                         if (e.kind == PadKind.Empty) MenuRow("New pattern", { core.send(Intent.PadNew(row.track, idx)); close() })
                         MenuRow("Set pattern…", { mode = PadMenuMode.Set })

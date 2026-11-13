@@ -7,6 +7,8 @@ package com.scottgerstl.lupe.core
  * the music's own slot.
  */
 object FakeP5 {
+    /** DELAY MODE in the FM-1's order: raw 0 is MONO (what a project written before 2.5 plays as), 1 STEREO (the run on 40c8629). The third is PING-PONG by its name on the iPad; the core should publish the DESC's own names. */
+    val DELAY_MODES = listOf("MONO", "STEREO", "PING-PONG")
     val engineNames = listOf("ANALOG", "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "DRUM")
 
     fun presetNames(engine: Int): List<String> = List(if (engine == 10) 8 else 12) { i -> "${engineNames.getOrElse(engine) { "ENG" }} ${i + 1}" }
@@ -20,7 +22,7 @@ object FakeP5 {
 
     fun card(section: String): MixCard? = when (section) {
         "delay" -> MixCard("Delay", listOf(PageControl("TIME", "3/16", 40, 0, 127, list = true), PageControl("FEEDBACK", "62", 62), PageControl("COLOR", "70", 70), PageControl("MIX", "30", 30)),
-            settings = listOf(PageControl("DELAY MODE", "STEREO", 0, 0, 2, list = true, names = listOf("STEREO", "PING-PONG", "MONO"))))
+            settings = listOf(PageControl("DELAY MODE", "STEREO", 1, 0, 2, list = true, names = DELAY_MODES)))
         "reverb" -> MixCard("Reverb", listOf(PageControl("TYPE", "ROOM", 1, 0, 3, list = true), PageControl("SIZE", "70", 70), PageControl("DAMP", "40", 40), PageControl("MIX", "25", 25)))
         "chorus" -> MixCard("Chorus", listOf(PageControl("RATE", "50", 50), PageControl("DEPTH", "60", 60), PageControl("MIX", "30", 30), null))
         "global" -> MixCard("Global", listOf(PageControl("TEMPO", "120", 120), PageControl("SWING", "0", 0), PageControl("MASTER", "100", 100), PageControl("TRANSPOSE", "0", 64)))

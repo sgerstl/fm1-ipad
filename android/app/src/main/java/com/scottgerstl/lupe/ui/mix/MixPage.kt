@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -118,8 +119,8 @@ private fun TrackRow(t: MixTrackUi, h: androidx.compose.ui.unit.Dp, roomy: Boole
             contentAlignment = Alignment.Center,
         ) { BasicText("${t.number}", style = LupeType.key.copy(fontSize = 16.sp, color = Tok.onColour)) }
         Column(Modifier.width(92.dp).padding(horizontal = 8.dp), verticalArrangement = Arrangement.Center) {
-            BasicText(t.name, style = LupeType.key.copy(fontSize = 14.sp), maxLines = 1)
-            BasicText("${t.levelText} · ${t.panText}", style = LupeType.small.copy(fontSize = 12.sp), maxLines = 1)
+            BasicText(t.name, style = LupeType.key.copy(fontSize = 14.sp), maxLines = 1, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 0.5.sp))
+            BasicText("${t.levelText} · ${t.panText}" + if (t.solo) " · SOLO" else "", style = LupeType.small.copy(fontSize = 12.sp, color = if (t.solo) Tok.text else Tok.text2Raised), maxLines = 1)
         }
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
             if (roomy) BasicText("LEVEL · send REV ${t.sendText}", style = LupeType.small.copy(fontSize = 12.sp), maxLines = 1)
@@ -177,6 +178,7 @@ private fun LevelFader(t: MixTrackUi, colour: Color, dim: Float, actions: MixAct
                 face = remember(t.name, colour) { MagnifierFace("LEVEL · ${t.name}", { latest.levelText }, { now() / 127f }, tint = colour) },
                 onStart = { base = now() }, onSlide = { set(base + it) },
                 bounds = { -now()..(127 - now()) },
+                forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways,   // drawn across: it follows the finger across (decision 10's setting is for knobs and value boxes)
             ),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -198,6 +200,7 @@ private fun RowMenu(t: MixTrackUi, at: Offset?, close: () -> Unit, actions: MixA
     LupeMenu(at != null, close, width = 248.dp, at = at) {
         MenuHeading("${t.number} ${t.name}")
         val sounds = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
+        com.scottgerstl.lupe.ui.shell.MenuRow("Solo", { actions.solo(t.number) }, checked = t.solo, sub = "Plays this track alone")
         com.scottgerstl.lupe.ui.shell.MenuRow("Sounds…", { close(); sounds.open(t.number) })
         CompositionLocalProvider(LocalMagnifier provides null) {
             MenuSlide("PAN", t.panText, t.pan, "Pan, ${t.name}", bipolar = true, mid = 64) { actions.pan(t.number, it) }
@@ -236,17 +239,21 @@ private fun MenuSlide(label: String, text: String, raw: Int, name: String, bipol
 /** Delay, Reverb, Chorus, Global (board 65): a short graph and the four controls, white because they are shared. */
 @Composable
 private fun BusPage(ui: MixUi, p: Int, actions: MixActions) {
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box(Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(10.dp)).background(Tok.panel)) {
+    // a short graph at split so the four controls and the settings under them stay in reach; the page scrolls when they still don't fit
+    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(10.dp)).background(Tok.panel)) {
             BusGraph(ui.pages[p], ui.bus)
             BasicText("Shared by every track", Modifier.align(Alignment.TopEnd).padding(10.dp), style = LupeType.small.copy(fontSize = 12.sp))
         }
         PageControlsRow(ui.bus, Tok.text, litSlot = -1, litSeq = 0, opened = { _, c -> c.raw }, onSet = { slot, v -> actions.setBus(slot, v) })
         // the card's settings (DELAY MODE on 2.5.1): a choice, not a knob
         ui.settings.forEachIndexed { i, c ->
+            // the core may publish the label as "DLY MODE" and no names: the screen says DELAY MODE and knows its three
+            val label = if (c.label.equals("DLY MODE", true)) "DELAY MODE" else c.label
+            val names = c.names.ifEmpty { if (label == "DELAY MODE") com.scottgerstl.lupe.core.FakeP5.DELAY_MODES else emptyList() }
             Column(Modifier.fillMaxWidth()) {
-                BasicText(c.label, Modifier.padding(bottom = 4.dp), style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2, letterSpacing = 0.5.sp))
-                if (c.names.size in 2..4) Segmented(c.names, c.raw.coerceIn(0, c.names.lastIndex), c.label) { actions.setSetting(i, it) }
+                BasicText(label, Modifier.padding(bottom = 4.dp), style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2, letterSpacing = 0.5.sp))
+                if (names.size in 2..4) Segmented(names, c.raw.coerceIn(0, names.lastIndex), label) { actions.setSetting(i, it) }
                 else BasicText(c.value, style = LupeType.key)
             }
         }

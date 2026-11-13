@@ -93,7 +93,8 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
     Box(modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val headerH = 36.dp
-            val viewport = maxHeight - headerH - 6.dp - if (playing) 48.dp else 0.dp
+            // the Stop strip overlays the foot: the rows keep their scale (the song scrolls up to clear it)
+            val viewport = maxHeight - headerH - 6.dp
             val visible = if (viewport >= 420.dp) 20 else 8
             val barH = viewport / visible
             val scroll = rememberScrollState()
@@ -116,7 +117,7 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                 Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(6.dp))) {
                     val bars = maxOf(ui.totalBars + 4, visible)
                     val contentH = barH * bars
-                    Box(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                    Box(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = if (playing) 48.dp else 0.dp)) {
                         Row(Modifier.fillMaxWidth().height(contentH), horizontalArrangement = Arrangement.spacedBy(GAP)) {
                             // the ruler: a number a bar, the first bar 1
                             Box(Modifier.width(RULER).fillMaxHeight().clearAndSetSemantics { }) {
@@ -197,7 +198,7 @@ private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androi
     val fill = if (b.rest) Tok.page else lerp(Tok.page, colour, 0.45f)
     val name = ui.trackNames.getOrNull(b.track - 1).orEmpty()
     val what = if (b.rest) "rest" else "pattern ${"%02d".format(b.pattern ?: 0)}"
-    val words = "Track ${b.track} $name, bars ${b.start.toInt() + 1} to ${kotlin.math.ceil(b.end).toInt()}, $what" + if (b.playing) ", playing" else ""
+    val words = "Track ${b.track} $name, ${barRange(b)}, $what" + if (b.playing) ", playing" else ""
 
     fun openMenu(at: Offset) { if (editable) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuMode = BlockMenu.Root; menuAt = at } }
 
@@ -214,7 +215,8 @@ private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androi
                 if (b.playing) drawRect(Tok.text, size = Size(size.width, 3.dp.toPx()))
                 else if (b.next) drawRoundRect(Tok.text2, Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(5.dp.toPx()), style = Stroke(1.5.dp.toPx()))
                 // the foot's grip, when it can be stretched
-                if (selected && editable) drawRoundRect(Tok.text.copy(alpha = 0.8f), Offset(size.width / 2 - 14.dp.toPx(), size.height - 8.dp.toPx()), Size(28.dp.toPx(), 3.dp.toPx()), CornerRadius(2.dp.toPx()))
+                // (a one-bar block is short: its grip is a small notch at the very foot, clear of the number)
+                if (selected && editable) { val tall = size.height >= 56.dp.toPx(); val gw = if (tall) 28.dp.toPx() else 16.dp.toPx(); drawRoundRect(Tok.text.copy(alpha = 0.8f), Offset(size.width / 2 - gw / 2, size.height - (if (tall) 8.dp.toPx() else 4.dp.toPx())), Size(gw, 2.dp.toPx()), CornerRadius(1.dp.toPx())) }
             }
             .semantics(mergeDescendants = true) {
                 role = Role.Button; contentDescription = words; stateDescription = if (selected) "Selected" else ""
@@ -246,7 +248,7 @@ private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androi
                 }
             } else Modifier),
     ) {
-        if (!b.rest) BasicText("%02d".format(b.pattern ?: 0), Modifier.align(Alignment.TopCenter).padding(top = 6.dp), style = LupeType.number.copy(fontSize = 18.sp, color = Tok.text))
+        if (!b.rest) BasicText("%02d".format(b.pattern ?: 0), Modifier.align(Alignment.TopCenter).padding(top = 3.dp), style = LupeType.number.copy(fontSize = 18.sp, color = Tok.text))
         else BasicText("REST", Modifier.align(Alignment.TopCenter).padding(top = 6.dp), style = LupeType.small.copy(fontSize = 12.sp))
         // anchored to the block, so the menu opens beside the finger
         BlockMenuPopup(b, menuAt, menuMode, armedAt, pendingPattern, ui, actions, { menuMode = it; if (it == BlockMenu.Delete || it == BlockMenu.PatternConfirm) armedAt = System.currentTimeMillis() }, { pendingPattern = it }, { menuAt = null })
@@ -265,10 +267,10 @@ private fun BlockMenuPopup(
             Column {
                 when (m) {
                     BlockMenu.Root -> {
-                        MenuHeading("Track ${b.track} · bars ${b.start.toInt() + 1}–${kotlin.math.ceil(b.end).toInt()}")
+                        MenuHeading("Track ${b.track} · ${barRange(b)}")
                         MenuRow(if (b.rest) "Pattern: REST ⌄" else "Pattern ${"%02d".format(b.pattern ?: 0)} ⌄", { setMode(BlockMenu.Pattern) })
                         // how long it plays: its passes, set by sliding (no − / +); the bars follow
-                        MenuSlideRow("PASSES · ${"%g".format(b.length)} bars", "${b.reps}", b.reps, 1, 16, "Passes, block on track ${b.track}", stepDp = 22f) { actions.stretch(b, it) }
+                        MenuSlideRow("PASSES · ${barsText(b.length)}".uppercase(), "${b.reps}", b.reps, 1, 16, "Passes, block on track ${b.track}", stepDp = 22f) { actions.stretch(b, it) }
                         MenuRow("Duplicate", { actions.duplicate(b); close() })
                         MenuRow("Select sound", { actions.openSounds(b.track); close() })
                         MenuRow("Delete…", { setMode(BlockMenu.Delete) })
@@ -288,7 +290,7 @@ private fun BlockMenuPopup(
                     }
                     BlockMenu.Delete -> {
                         val gone = if (b.rest) "the REST" else "pattern ${"%02d".format(b.pattern ?: 0)}"
-                        val words = "Delete $gone (${"%g".format(b.length)} bars) from track ${b.track}?" + if (erases) " It is used nowhere else, so it's erased." else ""
+                        val words = "Delete $gone (${barsText(b.length)}) from track ${b.track}?" + if (erases) " It is used nowhere else, so it's erased." else ""
                         ConfirmBox(words, "Confirm: $words", armedAt) { actions.delete(b); close() }
                         MenuRow("Cancel", { setMode(BlockMenu.Root) })
                     }
@@ -296,4 +298,21 @@ private fun BlockMenuPopup(
             }
         }
     }
+}
+
+/** "1 bar", "5 bars", "½ bar", "2½ bars": never a float's tail. */
+internal fun barsText(bars: Float): String {
+    val whole = kotlin.math.floor(bars + 1e-4f).toInt(); val frac = bars - whole
+    val half = kotlin.math.abs(frac - 0.5f) < 0.01f
+    return when {
+        kotlin.math.abs(frac) < 0.01f || kotlin.math.abs(frac - 1f) < 0.01f -> { val n = kotlin.math.round(bars).toInt(); "$n ${if (n == 1) "bar" else "bars"}" }
+        half -> if (whole == 0) "½ bar" else "$whole½ bars"
+        else -> "%.2f".format(bars).trimEnd('0').trimEnd('.') + " bars"
+    }
+}
+
+/** "bar 2" for a block inside one bar, "bars 2–5" otherwise. */
+internal fun barRange(b: BlockUi): String {
+    val first = b.start.toInt() + 1; val last = kotlin.math.ceil(b.end - 1e-4f).toInt().coerceAtLeast(first)
+    return if (first == last) "bar $first" else "bars $first–$last"
 }

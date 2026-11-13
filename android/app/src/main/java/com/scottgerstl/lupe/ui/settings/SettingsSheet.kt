@@ -103,7 +103,7 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         SwitchRow("Pause following after a touch", "The bottom half holds your page for 3 s after you touch it", phone.pauseFollowing, trial = true) { phone.choosePauseFollowing(it) }
         SwitchRow("Pin the bottom half's page", "The bottom half stops following the FM-1's page while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
         SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
-        SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Arrives with the Timeline", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
+        SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
     }
 }
 
