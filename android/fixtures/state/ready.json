@@ -1,0 +1,12 @@
+{
+  "provisional": true,
+  "note": "Hand-written to android/BRIDGE.md §2 by P2. Replace with P1's recording of PhoneCore over FakeSkiff(demo: true).",
+  "frames": [
+    {"atMs": 0,    "area": "link",  "state": {"phase": "searching"}},
+    {"atMs": 600,  "area": "link",  "state": {"phase": "connecting"}},
+    {"atMs": 1200, "area": "link",  "state": {"phase": "reading"}},
+    {"atMs": 1200, "area": "top",   "state": {"project":"Demo","playing":false,"rec":false,"tempo":120.0,"mode":"loop","launch":"bar","waiting":1,"bar":1,"beat":1}},
+    {"atMs": 1200, "area": "shell", "state": {"tab":"pads","divider":"split","bottom":{"kind":"editor"}}},
+    {"atMs": 1800, "area": "link",  "state": {"phase": "ready"}}
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "provisional": true,
+  "note": "An FM-1 that answers, but isn't running Skiff.",
+  "frames": [
+    {"atMs": 0,   "area": "link", "state": {"phase": "searching"}},
+    {"atMs": 600, "area": "link", "state": {"phase": "connecting"}},
+    {"atMs": 1200,"area": "link", "state": {"phase": "wrongFirmware", "firmware": "SLOOP 2.8.4"}}
+  ]
+}
