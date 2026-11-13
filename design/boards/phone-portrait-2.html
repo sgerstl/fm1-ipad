@@ -608,6 +608,15 @@ function slideCell(x, y, w, h, label, value, frac, o = {}) {
   inner += `<span class="abs" style="left:12px;bottom:10px;height:3px;width:${Math.round((w - 24) * frac)}px;border-radius:2px;background:${col}"></span>`;
   return el('', x, y, w, h, st, inner, `role="slider" aria-label="${label} ${value}"`);
 }
+// a compact round knob for the HOME strip: 56 ring, the value inside it, the label under it
+function miniKnob(x, y, label, value, frac, hot) {
+  const r = 24, c = 2 * Math.PI * r, arc = c * 0.75, ring = hot ? '#EDEDF0' : COL[SEL];
+  let h = svg(x + 20, y, 56, 56, `<circle cx="28" cy="28" r="${r}" fill="none" stroke="#26262B" stroke-width="5" stroke-dasharray="${arc} ${c}" transform="rotate(135 28 28)" stroke-linecap="round"/>
+    <circle cx="28" cy="28" r="${r}" fill="none" stroke="${ring}" stroke-width="5" stroke-dasharray="${arc * frac} ${c}" transform="rotate(135 28 28)" stroke-linecap="round"/>`);
+  h += el('cond', x + 20, y + 16, 56, 24, `text-align:center;font-size:20px;line-height:24px;color:var(--text)`, value, `role="slider" aria-label="${label} ${value}"`);
+  h += el('lab', x, y + 62, 96, 14, `text-align:center;${hot ? 'color:var(--text)' : ''}`, label);
+  return h;
+}
 const HOME4 = [['CUTOFF', '84', 84 / 127], ['RES', '40', 40 / 127], ['ATTACK', '12', 12 / 127], ['RELEASE', '64', 64 / 127]];
 const STEP4 = [['PITCH', 'C5', 0.55], ['MOVE', '6', 6 / 16], ['LENGTH', '3', 3 / 16], ['VELOCITY', '100', 100 / 127]];
 
@@ -628,7 +637,9 @@ function homeStrip(y, o = {}) {
   } else {
     h += el('', 8, y, 300, 28, 'display:flex;align-items:center;gap:8px;font-size:14px;white-space:nowrap',
       `<span style="font-weight:600">Sound</span><span style="color:var(--text2r)">ANALOG · the FM-1's four knobs</span>`);
-    HOME4.forEach((c, i) => { h += slideCell(8 + i * 100, y + 36, 96, 78, c[0], c[1], c[2], { hot: o.turning === i }); });
+    // round, like the FM-1's knobs (Scott, 2026-11-13): these four ARE its knobs on HOME, unlike the boxes around them
+    // the strip keeps the step panel's height, so the grid never jumps between the two: a compact knob, value inside the ring
+    HOME4.forEach((c, i) => { h += miniKnob(8 + i * 100, y + 34, c[0], c[1], c[2], o.turning === i); });
   }
   return h;
 }
@@ -653,14 +664,14 @@ function loupe(x, y, label, value, frac) {
 }
 
 board2(70, 'HOME: the FM-1\'s four sound knobs, a step on tap', [
-  { cap: 'FM-1 on HOME, no step picked', bottom: (y, h) => homeEditor(y, h, {}), label: 'Editor with the track\'s four sound cards', discs: [[1, 92, 806], [2, 380, 764]] },
+  { cap: 'FM-1 on HOME, no step picked', bottom: (y, h) => homeEditor(y, h, {}), label: 'Editor with the track\'s four sound cards', discs: [[1, 76, 792], [2, 380, 764]] },
   { cap: 'A step tapped', bottom: (y, h) => homeEditor(y, h, { step: true }), label: 'Editor with step 6 selected and its controls', discs: [[3, 84, 742]] },
-  { cap: 'Turning CUTOFF on the phone or the FM-1', bottom: (y, h) => homeEditor(y, h, { turning: 0 }), over: () => loupe(8, 686, 'CUTOFF', '91', 91 / 127), label: 'CUTOFF lit, the Magnifier above it', discs: [[4, 176, 704]] },
+  { cap: 'Turning CUTOFF on the phone or the FM-1', bottom: (y, h) => homeEditor(y, h, { turning: 0 }), over: () => loupe(8, 676, 'CUTOFF', '91', 91 / 127), label: 'CUTOFF lit, the Magnifier above it', discs: [[4, 176, 696]] },
 ], [
-  'With the FM-1 on HOME and no step picked, the strip under the grid shows the selected track\'s four sound cards, the same four the FM-1\'s knobs turn on HOME, with its labels and values (Skiff 2.5.1 ui.c home_param: the engine\'s main four; ANALOG\'s are CUTOFF, RES, ATTACK, RELEASE). Each card is a slide value (decision 10). The grid shows no selected step.',
+  'With the FM-1 on HOME and no step picked, the strip under the grid shows the selected track\'s four sound knobs, drawn round like the FM-1\'s knobs (the boxes elsewhere are the phone\'s own values), at the step panel\'s height so the grid never jumps when you tap a step, the same four the FM-1\'s knobs turn on HOME, with its labels and values (Skiff 2.5.1 ui.c home_param: the engine\'s main four; ANALOG\'s are CUTOFF, RES, ATTACK, RELEASE). Each knob is a slide value (decision 10). The grid shows no selected step.',
   'The header says what the row is: "Sound" and the engine. Other engines show their own four (DRUM puts MORPH on knob 1); the labels and values come from the same check as the sound pages (decision 22).',
   'Tap a step and the row becomes that step\'s controls (NOTES · FEEL · SOUND, Lock), under a "Step 6 ✕" key. ✕, tapping the step again, or the FM-1 changing page puts the sound cards back. ‹ › walk the steps without leaving. <span class="q">Open:</span> whether a step stays picked after the pattern changes, or the row falls back to sound.',
-  'A card lights while it turns, from the phone or from the FM-1\'s knob, as the FM-1 lights its card; the Magnifier floats the value above the finger. Holding HOME on the FM-1 (its SHIFT map) changes nothing here: its knobs keep turning these four.',
+  'A knob lights while it turns, from the phone or from the FM-1\'s knob, as the FM-1 lights its card; the Magnifier floats the value above the finger. Holding HOME on the FM-1 (its SHIFT map) changes nothing here: its knobs keep turning these four.',
 ]);
 
 document.getElementById('boards').innerHTML = B2.join('');
