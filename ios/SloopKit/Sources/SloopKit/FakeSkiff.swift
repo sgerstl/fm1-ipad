@@ -138,6 +138,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var cursor = 0
     /// The pages with a cursor and its top (skiff/README.md): MOD's routes, the lanes, the samples, USER's slots.
     static let cursorRange: [Int: Int] = [4: 10, 16: 5, 18: 7, 19: 7, 20: 7, 22: 15, 36: 31, 37: 63, 41: 63, 42: 63]
+    /// The sheets' windows (EDITOR_PROTOCOL.md "The page's cursor": the second cursor, read only): OPERATOR and ALL
+    /// OPS five each, SOUND four, by Lupe page. Each sheet keeps its own, as ui.c's fm_ui[1], fm_ui[2] and dx_ui_win.
+    static let windowCount: [Int: Int] = [16: 5, 17: 5, 19: 4]
+    var windows: [Int: Int] = [:]
     var screenWatched = false
     /// FREE TAKE levels 2 and 3 (the screen link's seventh build, `screenLinkVersion` 7; ui_take.c and editor.c's TAKE
     /// and UNDO on branch lupe-skiff-2.5.1-freetake): the picker, pushed with WATCH bit 5 (32).
@@ -511,7 +515,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         let b: [UInt8] = [screen.home ? 1 : 0, UInt8(wire), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(flags)]
         guard screenLinkVersion >= 2 else { return b }
         let c: UInt8 = !screen.home && Self.cursorRange[screen.page] != nil ? UInt8(cursor) : 127
-        // NOTES and FEEL: the second is the selection's last step (one step here, so the same)
+        // NOTES and FEEL: the second is the selection's last step (one step here, so the same); a sheet's: its window
+        if !screen.home, Self.windowCount[screen.page] != nil { return b + [c, UInt8(windows[screen.page] ?? 0)] }
         return b + [c, c != 127 && [41, 42].contains(screen.page) ? c : 127]
     }
 
@@ -520,6 +525,19 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         lock.lock()
         if let page { if page != screen.page || screen.home { cursor = 0 }; screen = (false, page, 0, 0, 0) } else { screen.home = true }
         if let track { selected = track }
+        let b = screenBytes(), on = screenWatched
+        lock.unlock()
+        if on { push(90, b) }
+    }
+
+    /// SELECT on the FM-1 on a sheet: its window down (`by` > 0) or up, within its ends (sheet_rows), and, watched, it
+    /// says so. Off a sheet, nothing here (past a sheet's ends SELECT goes on to the pages beside it).
+    public func selectOnDevice(by d: Int) {
+        lock.lock()
+        guard !screen.home, let n = Self.windowCount[screen.page] else { lock.unlock(); return }
+        let w = (windows[screen.page] ?? 0) + (d > 0 ? 1 : -1)
+        guard (0..<n).contains(w) else { lock.unlock(); return }
+        windows[screen.page] = w
         let b = screenBytes(), on = screenWatched
         lock.unlock()
         if on { push(90, b) }

@@ -192,6 +192,13 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
   `page` of that key's; SCREEN_GOTO, a write) and the `fm1Screen` area (`ScreenArea.swift`, `ScreenState.kt`). The
   area names the key whose screen is up, its page and title (SAVE's PRESETS, USER, PATTERNS, PROJECT), and the MENU and
   layer. Both use SloopKit's `SkiffButtonMap.place`, the iPad's table. P2 owns the Kotlin `ScreenGoto` class.
+- **The sheets and the page's new shape** (decision 25): OPERATOR, ALL OPS and SOUND give the four controls the FM-1's
+  knobs turn: the window SELECT is on, from the screen link's second cursor. `Sheets.swift` ports Skiff's `ui_fm6.c`
+  and `ui_dx.c`, with `SkiffSheetTables.swift` generated from Skiff's own arithmetic. setParam writes FM6_PUT or
+  KIT_PUT, and the sheet is read again every 300 ms while it shows, because the FM-1 pushes neither. The page area
+  lost `graph` (its picture values, `fm6`, `sheet`) and gained `title`, `tiles` (MOD's routes, or the names a knob
+  picks from) and `window`. P2 owns `PageState.kt`. The phone can't move a sheet's window: see
+  `android/notes/page-parity.md`.
 
 ### Read-only by default (P1, 2026-11-13)
 

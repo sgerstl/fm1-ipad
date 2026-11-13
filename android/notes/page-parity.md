@@ -25,6 +25,32 @@ for each engine (decision 21): which parameters they are (`SkiffHomeKnobs` again
 through `home_param`), their labels, and their text. That makes 289 checks, with no mismatches except the sharp
 sign below.
 
+## The sheets (decision 25, 2026-11-14)
+
+FM6's OPERATOR and ALL OPS, and DRUM-X's SOUND, are sheets on the FM-1: their four knobs are a window over a table,
+which SELECT moves (Skiff `ui.c sheet_t`). The page area now gives the four the FM-1's knobs turn now. That's the
+window the FM-1 is on, of the operator or sound picked, from the screen link's two cursors. The values come from the
+patch (FM6_GET) or the kit sound (KIT_GET). `PhoneCore/Sheets.swift` ports `ui_fm6.c` and `ui_dx.c`.
+`everySheetMatchesTheFM1` checks every window's labels and every card's text at every value against Skiff's own
+`fm_val` and `dx_cards` tables, and FINE in all eight mode and coarse cases: no mismatches. setParam writes the patch
+or the kit sound back whole (FM6_PUT, KIT_PUT). ALGO and FEEDBACK do what the FM-1's knob does: they write what plays
+into the patch and set EDIT 1's ALGO or FEEDBACK back to neutral. SOUND's LEVEL is the lane's track parameter.
+
+What the link can't do, and the smallest fix:
+
+- **The phone can't move a sheet's window.** The second cursor is read only (EDITOR_PROTOCOL.md: SCREEN_GOTO sets
+  the first cursor only). The phone shows the window the FM-1 is on and follows its SELECT, but has no way to walk the
+  sheet itself. **Smallest fix: firmware.** On the three sheet pages, let SCREEN_GOTO take a third byte that sets the
+  window. That's a few lines in the screen-link patch, beside its cursor byte. Then a `pickWindow` intent can follow.
+  The alternative, a window kept on the phone apart from the FM-1's, would show four knobs the FM-1's knobs don't turn,
+  against decision 25.
+- **The FM-1 pushes no patch or kit change.** When its own knob turns an operator value, nothing reaches the phone.
+  **Fixed on the phone:** while a sheet shows, its patch or sound is read again every 300 ms (one FM6_GET or KIT_GET).
+  The store skips a read within a second of the phone's own edit. A firmware push (a CHANGED for the patch) would
+  replace the reads, but isn't needed now.
+- **The operator and sound pickers:** pickTile moves the first cursor (SCREEN_GOTO's second byte), so the phone can
+  pick them.
+
 ## Fixed in this pass (2026-11-14)
 
 1. **Skiff's number rules** (`DeviceDisplay.skiffValue`, used wherever `formatValue(…, skiff: true)` is):

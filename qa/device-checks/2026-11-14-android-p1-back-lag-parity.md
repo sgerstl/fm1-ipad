@@ -14,7 +14,8 @@ knobs after a preset of another engine.
 - iPad: Lupe built from this branch's SloopKit.
 
 **Back up first: no.** Scott, 2026-11-14: "nothing on the FM-1 matters now". Checks 3, 7, 8 and 14 load a preset
-on track 1. Nothing writes the FM-1's flash.
+on track 1; 20, 22 and 23 change an FM6 patch or the DRUM-X kit (in memory: saved only with the project). Nothing
+writes the FM-1's flash.
 
 ## A. The phone
 
@@ -52,6 +53,17 @@ on track 1. Nothing writes the FM-1's flash.
 | 15 | Press the phone's **GLO**, then **SAVE**, then **SEQ**. | The FM-1 goes to MIXER, then PRESETS, then NOTES, and the phone's key for each lights. | – | ☐ pass ☐ fail: |
 | 16 | Press the phone's SAVE again until PROJECT. | The FM-1 is on SAVE › PROJECT and the phone opens Projects. On PRESETS or USER it opens the Sounds browser. | – | ☐ pass ☐ fail: |
 | 17 | On the FM-1 itself press ENV, then HOME. | The phone's ENV key lights, then HOME's. | – | ☐ pass ☐ fail: |
+
+## E. The sheets (decision 25; needs P2's page reading `tiles` and `window`)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 18 | FM6 track, EDIT › OPERATOR. Compare the phone's four with the FM-1's. | OUTPUT, RATIO, FINE, DETUNE with the FM-1's numbers ("1x", "1.00"). The header says OPERATOR 1. | – | ☐ pass ☐ fail: |
+| 19 | On the FM-1, press SELECT once. | The phone shows ENV 1: RATE 1, LEVEL 1, RATE 2, LEVEL 2. | – | ☐ pass ☐ fail: |
+| 20 | Pick OP3 on the phone's tiles, then slide LEVEL 1. | The FM-1 is on OPERATOR 3 and its LEVEL 1 follows the phone. | – | ☐ pass ☐ fail: |
+| 21 | Turn KNOB 2 (LEVEL 1) on the FM-1. | The phone's LEVEL 1 follows within about half a second. | – | ☐ pass ☐ fail: |
+| 22 | ALL OPS: slide ALGO. | The FM-1's ALGO follows. EDIT 1's ALGO reads PAT afterwards. | – | ☐ pass ☐ fail: |
+| 23 | DRUM-X track, EDIT › SOUND: pick CP on the phone, SELECT twice on the FM-1, then set DRIVE on the phone. | The phone shows COLOR A, COLOR B, LEVEL, DRIVE for CP, and the FM-1's DRIVE turns on. | – | ☐ pass ☐ fail: |
 
 **Not covered here:**
 
