@@ -44,3 +44,15 @@ adb -s 59200DLCH0022G shell am start -n com.scottgerstl.lupe/.core.debug.LinkDeb
 - `AndroidTransport` and `LinkGate`: 6 Mac tests (chunked bytes, clock inside frames, notes, send after finish, hand-out-once, a `DeviceSession` sending INFO through the gate).
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device". Send the check 3 screenshot either way: the property strings go into `FM1Link.isFM1` and BRIDGE.md §1.
+
+## Run overnight, 2026-11-13/14 (by the P1 session, read-only, Scott's approval)
+
+Run against the Pixel over Wi‑Fi adb with the FM-1 on its USB port, not by hand. Checks 1–4 were done in that form: the install, the debug screen, the INFO round trip, and the device strings read from the Pixel. Check 5 (unplug and replug) needs a hand and moves to `2026-11-14-android-p1-morning.md`.
+
+| # | Result |
+|---|---|
+| 1 | Pass: no crash, the log as described. |
+| 2 | Pass on the emulator and in the APK (74 µs per hop). Not repeated on the Pixel. |
+| 3 | Pass. The FM-1's strings: manufacturer "Hügelton Instruments", product "Felucca", name "Hügelton Instruments Felucca", USB 0x1209:0001, one port each way (names empty). Max message 1015 bytes. Chrome (Skiff's web editor) also held a connection to the device without its ports, which didn't get in the way. |
+| 4 | Pass: `← INFO: "FELUCCA v2.5.1" (v2_5_1), 6 tracks, 15 engines, supported by Lupe: yes`. **The FM-1 runs Skiff 2.5.1**, not 2.2. |
+| 5 | Moved to the morning check. |
