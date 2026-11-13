@@ -20,6 +20,9 @@ interface LupeCore {
     val sounds: StateFlow<SoundsState> get() = P5Defaults.sounds
     val projects: StateFlow<ProjectsState> get() = P5Defaults.projects
     val meters: StateFlow<MetersState> get() = P5Defaults.meters
+    /** P6 (P6State.kt). */
+    val timeline: StateFlow<TimelineState> get() = P6Defaults.timeline
+    val automation: StateFlow<AutomationState> get() = P6Defaults.automation
 
     fun send(intent: Intent)
 }

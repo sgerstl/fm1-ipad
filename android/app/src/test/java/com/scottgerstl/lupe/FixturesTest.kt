@@ -38,6 +38,8 @@ class FixturesTest {
                 "mix" -> assertEquals(6, lupeJson.decodeFromJsonElement(MixState.serializer(), fr.state).rows.size)
                 "sounds" -> assertEquals(32, lupeJson.decodeFromJsonElement(SoundsState.serializer(), fr.state).user.size)
                 "meters" -> assertEquals(6, lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.MetersState.serializer(), fr.state).levels.size)
+                "timeline" -> assertEquals(6, lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.TimelineState.serializer(), fr.state).tracks.size)
+                "automation" -> { val a = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.AutomationState.serializer(), fr.state); assertTrue(a.lane.isEmpty() || a.points.size == a.steps) }
                 "projects" -> assertEquals(4, lupeJson.decodeFromJsonElement(ProjectsState.serializer(), fr.state).slots.size)
                 else -> error("${f.name}: unknown area ${fr.area}")
             }
