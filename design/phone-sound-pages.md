@@ -57,6 +57,8 @@ Index is the FM-1's page number (the screen link's). Knobs in order; — is an e
 | 9 | SLICER | SLICER · PATTERN · RATE · DEPTH | the slicer's gates, 96 tall |
 | 10 | DUCK | BY · DEPTH · RELEASE · — | the duck over a bar at the tempo, 96 tall |
 
+**On Skiff 2.5.1 (the FM-1 Scott has) INSERT 2 isn't one of the FM-1's pages:** 2.5 moved its MIX onto INSERT's PRESETS card and the FM-1 counts "FX n/7" (SkiffFirmware.swift). Lupe numbers pages as 2.2 does, with FX › DELAY 46 and FX › REVERB 47, and the driver translates at the wire. So on 2.5.1 open question 3 mostly answers itself: following never lands on INSERT 2.
+
 The iPad merges INSERT and INSERT 2 into one card. **The phone keeps them as the FM-1's two pages**, because the bottom half follows the FM-1 page for page; merging would make "where am I" ambiguous when the FM-1 says INSERT 2. (Open question 3.)
 
 **INSERT's A, B, C** change meaning with TYPE. Their labels come from the firmware's DESC for the current type, as on the iPad. A type change cross-fades the three labels (nothing pops).
