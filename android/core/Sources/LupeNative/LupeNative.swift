@@ -107,6 +107,7 @@ func debug(_ line: String) {
 
 /// One ViewState area as JSON (BRIDGE.md §2). Used from gate 5.
 func publish(area: String, json: String) {
+    _ = __android_log_write(Int32(ANDROID_LOG_DEBUG.rawValue), "LupeState", "\(area) \(json)")
     guard let env = currentEnv(), let cls = nativeClass, let m = onStateMethod else { return }
     withJString(env, area) { a in
         withJString(env, json) { j in

@@ -45,6 +45,22 @@ public struct TopArea: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: diag
+
+/// Not a screen's area: what the link debug screen shows to check the reads on real hardware (firmware, the screen
+/// link, the clock). Kotlin keeps it for the debug screen only; nothing in the product UI reads it.
+public struct DiagArea: Codable, Equatable, Sendable {
+    public var firmware: String?
+    public var tracks: Int
+    public var selectedTrack: Int
+    public var screenLinked: Bool
+    /// The FM-1's screen as SCREEN reports it: page index, layer, menu, home (nil without the link).
+    public var page: Int?, layer: Int?, menu: Int?, home: Bool?
+    /// MIDI clock pulses since Start (-1: not running), and whether TRANSPORT says it's playing.
+    public var clockTicks: Int
+    public var playing: Bool
+}
+
 // MARK: intents
 
 /// What the person did, as Compose sends it: `{"intent": "play"}`, `{"intent": "setTempo", "bpm": 128.0}`.

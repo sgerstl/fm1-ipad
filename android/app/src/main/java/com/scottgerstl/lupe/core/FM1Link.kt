@@ -63,14 +63,18 @@ class FM1Link(context: Context) {
     }
 
     /**
-     * Whether [info] is the FM-1. Skiff keeps Felucca's USB name (BRIDGE.md §1); the iPad's findDevice
-     * looks for "Felucca" in the port name. Checked here against every string Android gives us, case-insensitively,
-     * until the Pixel's real strings are logged (gate 3); then narrowed to what the FM-1 actually reports.
+     * Whether [info] is the FM-1. From the Pixel 10 Pro's own report (`dumpsys midi`, 2026-11-13, Skiff-Lupe 2.2):
+     * USB, one port each way, manufacturer "Hügelton Instruments", product "Felucca", name "Hügelton Instruments
+     * Felucca", USB vendor 0x1209 product 1. Skiff keeps Felucca's USB name, as the iPad's findDevice assumes.
      */
     fun isFM1(info: MidiDeviceInfo): Boolean {
         if (info.type != MidiDeviceInfo.TYPE_USB) return false
         if (info.inputPortCount < 1 || info.outputPortCount < 1) return false
-        return strings(info).any { MATCH.any { m -> it.contains(m, ignoreCase = true) } }
+        val p = info.properties
+        return MATCH.any { m ->
+            p.getString(MidiDeviceInfo.PROPERTY_PRODUCT)?.contains(m, ignoreCase = true) == true ||
+                p.getString(MidiDeviceInfo.PROPERTY_NAME)?.contains(m, ignoreCase = true) == true
+        }
     }
 
     private fun consider(info: MidiDeviceInfo) {
@@ -151,8 +155,8 @@ class FM1Link(context: Context) {
 
     companion object {
         private const val TAG = "LupeLink"
-        /** What the FM-1's strings contain. BRIDGE.md's guess; gate 3 logs the real ones. */
-        val MATCH = listOf("Felucca", "FM-1", "FM1", "M-VAVE")
+        /** What the FM-1's product or name contains (see [isFM1]). */
+        val MATCH = listOf("Felucca")
 
         fun strings(info: MidiDeviceInfo): List<String> {
             val p = info.properties
@@ -168,7 +172,7 @@ class FM1Link(context: Context) {
             val type = when (info.type) { MidiDeviceInfo.TYPE_USB -> "USB"; MidiDeviceInfo.TYPE_BLUETOOTH -> "BT"; MidiDeviceInfo.TYPE_VIRTUAL -> "virtual"; else -> "type ${info.type}" }
             val props = p.keySet().sorted().joinToString(", ") { k ->
                 @Suppress("DEPRECATION") val v = p.get(k)
-                "$k=\"${if (v is android.os.Bundle) "{usb device}" else v}\""
+                "$k=\"${if (v is android.os.Bundle || v is android.hardware.usb.UsbDevice) "{usb device}" else v}\""
             }
             val ports = info.ports.joinToString(", ") { port ->
                 "${if (port.type == android.media.midi.MidiDeviceInfo.PortInfo.TYPE_INPUT) "in" else "out"}${port.portNumber}=\"${port.name}\""

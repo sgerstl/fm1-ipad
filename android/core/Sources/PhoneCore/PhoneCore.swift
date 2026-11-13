@@ -28,6 +28,7 @@ public final class PhoneCore {
         areas = [
             AreaWatch(name: "link", build: { [unowned self] in AreaJSON.encode(self.linkArea()) }, publish: publish),
             AreaWatch(name: "top", build: { [unowned self] in AreaJSON.encode(self.topArea()) }, publish: publish),
+            AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]
         areas.forEach { $0.start() }
         // The clock count isn't observed (Session samples it per frame on the iPad), so while playing the top
@@ -36,7 +37,10 @@ public final class PhoneCore {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(50))
                 guard let self else { return }
-                if self.session.playing { self.areas.first { $0.name == "top" }?.poke() }
+                if self.session.playing {
+                    self.areas.first { $0.name == "top" }?.poke()
+                    self.areas.first { $0.name == "diag" }?.poke()
+                }
             }
         }
         // The project's name (top.project): Session reads PROJ_NAME only when the iPad's Projects sheet opens, so
@@ -89,6 +93,12 @@ public final class PhoneCore {
         }
         return TopArea(project: s.skiffProjects?.name ?? "", playing: s.playing, rec: selectedArmed || s.isRecordingAnything,
                        tempo: Double(s.bpm), mode: mode, launch: launch, waiting: waiting, bar: bar, beat: beat)
+    }
+
+    public func diagArea() -> DiagArea {
+        let s = session, d = s.deviceScreen
+        return DiagArea(firmware: s.info?.version, tracks: s.trackCount, selectedTrack: s.selectedTrack, screenLinked: s.screenLinked,
+                        page: d?.page, layer: d?.layer, menu: d?.menu, home: d?.home, clockTicks: s.clockTicks, playing: s.playing)
     }
 
     // MARK: Intents

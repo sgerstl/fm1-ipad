@@ -16,6 +16,7 @@ import Testing
         let start = Date()
         var frames: [(ms: Int, area: String, json: String)] = []
         func publish(_ area: String, _ json: String) {
+            guard area != "diag" else { return }       // the debug screen's area, not a screen's: kept out of fixtures
             frames.append((Int(Date().timeIntervalSince(start) * 1000), area, json))
         }
         func phases() -> [String] {

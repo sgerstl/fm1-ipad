@@ -44,6 +44,9 @@ object LupeNative {
 
     // Swift → Kotlin (looked up by name in JNI_OnLoad; keep the signatures)
     @JvmStatic fun send(frame: ByteArray) { link?.send(frame) }
-    @JvmStatic fun onState(area: String, json: String) { stateListener?.invoke(area, json) }
+    @JvmStatic fun onState(area: String, json: String) {
+        val l = stateListener
+        if (l == null) android.util.Log.w("LupeState", "onState($area) with no listener") else l(area, json)
+    }
     @JvmStatic fun onDebug(line: String) { LinkLog.add(line) }
 }
