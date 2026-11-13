@@ -84,4 +84,17 @@ class FakeLupeCoreTest {
         core.send(Intent.StepSelect(3)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))
         assertEquals("D4", core.editor.value.steps[3].note)
     }
+
+    @Test fun storingOverAKeptSceneNeedsConfirmation() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.PadTap(1, 1))                       // what plays now
+        core.send(Intent.SceneStore(0))                      // scene 1 is kept: refused
+        core.send(Intent.SceneRecall(0)); assertEquals(PadPlay.Playing, core.pads.value.rows[0].entries[0].play) // still the old snapshot
+        core.send(Intent.PadTap(1, 1))                       // what plays now, again
+        core.send(Intent.SceneStore(0, confirmed = true))
+        core.send(Intent.PadTap(1, 0)); core.send(Intent.SceneRecall(0))
+        assertEquals(PadPlay.Playing, core.pads.value.rows[0].entries[1].play)   // now the new one
+        core.send(Intent.SceneStore(10))                     // an empty scene stores at once
+        assertTrue(core.pads.value.scenes[10].stored)
+    }
 }

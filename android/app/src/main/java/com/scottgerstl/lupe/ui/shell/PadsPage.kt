@@ -80,6 +80,9 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     var select by rememberSaveable { mutableStateOf(false) }
     var store by rememberSaveable { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    // Store over a kept scene asks once more, in place (Scott, 2026-11-14): the scene, and when it was asked
+    var confirmScene by remember { mutableStateOf<Int?>(null) }
+    var confirmAt by remember { mutableStateOf(0L) }
     val scroll = rememberScrollState()
     val haptic = LocalHapticFeedback.current
 
@@ -122,6 +125,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                     .pointerInput(i, store, s.stored) {
                                         detectTapGestures {
                                             when {
+                                                store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis(); notice = null }   // a kept scene: ask first
                                                 store -> { core.send(Intent.SceneStore(i)); store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) }
                                                 s.stored -> core.send(Intent.SceneRecall(i))
                                                 else -> notice = "Scene ${i + 1} is empty. Tap Store, then a scene, to keep what plays now."
@@ -134,6 +138,24 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                     }
                     Key({ select = !select; if (select) store = false }, "Select pad for the editor", width = 64.dp, height = scenesH, minTarget = scenesH, on = select,
                         role = Role.Switch, state = if (select) "On: a pad tap picks it and launches nothing" else "Off") { fg -> KeyLabel("Select", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                }
+                // Store over a kept scene: a red-outlined row naming it, Cancel beside it; a tap ignores the first 0.4 s
+                LupeCrossfade(confirmScene, Modifier.fillMaxSize()) { c ->
+                    if (c != null) Row(Modifier.fillMaxSize().background(Tok.page), horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically) {
+                        val words = "Replace scene ${c + 1} with what plays now"
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
+                                .semantics(mergeDescendants = true) {
+                                    role = Role.Button; contentDescription = "Confirm: $words"
+                                    onClick { if (System.currentTimeMillis() - confirmAt > 400) { core.send(Intent.SceneStore(c, confirmed = true)); confirmScene = null; store = false; true } else false }
+                                }
+                                .pointerInput(c, confirmAt) { detectTapGestures { if (System.currentTimeMillis() - confirmAt > 400) { core.send(Intent.SceneStore(c, confirmed = true)); confirmScene = null; store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) } } }
+                                .padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) { BasicText(words, style = LupeType.key.copy(fontSize = 13.sp), maxLines = 1) }
+                        Key({ confirmScene = null }, "Cancel", width = 72.dp, height = scenesH, minTarget = scenesH) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                    }
                 }
                 // a refusal shows over the scenes until dismissed
                 LupeCrossfade(notice, Modifier.fillMaxSize()) { n ->

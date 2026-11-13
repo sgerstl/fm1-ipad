@@ -166,7 +166,7 @@ class FakeLupeCore(
             }
             is Intent.TrackMute -> _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(muted = !it.muted) else it }) }
             is Intent.SceneRecall -> recall(intent.scene)
-            is Intent.SceneStore -> store(intent.scene)
+            is Intent.SceneStore -> if (_pads.value.scenes.getOrNull(intent.scene)?.stored == true && !intent.confirmed) Unit /* the core refuses: must confirm */ else store(intent.scene)
             is Intent.StepSelect -> emitEditor { it.copy(selected = intent.step.coerceIn(0, 15)) }
             is Intent.StepHold -> emitEditor {
                 when {
