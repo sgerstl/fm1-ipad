@@ -125,25 +125,15 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val editor by core.editor.collectAsStateWithLifecycle()
     // the picked step (decision 21): none shows HOME's knobs. The FM-1 changing page (or a sound page opening) puts the knobs back
     val pick = remember { StepPick() }
-    // In the stack (Labs) the grid stays under the sound page, so the picked step stays picked there and back up (decision 20b)
-    LaunchedEffect(shell.bottom) { if (!labs.soundStack) pick.step = null }
+    // A sound page opening clears the pick (HOME then brings the knobs back); tapping a step while a sound page shows picks it and
+    // keeps the page up, through page changes within the section (decision 20c)
+    LaunchedEffect(shell.bottom.kind) { pick.step = null }
 
     // Decision 19: while a sound page shows (and only then), the back gesture is HOME on the FM-1. Registered before the
     // content, so the Sounds browser's own BackHandler (composed later) wins while it is open.
     val soundPageUp = shell.bottom.kind == BottomKind.Page
     androidx.activity.compose.BackHandler(enabled = soundPageUp) { core.send(com.scottgerstl.lupe.core.GoHome) }
     androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.slide.LocalBackGoesHome provides soundPageUp) {
-    // Labs (decision 20b): the sound section has two positions, up (hidden below) and down (risen under the grid), nothing between.
-    // [flip] is 0 at the top of the page and 1 with the sound section risen; it moves in one spring.
-    val soundsOpen = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current.request != null
-    val flip = remember { Animatable(0f) }
-    var lastPage by remember { mutableStateOf(shown) }
-    if (shown.kind == BottomKind.Page) lastPage = shown
-    val wantDown = labs.soundStack && shown.kind == BottomKind.Page && !soundsOpen
-    LaunchedEffect(wantDown, reduce) {
-        val to = if (wantDown) 1f else 0f
-        if (reduce) flip.snapTo(to) else unscaled { flip.animateTo(to, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 420f)) }
-    }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val hb = with(density) { maxHeight.toPx() }
         fun dp(v: Float) = with(density) { v.dp.toPx() }
@@ -183,39 +173,10 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
             }
         }
 
-        // With the stack on, the bottom half keeps the steps; the sound page is the section that rises over them.
-        val layerShell = if (labs.soundStack && shellShown.bottom.kind == BottomKind.Page) shellShown.copy(bottom = BottomPage()) else shellShown
-        // The sound section is as tall as today's bottom half; it rises until its controls end at the screen's bottom. The page behind
-        // goes up by what that takes: the step grid ends where the section begins. Grid bottom = the body's bottom less the strip
-        // (122 + 12) and, at bottom full, the automation lane.
-        val af = (((hb - topAt(place.value) - dp(HANDLE_H) - dp(GAP)) - dp(560f)) / dp(100f)).coerceIn(0f, 1f)
-        val soundH = hb * 0.555f
-        val shift = (hb - dp(STRIP_H_STACK) - af * dp(162f) + soundH - hb).coerceAtLeast(0f)
-        val flipNow = if (labs.soundStack) flip.value else 0f
-        var swipe by remember { mutableStateOf(false) }
-        Box(
-            Modifier.fillMaxSize().clipToBounds()
-                .then(if (!labs.soundStack) Modifier else Modifier.pointerInput(wantDown) {
-                    // a vertical swipe on the non-control areas flips the two positions (knobs and sliders take their own vertical slide first: a consumed drag never reaches here)
-                    awaitEachGesture {
-                        val first = awaitFirstDown(requireUnconsumed = true)
-                        var total = 0f
-                        val slop = awaitVerticalTouchSlopOrCancellation(first.id) { change, over -> total = over; change.consume() } ?: return@awaitEachGesture
-                        val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
-                        tracker.addPosition(slop.uptimeMillis, slop.position)
-                        verticalDrag(slop.id) { change -> total += change.positionChange().y; tracker.addPosition(change.uptimeMillis, change.position); change.consume() }
-                        val v = tracker.calculateVelocity().y
-                        val far = abs(total) > 40.dp.toPx() || abs(v) > 900f
-                        if (far && total < 0 && !wantDown && lastPage.kind == BottomKind.Page) { core.send(com.scottgerstl.lupe.core.PickPage(lastPage.family ?: return@awaitEachGesture)) }
-                        else if (far && total > 0 && wantDown) core.send(com.scottgerstl.lupe.core.GoHome)
-                    }
-                }),
-        ) {
-        Box(Modifier.fillMaxSize().graphicsLayer { translationY = -shift * flipNow }) {
         if (reduce) {
-            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), layerShell, pads, editor, askCore, hb, ::topAt, onBottomTouch, frozen, pick) }
+            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, askCore, hb, ::topAt, onBottomTouch, frozen, pick) }
         } else {
-            Layers(place.value, layerShell, pads, editor, askCore, hb, ::topAt, onBottomTouch, frozen, pick)
+            Layers(place.value, shellShown, pads, editor, askCore, hb, ::topAt, onBottomTouch, frozen, pick)
         }
 
         // The divider's touch target: 48 dp tall around the 16 dp band, over both halves.
@@ -278,19 +239,6 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                                onClickLabel = "Show the editor") { settle(Divider.Split) },
                 contentAlignment = Alignment.Center,
             ) { BasicText("Editor ⌃", style = LupeType.key) }
-        }
-        }
-        // The sound section: from the family keys down, risen under the step grid. The strip behind it has left the view.
-        if (flipNow > 0.001f) {
-            val section = if (shown.kind == BottomKind.Page) shown else lastPage
-            Box(
-                Modifier.padding(horizontal = 8.dp).fillMaxWidth().heightPx { soundH.toInt() }
-                    .graphicsLayer { translationY = hb - soundH * flipNow }
-                    .background(Tok.page).pointerInput(Unit) {
-                        awaitPointerEventScope { while (true) { val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); if (e.changes.any { it.pressed && !it.previousPressed }) onBottomTouch() } }
-                    }.clipToBounds(),
-            ) { HeldSoundPage(section, askCore, frozen) }
-        }
         }
     }
     }
@@ -362,15 +310,17 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 if (req != null) {
                     // the Sounds browser opens over the editor or the sound page; Done or Back brings it back
                     SoundsBrowser(core, req, { soundsHost.close() })
-                } else LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
-                    when (page.kind) {
+                } else LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
+                    // the editor and a sound page share one layout (decision 20c): the grid stays, the dials row gives way to the sound section
+                    when (if (take) BottomKind.FreeTake else BottomKind.Editor) {
                         // the offer and the landing sit on top of the editor; the FM-1's picker takes its place
                         BottomKind.Editor -> Box(Modifier.fillMaxSize()) {
-                            EditorPage(editor, core, autoFraction, automation, pick = pick)
+                            EditorPage(editor, core, autoFraction, automation, pick = pick,
+                                sound = if (shell.bottom.kind == BottomKind.Page) ({ HeldSoundPage(shell.bottom, core, frozen) }) else null)
                             com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
                         }
                         BottomKind.FreeTake -> com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
-                        else -> HeldSoundPage(page, core, frozen)
+                        else -> Unit
                     }
                 }
             }

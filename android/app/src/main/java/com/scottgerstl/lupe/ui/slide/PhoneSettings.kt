@@ -33,11 +33,6 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     var timelineAcross by mutableStateOf(prefs?.getBoolean(ACROSS, false) ?: false)
         private set
 
-    /** Labs (decision 20): a sound key adds the sound page under the steps, and the whole bottom area is one vertical scroll. Off: today's layout. */
-    var soundStack by mutableStateOf(prefs?.getBoolean(STACK, false) ?: false)
-        private set
-
-    fun chooseSoundStack(on: Boolean) { soundStack = on; put(STACK, on) }
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
     fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
     fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN, on) }
@@ -52,7 +47,6 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"
         const val ACROSS = "labs_timeline_across"
-        const val STACK = "labs_sound_stack"
     }
 }
 

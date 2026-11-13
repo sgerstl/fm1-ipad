@@ -11,37 +11,37 @@ Built (Kotlin tests pass, APK builds); **not run on a screen**. Decisions 19, 20
 | 3 | On a sound page with Slide-to-turn on Sideways, slide a knob to the screen's edge | Known cost: the edge is not excluded from back there, so a slide that ends past the edge can go home. Tell me if it happens in daily use |
 | 4 | Open the Sounds browser from a sound page, swipe back | The browser closes (not HOME) |
 
-## The stack, two positions (decision 20b): Settings › Labs › Sound pages push up from below
+## One flexible page (decision 20c), replacing the stack prototype
 
-Off by default; off is today's layout, unchanged. Replaces the free scroll Scott tried. Built, not run on a screen.
+The Labs stack (switch "Sound pages push up from below", the free scroll and the two-position flip) is **removed**; this section supersedes the earlier rows 5-10b. Built, not run on a screen.
 
-**Up** is the page as it is (top half, divider, step grid, step settings strip). **Down** is the sound section (family keys, page row, sound page, the height of today's bottom half) risen until it sits directly under the step grid's bottom edge, with the strip behind it. The page behind moves up by about 313 dp on a Pixel 10 Pro (S minus the strip and its gap), which leaves the **bottom ~45 dp of the top half** in view: the scenes row (Store, 1–7, Select) and the divider band under it, then the ruler and the grid. The sound page's controls end at the bottom of the screen. At bottom full the automation lane makes the grid shorter and the shift smaller by the same amount.
+When a sound page shows (a sound key on the FM-1, or the phone's own page picks), the bottom half keeps the ruler and the **step grid**, hides the dials row (HOME knobs or the step's controls), and the family keys, page row and sound page take the room under the grid. The grid glides smaller and the dials row fades out as the sound section fades in (0.3 s, nothing pops; with Remove animations they cross-fade in place).
+
+What shows at each divider position on a 412 × 915 dp phone (body about 793 dp tall; the Pixel 7's 1080 × 2400 is 411 × 914 dp, so the same numbers):
+
+| Divider | Bottom half | Grid | Sound page |
+|---|---|---|---|
+| Top only | hidden; a sound page glides the divider to split (decision 13) and HOME glides it back unless you moved it | | |
+| Split | about 420 dp | rows squeezed to 36 dp (156 dp in all), number and note on one line | family keys, page row and the four controls; the picture is about 0 to 10 dp: it goes first |
+| Bottom full | about 729 dp | rows 72 dp (300 dp) | family keys, page row, a picture of about 170 dp, the four controls. The automation lane is for the editor only, so it leaves while a sound page is up and returns on HOME |
 
 | # | Do | See |
 |---|----|-----|
-| 5 | Switch it on. Press ENV on the FM-1 | One spring move (about 0.3 s): the sound section rises under the grid, the strip leaves, the top half goes up with only its bottom 45 dp showing. Nothing stops in between |
-| 6 | Swipe down on a gap in the grid, the ruler or the family row | The section goes back down (the FM-1 goes HOME too) with one spring |
-| 7 | Slide a knob up and down, or a graph handle, in either position | It turns the control; the page does not flip |
-| 8 | From the steps with no sound page open, swipe up on a gap | If a sound page was open earlier this session, it comes back (the phone sends that family's key); if none was, nothing happens |
-| 9 | Press other sound keys, or the page row | The section stays down |
-| 10 | Switch it off | Today's layout, the sound page in the divider's bottom half |
-| 10b | Remove animations on | The two positions swap with no travel |
+| 5 | Press ENV on the FM-1 (split) | The dials row fades out, the grid compresses to 36 dp rows, the family keys, page row and controls fill the space under it. The ruler stays above the grid |
+| 6 | Drag the divider to bottom full, then top only | Bottom full: roomy grid and a real picture. Top only: nothing of the bottom half; with a sound page showing, the divider glides to split at once |
+| 7 | Press HOME on the FM-1 (or swipe back) | The sound section fades out, the grid grows back, the dials row (HOME knobs, or the step's controls if you picked one while the page was up... see below) fades in |
+| 8 | With a sound page up, tap a step | It gets the white ring in the grid, the sound page stays up, the dials do not come back. Hold it and turn a knob to lock |
+| 9 | Change pages (FM-1 or phone) | The section changes within itself; a picked step stays picked |
+| 10 | Bottom full on the editor with an automation lane, then ENV, then HOME | The lane leaves with the dials row and returns on HOME |
 
-### What stays selected (decision for Scott: "what's selected and when")
+### What is selected and when (decisions I had to make)
 
-Handled:
-- The grid stays under the sound page, so **a picked step stays picked** while you are down and when you come back up; the strip is that step's controls again on return. With no step picked you get the HOME knobs again.
-- This is the one place the stack differs from today: without the stack, a sound page clears the pick and the knobs come back.
-- Pad selection, track and pattern are untouched by flipping.
-- A swipe over a step cell is not a hold: the lock gesture ignores a touch something else took.
-
-Open:
-- Whether coming up should always clear the pick (knobs back) instead of keeping it.
-- A latched Lock stays latched while down (the strip is hidden); the lock banner still shows in the ruler.
-- A pattern change while down.
-- The FM-1 selecting a different step while down: the grid ring follows what you picked on the phone, not the FM-1's cursor.
-- Swipe-up with no earlier sound page does nothing; a hint may be wanted.
-- The top-half sliver is touchable (pads' scenes row); it may want to be inert.
+- Opening a sound page clears the picked step, so HOME shows the HOME knobs. Without this, a step picked earlier would hide them.
+- A step tapped while a sound page is up is picked and stays picked through page changes inside the sound section. HOME clears it (the dials row returns as the HOME knobs), so a step you picked for a lock is not carried back.
+- The grid's selection ring is the phone's pick, not the FM-1's cursor.
+- The Step ⋯ menu is greyed while no step is picked, as before.
+- Open: should HOME keep the pick rather than clear it? A latched Lock while a sound page is up keeps its banner in the ruler. A pattern change while a sound page is up changes the grid under it. Whether a squeezed 36 dp grid is too small to hit on a phone: it is above the 24 dp floor but under 44.
+- At split with the "held" notice showing, the controls row can lose a few dp at the bottom: the picture is already gone.
 
 ## Picture handles (22)
 

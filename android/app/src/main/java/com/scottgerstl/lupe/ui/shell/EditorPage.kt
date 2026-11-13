@@ -2,6 +2,7 @@ package com.scottgerstl.lupe.ui.shell
 
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
@@ -108,28 +109,56 @@ private enum class PanelTab(val label: String) { Notes("NOTES"), Feel("FEEL"), S
 class StepPick { var step by mutableStateOf<Int?>(null) }
 
 @Composable
-fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, auto: com.scottgerstl.lupe.core.AutomationState = com.scottgerstl.lupe.core.AutomationState(), modifier: Modifier = Modifier, pick: StepPick = remember { StepPick() }) {
+fun EditorPage(
+    ed: EditorState, core: LupeCore, autoFraction: Float, auto: com.scottgerstl.lupe.core.AutomationState = com.scottgerstl.lupe.core.AutomationState(),
+    modifier: Modifier = Modifier, pick: StepPick = remember { StepPick() },
+    /** The sound section (family keys, page row, sound page) while the FM-1 shows a sound page, or null (decision 20c). */
+    sound: (@Composable () -> Unit)? = null,
+) {
     var tab by rememberSaveable { mutableStateOf(PanelTab.Notes) }
     // the whole bottom half for one lane (board 69): drawn on with a finger. Done, or Back, returns to the editor
     var drawing by rememberSaveable { mutableStateOf(false) }
     val track = Tok.track[(ed.track - 1).coerceAtLeast(0) % Tok.track.size]
     if (ed.steps.isEmpty()) { Placeholder("No pattern", "Pick a pad: hold it, then Edit steps", modifier); return }
-    if (drawing && auto.lane.isNotEmpty()) { AutomationFull(ed, auto, core, track, { drawing = false }, modifier); return }
-    Column(modifier.fillMaxSize()) {
-        Ruler(ed, track, core, pick.step != null)
-        Spacer(Modifier.height(0.dp))
-        Grid(ed, track, core, Modifier.weight(1f).padding(top = 0.dp), pick.step) { pick.step = it }
-        // the lane shows for every pattern: with no locks or recorded motion yet it is a parameter picker, so a fresh pattern has a way in
-        if (autoFraction > 0.02f) {
-            Spacer(Modifier.height(12.dp * autoFraction))
-            AutoLane(ed, auto, track, core, { drawing = true }, Modifier.height(150.dp * autoFraction).graphicsLayer { alpha = autoFraction })
-        }
-        Spacer(Modifier.height(12.dp))
-        LupeCrossfade(pick.step != null, Modifier.fillMaxWidth().height(STRIP_HEIGHT)) { picked ->
-            if (picked) StepPanel(ed, track, core, tab, { tab = it }, pick) else HomeKnobsStrip(ed, core)
+    if (drawing && auto.lane.isNotEmpty() && sound == null) { AutomationFull(ed, auto, core, track, { drawing = false }, modifier); return }
+    // One flexible page (decision 20c): with a sound page up, the grid stays, the dials row (HOME knobs or the step's controls) goes, and the
+    // sound section takes its place and more. [s] is 0 for the editor, 1 for the sound page; the two glide, never pop.
+    val s by animatedFloat(if (sound != null) 1f else 0f, Dur.PANEL)
+    var lastSound by remember { mutableStateOf(sound) }
+    if (sound != null) lastSound = sound
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val ruler = 40.dp
+        val lane0 = 162.dp * autoFraction
+        // the grid in the editor: what is left above the lane and the strip. With a sound page: no smaller than 36 dp a row, no bigger than 72, and
+        // leaving the sound section its four controls first; the section's picture takes what remains (0 at split on a 915 dp phone)
+        val grid0 = (maxHeight - ruler - 12.dp - STRIP_HEIGHT - lane0).coerceAtLeast(MIN_GRID)
+        val grid1 = (maxHeight - ruler - 8.dp - SOUND_IDEAL).coerceIn(MIN_GRID, MAX_GRID)
+        val grid = grid0 + (grid1 - grid0) * s
+        Column(Modifier.fillMaxSize()) {
+            Ruler(ed, track, core, pick.step != null)
+            Grid(ed, track, core, Modifier.height(grid), pick.step) { pick.step = it }
+            // the lane shows for every pattern: with no locks or recorded motion yet it is a parameter picker, so a fresh pattern has a way in
+            val laneF = autoFraction * (1f - s)
+            if (laneF > 0.02f) {
+                Spacer(Modifier.height(12.dp * laneF))
+                AutoLane(ed, auto, track, core, { drawing = true }, Modifier.height(150.dp * laneF).graphicsLayer { alpha = laneF })
+            }
+            Spacer(Modifier.height(12.dp - 4.dp * s))
+            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                if (s < 0.999f) Box(Modifier.fillMaxWidth().height(STRIP_HEIGHT).graphicsLayer { alpha = 1f - s }) {
+                    LupeCrossfade(pick.step != null, Modifier.fillMaxSize()) { picked ->
+                        if (picked) StepPanel(ed, track, core, tab, { tab = it }, pick) else HomeKnobsStrip(ed, core)
+                    }
+                }
+                if (s > 0.001f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = s }) { lastSound?.invoke() }
+            }
         }
     }
 }
+
+private val MIN_GRID = 156.dp          // four rows of 36 dp and three 4 dp gaps
+private val MAX_GRID = 300.dp          // rows of 72 dp: more room goes to the sound page's picture
+private val SOUND_IDEAL = 322.dp       // family keys 48, page row 44, controls ~120 and a picture of ~110
 
 // ---- ruler and lock banner
 
@@ -313,8 +342,18 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
                 }
             },
     ) {
-        BasicText("${i + 1}", Modifier.padding(start = 8.dp, top = 5.dp), style = LupeType.small.copy(color = if (s.on) Tok.text2Raised else Tok.text2))
-        if (s.on) {
+        val compact = h < 52.dp   // a sound page is up and the rows are squeezed: the number and the note share one line
+        if (compact) {
+            Row(Modifier.align(Alignment.CenterStart).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                BasicText("${i + 1}", Modifier.width(18.dp), style = LupeType.small.copy(fontSize = 11.sp, color = if (s.on) Tok.text2Raised else Tok.text2), maxLines = 1)
+                if (s.on) {
+                    BasicText(s.note, style = LupeType.number.copy(fontSize = 17.sp, lineHeight = 17.sp, color = Tok.text), maxLines = 1)
+                    if (s.extra > 0) BasicText("+${s.extra}", Modifier.padding(start = 3.dp), style = LupeType.small.copy(fontSize = 10.sp))
+                }
+            }
+            if (s.on) Box(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 4.dp).width(((w - 16.dp) / 4) * minOf(s.length, 4)).height(2.dp).background(track, RoundedCornerShape(2.dp)))
+        } else BasicText("${i + 1}", Modifier.padding(start = 8.dp, top = 5.dp), style = LupeType.small.copy(color = if (s.on) Tok.text2Raised else Tok.text2))
+        if (s.on && !compact) {
             val size = if (h > 80.dp) 26.sp else if (ed.kind == EditorKind.Drum) 17.sp else 20.sp
             Row(Modifier.align(Alignment.CenterStart).padding(start = 8.dp), verticalAlignment = Alignment.Bottom) {
                 BasicText(s.note, style = LupeType.number.copy(fontSize = size, lineHeight = size, color = Tok.text), maxLines = 1)
