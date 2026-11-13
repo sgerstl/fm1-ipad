@@ -24,12 +24,30 @@ import Testing
                 (try? JSONDecoder().decode(LinkArea.self, from: Data($0.json.utf8)))?.phase.rawValue
             }
         }
+        /// Frames of areas PhoneCore doesn't publish yet, carried over from the file already there (P2/P3's
+        /// hand-written ones), so recording link and top doesn't wipe the pads a screen is being built against.
+        var carried: [(ms: Int, area: String, json: String)] = []
+        func carryOver(from url: URL) {
+            guard let data = try? Data(contentsOf: url),
+                  let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let old = root["frames"] as? [[String: Any]] else { return }
+            let mine = Set(frames.map(\.area))
+            for f in old {
+                guard let area = f["area"] as? String, !mine.contains(area), let ms = f["atMs"] as? Int, let st = f["state"],
+                      let j = try? JSONSerialization.data(withJSONObject: st, options: [.sortedKeys]) else { continue }
+                carried.append((ms, area, String(decoding: j, as: UTF8.self)))
+            }
+        }
         func file(scenario: String, note: String) -> String {
-            let rows = frames.map { #"    {"atMs": \#($0.ms), "area": "\#($0.area)", "state": \#($0.json)}"# }
+            let all = (frames + carried).sorted { $0.ms < $1.ms }
+            let rows = all.map { #"    {"atMs": \#($0.ms), "area": "\#($0.area)", "state": \#($0.json)}"# }
+            let carriedAreas = Array(Set(carried.map(\.area))).sorted()
+            let provenance = carriedAreas.isEmpty ? "" :
+                " The \(carriedAreas.joined(separator: ", ")) frames are hand-written (carried over) until PhoneCore publishes them."
             return """
             {
-              "provisional": false,
-              "note": "\(note) Recorded by android/core/Tests/LupeCoreTests/FixtureRecordingTests.swift (scenario \(scenario)); don't edit by hand.",
+              "provisional": \(carriedAreas.isEmpty ? "false" : "true"),
+              "note": "\(note) Recorded by android/core/Tests/LupeCoreTests/FixtureRecordingTests.swift (scenario \(scenario)); don't edit by hand.\(provenance)",
               "frames": [
             \(rows.joined(separator: ",\n"))
               ]
@@ -46,6 +64,7 @@ import Testing
 
     func save(_ r: Recorder, _ scenario: String, note: String) throws {
         guard Self.writing else { return }
+        r.carryOver(from: Self.fixtures.appendingPathComponent("\(scenario).json"))
         try r.file(scenario: scenario, note: note).write(to: Self.fixtures.appendingPathComponent("\(scenario).json"), atomically: true, encoding: .utf8)
     }
 

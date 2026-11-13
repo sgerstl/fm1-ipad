@@ -59,7 +59,7 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
  * tap outside, closes it. Put this inside the key's Box so it anchors to it.
  */
 @Composable
-fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, width: Dp = 220.dp, content: @Composable () -> Unit) {
+fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, width: Dp = 220.dp, at: androidx.compose.ui.geometry.Offset? = null, content: @Composable () -> Unit) {
     val reduce = LocalReduceMotion.current
     var show by remember { mutableStateOf(false) }
     val t = animatedFloat(if (open) 1f else 0f, if (open) Dur.FINGER else Dur.EXIT, if (open) EaseOut else EaseIn)
@@ -68,9 +68,17 @@ fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, wi
     if (!show) return
     val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 4.dp.roundToPx() }
     val margin = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }
-    val provider = remember(alignEnd, gap, margin) {
+    val provider = remember(alignEnd, gap, margin, at) {
         object : PopupPositionProvider {
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                // beside the finger: to its right, or its left when there is no room; level with it
+                if (at != null) {
+                    val fx = anchorBounds.left + at.x.toInt(); val fy = anchorBounds.top + at.y.toInt()
+                    val side = gap * 3
+                    val x = if (fx + side + popupContentSize.width + margin <= windowSize.width) fx + side else fx - side - popupContentSize.width
+                    return IntOffset(x.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)),
+                        (fy - side).coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))
+                }
                 val x = if (alignEnd) anchorBounds.right - popupContentSize.width else anchorBounds.left
                 return IntOffset(x.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)), anchorBounds.bottom + gap)
             }
@@ -85,7 +93,7 @@ fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, wi
                     if (!reduce) {
                         val s = 0.96f + 0.04f * t.value
                         scaleX = s; scaleY = s
-                        transformOrigin = TransformOrigin(if (alignEnd) 1f else 0f, 0f)
+                        transformOrigin = TransformOrigin(if (alignEnd) 1f else 0f, if (at != null) 0.2f else 0f)
                     }
                     shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(12.dp); clip = true
                     ambientShadowColor = androidx.compose.ui.graphics.Color.Black; spotShadowColor = androidx.compose.ui.graphics.Color.Black

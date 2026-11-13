@@ -15,9 +15,13 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _link = MutableStateFlow(LinkState())
     private val _top = MutableStateFlow(TopState())
     private val _shell = MutableStateFlow(ShellState())
+    private val _pads = MutableStateFlow(PadsState())
+    private val _editor = MutableStateFlow(EditorState())
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
+    override val pads: StateFlow<PadsState> = _pads
+    override val editor: StateFlow<EditorState> = _editor
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -31,6 +35,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "link" -> _link.value = lupeJson.decodeFromString(LinkState.serializer(), json)
                 "top" -> _top.value = lupeJson.decodeFromString(TopState.serializer(), json)
                 "shell" -> _shell.value = lupeJson.decodeFromString(ShellState.serializer(), json)
+                "pads" -> _pads.value = lupeJson.decodeFromString(PadsState.serializer(), json)
+                "editor" -> _editor.value = lupeJson.decodeFromString(EditorState.serializer(), json)
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {

@@ -11,6 +11,8 @@ interface LupeCore {
     val link: StateFlow<LinkState>
     val top: StateFlow<TopState>
     val shell: StateFlow<ShellState>
+    val pads: StateFlow<PadsState>
+    val editor: StateFlow<EditorState>
 
     fun send(intent: Intent)
 }

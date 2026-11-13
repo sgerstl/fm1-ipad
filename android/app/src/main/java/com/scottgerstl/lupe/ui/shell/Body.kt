@@ -42,6 +42,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.scottgerstl.lupe.core.BottomKind
+import com.scottgerstl.lupe.core.EditorState
+import com.scottgerstl.lupe.core.PadsState
 import com.scottgerstl.lupe.core.Divider
 import com.scottgerstl.lupe.core.Intent
 import com.scottgerstl.lupe.core.LupeCore
@@ -79,6 +83,8 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val pads by core.pads.collectAsStateWithLifecycle()
+    val editor by core.editor.collectAsStateWithLifecycle()
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val hb = with(density) { maxHeight.toPx() }
@@ -114,9 +120,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         }
 
         if (reduce) {
-            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shell, core, hb, ::topAt) }
+            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shell, pads, editor, core, hb, ::topAt) }
         } else {
-            Layers(place.value, shell, core, hb, ::topAt)
+            Layers(place.value, shell, pads, editor, core, hb, ::topAt)
         }
 
         // The divider's touch target: 48 dp tall around the 16 dp band, over both halves.
@@ -159,7 +165,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 
 /** The picture at one divider place. */
 @Composable
-private fun Layers(p: Float, shell: ShellState, core: LupeCore, hb: Float, topAt: (Float) -> Float) {
+private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float) {
     val density = LocalDensity.current
     fun dp(v: Float) = with(density) { v.dp.toPx() }
     // tabs fade out and the strip fades in as the divider goes past split
@@ -168,11 +174,7 @@ private fun Layers(p: Float, shell: ShellState, core: LupeCore, hb: Float, topAt
 
     Box(Modifier.fillMaxSize()) {
         if (tabsAlpha > 0f) Tabs(shell.tab, { core.send(Intent.SetTab(it)) }, Modifier.padding(horizontal = 8.dp).graphicsLayer { alpha = tabsAlpha })
-        if (stripAlpha > 0f) Box(
-            Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(STRIP_H.dp).graphicsLayer { alpha = stripAlpha }
-                .background(Tok.well, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center,
-        ) { BasicText("The selected track's pads stay up here: phase 3", style = LupeType.body, maxLines = 1) }
+        if (stripAlpha > 0f) PadsStrip(pads, core, Modifier.padding(horizontal = 8.dp).graphicsLayer { alpha = stripAlpha })
 
         // top half: from 8 dp under the tabs to 4 dp above the divider
         Box(
@@ -182,7 +184,7 @@ private fun Layers(p: Float, shell: ShellState, core: LupeCore, hb: Float, topAt
                 .heightPx { (topAt(p) - dp(GAP) - dp(TOP_OFFSET)).toInt() }
                 .clipToBounds()
                 .graphicsLayer { alpha = (1f - stripAlpha * 2f).coerceIn(0f, 1f) },
-        ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { TopPlaceholder(it) } }
+        ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { if (it == Tab.Pads) PadsPage(pads, core) else TopPlaceholder(it) } }
 
         // bottom half: from 4 dp under the divider band to the bottom; it follows the FM-1's page
         Box(
@@ -191,6 +193,12 @@ private fun Layers(p: Float, shell: ShellState, core: LupeCore, hb: Float, topAt
                 .offset { IntOffset(0, (topAt(p) + dp(HANDLE_H) + dp(GAP)).toInt()) }
                 .heightPx { (hb - topAt(p) - dp(HANDLE_H) - dp(GAP)).toInt() }
                 .clipToBounds(),
-        ) { LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { BottomPlaceholder(it) } }
+        ) {
+            // the lane fits only when the bottom half is nearly full height
+            val autoFraction = (((hb - topAt(p) - dp(HANDLE_H) - dp(GAP)) - dp(560f)) / dp(100f)).coerceIn(0f, 1f)
+            LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
+                if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction) else BottomPlaceholder(page)
+            }
+        }
     }
 }

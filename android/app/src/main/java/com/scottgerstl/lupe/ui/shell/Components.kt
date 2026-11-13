@@ -72,6 +72,7 @@ fun Key(
     role: Role = Role.Button,
     state: String? = null,
     onLongClick: (() -> Unit)? = null,
+    minTarget: Dp = 48.dp,
     litTop: Color = Tok.primaryTop,
     litEdge: Color = Tok.primaryEdge,
     content: @Composable BoxScope.(Color) -> Unit,
@@ -83,8 +84,8 @@ fun Key(
     val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
     Box(
         modifier
-            .defaultMinSize(48.dp, 48.dp)
-            .width(maxOf(width ?: 44.dp, 48.dp))
+            .defaultMinSize(minTarget, minTarget)
+            .width(maxOf(width ?: 44.dp, minTarget))
             .semantics(mergeDescendants = true) {
                 contentDescription = description
                 this.role = role
@@ -166,3 +167,22 @@ fun Check(color: Color) =
 @Composable
 fun Panel(modifier: Modifier = Modifier, radius: Dp = 12.dp, color: Color = Tok.panel, content: @Composable () -> Unit) =
     Box(modifier.clip(RoundedCornerShape(radius)).background(color)) { content() }
+
+/** A key as wide as its row (Cancel under a confirm). 36 dp tall, the chiclet look. */
+@Composable
+fun WideKey(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val drop = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100, easing = androidx.compose.animation.core.LinearEasing)
+    Box(
+        modifier.fillMaxWidth().height(36.dp)
+            .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = text }
+            .combinedClickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
+            .drawBehind {
+                val r = CornerRadius(Tok.CHICLET_RADIUS.dp.toPx()); val e = Tok.CHICLET_EDGE.dp.toPx()
+                drawRoundRect(Tok.chicletEdge, Offset(0f, e), Size(size.width, size.height - e), r)
+                drawRoundRect(Tok.control, Offset(0f, drop.value * e), Size(size.width, size.height - e), r)
+            },
+        contentAlignment = Alignment.Center,
+    ) { KeyLabel(text, Tok.text) }
+}

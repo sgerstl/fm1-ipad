@@ -98,3 +98,133 @@ data class ShellState(
     val divider: Divider = Divider.Split,
     val bottom: BottomPage = BottomPage(),
 )
+
+// ---- pads (P3). PROVISIONAL, as the areas above: hand-written to BRIDGE.md §2 until P1's PhoneCore records them.
+
+@Serializable
+enum class PadKind {
+    @SerialName("empty") Empty,
+    @SerialName("pattern") Pattern,
+    @SerialName("rest") Rest,
+}
+
+@Serializable
+enum class PadPlay {
+    @SerialName("idle") Idle,
+    @SerialName("playing") Playing,
+    /** A launch is queued for [PadEntry.bar]. */
+    @SerialName("waiting") Waiting,
+    /** The song's next entry (SONG ON, ONCE): comes in by itself. */
+    @SerialName("next") Next,
+}
+
+@Serializable
+data class PadEntry(
+    val kind: PadKind = PadKind.Empty,
+    /** The pattern's number, for [PadKind.Pattern]. */
+    val pattern: Int? = null,
+    val play: PadPlay = PadPlay.Idle,
+    /** Where a waiting launch lands, 1-based ("bar 11"). */
+    val bar: Int? = null,
+    /** Passes of the entry (×4) and the one playing (2 of 4); null when REPS is 1. */
+    val passes: Int? = null,
+    val pass: Int? = null,
+    /** 0..1 through the pass, from Lupe's own clock count; null when not known (no bar is drawn). */
+    val progress: Float? = null,
+    /** The entry carries a sound (the iPad cuts the pad's top right corner). */
+    val hasSound: Boolean = false,
+)
+
+@Serializable
+data class PadRow(
+    /** 1-based track number. */
+    val track: Int,
+    /** The track's sound name ("Acid", "Drum Kit"). */
+    val name: String,
+    val muted: Boolean = false,
+    /** One per column: entries A… up to the last any track uses, plus one empty. */
+    val entries: List<PadEntry> = emptyList(),
+)
+
+@Serializable
+data class Scene(val stored: Boolean = false, val current: Boolean = false)
+
+/** [entry] is 0-based (A = 0). */
+@Serializable
+data class PadRef(val track: Int = 1, val entry: Int = 0)
+
+@Serializable
+data class PadsState(
+    val rows: List<PadRow> = emptyList(),
+    /** Sixteen. */
+    val scenes: List<Scene> = emptyList(),
+    /** The pad the editor shows. */
+    val selected: PadRef = PadRef(),
+)
+
+// ---- editor (P3)
+
+@Serializable
+enum class EditorKind {
+    /** Melodic: a note (and up to four chord notes) per step. */
+    @SerialName("roll") Roll,
+    /** Drum kit: lanes; a step is the lanes that hit. */
+    @SerialName("drum") Drum,
+}
+
+/** A value on a step. [locked] true: a lock on this step (◆); false: recorded automation the step passes through (—). */
+@Serializable
+data class StepValue(val param: String, val value: Int, val locked: Boolean = true)
+
+@Serializable
+data class Step(
+    val on: Boolean = false,
+    /** What the cell shows: "C4", "D#4", or lane names for a drum step ("BD SD"). Empty when off. */
+    val note: String = "",
+    /** Chord notes beyond the first: the "+2". */
+    val extra: Int = 0,
+    /** In steps. */
+    val length: Int = 1,
+    val velocity: Int = 100,
+    val chance: Int = 100,
+    val ratchet: Int = 1,
+    val cond: String = "ALWAYS",
+    val nudge: Int = 0,
+    /** Shown in the step panel's NOTES tab as the value under PITCH (a chord reads "C5 D#5"). */
+    val pitchText: String = "",
+    val values: List<StepValue> = emptyList(),
+) {
+    val locked: Boolean get() = values.any { it.locked }
+}
+
+@Serializable
+enum class LockMode {
+    @SerialName("off") Off,
+    /** A step is held down: knob turns lock to it until let go. */
+    @SerialName("held") Held,
+    /** The step panel's Lock key latched it. */
+    @SerialName("latched") Latched,
+}
+
+@Serializable
+data class EditorState(
+    val track: Int = 1,
+    val trackName: String = "",
+    /** "B": the entry the pattern sits in. */
+    val entry: String = "A",
+    val pattern: Int = 0,
+    /** "C min", or "" for a drum kit. */
+    val scale: String = "",
+    val kind: EditorKind = EditorKind.Roll,
+    /** Sixteen. */
+    val steps: List<Step> = emptyList(),
+    val selected: Int = 0,
+    /** -1 when stopped. */
+    val playhead: Int = -1,
+    val chord: Boolean = false,
+    val lock: LockMode = LockMode.Off,
+    /** Automation: the lanes this track has, the one shown, and its values (0..100) per step. */
+    val lanes: List<String> = emptyList(),
+    val lane: String = "",
+    val laneValues: List<Int> = emptyList(),
+)
