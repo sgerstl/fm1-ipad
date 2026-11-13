@@ -103,7 +103,7 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier) {
                 LupeCrossfade(page.page to page.family, Modifier.fillMaxSize(), Dur.STATE) { _ ->
                     GraphContent(
                         g, colour, if (litNow(page)) page.turned else -1,
-                        onSet = { slot, v -> core.send(SetParam(slot, v)) },
+                        pc = PictureControls(page.controls, colour, { slot, c -> opened.getOrPut(slot) { c.raw } }) { slot, v -> core.send(SetParam(slot, v)) },
                         onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) },
                         modifier = Modifier.fillMaxSize(),
                     )

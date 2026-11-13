@@ -197,3 +197,57 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
 fun Diamond(colour: Color, modifier: Modifier = Modifier) = Canvas(modifier.size(9.dp)) {
     drawPath(Path().apply { moveTo(size.width / 2, 0f); lineTo(size.width, size.height / 2); lineTo(size.width / 2, size.height); lineTo(0f, size.height / 2); close() }, colour)
 }
+
+
+/** What a picture needs to turn one of the page's controls: the control (by its FM-1 knob slot), where it opened, and how to send it. */
+class PictureControls(val controls: List<PageControl?>, val colour: Color, val opened: (Int, PageControl) -> Int, val onSet: (Int, Int) -> Unit) {
+    /** The slot whose control is called [label], or -1 (EDIT 1's CUTOFF and RES sit in different knobs on other engines). */
+    fun slotOf(label: String) = controls.indexOfFirst { it?.label == label }
+}
+
+/**
+ * A place in a picture that stands for one of the page's controls (decision 22): an invisible 44 dp target over the
+ * drawn slider or handle, turned exactly as the knob below it is: the Slide-to-turn direction, the Magnifier, a double
+ * tap back to where the page opened, the same steps per dp, the same TalkBack range and actions. Draws nothing.
+ */
+@Composable
+fun PictureSlider(slot: Int, pc: PictureControls, modifier: Modifier = Modifier, width: androidx.compose.ui.unit.Dp = 44.dp, height: androidx.compose.ui.unit.Dp = 44.dp) {
+    val c = pc.controls.getOrNull(slot) ?: return
+    if (c.ringless || c.fixed) return
+    val haptic = LocalHapticFeedback.current
+    var optimistic by remember { mutableIntStateOf(Int.MIN_VALUE) }
+    LaunchedEffect(c.raw) { if (optimistic == c.raw) optimistic = Int.MIN_VALUE }
+    val latest by rememberUpdatedState(c)
+    val send by rememberUpdatedState(pc.onSet)
+    val openedRaw = pc.opened(slot, c)
+    var base by remember { mutableIntStateOf(0) }
+    fun now() = if (optimistic != Int.MIN_VALUE) optimistic else latest.raw
+    fun set(v: Int) {
+        val n = v.coerceIn(c.min, c.max)
+        if (n == now()) return
+        optimistic = n
+        if (c.list || n == c.min || n == c.max) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        send(slot, n)
+    }
+    val colour = pc.colour
+    Box(
+        modifier.size(width, height)
+            .semantics {
+                contentDescription = c.label; stateDescription = c.value; role = Role.Button
+                progressBarRangeInfo = ProgressBarRangeInfo(now().toFloat(), c.min.toFloat()..c.max.toFloat(), c.max - c.min - 1)
+                setProgress { v -> set(v.roundToInt()); true }
+                customActions = listOf(
+                    CustomAccessibilityAction("Increase ${c.label}") { set(now() + 1); true },
+                    CustomAccessibilityAction("Decrease ${c.label}") { set(now() - 1); true },
+                    CustomAccessibilityAction("Put ${c.label} back to $openedRaw") { set(openedRaw); true },
+                )
+            }
+            .pointerInput(c.max, c.min, openedRaw) { detectTapGestures(onDoubleTap = { set(openedRaw) }) }
+            .slideToTurn(
+                enabled = true, stepDp = stepDp(c),
+                face = remember(c.label, colour) { MagnifierFace(c.label, { latest.value }, { val l = latest; if (l.max > l.min) (now() - l.min).toFloat() / (l.max - l.min) else 0f }, ring = true, tint = colour) },
+                onStart = { base = now() },
+                onSlide = { steps -> set(base + steps) },
+            ),
+    )
+}

@@ -47,6 +47,8 @@ sealed interface Intent {
     @Serializable @SerialName("lockClear") data class LockClear(val step: Int, val param: String) : Intent
     @Serializable @SerialName("locksClearAll") data class LocksClearAll(val step: Int) : Intent
     @Serializable @SerialName("stepAction") data class StepAction(val step: Int, val action: StepActionKind) : Intent
+    /** Android's back gesture while a sound page is showing: HOME on the FM-1 (SCREEN_GOTO 127), and the steps come back (decision 19). */
+    @Serializable @SerialName("goHome") data object GoHome : Intent
     @Serializable @SerialName("lanePick") data class LanePick(val lane: String) : Intent
 }
 

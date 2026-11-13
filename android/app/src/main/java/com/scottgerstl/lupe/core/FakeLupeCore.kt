@@ -172,6 +172,7 @@ class FakeLupeCore(
             is Intent.SetLaunch -> _top.update { it.copy(launch = intent.quantize) }
             Intent.CancelWaiting -> { _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map { if (it.play == PadPlay.Waiting) it.copy(play = PadPlay.Idle, bar = null) else it }) }) }; recount() }
             is Intent.SetTab -> _shell.update { it.copy(tab = intent.tab) }
+            is Intent.GoHome -> _shell.update { it.copy(bottom = BottomPage()) }
             is Intent.SetDivider -> _shell.update { it.copy(divider = intent.position) }
             is Intent.SetPlaybackMode -> _top.update { it.copy(mode = intent.mode) }
             is Intent.PadTap -> launch(intent.track, intent.entry)

@@ -13,6 +13,9 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxWithConstraintsScope
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -104,7 +107,7 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
 
 /** The graph panel's content for [g]. [hot] is the control the FM-1's knob is turning (0…3), or -1. */
 @Composable
-fun GraphContent(g: PageGraph, colour: Color, hot: Int, onSet: (slot: Int, value: Int) -> Unit, onPickRoute: (Int) -> Unit, onPickTile: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun GraphContent(g: PageGraph, colour: Color, hot: Int, pc: PictureControls?, onPickRoute: (Int) -> Unit, onPickTile: (Int) -> Unit, modifier: Modifier = Modifier) {
     when (g.kind) {
         GraphKind.None -> Unit
         GraphKind.Mod -> ModRoutes(g, colour, onPickRoute, modifier)
@@ -113,7 +116,25 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, onSet: (slot: Int, value
         GraphKind.Fm6Op -> Fm6OperatorPicture(g, colour, onPickTile, modifier)
         GraphKind.Fm6All -> Fm6AllOpsPicture(g, colour, modifier)
         GraphKind.Sound -> SoundSheetPicture(g, colour, onPickTile, modifier)
-        GraphKind.Env -> EnvGraph(g, colour, hot, onSet, modifier)
+        GraphKind.Env -> BoxWithConstraints(modifier) {
+            EnvGraph(g, colour, hot, Modifier.fillMaxSize())
+            if (pc != null) { val k = EnvGeo(g.values)
+                Spot(pc, 0, k.x1, k.top); Spot(pc, 1, k.x1 + k.d, k.y(k.sus)); Spot(pc, 2, (k.x1 + k.d + k.x3) / 2, k.y(k.sus)); Spot(pc, 3, k.x3, k.y(k.sus)) }
+        }
+        GraphKind.Fx -> BoxWithConstraints(modifier) {
+            CanvasGraph(g, colour, hot, Modifier.fillMaxSize())
+            // each send's bar is its control: the whole bar, top to bottom, turns it
+            if (pc != null) for (i in 0 until 4) Spot(pc, i, 30f + i * 60f, 47f, hGraph = 82f)
+        }
+        GraphKind.Analog -> BoxWithConstraints(modifier) {
+            CanvasGraph(g, colour, hot, Modifier.fillMaxSize())
+            if (pc != null) {
+                val fc = g.values.getOrElse(4) { 64 } / 127f; val reso = g.values.getOrElse(5) { 0 }
+                val cut = pc.slotOf("CUTOFF"); val res = pc.slotOf("RES")
+                if (cut >= 0) Spot(pc, cut, 128f + fc * 100f, 65f, hGraph = 114f)
+                if (res >= 0) Spot(pc, res, 128f + fc * 100f, 120f - (0.62f + 0.38f * reso / 127f) * 104f)
+            }
+        }
         else -> CanvasGraph(g, colour, hot, modifier)
     }
 }
@@ -147,38 +168,12 @@ private class EnvGeo(v: List<Int>) {
 }
 
 @Composable
-private fun EnvGraph(g: PageGraph, colour: Color, hot: Int, onSet: (Int, Int) -> Unit, modifier: Modifier) {
+private fun EnvGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifier) {
     val tm = rememberTextMeasurer()
-    var grabbed by remember { androidx.compose.runtime.mutableIntStateOf(-1) }
     val geo = EnvGeo(g.values)
     Canvas(
         modifier
             .semantics { contentDescription = describe(g) }
-            .pointerInput(g.values) {
-                // a handle is a 44 dp target of its own; only a drag that starts on it moves it
-                detectDragGestures(
-                    onDragStart = { p ->
-                        val k = EnvGeo(g.values)
-                        val hs = listOf(k.x1 to k.top, k.x1 + k.d to k.y(k.sus), k.x3 to k.y(k.sus))
-                        val best = hs.indices.minByOrNull { i -> val dx = hs[i].first / GW * size.width - p.x; val dy = hs[i].second / GH * size.height - p.y; dx * dx + dy * dy }!!
-                        val dx = hs[best].first / GW * size.width - p.x; val dy = hs[best].second / GH * size.height - p.y
-                        grabbed = if (dx * dx + dy * dy <= (22.dp.toPx()).let { it * it }) best else -1
-                    },
-                    onDragEnd = { grabbed = -1 }, onDragCancel = { grabbed = -1 },
-                ) { change, _ ->
-                    if (grabbed < 0) return@detectDragGestures
-                    change.consume()
-                    val k = EnvGeo(g.values)
-                    val x = change.position.x / size.width * GW; val yy = change.position.y / size.height * GH
-                    val sus = ((k.bot - yy) / (k.bot - k.top) * 127).roundToInt().coerceIn(0, 127)
-                    fun send(slot: Int, v: Int) { val n = v.coerceIn(0, 127); if (g.values.getOrElse(slot) { -1 } != n) onSet(slot, n) }
-                    when (grabbed) {
-                        0 -> send(0, ((x - 16f) * 127 / 50).roundToInt())
-                        1 -> { send(1, ((x - k.x1 - 6f) * 127 / 50).roundToInt()); send(2, sus) }
-                        2 -> { send(3, ((226f - x - 6f) * 127 / 60).roundToInt()); send(2, sus) }
-                    }
-                }
-            },
     ) {
         val s = Sp(this, tm)
         for (gy in listOf(geo.top, (geo.top + geo.bot) / 2, geo.bot)) s.rect(line, 12f, gy, 216f, 1f)
@@ -199,16 +194,25 @@ private fun EnvGraph(g: PageGraph, colour: Color, hot: Int, onSet: (Int, Int) ->
         drawPath(fill, colour.copy(alpha = 0.14f))
         // the segment being changed is drawn white (board 55): ATTACK the rise, DECAY the fall, SUSTAIN the hold, RELEASE the end
         fun seg(pts: List<Pair<Float, Float>>, on: Boolean) = s.stroke(if (on) Tok.text else colour, pts)
-        seg(atk, hot == 0 || grabbed == 0); seg(dec, hot == 1 || grabbed == 1); seg(hold, hot == 2); seg(rel, hot == 3 || grabbed == 2)
-        val handles = listOf(geo.x1 to geo.top, geo.x1 + geo.d to geo.y(geo.sus), geo.x3 to geo.y(geo.sus))
+        seg(atk, hot == 0); seg(dec, hot == 1); seg(hold, hot == 2); seg(rel, hot == 3)
+        // one handle for each of the four controls (decision 22): the invisible targets sit over them
+        val handles = listOf(geo.x1 to geo.top, geo.x1 + geo.d to geo.y(geo.sus), (geo.x1 + geo.d + geo.x3) / 2 to geo.y(geo.sus), geo.x3 to geo.y(geo.sus))
         handles.forEachIndexed { n, (hx, hy) ->
-            val on = grabbed == n || hot == n || (n > 0 && hot == n + 1)
+            val on = hot == n
             // only the square: the 44 dp target is the drag's hit test above, never drawn. (A dark knockout in graph
             // units used to sit here; the uneven scale made it a visible block, Scott's run 2026-11-13.)
             val c = s.o(hx, hy)
             drawRoundRect(if (on) Tok.text else colour, Offset(c.x - 6.dp.toPx(), c.y - 6.dp.toPx()), Size(12.dp.toPx(), 12.dp.toPx()), CornerRadius(2.dp.toPx()))
         }
     }
+}
+
+/** The invisible target over a drawn slider or handle, centred at ([gx], [gy]) in the graph's 240 × 140 space (or [hGraph] tall in it). */
+@Composable
+private fun BoxWithConstraintsScope.Spot(pc: PictureControls, slot: Int, gx: Float, gy: Float, hGraph: Float? = null) {
+    val h = if (hGraph != null) maxHeight * (hGraph / GH) else 44.dp
+    val w = 44.dp
+    PictureSlider(slot, pc, Modifier.offset(maxWidth * (gx / GW) - w / 2, maxHeight * (gy / GH) - h / 2), w, maxOf(h, 44.dp))
 }
 
 // ---- everything drawn on a plain canvas
@@ -402,6 +406,7 @@ private fun drawAnalog(s: Sp, g: PageGraph, c: Color) {
     val f0 = 128f; val fw = 100
     val fc = cutoff / 127.0; val xc = f0 + (fc * fw).toFloat()
     s.rect(dim, xc, 8f, 1f, 114f)
+    s.rect(c, xc - 3f, 8f, 6f, 10f, 2f)   // the cutoff's handle; RES's sits on the peak below
     val peak = 0.62 + 0.38 * reso / 127
     val pts = (0..fw).map { x ->
         val f = x.toDouble() / fw; val d = fc - f
@@ -410,6 +415,7 @@ private fun drawAnalog(s: Sp, g: PageGraph, c: Color) {
     }
     s.d.drawPath(s.path(pts).apply { lineTo(s.x(f0 + fw), s.y(120f)); lineTo(s.x(f0), s.y(120f)); close() }, c.copy(alpha = 0.14f))
     s.stroke(c, pts)
+    s.rect(c, xc - 3f, 120f - (peak * 104).toFloat() - 5f, 6f, 10f, 2f)
     g.side?.let { s.text(it, 228f, 16f, mid, right = true) }
     s.text("LOW", f0, 135f, dim); s.text("HIGH", 228f, 135f, dim, right = true)
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,6 +79,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import kotlin.math.abs
+import kotlinx.coroutines.flow.first
 
 private fun Divider.index() = when (this) { Divider.Top -> 0; Divider.Split -> 1; Divider.Bottom -> 2 }
 private fun Int.toDivider() = Divider.entries[this]
@@ -113,8 +115,35 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val pads by core.pads.collectAsStateWithLifecycle()
     val editor by core.editor.collectAsStateWithLifecycle()
 
+    // Decision 19: while a sound page shows (and only then), the back gesture is HOME on the FM-1. Registered before the
+    // content, so the Sounds browser's own BackHandler (composed later) wins while it is open.
+    val soundPageUp = shell.bottom.kind == BottomKind.Page
+    androidx.activity.compose.BackHandler(enabled = soundPageUp) { core.send(Intent.GoHome) }
+    androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.slide.LocalBackGoesHome provides soundPageUp) {
+    // Labs (decision 20): the sound page pushes up under the steps; the whole area is one vertical scroll
+    val soundsOpen = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current.request != null
+    val stackScroll = androidx.compose.foundation.rememberScrollState()
+    var stackUp by remember { mutableStateOf(false) }
+    var lastPage by remember { mutableStateOf(shown) }
+    if (shown.kind == BottomKind.Page) lastPage = shown
+    val wantStack = labs.soundStack && shown.kind == BottomKind.Page
+    LaunchedEffect(wantStack, reduce) {
+        if (wantStack) {
+            stackUp = true
+            androidx.compose.runtime.snapshotFlow { stackScroll.maxValue }.first { it > 0 }
+            if (reduce) stackScroll.scrollTo(stackScroll.maxValue) else unscaled { stackScroll.animateScrollTo(stackScroll.maxValue, tween(Dur.PANEL, easing = EaseOut)) }
+        } else if (stackUp) {
+            // the back gesture: the page scrolls back down, then the layout is today's again
+            if (reduce) stackScroll.scrollTo(0) else unscaled { stackScroll.animateScrollTo(0, tween(Dur.PANEL, easing = EaseOut)) }
+            stackUp = false
+        }
+    }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val hb = with(density) { maxHeight.toPx() }
+        if (labs.soundStack && stackUp && !soundsOpen) {
+            StackBody(shellShown, shell.divider, if (shown.kind == BottomKind.Page) shown else lastPage, core, pads, editor, stackScroll, hb, onBottomTouch, frozen)
+            return@BoxWithConstraints
+        }
         fun dp(v: Float) = with(density) { v.dp.toPx() }
         // Android's bottom gesture zone can reach above the body (LupeShell pads it only by the navigation bar).
         // Nothing that takes a drag may sit in it, or Android takes the upward swipe home (Scott's run, 2026-11-13).
@@ -220,17 +249,55 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
             ) { BasicText("Editor ⌃", style = LupeType.key) }
         }
     }
+    }
+}
+
+/**
+ * Labs: the stack (decision 20). One vertical scroll: the tabs and the top half's page, the steps, the sound page. A quick
+ * up-and-down drag anywhere scrolls it; a knob or a picture's handle takes the drag only after a short rest (LocalHoldToSlide).
+ * Back sends HOME (ShellBody's handler) and the scroll goes back down. The divider has no place here.
+ */
+@Composable
+private fun StackBody(shell: ShellState, divider: Divider, page: BottomPage, core: LupeCore, pads: PadsState, editor: EditorState, scroll: androidx.compose.foundation.ScrollState, hb: Float, onBottomTouch: () -> Unit, frozen: Boolean) {
+    val density = LocalDensity.current
+    val topH = with(density) { (hb * 350f / 787f).toDp() }
+    val bottomH = with(density) { hb.toDp() } - topH
+    val freeTake by core.freeTake.collectAsStateWithLifecycle()
+    val automation by core.automation.collectAsStateWithLifecycle()
+    androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.slide.LocalHoldToSlide provides true) {
+        androidx.compose.foundation.layout.Column(
+            Modifier.fillMaxSize().padding(horizontal = 8.dp).verticalScroll(scroll)
+                .pointerInput(Unit) { awaitPointerEventScope { while (true) { val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); if (e.changes.any { it.pressed && !it.previousPressed }) onBottomTouch() } } },
+        ) {
+            Box(Modifier.fillMaxWidth().height(topH)) {
+                Tabs(shell.tab, { core.send(Intent.SetTab(it)) })
+                Box(Modifier.padding(top = TOP_OFFSET.dp).fillMaxSize().clipToBounds()) { TopContent(shell.tab, pads, core) }
+            }
+            Box(Modifier.fillMaxWidth().height(bottomH).padding(top = GAP.dp).clipToBounds()) {
+                EditorPage(editor, core, 0f, automation)
+                com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
+            }
+            Box(Modifier.fillMaxWidth().height(bottomH).padding(top = GAP.dp).clipToBounds()) { HeldSoundPage(page, core, frozen) }
+        }
+    }
+}
+
+/** The top half's page for the tab: Pads, Timeline or Mix. */
+@Composable
+private fun TopContent(tab: Tab, pads: PadsState, core: LupeCore) {
+    val mix = rememberMix(core)
+    val timeline = rememberTimeline(core)   // the song is a stand-in until the core's timeline area lands
+    val topState = core.top.collectAsStateWithLifecycle()
+    val meters = core.meters.collectAsStateWithLifecycle()   // read only while drawing a meter line, so 20 updates a second never recompose the shell
+    LupeCrossfade(tab, Modifier.fillMaxSize(), Dur.STATE) { when (it) { Tab.Pads -> PadsPage(pads, core); Tab.Mix -> MixPage(mix.first, mix.second, meters)
+        Tab.Timeline -> TimelinePage(timeline.first, timeline.second, timeline.third, topState); else -> TopPlaceholder(it) } }
 }
 
 /** The picture at one divider place. */
 @Composable
 private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit, frozen: Boolean = false) {
     val density = LocalDensity.current
-    val mix = rememberMix(core)
-    val timeline = rememberTimeline(core)   // the song is a stand-in until the core's timeline area lands
-    val topState = core.top.collectAsStateWithLifecycle()
     val automation by core.automation.collectAsStateWithLifecycle()
-    val meters = core.meters.collectAsStateWithLifecycle()   // read only while drawing a meter line, so 20 updates a second never recompose the shell
     val soundsHost = LocalSoundsHost.current
     // at top only the bottom half is hidden: the browser glides the divider to split so it can be seen
     androidx.compose.runtime.LaunchedEffect(soundsHost.request) {
@@ -256,8 +323,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 .heightPx { (topAt(p) - dp(GAP) - dp(TOP_OFFSET)).toInt() }
                 .clipToBounds()
                 .graphicsLayer { alpha = (1f - stripAlpha * 2f).coerceIn(0f, 1f) },
-        ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { when (it) { Tab.Pads -> PadsPage(pads, core); Tab.Mix -> MixPage(mix.first, mix.second, meters)
-                Tab.Timeline -> TimelinePage(timeline.first, timeline.second, timeline.third, topState); else -> TopPlaceholder(it) } } }
+        ) { TopContent(shell.tab, pads, core) }
 
         // bottom half: from 4 dp under the divider band to the bottom; it follows the FM-1's page
         Box(

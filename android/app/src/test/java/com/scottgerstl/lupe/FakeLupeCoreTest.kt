@@ -24,6 +24,14 @@ class FakeLupeCoreTest {
         return FakeLupeCore(scope, scenarios, "searching").also { scope.testScheduler.advanceTimeBy(10) }
     }
 
+    @Test fun goHomeBringsTheStepsBack() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(com.scottgerstl.lupe.core.PickPage("ENV")); advanceTimeBy(10)
+        assertEquals(com.scottgerstl.lupe.core.BottomKind.Page, core.shell.value.bottom.kind)
+        core.send(Intent.GoHome); advanceTimeBy(10)
+        assertEquals(com.scottgerstl.lupe.core.BottomKind.Editor, core.shell.value.bottom.kind)
+    }
+
     @Test fun launchWaitsWhilePlayingAndCountsInTheTopBar() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.Play); advanceTimeBy(10)

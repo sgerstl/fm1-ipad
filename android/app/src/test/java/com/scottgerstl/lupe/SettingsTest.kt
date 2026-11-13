@@ -10,7 +10,7 @@ class SettingsTest {
     @Test fun labsStartOffAndHapticsOn() {
         val s = PhoneSettings(null)
         assertTrue(s.haptics)
-        assertFalse(s.pauseFollowing); assertFalse(s.pinBottom); assertFalse(s.piano); assertFalse(s.timelineAcross)
+        assertFalse(s.pauseFollowing); assertFalse(s.pinBottom); assertFalse(s.piano); assertFalse(s.timelineAcross); assertFalse(s.soundStack)
     }
     @Test fun changesTakeEffectAtOnce() {
         val s = PhoneSettings(null)
