@@ -2,7 +2,7 @@
 
 ## Re-check after P1's fixes (2026-11-14, branch `claude/android-p1-core-link-faf639`)
 
-Scott's run (2026-11-13) found six faults; P1 fixed them on its branch and checked each on an emulator. **Run this short list first**, on the fake core (`adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --es core fake`):
+Scott's run (2026-11-13) found six faults; P1 fixed them on its branch and checked each on an emulator. **Already installed on the Pixel** (commit 18192f2, over Wi‑Fi adb 192.168.2.56:45791) on the **fake core** with writes off, Lupe open. **Run this short list first.** (To switch cores by hand: `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --es core fake` or `--es core real`.)
 
 | # | Do this | You should see | Result |
 |---|---|---|---|
