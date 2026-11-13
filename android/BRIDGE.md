@@ -183,6 +183,11 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
   value text against what Skiff's own code prints (`android/scripts/skiff-page-dump.sh`). The fixes are in SloopKit
   (shared with the iPad): Skiff's number rules, FM6's names, the engine's descriptors read after a PRESET, and
   FakeSkiff's per-engine DESC and PRESET. What it can't decide is in `android/notes/page-parity.md`.
+- **HOME's four knobs** (decision 21, board 70): the `homeKnobs` area (`HomeKnobs.swift`, `HomeKnobsState.kt`) and
+  the `setHomeKnob` intent (slot 0…3, raw value; a write). The area carries the selected track's engine's four main
+  parameters (`SkiffHomeKnobs`, from each engine's `.knob` line) in PageControl's shape, built by the same
+  `PageArea.control` as a page's columns. `hot` and `hotSeq` mark the knob last turned on the FM-1. The link's
+  CHANGED names the parameter, not the screen, so it's hot from any page. `fm1Home` says whether the FM-1 is on HOME.
 
 ### Read-only by default (P1, 2026-11-13)
 

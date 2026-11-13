@@ -20,8 +20,10 @@ For each of the 14 engines, at its first preset, loaded with `pickPreset` as the
 
 The phone writes the FM-1's value and unit (two lines on its screen) as one string: "15.2 kHz", "47%".
 
-The check also covers INSERT under each of its 10 TYPEs and ENV with ENV SYNC on. That makes 275 pages, with no
-mismatches except the sharp sign below.
+The check also covers INSERT under each of its 10 TYPEs and ENV with ENV SYNC on. It also covers HOME's four knobs
+for each engine (decision 21): which parameters they are (`SkiffHomeKnobs` against each engine's `.knob` line,
+through `home_param`), their labels, and their text. That makes 289 checks, with no mismatches except the sharp
+sign below.
 
 ## Fixed in this pass (2026-11-14)
 

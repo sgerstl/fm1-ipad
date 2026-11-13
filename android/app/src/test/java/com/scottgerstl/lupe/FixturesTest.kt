@@ -42,6 +42,7 @@ class FixturesTest {
                 "automation" -> { val a = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.AutomationState.serializer(), fr.state); assertTrue(a.lane.isEmpty() || a.points.size == a.steps) }
                 "projects" -> assertEquals(4, lupeJson.decodeFromJsonElement(ProjectsState.serializer(), fr.state).slots.size)
                 "freetake" -> lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.FreeTakeState.serializer(), fr.state)
+                "homeKnobs" -> { val h = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.HomeKnobsState.serializer(), fr.state); assertEquals("${f.name}: HOME's four", 4, h.controls.size); assertTrue(h.hot in -1..3) }
                 else -> error("${f.name}: unknown area ${fr.area}")
             }
         }

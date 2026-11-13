@@ -13,8 +13,8 @@ knobs after a preset of another engine.
   allowed (`--ez allowWrites true`).
 - iPad: Lupe built from this branch's SloopKit.
 
-**Back up first: no.** Scott, 2026-11-14: "nothing on the FM-1 matters now". Checks 3, 7 and 8 load a preset on
-track 1. Nothing writes the FM-1's flash.
+**Back up first: no.** Scott, 2026-11-14: "nothing on the FM-1 matters now". Checks 3, 7, 8 and 14 load a preset
+on track 1. Nothing writes the FM-1's flash.
 
 ## A. The phone
 
@@ -35,6 +35,15 @@ track 1. Nothing writes the FM-1's flash.
 |---|---|---|---|---|
 | 9 | Sound tab, LFO: RATE at its lowest. | ".05 Hz", as on the FM-1 (it read "0.05 Hz" before). | – | ☐ pass ☐ fail: |
 | 10 | Library: load a preset of another engine on the selected track, then open its EDIT page. | The new engine's knob names and values at once. Before, the old engine's stayed until the track was selected again. | – | ☐ pass ☐ fail: |
+
+## C. HOME's four knobs (decision 21, board 70; needs P2's screen for them)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 11 | FM-1 on HOME, track 1 on an ANALOG sound. Look at the phone's four knobs. | CUTOFF, RES, ATTACK, RELEASE with the FM-1's own numbers. | – | ☐ pass ☐ fail: |
+| 12 | Turn the FM-1's KNOB 1. | The phone's CUTOFF follows, and its card lights as the FM-1's does, a beat later. | – | ☐ pass ☐ fail: |
+| 13 | Slide the phone's RES. | The FM-1's RES follows (HOME's knob 2 shows it). | – | ☐ pass ☐ fail: |
+| 14 | Load a PHASE sound on the track. | The phone's four become DCW, ENV, DETUNE, RELEASE, as the FM-1's HOME shows. | – | ☐ pass ☐ fail: |
 
 **Not covered here:**
 
