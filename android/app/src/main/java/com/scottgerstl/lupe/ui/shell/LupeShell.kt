@@ -17,6 +17,8 @@ import com.scottgerstl.lupe.ui.projects.ProjectsSheet
 import com.scottgerstl.lupe.ui.projects.rememberMockProjects
 import com.scottgerstl.lupe.ui.settings.SettingsSheet
 import com.scottgerstl.lupe.ui.sheet.LocalSheetHost
+import com.scottgerstl.lupe.ui.sounds.LocalSoundsHost
+import com.scottgerstl.lupe.ui.sounds.SoundsHost
 import com.scottgerstl.lupe.ui.sheet.SheetHost
 import com.scottgerstl.lupe.ui.slide.LocalMagnifier
 import com.scottgerstl.lupe.ui.slide.MagnifierHost
@@ -72,9 +74,10 @@ fun LupeShell(core: LupeCore) {
 
     val magnifier = remember { MagnifierState() }
     val sheets = remember { SheetHost() }
+    val soundsHost = remember { SoundsHost() }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost) {
         Column(
             Modifier.fillMaxSize().statusBarsPadding()
                 .greyedBy { grey.value }

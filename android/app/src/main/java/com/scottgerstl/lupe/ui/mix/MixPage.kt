@@ -195,6 +195,8 @@ private fun LevelFader(t: MixTrackUi, colour: Color, dim: Float, actions: MixAct
 private fun RowMenu(t: MixTrackUi, at: Offset?, close: () -> Unit, actions: MixActions) {
     LupeMenu(at != null, close, width = 248.dp, at = at) {
         MenuHeading("${t.number} ${t.name}")
+        val sounds = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
+        com.scottgerstl.lupe.ui.shell.MenuRow("Sounds…", { close(); sounds.open(t.number) })
         CompositionLocalProvider(LocalMagnifier provides null) {
             MenuSlide("PAN", t.panText, t.pan, "Pan, ${t.name}", bipolar = true, mid = 64) { actions.pan(t.number, it) }
             MenuSlide("REVERB SEND", t.sendText, t.send, "Reverb send, ${t.name}") { actions.send(t.number, it) }

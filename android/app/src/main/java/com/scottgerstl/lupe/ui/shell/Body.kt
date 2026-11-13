@@ -50,6 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scottgerstl.lupe.core.BottomKind
 import com.scottgerstl.lupe.ui.mix.MixPage
+import com.scottgerstl.lupe.ui.sounds.LocalSoundsHost
+import com.scottgerstl.lupe.ui.sounds.SoundsBrowser
+import com.scottgerstl.lupe.ui.sounds.rememberMockSounds
 import com.scottgerstl.lupe.ui.mix.rememberMock
 import com.scottgerstl.lupe.core.EditorState
 import com.scottgerstl.lupe.core.PadsState
@@ -220,6 +223,10 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit) {
     val density = LocalDensity.current
     val mix = rememberMock()   // stand-in until the core's mix area lands
+    val soundsHost = LocalSoundsHost.current
+    // at top only the bottom half is hidden: the browser glides the divider to split so it can be seen
+    androidx.compose.runtime.LaunchedEffect(soundsHost.request) { if (soundsHost.request != null && shell.divider == Divider.Top) core.send(Intent.SetDivider(Divider.Split)) }
+    val mockSounds = rememberMockSounds()   // stand-in until the core's sounds area lands
     fun dp(v: Float) = with(density) { v.dp.toPx() }
     // tabs fade out and the strip fades in as the divider goes past split
     val tabsAlpha = ((1.6f - p) / 0.6f).coerceIn(0f, 1f)
@@ -257,8 +264,14 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
         ) {
             // the lane fits only when the bottom half is nearly full height
             val autoFraction = (((hb - topAt(p) - dp(HANDLE_H) - dp(GAP)) - dp(560f)) / dp(100f)).coerceIn(0f, 1f)
-            LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
-                if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+            LupeCrossfade(soundsHost.request, Modifier.fillMaxSize(), Dur.PANEL) { req ->
+                if (req != null) {
+                    // the Sounds browser opens over the editor or the sound page; Done or Back brings it back
+                    val name = pads.rows.firstOrNull { it.track == req.track }?.name ?: "Track ${req.track}"
+                    SoundsBrowser(mockSounds.ui(req.track, name, req.pad), mockSounds.actions(req.track), { soundsHost.close() })
+                } else LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
+                    if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+                }
             }
         }
     }
