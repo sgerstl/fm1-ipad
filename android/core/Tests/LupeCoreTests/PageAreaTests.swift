@@ -256,6 +256,6 @@ import Testing
         try await waitFor(3, "operator 6 picked") { core.pageArea()?.graph.fm6?.picked == 6 }
         // SLICES has no picture to draw: the card stays (its markers can't be read)
         try await pick(core, family: "EDIT", page: 17)
-        try await waitFor(5, "ALL OPS") { core.pageArea()?.graph.kind == .fm6all }
+        try await waitFor(10, "ALL OPS") { core.pageArea()?.graph.kind == .fm6all }   // several page reads; 5 s ran out with four suites in parallel
     }
 }

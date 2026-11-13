@@ -248,6 +248,33 @@ public final class PhoneCore {
         case .cancelWaiting:
             guard canWrite() else { log("read-only: cancelWaiting not sent"); return }
             if let store = session.skiffSong { Task { await store.performOp(.cancel) } }
+        // the readout's controls, through the iPad's calls: TempoPanel's setBPM (clamped to the FM-1's range; not
+        // while following another clock), the REC button's toggleRec (Skiff's arm-the-others case included), and
+        // SongTools' launch quantise (PERFORM's launch, adopted once the FM-1 takes it). Each republishes `top`
+        // once the FM-1's answer is read back.
+        case .setTempo(let bpm):
+            guard canWrite() else { log("read-only: setTempo not sent (allow writes to send it)"); return }
+            if session.externalClock != nil { log("the FM-1 follows another clock: its tempo comes from there"); return }
+            let s = session
+            s.setBPM(Int(bpm.rounded()))
+            Task {
+                try? await Task.sleep(for: .milliseconds(300))      // the write sent; the FM-1 may have clamped it
+                await s.refreshTempo()
+                self.poke(["top"])
+            }
+        case .rec:
+            guard canWrite() else { log("read-only: rec not sent (allow writes to send it)"); return }
+            session.toggleRec()                                      // reads TRANSPORT back itself
+            Task { try? await Task.sleep(for: .milliseconds(300)); self.poke(["top"]) }
+        case .setLaunch(let q):
+            guard canWrite() else { log("read-only: setLaunch not sent (allow writes to send it)"); return }
+            guard let store = session.skiffSong else { log("no song read yet"); return }
+            let l: SongPlayback.Launch = switch q { case .loop: .loop; case .bar: .bar; case .beat: .beat; case .now: .now }
+            let s = session
+            Task {
+                if await store.performOp(.launch(l)) { s.adoptLaunch(l) } else { self.reportRefusal(store) }
+                self.poke(["top"])
+            }
         default: log("intent not handled yet (later phase): \(intent)")
         }
     }
