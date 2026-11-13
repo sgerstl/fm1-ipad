@@ -115,3 +115,10 @@ Holding ARP on the FM-1 is PERFORM (the scenes on the keys): the top half goes t
 3. **INSERT and INSERT 2.** Recommended: two pages, as the FM-1. Alternative: the iPad's merged card (five controls on one page), which breaks the four-controls rule and the one-to-one following.
 4. **The dense pages in v1** (OPERATOR, ALL OPS, SLICES, DRUM-X SOUND). Recommended: a named card with the FM-1's cursor, edited on the FM-1. Alternative: port the iPad's pictures in P4, which roughly doubles P4. (I first thought of mirroring the FM-1's screen; the screen link doesn't carry pixels.)
 5. **Sound pages at top only.** Recommended: when the FM-1 opens a sound page and the divider is at top only, the divider moves to split (as AUTOMATION moves it to bottom full), so following the FM-1 never hides what it opened. It goes back when the FM-1 goes HOME.
+
+## Decisions since the first draft (2026-11-14)
+
+- **Questions 1 and 5 (page row scrolls; divider glides to split and back):** kept as built.
+- **Decision 12, the dense EDIT pages:** OPERATOR, ALL OPS and DRUM-X's SOUND have pictures now (ported from the iPad: operator tiles and envelopes, the algorithm chart, the kit's windows; read-only on the phone). "Four controls first" no longer applies to them.
+- **Decision 17:** INSERT 2 is out of the FX row on Skiff 2.5.1 (the FM-1's own seven pages); it stays only on 2.2.
+- **Decision 18, SLICES:** keeps the named card for now (board 70). The iPad has no picture either, because the editor protocol can't read or move slice markers. A SLICES picture goes on the later list for both apps and needs new Skiff commands.
