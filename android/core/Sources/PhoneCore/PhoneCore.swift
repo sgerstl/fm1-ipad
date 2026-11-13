@@ -24,6 +24,9 @@ public final class PhoneCore {
     var chordMode = false
     var pickedLane: String?
     var copiedStep: SynthStep?
+    /// The note the last key wrote and when (the FM-1 sounds a written step: not a new key).
+    var lastKeyWrite: (note: Int, at: Date)?
+    var notesIn = 0
     private var motionTask: Task<Void, Never>?
     private var followTask: Task<Void, Never>?
     /// Whether writes may go to the FM-1 now (the link's read-only switch). Write intents are refused up front
@@ -41,7 +44,11 @@ public final class PhoneCore {
         guard runTask == nil else { return }
         let s = session
         runTask = Task { await s.run() }
-        s.onDeviceNote = { [weak self] e in self?.keyIntoStep(e) }   // the FM-1's keys into the step (decision 5)
+        s.onDeviceNote = { [weak self] e in                            // the FM-1's keys into the step (decision 5)
+            guard let self else { return }
+            if e.on { self.notesIn += 1; self.pokeAreas(["diag"]) }
+            self.keyIntoStep(e)
+        }
         areas = [
             AreaWatch(name: "link", build: { [unowned self] in AreaJSON.encode(self.linkArea()) }, publish: publish),
             AreaWatch(name: "top", build: { [unowned self] in AreaJSON.encode(self.topArea()) }, publish: publish),
@@ -161,7 +168,7 @@ public final class PhoneCore {
     public func diagArea() -> DiagArea {
         let s = session, d = s.deviceScreen
         return DiagArea(firmware: s.info?.version, tracks: s.trackCount, selectedTrack: s.selectedTrack, screenLinked: s.screenLinked,
-                        page: d?.page, layer: d?.layer, menu: d?.menu, home: d?.home, clockTicks: s.clockTicks, playing: s.playing)
+                        page: d?.page, layer: d?.layer, menu: d?.menu, home: d?.home, clockTicks: s.clockTicks, playing: s.playing, notesIn: notesIn)
     }
 
     // MARK: Intents
