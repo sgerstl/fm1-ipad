@@ -1899,6 +1899,12 @@ public final class DeviceSession {
         await refreshSkiffProjects()
         return rc
     }
+    /// RENAME slot 0…3 (its name only). rc 0: done, 1: an empty slot.
+    public func renameSkiffProject(slot: Int, name: String) async -> Int {
+        guard let k = driver as? SkiffDriver, let rc = try? await k.projectRename(slot: slot, name: name) else { return 2 }
+        await refreshSkiffProjects()
+        return rc
+    }
     /// The music on the FM-1 as a project for the iPad (Skiff: it stops the transport, as a save on the FM-1 does).
     public func readSkiffProject() async throws -> SkiffProjectData {
         guard let k = driver as? SkiffDriver, let info else { throw ProjectError.notConnected }

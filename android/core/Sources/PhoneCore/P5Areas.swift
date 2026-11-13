@@ -40,7 +40,7 @@ extension PhoneCore {
         let sections = SkiffButtonMap.MixerTab.allCases.map { MixArea.Section(key: Self.mixSectionKeys[$0.rawValue], title: $0.title, page: $0.page) }
         let rid = reverbSendID
         let perf = s.skiffSong?.perform
-        let soloed = Set(s.trackIndices.filter { soloTracks.contains($0) })
+        let soloed = s.skiffSong?.soloed ?? []
         let rows = s.trackIndices.map { t -> MixArea.Row in
             let tr = s.tracks[t]
             var rev: Int?, revText: String?, revMax = 127

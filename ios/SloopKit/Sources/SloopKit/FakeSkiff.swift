@@ -155,6 +155,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var projectSlots: [String?] = ["SONG ONE", nil, nil, nil]
     var musicSlot: Int? = 0
     var projectLoads = 0
+    /// PROJ_NAME's "changed since then 0/1" (EDITOR_PROTOCOL.md): set by a test; a load or a save clears it.
+    var musicChanged = false
 
     /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
     public convenience init?(demo: Bool) {
@@ -316,7 +318,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     private func uses(_ p: Int) -> Int { lists.reduce(0) { $0 + $1.filter { $0.p == p + 1 }.count } }
 
     private func projectReply(_ op: UInt8, _ rc: UInt8) -> [UInt8] {
-        [op, rc, UInt8(musicSlot ?? 127), 0] + Array((musicSlot.flatMap { projectSlots[$0] } ?? "").utf8) + [0]
+        [op, rc, UInt8(musicSlot ?? 127), musicChanged ? 1 : 0] + Array((musicSlot.flatMap { projectSlots[$0] } ?? "").utf8) + [0]
             + projectSlots.flatMap { n -> [UInt8] in [n == nil ? 0 : 1] + Array((n ?? "").utf8) + [0] }
     }
 
@@ -1070,14 +1072,19 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case (9, 2) where a[0] == 0 && a[1] < 4:
             // PROJECT load: a used slot replaces the music, the transport stopped
             let k = Int(a[1]), used = projectSlots[k] != nil
-            if used { setPlaying(false); musicSlot = k; projectLoads += 1 }
+            if used { setPlaying(false); musicSlot = k; projectLoads += 1; musicChanged = false }
             return [0, a[1], used ? 1 : 0]
         case (77, 0): return projectReply(0, 0)
         case (77, _) where a.count >= 2 && a[0] == 1 && a[1] < 4:
             setPlaying(false)
             projectSlots[Int(a[1])] = String(decoding: a[2...].prefix { $0 != 0 }, as: UTF8.self).uppercased()
-            musicSlot = Int(a[1])
+            musicSlot = Int(a[1]); musicChanged = false
             return projectReply(1, 0)
+        case (77, _) where a.count >= 2 && a[0] == 2 && a[1] < 4:
+            // RENAME (EDITOR_PROTOCOL.md PROJ_NAME op 2): a used slot's name; "rc 1 refused: … RENAME of an empty slot"
+            guard projectSlots[Int(a[1])] != nil else { return projectReply(2, 1) }
+            projectSlots[Int(a[1])] = String(decoding: a[2...].prefix { $0 != 0 }, as: UTF8.self).uppercased()
+            return projectReply(2, 0)
         case (78, 2) where a[0] == 1 || a[0] == 2:
             // CLEAR one nothing uses, or EMPTY one (its steps; it stays): stopped only
             let p = Int(a[1])
