@@ -23,7 +23,7 @@ import Testing
     func readyCore(_ fake: FakeSkiff, _ r: Recorder, writes: Bool = true) async throws -> (PhoneCore, Plug) {
         let plug = Plug(fake)
         plug.gate.readOnly = !writes
-        let core = PhoneCore(session: DeviceSession(transport: { plug.gate.makeTransport() }), publish: r.publish)
+        let core = PhoneCore(session: DeviceSession(transport: { plug.gate.makeTransport() }), publish: r.publish, canWrite: { writes })
         core.start()
         try await Task.sleep(for: .milliseconds(200))
         plug.plugIn()
@@ -49,7 +49,8 @@ import Testing
 
     /// Visits `visit` (page numbers of `family`, the shown one last), then records: every page frame stamped at the time
     /// (see below).
-    func recordPages(_ scenario: String, track: Int, engine: Int? = nil, family: String, visit: [Int], cursor: Int? = nil, note: String) async throws {
+    func recordPages(_ scenario: String, track: Int, engine: Int? = nil, family: String, visit: [Int], cursor: Int? = nil, cursor2: Int? = nil,
+                     until: ((PageArea) -> Bool)? = nil, note: String) async throws {
         let r = Recorder()
         let fake = try linkedFake(track: track, engine: engine)
         let (core, plug) = try await readyCore(fake, r)
@@ -60,12 +61,13 @@ import Testing
             try await waitFor(3, "the cursor") { core.session.deviceScreen?.cursor == cursor }
             try await Task.sleep(for: .milliseconds(100))
         }
-        try await Task.sleep(for: .milliseconds(200))
+        if let until { try await waitFor(5, "the page's data") { core.pageArea().map(until) ?? false } }
+        try await Task.sleep(for: .milliseconds(300))
         let got = pages(r)
         #expect(got.last?.page == visit.last, "\(scenario): ended on \(String(describing: got.last?.page))")
         #expect(got.last?.track == track)
         #expect(got.last?.controls.count == 4)
-        if let cursor { #expect(got.last?.controls.first??.raw == cursor, "\(scenario): the cursor") }
+        if let cursor, let first = got.last?.controls.first, let c = first { #expect(c.raw == cursor, "\(scenario): the cursor") }
         // The scenario opens ready: the last frame of each area at the start (the link's searching and reading steps
         // are `ready.json`'s). Every page frame follows 1 ms apart, the shown one last: the replay lands on it, and the
         // earlier frames only teach the fake the row.
@@ -94,6 +96,18 @@ import Testing
     }
     @Test func recordsScale() async throws {
         try await recordPages("page-scale", track: 5, family: "SEL", visit: [12, 13, 11], note: "SEL › SCALE, with CHORD's STRUM and DIR beside it (board 61 left).")
+    }
+    @Test func recordsOperator() async throws {
+        try await recordPages("page-operator", track: 2, engine: 12, family: "EDIT", visit: [17, 16], cursor: 1,
+                              until: { $0.graph.kind == .fm6op }, note: "EDIT › OPERATOR on an FM6 track, operator 2 picked: the algorithm, ratios and envelopes (FakeSkiff's init patch).")
+    }
+    @Test func recordsAllOps() async throws {
+        try await recordPages("page-allops", track: 2, engine: 12, family: "EDIT", visit: [16, 17],
+                              until: { $0.graph.kind == .fm6all }, note: "EDIT › ALL OPS on an FM6 track: the algorithm chart (FakeSkiff's init patch).")
+    }
+    @Test func recordsDrumXSound() async throws {
+        try await recordPages("page-sound", track: 4, engine: 14, family: "EDIT", visit: [20, 19], cursor: 2,
+                              until: { $0.graph.kind == .sound }, note: "EDIT › SOUND on a DRUM-X track, lane 3: the kit's windows (FakeSkiff's DEEP kit).")
     }
     @Test func recordsArp() async throws {
         try await recordPages("page-arp", track: 5, family: "ARP", visit: [40, 39], note: "ARP (board 63 left).")
@@ -125,6 +139,7 @@ import Testing
         #expect(a.page == 46 && a.pages.contains { $0.title == "REVERB" && $0.index == 47 }, "\(a.pages)")
         #expect(a.controls.first??.label == "SEND", "knob 1 is the track's send: \(a.controls)")
         #expect(a.pages.allSatisfy { !(41...45).contains($0.index) })
+        #expect(a.pages.map(\.title) == ["FX", "DELAY", "REVERB", "DRIVE", "INSERT", "SLICER", "DUCK"], "decision 17: the FM-1's own seven on 2.5.1, no INSERT 2: \(a.pages.map(\.title))")
     }
 
     @Test func aKnobTurnedOnTheFM1LightsItsControl() async throws {
@@ -162,7 +177,7 @@ import Testing
         core.handle(json: "{\"intent\": \"pickPage\", \"family\": \"ENV\"}")
         core.handle(json: "{\"intent\": \"pickPage\", \"family\": \"ENV\", \"page\": 1}")
         try await Task.sleep(for: .milliseconds(500))
-        #expect(fake.gotoWire.isEmpty, "SCREEN_GOTO was dropped by the guard, never reached the FM-1: \(fake.gotoWire)")
+        #expect(fake.gotoWire.isEmpty, "refused before Session (and the guard behind it): never reached the FM-1: \(fake.gotoWire)")
         #expect(core.session.deviceScreen?.home == true, "the screen is where the FM-1 left it")
     }
 
@@ -220,5 +235,27 @@ import Testing
         // only `bottom` is sent: the tab and divider are the screens' own
         let json = try #require(r.frames.last { $0.area == "shell" }?.json)
         #expect(!json.contains("tab") && !json.contains("divider"), Comment(rawValue: json))
+    }
+
+    @Test func theDensePagesCarryWhatTheirPicturesDraw() async throws {
+        let r = Recorder()
+        let fake = try linkedFake(track: 2, engine: 12)
+        let (core, plug) = try await readyCore(fake, r)
+        defer { core.stop(); plug.unplug() }
+        try await pick(core, family: "EDIT", page: 16)
+        try await waitFor(5, "the FM6 patch") { core.pageArea()?.graph.kind == .fm6op }
+        let g = try #require(core.pageArea()?.graph)
+        let p = try #require(g.fm6)
+        #expect(p.ops.count == 6 && p.picked == 1 && p.algorithm == 0, "\(p)")
+        #expect(p.ops.allSatisfy { $0.r.count == 4 && $0.l.count == 4 && !$0.ratio.isEmpty })
+        #expect(core.pageArea()?.controls.allSatisfy { $0 == nil } == true, "the picture takes the controls' place")
+        fake.turnCursorOnDevice(to: 3)
+        try await waitFor(3, "operator 4 picked") { core.pageArea()?.graph.fm6?.picked == 4 }
+        // pickTile on OPERATOR moves the FM-1's cursor, as the lane tiles do (a write: allowed in this gate)
+        core.handle(json: "{\"intent\": \"pickTile\", \"tile\": 5}")
+        try await waitFor(3, "operator 6 picked") { core.pageArea()?.graph.fm6?.picked == 6 }
+        // SLICES has no picture to draw: the card stays (its markers can't be read)
+        try await pick(core, family: "EDIT", page: 17)
+        try await waitFor(5, "ALL OPS") { core.pageArea()?.graph.kind == .fm6all }
     }
 }

@@ -110,6 +110,9 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, onSet: (slot: Int, value
         GraphKind.Mod -> ModRoutes(g, colour, onPickRoute, modifier)
         GraphKind.Tiles -> PickTiles(g, colour, onPickTile, modifier)
         GraphKind.Card -> DenseCard(g, modifier)
+        GraphKind.Fm6Op -> Fm6OperatorPicture(g, colour, onPickTile, modifier)
+        GraphKind.Fm6All -> Fm6AllOpsPicture(g, colour, modifier)
+        GraphKind.Sound -> SoundSheetPicture(g, colour, onPickTile, modifier)
         GraphKind.Env -> EnvGraph(g, colour, hot, onSet, modifier)
         else -> CanvasGraph(g, colour, hot, modifier)
     }
@@ -122,6 +125,9 @@ private fun describe(g: PageGraph): String = when (g.kind) {
     GraphKind.Fx -> "FX sends: " + listOf("drive", "chorus", "delay", "reverb").mapIndexed { i, n -> "$n ${g.values.getOrElse(i) { 0 }}" }.joinToString(", ")
     GraphKind.Scale -> "Scale keys. ${g.side ?: ""}"
     GraphKind.Arp -> "Arpeggio pattern. ${g.side ?: ""}"
+    GraphKind.Fm6Op -> "Operator envelopes and operator tiles"
+    GraphKind.Fm6All -> "FM algorithm chart"
+    GraphKind.Sound -> "DRUM-X sound sheet"
     GraphKind.Analog -> "Oscillator and filter. ${g.caption ?: ""}, ${g.side ?: ""}"
     else -> ""
 }
@@ -472,6 +478,10 @@ private fun PickTiles(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modifi
 private fun DenseCard(g: PageGraph, modifier: Modifier) {
     Column(modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(Tok.well).padding(12.dp), verticalArrangement = Arrangement.Top) {
         BasicText(g.title ?: "", style = LupeType.number.copy(fontSize = 22.sp))
-        BasicText("The FM-1's cursor is here. This page is edited on the FM-1 for now; its phone picture comes after v1.", Modifier.padding(top = 4.dp), style = LupeType.small)
+        BasicText(
+            if (g.title?.startsWith("SLICES") == true) "Slices are moved, split and joined on the FM-1: the editor protocol has no command for them."
+            else "The FM-1's cursor is here. Reading the page from the FM-1…",
+            Modifier.padding(top = 4.dp), style = LupeType.small.copy(color = Tok.text2Raised),
+        )
     }
 }

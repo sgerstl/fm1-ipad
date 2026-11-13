@@ -357,7 +357,7 @@ private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelT
                     val nextNote = ed.selected + 1 + cap
                     SlideColumn("LENGTH", "${s.length}", "Length", track, key = "length" to ed.selected, num = s.length, min = 1, max = cap,
                         dpPerStep = 16f, tick = false, locked = s.isLocked("LENGTH"),
-                        limitWord = if (s.length >= cap) (if (nextNote > 16) "pattern ends here" else "next note at step $nextNote") else null) { send(StepField.Length, it) }
+                        limitWord = if (s.length >= cap) (if (nextNote > 16) "pattern ends" else "note at step $nextNote") else null) { send(StepField.Length, it) }
                     SlideColumn("VELOCITY", "${s.velocity}", "Velocity", track, key = "velocity" to ed.selected, num = s.velocity, min = 1, max = 127, unit = 4,
                         dpPerStep = 3f, tick = false, locked = s.isLocked("VELOCITY")) { send(StepField.Velocity, it) }
                 }
@@ -527,7 +527,9 @@ private fun SlideColumn(
             }
             BasicText(value, Modifier.padding(top = 2.dp), style = LupeType.number.copy(fontSize = 22.sp, lineHeight = 26.sp), maxLines = 1,
                 autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 14.sp, maxFontSize = 22.sp, stepSize = 1.sp))
-            if (limitWord != null) BasicText(limitWord, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 12.sp), maxLines = 1)
+            // the short hint ("note at step 7") shrinks to fit the column rather than being cut off
+            if (limitWord != null) BasicText(limitWord, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 12.sp), maxLines = 1,
+                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 11.sp, stepSize = 0.5.sp))
         }
         // the gauge along the foot: from the left, or from the middle on a value centred on zero
         if (fraction != null) Canvas(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp)) {

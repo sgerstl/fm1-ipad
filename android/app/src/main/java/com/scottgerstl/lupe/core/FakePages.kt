@@ -12,7 +12,7 @@ class FakePages {
     /** Skiff 2.5.1's rows for a family the fixtures never showed (EDIT as an ANALOG track has it). */
     private val defaults = mapOf(
         "ENV" to listOf(0 to "ENV", 1 to "ENV 2"), "LFO" to listOf(2 to "LFO", 3 to "LFO 2", 4 to "MOD"),
-        "FX" to listOf(5 to "FX", 46 to "DELAY", 47 to "REVERB", 6 to "DRIVE", 7 to "INSERT", 8 to "INSERT 2", 9 to "SLICER", 10 to "DUCK"),
+        "FX" to listOf(5 to "FX", 46 to "DELAY", 47 to "REVERB", 6 to "DRIVE", 7 to "INSERT", 9 to "SLICER", 10 to "DUCK"),   // Skiff 2.5.1: seven; INSERT 2 is Lupe's row only on 2.2
         "SEL" to listOf(11 to "SCALE", 12 to "CHORD", 13 to "FOLLOW"),
         "EDIT" to listOf(14 to "EDIT 1", 15 to "EDIT 2", 28 to "VOICE", 29 to "VOICE 2"),
         "ARP" to listOf(39 to "ARP", 40 to "ARP 2"),
