@@ -19,7 +19,8 @@ object FakeP5 {
     fun db(level: Int) = if (level <= 0) "OFF" else "${((level - 100) * 0.4f).toInt()} dB"
 
     fun card(section: String): MixCard? = when (section) {
-        "delay" -> MixCard("Delay", listOf(PageControl("TIME", "3/16", 40, 0, 127, list = true), PageControl("FEEDBACK", "62", 62), PageControl("COLOR", "70", 70), PageControl("MIX", "30", 30)))
+        "delay" -> MixCard("Delay", listOf(PageControl("TIME", "3/16", 40, 0, 127, list = true), PageControl("FEEDBACK", "62", 62), PageControl("COLOR", "70", 70), PageControl("MIX", "30", 30)),
+            settings = listOf(PageControl("DELAY MODE", "STEREO", 0, 0, 2, list = true, names = listOf("STEREO", "PING-PONG", "MONO"))))
         "reverb" -> MixCard("Reverb", listOf(PageControl("TYPE", "ROOM", 1, 0, 3, list = true), PageControl("SIZE", "70", 70), PageControl("DAMP", "40", 40), PageControl("MIX", "25", 25)))
         "chorus" -> MixCard("Chorus", listOf(PageControl("RATE", "50", 50), PageControl("DEPTH", "60", 60), PageControl("MIX", "30", 30), null))
         "global" -> MixCard("Global", listOf(PageControl("TEMPO", "120", 120), PageControl("SWING", "0", 0), PageControl("MASTER", "100", 100), PageControl("TRANSPOSE", "0", 64)))
@@ -48,6 +49,7 @@ object FakeP5 {
         is TrackSolo -> row(s, i.track) { it.copy(solo = !it.solo) }
         is Intent.TrackMute -> row(s, i.track) { it.copy(mute = !it.mute) }
         is Intent.TrackSelect -> s.copy(rows = s.rows.map { it.copy(selected = it.track == i.track) })
+        is SetMixSetting -> s.copy(card = s.card?.copy(settings = s.card.settings.mapIndexed { n, c -> if (n == i.index) c.copy(raw = i.value, value = c.names.getOrElse(i.value) { c.value }) else c }))
         is SetMixParam -> s.copy(card = s.card?.copy(controls = s.card.controls.mapIndexed { n, c -> if (n == i.slot && c != null) c.copy(raw = i.value, value = if (c.list && c.names.isNotEmpty()) c.names.getOrElse(i.value) { c.value } else if (c.list) c.value else "${i.value}") else c }))
         else -> s
     }

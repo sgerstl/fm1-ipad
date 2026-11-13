@@ -24,6 +24,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import com.scottgerstl.lupe.ui.shell.MenuRow
+import com.scottgerstl.lupe.ui.shell.LupeMenu
+import com.scottgerstl.lupe.core.EraseUser
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +73,8 @@ import com.scottgerstl.lupe.ui.theme.LupeType
 import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 
+private data class SlotConfirm(val slot: Int, val armedAt: Long, val erase: Boolean)
+
 private const val USER = -1   // the left list's last entry: the FM-1's 32 user slots
 
 /**
@@ -89,7 +96,8 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
     // what the left list shows: an engine (the core's `viewing`) or User; Save also opens User, to choose a slot
     var userView by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    var confirmSlot by remember { mutableStateOf<Pair<Int, Long>?>(null) }
+    // a user slot asked about in place: to be replaced by Save, or erased (from its hold menu)
+    var confirmSlot by remember { mutableStateOf<SlotConfirm?>(null) }
     val viewing = if (userView) USER else s.viewing
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -124,10 +132,14 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
                             Tile(
                                 text = if (u.used) u.name else "${u.slot + 1} · empty", current = u.current, dim = !u.used && !saving, colour = colour,
                                 description = "User slot ${u.slot + 1}, " + if (u.used) u.name else "empty", state = if (u.current) "Playing on this track" else "",
+                                // held: its menu beside the finger, Erase asked in place (a used slot only)
+                                menu = if (u.used) { close -> MenuRow("Erase user slot ${u.slot + 1}…", { close(); confirmSlot = SlotConfirm(u.slot, System.currentTimeMillis(), true) }) } else null,
+                                actionLabel = if (u.used) "Erase user slot ${u.slot + 1}" else null,
+                                onAction = { confirmSlot = SlotConfirm(u.slot, System.currentTimeMillis(), true) },
                             ) {
                                 haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                 when {
-                                    saving && u.used -> confirmSlot = u.slot to System.currentTimeMillis()          // over a used slot: ask in place
+                                    saving && u.used -> confirmSlot = SlotConfirm(u.slot, System.currentTimeMillis(), false)          // over a used slot: ask in place
                                     saving -> { core.send(SaveSound(u.slot, s.trackName.take(8).uppercase().ifEmpty { "SOUND" })); saving = false }
                                     u.used -> core.send(PickUser(u.slot))
                                 }
@@ -143,18 +155,24 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
                         }
                     }
                 }
-                // a Save over a used user slot, asked in place: names what it replaces; taps are ignored for the first 0.4 s
+                // a Save over a used user slot, or an Erase, asked in place: names the slot; taps are ignored for the first 0.4 s
                 LupeCrossfade(confirmSlot, Modifier.fillMaxWidth().padding(top = 4.dp)) { c ->
                     if (c != null) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        val u = s.user.getOrNull(c.first)
-                        val words = "Replace user slot ${c.first + 1}${u?.name?.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""} with this sound?"
+                        val u = s.user.getOrNull(c.slot)
+                        val slotWords = "user slot ${c.slot + 1}${u?.name?.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""}"
+                        val words = if (c.erase) "Erase $slotWords? It can't be undone." else "Replace $slotWords with this sound?"
+                        val go = {
+                            if (c.erase) core.send(EraseUser(c.slot, confirmed = true))
+                            else { core.send(SaveSound(c.slot, s.trackName.take(8).uppercase().ifEmpty { "SOUND" }, confirmed = true)); saving = false }
+                            confirmSlot = null
+                        }
                         Box(
                             Modifier.fillMaxWidth().drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
                                 .semantics(mergeDescendants = true) {
                                     role = Role.Button; contentDescription = "Confirm: $words"
-                                    onClick { if (System.currentTimeMillis() - c.second > 400) { core.send(SaveSound(c.first, s.trackName.take(8).uppercase().ifEmpty { "SOUND" }, confirmed = true)); confirmSlot = null; saving = false; true } else false }
+                                    onClick { if (System.currentTimeMillis() - c.armedAt > 400) { go(); true } else false }
                                 }
-                                .pointerInput(c) { detectTapGestures { if (System.currentTimeMillis() - c.second > 400) { core.send(SaveSound(c.first, s.trackName.take(8).uppercase().ifEmpty { "SOUND" }, confirmed = true)); confirmSlot = null; saving = false } } }
+                                .pointerInput(c) { detectTapGestures { if (System.currentTimeMillis() - c.armedAt > 400) go() } }
                                 .padding(10.dp),
                         ) { BasicText(words, style = LupeType.key.copy(fontSize = 13.sp)) }
                         WideKey("Cancel", { confirmSlot = null })
@@ -174,23 +192,34 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
     }
 }
 
-/** A preset (or a user slot): 40 dp, two to a row; the one playing is tinted in the track's colour with a ring and a tick. */
+/** A preset (or a user slot): 40 dp, two to a row; the one playing is tinted in the track's colour with a ring and a tick. A held tile can open a menu beside the finger. */
 @Composable
-private fun Tile(text: String, current: Boolean, dim: Boolean, colour: androidx.compose.ui.graphics.Color, description: String, state: String, onTap: () -> Unit) {
+private fun Tile(
+    text: String, current: Boolean, dim: Boolean, colour: androidx.compose.ui.graphics.Color, description: String, state: String,
+    menu: (@Composable (close: () -> Unit) -> Unit)? = null, actionLabel: String? = null, onAction: () -> Unit = {}, onTap: () -> Unit,
+) {
     val lit = animatedFloat(if (current) 1f else 0f, Dur.STATE)
-    Box(
-        Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(8.dp))
-            .background(lerp(Tok.control, lerp(Tok.page, colour, 0.35f), lit.value))
-            .drawBehind { if (lit.value > 0f) drawRoundRect(Tok.text.copy(alpha = lit.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx())) }
-            .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = description; stateDescription = state; onClick { onTap(); true } }
-            .pointerInput(onTap) { detectTapGestures { onTap() } }
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        BasicText(text, style = LupeType.key.copy(fontSize = 13.sp, letterSpacing = 0.3.sp, color = if (dim) Tok.text2Raised else Tok.text), maxLines = 1)
-        if (current) Canvas(Modifier.align(Alignment.CenterEnd).size(14.dp, 12.dp)) {
-            val path = Path().apply { moveTo(1.dp.toPx(), size.height * 0.55f); lineTo(size.width * 0.38f, size.height - 1.dp.toPx()); lineTo(size.width - 1.dp.toPx(), 1.dp.toPx()) }
-            drawPath(path, Tok.text, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    Box(Modifier.fillMaxWidth().height(40.dp)) {
+        Box(
+            Modifier.matchParentSize().clip(RoundedCornerShape(8.dp))
+                .background(lerp(Tok.control, lerp(Tok.page, colour, 0.35f), lit.value))
+                .drawBehind { if (lit.value > 0f) drawRoundRect(Tok.text.copy(alpha = lit.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx())) }
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button; contentDescription = description; stateDescription = state; onClick { onTap(); true }
+                    // every hold has a non-hold way in (WCAG 2.5.7)
+                    if (actionLabel != null) customActions = listOf(CustomAccessibilityAction(actionLabel) { onAction(); true })
+                }
+                .pointerInput(onTap, menu != null) { detectTapGestures(onTap = { onTap() }, onLongPress = { at -> if (menu != null) menuAt = at }) }
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicText(text, style = LupeType.key.copy(fontSize = 13.sp, letterSpacing = 0.3.sp, color = if (dim) Tok.text2Raised else Tok.text), maxLines = 1)
+            if (current) Canvas(Modifier.align(Alignment.CenterEnd).size(14.dp, 12.dp)) {
+                val path = Path().apply { moveTo(1.dp.toPx(), size.height * 0.55f); lineTo(size.width * 0.38f, size.height - 1.dp.toPx()); lineTo(size.width - 1.dp.toPx(), 1.dp.toPx()) }
+                drawPath(path, Tok.text, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
         }
+        if (menu != null) LupeMenu(menuAt != null, { menuAt = null }, width = 232.dp, at = menuAt) { menu { menuAt = null } }
     }
 }

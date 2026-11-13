@@ -240,6 +240,14 @@ private fun BusPage(ui: MixUi, p: Int, actions: MixActions) {
             BasicText("Shared by every track", Modifier.align(Alignment.TopEnd).padding(10.dp), style = LupeType.small.copy(fontSize = 12.sp))
         }
         PageControlsRow(ui.bus, Tok.text, litSlot = -1, litSeq = 0, opened = { _, c -> c.raw }, onSet = { slot, v -> actions.setBus(slot, v) })
+        // the card's settings (DELAY MODE on 2.5.1): a choice, not a knob
+        ui.settings.forEachIndexed { i, c ->
+            Column(Modifier.fillMaxWidth()) {
+                BasicText(c.label, Modifier.padding(bottom = 4.dp), style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2, letterSpacing = 0.5.sp))
+                if (c.names.size in 2..4) Segmented(c.names, c.raw.coerceIn(0, c.names.lastIndex), c.label) { actions.setSetting(i, it) }
+                else BasicText(c.value, style = LupeType.key)
+            }
+        }
     }
 }
 

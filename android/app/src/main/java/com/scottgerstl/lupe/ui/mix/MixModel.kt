@@ -38,6 +38,8 @@ data class MixUi(
     val tracks: List<MixTrackUi> = emptyList(),
     /** The four controls of a bus page (knob order); null is an empty well. Shared by every track. */
     val bus: List<PageControl?> = emptyList(),
+    /** The bus card's settings (DELAY MODE on 2.5.1): a choice from a list, shown under the four controls. */
+    val settings: List<PageControl> = emptyList(),
 )
 
 class MixActions(
@@ -48,6 +50,7 @@ class MixActions(
     val mute: (track: Int) -> Unit,
     val select: (track: Int) -> Unit,
     val setBus: (slot: Int, raw: Int) -> Unit,
+    val setSetting: (index: Int, raw: Int) -> Unit,
 )
 
 fun MixState.toUi(): MixUi {
@@ -57,7 +60,7 @@ fun MixState.toUi(): MixUi {
         pages = titles, page = keys.indexOf(section).coerceAtLeast(0),
         // the core names a track "Engine · Sound" ("Analog · Acid"); the row has room for the sound's name
         tracks = rows.map { MixTrackUi(it.track, it.name.substringAfter(" · "), it.level, it.levelText, it.pan + 64, it.panText, it.reverb ?: 0, it.reverbText ?: "…", it.mute, null, it.selected) },
-        bus = card?.controls.orEmpty(),
+        bus = card?.controls.orEmpty(), settings = card?.settings.orEmpty(),
     )
 }
 
@@ -76,6 +79,7 @@ fun rememberMix(core: LupeCore): Pair<MixUi, MixActions> {
             mute = { core.send(Intent.TrackMute(it)) },
             select = { core.send(Intent.TrackSelect(it)) },
             setBus = { s, v -> core.send(SetMixParam(s, v)) },
+            setSetting = { i, v -> core.send(com.scottgerstl.lupe.core.SetMixSetting(i, v)) },
         )
     }
     return ui to actions

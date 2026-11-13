@@ -78,7 +78,8 @@ class ProjectActions(
     val load: (slot: Int, confirmed: Boolean) -> Unit,
     /** Save over the music's own slot: only [confirmed] (it replaces what the slot held). */
     val save: (confirmed: Boolean) -> Unit,
-    val saveAs: (slot: Int, name: String) -> Unit,
+    /** [confirmed]: over a used slot the core refuses unless the person has seen what it replaces. */
+    val saveAs: (slot: Int, name: String, confirmed: Boolean) -> Unit,
     val rename: (slot: Int, name: String) -> Unit,
 )
 
@@ -87,6 +88,8 @@ private sealed interface Pending {
     data class Load(val slot: ProjectSlotUi, val armedAt: Long) : Pending
     /** Save over the playing project's own slot: replaces what it held. */
     data class Save(val slot: ProjectSlotUi, val armedAt: Long) : Pending
+    /** Save the playing project into a used slot: replaces that project. */
+    data class SaveAs(val slot: ProjectSlotUi, val armedAt: Long) : Pending
     data class Rename(val slot: ProjectSlotUi) : Pending
 }
 
@@ -108,7 +111,7 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
             Modifier.padding(bottom = 12.dp), style = LupeType.small.copy(fontSize = 13.sp),
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ui.slots.forEach { slot -> SlotRow(slot, pending, { pending = it }, ui, actions) { host.close() } }
+            ui.slots.forEach { slot -> SlotRow(slot, playing, pending, { pending = it }, ui, actions) { host.close() } }
         }
         // a Save over the playing project's own slot replaces what the slot held: asked in place too
         LupeCrossfade(pending as? Pending.Save, Modifier.fillMaxWidth().padding(top = 16.dp)) { p ->
@@ -122,6 +125,24 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
                             onClick { if (System.currentTimeMillis() - p.armedAt > 400) { actions.save(true); pending = null; true } else false }
                         }
                         .pointerInput(p) { detectTapGestures { if (System.currentTimeMillis() - p.armedAt > 400) { actions.save(true); pending = null } } }
+                        .padding(14.dp),
+                ) { BasicText(words, style = LupeType.key) }
+                Key({ pending = null }, "Cancel", Modifier.fillMaxWidth(), height = 44.dp) { fg -> KeyLabel("Cancel", fg) }
+            }
+        }
+        // Save as over a used slot names the project it replaces
+        LupeCrossfade(pending as? Pending.SaveAs, Modifier.fillMaxWidth().padding(top = 16.dp)) { p ->
+            if (p != null) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val words = "Replace ${p.slot.index} ${p.slot.name} with ${playing?.name?.ifEmpty { "the playing project" } ?: "the playing project"}? ${p.slot.name} is gone."
+                val go = { actions.saveAs(p.slot.index, playing?.name?.ifEmpty { null } ?: "Project ${p.slot.index}", true); pending = null }
+                Box(
+                    Modifier.fillMaxWidth()
+                        .drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Button; contentDescription = "Confirm: $words"
+                            onClick { if (System.currentTimeMillis() - p.armedAt > 400) { go(); true } else false }
+                        }
+                        .pointerInput(p) { detectTapGestures { if (System.currentTimeMillis() - p.armedAt > 400) go() } }
                         .padding(14.dp),
                 ) { BasicText(words, style = LupeType.key) }
                 Key({ pending = null }, "Cancel", Modifier.fillMaxWidth(), height = 44.dp) { fg -> KeyLabel("Cancel", fg) }
@@ -153,7 +174,7 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
 }
 
 @Composable
-private fun SlotRow(slot: ProjectSlotUi, pending: Pending?, setPending: (Pending?) -> Unit, ui: ProjectsUi, actions: ProjectActions, closeSheet: () -> Unit) {
+private fun SlotRow(slot: ProjectSlotUi, playing: ProjectSlotUi?, pending: Pending?, setPending: (Pending?) -> Unit, ui: ProjectsUi, actions: ProjectActions, closeSheet: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val renaming = (pending as? Pending.Rename)?.slot?.index == slot.index
     Row(
@@ -175,7 +196,7 @@ private fun SlotRow(slot: ProjectSlotUi, pending: Pending?, setPending: (Pending
         if (!renaming) {
             when {
                 slot.current -> Key({ setPending(Pending.Save(slot, System.currentTimeMillis())) }, "Save ${slot.name}", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
-                slot.empty -> Key({ actions.saveAs(slot.index, "Project ${slot.index}") }, "Save here as a new project in slot ${slot.index}", width = 92.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save here", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                slot.empty -> Key({ actions.saveAs(slot.index, playing?.name?.ifEmpty { null } ?: "Project ${slot.index}", false) }, "Save here as a new project in slot ${slot.index}", width = 92.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save here", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
                 else -> Key({
                     if (ui.changes != null) setPending(Pending.Load(slot, System.currentTimeMillis())) else { actions.load(slot.index, false); closeSheet() }
                 }, "Load ${slot.name}", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Load", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
@@ -186,6 +207,8 @@ private fun SlotRow(slot: ProjectSlotUi, pending: Pending?, setPending: (Pending
                 }
                 LupeMenu(menu, { menu = false }, alignEnd = true, width = 200.dp) {
                     MenuRow("Rename", { menu = false; setPending(Pending.Rename(slot)) })
+                    // the playing project into this (used) slot: replaces what it holds, so it asks
+                    if (!slot.current && playing != null) MenuRow("Save the playing project here", { menu = false; setPending(Pending.SaveAs(slot, System.currentTimeMillis())) }, sub = "Replaces ${slot.name}")
                 }
             }
         }
@@ -224,7 +247,7 @@ fun rememberProjects(core: LupeCore): Pair<ProjectsUi, ProjectActions> {
         ProjectActions(
             load = { s, c -> core.send(ProjectLoad(s - 1, c)) },
             save = { c -> core.send(ProjectSave(c)) },
-            saveAs = { s, n -> core.send(ProjectSaveAs(s - 1, n)) },
+            saveAs = { s, n, c -> core.send(ProjectSaveAs(s - 1, n, c)) },
             rename = { s, n -> core.send(ProjectRename(s - 1, n)) },
         )
     }

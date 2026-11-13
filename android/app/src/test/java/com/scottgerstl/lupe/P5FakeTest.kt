@@ -55,4 +55,29 @@ class P5FakeTest {
         s = FakeP5.sounds(s, SoundsTargetPick(4, 1)); s = FakeP5.sounds(s, PickPreset(10, 2))
         assertEquals("preset", s.entrySound?.kind); assertEquals(0, s.engine)                     // the track's own sound is untouched
     }
+
+    @Test fun mixCardSettingsChange() {
+        var m = FakeP5.seedMix(names, 1)
+        m = FakeP5.mix(m, MixSectionPick("delay"))
+        assertEquals("STEREO", m.toUi().settings.single().value)
+        m = FakeP5.mix(m, com.scottgerstl.lupe.core.SetMixSetting(0, 1))
+        assertEquals("PING-PONG", m.toUi().settings.single().value); assertEquals(1, m.card!!.settings.single().raw)
+        assertTrue(FakeP5.mix(FakeP5.mix(m, MixSectionPick("chorus")), Intent.TrackSelect(1)).toUi().settings.isEmpty())   // chorus has none
+    }
+
+    @Test fun saveAsOverAUsedProjectSlotNeedsConfirmation() {
+        var p = FakeP5.seedProjects()
+        p = FakeP5.projects(p, com.scottgerstl.lupe.core.ProjectSaveAs(1, "NIGHT DRIVE"))              // slot 2 holds KOTO: refused
+        assertEquals("KOTO", p.slots[1].name)
+        p = FakeP5.projects(p, com.scottgerstl.lupe.core.ProjectSaveAs(1, "NIGHT DRIVE", confirmed = true))
+        assertEquals("NIGHT DRIVE", p.slots[1].name); assertTrue(p.slots[1].current)
+        p = FakeP5.projects(p, com.scottgerstl.lupe.core.ProjectSaveAs(2, "NEW"))                       // an empty slot: one tap
+        assertEquals("NEW", p.slots[2].name)
+    }
+
+    @Test fun eraseAUserSlotNeedsConfirmation() {
+        var s = FakeP5.seedSounds(5, "Piano")
+        s = FakeP5.sounds(s, com.scottgerstl.lupe.core.EraseUser(0)); assertTrue(s.user[0].used); assertNotNull(s.refusal)
+        s = FakeP5.sounds(s, com.scottgerstl.lupe.core.EraseUser(0, confirmed = true)); assertFalse(s.user[0].used)
+    }
 }
