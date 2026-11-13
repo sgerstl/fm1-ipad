@@ -27,7 +27,6 @@ public final class PhoneCore {
     /// P5's screen-local state (P5Areas.swift): the Mix section on screen, Lupe's solos, the Sounds browser's target
     /// and the engine browsed, a project op going on.
     var mixSection = "mixer"
-    var soloTracks: Set<Int> = []
     var soundsTrack: Int?          // nil: the selected track
     var soundsEntry: Int?
     var soundsViewing: Int?
@@ -200,6 +199,7 @@ public final class PhoneCore {
         if handlePageJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
+            if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects
             handle(try PhoneIntent.decode(json))
         } catch { log("intent not understood: \(json) (\(error))") }
     }
