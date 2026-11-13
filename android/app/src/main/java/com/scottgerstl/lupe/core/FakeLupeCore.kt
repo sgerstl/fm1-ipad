@@ -219,7 +219,9 @@ class FakeLupeCore(
             is DrawLane -> {
                 val st = _editor.value.selected
                 val p = intent.param
-                val hasRecorded = model.any { m -> m.values.any { it.param == p && !it.locked } }
+                // refused unless confirmed when any painted step shows recorded data (one held from an earlier step counts), as the core
+                val pts = FakeP6.automation(_editor.value, p).points
+                val hasRecorded = (intent.from until intent.from + intent.values.size).any { pts.getOrNull(it)?.source == "recorded" }
                 if (!(hasRecorded && !intent.confirmed)) {          // drawing over recorded changes is refused unless confirmed
                     intent.values.forEachIndexed { n, v ->
                         val k = intent.from + n

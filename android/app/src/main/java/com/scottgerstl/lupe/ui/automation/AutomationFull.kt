@@ -161,8 +161,10 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                             val pad = 12.dp.toPx()
                             fun stepAt(x: Float) = (((x - pad) / (size.width - 2 * pad)) * (steps - 1)).roundToInt().coerceIn(0, steps - 1)
                             fun valueAt(y: Float) = (100f * (1f - (y - 10.dp.toPx()) / (size.height - 20.dp.toPx()))).roundToInt().coerceIn(0, 100)
-                            // decision 16: the first touch on recorded motion asks once, in place
-                            if (info.recorded && armedLane != lane) {
+                            // decision 16: painting a step that shows recorded data (a change, or one held from an earlier step) asks once, in place.
+                            // The core refuses such a stroke unless confirmed, so the screen asks first and sends confirmed after yes.
+                            fun recordedAt(st: Int) = auto.points.getOrNull(st)?.source == "recorded"
+                            if (recordedAt(stepAt(down.position.x)) && armedLane != lane) {
                                 asking = System.currentTimeMillis()
                                 waitForUpOrCancellation()
                                 return@awaitEachGesture
@@ -172,11 +174,15 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                             var last = -1
                             var lastV = 0
                             var moved = false
+                            var blocked = false
                             fun apply(c: PointerInputChange) {
+                                if (blocked) return
                                 val st = stepAt(c.position.x); val v = valueAt(c.position.y)
                                 // every step passed since the last one, the height eased between: a fast finger skips none, and each is a lock
                                 val range = if (last < 0) listOf(st) else if (st >= last) (last + 1..st).toList() else (last - 1 downTo st).toList()
                                 val from = last.coerceAtLeast(0)
+                                // a stroke that reaches recorded steps stops there and asks (nothing is sent for them)
+                                if (armedLane != lane && range.any { recordedAt(it) }) { blocked = true; asking = System.currentTimeMillis(); return }
                                 if (range.isNotEmpty()) {
                                     val values = range.mapIndexed { n, _ -> auto.raw(if (last < 0) v else (lastV + (v - lastV) * (n + 1) / range.size)) }
                                     core.send(DrawLane(lane, range.first(), values, lock = true, confirmed = armedLane == lane))

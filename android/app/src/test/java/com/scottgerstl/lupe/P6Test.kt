@@ -64,4 +64,15 @@ class P6Test {
         assertTrue(c.automation.value.points.slice(11..14).all { it.source == "lock" })
         assertEquals(7, c.automation.value.lanes.first { it.param == lane }.locks)      // the pattern had 3 CUTOFF locks, now 4 more
     }
+
+    @Test fun drawingOnAStepShowingRecordedDataNeedsConfirmation() = runTest(StandardTestDispatcher()) {
+        val c = core(this)
+        // pattern 12: RESONANCE is recorded at step 6 (held through the steps after it)
+        c.send(com.scottgerstl.lupe.core.AutomationLanePick("RESONANCE"))
+        assertEquals("recorded", c.automation.value.points[7].source)
+        c.send(DrawLane("RESONANCE", 7, listOf(100), lock = true))                              // refused
+        assertEquals("recorded", c.automation.value.points[7].source)
+        c.send(DrawLane("RESONANCE", 7, listOf(100), lock = true, confirmed = true))
+        assertEquals("lock", c.automation.value.points[7].source)
+    }
 }
