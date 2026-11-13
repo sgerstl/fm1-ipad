@@ -32,6 +32,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -102,6 +105,7 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier) {
                         g, colour, if (litNow(page)) page.turned else -1,
                         onSet = { slot, v -> core.send(SetParam(slot, v)) },
                         onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) },
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -184,11 +188,15 @@ private fun PageRow(page: PageState, colour: Color, onPick: (Int) -> Unit) {
                     Modifier.fillMaxHeight().padding(horizontal = 4.dp)
                         .semantics(mergeDescendants = true) { role = Role.Tab; selected = on; contentDescription = "${r.title} page" }
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPick(r.index) }
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 8.dp)
+                        .drawBehind {
+                            // the current page's underline grows from the middle (a drawn bar; it needs no width from a scrolling row)
+                            val w = size.width * lit.value
+                            drawRect(Tok.text, Offset((size.width - w) / 2, size.height - 8.dp.toPx()), Size(w, 2.dp.toPx()))
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     BasicText(r.title, style = LupeType.key.copy(color = lerp(Tok.text2, Tok.text, lit.value)), maxLines = 1)
-                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).height(2.dp).fillMaxWidth(lit.value).background(Tok.text))
                 }
             }
         }

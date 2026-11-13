@@ -291,11 +291,7 @@ private fun drawDrive(s: Sp, g: PageGraph, c: Color) {
     s.rect(line, 12f, 66f, 116f, 1f); s.rect(line, 70f, 8f, 1f, 117f)
     s.d.drawPath(s.path(listOf(12f to 124f, 128f to 8f)), dim, style = Stroke(s.run { 1f.px() }, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))))
     s.stroke(c, curve)
-    val w = driveWave(type, d, tone)
-    s.rect(line, 140f, 88f, 87f, 1f)
-    val wf = w.mapIndexed { i, v -> (140f + i) to (88f - v * 32f / 32768f) }
-    s.d.drawPath(s.path(wf).apply { lineTo(s.x(227f), s.y(88f)); lineTo(s.x(140f), s.y(88f)); close() }, c.copy(alpha = 0.14f))
-    s.stroke(c, wf, 2f)
+    // TODO: the drive's output wave (iPad: driveWave, ported above) is not drawn: board 59 shows the curve and the type's name
 }
 
 private fun drawFx(s: Sp, g: PageGraph, c: Color) {
@@ -330,7 +326,6 @@ private fun drawScale(s: Sp, g: PageGraph, c: Color) {
         s.rect(if (on) c else Tok.well, x, top, kw * 0.6f, hh * 0.58f, 3f)
         if (n == g.root) s.text("●", x + kw * 0.3f - 3f, top + hh * 0.58f - 6f, Tok.onColour, 10f)
     }
-    g.side?.let { s.text(it, 228f, 5f, mid, right = true) }
 }
 
 private val ARP_MODES = 15
@@ -374,7 +369,6 @@ private fun drawArp(s: Sp, g: PageGraph, c: Color) {
             else s.rect(col, x, y, gw.toFloat(), th.toFloat(), 1.5f)
         }
     }
-    g.side?.let { s.text(it, 228f, 12f, mid, right = true) }
 }
 
 private fun shape(w: Int, f0: Double): Double {
@@ -473,7 +467,7 @@ private fun PickTiles(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modifi
 
 @Composable
 private fun DenseCard(g: PageGraph, modifier: Modifier) {
-    Column(modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(Tok.well).padding(12.dp), verticalArrangement = Arrangement.Center) {
+    Column(modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(Tok.well).padding(12.dp), verticalArrangement = Arrangement.Top) {
         BasicText(g.title ?: "", style = LupeType.number.copy(fontSize = 22.sp))
         BasicText("The FM-1's cursor is here. This page is edited on the FM-1 for now; its phone picture comes after v1.", Modifier.padding(top = 4.dp), style = LupeType.small)
     }
