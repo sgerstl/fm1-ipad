@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellati
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +31,13 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import kotlin.math.roundToInt
+import com.scottgerstl.lupe.ui.slide.slideToTurn
+import com.scottgerstl.lupe.ui.slide.MagnifierFace
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -122,11 +130,6 @@ private fun Ruler(ed: EditorState, track: Color, core: LupeCore) {
                 BasicText("${ed.track} ${ed.trackName}", style = LupeType.key, maxLines = 1)
                 BasicText("· ${ed.entry} · pattern ${"%02d".format(ed.pattern)}" + if (ed.scale.isNotEmpty()) " · ${ed.scale}" else "", style = LupeType.body.copy(fontSize = 14.sp), maxLines = 1)
             }
-            if (ed.kind == EditorKind.Roll) {
-                Key({ core.send(Intent.ChordToggle) }, "Chord", width = 66.dp, height = 32.dp, minTarget = 40.dp, on = ed.chord, role = Role.Switch,
-                    state = if (ed.chord) "On: a second FM-1 key adds to the step's chord" else "Off") { fg -> KeyLabel("Chord", fg) }
-                Spacer(Modifier.width(6.dp))
-            }
             StepMenuKey(ed, core)
         }
     }
@@ -154,7 +157,7 @@ private fun Diamond(color: Color, size: Dp, modifier: Modifier = Modifier) =
 private fun DrawScope.diamond(color: Color, cx: Float, cy: Float, r: Float) =
     drawPath(Path().apply { moveTo(cx, cy - r * 1.2f); lineTo(cx + r * 1.2f, cy); lineTo(cx, cy + r * 1.2f); lineTo(cx - r * 1.2f, cy); close() }, color)
 
-private enum class StepMenuMode { Root, ClearConfirm }
+private enum class StepMenuMode { Root, ClearConfirm, PasteConfirm }
 
 @Composable
 private fun StepMenuKey(ed: EditorState, core: LupeCore) {
@@ -163,6 +166,13 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore) {
     var armedAt by remember { mutableStateOf(0L) }
     val n = ed.selected + 1
     val step = ed.steps.getOrNull(ed.selected)
+    // A step that holds the note before it (a TIE): writing here shortens that note (Skiff's own behaviour; Scott lost
+    // step 15's D5 length this way without a warning, 2026-11-14). `heldFrom` is the 0-based step whose note it holds.
+    val held = step?.heldFrom?.takeIf { it >= 0 }?.let { ed.steps.getOrNull(it)?.let { owner -> it to owner } }
+    fun shortens(verb: String) = held?.let { (from, owner) ->
+        val left = ed.selected - from
+        "$verb here shortens step ${from + 1} (${owner.pitchText.ifEmpty { owner.note }}) to $left step${if (left == 1) "" else "s"}."
+    }
     Box {
         Key({ open = true; mode = StepMenuMode.Root }, "Step menu", width = 64.dp, height = 32.dp, minTarget = 40.dp) { fg ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -177,8 +187,10 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore) {
                         StepMenuMode.Root -> {
                             MenuHeading("Step $n")
                             MenuRow("Copy step", { core.send(Intent.StepAction(ed.selected, StepActionKind.Copy)); open = false })
-                            MenuRow("Paste step", { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false })
-                            MenuRow("Clear step", { mode = StepMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() }, enabled = step?.on == true)
+                            MenuRow("Paste step", { if (held != null) { mode = StepMenuMode.PasteConfirm; armedAt = System.currentTimeMillis() } else { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false } },
+                                sub = shortens("Pasting"))
+                            MenuRow("Clear step", { mode = StepMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() }, enabled = step?.on == true || held != null,
+                                sub = shortens("Clearing"))
                         }
                         StepMenuMode.ClearConfirm -> {
                             val goes = buildString {
@@ -186,7 +198,14 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore) {
                                 val l = step?.values?.count { it.locked } ?: 0
                                 if (l > 0) append(" and its $l lock${if (l == 1) "" else "s"}")
                             }
-                            ConfirmBox("Clear step $n, removing $goes", "Confirm: clear step $n, removing $goes", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Clear)); open = false }
+                            val note = shortens("Clearing")
+                            val words = (if (step?.on == true) "Clear step $n, removing $goes." else "Clear step $n.") + (note?.let { " $it" } ?: "")
+                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Clear)); open = false }
+                            MenuRow("Cancel", { mode = StepMenuMode.Root })
+                        }
+                        StepMenuMode.PasteConfirm -> {
+                            val words = "Paste into step $n. ${shortens("Pasting") ?: ""}".trim()
+                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false }
                             MenuRow("Cancel", { mode = StepMenuMode.Root })
                         }
                     }
@@ -327,25 +346,32 @@ private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelT
         LupeCrossfade(Pair(tab, confirm), Modifier.fillMaxSize()) { (t, c) ->
             when {
                 t == PanelTab.Notes -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    val pitch = if (s.on) s.pitchText else "—"
-                    Stepper(if (ed.kind == EditorKind.Drum) "LANE" else "PITCH", pitch, "Pitch", s, "PITCH", { core.send(Intent.StepAdjust(StepField.Pitch, -1)) }, { core.send(Intent.StepAdjust(StepField.Pitch, 1)) },
-                        range = 48, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Pitch, d)) })
-                    Stepper("MOVE", "$n", "Move", s, "MOVE", { core.send(Intent.StepAdjust(StepField.Move, -1)) }, { core.send(Intent.StepAdjust(StepField.Move, 1)) },
-                        range = 16, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Move, d)) })
-                    Stepper("LENGTH", "${s.length}", "Length", s, "LENGTH", { core.send(Intent.StepAdjust(StepField.Length, -1)) }, { core.send(Intent.StepAdjust(StepField.Length, 1)) },
-                        range = 16, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Length, d)) })
-                    Stepper("VELOCITY", "${s.velocity}", "Velocity", s, "VELOCITY", { core.send(Intent.StepAdjust(StepField.Velocity, -1)) }, { core.send(Intent.StepAdjust(StepField.Velocity, 1)) },
-                        range = 32, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Velocity, d)) })
+                    val send = { f: StepField, d: Int -> core.send(Intent.StepAdjust(f, d)) }
+                    SlideColumn(if (ed.kind == EditorKind.Drum) "LANE" else "PITCH", if (s.on) s.pitchText else "—", "Pitch", track, key = "pitch" to ed.selected,
+                        dpPerStep = 16f, tick = false, locked = s.isLocked("PITCH")) { send(StepField.Pitch, it) }
+                    // MOVE follows the step, so its undo spans the selection changing
+                    SlideColumn("MOVE", "$n", "Move", track, key = "move" to ed.pattern, num = n, min = 1, max = 16,
+                        dpPerStep = 22f, tick = true, locked = false) { send(StepField.Move, it) }
+                    // LENGTH grows only up to the next note (the core's maxLength): at the limit the slide stops and says where
+                    val cap = s.maxLength.coerceIn(1, 16)
+                    val nextNote = ed.selected + 1 + cap
+                    SlideColumn("LENGTH", "${s.length}", "Length", track, key = "length" to ed.selected, num = s.length, min = 1, max = cap,
+                        dpPerStep = 16f, tick = false, locked = s.isLocked("LENGTH"),
+                        limitWord = if (s.length >= cap) (if (nextNote > 16) "pattern ends here" else "next note at step $nextNote") else null) { send(StepField.Length, it) }
+                    SlideColumn("VELOCITY", "${s.velocity}", "Velocity", track, key = "velocity" to ed.selected, num = s.velocity, min = 1, max = 127, unit = 4,
+                        dpPerStep = 3f, tick = false, locked = s.isLocked("VELOCITY")) { send(StepField.Velocity, it) }
                 }
                 t == PanelTab.Feel -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Stepper("CHANCE", "${s.chance}", "Chance", s, "CHANCE", { core.send(Intent.StepAdjust(StepField.Chance, -1)) }, { core.send(Intent.StepAdjust(StepField.Chance, 1)) },
-                        range = 20, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Chance, d)) })
-                    Stepper("RATCHET", "${s.ratchet}", "Ratchet", s, "RATCHET", { core.send(Intent.StepAdjust(StepField.Ratchet, -1)) }, { core.send(Intent.StepAdjust(StepField.Ratchet, 1)) },
-                        range = 4, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Ratchet, d)) })
-                    Stepper("COND", s.cond, "Condition", s, "COND", { core.send(Intent.StepAdjust(StepField.Cond, -1)) }, { core.send(Intent.StepAdjust(StepField.Cond, 1)) },
-                        range = 12, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Cond, d)) })
-                    Stepper("NUDGE", "${s.nudge}", "Nudge", s, "NUDGE", { core.send(Intent.StepAdjust(StepField.Nudge, -1)) }, { core.send(Intent.StepAdjust(StepField.Nudge, 1)) },
-                        range = 64, onSlide = { d -> core.send(Intent.StepAdjust(StepField.Nudge, d)) })
+                    val send = { f: StepField, d: Int -> core.send(Intent.StepAdjust(f, d)) }
+                    SlideColumn("CHANCE", "${s.chance}%", "Chance", track, key = "chance" to ed.selected, num = s.chance, min = 0, max = 100, unit = 5,
+                        dpPerStep = 4f, tick = false, locked = s.isLocked("CHANCE")) { send(StepField.Chance, it) }
+                    SlideColumn("RATCHET", "${s.ratchet}", "Ratchet", track, key = "ratchet" to ed.selected, num = s.ratchet, min = 1, max = 4,
+                        dpPerStep = 28f, tick = true, locked = s.isLocked("RATCHET")) { send(StepField.Ratchet, it) }
+                    // COND is a list: each step through it ticks
+                    SlideColumn("COND", s.cond, "Condition", track, key = "cond" to ed.selected,
+                        dpPerStep = 26f, tick = true, locked = s.isLocked("COND")) { send(StepField.Cond, it) }
+                    SlideColumn("NUDGE", "${s.nudge}", "Nudge", track, key = "nudge" to ed.selected, num = s.nudge, min = -12, max = 12, bipolar = true,
+                        dpPerStep = 12f, tick = false, locked = s.isLocked("NUDGE")) { send(StepField.Nudge, it) }
                 }
                 c -> Column {
                     val names = s.values.filter { it.locked }.joinToString(", ") { it.param }
@@ -386,62 +412,6 @@ private fun PanelTabs(tab: PanelTab, setTab: (PanelTab) -> Unit) {
                     },
                 contentAlignment = Alignment.Center,
             ) { BasicText(t.label, style = LupeType.label.copy(fontFamily = LupeType.number.fontFamily, letterSpacing = 0.5.sp, color = lerp(Tok.text2Raised, Tok.text, lit.value))) }
-        }
-    }
-}
-
-/**
- * The iPad's column slide (ios/FM1/Knobs.swift, Scott 2026-11-06; asked for on the phone 2026-11-14): the whole
- * range in this many dp of sideways travel. The iPad tunes it in Labs (`Labs.columnTravel`, 240 pt); the phone
- * has no Labs screen yet, so it lives here until one exists (CLAUDE.md rule 3).
- */
-private const val COLUMN_TRAVEL_DP = 240f
-
-/**
- * A value with its − and +: 96 dp wide, the label over the number over two 46 × 36 keys. A sideways slide across
- * the column turns it, a tick a step, [range] steps over [COLUMN_TRAVEL_DP]. A step is one StepAdjust unit, the − / +
- * key's step (VELOCITY 4, CHANCE 5, the rest 1), so [range] counts those. The first movement's axis decides, so
- * an up-and-down drag stays the page's. The keys are the non-drag way in (WCAG 2.5.7).
- */
-@Composable
-private fun Stepper(label: String, value: String, name: String, s: Step, param: String, down: () -> Unit, up: () -> Unit,
-                    range: Int, onSlide: (Int) -> Unit) {
-    val locked = s.values.any { it.locked && it.param == param }
-    val haptic = LocalHapticFeedback.current
-    val slide by rememberUpdatedState(onSlide)
-    var sliding by remember { mutableStateOf(false) }
-    Column(
-        Modifier.width(96.dp)
-            // the right-hand column reaches Android's back-gesture edge: keep a slide there ours (Android allows
-            // up to 200 dp of exclusion per edge; the panel's columns are about 120 dp tall)
-            .systemGestureExclusion()
-            .background(if (sliding) Tok.well else Color.Transparent, RoundedCornerShape(8.dp))
-            .pointerInput(range) {
-                val perStep = COLUMN_TRAVEL_DP.dp.toPx() / range.coerceAtLeast(1)
-                awaitEachGesture {
-                    val first = awaitFirstDown(requireUnconsumed = false)
-                    var acc = 0f; var sent = 0
-                    // only a sideways start becomes a slide; anything else is left to the keys and the page
-                    val start = awaitHorizontalTouchSlopOrCancellation(first.id) { change, over -> change.consume(); acc += over } ?: return@awaitEachGesture
-                    sliding = true
-                    fun emit() {
-                        val n = (acc / perStep).toInt()
-                        if (n != sent) { slide(n - sent); sent = n; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
-                    }
-                    emit()
-                    horizontalDrag(start.id) { change -> acc += change.positionChange().x; change.consume(); emit() }
-                    sliding = false
-                }
-            },
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            BasicText(label, style = LupeType.label.copy(fontFamily = LupeType.number.fontFamily, letterSpacing = 0.5.sp), maxLines = 1)
-            if (locked) Diamond(Tok.text, 6.dp)
-        }
-        BasicText(value, Modifier.height(30.dp).semantics { contentDescription = "$name $value" }, style = LupeType.number.copy(fontSize = 24.sp, lineHeight = 30.sp), maxLines = 1)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Key(down, "$name down", width = 46.dp, height = 36.dp, minTarget = 36.dp) { fg -> BasicText("−", style = LupeType.key.copy(color = fg, fontSize = 18.sp)) }
-            Key(up, "$name up", width = 46.dp, height = 36.dp, minTarget = 36.dp) { fg -> BasicText("+", style = LupeType.key.copy(color = fg, fontSize = 18.sp)) }
         }
     }
 }
@@ -491,5 +461,81 @@ private fun AutoLane(ed: EditorState, track: Color, core: LupeCore, modifier: Mo
             drawPath(line, track, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             ed.steps.forEachIndexed { i, s -> if (s.values.any { it.locked && it.param == ed.lane }) diamond(Tok.text, x(i), y(vals[i]), 4.dp.toPx()) }
         }
+    }
+}
+
+private fun Step.isLocked(param: String) = values.any { it.locked && it.param == param }
+
+/**
+ * One of the step panel's values (the iPad's column: label, value, a gauge at the foot, a white bar along the top
+ * while it slides). It turns by sliding on it, in the direction the setting says; the Magnifier floats the value
+ * above the finger; a double tap puts it back to what it was when this step was selected ([key] says what "this"
+ * is). [dpPerStep] is how far a finger moves for one step; a list ([tick]) ticks on each step. TalkBack gets
+ * Increase and Decrease, the range, and Put back. [onSteps] gets a change in steps, never an absolute value.
+ */
+@Composable
+private fun SlideColumn(
+    label: String, value: String, name: String, tint: Color, key: Any, dpPerStep: Float, tick: Boolean, locked: Boolean,
+    num: Int? = null, min: Int = 0, max: Int = 0, bipolar: Boolean = false, unit: Int = 1, limitWord: String? = null, onSteps: (Int) -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    val send by rememberUpdatedState(onSteps)
+    var net by remember(key) { mutableStateOf(0) }       // steps applied since this step was selected, for the double tap
+    var last by remember { mutableStateOf(0) }
+    var hot by remember { mutableStateOf(false) }
+    val hotF = animatedFloat(if (hot) 1f else 0f, Dur.STATE)
+    val fraction = if (num != null && max > min) (num - min).toFloat() / (max - min) else null
+    val shown by rememberUpdatedState(value)
+    val frac by rememberUpdatedState(fraction)
+    fun step(d: Int) { if (d == 0) return; net += d; send(d); if (tick) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+    val range = if (num != null) ", range $min to $max" else ""
+    Box(
+        Modifier.width(96.dp).height(84.dp)
+            .clip(RoundedCornerShape(6.dp)).background(Tok.well)
+            .semantics(mergeDescendants = true) {
+                contentDescription = name + if (locked) ", locked on this step" else ""
+                stateDescription = value + range + (limitWord?.let { ", can't grow: $it" } ?: "")
+                role = Role.Button
+                if (num != null) {
+                    progressBarRangeInfo = ProgressBarRangeInfo(num.toFloat(), min.toFloat()..max.toFloat(), max - min - 1)
+                    // one step is `unit` of the value (VELOCITY 4, CHANCE 5: StepAdjust's units, P1's 9533897)
+                    setProgress { v -> step((v.roundToInt() - num) / unit); true }
+                }
+                customActions = listOf(
+                    CustomAccessibilityAction("Increase $name") { step(1); true },
+                    CustomAccessibilityAction("Decrease $name") { step(-1); true },
+                    CustomAccessibilityAction("Put $name back as it was") { val b = -net; net = 0; send(b); true },
+                )
+            }
+            // double tap: back to what it was when this step was selected
+            .pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) { send(b); haptic.performHapticFeedback(HapticFeedbackType.Confirm) } }) }
+            .slideToTurn(
+                enabled = true, stepDp = dpPerStep,
+                face = remember(label, tint) { MagnifierFace(label, { shown }, { frac }, bipolar, ring = false, tint = tint) },
+                onStart = { last = 0; hot = true },
+                onSlide = { total -> step(total - last); last = total },
+                onEnd = { hot = false },
+                // the slide stops at the value's ends (LENGTH: the next note), with a tick as it meets the limit
+                bounds = { num?.let { n -> -((n - min) / unit)..((max - n) / unit) } },
+                onLimit = { haptic.performHapticFeedback(HapticFeedbackType.ContextClick) },
+            ),
+    ) {
+        Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                BasicText(label, style = LupeType.label.copy(fontFamily = LupeType.number.fontFamily, letterSpacing = 0.5.sp, color = Tok.text2), maxLines = 1)
+                if (locked) Diamond(Tok.text, 6.dp)
+            }
+            BasicText(value, Modifier.padding(top = 2.dp), style = LupeType.number.copy(fontSize = 22.sp, lineHeight = 26.sp), maxLines = 1,
+                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 14.sp, maxFontSize = 22.sp, stepSize = 1.sp))
+            if (limitWord != null) BasicText(limitWord, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 12.sp), maxLines = 1)
+        }
+        // the gauge along the foot: from the left, or from the middle on a value centred on zero
+        if (fraction != null) Canvas(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp)) {
+            drawRect(Tok.stepEmpty)
+            val x = fraction.coerceIn(0f, 1f) * size.width; val from = if (bipolar) size.width / 2 else 0f
+            drawRect(tint, Offset(minOf(from, x), 0f), Size(maxOf(kotlin.math.abs(x - from), if (bipolar) 2f else 0f), size.height))
+        }
+        // sliding (here or on the FM-1): a white bar along the top, the column as it is
+        Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(3.dp).graphicsLayer { alpha = hotF.value }.background(Tok.text))
     }
 }

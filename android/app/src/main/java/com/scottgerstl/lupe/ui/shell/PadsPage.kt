@@ -80,6 +80,9 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     var select by rememberSaveable { mutableStateOf(false) }
     var store by rememberSaveable { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    // Store over a kept scene asks once more, in place (Scott, 2026-11-14): the scene, and when it was asked
+    var confirmScene by remember { mutableStateOf<Int?>(null) }
+    var confirmAt by remember { mutableStateOf(0L) }
     val scroll = rememberScrollState()
     val haptic = LocalHapticFeedback.current
 
@@ -98,7 +101,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                         rows.forEach { r ->
                             Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
                                 r.entries.forEachIndexed { i, e ->
-                                    Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = select)
+                                    Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = select, pads = pads)
                                 }
                             }
                         }
@@ -122,6 +125,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                     .pointerInput(i, store, s.stored) {
                                         detectTapGestures {
                                             when {
+                                                store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis(); notice = null }   // a kept scene: ask first
                                                 store -> { core.send(Intent.SceneStore(i)); store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) }
                                                 s.stored -> core.send(Intent.SceneRecall(i))
                                                 else -> notice = "Scene ${i + 1} is empty. Tap Store, then a scene, to keep what plays now."
@@ -134,6 +138,24 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                     }
                     Key({ select = !select; if (select) store = false }, "Select pad for the editor", width = 64.dp, height = scenesH, minTarget = scenesH, on = select,
                         role = Role.Switch, state = if (select) "On: a pad tap picks it and launches nothing" else "Off") { fg -> KeyLabel("Select", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                }
+                // Store over a kept scene: a red-outlined row naming it, Cancel beside it; a tap ignores the first 0.4 s
+                LupeCrossfade(confirmScene, Modifier.fillMaxSize()) { c ->
+                    if (c != null) Row(Modifier.fillMaxSize().background(Tok.page), horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically) {
+                        val words = "Replace scene ${c + 1} with what plays now"
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
+                                .semantics(mergeDescendants = true) {
+                                    role = Role.Button; contentDescription = "Confirm: $words"
+                                    onClick { if (System.currentTimeMillis() - confirmAt > 400) { core.send(Intent.SceneStore(c, confirmed = true)); confirmScene = null; store = false; true } else false }
+                                }
+                                .pointerInput(c, confirmAt) { detectTapGestures { if (System.currentTimeMillis() - confirmAt > 400) { core.send(Intent.SceneStore(c, confirmed = true)); confirmScene = null; store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) } } }
+                                .padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) { BasicText(words, style = LupeType.key.copy(fontSize = 13.sp), maxLines = 1) }
+                        Key({ confirmScene = null }, "Cancel", width = 72.dp, height = scenesH, minTarget = scenesH) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                    }
                 }
                 // a refusal shows over the scenes until dismissed
                 LupeCrossfade(notice, Modifier.fillMaxSize()) { n ->
@@ -175,7 +197,7 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, core: LupeCore) {
 
 /** One entry of one track: its faces are the board's (playing, muted, waiting, next, selected, empty, REST). */
 @Composable
-fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: LupeCore, selectMode: Boolean, modifier: Modifier = Modifier) {
+fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: LupeCore, selectMode: Boolean, pads: PadsState, modifier: Modifier = Modifier) {
     val color = Tok.track[(row.track - 1) % Tok.track.size]
     val reduce = LocalReduceMotion.current
     val haptic = LocalHapticFeedback.current
@@ -260,7 +282,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     .background(Tok.onColour.copy(alpha = 0.55f), RoundedCornerShape(2.dp)))
             }
         }
-        PadMenu(row, idx, e, menuAt, { menuAt = null }, core)
+        PadMenu(row, idx, e, pads, menuAt, { menuAt = null }, core)
     }
 }
 
@@ -268,16 +290,29 @@ private fun Color.Companion.lerp(a: Color, b: Color, t: Float) = androidx.compos
 
 private enum class PadMenuMode { Root, Set, ClearConfirm }
 
-/** The pad's hold menu, opened beside the finger: Edit steps, Select sound, New, Set, Clear (confirmed in place). */
+/** Where else a pattern is used: "T2 B". Skiff erases a pattern only when no other entry names it (P1, 2026-11-14). */
+private fun otherUsers(pads: PadsState, track: Int, idx: Int, pattern: Int): List<String> =
+    pads.rows.flatMap { r -> r.entries.mapIndexedNotNull { i, x -> if (x.kind == PadKind.Pattern && x.pattern == pattern && !(r.track == track && i == idx)) "T${r.track} ${'A' + i}" else null } }
+
+/** The pattern numbers the FM-1 holds: from the core, or (an older recording) the ones the pads name. */
+private fun keptPatterns(pads: PadsState): List<Int> =
+    pads.kept.ifEmpty { pads.rows.flatMap { r -> r.entries.mapNotNull { if (it.kind == PadKind.Pattern) it.pattern else null } }.distinct().sorted() }
+
+/**
+ * The pad's hold menu, opened beside the finger: Edit steps, Select sound, New, Set, Clear. Set lists only the
+ * kept patterns (Skiff's LIST SET refuses an empty number; "New pattern" is the way to a new one), a list so no
+ * tap can be taken for half a double tap. Clear asks only when it would erase a pattern nothing else uses; if
+ * another entry names it, the pattern stays and the entry clears at once, as on the iPad.
+ */
 @Composable
-private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, at: Offset?, close: () -> Unit, core: LupeCore) {
+private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, pads: PadsState, at: Offset?, close: () -> Unit, core: LupeCore) {
     var mode by remember { mutableStateOf(PadMenuMode.Root) }
-    var picked by remember(e.pattern) { mutableStateOf(e.pattern ?: 1) }
     var armedAt by remember { mutableStateOf(0L) }
     val open = at != null
     // start from the root each time it opens
     if (!open && mode != PadMenuMode.Root) mode = PadMenuMode.Root
     val letter = ('A' + idx).toString()
+    val others = if (e.kind == PadKind.Pattern && e.pattern != null) otherUsers(pads, row.track, idx, e.pattern) else emptyList()
     LupeMenu(open, { close() }, width = 240.dp, at = at) {
         LupeCrossfade(mode) { m ->
             Column {
@@ -289,28 +324,29 @@ private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, at: Offset?, close: () -
                         }
                         if (e.kind == PadKind.Empty) MenuRow("New pattern", { core.send(Intent.PadNew(row.track, idx)); close() })
                         MenuRow("Set pattern…", { mode = PadMenuMode.Set })
-                        if (e.kind != PadKind.Empty) MenuRow("Clear", { mode = PadMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() })
+                        if (e.kind != PadKind.Empty) {
+                            val erases = e.kind == PadKind.Pattern && others.isEmpty()
+                            MenuRow("Clear", { if (erases) { mode = PadMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() } else { core.send(Intent.PadClear(row.track, idx)); close() } },
+                                sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null)
+                        }
                     }
                     PadMenuMode.Set -> {
+                        val kept = keptPatterns(pads)
                         MenuHeading("Pattern for $letter on ${row.name}")
-                        Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Key({ picked = (picked - 1).coerceAtLeast(1) }, "Pattern down") { fg -> BasicText("−", style = LupeType.key.copy(color = fg, fontSize = 18.sp)) }
-                            BasicText("%02d".format(picked), Modifier.weight(1f), style = LupeType.number.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
-                            Key({ picked = (picked + 1).coerceAtMost(99) }, "Pattern up") { fg -> BasicText("+", style = LupeType.key.copy(color = fg, fontSize = 18.sp)) }
-                        }
-                        MenuRow("Set pattern %02d".format(picked), { core.send(Intent.PadSet(row.track, idx, picked)); close() })
+                        if (kept.isEmpty()) BasicText("No patterns yet. Use New pattern on an empty pad.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = LupeType.body.copy(fontSize = 14.sp))
+                        kept.forEach { p -> MenuRow("Pattern %02d".format(p), { core.send(Intent.PadSet(row.track, idx, p)); close() }, checked = e.pattern == p) }
                         MenuRow("Back", { mode = PadMenuMode.Root })
                     }
                     PadMenuMode.ClearConfirm -> {
-                        // the item turns into a button outlined in REC red that names exactly what goes; it ignores taps for 0.4 s
-                        val goes = if (e.kind == PadKind.Rest) "the REST" else "pattern %02d".format(e.pattern ?: 0)
+                        // nothing else names this pattern, so Clear erases it: a button outlined in REC red that says so; it ignores taps for 0.4 s
+                        val words = "Clear entry $letter on T${row.track} ${row.name}. Pattern %02d is used nowhere else, so it's erased; can't be undone".format(e.pattern ?: 0)
                         Box(
                             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
                                 .drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
-                                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Confirm: clear entry $letter on track ${row.track}, ${row.name}, removing $goes" }
+                                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Confirm: $words" }
                                 .pointerInput(Unit) { detectTapGestures { if (System.currentTimeMillis() - armedAt > 400) { core.send(Intent.PadClear(row.track, idx)); close() } } }
                                 .padding(12.dp),
-                        ) { BasicText("Clear entry $letter on T${row.track} ${row.name}, removing $goes", style = LupeType.key) }
+                        ) { BasicText(words, style = LupeType.key) }
                         MenuRow("Cancel", { mode = PadMenuMode.Root })
                     }
                 }
@@ -332,7 +368,7 @@ fun PadsStrip(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center,
         ) { BasicText("${row.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(GAP)) {
-            row.entries.forEachIndexed { i, e -> Pad(row, i, e, 40.dp, selected = pads.selected.entry == i, core = core, selectMode = false) }
+            row.entries.forEachIndexed { i, e -> Pad(row, i, e, 40.dp, selected = pads.selected.entry == i, core = core, selectMode = false, pads = pads) }
         }
     }
 }

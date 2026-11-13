@@ -59,16 +59,6 @@ class FakeLupeCoreTest {
         assertEquals(listOf("DECAY", "RESONANCE"), core.editor.value.steps[5].values.map { it.param })
     }
 
-    @Test fun fm1KeyEntersTheNoteAndChordAdds() = runTest(StandardTestDispatcher()) {
-        val core = fake(this)
-        core.send(Intent.StepSelect(1))
-        core.fm1Key(60)
-        assertEquals("C4", core.editor.value.steps[1].note)
-        assertEquals(2, core.editor.value.selected) // the cursor moves on
-        core.send(Intent.StepSelect(1)); core.send(Intent.ChordToggle); core.fm1Key(63)
-        assertEquals(1, core.editor.value.steps[1].extra)
-    }
-
     @Test fun selectingAnotherPadLoadsItsOwnPattern() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.PadSelect(4, 0))
@@ -79,9 +69,37 @@ class FakeLupeCoreTest {
 
     @Test fun noteNamesUseSloopKitsSharpSign() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
-        core.send(Intent.StepSelect(3)); core.fm1Key(61)
+        core.send(Intent.StepSelect(3)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))   // an empty step starts at C4
         assertEquals("C♯4", core.editor.value.steps[3].note)
-        core.send(Intent.StepSelect(3)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))
+        core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))
         assertEquals("D4", core.editor.value.steps[3].note)
+    }
+
+    @Test fun storingOverAKeptSceneNeedsConfirmation() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.PadTap(1, 1))                       // what plays now
+        core.send(Intent.SceneStore(0))                      // scene 1 is kept: refused
+        core.send(Intent.SceneRecall(0)); assertEquals(PadPlay.Playing, core.pads.value.rows[0].entries[0].play) // still the old snapshot
+        core.send(Intent.PadTap(1, 1))                       // what plays now, again
+        core.send(Intent.SceneStore(0, confirmed = true))
+        core.send(Intent.PadTap(1, 0)); core.send(Intent.SceneRecall(0))
+        assertEquals(PadPlay.Playing, core.pads.value.rows[0].entries[1].play)   // now the new one
+        core.send(Intent.SceneStore(10))                     // an empty scene stores at once
+        assertTrue(core.pads.value.scenes[10].stored)
+    }
+
+    @Test fun lengthStopsAtTheNextNote() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.StepSelect(0))                       // pattern 12: step 1 holds C4, the next note is on step 3
+        assertEquals(2, core.editor.value.steps[0].maxLength)
+        core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Length, 5))
+        assertEquals(2, core.editor.value.steps[0].length)
+    }
+
+    @Test fun aStepInsideANotesLengthSaysWhoHoldsIt() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        // pattern 12: C4 on step 1 has length 2, so step 2 holds it; step 4 (empty, outside any note) doesn't
+        assertEquals(0, core.editor.value.steps[1].heldFrom)
+        assertEquals(-1, core.editor.value.steps[3].heldFrom)
     }
 }

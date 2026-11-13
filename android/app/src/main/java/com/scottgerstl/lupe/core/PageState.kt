@@ -40,8 +40,8 @@ data class PageControl(
     /** This step carries a lock for it while a step is held: ◆ beside the label. */
     val locked: Boolean = false,
     /**
-     * FAKE ONLY: the names a list control steps through, so [FakeLupeCore] can rename on SetParam. The real core
-     * sends [value] and leaves this empty.
+     * The names a list control steps through, indexed by [raw] (the FM-1's DESC names; empty for a number), so
+     * [FakeLupeCore] can rename on SetParam. The real core sends them too, taken from the parameter's DESC.
      */
     val names: List<String> = emptyList(),
 )

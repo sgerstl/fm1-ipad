@@ -96,19 +96,6 @@ class FakeLupeCore(
     /** Set the shell's bottom page as if the FM-1's button had been pressed (what the bottom half follows). */
     fun showBottom(page: BottomPage) = _shell.update { it.copy(bottom = page) }
 
-    /** The FM-1's key pressed: the note goes into the selected step (a chord adds, up to four), then the cursor moves on. */
-    fun fm1Key(midi: Int) {
-        val ed = _editor.value
-        val st = model[ed.selected]
-        if (ed.kind == EditorKind.Drum) {
-            val lane = (midi % 6)
-            st.on = true; st.lanes.add(lane)
-        } else if (ed.chord && st.on) {
-            if (st.extra < 3) st.extra++
-        } else { st.on = true; st.midi = midi; st.extra = 0 }
-        emitEditor { it.copy(selected = if (ed.chord) it.selected else (it.selected + 1) % 16) }
-    }
-
     /** The FM-1's knob [slot] (0…3) turned on a sound page: the phone lights that control (the screen link's job on the real core). */
     fun fm1PageKnob(slot: Int) = _page.update { pageFake.fm1Turn(it, slot) }
 
@@ -137,6 +124,7 @@ class FakeLupeCore(
                 model = e.steps.map { FStep.from(it, e.kind == EditorKind.Drum) }.toMutableList()
                 patterns[e.track to e.pattern] = model
                 _editor.value = e
+                emitEditor()   // the fake fills what the recording doesn't (maxLength, heldFrom)
             }
         }
     }
@@ -166,7 +154,7 @@ class FakeLupeCore(
             }
             is Intent.TrackMute -> _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(muted = !it.muted) else it }) }
             is Intent.SceneRecall -> recall(intent.scene)
-            is Intent.SceneStore -> store(intent.scene)
+            is Intent.SceneStore -> if (_pads.value.scenes.getOrNull(intent.scene)?.stored == true && !intent.confirmed) Unit /* the core refuses: must confirm */ else store(intent.scene)
             is Intent.StepSelect -> emitEditor { it.copy(selected = intent.step.coerceIn(0, 15)) }
             is Intent.StepHold -> emitEditor {
                 when {
@@ -190,7 +178,7 @@ class FakeLupeCore(
                 emitEditor()
             }
             is SetParam -> _page.update { pageFake.setParam(it, intent.slot, intent.value) }
-            is PickPage -> { _page.update { pageFake.pick(it, intent.family, intent.page) }; _shell.update { it.copy(bottom = BottomPage(BottomKind.Page, _page.value.family, _page.value.pages.firstOrNull { r -> r.index == _page.value.page }?.title)) } }
+            is PickPage -> { _page.update { pageFake.pick(it, intent.family, intent.page, _editor.value.track, _editor.value.trackName) }; _shell.update { it.copy(bottom = BottomPage(BottomKind.Page, _page.value.family, _page.value.pages.firstOrNull { r -> r.index == _page.value.page }?.title)) } }
             is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
             is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }
@@ -204,7 +192,14 @@ class FakeLupeCore(
         val drum = e.kind == EditorKind.Drum
         val lane = e.lane
         val lv = model.map { st -> ((st.values.firstOrNull { it.param == lane }?.value ?: (FakeData.baseValue(lane) + if (lane.isEmpty()) 0 else (model.indexOf(st) * 7) % 22 - 8)) * 100 / 127).coerceIn(0, 100) }
-        _editor.value = e.copy(steps = model.map { it.toStep(drum) }, laneValues = lv)
+        // how far each step can grow: up to the next note (or the pattern's end)
+        val steps = model.mapIndexed { i, st ->
+            val next = (i + 1 until 16).firstOrNull { model[it].on } ?: 16
+            // a step inside the previous note's length holds it (a TIE): heldFrom is that note's step
+            val owner = (i - 1 downTo 0).firstOrNull { model[it].on && it + model[it].length > i && (it + 1..i).none { k -> k != i && model[k].on } }
+            st.toStep(drum).copy(maxLength = next - i, heldFrom = if (!st.on && owner != null) owner else -1)
+        }
+        _editor.value = e.copy(steps = steps, laneValues = lv)
     }
 
     private fun adjust(field: StepField, delta: Int) {
@@ -221,7 +216,7 @@ class FakeLupeCore(
                 val tmp = model[to]; model[to] = model[ed.selected]; model[ed.selected] = tmp
                 emitEditor { it.copy(selected = to) }; return
             }
-            StepField.Length -> st.length = (st.length + delta).coerceIn(1, 16)
+            StepField.Length -> { val next = (ed.selected + 1 until 16).firstOrNull { model[it].on } ?: 16; st.length = (st.length + delta).coerceIn(1, next - ed.selected) }
             StepField.Velocity -> st.velocity = (st.velocity + delta * 4).coerceIn(1, 127)
             StepField.Chance -> st.chance = (st.chance + delta * 5).coerceIn(0, 100)
             StepField.Ratchet -> st.ratchet = (st.ratchet + delta).coerceIn(1, 4)

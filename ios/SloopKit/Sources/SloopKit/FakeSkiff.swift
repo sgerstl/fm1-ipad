@@ -742,7 +742,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     deinit { clockTimer?.cancel() }
 
     /// A few notes on each track and PLAY, so the demo has something to show (the recorded unit is blank).
-    private func seedDemo() {
+    func seedDemo() {
         let roots = [48, 60, 55, 36, 64, 38]
         for t in steps.indices {
             for i in stride(from: 0, to: 16, by: t % 2 == 0 ? 2 : 4) {
@@ -792,7 +792,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         }
     }
 
-    private func v14(_ v: Int) -> [UInt8] { Frame.v14(v) }
+    func v14(_ v: Int) -> [UInt8] { Frame.v14(v) }
     private func id(_ scope: UInt8, _ i: UInt8) -> Int { scope == 2 ? Int(i) + 128 : Int(i) }
 
     private func trackList() -> [UInt8] {
