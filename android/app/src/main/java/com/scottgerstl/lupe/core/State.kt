@@ -160,6 +160,9 @@ data class PadsState(
     val scenes: List<Scene> = emptyList(),
     /** The pad the editor shows. */
     val selected: PadRef = PadRef(),
+    /** The pattern numbers (1…64) the FM-1 holds: the only ones Set pattern can name (LIST SET refuses an empty one).
+     *  P1, 2026-11-14 (Scott's run: Set to 60 refused). */
+    val kept: List<Int> = emptyList(),
 )
 
 // ---- editor (P3)
@@ -193,6 +196,8 @@ data class Step(
     /** Shown in the step panel's NOTES tab as the value under PITCH (a chord reads "C5 D#5"). */
     val pitchText: String = "",
     val values: List<StepValue> = emptyList(),
+    /** How long LENGTH can make it: up to the next step with a note, at most 16 (P1, 2026-11-14). */
+    val maxLength: Int = 16,
 ) {
     val locked: Boolean get() = values.any { it.locked }
 }
