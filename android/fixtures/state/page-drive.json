@@ -1,6 +1,6 @@
 {
  "provisional": true,
- "note": "PROVISIONAL (P4): hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. FX > DRIVE (board 59 right).",
+ "note": "PROVISIONAL (P4), Skiff 2.5.1 pages: hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. FX > DRIVE (board 59 right).",
  "frames": [
   {
    "atMs": 0,
@@ -386,7 +386,7 @@
     "bottom": {
      "kind": "page",
      "family": "FX",
-     "page": "DRIVE"
+     "page": "DELAY"
     }
    }
   },
@@ -399,6 +399,14 @@
      {
       "index": 5,
       "title": "FX"
+     },
+     {
+      "index": 41,
+      "title": "DELAY"
+     },
+     {
+      "index": 42,
+      "title": "REVERB"
      },
      {
       "index": 6,
@@ -478,6 +486,99 @@
       "title": "FX"
      },
      {
+      "index": 41,
+      "title": "DELAY"
+     },
+     {
+      "index": 42,
+      "title": "REVERB"
+     },
+     {
+      "index": 6,
+      "title": "DRIVE"
+     },
+     {
+      "index": 7,
+      "title": "INSERT"
+     },
+     {
+      "index": 8,
+      "title": "INSERT 2"
+     },
+     {
+      "index": 9,
+      "title": "SLICER"
+     },
+     {
+      "index": 10,
+      "title": "DUCK"
+     }
+    ],
+    "page": 42,
+    "track": 1,
+    "trackName": "Acid",
+    "controls": [
+     {
+      "label": "SEND",
+      "value": "40",
+      "raw": 40,
+      "min": 0,
+      "max": 127
+     },
+     {
+      "label": "TYPE",
+      "value": "HALL",
+      "raw": 1,
+      "min": 0,
+      "max": 2,
+      "list": true,
+      "names": [
+       "ROOM",
+       "HALL",
+       "PLATE"
+      ]
+     },
+     {
+      "label": "SIZE",
+      "value": "70",
+      "raw": 70,
+      "min": 0,
+      "max": 127
+     },
+     {
+      "label": "DAMP",
+      "value": "30",
+      "raw": 30,
+      "min": 0,
+      "max": 127
+     }
+    ],
+    "graph": {
+     "kind": "none"
+    },
+    "turned": -1,
+    "turnSeq": 0
+   }
+  },
+  {
+   "atMs": 0,
+   "area": "page",
+   "state": {
+    "family": "FX",
+    "pages": [
+     {
+      "index": 5,
+      "title": "FX"
+     },
+     {
+      "index": 41,
+      "title": "DELAY"
+     },
+     {
+      "index": 42,
+      "title": "REVERB"
+     },
+     {
       "index": 6,
       "title": "DRIVE"
      },
@@ -511,13 +612,13 @@
      },
      {
       "label": "TYPE",
-      "value": "TUBE",
+      "value": "SOFT",
       "raw": 0,
       "min": 0,
       "max": 4,
       "list": true,
       "names": [
-       "TUBE",
+       "SOFT",
        "HARD",
        "FOLD",
        "CRUSH",
@@ -540,8 +641,96 @@
       0,
       40
      ],
-     "caption": "TUBE",
+     "caption": "SOFT",
      "side": "drive 72 \u00b7 tone 40"
+    },
+    "turned": -1,
+    "turnSeq": 0
+   }
+  },
+  {
+   "atMs": 0,
+   "area": "page",
+   "state": {
+    "family": "FX",
+    "pages": [
+     {
+      "index": 5,
+      "title": "FX"
+     },
+     {
+      "index": 41,
+      "title": "DELAY"
+     },
+     {
+      "index": 42,
+      "title": "REVERB"
+     },
+     {
+      "index": 6,
+      "title": "DRIVE"
+     },
+     {
+      "index": 7,
+      "title": "INSERT"
+     },
+     {
+      "index": 8,
+      "title": "INSERT 2"
+     },
+     {
+      "index": 9,
+      "title": "SLICER"
+     },
+     {
+      "index": 10,
+      "title": "DUCK"
+     }
+    ],
+    "page": 41,
+    "track": 1,
+    "trackName": "Acid",
+    "controls": [
+     {
+      "label": "SEND",
+      "value": "30",
+      "raw": 30,
+      "min": 0,
+      "max": 127
+     },
+     {
+      "label": "TYPE",
+      "value": "TUBE",
+      "raw": 0,
+      "min": 0,
+      "max": 4,
+      "list": true,
+      "names": [
+       "TUBE",
+       "HARD",
+       "FOLD",
+       "CRUSH",
+       "FUZZ"
+      ]
+     },
+     {
+      "label": "FEEDBACK",
+      "value": "40",
+      "raw": 40,
+      "min": 0,
+      "max": 127
+     },
+     {
+      "label": "COLOR",
+      "value": "64",
+      "raw": 64,
+      "min": 0,
+      "max": 127
+     }
+    ],
+    "graph": {
+     "kind": "none",
+     "caption": "TUBE"
     },
     "turned": -1,
     "turnSeq": 0

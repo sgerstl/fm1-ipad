@@ -1,6 +1,6 @@
 {
  "provisional": true,
- "note": "PROVISIONAL (P4): hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. SEL > SCALE (board 61 left).",
+ "note": "PROVISIONAL (P4), Skiff 2.5.1 pages: hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. SEL > SCALE (board 61 left).",
  "frames": [
   {
    "atMs": 0,
@@ -439,8 +439,25 @@
        "OPEN"
       ]
      },
-     null,
-     null
+     {
+      "label": "STRUM",
+      "value": "0 ms",
+      "raw": 0,
+      "min": 0,
+      "max": 127
+     },
+     {
+      "label": "DIR",
+      "value": "UP",
+      "raw": 0,
+      "min": 0,
+      "max": 1,
+      "list": true,
+      "names": [
+       "UP",
+       "DOWN"
+      ]
+     }
     ],
     "graph": {
      "kind": "none"

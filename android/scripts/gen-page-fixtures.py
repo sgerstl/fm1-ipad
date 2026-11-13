@@ -17,7 +17,8 @@ def lst(label, names, i, **kw): return c(label, names[i], i, 0, len(names) - 1, 
 ROWS = {
  "ENV": [(0,"ENV"),(1,"ENV 2")],
  "LFO": [(2,"LFO"),(3,"LFO 2"),(4,"MOD")],
- "FX": [(5,"FX"),(6,"DRIVE"),(7,"INSERT"),(8,"INSERT 2"),(9,"SLICER"),(10,"DUCK")],
+ # Skiff 2.5.1 (the FM-1 P1 found): DELAY and REVERB follow FX. Their page numbers (41, 42) are MY stand-ins: the real ones come with P1's recording.
+ "FX": [(5,"FX"),(41,"DELAY"),(42,"REVERB"),(6,"DRIVE"),(7,"INSERT"),(8,"INSERT 2"),(9,"SLICER"),(10,"DUCK")],
  "SEL": [(11,"SCALE"),(12,"CHORD"),(13,"FOLLOW")],
  "EDIT-ANALOG": [(14,"EDIT 1"),(15,"EDIT 2"),(28,"VOICE"),(29,"VOICE 2")],
  "EDIT-DRUM": [(14,"EDIT 1"),(15,"EDIT 2"),(18,"LANES"),(20,"LANE MIX"),(28,"VOICE"),(29,"VOICE 2")],
@@ -61,6 +62,9 @@ fixed_ = lambda i: [c("ROUTE",routes[i]["group"]+"→"+routes[i]["label"][:3],i,
 PAGES["MOD"] = [page("LFO","LFO",4,5,"Piano",fixed_(1),dict(kind="mod",routes=routes,picked=1))]
 PAGES["DRIVE"] = [
   page("FX","FX",5,1,"Acid",[num("DIST",72),num("CHORUS",20),num("DELAY",30),num("REVERB",40)],dict(kind="fx",values=[72,20,30,40])),
+  # 2.5: knob 1 is the track's SEND, knobs 2 to 4 are the shared bus (no graph yet: TODO)
+  page("FX","FX",41,1,"Acid",[num("SEND",30),c("TIME","1/8",2,0,5,list=True),num("FEEDBACK",40),num("COLOR",64)],dict(kind="none")),
+  page("FX","FX",42,1,"Acid",[num("SEND",40),lst("TYPE",["ROOM","HALL","PLATE"],1),num("SIZE",70),num("DAMP",30)],dict(kind="none")),
   page("FX","FX",6,1,"Acid",[num("DIST",72),lst("TYPE",DRIVE,0),num("TONE",40),None],dict(kind="drive",values=[72,0,40],caption="SOFT",side="drive 72 · tone 40")),
 ]
 PAGES["DRIVE"][1]["controls"][1] = lst("TYPE",["TUBE","HARD","FOLD","CRUSH","FUZZ"],0)
@@ -73,7 +77,7 @@ PAGES["EDIT1"] = [
 ]
 PAGES["SCALE"] = [
   page("SEL","SEL",11,5,"Piano",[lst("ROOT",NOTE,0),lst("SCALE",SCALES,2),lst("QUANTIZE",["OFF","ON"],1),c("TRANSP","0",0,-24,24)],dict(kind="scale",root=0,notes=SCALE_NOTES["MIN"],side="C minor · ● root")),
-  page("SEL","SEL",12,5,"Piano",[lst("CHORD",["OFF","MAJ","MIN","7TH"],0),lst("VOICING",["CLOSE","OPEN"],0),None,None],dict(kind="none")),
+  page("SEL","SEL",12,5,"Piano",[lst("CHORD",["OFF","MAJ","MIN","7TH"],0),lst("VOICING",["CLOSE","OPEN"],0),c("STRUM","0 ms",0),lst("DIR",["UP","DOWN"],0)],dict(kind="none")),   # 2.5: STRUM and DIR
   page("SEL","SEL",13,5,"Piano",[lst("FOLLOW",["OFF","1","2","3"],0),lst("MODE",["NOTE","CHORD"],0),num("NOTE",0),None],dict(kind="none")),
 ]
 LANES = ["KICK","SNARE","CLAP","CL HAT","OP HAT","TOM","RIM","BELL"]
@@ -97,7 +101,7 @@ def scenario(name, lib, shown, note):
     frames.append(dict(atMs=0, area="shell", state=dict(tab="pads", divider="split", bottom=dict(kind="page", family=first["family"], page=next(t for i,t in [(r["index"],r["title"]) for r in first["pages"]] if i == first["page"])))))
     order = [p for i, p in enumerate(pages) if i != shown] + [first]
     for p in order: frames.append(dict(atMs=0, area="page", state=p))
-    json.dump(dict(provisional=True, note="PROVISIONAL (P4): hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. " + note, frames=frames),
+    json.dump(dict(provisional=True, note="PROVISIONAL (P4), Skiff 2.5.1 pages: hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. " + note, frames=frames),
               open(os.path.join(out, name + ".json"), "w"), indent=1)
 
 scenario("page-env","ENV",0,"ENV on a Piano track (board 55).")

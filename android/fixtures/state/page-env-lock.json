@@ -1,6 +1,6 @@
 {
  "provisional": true,
- "note": "PROVISIONAL (P4): hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. ENV with step 6 held and DECAY locked (board 61).",
+ "note": "PROVISIONAL (P4), Skiff 2.5.1 pages: hand-written by android/scripts/gen-page-fixtures.py to design/phone-sound-pages.md. ENV with step 6 held and DECAY locked (board 61).",
  "frames": [
   {
    "atMs": 0,
