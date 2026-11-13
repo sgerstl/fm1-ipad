@@ -90,7 +90,7 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
 
     BoxWithConstraints(modifier.fillMaxSize()) {
     // On a page with tiles, at split only (the section is short), the header line goes: the underlined page row already names the page
-    val showHeader = !(hasTiles(page.graph) && maxHeight < 240.dp)
+    val showHeader = !(page.tiles != null && maxHeight < 240.dp)
     Column(Modifier.fillMaxSize()) {
         // the family keys live in the button block now (decision 24); this page starts at its page row
         Box(Modifier.fillMaxWidth().height(44.dp)) {
@@ -104,7 +104,7 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
         // tiles where a knob picks from a list of names; otherwise the room is left empty (the FM-1 has the detail)
         Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = if (showHeader) 4.dp else 0.dp)) {
             LupeCrossfade(page.page to page.family, Modifier.fillMaxSize(), Dur.STATE) { _ ->
-                if (hasTiles(page.graph)) PageTilesContent(page.graph, colour, onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) }, modifier = Modifier.fillMaxSize())
+                if (page.tiles != null) PageTilesContent(page.tiles, colour, onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) }, modifier = Modifier.fillMaxSize())
                 else if (page.controls.none { it != null }) BasicText("Set this page on the FM-1.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = LupeType.small.copy(color = Tok.text2Raised))
             }
         }
@@ -118,12 +118,17 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
     }
 }
 
-/** "FX · 1 of 6" and the track line ("5 Piano"): 28 dp. */
+/**
+ * The header: the page's title and place ("FX · 1 of 6", or a sheet's own "OPERATOR 4"), the sheet window it is in (read-only: the FM-1's SELECT
+ * moves it), and the track line. 28 dp.
+ */
 @Composable
 private fun PageHeader(page: PageState, colour: Color) {
     val at = page.pages.indexOfFirst { it.index == page.page }
+    val title = page.title.ifEmpty { page.family } + if (page.title.isEmpty() && at >= 0 && page.pages.size > 1) " · ${at + 1} of ${page.pages.size}" else ""
     Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        BasicText(page.family + if (at >= 0 && page.pages.size > 1) " · ${at + 1} of ${page.pages.size}" else "", Modifier.semantics { heading() }, style = LupeType.key, maxLines = 1)
+        BasicText(title, Modifier.semantics { heading() }, style = LupeType.key, maxLines = 1)
+        page.window?.let { w -> BasicText("  ${w.title} · ${w.index + 1} of ${w.count}", style = LupeType.small.copy(color = Tok.text2Raised), maxLines = 1) }
         Spacer(Modifier.weight(1f))
         TrackLine(page, colour, Modifier)
     }

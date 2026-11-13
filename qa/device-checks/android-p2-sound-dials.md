@@ -29,3 +29,13 @@ Pre-flight (design-standards) ran: tokens only, one dial component for the HOME 
 
 | 8 | Split, a page with tiles (MOD, LANES) | No header line; one row of tiles shows and scrolls; the steps are rows of about 26 dp, the number clear of the length bar |
 | 9 | Split, any step with a note, look at the number and its length bar | They no longer touch |
+
+## The page area's new shape (P1, decision 25)
+
+`PageState` now reads P1's shape: `title` (the header: the page's title, or a sheet's own "OPERATOR 4", "ALL OPS", "SOUND SD"), `tiles` (`kind` "routes" for MOD, "pick" for LANES, LANE MIX, SOUND and OPERATOR) and `window` (`index`, `count`, `title`, sheets only). The old `graph` (and `GraphKind`, `PageGraph`, the Fm6 and sheet types) is gone from the phone's side. Built against the fake and the sample JSON; the re-recorded fixtures and the real core have not been run.
+
+| # | Do | See |
+|---|----|-----|
+| 10 | OPERATOR, ALL OPS, SOUND on the FM-1 | The header is the FM-1's ("OPERATOR 4"), with the window in grey after it ("ENV 1 · 2 of 5") and four dials for the window's controls. OPERATOR shows OP1 to OP6 as tiles; tapping one moves the FM-1's cursor (pickTile) |
+| 11 | Turn the FM-1's SELECT on a sheet | The window name in the header follows. The phone has no way to change it (the link's second cursor is read-only) |
+| 12 | MOD, LANES, LANE MIX | Tiles from `tiles` (routes, or the eight lane names), the pick lit |

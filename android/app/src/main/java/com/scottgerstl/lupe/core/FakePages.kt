@@ -3,7 +3,7 @@ package com.scottgerstl.lupe.core
 /**
  * What [FakeLupeCore] does with the page area: it learns every page the fixtures show (by title), answers SetParam by
  * changing the number it was given, and PickPage by switching to the page it knows. A page it has never seen comes up
- * with empty wells and no graph. PROVISIONAL: the real core answers from the FM-1 and the screen link.
+ * with empty wells and no tiles. PROVISIONAL: the real core answers from the FM-1 and the screen link.
  */
 class FakePages {
     private val library = mutableMapOf<String, PageState>()
@@ -32,14 +32,7 @@ class FakePages {
         val v = clamp(c, value)
         val shown = if (c.list && c.names.isNotEmpty()) c.names.getOrElse(v) { v.toString() } else v.toString()
         val controls = p.controls.mapIndexed { i, x -> if (i == slot) c.copy(raw = v, value = shown) else x }
-        val g = p.graph
-        val graph = when (g.kind) {
-            GraphKind.Env, GraphKind.Fx, GraphKind.Lfo, GraphKind.Drive, GraphKind.Arp, GraphKind.Analog ->
-                if (slot < g.values.size) g.copy(values = g.values.mapIndexed { i, x -> if (i == slot) v else x }) else g
-            GraphKind.Scale -> if (slot == 0) g.copy(root = v) else g
-            else -> g
-        }
-        return p.copy(controls = controls, graph = graph)
+        return p.copy(controls = controls)
     }
 
     fun pick(p: PageState, family: String, page: Int?, track: Int = p.track, trackName: String = p.trackName): PageState {
@@ -47,15 +40,16 @@ class FakePages {
         val ref = (if (page == null) row.firstOrNull() else row.firstOrNull { it.index == page }) ?: return p.copy(family = family)
         library[ref.title]?.let { return it.copy(track = track, trackName = trackName, lock = p.lock, turned = -1) }
         // a page the fixtures don't carry: built from the map (FakePageMap), else four empty wells
-        val (controls, graph) = FakePageMap.build(ref.title) ?: (List<PageControl?>(4) { null } to PageGraph())
-        return p.copy(family = family, pages = row, page = ref.index, track = track, trackName = trackName, controls = controls, graph = graph, turned = -1)
+        val (controls, tiles) = FakePageMap.build(ref.title) ?: (List<PageControl?>(4) { null } to null)
+        val window = if (ref.title == "OPERATOR") PageWindow(1, 5, "ENV 1") else null
+        return p.copy(family = family, pages = row, page = ref.index, track = track, trackName = trackName, controls = controls, tiles = tiles, title = if (ref.title == "OPERATOR") "OPERATOR 4" else "", window = window, turned = -1)
     }
 
     fun pickRoute(p: PageState, route: Int): PageState =
-        if (p.graph.kind == GraphKind.Mod) p.copy(graph = p.graph.copy(picked = route.coerceIn(0, p.graph.routes.size - 1))) else p
+        p.tiles?.takeIf { it.kind == "routes" }?.let { p.copy(tiles = it.copy(picked = route.coerceIn(0, it.routes.size - 1))) } ?: p
 
     fun pickTile(p: PageState, tile: Int): PageState =
-        if (p.graph.kind == GraphKind.Tiles) p.copy(graph = p.graph.copy(picked = tile.coerceIn(0, p.graph.tiles.size - 1))) else p
+        p.tiles?.takeIf { it.kind == "pick" }?.let { p.copy(tiles = it.copy(picked = tile.coerceIn(0, it.labels.size - 1))) } ?: p
 }
 
 /** The FM-1's knob [slot] turned (the demo's stand-in for the screen link's knob report): lights it on the phone. */

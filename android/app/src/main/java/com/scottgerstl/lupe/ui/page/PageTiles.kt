@@ -1,6 +1,7 @@
 package com.scottgerstl.lupe.ui.page
 
-import com.scottgerstl.lupe.core.PageTile
+import com.scottgerstl.lupe.core.PageRoute
+import com.scottgerstl.lupe.core.PageTilesState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -57,8 +58,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.scottgerstl.lupe.core.GraphKind
-import com.scottgerstl.lupe.core.PageGraph
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
 import com.scottgerstl.lupe.ui.theme.LupeType
 import com.scottgerstl.lupe.ui.theme.Tok
@@ -75,20 +74,20 @@ import kotlin.math.tanh
 // ---- MOD's eleven routes, the pickers' tiles, the dense pages' card
 
 @Composable
-internal fun ModRoutes(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
+internal fun ModRoutes(routes: List<PageRoute>, picked: Int, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
     val groups = listOf("LFO" to "LFO →", "ENV" to "ENV →", "SLOTS" to "SLOTS")
     // at split the room is small: the rows keep 36 dp and the list scrolls, rather than three slivers
     BoxWithConstraints(modifier.fillMaxSize()) {
     val squeezed = maxHeight < 140.dp
     Column(Modifier.fillMaxSize().then(if (squeezed) Modifier.verticalScroll(rememberScrollState()) else Modifier), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         groups.forEach { (key, head) ->
-            val rows = g.routes.withIndex().filter { it.value.group == key }
+            val rows = routes.withIndex().filter { it.value.group == key }
             Row(if (squeezed) Modifier.height(36.dp).fillMaxWidth() else Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 BasicText(head, Modifier.size(width = 40.dp, height = 16.dp), style = LupeType.number.copy(fontSize = 11.sp, color = Tok.text2Raised))
                 for (slot in 0 until 4) {
                     val r = rows.getOrNull(slot)
                     if (r == null) { Box(Modifier.weight(1f)); continue }
-                    RouteTile(r.value.label, r.value.amount, r.value.empty, r.index == g.picked, colour, "${head.removeSuffix(" →")} to ${r.value.label}", Modifier.weight(1f).fillMaxSize()) { onPick(r.index) }
+                    RouteTile(r.value.label, r.value.amount, r.value.empty, r.index == picked, colour, "${head.removeSuffix(" →")} to ${r.value.label}", Modifier.weight(1f).fillMaxSize()) { onPick(r.index) }
                 }
             }
         }
@@ -117,20 +116,20 @@ private fun Modifier.drawWithOutline(): Modifier = this.then(Modifier.drawWithCo
 })
 
 @Composable
-internal fun PickTiles(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
+internal fun PickTiles(labels: List<String>, picked: Int, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
     BoxWithConstraints(modifier.fillMaxSize()) {
     val rowH = if (maxHeight < 100.dp) 36.dp else 48.dp   // squeezed at split: shorter tiles, the list scrolls
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(if (rowH < 48.dp) 4.dp else 8.dp)) {
-        g.tiles.withIndex().chunked(4).forEach { row ->
+        labels.withIndex().chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { (i, t) ->
-                    val on = i == g.picked
+                    val on = i == picked
                     Box(
                         Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(8.dp)).background(if (on) colour else Tok.control)
-                            .semantics(mergeDescendants = true) { contentDescription = t.label + if (on) ", picked" else "" }
+                            .semantics(mergeDescendants = true) { contentDescription = t + if (on) ", picked" else "" }
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPick(i) },
                         contentAlignment = Alignment.Center,
-                    ) { BasicText(t.label, style = LupeType.number.copy(fontSize = 16.sp, color = if (on) Tok.onColour else Tok.text), maxLines = 1) }
+                    ) { BasicText(t, style = LupeType.number.copy(fontSize = 16.sp, color = if (on) Tok.onColour else Tok.text), maxLines = 1) }
                 }
                 repeat(4 - row.size) { Box(Modifier.weight(1f)) }
             }
@@ -140,23 +139,8 @@ internal fun PickTiles(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modif
 }
 
 
-/** DRUM-X's SOUND: the lanes as tiles; the FM-1 shows the sound's windows. Tapping one picks it (knob 1). */
+/** What a page shows in place of a picture: tiles where knob 1 picks from a list of names (MOD's routes; LANES, SOUND, OPERATOR), or nothing. */
 @Composable
-internal fun LaneTiles(g: PageGraph, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
-    val s = g.sheet ?: return
-    PickTiles(PageGraph(kind = com.scottgerstl.lupe.core.GraphKind.Tiles, tiles = s.lanes.map { PageTile(it) }, picked = s.lane), colour, onPick, modifier)
+fun PageTilesContent(t: PageTilesState, colour: Color, onPickRoute: (Int) -> Unit, onPickTile: (Int) -> Unit, modifier: Modifier = Modifier) {
+    if (t.kind == "routes") ModRoutes(t.routes, t.picked, colour, onPickRoute, modifier) else PickTiles(t.labels, t.picked, colour, onPickTile, modifier)
 }
-
-/** What a page shows in place of a picture: tiles where knob 1 picks from a list of names (MOD's routes, LANES, SAMPLES, DRUM-X's SOUND), or nothing. */
-@Composable
-fun PageTilesContent(g: PageGraph, colour: Color, onPickRoute: (Int) -> Unit, onPickTile: (Int) -> Unit, modifier: Modifier = Modifier) {
-    when (g.kind) {
-        GraphKind.Mod -> ModRoutes(g, colour, onPickRoute, modifier)
-        GraphKind.Tiles -> PickTiles(g, colour, onPickTile, modifier)
-        GraphKind.Sound -> LaneTiles(g, colour, onPickTile, modifier)
-        else -> Unit
-    }
-}
-
-/** True when the page has tiles to show (the sound section then needs room for them). */
-fun hasTiles(g: PageGraph) = g.kind == GraphKind.Mod || g.kind == GraphKind.Tiles || (g.kind == GraphKind.Sound && g.sheet != null)

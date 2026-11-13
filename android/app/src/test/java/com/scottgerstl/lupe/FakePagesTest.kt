@@ -2,7 +2,6 @@ package com.scottgerstl.lupe
 
 import com.scottgerstl.lupe.core.BottomKind
 import com.scottgerstl.lupe.core.FakeLupeCore
-import com.scottgerstl.lupe.core.GraphKind
 import com.scottgerstl.lupe.core.PickPage
 import com.scottgerstl.lupe.core.PickRoute
 import com.scottgerstl.lupe.core.Scenario
@@ -34,12 +33,11 @@ class FakePagesTest {
         assertEquals(4, core.page.value.controls.size)
     }
 
-    @Test fun setParamMovesTheNumberAndTheGraph() = runTest(StandardTestDispatcher()) {
+    @Test fun setParamMovesTheNumber() = runTest(StandardTestDispatcher()) {
         val core = fake(this, "page-env")
         val max = core.page.value.controls[1]!!.max
         core.send(SetParam(1, 100))
         assertEquals(100, core.page.value.controls[1]!!.raw)
-        assertEquals(100, core.page.value.graph.values[1])
         core.send(SetParam(1, 999))
         assertEquals(max, core.page.value.controls[1]!!.raw)   // clamped to the control's range
     }
@@ -52,7 +50,6 @@ class FakePagesTest {
         core.send(PickPage("FX"))      // a family the scenario never showed: built from the map (FakePageMap)
         assertEquals("FX", core.page.value.family)
         assertEquals(listOf("DIST", "CHORUS", "DELAY", "REVERB"), core.page.value.controls.map { it!!.label })
-        assertEquals(GraphKind.Fx, core.page.value.graph.kind)
         assertTrue(core.page.value.trackName.isNotEmpty())
         for (family in listOf("LFO", "SEL", "EDIT", "ARP")) {       // every family key opens a filled page, with the track's name
             core.send(PickPage(family))
@@ -63,10 +60,17 @@ class FakePagesTest {
     }
 
     @Test fun modRoutePickMovesTheTile() = runTest(StandardTestDispatcher()) {
-        val core = fake(this, "page-mod")
-        assertEquals(GraphKind.Mod, core.page.value.graph.kind)
+        val core = fake(this, "page-env")
+        core.send(PickPage("LFO", 4))    // MOD, built from the map: its eleven routes as tiles
+        assertEquals("routes", core.page.value.tiles!!.kind)
         core.send(PickRoute(5))
-        assertEquals(5, core.page.value.graph.picked)
+        assertEquals(5, core.page.value.tiles!!.picked)
+    }
+
+    @Test fun theNewPageShapeDecodes() {
+        val s = lupeJson.decodeFromString(com.scottgerstl.lupe.core.PageState.serializer(),
+            """{"family":"EDIT","title":"OPERATOR 4","controls":[{"label":"RATE 1","value":"99"},null,null,null],"tiles":{"kind":"pick","labels":["OP1","OP2","OP3","OP4"],"picked":3,"routes":[]},"window":{"count":5,"index":1,"title":"ENV 1"}}""")
+        assertEquals("OPERATOR 4", s.title); assertEquals(3, s.tiles!!.picked); assertEquals("ENV 1", s.window!!.title)
     }
 
     @Test fun emptyWellsSurviveTheRoundTrip() {
