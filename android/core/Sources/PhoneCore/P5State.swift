@@ -46,6 +46,12 @@ public struct MixArea: Codable, Equatable, Sendable {
     public var card: Card?
 }
 
+/// The six tracks' output levels, 0…1 (Skiff's METER over the screen link, else Lupe's own from the notes heard),
+/// sampled every 50 ms and sent only when one moves: an area of its own so the Mix rows aren't resent 20 times a second.
+public struct MetersArea: Codable, Equatable, Sendable {
+    public var levels: [Double]
+}
+
 // MARK: sounds (the Sounds browser in the bottom half: the track name ⌄, SAVE, the hold menu)
 
 public struct SoundsArea: Codable, Equatable, Sendable {

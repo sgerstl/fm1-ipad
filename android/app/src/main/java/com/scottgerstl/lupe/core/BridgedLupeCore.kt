@@ -23,6 +23,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _mix = MutableStateFlow(MixState())
     private val _sounds = MutableStateFlow(SoundsState())
     private val _projects = MutableStateFlow(ProjectsState())
+    private val _meters = MutableStateFlow(MetersState())
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
@@ -32,6 +33,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val mix: StateFlow<MixState> = _mix
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
+    override val meters: StateFlow<MetersState> = _meters
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -52,6 +54,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "mix" -> _mix.value = lupeJson.decodeFromString(MixState.serializer(), json)
                 "sounds" -> _sounds.value = lupeJson.decodeFromString(SoundsState.serializer(), json)
                 "projects" -> _projects.value = lupeJson.decodeFromString(ProjectsState.serializer(), json)
+                "meters" -> _meters.value = lupeJson.decodeFromString(MetersState.serializer(), json)
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {

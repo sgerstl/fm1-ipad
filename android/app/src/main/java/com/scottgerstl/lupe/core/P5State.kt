@@ -58,6 +58,10 @@ data class MixState(
     val card: MixCard? = null,
 )
 
+/** The six tracks' output levels 0…1 (METER over the screen link), sampled every 50 ms, sent when one moves. */
+@Serializable
+data class MetersState(val levels: List<Double> = emptyList())
+
 // ---- sounds: the browser in the bottom half (track name ⌄, SAVE, the hold menu)
 
 @Serializable
@@ -126,6 +130,7 @@ object P5Defaults {
     val mix: StateFlow<MixState> = MutableStateFlow(MixState())
     val sounds: StateFlow<SoundsState> = MutableStateFlow(SoundsState())
     val projects: StateFlow<ProjectsState> = MutableStateFlow(ProjectsState())
+    val meters: StateFlow<MetersState> = MutableStateFlow(MetersState())
 }
 
 // ---- intents (same "intent" discriminator as Intent.kt)
