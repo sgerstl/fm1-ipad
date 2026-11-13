@@ -299,7 +299,9 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
             .pointerInput(i) {
                 awaitEachGesture {
                     awaitFirstDown()
-                    val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation() }
+                    var cancelled = false
+                    val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
+                    if (cancelled) return@awaitEachGesture   // a swipe that something took (the stack's flip) is not a hold
                     if (up != null) { if (pickNow == i) onPick(null) else { onPick(i); core.send(Intent.StepSelect(i)) } }   // tapping the picked step again lets it go
                     else {
                         onPick(i)

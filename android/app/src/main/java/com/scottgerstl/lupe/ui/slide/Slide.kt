@@ -71,10 +71,6 @@ class MagnifierFace(
 )
 
 /** True while a sound page is showing: the back gesture sends HOME then (decision 19), so no control may exclude the screen's edges from it. */
-/** The sound-page stack scrolls up and down, so an up-and-down slide only claims the drag after the finger has rested this long (Labs, decision 20). */
-val LocalHoldToSlide = androidx.compose.runtime.compositionLocalOf { false }
-const val HOLD_TO_SLIDE_MS = 160L   // PROVISIONAL: Labs candidate (CLAUDE.md rule 3)
-
 val LocalBackGoesHome = androidx.compose.runtime.compositionLocalOf { false }
 
 /** The loupe's state: one at the top of the screen, driven by whichever control is being slid. */
@@ -119,21 +115,18 @@ fun Modifier.slideToTurn(
     val limit by rememberUpdatedState(onLimit)
     val currentFace by rememberUpdatedState(face)
     val loupeOn by rememberUpdatedState(settings.magnifier)
-    val holdFirst = LocalHoldToSlide.current
     val density = LocalDensity.current
     val stepPx = with(density) { stepDp.dp.toPx() }
     // a sideways slide at the screen's edge must not become the system's back gesture (P1's run, 2026-11-13)
     return this.onGloballyPositioned { coords = it }.then(
-        if (!enabled) Modifier else (if (LocalBackGoesHome.current) Modifier else Modifier.systemGestureExclusion()).pointerInput(dir, stepPx, holdFirst) {
+        if (!enabled) Modifier else (if (LocalBackGoesHome.current) Modifier else Modifier.systemGestureExclusion()).pointerInput(dir, stepPx) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 var vertical = false
                 var first = Offset.Zero
                 val claimed: PointerInputChange = awaitTouchSlopOrCancellation(down.id) { change, over ->
                     val up = abs(over.y) > abs(over.x)
-                    // in the scrolling stack a quick up-and-down drag is the page's: a knob wants a short rest first
-                    val rested = !holdFirst || !up || change.uptimeMillis - down.uptimeMillis >= HOLD_TO_SLIDE_MS
-                    if (dir.takes(up) && rested) { vertical = up; first = over; change.consume() }
+                    if (dir.takes(up)) { vertical = up; first = over; change.consume() }
                 } ?: return@awaitEachGesture
                 var acc = if (vertical) -first.y else first.x
                 start()
