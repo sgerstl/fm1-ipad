@@ -3,6 +3,7 @@ package com.scottgerstl.lupe
 import android.app.Application
 import com.scottgerstl.lupe.core.FakeLupeCore
 import com.scottgerstl.lupe.core.LupeCore
+import com.scottgerstl.lupe.core.LupeStartup
 import com.scottgerstl.lupe.core.Scenario
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ class LupeApp : Application() {
             val name = f.removeSuffix(".json")
             name to Scenario.parse(name, assets.open("state/$f").bufferedReader().use { it.readText() })
         }
-        core = FakeLupeCore(scope, scenarios)
+        // P1: the real core (Swift over the FM-1) unless the "core" preference asks for the fake (LupeStartup).
+        core = if (LupeStartup.wantsFake(this)) FakeLupeCore(scope, scenarios) else LupeStartup.start(this, scope)
     }
 }

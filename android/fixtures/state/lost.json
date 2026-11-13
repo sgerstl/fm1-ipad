@@ -1,12 +1,18 @@
 {
-  "provisional": true,
-  "note": "Ready, then the cable goes (1.5 s), the FM-1 comes back (6 s) and is read, then picked up (7.5 s): the lost card, back-and-reading, and the page returning.",
+  "provisional": false,
+  "note": "Ready, then the FM-1 unplugged (lost, reason unplugged), then plugged back in (reading, ready). Recorded by android/core/Tests/LupeCoreTests/FixtureRecordingTests.swift (scenario lost); don't edit by hand.",
   "frames": [
-    {"atMs": 0,    "area": "top",   "state": {"project":"Demo","playing":false,"rec":false,"tempo":120.0,"mode":"loop","launch":"bar","waiting":1,"bar":1,"beat":1}},
-    {"atMs": 0,    "area": "shell", "state": {"tab":"pads","divider":"split","bottom":{"kind":"editor"}}},
-    {"atMs": 0,    "area": "link",  "state": {"phase": "ready"}},
-    {"atMs": 1500, "area": "link",  "state": {"phase": "lost", "reason": "unplugged"}},
-    {"atMs": 6000, "area": "link",  "state": {"phase": "reading"}},
-    {"atMs": 7500, "area": "link",  "state": {"phase": "ready"}}
+    {"atMs": 7, "area": "link", "state": {"phase":"searching"}},
+    {"atMs": 7, "area": "top", "state": {"bar":1,"beat":1,"launch":"loop","mode":"loop","playing":false,"project":"","rec":false,"tempo":120,"waiting":0}},
+    {"atMs": 23, "area": "link", "state": {"phase":"connecting"}},
+    {"atMs": 694, "area": "link", "state": {"phase":"reading"}},
+    {"atMs": 2135, "area": "top", "state": {"bar":1,"beat":1,"launch":"loop","mode":"song","playing":true,"project":"","rec":false,"tempo":120,"waiting":6}},
+    {"atMs": 2146, "area": "link", "state": {"phase":"ready"}},
+    {"atMs": 2268, "area": "top", "state": {"bar":1,"beat":1,"launch":"loop","mode":"song","playing":true,"project":"SONG ONE","rec":false,"tempo":120,"waiting":6}},
+    {"atMs": 3154, "area": "top", "state": {"bar":1,"beat":1,"launch":"bar","mode":"song","playing":true,"project":"SONG ONE","rec":false,"tempo":120,"waiting":6}},
+    {"atMs": 3159, "area": "link", "state": {"phase":"lost","reason":"unplugged"}},
+    {"atMs": 6170, "area": "link", "state": {"phase":"connecting"}},
+    {"atMs": 6844, "area": "link", "state": {"phase":"reading"}},
+    {"atMs": 8562, "area": "link", "state": {"phase":"ready"}}
   ]
 }

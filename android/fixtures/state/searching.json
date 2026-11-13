@@ -1,9 +1,8 @@
 {
-  "provisional": true,
-  "note": "Never connected this launch: the full 'looking for your FM-1' page.",
+  "provisional": false,
+  "note": "No FM-1 plugged in. Recorded by android/core/Tests/LupeCoreTests/FixtureRecordingTests.swift (scenario searching); don't edit by hand.",
   "frames": [
-    {"atMs": 0, "area": "link", "state": {"phase": "searching"}},
-    {"atMs": 0, "area": "top", "state": {"project":"Demo","playing":false,"rec":false,"tempo":120.0,"mode":"loop","launch":"bar","waiting":1,"bar":1,"beat":1}},
-    {"atMs": 0, "area": "shell", "state": {"tab":"pads","divider":"split","bottom":{"kind":"editor"}}}
+    {"atMs": 0, "area": "link", "state": {"phase":"searching"}},
+    {"atMs": 0, "area": "top", "state": {"bar":1,"beat":1,"launch":"loop","mode":"loop","playing":false,"project":"","rec":false,"tempo":120,"waiting":0}}
   ]
 }

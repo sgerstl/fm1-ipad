@@ -33,9 +33,10 @@ class FixturesTest {
 
     @Test fun wrongFirmwareCarriesItsVersion() {
         val s = Scenario.parse("w", File(dir, "wrongFirmware.json").readText())
-        val last = lupeJson.decodeFromJsonElement(LinkState.serializer(), s.frames.last().state)
+        // P1's recording (PhoneCore over FakeSloop reporting 2.9.0, as SloopKit's refusesOtherFirmware test)
+        val last = lupeJson.decodeFromJsonElement(LinkState.serializer(), s.frames.last { it.area == "link" }.state)
         assertEquals(LinkPhase.WrongFirmware, last.phase)
-        assertEquals("SLOOP 2.8.4", last.firmware)
+        assertEquals("FELUCCA SLOOP 2.9.0", last.firmware)
     }
 
     @Test fun intentsEncodeWithTheirDiscriminator() {

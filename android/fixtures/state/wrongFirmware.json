@@ -1,9 +1,10 @@
 {
-  "provisional": true,
-  "note": "An FM-1 that answers, but isn't running Skiff.",
+  "provisional": false,
+  "note": "An FM-1 on firmware Lupe doesn't speak (FakeSloop reporting SLOOP 2.9.0, as SloopKit's refusesOtherFirmware test). Recorded by android/core/Tests/LupeCoreTests/FixtureRecordingTests.swift (scenario wrongFirmware); don't edit by hand.",
   "frames": [
-    {"atMs": 0,   "area": "link", "state": {"phase": "searching"}},
-    {"atMs": 600, "area": "link", "state": {"phase": "connecting"}},
-    {"atMs": 1200,"area": "link", "state": {"phase": "wrongFirmware", "firmware": "SLOOP 2.8.4"}}
+    {"atMs": 0, "area": "link", "state": {"phase":"searching"}},
+    {"atMs": 0, "area": "top", "state": {"bar":1,"beat":1,"launch":"loop","mode":"loop","playing":false,"project":"","rec":false,"tempo":120,"waiting":0}},
+    {"atMs": 17, "area": "link", "state": {"phase":"connecting"}},
+    {"atMs": 221, "area": "link", "state": {"firmware":"FELUCCA SLOOP 2.9.0","phase":"wrongFirmware"}}
   ]
 }

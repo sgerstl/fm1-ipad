@@ -13,8 +13,6 @@ object LupeNative {
     @Volatile private var loaded = false
     /** Where Swift's frames go: the app's one FM1Link. */
     @Volatile var link: FM1Link? = null
-    /** Lines from Swift for the debug screen (also in logcat, tag "Lupe"). */
-    @Volatile var debugListener: ((String) -> Unit)? = null
     /** ViewState areas from Swift (gate 5). */
     @Volatile var stateListener: ((area: String, json: String) -> Unit)? = null
 
@@ -30,16 +28,22 @@ object LupeNative {
     // Kotlin → Swift
     @JvmStatic private external fun nativeInit(): String
     @JvmStatic external fun onOpening()
-    @JvmStatic external fun onOpened(rawMode: Boolean)
+    /** Starts the link: [raw] true for gate 3's raw-bytes mode (no Session), false for PhoneCore over Session. */
+    @JvmStatic external fun startCore(raw: Boolean)
+    /** True: only reads reach the FM-1 (the default). Takes effect for the next connection. */
+    @JvmStatic external fun setReadOnly(on: Boolean)
+    /** One [Intent] as JSON, on the UI thread. */
+    @JvmStatic external fun intent(json: String)
+    @JvmStatic external fun onOpened()
     @JvmStatic external fun onLost()
     @JvmStatic external fun onBytes(bytes: ByteArray, offset: Int, count: Int, timestamp: Long)
     /** Debug: sends Skiff's version request (INFO) on the open connection. */
     @JvmStatic external fun requestVersion()
-    /** Debug: gate 2's main-actor hop, inside the app; the result arrives through [debugListener]. */
+    /** Debug: gate 2's main-actor hop, inside the app; the result arrives in [LinkLog]. */
     @JvmStatic external fun mainActorCheck()
 
     // Swift → Kotlin (looked up by name in JNI_OnLoad; keep the signatures)
     @JvmStatic fun send(frame: ByteArray) { link?.send(frame) }
     @JvmStatic fun onState(area: String, json: String) { stateListener?.invoke(area, json) }
-    @JvmStatic fun onDebug(line: String) { debugListener?.invoke(line) }
+    @JvmStatic fun onDebug(line: String) { LinkLog.add(line) }
 }

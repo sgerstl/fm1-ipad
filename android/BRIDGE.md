@@ -109,6 +109,21 @@ Each area is its own `Codable` struct. Swift sends an area again only when it ch
 
 **Touch feedback never waits for the round trip.** Compose shows the pressed state, the drag and the haptic itself; the FM-1's answer then confirms or corrects it, the way the iPad already treats a pad tap while a launch waits.
 
+### Built at gate 5 (P1, 2026-11-13)
+
+- **`PhoneCore`** (`android/core/Sources/PhoneCore`) publishes `link` and `top`. `State.swift` mirrors P2's `State.kt` field for field; nil fields are left out.
+  - `link.phase` follows `DeviceSession.status`. `reading` comes from a new `DeviceSession.reading` flag, true between INFO and ready (the iPad ignores it).
+  - `link.reason` is `unplugged` (the stream ended while connected) or `readFailed`.
+  - `top`: `project` is PROJ_NAME's name, read on reaching ready and every 5 s, because Session reads it only when the iPad's Projects sheet opens. `waiting` counts tracks with a staged entry, the same test SkiffSongStore uses. `bar`/`beat` count MIDI clock in 4/4: Session doesn't observe its clock counter, so `top` is rebuilt every 50 ms while playing and sent only when the beat moves.
+- **Intents:** `retry` restarts Session's search loop; `play` and `stop` call `setPlaying`. The rest of P2's list decodes and is logged as "not handled yet". `setPlaybackMode` is accepted into the list.
+- **`shell` stays in Kotlin for now.** `BridgedLupeCore` keeps tab and divider locally and answers `setTab`/`setDivider` itself. Swift takes `shell` over when the FM-1's page drives the bottom half (screen link).
+- **`BridgedLupeCore`** (Kotlin) is P2's `LupeCore` over the bridge. `LupeApp` builds it through `LupeStartup` unless the app preference `core` is `fake`.
+- **Fixtures are recorded, not hand-written:** `RECORD_FIXTURES=1 swift test --filter FixtureRecording` in `android/core` writes `ready`, `searching`, `lost` and `wrongFirmware`. The FM-1 side is FakeSkiff (demo) and, for wrong firmware, FakeSloop reporting 2.9.0, as SloopKit's own test does. Unplugging goes through `LinkGate.lost()`, FM1Link's path.
+
+### Read-only by default (P1, 2026-11-13)
+
+`LinkGate.readOnly` (on by default) wraps every connection in `GuardedTransport`. Only frames that Skiff's own protocol table (`skiff-src web/EDITOR_PROTOCOL.md`) calls queries reach the FM-1; anything else is dropped and logged ("read-only: blocked cmd N…"). The allowlist is in `ReadOnlyGuard.swift`. Tests show Session and PhoneCore reach ready and keep running over FakeSkiff (with and without the screen link) with nothing blocked. The guard was added for Scott's approved overnight read-only tests on the real FM-1. **There is deliberately no button that turns writes on**: a stray tap from another session's screenshot script hit one on the shared emulator. Writes need `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --ez allowWrites true`. Making it read-only again is one tap. So Play from the phone does nothing until writes are allowed.
+
 ### The schema is shared, written once
 
 The area structs live in one place: Swift `Codable` types in `PhoneCore/State.swift`, with a generator (or, at first, a hand-kept Kotlin file plus a round-trip test) producing the Kotlin data classes. A test in each language decodes the other's sample JSON from `android/fixtures/state/`, so a renamed field fails a build, not a screen.

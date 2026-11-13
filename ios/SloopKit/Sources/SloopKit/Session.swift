@@ -71,6 +71,8 @@ public enum ConnectionStatus: Equatable, Sendable {
 @MainActor @Observable
 public final class DeviceSession {
     public private(set) var status: ConnectionStatus = .searching
+    /// Between the firmware answering INFO and `.connected`: the whole read (the phone's link area shows "reading").
+    public private(set) var reading = false
     public var isConnected: Bool { if case .connected = status { true } else { false } }
     /// Recording anything: a loop's notes or knobs, or SLOOP's song.
     public var isRecordingAnything: Bool { recording || song.songRecording }
@@ -462,6 +464,7 @@ public final class DeviceSession {
             return
         }
         driver = c
+        reading = true
         do {
             let i = c.info
             info = i
@@ -515,9 +518,11 @@ public final class DeviceSession {
                 skiffSong = nil
             }
             if let k = c as? SkiffDriver, k.firmware.hasDelayMode { Task { await self.readKeepSends(k) } }
+            reading = false
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
             stats = Stats()
         } catch {
+            reading = false
             status = .lost("Lost the FM-1 while reading it")
             await c.close()
             driver = nil

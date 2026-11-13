@@ -21,7 +21,7 @@ import android.util.Log
  *
  * Android names ports from the device's side: we SEND to its INPUT port and RECEIVE from its OUTPUT port.
  */
-class FM1Link(context: Context, private val rawMode: Boolean = false) {
+class FM1Link(context: Context) {
     enum class State { None, Opening, Open }
 
     private val midi = context.getSystemService(MidiManager::class.java)
@@ -37,9 +37,8 @@ class FM1Link(context: Context, private val rawMode: Boolean = false) {
     @Volatile private var input: MidiInputPort? = null
     @Volatile private var output: MidiOutputPort? = null
 
-    /** Called on the UI thread whenever [state] changes, and with each line for the debug screen. */
+    /** Called on the UI thread whenever [state] or [seen] changes. */
     var onChange: (() -> Unit)? = null
-    var onLog: ((String) -> Unit)? = null
 
     /** Every MIDI device Android listed, with its property strings, for the debug screen. */
     @Volatile var seen: List<String> = emptyList()
@@ -96,7 +95,7 @@ class FM1Link(context: Context, private val rawMode: Boolean = false) {
         device = dev; deviceInfo = info; input = inPort; output = outPort
         outPort.connect(receiver)
         setState(State.Open)
-        LupeNative.onOpened(rawMode)
+        LupeNative.onOpened()
         log("open: input port max message ${inPort.maxMessageSize} bytes")
     }
 
@@ -140,13 +139,14 @@ class FM1Link(context: Context, private val rawMode: Boolean = false) {
     private fun remember(info: MidiDeviceInfo) {
         val line = describe(info)
         seen = (seen.filterNot { it.startsWith("#${info.id} ") } + line)
+        main.post { onChange?.invoke() }
     }
 
     private fun setState(s: State) { state = s; main.post { onChange?.invoke() } }
 
     private fun log(line: String) {
         Log.i(TAG, line)
-        main.post { onLog?.invoke(line) }
+        LinkLog.add(line)
     }
 
     companion object {

@@ -53,6 +53,7 @@ import Testing
         #expect(gate.makeTransport() == nil)          // nothing open yet
         gate.opening()
         #expect(gate.state == .opening && gate.makeTransport() == nil)
+        gate.readOnly = false
         let first = gate.opened()
         #expect(gate.state == .open)
         #expect(gate.makeTransport() === first)
@@ -66,6 +67,10 @@ import Testing
 
         let second = gate.opened()                    // plugged back in
         #expect(gate.makeTransport() === second)
+
+        gate.readOnly = true                          // the default: the connection comes wrapped in the guard
+        gate.opened()
+        #expect(gate.makeTransport() is GuardedTransport)
     }
 
     @Test func bytesReachTheOpenConnectionOnly() async {

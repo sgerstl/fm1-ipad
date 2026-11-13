@@ -12,6 +12,7 @@ import AndroidLink
 import CAndroid
 import Foundation
 import MainLooper
+import PhoneCore
 import SloopKit
 
 // MARK: - The JVM
@@ -118,8 +119,14 @@ func publish(area: String, json: String) {
 
 // MARK: - The link
 
-/// The one connection gate for the app's life: FM1Link's reports in, Session's factory out.
-let gate = LinkGate(send: { javaSend($0) })
+/// The one connection gate for the app's life: FM1Link's reports in, Session's factory out. Read-only until
+/// Kotlin says otherwise (setReadOnly); every frame the guard drops is reported.
+let gate = LinkGate(send: { javaSend($0) }, onBlocked: { debug("read-only: blocked " + ReadOnlyGuard.describe($0)) })
+
+/// How the app runs the link: `session` (PhoneCore over DeviceSession, the real app) or `raw` (gate 3's debug
+/// mode: no Session; Swift reads the frames itself and prints them).
+nonisolated(unsafe) private var rawMode = false
+nonisolated(unsafe) private var core: PhoneCore?
 
 /// Gate 3's debug mode: Swift reads the frames itself and prints them (no Session yet).
 nonisolated(unsafe) private var rawReader: Task<Void, Never>?
@@ -162,10 +169,43 @@ public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) -> 
 @_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_onOpening")
 public func onOpening(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) { gate.opening() }
 
+/// Starts the link in `raw` or `session` mode (once, on the UI thread, after nativeInit). Session mode builds
+/// PhoneCore, which publishes the ViewState areas through LupeNative.onState.
+@_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_startCore")
+public func startCore(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ raw: jboolean) {
+    rawMode = raw != 0
+    debug("link mode: \(rawMode ? "raw bytes (no Session)" : "session"), read-only: \(gate.readOnly)")
+    guard !rawMode, core == nil else { return }
+    MainActor.assumeIsolated {
+        let c = PhoneCore(session: DeviceSession(transport: { gate.makeTransport() }),
+                          publish: { area, json in publish(area: area, json: json) },
+                          log: { debug($0) })
+        core = c
+        c.start()
+    }
+}
+
+/// Lets writes through (false) or keeps the link read-only (true). For the next connection.
+@_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_setReadOnly")
+public func setReadOnly(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ on: jboolean) {
+    gate.readOnly = on != 0
+    debug("read-only: \(on != 0 ? "on" : "OFF: writes reach the FM-1 from the next connection")")
+}
+
+/// One intent from Compose as JSON (BRIDGE.md §2). Called on the UI thread.
+@_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_intent")
+public func intent(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ json: jstring?) {
+    let text = string(env, json)
+    MainActor.assumeIsolated {
+        guard let core else { debug("intent with no core running: \(text)"); return }
+        core.handle(json: text)
+    }
+}
+
 @_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_onOpened")
-public func onOpened(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ rawMode: jboolean) {
+public func onOpened(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) {
     let t = gate.opened()
-    if rawMode != 0 { startRawReader(t) }
+    if rawMode { startRawReader(t) }
 }
 
 @_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_onLost")
@@ -185,6 +225,7 @@ public func onBytes(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ byte
 /// Debug: sends Skiff's version request (INFO, cmd 1) on the open connection.
 @_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_requestVersion")
 public func requestVersion(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) {
+    guard rawMode else { debug("version request is for raw mode; in session mode Session sends INFO itself"); return }
     guard let t = gate.transport else { debug("no FM-1 open: nothing sent"); return }
     let f = Frame.encode(Cmd.info)
     debug("→ INFO request [\(hex(f))]")

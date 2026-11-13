@@ -78,9 +78,22 @@ public final class LinkGate: @unchecked Sendable {
     private var handedOut = false
     private var _state: State = .none
 
-    public init(send: @escaping @Sendable ([UInt8]) -> Void) { sender = send }
+    private var _readOnly = true
+    private let onBlocked: @Sendable ([UInt8]) -> Void
+
+    /// `onBlocked` hears each frame the read-only guard dropped.
+    public init(send: @escaping @Sendable ([UInt8]) -> Void, onBlocked: @escaping @Sendable ([UInt8]) -> Void = { _ in }) {
+        sender = send; self.onBlocked = onBlocked
+    }
 
     public var state: State { lock.withLock { _state } }
+
+    /// Only reads reach the FM-1 (ReadOnlyGuard). On by default: the phone build writes nothing until someone
+    /// turns writes on (the debug screen's switch). Takes effect for the next connection handed out.
+    public var readOnly: Bool {
+        get { lock.withLock { _readOnly } }
+        set { lock.withLock { _readOnly = newValue } }
+    }
 
     /// FM1Link found the FM-1 and asked Android to open it.
     public func opening() { lock.withLock { if _state == .none { _state = .opening } } }
@@ -123,7 +136,7 @@ public final class LinkGate: @unchecked Sendable {
         lock.withLock {
             guard let t = current, !handedOut, !t.isFinished else { return nil }
             handedOut = true
-            return t
+            return _readOnly ? GuardedTransport(t, onBlocked: onBlocked) : t
         }
     }
 }
