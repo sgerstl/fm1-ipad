@@ -130,6 +130,8 @@ extension PhoneCore {
     public func shellArea() -> ShellArea? {
         let s = session
         guard s.isConnected, s.dialect == .skiff, s.screenLinked, let screen = s.deviceScreen else { return nil }
+        // the FM-1's FREE TAKE picker open: it takes the editor's place (the bottom half follows the FM-1)
+        if s.takePicker?.open == true { return ShellArea(bottom: .init(kind: "freetake", family: nil, page: nil)) }
         if let fw = Self.soundPage(of: screen), let page = SoundPage.page(s, fw: fw) {
             return ShellArea(bottom: .init(kind: "page", family: page.family.rawValue, page: page.title))
         }

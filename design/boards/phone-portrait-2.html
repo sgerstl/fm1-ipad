@@ -113,6 +113,72 @@ function soundPage(y0, h0, s) {
   return h;
 }
 
+
+// ---------------------------------------------------------------- FREE TAKE picker (board 71)
+// The iPad's picker (form A, Scott 2026-11-11) on the phone: in the editor's place in the bottom half. Skiff's four knobs in words.
+function takeNotes(x, y, w, h, t) {
+  const n = [[0, 2, 60], [2, 1, 63], [4, 2, 67], [6, 1, 65], [8, 3, 60], [12, 1, 62], [14, 2, 67], [18, 2, 70], [20, 1, 67], [24, 2, 63], [28, 3, 60], [32, 2, 65]];
+  const len = 32, gw = w - 24, sw = gw / len, gh = h - 30;
+  let g = '';
+  for (let k = 0; k <= len; k++) g += `<rect x="${12 + k * sw}" y="6" width="${k % 16 === 0 ? 2 : 1}" height="${gh}" fill="${k % 16 === 0 ? '#71717A' : k % 4 === 0 ? '#34343B' : '#222226'}"/>`;
+  n.forEach(([st, l, p]) => { g += `<rect x="${12 + st * sw + 1}" y="${6 + (70 - p) / 12 * (gh - 12)}" width="${Math.max(4, l * sw - 2)}" height="9" rx="3" fill="${COL[t]}"/>`; });
+  g += `<text x="14" y="${h - 8}" fill="#C4C4CC" font-size="11" font-family="Barlow" font-weight="600">1</text><text x="${12 + 16 * sw + 4}" y="${h - 8}" fill="#C4C4CC" font-size="11" font-family="Barlow" font-weight="600">2</text>`;
+  return el('', x, y, w, h, 'border-radius:12px;background:var(--well)') + svg(x, y, w, h, g, "The take's notes: 12 notes over 2 bars");
+}
+function takeSeg(x, y, opts, sel, caps, wEach) {
+  const w = opts.length * wEach + 8;
+  let h = el('', x, y, w, 48, 'border-radius:12px;background:var(--well)');
+  opts.forEach((o, i) => {
+    const on = i === sel;
+    h += (on ? el('', x + 4 + i * wEach, y + 4, wEach, 40, 'border-radius:8px;background:var(--lifted);box-shadow:0 2px 0 var(--edge)') : '') +
+      el('', x + 4 + i * wEach, y + 4, wEach, 40, `display:flex;flex-direction:column;align-items:center;justify-content:center;color:${on ? 'var(--text)' : 'var(--text2r)'};font-size:15px;font-weight:${on ? 600 : 400}`,
+        `<span>${o}</span>${caps ? `<span style="font-size:11px;font-weight:400;line-height:1">${caps[i]}</span>` : ''}`);
+  });
+  return h;
+}
+function takeChoice(y, label, help, body) {
+  return el('', 8, y, 396, 20, 'font-size:13px;font-weight:600;color:var(--text)', `${label} <span style="font-weight:400;color:var(--text2r)">${help || ''}</span>`) + body(y + 22);
+}
+function takePicker(y0, h0, o) {
+  const t = 4, big = h0 > 600;
+  let h = el('', 8, y0 + 2, 36, 36, `border-radius:8px;background:${COL[t]};color:#101012;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;font-family:'Barlow Condensed',sans-serif`, '5');
+  h += el('', 54, y0, 350, 20, 'font-size:16px;font-weight:600;color:var(--text)', 'Keep that take on T5 Piano');
+  h += el('', 54, y0 + 21, 350, 32, 'font-size:12px;color:var(--text2r);line-height:1.35', 'Replaces pattern 12 there, and on its 1 other entry. Undo brings it back.');
+  const nh = big ? 150 : 84;
+  h += takeNotes(8, y0 + 60, 396, nh, t);
+  const cy = y0 + 60 + nh + 10, actY = y0 + h0 - 52, avail = actY - 8 - cy;
+  let ch = '';
+  ch += takeChoice(cy, 'Tempo', "Skiff's guesses, the likeliest first", y => takeSeg(8, y, ['120', '60', '240'], 0, ['guess', 'half', 'double'], 76));
+  ch += takeChoice(cy + 76, 'Bars', '', y => takeSeg(8, y, ['1', '2', '4', '8'], 1, null, 64));
+  ch += takeChoice(cy + 152, 'Where the 1 is', 'which note is the first beat', y =>
+    el('key', 8, y + 2, 56, 44, 'font-size:16px', '‹', 'aria-label="Earlier note"') + el('', 70, y + 2, 160, 44, 'display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;font-family:\'Barlow Condensed\',sans-serif', 'note 1 of 12') + el('key', 236, y + 2, 56, 44, 'font-size:16px', '›', 'aria-label="Later note"'));
+  ch += takeChoice(cy + 228, 'Song tempo', "the song's 96 BPM before", y => takeSeg(8, y, ['Set to 120', 'Keep 96'], 0, null, 118));
+  // the choices scroll in the room between the notes and the keys; a fade at the cut edge says so
+  h += `<div class="abs" style="left:0;top:${cy}px;width:412px;height:${avail}px;overflow:hidden"><div style="position:absolute;left:0;top:${-cy}px;width:412px">${ch}</div>${avail < 300 ? '<div class="abs" style="left:0;bottom:0;width:412px;height:26px;background:linear-gradient(transparent,var(--page))"></div>' : ''}</div>`;
+  // the keys, pinned
+  if (o.confirm) {
+    h += el('key', 8, actY, 96, 44, '', 'Cancel') + el('', 112, actY, 292, 44, 'border-radius:8px;background:var(--control);box-shadow:0 2px 0 var(--edge);border:3px solid var(--rec);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--text)', 'Replace pattern 12 on T5 and 1 more');
+  } else {
+    h += el('key', 8, actY, 104, 44, 'font-size:15px', '▶ Listen') + el('key', 118, actY, 112, 44, 'font-size:15px', '↶ Put back') +
+      el('', 276, actY, 128, 44, 'border-radius:8px;background:var(--text);box-shadow:0 2px 0 #8A8A92;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--on)', 'Keep it');
+  }
+  return h;
+}
+function takeOffer(y) {   // the phrase heard on the FM-1, offered once its 2.5 s pause has passed: a strip at the top of the bottom half
+  return el('', 8, y, 396, 56, `border-radius:14px;background:#4A4A52;box-shadow:0 6px 9px rgba(0,0,0,.35)`) +
+    el('', 18, y + 10, 36, 36, `border-radius:8px;background:${COL[4]};color:#101012;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;font-family:'Barlow Condensed',sans-serif`, '5') +
+    el('', 62, y + 8, 220, 20, 'font-size:15px;font-weight:600;color:var(--text)', 'You played 12 notes on T5 Piano') +
+    el('', 62, y + 29, 220, 18, 'font-size:12px;color:var(--text2r)', 'Keep that opens Skiff\'s picker here') +
+    el('', 290, y + 6, 78, 44, 'border-radius:8px;background:var(--text);box-shadow:0 2px 0 #8A8A92;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--on)', 'Keep that') +
+    el('', 370, y + 6, 34, 44, 'display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text2r)', '✕', 'aria-label="Let it go"');
+}
+function takeLanded(y) {   // after Keep it: what it became, with the FM-1's own undo
+  return el('', 8, y, 396, 56, 'border-radius:14px;background:var(--lifted);box-shadow:0 6px 9px rgba(0,0,0,.35)') +
+    el('', 20, y + 8, 250, 20, 'font-size:15px;font-weight:600;color:var(--text)', 'Kept on T5 Piano') +
+    el('', 20, y + 29, 250, 18, 'font-size:12px;color:var(--text2r)', '32 steps at 120 BPM · Undo goes back') +
+    el('key', 276, y + 6, 78, 44, 'font-size:15px', 'Undo') + el('', 362, y + 6, 42, 44, 'display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text2r)', '✕', 'aria-label="Dismiss"');
+}
+
 // ---------------------------------------------------------------- graphs
 const G = {
   analog(x, y, w, h, col) {   // EDIT 1, ANALOG: the oscillator (saw + noise) and the filter's curve
@@ -455,6 +521,21 @@ board2(70, 'EDIT › SLICES: no picture to port', [
   '<span class="q">Decided 18 (2026-11-14):</span> Scott keeps the named card for now; a SLICES picture goes on the later list for both apps and needs new Skiff commands (one that reads the slice markers, one that moves them). Before that: Scott asked for pictures on the dense EDIT pages. OPERATOR, ALL OPS and DRUM-X\'s SOUND have iPad pictures and are ported (envelopes and operator tiles, the algorithm chart, the kit\'s windows). <b>SLICES has none on the iPad either</b>: its markers can\'t be read or moved, because the editor protocol has no command for them (SlicesNote on the iPad says so). So there is nothing to port.',
   'What the phone shows now: the named card, the page row and the family row working, and the words above. The EDIT 1 and EDIT 2 pages already carry SOURCE and DIV as ordinary controls.',
   'Decision: (a), the card, for release. (b), a Skiff editor command that reads the slice markers (firmware work, then a waveform with markers here), is on the later list.',
+]);
+
+board2(71, 'FREE TAKE: the take offered, the picker, kept', [
+  { cap: 'A phrase played on the FM-1: offered', bottom: (y, h) => editor(y, h, {}) + takeOffer(y + 2), label: 'The editor with the take offered', discs: [[1, 392, 478]] },
+  { cap: 'Keep that: the picker, in the editor\'s place', bottom: (y, h) => takePicker(y, h, {}), label: 'FREE TAKE picker at split', discs: [[2, 392, 466], [3, 392, 640], [4, 392, 826]] },
+  { cap: 'Keep it on a track with a pattern: asked once more', bottom: (y, h) => takePicker(y, h, { confirm: true }), label: 'FREE TAKE picker asking to replace a pattern', discs: [[5, 392, 826]] },
+  { cap: 'At bottom full all four choices show', mode: 'bottom', bottom: (y, h) => takePicker(y, h, {}), label: 'FREE TAKE picker at bottom full', discs: [[6, 392, 160]] },
+], [
+  'Nothing is written from the phone to start it: you play on the FM-1 with the transport stopped, pause 2.5 s, and the phone offers the phrase (this strip, on top of the editor). "Keep that" is the FM-1\'s SHIFT + SAVE, sent from here; ✕ lets it go. Without Skiff-Lupe\'s screen link v7 the strip says to press SHIFT + SAVE on the FM-1 instead.',
+  'The picker takes the editor\'s place in the bottom half (form A), so the top half, the Pads, stays in view. The header names the track and the pattern Keep it writes over, and the other entries that name the same pattern.',
+  'The take\'s notes as the FM-1 placed them: the track\'s own steps over the bars, bar lines strong, each note a block in the track\'s colour. They re-grid as you change a choice, because the FM-1 rewrites the track with every choice.',
+  'Skiff\'s four knobs in words, each a segmented control or a ‹ note n of m › pair (taps, no drag). At split they scroll between the notes and the keys (a fade shows the cut edge); the three keys stay pinned. TEMPO shows Skiff\'s guesses with half and double named.',
+  'Listen is Skiff\'s PLAY (it plays the take; the key turns to Stop), Put back its OCT−, Keep it its OCT+. Keep it on a track with a pattern is asked once more in place, in the destructive outline, naming the pattern; Cancel goes back.',
+  'At bottom full the notes grow and all four choices fit without scrolling. After Keep it the strip "Kept on T5 · Undo" (the FM-1\'s own undo; Redo after it) sits where the offer did, and the editor is back.',
+  '<span class="q">Not on the phone:</span> the Timeline the iPad lands on after a keep (the phone has the Timeline tab; it shows the new block once the song lists are read again).',
 ]);
 
 section('P5 · Mix, Sounds, Projects, Settings');

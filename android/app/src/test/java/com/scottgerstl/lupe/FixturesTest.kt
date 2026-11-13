@@ -39,6 +39,7 @@ class FixturesTest {
                 "sounds" -> assertEquals(32, lupeJson.decodeFromJsonElement(SoundsState.serializer(), fr.state).user.size)
                 "meters" -> assertEquals(6, lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.MetersState.serializer(), fr.state).levels.size)
                 "projects" -> assertEquals(4, lupeJson.decodeFromJsonElement(ProjectsState.serializer(), fr.state).slots.size)
+                "freetake" -> lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.FreeTakeState.serializer(), fr.state)
                 else -> error("${f.name}: unknown area ${fr.area}")
             }
         }

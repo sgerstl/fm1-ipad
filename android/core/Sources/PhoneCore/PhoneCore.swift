@@ -65,6 +65,8 @@ public final class PhoneCore {
             // shell.bottom only (tab and divider are Kotlin's): the sound page the FM-1 shows, else the editor
             AreaWatch(name: "shell", build: { [unowned self] in self.shellArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "pageReads", build: { [unowned self] in self.readDenseData() }, publish: { _, _ in }),   // asks for the dense pages' data
+            // FREE TAKE (FreeTakeArea.swift): the offer, the FM-1's picker, the landing
+            AreaWatch(name: "freetake", build: { [unowned self] in self.freeTakeArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             // P5: once the FM-1 has been read, as pads and editor
             AreaWatch(name: "mix", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.mixArea()) : nil }, publish: publish),
@@ -200,7 +202,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects

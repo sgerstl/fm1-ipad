@@ -65,11 +65,13 @@ class FakeLupeCore(
     override val editor: StateFlow<EditorState> = _editor
     override val page: StateFlow<PageState> = _page
     private val _mix = MutableStateFlow(MixState())
+    private val _freeTake = MutableStateFlow(FreeTakeState())
     private val _sounds = MutableStateFlow(SoundsState())
     private val _projects = MutableStateFlow(ProjectsState())
     private val _meters = MutableStateFlow(MetersState())
     override val meters: StateFlow<MetersState> = _meters
     override val mix: StateFlow<MixState> = _mix
+    override val freeTake: StateFlow<FreeTakeState> = _freeTake
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
 
@@ -134,6 +136,7 @@ class FakeLupeCore(
             "top" -> _top.value = lupeJson.decodeFromJsonElement(TopState.serializer(), state).also { syncTicker(it.playing) }
             "shell" -> _shell.value = lupeJson.decodeFromJsonElement(ShellState.serializer(), state)
             "page" -> { val p = lupeJson.decodeFromJsonElement(PageState.serializer(), state); pageFake.learn(p); _page.value = p }
+            "freetake" -> _freeTake.value = lupeJson.decodeFromJsonElement(FreeTakeState.serializer(), state)
             "mix" -> _mix.value = lupeJson.decodeFromJsonElement(MixState.serializer(), state)
             "sounds" -> _sounds.value = lupeJson.decodeFromJsonElement(SoundsState.serializer(), state)
             "projects" -> _projects.value = lupeJson.decodeFromJsonElement(ProjectsState.serializer(), state)
@@ -205,6 +208,12 @@ class FakeLupeCore(
             is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
             is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }
+            // FREE TAKE (FreeTakeState.kt): the picker's choices; the shell follows the picker
+            TakeStart, is TakeGuessPick, is TakeBarsPick, is TakeFirstBeat, is TakeSetTempo, TakeListen, TakeKeep, TakePutBack, TakeUndo, TakeDismissOffer, TakeDismissLanded -> {
+                val ed = _editor.value
+                _freeTake.update { FakeTake.apply(it, intent, ed.track, ed.trackName) }
+                _shell.update { it.copy(bottom = if (_freeTake.value.picker != null) BottomPage(BottomKind.FreeTake) else if (it.bottom.kind == BottomKind.FreeTake) BottomPage() else it.bottom) }
+            }
             // P5's intents (P5State.kt): mix, sounds, projects
             is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam -> _mix.update { FakeP5.mix(it, intent) }
             is SoundsTargetPick, is SoundsView, is PickPreset, is PickUser, ClearEntrySound, is SaveSound, is EraseUser -> _sounds.update { FakeP5.sounds(it, intent) }

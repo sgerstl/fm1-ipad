@@ -266,6 +266,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                     }
                 },
         ) {
+            val freeTake by core.freeTake.collectAsStateWithLifecycle()
             // the lane fits only when the bottom half is nearly full height
             val autoFraction = (((hb - topAt(p) - dp(HANDLE_H) - dp(GAP)) - dp(560f)) / dp(100f)).coerceIn(0f, 1f)
             LupeCrossfade(soundsHost.request, Modifier.fillMaxSize(), Dur.PANEL) { req ->
@@ -273,7 +274,15 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                     // the Sounds browser opens over the editor or the sound page; Done or Back brings it back
                     SoundsBrowser(core, req, { soundsHost.close() })
                 } else LupeCrossfade(shell.bottom, Modifier.fillMaxSize(), Dur.PANEL) { page ->
-                    if (page.kind == BottomKind.Editor) EditorPage(editor, core, autoFraction) else com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+                    when (page.kind) {
+                        // the offer and the landing sit on top of the editor; the FM-1's picker takes its place
+                        BottomKind.Editor -> Box(Modifier.fillMaxSize()) {
+                            EditorPage(editor, core, autoFraction)
+                            com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
+                        }
+                        BottomKind.FreeTake -> com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
+                        else -> com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, core)
+                    }
                 }
             }
         }

@@ -42,4 +42,5 @@ fun TopPlaceholder(tab: Tab, modifier: Modifier = Modifier) = when (tab) {
 fun BottomPlaceholder(page: BottomPage, modifier: Modifier = Modifier) = when (page.kind) {
     BottomKind.Editor -> Placeholder("Editor", "SEQ on the FM-1: the step grid and the step panel, phase 3", modifier)
     BottomKind.Page -> Placeholder("${page.family ?: ""} · ${page.page ?: ""}", "A sound page: four controls in the FM-1's knob order, phase 4", modifier)
+    BottomKind.FreeTake -> Placeholder("FREE TAKE", "The FM-1's picker: ui/freetake", modifier)
 }

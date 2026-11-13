@@ -82,6 +82,8 @@ enum class BottomKind {
     @SerialName("editor") Editor,
     /** A sound page: ENV, LFO, FX, SEL, EDIT, ARP (P4). */
     @SerialName("page") Page,
+    /** The FM-1's FREE TAKE picker is open: it takes the editor's place. */
+    @SerialName("freetake") FreeTake,
 }
 
 /** Which page the FM-1's screen shows; the bottom half follows it. [family] and [page] are only set for [BottomKind.Page]. */
