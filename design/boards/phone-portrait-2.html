@@ -24,11 +24,11 @@
 // top only: content 140–863, divider 867–883
 // bottom full: strip 96–136, divider 140–156, bottom 160–883
 function frame(o) {
-  let h = statusBar() + topBar(o) + gestureBar();
+  let h = (o.head ? o.head(o) + (o.head === headB ? '' : statusBar()) : statusBar() + topBar(o)) + gestureBar();
   const mode = o.mode || 'split';
   const top = o.top || ((y, hh) => pads(y, hh, {}));
   if (mode === 'split') {
-    h += tabs(96, o.tab || 'Pads') + top(140, 302) + divider(446) + o.bottom(466, 417);
+    h += (o.head ? '' : tabs(96, o.tab || 'Pads')) + top(140, 302) + divider(446) + o.bottom(466, 417);
   } else if (mode === 'top') {
     h += tabs(96, o.tab || 'Pads') + top(140, 723) + divider(867);
   } else {
@@ -672,6 +672,87 @@ board2(70, 'HOME: the FM-1\'s four sound knobs, a step on tap', [
   'The header says what the row is: "Sound" and the engine. Other engines show their own four (DRUM puts MORPH on knob 1); the labels and values come from the same check as the sound pages (decision 22).',
   'Tap a step and the row becomes that step\'s controls (NOTES · FEEL · SOUND, Lock), under a "Step 6 ✕" key. ✕, tapping the step again, or the FM-1 changing page puts the sound cards back. ‹ › walk the steps without leaving. <span class="q">Open:</span> whether a step stays picked after the pattern changes, or the row falls back to sound.',
   'A knob lights while it turns, from the phone or from the FM-1\'s knob, as the FM-1 lights its card; the Magnifier floats the value above the finger. Holding HOME on the FM-1 (its SHIFT map) changes nothing here: its knobs keep turning these four.',
+]);
+
+section('The header: telling chrome from content');
+
+// round transport keys, like the FM-1's buttons
+function rKey(x, y, d, inner, o = {}) {
+  const st = `border-radius:${d / 2}px;display:flex;align-items:center;justify-content:center;` +
+    (o.lit ? 'background:#EDEDF0;color:#101012;' : o.ring ? 'box-shadow:inset 0 0 0 2px var(--outline);' : 'background:var(--control);');
+  return el('', x, y, d, d, st, inner, `role="button" aria-label="${o.label || ''}"`);
+}
+const recDot = '<span style="width:14px;height:14px;border-radius:7px;background:var(--rec)"></span>';
+const playTri = '<span style="font-size:16px;margin-left:2px">▶</span>';
+const readout = (x, y) => el('', x, y, 60, 44, 'display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.05',
+  `<span class="cond" style="font-size:22px;color:var(--text)">10·3</span><span style="font-size:12px;color:var(--text2r)">120 BPM</span>`);
+const chev = '<span style="color:var(--text2);font-weight:400;margin-left:4px">⌄</span>';
+// underlined text tabs; x0/w: the row; align 'even' (thirds) or 'left'
+function lineTabs(y, cur, o = {}) {
+  const names = ['Pads', 'Timeline', 'Mix'];
+  let h = '';
+  if (o.left) {
+    let x = 16;
+    names.forEach(t => {
+      const on = t === cur, w = t.length * 9.5 + 4;
+      h += el('', x, y, w, 36, `display:flex;align-items:center;font-size:17px;font-weight:600;color:${on ? 'var(--text)' : 'var(--text2)'}`, t, `role="tab" aria-selected="${on}"`);
+      if (on) h += el('', x, y + 33, w, 3, 'border-radius:2px;background:#EDEDF0');
+      x += w + 24;
+    });
+  } else {
+    const w = 396 / 3;
+    names.forEach((t, i) => {
+      const on = t === cur, x = 8 + i * w;
+      h += el('', x, y, w, 36, `display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:${on ? 'var(--text)' : 'var(--text2)'}`, t, `role="tab" aria-selected="${on}"`);
+      if (on) h += el('', x + 24, y + 33, w - 48, 3, 'border-radius:2px;background:#EDEDF0');
+    });
+  }
+  return h;
+}
+
+// A · quiet chrome: no boxes in the header at all; words, round keys, a hairline under the tabs
+function headA(o) {
+  let h = el('', 12, 44, 120, 44, 'display:flex;align-items:center;font-size:17px;font-weight:600;color:var(--text)', 'TESTBED' + chev, 'role="button"');
+  h += el('', 140, 44, 80, 44, 'display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--text2r)', 'Loop' + chev, 'role="button"');
+  h += rKey(236, 46, 40, recDot, { ring: true, label: 'Record' });
+  h += rKey(284, 46, 40, playTri, { lit: true, label: 'Stop' });
+  h += readout(344, 44);
+  h += lineTabs(96, o.tab || 'Pads');
+  h += el('', 0, 132, W, 1, 'background:var(--control)');
+  return h;
+}
+// B · a panel band: the header sits on its own surface, full width; tabs underline along the band's edge
+function headB(o) {
+  let h = el('', 0, 0, W, 134, 'background:var(--panel)');
+  h += el('', 12, 44, 120, 44, 'display:flex;align-items:center;font-size:17px;font-weight:600;color:var(--text)', 'TESTBED' + chev, 'role="button"');
+  h += el('', 140, 44, 80, 44, 'display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--text2r)', 'Loop' + chev, 'role="button"');
+  h += rKey(236, 46, 40, recDot, { label: 'Record' });
+  h += rKey(284, 46, 40, playTri, { lit: true, label: 'Stop' });
+  h += readout(344, 44);
+  h += lineTabs(96, o.tab || 'Pads');
+  return h + statusBar();
+}
+// C · title and transport: the project as the screen's title, launch moves into the readout's menu, tabs as a left row
+function headC(o) {
+  let h = el('', 12, 44, 170, 44, 'display:flex;align-items:center;font-size:20px;font-weight:600;color:var(--text)', 'TESTBED' + chev, 'role="button"');
+  h += readout(232, 44);
+  h += rKey(304, 44, 44, recDot, { ring: true, label: 'Record' });
+  h += rKey(356, 44, 48, playTri, { lit: true, label: 'Stop' });
+  h += lineTabs(96, o.tab || 'Pads', { left: true });
+  h += el('', 0, 132, W, 1, 'background:var(--control)');
+  return h;
+}
+
+board2(71, 'Header: three ways to set it apart', [
+  { cap: 'A · Quiet chrome', head: headA, bottom: (y, h) => homeEditor(y, h, { step: true }), label: 'Header with words, round keys and a hairline', discs: [[1, 216, 54], [2, 392, 100]] },
+  { cap: 'B · Panel band', head: headB, bottom: (y, h) => homeEditor(y, h, { step: true }), label: 'Header on its own band', discs: [[3, 380, 128]] },
+  { cap: 'C · Title and transport', head: headC, bottom: (y, h) => homeEditor(y, h, { step: true }), label: 'Header with the project as a title', discs: [[4, 290, 34], [5, 230, 104]] },
+], [
+  'All three: the header stops using the content\'s square keys. Project and Loop become words with a ⌄ (they open menus, they aren\'t pads), and Record and Play go round, as the FM-1\'s buttons are. Play is lit while playing. The square key stays the content\'s language: pads, steps, values.',
+  'Tabs become a row of related words with a 3 px white underline under the one showing, which glides between tabs (DESIGN.md: nothing pops). White, not a track colour: the tabs aren\'t a track\'s.',
+  '<b>B</b> puts the whole header on the panel surface, a band across the top that the content scrolls under. The strongest separation; it costs a little depth budget and reads more "app bar".',
+  '<b>C</b> makes the project the screen\'s title (20 semibold) and moves launch timing (Loop · Bar · Beat · Now) into the readout\'s menu beside tempo and playback, so the transport sits together at the right with a bigger Play. <span class="q">Open:</span> launch is one tap further away; you change it less often than you play.',
+  'A is the quietest and changes the least. My pick is A with B\'s band if A still doesn\'t separate enough on the Pixel; C is the bolder rearrangement.',
 ]);
 
 document.getElementById('boards').innerHTML = B2.join('');
