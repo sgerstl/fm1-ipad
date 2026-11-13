@@ -40,6 +40,7 @@ public final class PhoneCore {
         guard runTask == nil else { return }
         let s = session
         runTask = Task { await s.run() }
+        s.onDeviceNote = { [weak self] e in self?.keyIntoStep(e) }   // the FM-1's keys into the step (decision 5)
         areas = [
             AreaWatch(name: "link", build: { [unowned self] in AreaJSON.encode(self.linkArea()) }, publish: publish),
             AreaWatch(name: "top", build: { [unowned self] in AreaJSON.encode(self.topArea()) }, publish: publish),
@@ -92,6 +93,7 @@ public final class PhoneCore {
     func pokeAreas(_ names: [String]) { poke(names) }
 
     public func stop() {
+        session.onDeviceNote = nil
         runTask?.cancel(); runTask = nil
         clockTask?.cancel(); clockTask = nil
         projectTask?.cancel(); projectTask = nil

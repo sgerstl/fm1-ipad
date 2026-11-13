@@ -1540,8 +1540,13 @@ public final class DeviceSession {
         return ((n - 36) % 16 + 16) % 16
     }
 
+    /// Every note the FM-1 sends (its keys, and on Skiff its sequencer's notes too, a channel a track), as it arrives.
+    /// The phone's step entry listens here (decision 5); the iPad doesn't use it.
+    @ObservationIgnored public var onDeviceNote: (@MainActor (NoteEvent) -> Void)?
+
     private func noteLoop(_ t: SysExTransport) async {
         for await e in t.notes {
+            onDeviceNote?(e)
             let n = Int(e.note)
             if capabilities.contains(.livePlayhead) {
                 if e.on { deviceNotes.insert(n); followOctave(n) } else { deviceNotes.remove(n) }
