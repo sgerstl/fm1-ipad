@@ -170,6 +170,20 @@ The schema is `P6State.swift` mirrored by `P6State.kt` (published first, 100a607
 
 Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
 
+### Back, the lag, and page parity (P1, 2026-11-14)
+
+- **goHome** (decision 19: Android's back gesture is the only way back from a sound page). JSON `{"intent":"goHome"}`,
+  Kotlin `GoHome` (`PageState.kt`). It sends SCREEN_GOTO 127 (a HOME tap) through `Session.showOnDevice`, as the
+  iPad's HOME key does. It's a write, so it's refused while read-only. The shell's bottom is the editor again at once:
+  `shell` and `page` are published in the same call, from Session's optimistic screen, then follow the FM-1's reply.
+- **The sound key's lag:** `pickPage` (and `goHome`, `pickRoute`, `pickTile`) publish their areas in the intent's own
+  call instead of a frame later. On the Mac that takes intent → page from about 22 ms to 1–2 ms. A trace (`lag` lines
+  in LupeLog, Swift and Kotlin on one clock) is there for the Pixel. See `android/notes/page-lag.md`.
+- **Parity with the FM-1** (decision 22): `PageParityTests` checks every Skiff 2.5.1 sound page's reach, labels and
+  value text against what Skiff's own code prints (`android/scripts/skiff-page-dump.sh`). The fixes are in SloopKit
+  (shared with the iPad): Skiff's number rules, FM6's names, the engine's descriptors read after a PRESET, and
+  FakeSkiff's per-engine DESC and PRESET. What it can't decide is in `android/notes/page-parity.md`.
+
 ### Read-only by default (P1, 2026-11-13)
 
 `LinkGate.readOnly` (on by default) wraps every connection in `GuardedTransport`. Only frames that Skiff's own protocol table (`skiff-src web/EDITOR_PROTOCOL.md`) calls queries reach the FM-1; anything else is dropped and logged ("read-only: blocked cmd N…"). The allowlist is in `ReadOnlyGuard.swift`. Tests show Session and PhoneCore reach ready and keep running over FakeSkiff (with and without the screen link) with nothing blocked. The guard was added for Scott's approved overnight read-only tests on the real FM-1. **There is deliberately no button that turns writes on**: a stray tap from another session's screenshot script hit one on the shared emulator. Writes need `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --ez allowWrites true`. Making it read-only again is one tap. So Play from the phone does nothing until writes are allowed.
