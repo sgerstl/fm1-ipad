@@ -56,6 +56,7 @@ public final class PhoneCore {
             // Only while the FM-1's screen is on a sound page (nil otherwise: the last page stays; the shell says what shows).
             // shell.bottom only (tab and divider are Kotlin's): the sound page the FM-1 shows, else the editor
             AreaWatch(name: "shell", build: { [unowned self] in self.shellArea().map(AreaJSON.encode) }, publish: publish),
+            AreaWatch(name: "pageReads", build: { [unowned self] in self.readDenseData() }, publish: { _, _ in }),   // asks for the dense pages' data
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]

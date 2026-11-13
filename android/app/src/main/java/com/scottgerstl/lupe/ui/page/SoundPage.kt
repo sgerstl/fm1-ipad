@@ -115,7 +115,8 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier) {
             }
             if (g.kind == com.scottgerstl.lupe.core.GraphKind.Drive && g.caption != null) DriveName(g.caption!!, g.side, colour)
         }
-        PageControlsRow(
+        // the dense pages have no controls (four empty wells): their picture takes the height instead
+        if (page.controls.any { it != null }) PageControlsRow(
             page.controls, colour, page.turned, page.turnSeq,
             opened = { slot, c -> opened.getOrPut(slot) { c.raw } },
             onSet = { slot, v -> core.send(SetParam(slot, v)) },

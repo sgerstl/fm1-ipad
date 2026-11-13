@@ -28,9 +28,42 @@ public struct PageArea: Codable, Equatable, Sendable {
         public var names: [String]?
     }
 
-    public enum Kind: String, Codable, Sendable { case none, env, lfo, drive, fx, scale, arp, analog, mod, tiles, card }
+    public enum Kind: String, Codable, Sendable { case none, env, lfo, drive, fx, scale, arp, analog, mod, tiles, card, fm6op, fm6all, sound }
     public struct Tile: Codable, Equatable, Sendable { public var label: String }
     public struct Route: Codable, Equatable, Sendable { public var group: String; public var label: String; public var amount: Int; public var empty: Bool }
+
+    /// FM6's patch as OPERATOR and ALL OPS draw it (FM6_GET: the track's own patch, read whole).
+    public struct Fm6: Codable, Equatable, Sendable {
+        public struct Op: Codable, Equatable, Sendable {
+            public var output: Int
+            /// RATIO as the FM-1 shows it ("2×", "0.5×", "100 Hz").
+            public var ratio: String
+            /// RATE 1…4 and LEVEL 1…4, 0…99.
+            public var r: [Int]
+            public var l: [Int]
+        }
+        /// 0…31 (ALGO 1…32 on the FM-1), and FEEDBACK 0…7.
+        public var algorithm: Int
+        public var feedback: Int
+        /// The operator the FM-1's page is on, 1…6.
+        public var picked: Int
+        /// The FM-1's window (SCREEN's second cursor), if it reports one.
+        public var lit: Int?
+        public var ops: [Op]
+        /// ALL OPS' other settings as one line each ("TRANSPOSE +0 st", "LFO SINE · RATE 35 · FADE 0").
+        public var lines: [String]
+    }
+
+    /// DRUM-X's SOUND: the kit's sound and its windows as the FM-1 shows them (read-only on the phone).
+    public struct Sheet: Codable, Equatable, Sendable {
+        public struct Cell: Codable, Equatable, Sendable { public var label: String; public var value: String }
+        public struct Row: Codable, Equatable, Sendable { public var title: String; public var cells: [Cell] }
+        public var lane: Int
+        public var lanes: [String]
+        public var rows: [Row]
+        public var lit: Int?
+        public var note: String?
+    }
 
     public struct Graph: Codable, Equatable, Sendable {
         public var kind: Kind = .none
@@ -43,6 +76,8 @@ public struct PageArea: Codable, Equatable, Sendable {
         public var tiles: [Tile] = []
         public var picked = 0
         public var title: String?
+        public var fm6: Fm6?
+        public var sheet: Sheet?
     }
 
     public struct Lock: Codable, Equatable, Sendable { public var text: String; public var note: String?; public var locking: Bool }
@@ -76,6 +111,7 @@ public struct ShellArea: Codable, Equatable, Sendable {
 
 // MARK: building it
 
+let pageLaneShort = ["BD", "SD", "CP", "CH", "OH", "TM", "RS", "CB"]
 let pageLaneNames = ["KICK", "SNARE", "CLAP", "CL HAT", "OP HAT", "TOM", "RIM", "BELL"]
 let pageModFixed: [(group: String, label: String)] =
     [("LFO", "PITCH"), ("LFO", "CUTOFF"), ("LFO", "SHAPE"), ("LFO", "AMP"), ("ENV", "PITCH"), ("ENV", "CUTOFF"), ("ENV", "SHAPE")]
@@ -100,6 +136,21 @@ extension PhoneCore {
         return ShellArea(bottom: .init(kind: "editor", family: nil, page: nil))
     }
 
+    /// Asks for what the dense pages draw (FM6_GET, KIT_GET: reads) whenever the FM-1's screen moves onto or within one.
+    /// Run as an area watch's builder so Observation re-runs it on a screen or track change; it publishes nothing.
+    func readDenseData() -> String? {
+        let s = session
+        guard s.isConnected, s.dialect == .skiff, s.screenLinked, let screen = s.deviceScreen, let fw = Self.soundPage(of: screen),
+              let page = SoundPage.page(s, fw: fw), let store = s.skiffEdit else { return nil }
+        let t = s.selectedTrack
+        switch page.title {
+        case "OPERATOR", "ALL OPS": Task { await store.readPatch(track: t) }
+        case "SOUND": Task { await store.readKit(lane: min(max(screen.cursor ?? 0, 0), 7)) }
+        default: break
+        }
+        return nil
+    }
+
     /// The sound page the FM-1 shows, or nil when it shows none (HOME, the sequencer, GLO, a layer), when the firmware
     /// isn't Skiff, or before the screen link has reported.
     public func pageArea() -> PageArea? {
@@ -108,7 +159,7 @@ extension PhoneCore {
               let fw = Self.soundPage(of: screen),
               let page = SoundPage.page(s, fw: fw) else { return nil }
         let t = s.selectedTrack
-        var row = SoundPage.reached(s, page.family).map { PageArea.Ref(index: $0.fw, title: $0.title) }
+        var row = SoundPage.counted(SoundPage.reached(s, page.family), s).map { PageArea.Ref(index: $0.fw, title: $0.title) }
         if !row.contains(where: { $0.index == page.fw }) { row.append(PageArea.Ref(index: page.fw, title: page.title)) }
         let ctx = PageContext(session: s, page: page, cursor: screen.cursor)
         var area = PageArea(family: page.family.rawValue, pages: row, page: page.fw, track: t + 1, trackName: s.tracks[t].displayName,
@@ -214,6 +265,64 @@ extension PhoneCore {
         return control(scope: p.scope(of: k), id: id).value
     }
 
+    // MARK: dense pages (OPERATOR, ALL OPS, SOUND), from SkiffEditStore's reads
+
+    /// The track's FM6 patch, as ios/FM1/FM6Pages.swift reads it. nil until it has been read.
+    func fm6() -> PageArea.Fm6? {
+        guard let p = session.skiffEdit?.patches[track] else { return nil }
+        let e0 = SoundPage.pages(session).first { $0.engineEdit == 1 }?.ids.first ?? nil
+        let macro = e0.map { session.cell($0).value } ?? 0
+        let algorithm = (1...32).contains(macro) ? macro - 1 : p[.algorithm]
+        let fbMacro = (e0.map { $0 + 1 }).map { session.cell($0).value } ?? 0
+        let feedback = min(7, max(0, p[.feedback] + fbMacro))
+        let ops = (1...6).map { n in
+            PageArea.Fm6.Op(output: p.op(n, .output), ratio: Self.ratio(p, n),
+                            r: [FM6Patch.Op.r1, .r2, .r3, .r4].map { p.op(n, $0) }, l: [FM6Patch.Op.l1, .l2, .l3, .l4].map { p.op(n, $0) })
+        }
+        let waves = ["TRI", "SAW DN", "SAW UP", "SQUARE", "SINE", "RANDOM"]
+        let tr = p[.transpose] - 24
+        let lines = ["TRANSPOSE \(tr > 0 ? "+" : "")\(tr) st",
+                     "LFO \(waves[min(5, p[.lfoWave])]) · RATE \(p[.lfoSpeed]) · FADE \(p[.lfoDelay])",
+                     "VIBRATO \(p[.pitchDepth]) · TREMOLO \(p[.ampDepth])"]
+        return PageArea.Fm6(algorithm: algorithm, feedback: feedback, picked: min(max(cursor ?? 0, 0), 5) + 1, lit: litWindow,
+                            ops: ops, lines: lines)
+    }
+
+    /// RATIO as the FM-1 shows it: ratio mode "0.5×", or the fixed mode's 1, 10, 100, 1K Hz.
+    static func ratio(_ p: FM6Patch, _ n: Int) -> String {
+        let fc = p.op(n, .coarse)
+        if p.op(n, .mode) == 1 { return ["1", "10", "100", "1K"][fc & 3] + " Hz" }
+        return fc == 0 ? "0.5×" : "\(fc)×"
+    }
+
+    /// The FM-1's window (SCREEN's second cursor) on this page.
+    var litWindow: Int? {
+        guard let s = session.deviceScreen, !s.home, s.page == page.fw else { return nil }
+        return s.cursor2
+    }
+
+    /// DRUM-X's sound under the FM-1's lane cursor, in the windows ui_dx.c has (PITCH, DECAY NOISE, COLOR LEVEL, MODE).
+    func soundSheet() -> PageArea.Sheet? {
+        let l = lane
+        guard let k = session.skiffEdit?.kit[l] else { return nil }
+        func ab(_ i: Int) -> [PageArea.Sheet.Cell] {
+            [PageArea.Sheet.Cell(label: "\(DXLane.names[i]) A", value: "\(k.a[i])"), PageArea.Sheet.Cell(label: "\(DXLane.names[i]) B", value: "\(k.b[i])")]
+        }
+        func name(_ v: Int, _ names: [String]) -> String { names[safe: v] ?? "\(v)" }
+        let level = (page.picks[safe: l]?.first ?? nil).map { control(scope: 0, id: $0, label: "LEVEL").value } ?? "–"
+        let rows = [
+            PageArea.Sheet.Row(title: "PITCH", cells: ab(0) + ab(1)),
+            PageArea.Sheet.Row(title: "DECAY NOISE", cells: ab(2) + ab(3)),
+            PageArea.Sheet.Row(title: "COLOR LEVEL", cells: ab(4) + [.init(label: "LEVEL", value: level), .init(label: "DRIVE", value: name(k.drive, ["OFF", "ON"]))]),
+            PageArea.Sheet.Row(title: "MODE", cells: [.init(label: "WAVE", value: name(k.wave, ["SIN", "FM", "MTL", "BEL"])),
+                                                      .init(label: "FILTER", value: name(k.filter, ["LP", "BP", "HP"])),
+                                                      .init(label: "SNAP", value: name(k.snap, ["OFF", "ON"])),
+                                                      .init(label: "P SHAPE", value: name(k.pitchShape, ["DECAY", "LONG", "NOISE", "SINE"]))]),
+        ]
+        return PageArea.Sheet(lane: l, lanes: pageLaneShort, rows: rows, lit: litWindow,
+                              note: "The kit is the project's: every DRUM-X track plays it, MORPH blending A into B.")
+    }
+
     func graph() -> PageArea.Graph {
         var g = PageArea.Graph()
         switch page.title {
@@ -263,9 +372,17 @@ extension PhoneCore {
         case "LANES", "LANE MIX":
             guard isLanes else { break }
             g.kind = .tiles; g.tiles = pageLaneNames.map { PageArea.Tile(label: $0) }; g.picked = lane
-        case "OPERATOR", "ALL OPS", "SLICES", "SOUND":
+        case "OPERATOR", "ALL OPS":
             g.kind = .card
             g.title = cursor.map { "\(page.title) · \($0 + 1)" } ?? page.title
+            if let fm6 = fm6() { g.kind = page.title == "OPERATOR" ? .fm6op : .fm6all; g.fm6 = fm6 }
+        case "SOUND":
+            g.kind = .card
+            g.title = cursor.map { "\(page.title) · \($0 + 1)" } ?? page.title
+            if let sheet = soundSheet() { g.kind = .sound; g.sheet = sheet }
+        case "SLICES":
+            g.kind = .card      // the markers can't be read or moved from here (no command reaches them): the card says so
+            g.title = "SLICES"
         default: break
         }
         return g

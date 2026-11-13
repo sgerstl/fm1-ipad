@@ -18,7 +18,7 @@ ROWS = {
  "ENV": [(0,"ENV"),(1,"ENV 2")],
  "LFO": [(2,"LFO"),(3,"LFO 2"),(4,"MOD")],
  # Skiff 2.5.1 (the FM-1 P1 found): DELAY and REVERB follow FX. Skiff 2.2 numbering, 46 and 47: the real ones come with P1's recording.
- "FX": [(5,"FX"),(46,"DELAY"),(47,"REVERB"),(6,"DRIVE"),(7,"INSERT"),(8,"INSERT 2"),(9,"SLICER"),(10,"DUCK")],
+ "FX": [(5,"FX"),(46,"DELAY"),(47,"REVERB"),(6,"DRIVE"),(7,"INSERT"),(9,"SLICER"),(10,"DUCK")],   # decision 17: the FM-1's own seven on 2.5.1 (INSERT 2 only on 2.2),
  "SEL": [(11,"SCALE"),(12,"CHORD"),(13,"FOLLOW")],
  "EDIT-ANALOG": [(14,"EDIT 1"),(15,"EDIT 2"),(28,"VOICE"),(29,"VOICE 2")],
  "EDIT-DRUM": [(14,"EDIT 1"),(15,"EDIT 2"),(18,"LANES"),(20,"LANE MIX"),(28,"VOICE"),(29,"VOICE 2")],
@@ -97,8 +97,8 @@ PAGES["ARP"] = [
 ]
 
 # Recorded from PhoneCore over FakeSkiff 2.5.1 (android/core/Tests/LupeCoreTests/PageAreaTests.swift, RECORD_FIXTURES=1):
-# this script no longer writes them. Still hand-written here: page-env-lock (a held step), page-lanes, page-operator.
-RECORDED = {"page-env", "page-lfo", "page-mod", "page-drive", "page-edit1", "page-scale", "page-arp"}
+# this script no longer writes them. Still hand-written here: page-env-lock (a held step) and page-lanes.
+RECORDED = {"page-env", "page-lfo", "page-mod", "page-drive", "page-edit1", "page-scale", "page-arp", "page-operator", "page-allops", "page-sound"}
 
 def scenario(name, lib, shown, note, page=None):
     if name in RECORDED: return
