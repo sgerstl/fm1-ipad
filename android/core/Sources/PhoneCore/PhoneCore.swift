@@ -82,6 +82,8 @@ public final class PhoneCore {
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             // HOME's four knobs (decision 21): the selected track's engine's, as the FM-1 shows them
             AreaWatch(name: "homeKnobs", build: { [unowned self] in self.homeKnobsArea().map(AreaJSON.encode) }, publish: publish),
+            // the FM-1 key whose screen is up (decision 24: the phone's button block lights it)
+            AreaWatch(name: "fm1Screen", build: { [unowned self] in self.fm1ScreenArea().map(AreaJSON.encode) }, publish: publish),
             // P5: once the FM-1 has been read, as pads and editor
             AreaWatch(name: "mix", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.mixArea()) : nil }, publish: publish),
             AreaWatch(name: "meters", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.metersArea()) : nil }, publish: publish),
@@ -227,7 +229,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects

@@ -45,6 +45,14 @@ on track 1. Nothing writes the FM-1's flash.
 | 13 | Slide the phone's RES. | The FM-1's RES follows (HOME's knob 2 shows it). | – | ☐ pass ☐ fail: |
 | 14 | Load a PHASE sound on the track. | The phone's four become DCW, ENV, DETUNE, RELEASE, as the FM-1's HOME shows. | – | ☐ pass ☐ fail: |
 
+## D. The FM-1 button block (decision 24, board 72; needs P2's keys)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 15 | Press the phone's **GLO**, then **SAVE**, then **SEQ**. | The FM-1 goes to MIXER, then PRESETS, then NOTES, and the phone's key for each lights. | – | ☐ pass ☐ fail: |
+| 16 | Press the phone's SAVE again until PROJECT. | The FM-1 is on SAVE › PROJECT and the phone opens Projects. On PRESETS or USER it opens the Sounds browser. | – | ☐ pass ☐ fail: |
+| 17 | On the FM-1 itself press ENV, then HOME. | The phone's ENV key lights, then HOME's. | – | ☐ pass ☐ fail: |
+
 **Not covered here:**
 
 - Pictures, sheets and MOD's layout: see android/notes/page-parity.md, "Open, for Scott" and "What the test can't

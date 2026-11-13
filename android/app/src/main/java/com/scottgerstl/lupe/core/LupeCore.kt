@@ -27,6 +27,8 @@ interface LupeCore {
     val automation: StateFlow<AutomationState> get() = P6Defaults.automation
     /** HOME's four knobs (decision 21): HomeKnobsState.kt. */
     val homeKnobs: StateFlow<HomeKnobsState> get() = HomeKnobsDefaults.homeKnobs
+    /** The FM-1 key whose screen is up (decision 24): ScreenState.kt. */
+    val fm1Screen: StateFlow<Fm1ScreenState> get() = ScreenDefaults.fm1Screen
 
     fun send(intent: Intent)
 }
