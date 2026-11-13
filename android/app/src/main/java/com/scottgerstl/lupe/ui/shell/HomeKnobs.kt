@@ -39,8 +39,7 @@ import com.scottgerstl.lupe.core.HomeKnobsState
 import com.scottgerstl.lupe.core.LupeCore
 import com.scottgerstl.lupe.core.SetHomeKnob
 import com.scottgerstl.lupe.ui.page.LIT_FADE_MS
-import com.scottgerstl.lupe.ui.page.PictureControls
-import com.scottgerstl.lupe.ui.page.PictureSlider
+import com.scottgerstl.lupe.ui.page.KnobControls
 import com.scottgerstl.lupe.ui.theme.EaseOut
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
 import com.scottgerstl.lupe.ui.theme.LupeType
@@ -60,7 +59,7 @@ fun HomeKnobsStrip(ed: EditorState, core: LupeCore, modifier: Modifier = Modifie
     val track = Tok.track[(ed.track - 1).coerceAtLeast(0) % Tok.track.size]
     // the value each knob had when the strip appeared: what a double tap puts back (the FM-1 has no per-sound factory value)
     val opened = remember(ed.track, home.engine) { mutableMapOf<Int, Int>() }
-    val pc = PictureControls(home.controls, track, { slot, c -> opened.getOrPut(slot) { c.raw } }) { slot, v -> core.send(SetHomeKnob(slot, v)) }
+    val pc = KnobControls(home.controls, track, { slot, c -> opened.getOrPut(slot) { c.raw } }) { slot, v -> core.send(SetHomeKnob(slot, v)) }
     Column(modifier.fillMaxWidth().height(STRIP_HEIGHT)) {
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicText("Sound", Modifier.semantics { heading() }, style = LupeType.key)
@@ -70,60 +69,11 @@ fun HomeKnobsStrip(ed: EditorState, core: LupeCore, modifier: Modifier = Modifie
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
             for (slot in 0 until 4) Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                 val c = home.controls.getOrNull(slot)
-                if (c == null) Box(Modifier.size(KNOB))   // an empty well keeps knob 3 knob 3
-                else RoundKnob(slot, c.label, c.value, c.raw, c.min, c.max, track, if (slot == home.hot) home.hotSeq else -1, pc)
+                if (c == null) Box(Modifier.size(com.scottgerstl.lupe.ui.page.DIAL_RING))   // an empty well keeps knob 3 knob 3
+                else com.scottgerstl.lupe.ui.page.RoundDial(slot, c, track, if (slot == home.hot) home.hotSeq else -1, pc)
             }
         }
     }
 }
 
 internal val STRIP_HEIGHT = 122.dp
-private val KNOB = 60.dp
-
-@Composable
-private fun RoundKnob(slot: Int, label: String, value: String, raw: Int, min: Int, max: Int, track: androidx.compose.ui.graphics.Color, litKey: Int, pc: PictureControls) {
-    val reduce = LocalReduceMotion.current
-    val lit = remember { Animatable(0f) }
-    var sliding by remember { mutableStateOf(false) }
-    // the FM-1 turned it: white at once, then fading over 600 ms (the sound pages' rule); while a finger slides it, white throughout
-    LaunchedEffect(litKey) {
-        if (litKey < 0) return@LaunchedEffect
-        unscaled { lit.animateTo(1f, tween(if (reduce) 0 else 80)); lit.animateTo(0f, tween(LIT_FADE_MS, easing = EaseOut)) }
-    }
-    val on = if (sliding) 1f else lit.value
-    val ring = lerp(track, Tok.text, on)
-    val frac = if (max > min) (raw - min).toFloat() / (max - min) else 0f
-    Box(Modifier.size(width = 84.dp, height = 88.dp), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.clearAndSetSemantics { }, horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(KNOB), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.fillMaxSize().padding(2.dp)) {
-                    val w = 5.dp.toPx(); val tl = Offset(w / 2, w / 2); val sz = Size(size.width - w, size.height - w)
-                    drawArc(Tok.control, 135f, 270f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
-                    if (frac > 0.003f) drawArc(ring, 135f, 270f * frac, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
-                }
-                FittedValue(value)
-            }
-            BasicText(label, Modifier.padding(top = 4.dp), style = LupeType.number.copy(fontSize = 12.sp, color = lerp(Tok.text2Raised, Tok.text, on), letterSpacing = 0.5.sp), maxLines = 1)
-        }
-        // the whole knob and its label is the target; it says its own name and value to TalkBack
-        PictureSlider(slot, pc, Modifier, 84.dp, 88.dp, onHot = { sliding = it })
-    }
-}
-
-/**
- * The value inside the ring: 22 sp shrinking one step at a time to fit the ring's inner width, floor 13 sp. A list value
- * too long even then ("GOSPEL" on a WHEEL track, seen on the real FM-1) is cut to the letters that fit, as the FM-1 does with
- * its short forms, rather than shrinking past reading.
- */
-@Composable
-private fun FittedValue(value: String) {
-    val tm = androidx.compose.ui.text.rememberTextMeasurer()
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val inner = with(density) { 46.dp.roundToPx() }
-    val base = LupeType.number.copy(color = Tok.text, textAlign = TextAlign.Center)
-    fun fits(t: String, sp: Int) = tm.measure(t, base.copy(fontSize = sp.sp), maxLines = 1, softWrap = false).size.width <= inner
-    var size = 13; var text = value
-    for (sp in 22 downTo 13) if (fits(value, sp)) { size = sp; break }
-    if (!fits(value, size)) { var n = value.length; while (n > 1 && !fits(value.take(n), 13)) n--; text = value.take(n) }
-    BasicText(text, style = base.copy(fontSize = size.sp, lineHeight = size.sp), maxLines = 1, softWrap = false)
-}

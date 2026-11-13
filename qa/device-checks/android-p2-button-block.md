@@ -4,6 +4,8 @@ Built (Kotlin tests pass, APK builds); **not run on a screen**. P1's core side (
 
 The block sits at the very bottom of the bottom half, always, on HOME too: **FX SEL ENV LFO EDIT GLO** over **HOME SAVE ARP SEQ PLAY/STOP REC**, Barlow Condensed labels, PLAY/STOP (two lines) and REC in red. The sound page no longer has its own six family keys. From the top: ruler, step grid, the HOME knobs or step controls (or the sound page), the block.
 
+> Updated by decision 25: the sound page has no picture (see `android-p2-sound-dials.md` for the numbers). The table below is the earlier layout.
+
 ## What fits on a 412 × 915 dp phone (body about 793 dp; the Pixel 7's 1080 × 2400 is 411 × 914 dp, the same)
 
 | Divider | HOME / editor | A sound page (FX) |

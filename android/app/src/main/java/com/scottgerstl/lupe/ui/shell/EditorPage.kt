@@ -114,6 +114,8 @@ fun EditorPage(
     modifier: Modifier = Modifier, pick: StepPick = remember { StepPick() },
     /** The sound section (family keys, page row, sound page) while the FM-1 shows a sound page, or null (decision 20c). */
     sound: (@Composable () -> Unit)? = null,
+    /** What the sound section needs (page row, header, dials, and tiles if any); the grid gets the rest. */
+    soundNeeds: Dp = SOUND_IDEAL,
 ) {
     var tab by rememberSaveable { mutableStateOf(PanelTab.Notes) }
     // the whole bottom half for one lane (board 69): drawn on with a finger. Done, or Back, returns to the editor
@@ -132,7 +134,7 @@ fun EditorPage(
         // the grid in the editor: what is left above the lane and the strip. With a sound page: no smaller than 36 dp a row, no bigger than 72, and
         // leaving the sound section its four controls first; the section's picture takes what remains (0 at split on a 915 dp phone)
         val grid0 = (maxHeight - ruler - 12.dp - STRIP_HEIGHT - lane0 - BLOCK_HEIGHT - 6.dp).coerceAtLeast(MIN_GRID)
-        val grid1 = (maxHeight - ruler - 6.dp - SOUND_IDEAL - BLOCK_HEIGHT - 6.dp).coerceIn(MIN_GRID, MAX_GRID)
+        val grid1 = (maxHeight - ruler - 6.dp - soundNeeds - BLOCK_HEIGHT - 6.dp).coerceIn(MIN_GRID, MAX_GRID)
         val grid = grid0 + (grid1 - grid0) * s
         Column(Modifier.fillMaxSize()) {
             Ruler(ed, track, core, pick.step != null)
@@ -160,8 +162,9 @@ fun EditorPage(
 }
 
 private val MIN_GRID = 128.dp          // four rows of 29 dp and three 4 dp gaps (the board's miniGrid, about 30)
-private val MAX_GRID = 300.dp          // rows of 72 dp: more room goes to the sound page's picture
-private val SOUND_IDEAL = 272.dp       // page row 44, controls ~118 and a picture of ~110
+private val MAX_GRID = 348.dp          // rows of 84 dp
+internal val SOUND_IDEAL = 160.dp       // page row 44, header 28, dials 88 (decision 25: no picture)
+internal val SOUND_IDEAL_TILES = 300.dp // with tiles to pick from: room for three rows of them
 
 // ---- ruler and lock banner
 

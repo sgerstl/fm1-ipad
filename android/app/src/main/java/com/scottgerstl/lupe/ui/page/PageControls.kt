@@ -76,118 +76,24 @@ const val LIT_FADE_MS = 600
 /** A drag of this many dp moves the value one step: about 2 dp for a 0–127 range, wider where there are few steps (a list). PROVISIONAL, Labs candidate. */
 private fun stepDp(c: PageControl): Float = if (c.max - c.min >= 64) 2f else if (c.max - c.min >= 16) 6f else 20f
 
-/** The row of four. [litSeq] / [litSlot] come from the page area (the FM-1's knob turning). */
+/**
+ * The row of four dials (decision 25: the sound page is the page row, a header, tiles if any, and these). Round, as the FM-1's are and as
+ * board 70's HOME knobs: the value inside the ring, the label under it. Slide to turn (the direction setting, the Magnifier), double tap
+ * back to where the page opened. [litSlot] / [litSeq] come from the page area (the FM-1's knob turning): the ring goes white.
+ */
 @Composable
 fun PageControlsRow(
     controls: List<PageControl?>, colour: Color, litSlot: Int, litSeq: Int, opened: (Int, PageControl) -> Int,
     onSet: (slot: Int, value: Int) -> Unit, modifier: Modifier = Modifier,
 ) {
+    val kc = KnobControls(controls, colour, opened, onSet)
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         for (slot in 0 until 4) {
-            val c = controls.getOrNull(slot)
             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                if (c == null) EmptyWell(slot) else PageKnob(slot, c, colour, if (slot == litSlot) litSeq else -1, opened(slot, c)) { onSet(slot, it) }
+                val c = controls.getOrNull(slot)
+                if (c == null) Box(Modifier.size(DIAL_RING))   // an FM-1 knob with no parameter on this page (0xFF): the well stays so knob 3 is always knob 3
+                else RoundDial(slot, c, colour, if (slot == litSlot) litSeq else -1, kc)
             }
-        }
-    }
-}
-
-/** An FM-1 knob with no parameter on this page (0xFF): the well stays so knob 3 is always knob 3. Hidden from TalkBack. */
-@Composable
-private fun EmptyWell(slot: Int) {
-    Column(Modifier.width(96.dp).clearAndSetSemantics { }, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.padding(top = 6.dp).size(RING_BOX - 8.dp).clip(CircleShape).background(Tok.well))
-    }
-}
-
-private val RING_BOX = 64.dp
-
-@Composable
-private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, openedRaw: Int, onSet: (Int) -> Unit) {
-    val reduce = LocalReduceMotion.current
-    val haptic = LocalHapticFeedback.current
-    val lit = remember { Animatable(0f) }
-    // lit while the FM-1 turns: it comes on at once, then fades 600 ms after the last turn
-    LaunchedEffect(litKey) {
-        if (litKey < 0) return@LaunchedEffect
-        unscaled { lit.animateTo(1f, tween(if (reduce) 0 else 80)); lit.animateTo(0f, tween(LIT_FADE_MS, easing = EaseOut)) }
-    }
-    // an optimistic value while a finger moves it: the ring follows at once; the FM-1's answer then settles the words
-    var optimistic by remember { mutableIntStateOf(Int.MIN_VALUE) }
-    LaunchedEffect(c.raw) { if (optimistic == c.raw) optimistic = Int.MIN_VALUE }
-    val raw = if (optimistic != Int.MIN_VALUE) optimistic else c.raw
-
-    val editable = !c.ringless && !c.fixed
-    // The value right now, read from state rather than from `raw` (fixed at the last recomposition): taps that come
-    // faster than a frame each add their step instead of all adding to the same old value (adb taps lost steps,
-    // 2026-11-13).
-    val latest by rememberUpdatedState(c)   // the gesture blocks outlive recompositions: read the control through this
-    val latestOnSet by rememberUpdatedState(onSet)
-    var slideBase by remember { mutableIntStateOf(0) }
-    fun now() = if (optimistic != Int.MIN_VALUE) optimistic else latest.raw
-    fun set(v: Int) {
-        val n = v.coerceIn(c.min, c.max)
-        if (n == now()) { if (v != n) haptic.performHapticFeedback(HapticFeedbackType.ContextClick) ; return }   // at an end
-        optimistic = n
-        if (c.list || n == c.min || n == c.max) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        latestOnSet(n)
-    }
-
-    val litF = lit.value
-    val frac = if (c.max > c.min) (raw - c.min).toFloat() / (c.max - c.min) else 0f
-    val ring = lerp(colour, Tok.text, litF)
-    val labelColour = lerp(if (c.fixed) Tok.text2 else Tok.text2Raised, Tok.text, litF)
-    val valueColour = if (c.fixed) Tok.text2 else Tok.text
-    val spoken = c.label + (if (c.locked) ", locked on this step" else "")
-
-    Column(
-        Modifier.width(96.dp)
-            .semantics(mergeDescendants = true) {
-                contentDescription = spoken
-                stateDescription = c.value + if (c.fixed) ", fixed" else ""
-                if (editable) {
-                    role = Role.Button
-                    progressBarRangeInfo = ProgressBarRangeInfo(raw.toFloat(), c.min.toFloat()..c.max.toFloat(), c.max - c.min - 1)
-                    setProgress { v -> set(v.roundToInt()); true }
-                    customActions = listOf(
-                        CustomAccessibilityAction("Increase $spoken") { set(now() + 1); true },
-                        CustomAccessibilityAction("Decrease $spoken") { set(now() - 1); true },
-                        CustomAccessibilityAction("Put $spoken back to ${openedRaw}") { set(openedRaw); true },
-                    )
-                }
-            }
-            // double tap puts it back; sliding turns it (the direction is the setting's), the Magnifier floats the value
-            .then(if (!editable) Modifier else Modifier
-                .pointerInput(c.max, c.min, openedRaw) { detectTapGestures(onDoubleTap = { set(openedRaw) }) }
-                .slideToTurn(
-                    enabled = true, stepDp = stepDp(c),
-                    face = remember(c.label, colour) { MagnifierFace(c.label, { latest.value }, { val l = latest; if (l.max > l.min) (now() - l.min).toFloat() / (l.max - l.min) else 0f }, ring = true, tint = colour) },
-                    onStart = { slideBase = now() },
-                    onSlide = { steps -> set(slideBase + steps) },
-                )),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.size(RING_BOX).padding(top = 2.dp), contentAlignment = Alignment.Center) {
-            if (!c.ringless) Canvas(Modifier.fillMaxSize().padding(4.dp)) {
-                val w = 5.dp.toPx()
-                val tl = Offset(w / 2, w / 2); val sz = Size(size.width - w, size.height - w)
-                drawArc(Tok.control, 135f, 270f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
-                if (frac > 0.003f) drawArc(ring, 135f, 270f * frac, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            if (c.locked) { Diamond(colour); Box(Modifier.width(4.dp)) }
-            BasicText(c.label, style = LupeType.number.copy(fontSize = 12.sp, color = labelColour, letterSpacing = 0.5.sp), maxLines = 1, overflow = TextOverflow.Clip)
-        }
-        // the value: 24 (shrinking to 18 for a long name), and 30 while the FM-1 turns it
-        val grow = if (reduce) 1f else 1f + 0.25f * litF
-        Box(Modifier.height(34.dp).fillMaxWidth().graphicsLayer { scaleX = grow; scaleY = grow }, contentAlignment = Alignment.Center) {
-            BasicText(
-                c.value, Modifier.padding(horizontal = 2.dp),
-                style = LupeType.number.copy(fontSize = 24.sp, color = valueColour, textAlign = TextAlign.Center),
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 24.sp, stepSize = 1.sp),
-            )
         }
     }
 }
@@ -200,7 +106,7 @@ fun Diamond(colour: Color, modifier: Modifier = Modifier) = Canvas(modifier.size
 
 
 /** What a picture needs to turn one of the page's controls: the control (by its FM-1 knob slot), where it opened, and how to send it. */
-class PictureControls(val controls: List<PageControl?>, val colour: Color, val opened: (Int, PageControl) -> Int, val onSet: (Int, Int) -> Unit) {
+class KnobControls(val controls: List<PageControl?>, val colour: Color, val opened: (Int, PageControl) -> Int, val onSet: (Int, Int) -> Unit) {
     /** The slot whose control is called [label], or -1 (EDIT 1's CUTOFF and RES sit in different knobs on other engines). */
     fun slotOf(label: String) = controls.indexOfFirst { it?.label == label }
 }
@@ -211,7 +117,7 @@ class PictureControls(val controls: List<PageControl?>, val colour: Color, val o
  * tap back to where the page opened, the same steps per dp, the same TalkBack range and actions. Draws nothing.
  */
 @Composable
-fun PictureSlider(slot: Int, pc: PictureControls, modifier: Modifier = Modifier, width: androidx.compose.ui.unit.Dp = 44.dp, height: androidx.compose.ui.unit.Dp = 44.dp, onHot: (Boolean) -> Unit = {}) {
+fun KnobTarget(slot: Int, pc: KnobControls, modifier: Modifier = Modifier, width: androidx.compose.ui.unit.Dp = 44.dp, height: androidx.compose.ui.unit.Dp = 44.dp, onHot: (Boolean) -> Unit = {}) {
     val hotNow by rememberUpdatedState(onHot)
     val c = pc.controls.getOrNull(slot) ?: return
     if (c.ringless || c.fixed) return

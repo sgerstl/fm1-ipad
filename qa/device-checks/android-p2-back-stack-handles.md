@@ -43,20 +43,9 @@ What shows at each divider position on a 412 × 915 dp phone (body about 793 dp 
 - Open: should HOME keep the pick rather than clear it? A latched Lock while a sound page is up keeps its banner in the ruler. A pattern change while a sound page is up changes the grid under it. Whether a squeezed 36 dp grid is too small to hit on a phone: it is above the 24 dp floor but under 44.
 - At split with the "held" notice showing, the controls row can lose a few dp at the bottom: the picture is already gone.
 
-## Picture handles (22)
+## Picture handles (22): removed
 
-On ENV, the FX sends page, and EDIT 1's picture (ANALOG engine).
-
-| # | Do | See |
-|---|----|-----|
-| 11 | ENV: slide each of the four handles (attack peak, decay corner, a sustain handle on the held line, release end) | Each turns the control of that name below it, with the same direction, step and Magnifier as the knob. The old drag-to-position is gone |
-| 12 | Double tap a handle | Back to where the page opened, as the knob |
-| 13 | FX sends: slide a bar | That send's control turns; the bar follows |
-| 14 | EDIT 1: slide the cutoff line's handle and the peak's handle | CUTOFF and RES turn |
-| 15 | Turn TalkBack on and swipe through a handle | It reads as the control (name, value, increase and decrease) |
-| 16 | LFO, DRIVE, ARP, SCALE pictures | Still decoration: no handle |
-
-Known edges: handles are 44 dp targets (the 48 dp knobs below are the roomier way in); two handles can sit close on a very short decay.
+Superseded by decision 25 (the phone no longer draws the FM-1's pictures, so there are no handles). Rows 11-16 are gone. The dials below the sound page's header are the way in; see `android-p2-button-block.md`.
 
 ## Pause and Pin only hold against the FM-1 (2026-11-13)
 

@@ -77,18 +77,16 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 fun trackColour(track: Int): Color = Tok.track[((track - 1) % 6 + 6) % 6]
 
 /**
- * The bottom half while the FM-1 is on a sound page (design/phone-sound-pages.md; boards 55, 59–63). Top to bottom:
- * the family keys, the page row (or the lock banner), the graph panel, the four controls. The controls are fixed
- * in size and sit at the bottom, so at bottom full the graph takes all the extra height and the controls stay
- * where the thumb found them at split.
+ * The bottom half while the FM-1 is on a sound page (decision 25: the phone is the overview, the FM-1 is the detail, so no pictures).
+ * Top to bottom: the page row (or the lock banner), a header naming the page and its place with the track line, tiles where knob 1 picks
+ * from a list of names (MOD's routes, LANES, SAMPLES, DRUM-X's SOUND), and the four dials at the bottom. The button block under it is
+ * the layout's, not this page's.
  */
 @Composable
 fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, notice: String? = null) {
     val colour = trackColour(page.track)
     // the value each control had when this page opened, for double-tap to put it back (not a factory default: the FM-1 has none per sound)
     val opened = remember(page.track, page.page, page.family) { mutableMapOf<Int, Int>() }
-    // the FM-1's knob lights its control; a new page starts with nothing lit
-    val hot = remember { mutableStateOf(-1) }
 
     Column(modifier.fillMaxSize()) {
         // the family keys live in the button block now (decision 24); this page starts at its page row
@@ -99,33 +97,31 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, no
         }
         // the held notice has its own slim line under the page row (never over a key); it fades in and out
         HeldNotice(notice)
-        // the graph panel takes what is left
-        Box(
-            Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(Tok.panel),
-        ) {
-            val g = page.graph
-            Box(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 30.dp, bottom = 10.dp)) {
-                LupeCrossfade(page.page to page.family, Modifier.fillMaxSize(), Dur.STATE) { _ ->
-                    GraphContent(
-                        g, colour, if (litNow(page)) page.turned else -1,
-                        pc = PictureControls(page.controls, colour, { slot, c -> opened.getOrPut(slot) { c.raw } }) { slot, v -> core.send(SetParam(slot, v)) },
-                        onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+        PageHeader(page, colour)
+        // tiles where a knob picks from a list of names; otherwise the room is left empty (the FM-1 has the detail)
+        Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp)) {
+            LupeCrossfade(page.page to page.family, Modifier.fillMaxSize(), Dur.STATE) { _ ->
+                if (hasTiles(page.graph)) PageTilesContent(page.graph, colour, onPickRoute = { core.send(PickRoute(it)) }, onPickTile = { core.send(PickTile(it)) }, modifier = Modifier.fillMaxSize())
+                else if (page.controls.none { it != null }) BasicText("Set this page on the FM-1.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = LupeType.small.copy(color = Tok.text2Raised))
             }
-            TrackLine(page, colour, Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 8.dp))
-            if (g.side != null && g.kind in setOf(com.scottgerstl.lupe.core.GraphKind.Scale, com.scottgerstl.lupe.core.GraphKind.Arp)) {
-                BasicText(g.side!!, Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 8.dp), style = LupeType.small.copy(color = Tok.text2Raised), maxLines = 1)
-            }
-            if (g.kind == com.scottgerstl.lupe.core.GraphKind.Drive && g.caption != null) DriveName(g.caption!!, g.side, colour)
         }
-        // the dense pages have no controls (four empty wells): their picture takes the height instead
+        // the dense pages have no controls (four empty wells): they show only the line above
         if (page.controls.any { it != null }) PageControlsRow(
-            page.controls, colour, page.turned, page.turnSeq,
+            page.controls, colour, if (litNow(page)) page.turned else -1, page.turnSeq,
             opened = { slot, c -> opened.getOrPut(slot) { c.raw } },
             onSet = { slot, v -> core.send(SetParam(slot, v)) },
         )
+    }
+}
+
+/** "FX · 1 of 6" and the track line ("5 Piano"): 28 dp. */
+@Composable
+private fun PageHeader(page: PageState, colour: Color) {
+    val at = page.pages.indexOfFirst { it.index == page.page }
+    Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        BasicText(page.family + if (at >= 0 && page.pages.size > 1) " · ${at + 1} of ${page.pages.size}" else "", Modifier.semantics { heading() }, style = LupeType.key, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        TrackLine(page, colour, Modifier)
     }
 }
 
@@ -143,15 +139,6 @@ private fun HeldNotice(text: String?) {
 
 // "lit" = the FM-1 turned it just now. The page area carries only the counter, so the graph is told which knob until the next page.
 private fun litNow(page: PageState) = page.turned >= 0 && page.turnSeq > 0
-
-@Composable
-private fun DriveName(name: String, side: String?, colour: Color) {
-    // DRIVE's board 59: the type's name large to the right of the curve, its numbers under it
-    Column(Modifier.fillMaxSize().padding(end = 24.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center) {
-        BasicText(name, style = LupeType.number.copy(color = Tok.text))
-        if (side != null) BasicText(side, style = LupeType.small.copy(color = Tok.text2Raised))
-    }
-}
 
 @Composable
 private fun TrackLine(page: PageState, colour: Color, modifier: Modifier) {

@@ -1,3 +1,5 @@
+> **Superseded in part by decision 25 (2026-11-13):** the pictures this sheet checks (ENV, LFO, DRIVE, FX, SCALE, ARP, ANALOG, FM6, DRUM-X sheets, the dense cards) are gone. A sound page is the page row, a header, tiles where knob 1 picks from a list of names, and four round dials. The checks about pictures no longer apply; the ones about the page row, the four controls and locks still do. See `android-p2-sound-dials.md`.
+
 # Device check: android-p4-sound-pages (claude/android-p4-sound-pages-7e2a23), 2026-11-13
 
 ## Re-check after P1's fixes (2026-11-14, branch `claude/android-p1-core-link-faf639`)
