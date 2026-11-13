@@ -27,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -80,7 +83,7 @@ fun trackColour(track: Int): Color = Tok.track[((track - 1) % 6 + 6) % 6]
  * where the thumb found them at split.
  */
 @Composable
-fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier) {
+fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier, notice: String? = null) {
     val colour = trackColour(page.track)
     // the value each control had when this page opened, for double-tap to put it back (not a factory default: the FM-1 has none per sound)
     val opened = remember(page.track, page.page, page.family) { mutableMapOf<Int, Int>() }
@@ -94,6 +97,8 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier) {
                 if (lock == null) PageRow(page, colour) { core.send(PickPage(page.family, it)) } else LockBanner(lock, colour)
             }
         }
+        // the held notice has its own slim line under the page row (never over a key); it fades in and out
+        HeldNotice(notice)
         // the graph panel takes what is left
         Box(
             Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(Tok.panel),
@@ -121,6 +126,18 @@ fun SoundPage(page: PageState, core: LupeCore, modifier: Modifier = Modifier) {
             opened = { slot, c -> opened.getOrPut(slot) { c.raw } },
             onSet = { slot, v -> core.send(SetParam(slot, v)) },
         )
+    }
+}
+
+/** "The FM-1 is on SEL · held here": 16 dp of its own under the page row, secondary grey, 12 sp; fades with the height. */
+@Composable
+private fun HeldNotice(text: String?) {
+    var last by remember { mutableStateOf(text) }
+    if (text != null) last = text
+    val a = animatedFloat(if (text != null) 1f else 0f, Dur.STATE)
+    if (a.value <= 0.001f) return
+    Box(Modifier.fillMaxWidth().height(16.dp * a.value).graphicsLayer { alpha = a.value }.clipToBounds(), contentAlignment = Alignment.CenterStart) {
+        BasicText(last.orEmpty(), Modifier.padding(horizontal = 4.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised), maxLines = 1)
     }
 }
 
@@ -245,8 +262,8 @@ fun FollowFm1Divider(shell: ShellState, core: LupeCore) {
 
 /** The bottom half's slot for a Page: the sound page for the six families; anything else (P5's Sounds, Patterns, Projects) keeps the placeholder. */
 @Composable
-fun SoundOrPlaceholder(bottom: com.scottgerstl.lupe.core.BottomPage, core: LupeCore, modifier: Modifier = Modifier) {
+fun SoundOrPlaceholder(bottom: com.scottgerstl.lupe.core.BottomPage, core: LupeCore, modifier: Modifier = Modifier, notice: String? = null) {
     val page by core.page.collectAsStateWithLifecycle()
-    if (bottom.family in PageFamilies) SoundPage(page, core, modifier)
+    if (bottom.family in PageFamilies) SoundPage(page, core, modifier, notice)
     else com.scottgerstl.lupe.ui.shell.BottomPlaceholder(bottom, modifier)
 }

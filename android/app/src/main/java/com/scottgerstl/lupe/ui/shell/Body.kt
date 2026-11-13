@@ -107,11 +107,14 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     // Labs: the bottom half can hold its page for 3 s after a touch, or be pinned (it stops following the FM-1)
     val labs = LocalPhoneSettings.current
     var bottomTouches by remember { mutableIntStateOf(0) }
-    val followed = followedBottom(shell.bottom, labs.pinBottom, labs.pauseFollowing, bottomTouches)
+    var phoneAsks by remember { mutableIntStateOf(0) }
+    val followed = followedBottom(shell.bottom, labs.pinBottom, labs.pauseFollowing, bottomTouches, phoneAsks)
     val shown = followed.first
     val frozen = followed.second
     val shellShown = if (shown == shell.bottom) shell else shell.copy(bottom = shown)
     val onBottomTouch = { bottomTouches++ ; Unit }
+    // the bottom half's page changes the phone itself asks for are never held; its core says so before sending them
+    val askCore = remember(core) { AskingCore(core) { phoneAsks++ } }
     val pads by core.pads.collectAsStateWithLifecycle()
     val editor by core.editor.collectAsStateWithLifecycle()
     // the picked step (decision 21): none shows HOME's knobs. The FM-1 changing page (or a sound page opening) puts the knobs back
@@ -144,7 +147,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val hb = with(density) { maxHeight.toPx() }
         if (labs.soundStack && stackUp && !soundsOpen) {
-            StackBody(shellShown, shell.divider, if (shown.kind == BottomKind.Page) shown else lastPage, core, pads, editor, stackScroll, hb, onBottomTouch, frozen, pick)
+            StackBody(shellShown, shell.divider, if (shown.kind == BottomKind.Page) shown else lastPage, askCore, pads, editor, stackScroll, hb, onBottomTouch, frozen, pick)
             return@BoxWithConstraints
         }
         fun dp(v: Float) = with(density) { v.dp.toPx() }
@@ -185,9 +188,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         }
 
         if (reduce) {
-            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen, pick) }
+            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, askCore, hb, ::topAt, onBottomTouch, frozen, pick) }
         } else {
-            Layers(place.value, shellShown, pads, editor, core, hb, ::topAt, onBottomTouch, frozen, pick)
+            Layers(place.value, shellShown, pads, editor, askCore, hb, ::topAt, onBottomTouch, frozen, pick)
         }
 
         // The divider's touch target: 48 dp tall around the 16 dp band, over both halves.
@@ -374,12 +377,14 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
  * then catches up to the FM-1's.
  */
 @Composable
-private fun followedBottom(actual: BottomPage, pin: Boolean, pause: Boolean, touches: Int): Pair<BottomPage, Boolean> {
-    var shown by remember { mutableStateOf(actual) }
-    var held by remember { mutableStateOf(false) }
-    LaunchedEffect(touches) { if (pause && touches > 0) { held = true; delay(3000); held = false } }
-    LaunchedEffect(actual, pin, held) { if (!pin && !held) shown = actual }
-    return shown to (pin || held)
+private fun followedBottom(actual: BottomPage, pin: Boolean, pause: Boolean, touches: Int, asks: Int): Pair<BottomPage, Boolean> {
+    val m = remember { FollowModel(actual) }
+    m.pin = pin; m.pause = pause
+    val now = { System.currentTimeMillis() }
+    LaunchedEffect(touches) { if (touches > 0) { m.touch(now()); delay(FollowModel.HOLD_MS + 20); m.tick(now()) } }
+    LaunchedEffect(asks) { if (asks > 0) { m.ask(now()); m.onActual(actual, now()) } }
+    LaunchedEffect(actual, pin, pause) { m.onActual(actual, now()); m.tick(now()) }
+    return m.shown to m.frozen
 }
 
 /**
@@ -394,8 +399,15 @@ private fun HeldSoundPage(page: BottomPage, core: LupeCore, frozen: Boolean) {
     LaunchedEffect(live, frozen) { if (!frozen) snap = live }
     val moved = frozen && (snap.family != live.family || snap.page != live.page)
     Box(Modifier.fillMaxSize()) {
-        com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, if (moved) remember(snap) { HeldPageCore(core, snap) } else core)
-        if (moved) BasicText("The FM-1 is on ${live.family} · held here", Modifier.align(Alignment.TopEnd).padding(8.dp), style = LupeType.small.copy(fontSize = 12.sp))
+        com.scottgerstl.lupe.ui.page.SoundOrPlaceholder(page, if (moved) remember(snap) { HeldPageCore(core, snap) } else core, notice = if (moved) "The FM-1 is on ${live.family} · held here" else null)
+    }
+}
+
+/** The core as the bottom half sees it: a page change the phone asks for tells the follower first. */
+private class AskingCore(private val base: LupeCore, private val asked: () -> Unit) : LupeCore by base {
+    override fun send(intent: Intent) {
+        if (intent is com.scottgerstl.lupe.core.PickPage || intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile || intent == com.scottgerstl.lupe.core.GoHome) asked()
+        base.send(intent)
     }
 }
 

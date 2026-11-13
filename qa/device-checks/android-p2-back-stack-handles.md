@@ -38,3 +38,14 @@ On ENV, the FX sends page, and EDIT 1's picture (ANALOG engine).
 | 16 | LFO, DRIVE, ARP, SCALE pictures | Still decoration: no handle |
 
 Known edges: handles are 44 dp targets (the 48 dp knobs below are the roomier way in); two handles can sit close on a very short decay.
+
+## Pause and Pin only hold against the FM-1 (2026-11-13)
+
+Built (tests in `FollowModelTest`), not run on a screen.
+
+| # | Do | See |
+|---|----|-----|
+| 17 | Labs › Pause following on. Tap SEL, then FX on the phone's family row | Each page shows at once; no "held here" line, however fast you tap |
+| 18 | Same, tap a page in the page row, a MOD route, a tile, then swipe back | All apply at once |
+| 19 | Pause on: touch the bottom half, then press SEL on the FM-1 within 3 s | The page stays; a grey line "The FM-1 is on SEL · held here" fades in under the page row, never over the family keys; after 3 s the page catches up and the line fades |
+| 20 | Pin on: press ENV, then LFO on the FM-1 | Held with the line. Tapping a family key on the phone still switches |
