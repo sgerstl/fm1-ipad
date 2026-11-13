@@ -109,3 +109,11 @@ New faults seen:
 - ✗ **Tempo slide doesn't respond**: the TEMPO · BPM value in the readout popover stays at 82 for up, down, sideways and fast slides; nothing is sent.
 - ✓ Pad › Select sound on a melodic track (T3 Wheel, pad B): "Sound for pad B on track 3", the pad took its own sound with the cut corner, the track kept Gospel; "Use the track's own sound" cleared it.
 - ☐ Save names: not rechecked (Scott).
+
+## Fixes for the recheck on fb7a661 (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| – | Tempo slide doesn't respond | **The screen slides and sends; the core doesn't handle the intent.** On the fake (emulator) a 120 px swipe took 120 → 139 BPM and the readout followed. On the real core, `PhoneCore.handle(_ intent: PhoneIntent)` has cases for retry, play, stop, padSelect, stepSelect, setPlaybackMode and cancelWaiting only: `setTempo` (and `rec`, `setLaunch`) fall to `default: log("intent not handled yet")`, so nothing reaches the FM-1 and `top.tempo` never changes. P1 to wire them; nothing more to do in the UI. (The old − / + keys sent the same intent, so they could not have worked on the FM-1 either.) | After P1 wires setTempo: slide the readout's TEMPO; the FM-1's tempo moves and the readout follows. Rec and Launch at have the same gap. |
+| – | A soloed row showed only a faint "·" | A lit **SOLO** pill beside the row's name (a word on a light ground, not colour alone); TalkBack reads "solo". | Solo a row. |
+| – | At split the Delay card's DELAY MODE switch was cut off | The bus graph takes only what the four controls and the settings leave (it shrinks, or goes, at split), so MONO · STEREO · PING-PONG sits whole above the divider. Checked on the emulator at split. | Delay page at split. |
