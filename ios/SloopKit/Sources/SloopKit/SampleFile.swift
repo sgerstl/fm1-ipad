@@ -1,3 +1,5 @@
+#if canImport(AVFoundation)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 import AVFoundation
 
 /// A sound file brought into the sampler (Import file…): WAV, AIFF or M4A, read as a slot wants it, mono at
@@ -54,3 +56,5 @@ public enum SampleFile {
         return out
     }
 }
+
+#endif

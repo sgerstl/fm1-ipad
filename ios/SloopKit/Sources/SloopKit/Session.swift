@@ -409,7 +409,12 @@ public final class DeviceSession {
         // -demo-skiff: a pretend Skiff 2.2 answering as skiff-sim did (FakeSkiff), instead of SLOOP
         let skiff = skiff ?? Self.launchedSkiffDemo
         demoSkiff = demo && skiff
+        #if canImport(CoreMIDI)
         makeTransport = !demo ? { MIDITransport() } : skiff ? { FakeSkiff(demo: true) } : { FakeSloop(autoEdits: !still) }
+        #else
+        // Android has no CoreMIDI: the phone passes its own factory (init(transport:)) over AndroidTransport.
+        makeTransport = !demo ? { nil } : skiff ? { FakeSkiff(demo: true) } : { FakeSloop(autoEdits: !still) }
+        #endif
     }
 
     /// The launch asked for the Skiff demo (-demo-skiff: screenshots and tests).

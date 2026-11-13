@@ -1,3 +1,5 @@
+#if canImport(CoreMIDI)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 import CoreMIDI
 import Foundation
 
@@ -96,3 +98,5 @@ public final class MIDITransport: SysExTransport, @unchecked Sendable {
         clockSink.finish()
     }
 }
+
+#endif

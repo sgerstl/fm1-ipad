@@ -272,6 +272,7 @@ import Testing
     }
 }
 
+#if canImport(CryptoKit)
 /// The staged release: the repository's copy matches its pin, says FM-1_725, and downloads from its own release.
 @Suite struct Skiff251ReleaseTests {
     @Test func theStagedPackageMatchesItsPin() throws {
@@ -283,3 +284,4 @@ import Testing
         #expect(LupeFirmware.matching(identity: "ota-FM-1_725") == .skiff251)
     }
 }
+#endif

@@ -14,3 +14,11 @@ ios/**/DerivedData/
 # skiff-sim
 skiff-sim/build/
 skiff-sim-flash.bin
+# Android (P1/P2)
+ios/SloopKit/.build-android/
+android/core/.build/
+android/core/.build-android/
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/

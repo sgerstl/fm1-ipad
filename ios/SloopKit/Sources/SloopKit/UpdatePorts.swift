@@ -1,3 +1,5 @@
+#if canImport(CoreMIDI)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 // The installer's MIDI ports on CoreMIDI, and the frame queue its links share with the fake FM-1.
 import CoreMIDI
 import Foundation
@@ -144,3 +146,5 @@ final class CoreMIDIUpdateLink: UpdateLink, @unchecked Sendable {
         MIDIPortDispose(outPort)
     }
 }
+
+#endif

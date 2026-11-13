@@ -117,7 +117,7 @@ The area structs live in one place: Swift `Codable` types in `PhoneCore/State.sw
 
 ## 3. Building SloopKit for Android
 
-- **Toolchain:** the official Swift SDK for Android (Swift 6.3, March 2026). JNI glue with `swift-java`, which is still pre-1.0 (0.4.x); if its generated bindings get in the way, the bridge is only six functions (`onBytes`, `onLost`, `send`, `onState`, `intent`, `factory state`), small enough to write by hand with Swift Java JNI Core. [emerging: needs P1 to prove it builds]
+- **Toolchain:** the official Swift SDK for Android, **6.4.2** (the current release on 2026-11-13; it must match the compiler exactly, so it's paired with swift.org's 6.4.2 toolchain, not Xcode's) and NDK r30. Install steps and paths are in `android/scripts/env.sh`. JNI glue is **hand-written** (P1 settled the open question): the bridge is a handful of functions, and `swift-java` (pre-1.0) would add a generator step for no gain. *(P1, 2026-11-13: was "Swift 6.3" and "swift-java, or by hand if it gets in the way".)*
 - **Files that stay Apple-only**, behind `#if canImport(CoreMIDI)` / `canImport(CryptoKit)` / `canImport(AVFoundation)` so the iPad's build and Xcode project don't change:
   - `MIDITransport.swift`, `UpdatePorts.swift` (CoreMIDI; replaced by `AndroidTransport`)
   - The installer group: `FirmwareStore.swift`, `FirmwarePackage.swift` (CryptoKit), and `FirmwareInstaller.swift`, `FakeLoader.swift` (which use the package type). Installs are out of scope.
@@ -125,7 +125,8 @@ The area structs live in one place: Swift `Codable` types in `PhoneCore/State.sw
   - `SampleFile.swift` (AVFoundation; sample import is out of scope)
   - `FakeSloop.swift`, `SloopDriver.swift` stay in (tests use them) but the phone never builds a SLOOP session.
 - **Foundation and Observation** come with the SDK. Every other SloopKit file imports only those two.
-- **`Package.swift`** gains the Android platform; the new `PhoneCore` and `AndroidTransport` go in a separate target that depends on SloopKit, so the iPad app never links them.
+- **SloopKit's `Package.swift` doesn't change.** SwiftPM needs no platform entry to build for Android. The phone's code lives in its own package, `android/core/` (`LupeCore`), which depends on SloopKit by path: `AndroidLink` (AndroidTransport, the factory), `PhoneCore`, `MainLooper`, and `LupeNative` (the JNI surface, built as `libLupeNative.so`). The iPad app never sees them. *(P1, 2026-11-13: was "new targets in SloopKit's Package.swift"; a separate package keeps the iPad's package graph untouched.)*
+- **Gate 1 result (2026-11-13):** SloopKit compiled for `aarch64-unknown-linux-android33` with only the `canImport` guards above, plus one in `Session.init(demo:)` (no CoreMIDI: the non-demo default factory returns nil, and the phone passes its own). Its tests run on an arm64 Android 16 emulator through `android/scripts/sloopkit-android-test.sh`: 261 of the 349 macOS tests build for Android (the rest are CoreMIDI sims, firmware installs and AVFoundation) and all pass. macOS still passes 349 of 349, and SloopKit still builds for iOS.
 
 ### The one real risk: the main actor
 
@@ -146,6 +147,6 @@ P2 starts the day this file is agreed: the Compose project, the shell from board
 ## Open, to settle in P1 (not blocking P2)
 
 - The FM-1's exact USB property strings on Android.
-- Whether `swift-java`'s generator or hand-written JNI is less trouble.
+- ~~Whether `swift-java`'s generator or hand-written JNI is less trouble.~~ Hand-written (§3).
 - Whether the Kotlin data classes are generated or hand-kept with a round-trip test.
 - Lifecycle: keep the ports open while the app is in the background (default, so a quick app switch doesn't drop the link), and rebuild everything on process death through the normal search loop.

@@ -30,6 +30,7 @@ import Testing
         run6.cancel()
     }
 
+    #if canImport(CryptoKit)
     /// The new build is its own pin: a new name and hash, the same identity, and the installer's default untouched.
     @Test func theTakeBuildIsPinned() throws {
         let f = LupeFirmware.skiff251Take
@@ -39,6 +40,7 @@ import Testing
         #expect(LupeFirmware.matching(identity: "FM-1_725") == .skiff251)   // (identity: the family, as before)
         #expect(LupeFirmware.skiff251.sha256 == "80b21b33d05ccaa384636261e229eb94efdac847c93cc1f534d69082ff71302c")
     }
+    #endif
 
     @Test func pickerBytesDecode() throws {
         let b: [UInt8] = [1, 2, 3, 7, 3, 1, 96, 0, 48, 0, 64, 1, 0, 0, 2, 4, 8, 1, 120, 0, 1]

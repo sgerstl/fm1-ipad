@@ -1,3 +1,5 @@
+#if canImport(CryptoKit)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 // FM-1 .fwsc packages: the identity, the logical image the device reads during an update, and the files' CRCs.
 // After Skiff's web/fm1pkg.js and tools/fm1_install.py, and SLOOP's package_damage (GPL-3.0, Leo Kuroshita).
 import CryptoKit
@@ -316,3 +318,5 @@ public struct FirmwarePackage: Sendable {
         return false
     }
 }
+
+#endif
