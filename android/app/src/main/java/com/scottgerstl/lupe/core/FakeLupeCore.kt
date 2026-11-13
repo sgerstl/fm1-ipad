@@ -137,6 +137,7 @@ class FakeLupeCore(
                 model = e.steps.map { FStep.from(it, e.kind == EditorKind.Drum) }.toMutableList()
                 patterns[e.track to e.pattern] = model
                 _editor.value = e
+                emitEditor()   // the fake fills what the recording doesn't (maxLength, heldFrom)
             }
         }
     }
@@ -207,7 +208,9 @@ class FakeLupeCore(
         // how far each step can grow: up to the next note (or the pattern's end)
         val steps = model.mapIndexed { i, st ->
             val next = (i + 1 until 16).firstOrNull { model[it].on } ?: 16
-            st.toStep(drum).copy(maxLength = next - i)
+            // a step inside the previous note's length holds it (a TIE): heldFrom is that note's step
+            val owner = (i - 1 downTo 0).firstOrNull { model[it].on && it + model[it].length > i && (it + 1..i).none { k -> k != i && model[k].on } }
+            st.toStep(drum).copy(maxLength = next - i, heldFrom = if (!st.on && owner != null) owner else -1)
         }
         _editor.value = e.copy(steps = steps, laneValues = lv)
     }

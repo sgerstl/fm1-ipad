@@ -105,4 +105,11 @@ class FakeLupeCoreTest {
         core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Length, 5))
         assertEquals(2, core.editor.value.steps[0].length)
     }
+
+    @Test fun aStepInsideANotesLengthSaysWhoHoldsIt() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        // pattern 12: C4 on step 1 has length 2, so step 2 holds it; step 4 (empty, outside any note) doesn't
+        assertEquals(0, core.editor.value.steps[1].heldFrom)
+        assertEquals(-1, core.editor.value.steps[3].heldFrom)
+    }
 }

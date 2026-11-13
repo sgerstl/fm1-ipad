@@ -162,7 +162,7 @@ private fun Diamond(color: Color, size: Dp, modifier: Modifier = Modifier) =
 private fun DrawScope.diamond(color: Color, cx: Float, cy: Float, r: Float) =
     drawPath(Path().apply { moveTo(cx, cy - r * 1.2f); lineTo(cx + r * 1.2f, cy); lineTo(cx, cy + r * 1.2f); lineTo(cx - r * 1.2f, cy); close() }, color)
 
-private enum class StepMenuMode { Root, ClearConfirm }
+private enum class StepMenuMode { Root, ClearConfirm, PasteConfirm }
 
 @Composable
 private fun StepMenuKey(ed: EditorState, core: LupeCore) {
@@ -171,6 +171,13 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore) {
     var armedAt by remember { mutableStateOf(0L) }
     val n = ed.selected + 1
     val step = ed.steps.getOrNull(ed.selected)
+    // A step that holds the note before it (a TIE): writing here shortens that note (Skiff's own behaviour; Scott lost
+    // step 15's D5 length this way without a warning, 2026-11-14). `heldFrom` is the 0-based step whose note it holds.
+    val held = step?.heldFrom?.takeIf { it >= 0 }?.let { ed.steps.getOrNull(it)?.let { owner -> it to owner } }
+    fun shortens(verb: String) = held?.let { (from, owner) ->
+        val left = ed.selected - from
+        "$verb here shortens step ${from + 1} (${owner.pitchText.ifEmpty { owner.note }}) to $left step${if (left == 1) "" else "s"}."
+    }
     Box {
         Key({ open = true; mode = StepMenuMode.Root }, "Step menu", width = 64.dp, height = 32.dp, minTarget = 40.dp) { fg ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -185,8 +192,10 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore) {
                         StepMenuMode.Root -> {
                             MenuHeading("Step $n")
                             MenuRow("Copy step", { core.send(Intent.StepAction(ed.selected, StepActionKind.Copy)); open = false })
-                            MenuRow("Paste step", { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false })
-                            MenuRow("Clear step", { mode = StepMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() }, enabled = step?.on == true)
+                            MenuRow("Paste step", { if (held != null) { mode = StepMenuMode.PasteConfirm; armedAt = System.currentTimeMillis() } else { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false } },
+                                sub = shortens("Pasting"))
+                            MenuRow("Clear step", { mode = StepMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() }, enabled = step?.on == true || held != null,
+                                sub = shortens("Clearing"))
                         }
                         StepMenuMode.ClearConfirm -> {
                             val goes = buildString {
@@ -194,7 +203,14 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore) {
                                 val l = step?.values?.count { it.locked } ?: 0
                                 if (l > 0) append(" and its $l lock${if (l == 1) "" else "s"}")
                             }
-                            ConfirmBox("Clear step $n, removing $goes", "Confirm: clear step $n, removing $goes", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Clear)); open = false }
+                            val note = shortens("Clearing")
+                            val words = (if (step?.on == true) "Clear step $n, removing $goes." else "Clear step $n.") + (note?.let { " $it" } ?: "")
+                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Clear)); open = false }
+                            MenuRow("Cancel", { mode = StepMenuMode.Root })
+                        }
+                        StepMenuMode.PasteConfirm -> {
+                            val words = "Paste into step $n. ${shortens("Pasting") ?: ""}".trim()
+                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false }
                             MenuRow("Cancel", { mode = StepMenuMode.Root })
                         }
                     }
