@@ -4,8 +4,9 @@ import Testing
 @testable import PhoneCore
 @testable import SloopKit
 
-/// Decision 5 (phone decisions): note entry is the FM-1's keys only, into the selected step; Chord adds up to four.
-/// And Scott's answer of 2026-11-14 on scenes: a kept scene is replaced only when the screen confirmed.
+/// Decision 5 as revised by Scott (2026-11-14): "the fm1 keys should work just like they do on the ipad": the FM-1's
+/// keys play its sound and never write from the phone (14 keys had replaced pattern 56 on the device). And his answer
+/// on scenes: a kept scene is replaced only when the screen confirmed.
 @Suite(.serialized) @MainActor struct KeyEntryTests {
     /// FakeSkiff with a notes stream the test plays into, as the FM-1's keys arrive on the transport.
     final class Keys: SysExTransport, @unchecked Sendable {
@@ -44,59 +45,6 @@ import Testing
         while !cond() { if Date() > end { Issue.record("timed out: \(what)"); return }; try await Task.sleep(for: .milliseconds(10)) }
     }
 
-    @Test func chordOffReplacesAndMovesOn() async throws {
-        let box = Box()
-        let (core, fake, keys) = try await connected(box)
-        defer { core.stop() }
-        let t = core.editorTrack()
-        core.handle(json: #"{"intent":"stepSelect","step":4}"#)
-        keys.key(64, channel: t)
-        try await settle({ fake.steps[t][4][0] == 1 && fake.steps[t][4][1] == 64 }, "E4 into step 5")
-        #expect(core.selectedStep == 5)
-        keys.key(67, channel: t)                                                        // the next key, the next step
-        try await settle({ fake.steps[t][5][1] == 67 }, "G4 into step 6")
-        #expect(fake.unansweredCommands.isEmpty)
-    }
-
-    @Test func chordOnAddsUpToFour() async throws {
-        let box = Box()
-        let (core, fake, keys) = try await connected(box)
-        defer { core.stop() }
-        let t = core.editorTrack()
-        core.handle(json: #"{"intent":"stepSelect","step":3}"#)
-        keys.key(60, channel: t)                                                        // a note in, chord off
-        try await settle({ fake.steps[t][3][1] == 60 }, "C4")
-        core.handle(json: #"{"intent":"stepSelect","step":3}"#)
-        core.handle(json: #"{"intent":"chordToggle"}"#)
-        for n in [64, 67, 71, 74] { keys.key(n, channel: t); try await Task.sleep(for: .milliseconds(120)) }
-        try await settle({ fake.steps[t][3][0] == 4 }, "four notes")
-        #expect(Array(fake.steps[t][3][1...4]) == [60, 64, 67, 71])                   // the fifth (74) refused
-        #expect(core.selectedStep == 3)                                                 // the cursor stays
-        #expect(box.log.contains { $0.contains("four notes") })
-    }
-
-    @Test func notWrittenReadOnlyPlayingOrOnAnotherTrack() async throws {
-        let box = Box()
-        let (core, fake, keys) = try await connected(box)
-        defer { core.stop() }
-        let t = core.editorTrack()
-        core.handle(json: #"{"intent":"stepSelect","step":7}"#)
-        let before = fake.steps[t][7]
-        keys.key(72, channel: (t + 1) % 6)                                              // another track's channel
-        box.writes = false
-        keys.key(72, channel: t)                                                        // read-only
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(fake.steps[t][7] == before)
-        #expect(box.log.contains { $0.contains("not written: read-only") })
-        #expect(box.log.contains { $0.contains("not track") })                         // the other channel, said why
-        box.writes = true
-        core.handle(json: #"{"intent":"play"}"#)
-        try await settle({ core.session.playing }, "playing")
-        keys.key(72, channel: t)                                                        // playing: the sequencer's notes look the same
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(fake.steps[t][7] == before)
-    }
-
     @Test func aKeptSceneNeedsTheScreensConfirmation() async throws {
         let box = Box()
         let (core, fake, _) = try await connected(box)
@@ -117,20 +65,22 @@ import Testing
         #expect(fake.unansweredCommands.isEmpty)
     }
 
-    /// The FM-1 sounds a step when it's written (STEP PREVIEW): that note coming back isn't a new key.
-    @Test func theStepSoundingBackIsNotAKey() async throws {
+
+    /// The regression from the device run: keys pressed while stopped, writes allowed, the editor on a step. Nothing
+    /// is written and the cursor stays; the notes are only counted for the debug screen.
+    @Test func theFM1sKeysNeverWrite() async throws {
         let box = Box()
         let (core, fake, keys) = try await connected(box)
         defer { core.stop() }
         let t = core.editorTrack()
-        core.handle(json: #"{"intent":"stepSelect","step":8}"#)
-        keys.key(62, channel: t)
-        try await settle({ fake.steps[t][8][1] == 62 }, "D4 into step 9")
-        let next = fake.steps[t][9]
-        keys.key(62, channel: t)                                                        // the preview, at once
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(core.selectedStep == 9 && fake.steps[t][9] == next)
-        #expect(box.log.contains { $0.contains("sounding the step just written") })
-        #expect(box.log.contains { $0.contains("written to T\(t + 1) step 9") })        // and each key is in the log
+        core.handle(json: #"{"intent":"stepSelect","step":4}"#)
+        let before = fake.steps[t]
+        for n in 60..<74 { keys.key(n, channel: t); try await Task.sleep(for: .milliseconds(30)) }
+        try await settle({ core.notesIn == 14 }, "fourteen notes counted")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(fake.steps[t] == before)
+        #expect(core.selectedStep == 4)
+        #expect(core.diagArea().notesIn == 14)
+        #expect(fake.unansweredCommands.isEmpty)
     }
 }

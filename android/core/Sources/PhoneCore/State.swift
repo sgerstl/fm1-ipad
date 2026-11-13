@@ -111,6 +111,8 @@ public struct EditorArea: Codable, Equatable, Sendable {
     public var steps: [Step]             // sixteen
     public var selected: Int
     public var playhead: Int             // -1 stopped
+    /// Always false: the phone has no Chord entry (the FM-1's keys never write from the phone; decision 5 revised,
+    /// 2026-11-14). Kept so the schema stays as P3 has it until the field is dropped on both sides.
     public var chord: Bool
     public var lock: Lock
     public var lanes: [String]
@@ -184,7 +186,7 @@ public enum PhoneIntent: Equatable, Sendable {
         case "padSelect": return .padSelect(track: try need(w.track, "track"), entry: try need(w.entry, "entry"))
         case "stepSelect": return .stepSelect(try need(w.step, "step"))
         case "padTap", "padSelectSound", "padNew", "padSet", "padClear", "trackSelect", "trackMute", "sceneRecall",
-             "sceneStore", "stepHold", "stepAdjust", "chordToggle", "lockToggle", "lockClear", "locksClearAll",
+             "sceneStore", "stepHold", "stepAdjust", "lockToggle", "lockClear", "locksClearAll",
              "stepAction", "lanePick":
             return .notYet(w.intent)
         default: throw DecodeError.unknown(w.intent)

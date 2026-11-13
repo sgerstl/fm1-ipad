@@ -134,7 +134,7 @@ extension PhoneCore {
             pattern: list?.entries[safe: entry]?.pattern ?? 0,
             scale: kit ? "" : "\(Music.noteNames[((tr.root % 12) + 12) % 12]) \(scaleName)",
             kind: kit ? .drum : .roll, steps: steps, selected: selectedStep, playhead: playhead,
-            chord: chordMode, lock: heldStep != nil ? .held : lockLatched ? .latched : .off,
+            chord: false, lock: heldStep != nil ? .held : lockLatched ? .latched : .off,
             lanes: lanes, lane: lane, laneValues: laneValues)
     }
 }
