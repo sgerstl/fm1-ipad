@@ -3,20 +3,19 @@ package com.scottgerstl.lupe.ui.shell
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.scottgerstl.lupe.core.BottomPage
 
 /**
- * What the bottom half shows, and whether it is held (Labs: Pause following after a touch, Pin). It follows the FM-1.
+ * What the bottom half shows (or the screen the phone follows), and whether it is held (Labs: Pause following after a touch, Pin). It follows the FM-1.
  * Pause and Pin hold only against changes the FM-1 makes by itself (its buttons): a page change the phone itself asked
  * for (the family row, the page row, a route or tile pick, back) applies at once, resets the pause timer, and its echo from the
  * FM-1 (the same page) is not "the FM-1 moved on". Clock-driven by [now] so tests can run it.
  */
-class FollowModel(initial: BottomPage) {
+class FollowModel<T>(initial: T) {
     var pin = false
     var pause = false
     var shown by mutableStateOf(initial); private set
     var held by mutableStateOf(false); private set
-    private var actual = initial
+    private var actual: T = initial
     private var heldUntil = 0L
     private var applyUntil = 0L
 
@@ -27,7 +26,7 @@ class FollowModel(initial: BottomPage) {
     fun ask(now: Long) { held = false; heldUntil = 0; applyUntil = now + ASK_WINDOW_MS }
 
     /** The core's page changed (or the flags did). */
-    fun onActual(page: BottomPage, now: Long) {
+    fun onActual(page: T, now: Long) {
         actual = page
         if (now < applyUntil || (!pin && !(held && now < heldUntil))) shown = page
     }

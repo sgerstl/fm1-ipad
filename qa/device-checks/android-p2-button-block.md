@@ -26,3 +26,18 @@ The block sits at the very bottom of the bottom half, always, on HOME too: **FX 
 | 10 | Press the FM-1's own GLO, SAVE, SEQ or HOME keys, or hold a layer (SCL) | The matching block key lights as the FM-1's screen changes; under a MENU or a held layer the key shown is the link's (none lit while a menu covers the screen) |
 
 Notes: a block key is 36 dp tall (over the 24 dp floor, under 44); the red words are `rec` (#FF4D4D) on the key face; contrast not computed fresh. Pre-flight (design-standards) ran: tokens only, existing key press and focus states, no new motion. `check-tells.sh` scans web sources only, so that is not a pass; no rendered check.
+
+## The phone follows the FM-1's own GLO, SAVE and SEQ (Scott: "Yes, follow it"), 2026-11-13
+
+Built (tests in `PlaceFollowerTest`), not run on a screen. The block's GLO, SAVE and SEQ now only send the FM-1 there; the phone's place follows from `fm1Screen`, the same way for the block's keys and the FM-1's own.
+
+| # | Do | See |
+|---|----|-----|
+| 11 | On the Timeline tab, press the FM-1's GLO; step MIXER → CHORUS on the FM-1 | The Mix tab opens (the tabs glide) and its section follows the FM-1 (assumes the core's `mix.section` follows the FM-1's GLO page) |
+| 12 | Press HOME or a sound key on the FM-1 | Back on the Timeline tab you had |
+| 13 | Press the FM-1's SAVE; step PRESETS → USER → PATTERNS → PROJECT | The Sounds browser for PRESETS and USER, nothing new for PATTERNS (and what it opened closes), then the Projects sheet for PROJECT (rises). HOME closes whichever it opened |
+| 14 | Press the FM-1's SEQ; step to AUTOMATION, then SONG, then NOTES | The editor shows; AUTOMATION glides the divider to bottom full (the lane); SONG opens the Timeline tab; NOTES puts the tab and divider back |
+| 15 | Labs › Pin the bottom half's page on; press GLO on the FM-1 | The phone does not follow. Tapping the block's GLO does (a change the phone asks for is never held) |
+| 16 | Labs › Pause following on: touch the bottom half, then press SAVE on the FM-1 within 3 s | The phone waits, then catches up; the block's keys always apply at once |
+
+Known edges: the follower saves the tab and divider the first time it changes them and puts them back on HOME or a sound family, even if you moved them since. A sheet you opened yourself is never closed by it. Under a MENU or a held layer on the FM-1 (no `key`) it does nothing.

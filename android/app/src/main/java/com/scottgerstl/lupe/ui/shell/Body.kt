@@ -119,6 +119,29 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val frozen = followed.second
     val shellShown = if (shown == shell.bottom) shell else shell.copy(bottom = shown)
     val onBottomTouch = { bottomTouches++ ; Unit }
+    // The phone follows the FM-1's own GLO, SAVE and SEQ (fm1Screen): the Mix tab, the Sounds sheet or Projects, the editor, the lane or the
+    // Timeline. HOME or a sound family returns to where the phone was. Pause and Pin hold it as they hold sound pages.
+    val screenNow by core.fm1Screen.collectAsStateWithLifecycle()
+    var lastScreen by remember { mutableStateOf(screenNow) }
+    if (screenNow.key.isNotEmpty()) lastScreen = screenNow   // under a MENU or a held layer nothing changes here
+    val screenFollowed = followedBottom(lastScreen, labs.pinBottom, labs.pauseFollowing, bottomTouches, phoneAsks).first
+    val place = remember { PlaceFollower() }
+    val sheetsHost = com.scottgerstl.lupe.ui.sheet.LocalSheetHost.current
+    val soundsHost0 = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
+    val padsNow by core.pads.collectAsStateWithLifecycle()
+    LaunchedEffect(screenFollowed.key, screenFollowed.page) {
+        val actions = place.follow(screenFollowed, shell.tab, shell.divider, soundsHost0.request != null, sheetsHost.open == com.scottgerstl.lupe.ui.sheet.SheetKind.Projects)
+        actions.forEach { a ->
+            when (a) {
+                is PlaceAction.Tab -> core.send(Intent.SetTab(a.tab))
+                is PlaceAction.Divider -> core.send(Intent.SetDivider(a.position))
+                PlaceAction.OpenSounds -> soundsHost0.open(padsNow.selected.track.coerceAtLeast(1))
+                PlaceAction.CloseSounds -> soundsHost0.close()
+                PlaceAction.ShowProjects -> sheetsHost.show(com.scottgerstl.lupe.ui.sheet.SheetKind.Projects)
+                PlaceAction.CloseProjects -> sheetsHost.close()
+            }
+        }
+    }
     // the bottom half's page changes the phone itself asks for are never held; its core says so before sending them
     val askCore = remember(core) { AskingCore(core) { phoneAsks++ } }
     val pads by core.pads.collectAsStateWithLifecycle()
@@ -335,7 +358,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
  * then catches up to the FM-1's.
  */
 @Composable
-private fun followedBottom(actual: BottomPage, pin: Boolean, pause: Boolean, touches: Int, asks: Int): Pair<BottomPage, Boolean> {
+private fun <T> followedBottom(actual: T, pin: Boolean, pause: Boolean, touches: Int, asks: Int): Pair<T, Boolean> {
     val m = remember { FollowModel(actual) }
     m.pin = pin; m.pause = pause
     val now = { System.currentTimeMillis() }
@@ -364,7 +387,7 @@ private fun HeldSoundPage(page: BottomPage, core: LupeCore, frozen: Boolean) {
 /** The core as the bottom half sees it: a page change the phone asks for tells the follower first. */
 private class AskingCore(private val base: LupeCore, private val asked: () -> Unit) : LupeCore by base {
     override fun send(intent: Intent) {
-        if (intent is com.scottgerstl.lupe.core.PickPage || intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile || intent == com.scottgerstl.lupe.core.GoHome) asked()
+        if (intent is com.scottgerstl.lupe.core.PickPage || intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile || intent is com.scottgerstl.lupe.core.ScreenGoto || intent is com.scottgerstl.lupe.core.MixSectionPick || intent == com.scottgerstl.lupe.core.GoHome) asked()
         base.send(intent)
     }
 }

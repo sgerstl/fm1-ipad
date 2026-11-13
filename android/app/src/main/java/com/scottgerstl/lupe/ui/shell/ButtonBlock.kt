@@ -54,9 +54,6 @@ fun ButtonBlock(core: LupeCore, modifier: Modifier = Modifier) {
     val home by core.homeKnobs.collectAsStateWithLifecycle()
     val top by core.top.collectAsStateWithLifecycle()
     val screen by core.fm1Screen.collectAsStateWithLifecycle()
-    val pads by core.pads.collectAsStateWithLifecycle()
-    val sheets = LocalSheetHost.current
-    val sounds = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
     // The lit key is the FM-1's own: the link's fm1Screen.key ("" under a MENU or a held layer lights none). Until the link has reported
     // (nothing published yet) it falls back to what the shell shows.
     val reported = screen.key.isNotEmpty() || screen.menu || screen.layer != 0
@@ -75,27 +72,13 @@ fun ButtonBlock(core: LupeCore, modifier: Modifier = Modifier) {
     fun press(k: BlockKey) {
         when (k) {
             BlockKey.HOME -> core.send(GoHome)
+            // GLO, SAVE and SEQ send the FM-1 there; the phone's own place (Mix tab, Sounds sheet, Projects, the lane, the Timeline) follows from the
+            // link's fm1Screen, exactly as when the FM-1's own button is pressed (FollowPlace.kt), so what was open before can be put back
             BlockKey.GLO -> target(k)?.let { (n, _) ->
-                core.send(ScreenGoto("GLO", n)); core.send(Intent.SetTab(Tab.Mix))
-                // the Mix tab at the section the FM-1 lands on
+                core.send(ScreenGoto("GLO", n))
                 core.send(com.scottgerstl.lupe.core.MixSectionPick(listOf("mixer", "delay", "reverb", "chorus", "global")[n - 30]))
             }
-            BlockKey.SAVE -> target(k)?.let { (n, title) ->
-                core.send(ScreenGoto("SAVE", n))
-                when (title) {
-                    "PRESETS", "USER" -> sounds.open(pads.selected.track.coerceAtLeast(1))   // the Sounds browser, for the selected track
-                    "PROJECT" -> sheets.show(SheetKind.Projects)
-                    else -> Unit   // PATTERNS: the FM-1 goes there; the phone has no place for the pattern pool yet (open question)
-                }
-            }
-            BlockKey.SEQ -> target(k)?.let { (n, title) ->
-                core.send(ScreenGoto("SEQ", n))
-                when (title) {
-                    "AUTOMATION" -> core.send(Intent.SetDivider(com.scottgerstl.lupe.core.Divider.Bottom))   // the lane, which fits at bottom full
-                    "SONG" -> core.send(Intent.SetTab(Tab.Timeline))
-                    else -> Unit   // the editor shows for the rest
-                }
-            }
+            BlockKey.SAVE, BlockKey.SEQ -> target(k)?.let { (n, _) -> core.send(ScreenGoto(k.name, n)) }
             BlockKey.PLAY -> core.send(if (top.playing) Intent.Stop else Intent.Play)
             BlockKey.REC -> core.send(Intent.Rec)
             else -> {
