@@ -71,6 +71,9 @@ public final class PhoneCore {
             AreaWatch(name: "meters", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.metersArea()) : nil }, publish: publish),
             AreaWatch(name: "sounds", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.soundsArea()) : nil }, publish: publish),
             AreaWatch(name: "projects", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.projectsArea()) : nil }, publish: publish),
+            // P6: once the FM-1 has been read
+            AreaWatch(name: "timeline", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.timelineArea()) : nil }, publish: publish),
+            AreaWatch(name: "automation", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.automationArea()) : nil }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]
         areas.forEach { $0.start() }
@@ -84,7 +87,7 @@ public final class PhoneCore {
                 if self.session.isConnected { self.areas.first { $0.name == "meters" }?.poke() }
                 if self.session.playing {
                     self.areas.first { $0.name == "top" }?.poke()
-                    for n in ["diag", "pads", "editor"] { self.areas.first { $0.name == n }?.poke() }
+                    for n in ["diag", "pads", "editor", "timeline"] { self.areas.first { $0.name == n }?.poke() }
                 }
             }
         }
