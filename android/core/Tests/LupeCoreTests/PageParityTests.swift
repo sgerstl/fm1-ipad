@@ -11,6 +11,7 @@ import Testing
 /// it), on FakeSkiff 2.5.1:
 /// - which pages each family's key reaches (the FM-1's page_visible against SoundPage.reached);
 /// - each page reached: the four labels (the page area's controls);
+/// - HOME's four knobs (decision 21): which parameters, their labels and text, as on a page;
 /// - each control's value text, at the dump's spread of raw values (every value of a list, the ends and steps between
 ///   for a number), as the page area formats it (formatValue with the session's descriptor), against param_format's
 ///   value and unit ("%" joined, any other unit after a space: the phone's way of writing the FM-1's two lines).
@@ -33,7 +34,8 @@ import Testing
             var shown: String { unit.isEmpty ? text : unit == "%" ? "\(text)%" : "\(text) \(unit)" }
         }
         struct Page: Decodable { var index: Int; var title: String; var family: String; var graph: Int; var visible: Bool; var slots: [Slot] }
-        struct Engine: Decodable { var engine: Int; var name: String; var preset: String; var pages: [Page] }
+        struct Home: Decodable { var id: Int; var label: String; var values: [Value] }
+        struct Engine: Decodable { var engine: Int; var name: String; var preset: String; var home: [Home]; var pages: [Page] }
         struct Insert: Decodable { var type: Int; var pages: [Page] }
         var engines: [Engine]
         var insert: [Insert]
@@ -108,6 +110,24 @@ import Testing
             try await waitFor(4, "\(eng.name)'s descriptors") { core.session.trackDescs[e0]?.label == eng.pages.first { $0.title == "EDIT 1" }?.slots.first?.label || eng.engine == 0 }
             try await Task.sleep(for: .milliseconds(150))
             let s = core.session
+            // HOME's four (decision 21): which parameters (SkiffHomeKnobs against the engine's .knob), their labels and text
+            if let area = core.homeKnobsArea() {
+                let ids = s.homeKnobIDs ?? []
+                for (k, want) in eng.home.enumerated() {
+                    let ctx = "\(eng.name) HOME knob \(k + 1)"
+                    if ids.dropFirst(k).first != want.id { out.append("\(ctx): parameter \(ids.dropFirst(k).first ?? -1), the FM-1's \(want.id)"); continue }
+                    let label = area.controls.dropFirst(k).first?.label ?? ""
+                    if label != want.label { out.append("\(ctx): label \"\(label)\", the FM-1 \"\(want.label)\"") }
+                    let d = s.trackDesc(want.id)
+                    let bad = want.values.filter { formatValue(d, $0.raw, skiff: true).shown.replacingOccurrences(of: "♯", with: "#") != $0.shown }
+                    if !bad.isEmpty {
+                        out.append("\(ctx) \(want.label): " + bad.prefix(6).map { "\($0.raw): \"\(formatValue(d, $0.raw, skiff: true).shown)\" ≠ \"\($0.shown)\"" }.joined(separator: ", "))
+                    }
+                }
+                checked += 1
+            } else {
+                out.append("\(eng.name): no homeKnobs area")
+            }
             // reach: per family, the pages the FM-1's key steps through against the phone's
             for fam in Set(eng.pages.map(\.family)) {
                 guard let family = SoundFamily(rawValue: fam) else { continue }

@@ -5,33 +5,35 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * HOME's four sound knobs (decision 21, board 70): the selected track's engine main params, the same four the FM-1's
- * knobs turn on HOME (Skiff ui.c home_param: ANALOG is CUTOFF, RES, ATTACK, RELEASE; DRUM puts MORPH on knob 1). Shown under
- * the step grid while no step is picked. A knob is a [PageControl] (label, value text, raw and range), so it turns
- * exactly like a sound page's.
- *
- * Shape as P1 fixed it (2026-11-13). The area isn't published until a Skiff FM-1 has been read.
- */
+// HOME's four knobs (decision 21, board 70): what KNOB 1…4 turn on the FM-1's HOME screen, the selected track's
+// engine's four main parameters (Skiff ui.c home_param). Mirrors P1's android/core/Sources/PhoneCore/HomeKnobs.swift.
+// Labels and values as the FM-1 shows them, the same as a sound page's [PageControl]s.
+
 @Serializable
 data class HomeKnobsState(
-    val track: Int = 1,
+    /** 1-based; 0 before the FM-1 is read. */
+    val track: Int = 0,
     val trackName: String = "",
-    /** "ANALOG", "DRUM", "FM6"…: the header reads "Sound  ANALOG · ACID". */
+    /** The engine ("ANALOG") and the sound ("ACID"). */
     val engine: String = "",
-    /** The preset's name ("ACID"), or empty. */
     val preset: String = "",
-    /** The FM-1's knobs 1-4, as the sound pages' controls; null is an empty well. */
-    val controls: List<PageControl?> = List(4) { null },
-    /** The knob (0…3) last turned on the FM-1, or -1; [hotSeq] changes with each turn (restart the light). It lights for any change of that parameter, from any page. */
+    /** KNOB 1…4 in the FM-1's order (empty before the FM-1 is read); a null slot is an empty well. */
+    val controls: List<PageControl?> = emptyList(),
+    /**
+     * The knob last turned on the FM-1 (0…3), or -1. The FM-1 lights that card for 40 frames from the turn
+     * (ui_input.c). The link says which parameter moved, not which screen it was turned on, so a knob is hot when its
+     * parameter changed on the FM-1 (a sound loading lights none). It arrives about 150 ms after the turn.
+     */
     val hot: Int = -1,
+    /** A new value with each turn on the FM-1: start the light again when it changes. */
     val hotSeq: Int = 0,
     /** The FM-1's screen is on HOME, where its knobs turn these four. */
     val fm1Home: Boolean = false,
 )
 
-/** Turn one of the four. [slot] 0…3, [value] raw. A write: refused while read-only, same path as setParam. */
-@Serializable @SerialName("setHomeKnob")
-data class SetHomeKnob(val slot: Int, val value: Int) : Intent
+object HomeKnobsDefaults {
+    val state: StateFlow<HomeKnobsState> = MutableStateFlow(HomeKnobsState())
+}
 
-object HomeKnobsDefaults { val state: StateFlow<HomeKnobsState> = MutableStateFlow(HomeKnobsState()) }
+/** Turn HOME's knob [slot] (0…3) to [value] (its raw number; a list's index), as the FM-1's knob would. A write. */
+@Serializable @SerialName("setHomeKnob") data class SetHomeKnob(val slot: Int, val value: Int) : Intent

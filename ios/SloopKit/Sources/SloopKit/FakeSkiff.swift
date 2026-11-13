@@ -468,6 +468,13 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     /// Pushes (CHANGED, STEP_CHANGED, ...) as the device sends them while watched.
     func push(_ cmd: UInt8, _ body: [UInt8]) { if watching { sink.yield(Frame.encode(cmd, body)) } }
 
+    /// A knob turned once on the FM-1 to `v`, for track parameter `id` of the selected track: the value kept and CHANGED
+    /// pushed as editor.c's watch writes it (ED_SCOPE, ED_ID7: a wide id, 128 on, as scope 2 and its low seven bits).
+    public func turnKnobOnDevice(id: Int, to v: Int) {
+        lock.lock(); let sel = selected; if id < params[sel].count { params[sel][id] = v }; lock.unlock()
+        push(Cmd.changed, [UInt8((id >> 7) << 1), UInt8(id & 127)] + v14(v))
+    }
+
     private var turnTimer: DispatchSourceTimer?
     /// A knob turned slowly back and forth on the FM-1: CHANGED for `id` every 40 ms, a step each, 0…127 and back.
     func startTurning(_ id: Int) {

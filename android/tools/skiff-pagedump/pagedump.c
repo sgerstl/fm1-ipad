@@ -1,7 +1,8 @@
 /* What the FM-1 on Skiff 2.5.1 draws on each sound page: for every engine (at its first preset, as an engine change
  * loads it), each page of the sound families with whether the family's button reaches it (ui.c page_visible), and
  * each of the four columns as ui_draw.c draws it (the label, an action column, a blank) with the text param_format
- * gives a spread of raw values (every value of a list; the ends, the default and steps between for a number). Two
+ * gives a spread of raw values (every value of a list; the ends, the default and steps between for a number), and HOME's
+ * four knobs (ui.c home_param: the engine's .knob) the same way. Two
  * cases more on the first engine: INSERT under every TYPE (its A B C take the TYPE's names) and ENV with ENV SYNC on
  * (note values).
  *
@@ -114,6 +115,36 @@ static void page_json(uint32_t i)
     printf("]}");
 }
 
+/* HOME's four (ui.c home_param: the engine's .knob, through track_desc), as ui_draw.c draws them on HOME */
+static void home_json(void)
+{
+    uint32_t c, k, n;
+    int32_t vals[160];
+    char val[16];
+    const char *unit;
+    ui.home = 1;
+    printf("[");
+    for (c = 0; c < 4u; c++) {
+        int16_t *vp;
+        const param_desc_t *d = home_param(c, &vp);
+        printf("%s{\"id\":%d,\"label\":", c ? "," : "", (int)(vp - TSEL->p));
+        js_str(d->label);
+        printf(",\"fmt\":%d,\"min\":%d,\"max\":%d,\"values\":[", d->fmt, d->min, d->max);
+        n = spread(d, vals);
+        for (k = 0; k < n; k++) {
+            param_format(d, vals[k], val, &unit);
+            printf("%s[%d,", k ? "," : "", vals[k]);
+            js_str(val);
+            putchar(',');
+            js_str(unit);
+            putchar(']');
+        }
+        printf("]}");
+    }
+    printf("]");
+    ui.home = 0;
+}
+
 static void pages_json(int only_fam, const char *only_title)
 {
     uint32_t i, first = 1;
@@ -154,6 +185,8 @@ int main(void)
         js_str(en->name);
         printf(",\"preset\":");
         js_str(en->presets[0].name);
+        printf(",\"home\":");
+        home_json();
         printf(",\"pages\":");
         pages_json(0, 0);
         printf("}");

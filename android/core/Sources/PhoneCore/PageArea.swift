@@ -195,16 +195,7 @@ extension PhoneCore {
     var lane: Int { min(max(cursor ?? 0, 0), 7) }
 
     func control(scope: Int, id: Int, label: String? = nil, fixed: Bool = false) -> PageArea.Control {
-        let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
-        let locked = scope == 0 && session.lockStep.map { step in
-            session.motion[track]?.events.contains { $0.lock && $0.step == step && $0.id == id } ?? false } ?? false
-        let lockedValue = scope == 0 ? session.lockStep.flatMap { step in
-            session.motion[track]?.events.first { $0.lock && $0.step == step && $0.id == id }?.value } : nil
-        let v = lockedValue ?? (scope == 0 ? session.cell(id).value : session.globalCell(id).value)
-        let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
-        return PageArea.Control(label: label ?? d?.label ?? "", value: formatValue(d, v, skiff: true).shown, raw: v, min: lo, max: hi,
-                                list: d.map { $0.format == 8 || !$0.names.isEmpty } ?? false, ringless: false, fixed: fixed, locked: locked,
-                                names: d.flatMap { $0.names.isEmpty ? nil : Array(repeating: "", count: max(0, $0.min)) + $0.names })
+        PageArea.control(session, track: track, scope: scope, id: id, label: label, fixed: fixed)
     }
 
     /// The control on knob k of the page's own ids. A parameter the FM-1 labels "-" (an engine's unused knob: SAMPLE's
@@ -446,6 +437,23 @@ extension PhoneCore {
             if let t = w.tile, let page = shape { session.showOnDevice(page: page.fw, cursor: min(max(t, 0), 7)); publishNow(["page"]) }
         }
         return true
+    }
+}
+
+extension PageArea {
+    /// One control as the FM-1 shows it: the label (track_desc's), the value text (param_format's), the range, a held
+    /// step's lock. The sound pages' columns and HOME's four (HomeKnobs.swift) both come from here.
+    @MainActor static func control(_ session: DeviceSession, track: Int, scope: Int, id: Int, label: String? = nil, fixed: Bool = false) -> PageArea.Control {
+        let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
+        let locked = scope == 0 && session.lockStep.map { step in
+            session.motion[track]?.events.contains { $0.lock && $0.step == step && $0.id == id } ?? false } ?? false
+        let lockedValue = scope == 0 ? session.lockStep.flatMap { step in
+            session.motion[track]?.events.first { $0.lock && $0.step == step && $0.id == id }?.value } : nil
+        let v = lockedValue ?? (scope == 0 ? session.cell(id).value : session.globalCell(id).value)
+        let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
+        return PageArea.Control(label: label ?? d?.label ?? "", value: formatValue(d, v, skiff: true).shown, raw: v, min: lo, max: hi,
+                                list: d.map { $0.format == 8 || !$0.names.isEmpty } ?? false, ringless: false, fixed: fixed, locked: locked,
+                                names: d.flatMap { $0.names.isEmpty ? nil : Array(repeating: "", count: max(0, $0.min)) + $0.names })
     }
 }
 

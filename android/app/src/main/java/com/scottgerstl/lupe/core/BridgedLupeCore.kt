@@ -29,6 +29,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _meters = MutableStateFlow(MetersState())
     private val _timeline = MutableStateFlow(TimelineState())
     private val _automation = MutableStateFlow(AutomationState())
+    private val _homeKnobs = MutableStateFlow(HomeKnobsState())
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
@@ -42,6 +43,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val meters: StateFlow<MetersState> = _meters
     override val timeline: StateFlow<TimelineState> = _timeline
     override val automation: StateFlow<AutomationState> = _automation
+    override val homeKnobs: StateFlow<HomeKnobsState> = _homeKnobs
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -90,6 +92,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "meters" -> _meters.value = lupeJson.decodeFromString(MetersState.serializer(), json)
                 "timeline" -> _timeline.value = lupeJson.decodeFromString(TimelineState.serializer(), json)
                 "automation" -> _automation.value = lupeJson.decodeFromString(AutomationState.serializer(), json)
+                "homeKnobs" -> _homeKnobs.value = lupeJson.decodeFromString(HomeKnobsState.serializer(), json)
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {
