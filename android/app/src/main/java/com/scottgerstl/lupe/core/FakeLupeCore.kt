@@ -182,6 +182,8 @@ class FakeLupeCore(
             is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
             is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }
+            // P5's intents (P5State.kt): the fake ignores them until P2 builds P5's fake (P1, 2026-11-14)
+            else -> {}
         }
     }
 
