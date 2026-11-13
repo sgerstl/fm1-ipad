@@ -56,11 +56,14 @@ class FakeLupeCore(
     private val _shell = MutableStateFlow(ShellState())
     private val _pads = MutableStateFlow(PadsState())
     private val _editor = MutableStateFlow(EditorState())
+    private val _page = MutableStateFlow(PageState())
+    private val pageFake = FakePages()
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
     override val pads: StateFlow<PadsState> = _pads
     override val editor: StateFlow<EditorState> = _editor
+    override val page: StateFlow<PageState> = _page
 
     private var replay: Job? = null
     private var ticker: Job? = null
@@ -106,6 +109,9 @@ class FakeLupeCore(
         emitEditor { it.copy(selected = if (ed.chord) it.selected else (it.selected + 1) % 16) }
     }
 
+    /** The FM-1's knob [slot] (0…3) turned on a sound page: the phone lights that control (the screen link's job on the real core). */
+    fun fm1PageKnob(slot: Int) = _page.update { pageFake.fm1Turn(it, slot) }
+
     /** One of the FM-1's four knobs turned: with a step held (or Lock latched), the value locks to that step. */
     fun fm1Knob(knob: Int, delta: Int) {
         val ed = _editor.value
@@ -124,6 +130,7 @@ class FakeLupeCore(
             "link" -> _link.value = lupeJson.decodeFromJsonElement(LinkState.serializer(), state)
             "top" -> _top.value = lupeJson.decodeFromJsonElement(TopState.serializer(), state).also { syncTicker(it.playing) }
             "shell" -> _shell.value = lupeJson.decodeFromJsonElement(ShellState.serializer(), state)
+            "page" -> { val p = lupeJson.decodeFromJsonElement(PageState.serializer(), state); pageFake.learn(p); _page.value = p }
             "pads" -> _pads.value = lupeJson.decodeFromJsonElement(PadsState.serializer(), state)
             "editor" -> {
                 val e = lupeJson.decodeFromJsonElement(EditorState.serializer(), state)
@@ -182,6 +189,10 @@ class FakeLupeCore(
                 }
                 emitEditor()
             }
+            is SetParam -> _page.update { pageFake.setParam(it, intent.slot, intent.value) }
+            is PickPage -> { _page.update { pageFake.pick(it, intent.family, intent.page) }; _shell.update { it.copy(bottom = BottomPage(BottomKind.Page, _page.value.family, _page.value.pages.firstOrNull { r -> r.index == _page.value.page }?.title)) } }
+            is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
+            is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }
         }
     }

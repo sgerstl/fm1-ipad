@@ -2,6 +2,7 @@ package com.scottgerstl.lupe
 
 import com.scottgerstl.lupe.core.Intent
 import com.scottgerstl.lupe.core.LinkPhase
+import com.scottgerstl.lupe.core.PageState
 import com.scottgerstl.lupe.core.ShellState
 import com.scottgerstl.lupe.core.Scenario
 import com.scottgerstl.lupe.core.TopState
@@ -29,6 +30,7 @@ class FixturesTest {
                 "top" -> lupeJson.decodeFromJsonElement(TopState.serializer(), fr.state)
                 "shell" -> lupeJson.decodeFromJsonElement(ShellState.serializer(), fr.state)
                 "pads" -> assertEquals(6, lupeJson.decodeFromJsonElement(PadsState.serializer(), fr.state).rows.size)
+                "page" -> { val p = lupeJson.decodeFromJsonElement(PageState.serializer(), fr.state); assertEquals("${f.name}: four controls", 4, p.controls.size); assertTrue(p.pages.any { it.index == p.page }) }
                 "editor" -> assertEquals(16, lupeJson.decodeFromJsonElement(EditorState.serializer(), fr.state).steps.size)
                 else -> error("${f.name}: unknown area ${fr.area}")
             }

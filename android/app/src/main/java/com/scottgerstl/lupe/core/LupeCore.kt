@@ -13,6 +13,8 @@ interface LupeCore {
     val shell: StateFlow<ShellState>
     val pads: StateFlow<PadsState>
     val editor: StateFlow<EditorState>
+    /** The bottom half's sound page (ENV, LFO, FX, SEL, EDIT, ARP): P4. */
+    val page: StateFlow<PageState>
 
     fun send(intent: Intent)
 }

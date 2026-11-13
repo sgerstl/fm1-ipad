@@ -1,0 +1,148 @@
+package com.scottgerstl.lupe.core
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+// The `page` ViewState area (P4): what the bottom half shows while the FM-1 is on a sound page (ENV, LFO, FX, SEL,
+// EDIT, ARP). PROVISIONAL, like everything in android/fixtures/state/page-*.json: hand-written to design/phone-sound-pages.md
+// and BRIDGE.md §2 until P1's PhoneCore records real ones. Kept out of State.kt so P3's edits there don't collide;
+// the intents at the bottom extend the sealed [Intent] from here (Kotlin allows that within a package).
+//
+// Who decides what: the core (Swift: SkiffPages, DeviceDisplay) names the pages the FM-1 has for this track, finds each
+// knob's label and formats each value as the FM-1 shows it. Compose draws, and decides only look and feel (the ring,
+// the lit state, the haptics, the graph pictures from the values it is given).
+
+/** The six family keys of the bottom half's top row, in the FM-1's order. GLO and SEQ are not here (map: "What stays the same"). */
+val PageFamilies = listOf("ENV", "LFO", "FX", "SEL", "EDIT", "ARP")
+
+/** One key of the page row: [index] is the FM-1's page number (the screen link's), [title] its name on the FM-1. */
+@Serializable
+data class PageRef(val index: Int, val title: String)
+
+/**
+ * One of the four controls, in the FM-1's knob order. A knob with no parameter on this page (the FM-1's 0xFF) is
+ * `null` in [PageState.controls], an empty well, so knob 3 here is always knob 3 on the FM-1.
+ */
+@Serializable
+data class PageControl(
+    val label: String,
+    /** The value as the FM-1 shows it: "72", "-3", "710 Hz", "SAW", "1/16T". */
+    val value: String,
+    val raw: Int = 0,
+    val min: Int = 0,
+    val max: Int = 127,
+    /** The value is a name from a list (a wave, a division): each step gets a haptic tick, and the value may shrink to fit. */
+    val list: Boolean = false,
+    /** A picker's knob 1 (MOD's ROUTE, LANES' LANE): no ring, it isn't a value. The tiles above send it. */
+    val ringless: Boolean = false,
+    /** Shown but not editable here (MOD's fixed route: SRC and DEST). Drawn in text2. */
+    val fixed: Boolean = false,
+    /** This step carries a lock for it while a step is held: ◆ beside the label. */
+    val locked: Boolean = false,
+    /**
+     * FAKE ONLY: the names a list control steps through, so [FakeLupeCore] can rename on SetParam. The real core
+     * sends [value] and leaves this empty.
+     */
+    val names: List<String> = emptyList(),
+)
+
+@Serializable
+enum class GraphKind {
+    @SerialName("none") None,
+    @SerialName("env") Env,
+    @SerialName("lfo") Lfo,
+    @SerialName("drive") Drive,
+    @SerialName("fx") Fx,
+    @SerialName("scale") Scale,
+    @SerialName("arp") Arp,
+    @SerialName("analog") Analog,
+    /** MOD's eleven routes. */
+    @SerialName("mod") Mod,
+    /** LANES, LANE MIX, SAMPLES: knob 1's choices as tiles. */
+    @SerialName("tiles") Tiles,
+    /** OPERATOR, ALL OPS, SLICES, SOUND: the named card with the FM-1's cursor. */
+    @SerialName("card") Card,
+}
+
+@Serializable
+data class PageTile(val label: String)
+
+/** One of MOD's eleven routes: [group] "LFO", "ENV" or "SLOTS"; [amount] 0…127 as the small bar; [empty] a matrix slot with nothing set. */
+@Serializable
+data class PageRoute(val group: String, val label: String, val amount: Int = 0, val empty: Boolean = false)
+
+/**
+ * What a graph is drawn from. Which fields a kind reads (the rest stay empty):
+ *  - Env: [values] = ATTACK, DECAY, SUSTAIN, RELEASE (0…127)
+ *  - Lfo: [values] = RATE, WAVE, PHASE, FADE; [caption] the rate as shown ("2.40 Hz")
+ *  - Drive: [values] = DIST, TYPE, TONE; [caption] the type's name; [side] "drive 72 · tone 40"
+ *  - Fx: [values] = DIST, CHORUS, DELAY, REVERB sends
+ *  - Scale: [root] 0…11, [notes] the scale's semitone offsets from the root; [side] "C minor · ● root"
+ *  - Arp: [values] = MODE, RATE, OCTAVE, GATE, SWING, CHANCE, HOLD, ORDER; [side] "UP · 2 oct · 1/16 · gate 60%"
+ *  - Analog: [values] = WAVE, DETUNE, MIX, NOISE, CUTOFF, RESO; [caption] "OSC · SAW · 2 voices", [side] "FILTER · 710 Hz"
+ *  - Mod: [routes] and [picked] (0…10)
+ *  - Tiles: [tiles] and [picked]
+ *  - Card: [title] "OP 2 · RATIO" (the page and where the FM-1's cursor is)
+ */
+@Serializable
+data class PageGraph(
+    val kind: GraphKind = GraphKind.None,
+    val values: List<Int> = emptyList(),
+    val root: Int = 0,
+    val notes: List<Int> = emptyList(),
+    val caption: String? = null,
+    val side: String? = null,
+    val routes: List<PageRoute> = emptyList(),
+    val tiles: List<PageTile> = emptyList(),
+    val picked: Int = 0,
+    val title: String? = null,
+)
+
+/**
+ * The banner that stands in for the page row while a step is held ("Locking to step 6", board 61), or says why it
+ * can't ("Not lockable": SAMPLES and GLO's pages are SC_GLOBAL), or "Keys: SCALE" while SCL is held on the FM-1.
+ */
+@Serializable
+data class PageLock(
+    val text: String,
+    val note: String? = null,
+    /** A real lock (the ◆ in front, in the track's colour) rather than a notice. */
+    val locking: Boolean = true,
+)
+
+@Serializable
+data class PageState(
+    val family: String = "ENV",
+    /** The family's pages the selected track has, in the FM-1's order. */
+    val pages: List<PageRef> = emptyList(),
+    /** [PageRef.index] of the page showing. */
+    val page: Int = 0,
+    /** The selected track, 1…6, and its name ("Piano"): the track line. */
+    val track: Int = 1,
+    val trackName: String = "",
+    /** Always four. */
+    val controls: List<PageControl?> = List(4) { null },
+    val graph: PageGraph = PageGraph(),
+    /** The control (0…3) the FM-1's knob last turned, and a counter that grows with every turn: Compose lights it and fades it 600 ms after the last. */
+    val turned: Int = -1,
+    val turnSeq: Int = 0,
+    val lock: PageLock? = null,
+)
+
+// ---- intents (P4). Same JSON discriminator ("intent") as Intent.kt.
+
+/** Turn one of the four controls to [value] (its raw number; a list's index). [slot] 0…3 is the FM-1's knob order. A graph handle sends this too. */
+@Serializable @SerialName("setParam")
+data class SetParam(val slot: Int, val value: Int) : Intent
+
+/** Send the FM-1 to a page (SCREEN_GOTO). [page] null: the family's first. */
+@Serializable @SerialName("pickPage")
+data class PickPage(val family: String, val page: Int? = null) : Intent
+
+/** MOD: pick one of the eleven routes (turns knob 1). */
+@Serializable @SerialName("pickRoute")
+data class PickRoute(val route: Int) : Intent
+
+/** LANES, LANE MIX, SOUND, SAMPLES: pick a tile (turns knob 1). */
+@Serializable @SerialName("pickTile")
+data class PickTile(val tile: Int) : Intent
