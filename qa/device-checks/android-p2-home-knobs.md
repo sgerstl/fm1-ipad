@@ -1,6 +1,6 @@
 # Android P2: HOME's four sound knobs under the grid (board 70, decision 21), 2026-11-13
 
-Built (Kotlin tests pass, APK builds); **not run on a screen**, and not against the real core: the data is the fake's ANALOG set (CUTOFF 84, RES 40, ATTACK 12, RELEASE 64) behind a **provisional** `homeKnobs` area and `setHomeKnob` intent. P1's real shapes replace them. Nothing here writes the FM-1's flash: no backup needed.
+Built (Kotlin tests pass, APK builds); **not run on a screen**, and not against the real core: the data is the fake's ANALOG set (CUTOFF 84, RES 40, ATTACK 12, RELEASE 64) in the shapes P1 fixed (`homeKnobs`: track, engine, preset, controls, hot, hotSeq, fm1Home; intent `setHomeKnob`). Not yet checked against P1's commit or the real core. Nothing here writes the FM-1's flash: no backup needed.
 
 | # | Do | See |
 |---|----|-----|

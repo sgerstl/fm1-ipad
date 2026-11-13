@@ -65,13 +65,13 @@ fun HomeKnobsStrip(ed: EditorState, core: LupeCore, modifier: Modifier = Modifie
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicText("Sound", Modifier.semantics { heading() }, style = LupeType.key)
             if (home.engine.isNotEmpty()) BasicText(home.engine, Modifier.padding(start = 8.dp), style = LupeType.small.copy(color = Tok.text2Raised), maxLines = 1)
-            BasicText("· the FM-1's four knobs", Modifier.padding(start = 4.dp), style = LupeType.small, maxLines = 1)
+            if (home.preset.isNotEmpty()) BasicText("· ${home.preset}", Modifier.padding(start = 4.dp), style = LupeType.small, maxLines = 1)
         }
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
             for (slot in 0 until 4) Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                 val c = home.controls.getOrNull(slot)
                 if (c == null) Box(Modifier.size(KNOB))   // an empty well keeps knob 3 knob 3
-                else RoundKnob(slot, c.label, c.value, c.raw, c.min, c.max, track, if (slot == home.turned) home.turnSeq else -1, pc)
+                else RoundKnob(slot, c.label, c.value, c.raw, c.min, c.max, track, if (slot == home.hot) home.hotSeq else -1, pc)
             }
         }
     }

@@ -40,7 +40,7 @@ class FakeLupeCoreTest {
         core.send(com.scottgerstl.lupe.core.SetHomeKnob(0, 200)); advanceTimeBy(10)
         assertEquals("127", core.homeKnobs.value.controls[0]!!.value)   // stops at the range's end
         core.fm1HomeKnob(2, 3); advanceTimeBy(10)
-        assertEquals("15", core.homeKnobs.value.controls[2]!!.value); assertEquals(2, core.homeKnobs.value.turned)
+        assertEquals("15", core.homeKnobs.value.controls[2]!!.value); assertEquals(2, core.homeKnobs.value.hot)
     }
 
     @Test fun launchWaitsWhilePlayingAndCountsInTheTopBar() = runTest(StandardTestDispatcher()) {

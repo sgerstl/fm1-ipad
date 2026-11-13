@@ -11,21 +11,26 @@ import kotlinx.serialization.Serializable
  * the step grid while no step is picked. A knob is a [PageControl] (label, value text, raw and range), so it turns
  * exactly like a sound page's.
  *
- * PROVISIONAL shape: P1 is adding the real `homeKnobs` area and its set intent and will message the fields; this is
- * what the fake and the fixture use until then.
+ * Shape as P1 fixed it (2026-11-13). The area isn't published until a Skiff FM-1 has been read.
  */
 @Serializable
 data class HomeKnobsState(
-    /** "ANALOG", "DRUM", "FM6"…: the header reads "Sound  ANALOG · the FM-1's four knobs". */
+    val track: Int = 1,
+    val trackName: String = "",
+    /** "ANALOG", "DRUM", "FM6"…: the header reads "Sound  ANALOG · ACID". */
     val engine: String = "",
-    /** Always four; null is an empty well (a knob with no parameter). */
+    /** The preset's name ("ACID"), or empty. */
+    val preset: String = "",
+    /** The FM-1's knobs 1-4, as the sound pages' controls; null is an empty well. */
     val controls: List<PageControl?> = List(4) { null },
-    /** The knob (0…3) the FM-1 last turned and a counter that grows with each turn: Compose lights it for 600 ms. */
-    val turned: Int = -1,
-    val turnSeq: Int = 0,
+    /** The knob (0…3) last turned on the FM-1, or -1; [hotSeq] changes with each turn (restart the light). It lights for any change of that parameter, from any page. */
+    val hot: Int = -1,
+    val hotSeq: Int = 0,
+    /** The FM-1's screen is on HOME, where its knobs turn these four. */
+    val fm1Home: Boolean = false,
 )
 
-/** Turn one of the four. [slot] 0…3, [value] raw. PROVISIONAL name, see [HomeKnobsState]. */
+/** Turn one of the four. [slot] 0…3, [value] raw. A write: refused while read-only, same path as setParam. */
 @Serializable @SerialName("setHomeKnob")
 data class SetHomeKnob(val slot: Int, val value: Int) : Intent
 

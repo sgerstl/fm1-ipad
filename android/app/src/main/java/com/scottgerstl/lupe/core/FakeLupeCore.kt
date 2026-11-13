@@ -117,7 +117,7 @@ class FakeLupeCore(
     fun fm1PageKnob(slot: Int) = _page.update { pageFake.fm1Turn(it, slot) }
 
     /** The FM-1's HOME knob [slot] (0…3) turned by [delta]: the phone's knob follows and lights. */
-    fun fm1HomeKnob(slot: Int, delta: Int) = _home.update { FakeHome.set(it, slot, (it.controls.getOrNull(slot)?.raw ?: 0) + delta).copy(turned = slot, turnSeq = it.turnSeq + 1) }
+    fun fm1HomeKnob(slot: Int, delta: Int) = _home.update { FakeHome.set(it, slot, (it.controls.getOrNull(slot)?.raw ?: 0) + delta).copy(hot = slot, hotSeq = it.hotSeq + 1) }
 
     /** One of the FM-1's four knobs turned: with a step held (or Lock latched), the value locks to that step. */
     fun fm1Knob(knob: Int, delta: Int) {
@@ -420,7 +420,7 @@ class FakeLupeCore(
 
 /** The fake's HOME knobs: ANALOG's CUTOFF 84, RES 40, ATTACK 12, RELEASE 64 (board 70). */
 internal object FakeHome {
-    fun seed() = HomeKnobsState("ANALOG", listOf("CUTOFF" to 84, "RES" to 40, "ATTACK" to 12, "RELEASE" to 64).map { (l, v) -> PageControl(l, "$v", v, 0, 127) })
+    fun seed() = HomeKnobsState(1, "Analog · Acid", "ANALOG", "ACID", listOf("CUTOFF" to 84, "RES" to 40, "ATTACK" to 12, "RELEASE" to 64).map { (l, v) -> PageControl(l, "$v", v, 0, 127) }, fm1Home = true)
     fun set(s: HomeKnobsState, slot: Int, value: Int): HomeKnobsState {
         val c = s.controls.getOrNull(slot) ?: return s
         val v = value.coerceIn(c.min, c.max)
