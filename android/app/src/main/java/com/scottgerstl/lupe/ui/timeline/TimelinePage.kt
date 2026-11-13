@@ -129,6 +129,7 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                             for (t in 1..6) {
                                 val colour = Tok.track[(t - 1) % Tok.track.size]
                                 Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Tok.well)) {
+                                    TrackEnd(t, ui, actions, barH, !playing)
                                     ui.blocks.filter { it.track == t && !it.gap }.forEach { b ->
                                         key(b.key) { BlockView(b, colour, b.key == ui.selected, barH, bars, ui, actions, !playing) }
                                     }
@@ -157,7 +158,7 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
     }
 }
 
-private enum class BlockMenu { Root, Pattern, PatternConfirm, Delete }
+private enum class BlockMenu { Root, Pattern, PatternConfirm, Delete, Insert }
 
 /**
  * One block. A track's song is a list of entries that play back to back, so a block has no free place: dragging it by its
@@ -272,6 +273,10 @@ private fun BlockMenuPopup(
                         // how long it plays: its passes, set by sliding (no − / +); the bars follow
                         MenuSlideRow("PASSES · ${barsText(b.length)}".uppercase(), "${b.reps}", b.reps, 1, 16, "Passes, block on track ${b.track}", stepDp = 22f) { actions.stretch(b, it) }
                         MenuRow("Duplicate", { actions.duplicate(b); close() })
+                        MenuRow("Insert before…", { setMode(BlockMenu.Insert) }, enabled = (ui.entries[b.track] ?: 0) < 16)
+                        // a chain plays its patterns as one block; Chain joins this block to the next, Split takes a chain apart
+                        if (ui.blocks.any { it.track == b.track && !it.gap && it.id == b.id + b.entries }) MenuRow("Chain with the next", { actions.chain(b); close() })
+                        if (b.entries > 1) MenuRow("Split the chain", { actions.split(b); close() })
                         MenuRow("Select sound", { actions.openSounds(b.track); close() })
                         MenuRow("Delete…", { setMode(BlockMenu.Delete) })
                     }
@@ -280,6 +285,12 @@ private fun BlockMenuPopup(
                         ui.kept.forEach { p ->
                             MenuRow("Pattern ${"%02d".format(p)}", { if (erases && p != b.pattern) { setPending(p); setMode(BlockMenu.PatternConfirm) } else { actions.setPattern(b, p); close() } }, checked = !b.rest && b.pattern == p)
                         }
+                        MenuRow("Back", { setMode(BlockMenu.Root) })
+                    }
+                    BlockMenu.Insert -> {
+                        MenuHeading("Insert before this block")
+                        MenuRow("REST", { actions.insert(b.track, b.id, 65); close() })
+                        ui.kept.forEach { p -> MenuRow("Pattern ${"%02d".format(p)}", { actions.insert(b.track, b.id, p); close() }) }
                         MenuRow("Back", { setMode(BlockMenu.Root) })
                     }
                     BlockMenu.PatternConfirm -> {
@@ -315,4 +326,44 @@ internal fun barsText(bars: Float): String {
 internal fun barRange(b: BlockUi): String {
     val first = b.start.toInt() + 1; val last = kotlin.math.ceil(b.end - 1e-4f).toInt().coerceAtLeast(first)
     return if (first == last) "bar $first" else "bars $first–$last"
+}
+
+/** Holding the empty part of a track's column, after its last block: a menu beside the finger to add to the song (New pattern, or a kept pattern or a REST at the end). */
+@Composable
+private fun TrackEnd(track: Int, ui: TimelineUi, actions: TimelineActions, barH: androidx.compose.ui.unit.Dp, editable: Boolean) {
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    var listing by remember { mutableStateOf(false) }
+    val end = ui.blocks.filter { it.track == track && !it.gap }.maxOfOrNull { it.end } ?: 0f
+    val endPx = with(density) { (barH * end).toPx() }
+    val full = (ui.entries[track] ?: 0) >= 16
+    Box(
+        Modifier.fillMaxSize()
+            .semantics { onLongClick("Add to track $track's song") { if (editable) { listing = false; menuAt = Offset(60f, endPx + 40f); true } else false } }
+            .pointerInput(track, editable, endPx) {
+                detectTapGestures(onLongPress = { at -> if (editable && at.y > endPx) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); listing = false; menuAt = at } })
+            },
+    ) {
+        // anchored to a 1 dp box at the empty spot, so the menu opens beside the finger
+        Box(Modifier.offset { IntOffset(0, endPx.toInt()) }.height(1.dp).width(1.dp)) {
+            LupeMenu(menuAt != null, { menuAt = null }, width = 232.dp, at = menuAt?.let { Offset(it.x, it.y - endPx) }) {
+                LupeCrossfade(listing) { l ->
+                    Column {
+                        if (!l) {
+                            MenuHeading("Track $track · end of the song")
+                            MenuRow("New pattern", { actions.newBlock(track); menuAt = null }, enabled = !full)
+                            MenuRow("Add a pattern ⌄", { listing = true }, enabled = !full)
+                            MenuRow("Add a REST", { actions.insert(track, ui.entries[track] ?: 0, 65); menuAt = null }, enabled = !full)
+                            if (full) BasicText("The track's 16 entries are full.", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = LupeType.small)
+                        } else {
+                            MenuHeading("Add at the end")
+                            ui.kept.forEach { p -> MenuRow("Pattern ${"%02d".format(p)}", { actions.insert(track, ui.entries[track] ?: 0, p); menuAt = null }) }
+                            MenuRow("Back", { listing = false })
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

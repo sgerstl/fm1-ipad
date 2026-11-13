@@ -53,3 +53,14 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 | 14, 15 | ☐ TalkBack, Remove animations: later |
 
 Also: the tempo popover still has −10 / −1 / +1 / +10 steppers (decision 10 says none); the readout never shows Once or Song once set.
+
+## Fixes for the run on 40c8629 (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| 6 | Insert, Chain, Split, New, ClearLane had no controls | The block's hold menu has **Insert before…** (REST or a kept pattern), **Chain with the next** and (on a chain) **Split the chain**; holding the empty part of a track's column after its last block opens **New pattern / Add a pattern / Add a REST**; the lane picker has **Clear this lane…**, asked in place. | Hold a block; hold the empty space under a track; open the lane picker. |
+| 7 | A fresh pattern had no way into AUTOMATION | The lane area shows for every pattern: with no lanes it is a **Pick a parameter** picker (the lanes it has, plus the controls of the sound page the FM-1 is on), then Draw. **This leans on the core accepting a parameter it hasn't listed**; the automation area should list every drawable parameter. | A pattern with no locks: pick a parameter, Draw, draw. |
+| 8 | "1.00000 bars", "BARS 2–2" | "1 bar", "5 bars", "½ bar"; "bar 2". | Menu headings and the Delete question. |
+| 9 | The grip crossed a 1-bar block's number | A short block's grip is a small notch at its very foot. | Select a 1-bar block. |
+| 10 | The head ring sat on track 1 | It rings the FM-1's selected track (the pads' selection). | Select track 3 or 5 on the FM-1. |
+| 11 | Playing squashed the rows | The Stop strip overlays the foot; the rows keep their scale and the song scrolls up to clear it. | Press Play. |

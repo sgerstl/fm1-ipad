@@ -80,3 +80,21 @@ New faults seen:
 - **SAVE and Save here never ask for a name**: the user slot took "FLUTE", the project slot copied "TESTBED".
 - **The erase menu on a user slot opens over the finger**, not beside it.
 - **The playing project's dot** shows when the core says unchanged.
+
+## Fixes for the run on 40c8629 (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| 1 | DELAY MODE plain text on the real core | The screen says DELAY MODE (the core's "DLY MODE" is renamed) and, with no names from the core, offers **MONO · STEREO · PING-PONG** (raw 0, 1, 2; raw 1 is STEREO, from the run); the bus page scrolls so it's in reach at split; the fake matches. **The third name is a guess** from the iPad's wording (skiff-src is the 2.2 tree and has no DELAY MODE): the core should publish the DESC's own names, then this fallback goes. | Delay page: tap each mode; the FM-1's reply is the truth. |
+| 2 | No Solo | Solo is in a Mix row's hold menu (checked when on) and the row says SOLO. | Hold a row: Solo; the row shows SOLO. |
+| 3 | Pad › Select sound changed the whole track on a melodic track | Every track's pad Select sound opens that pad's own sound ("Sound for pad B on track 5"); the track's sound is untouched. | Track 5, hold a pad: Select sound. |
+| 4 | Mix faders ignored a sideways drag under Up and down | A fader follows the finger across whatever Slide to turn says. | Drag a fader sideways. |
+| 5 | Tempo popover had − / + steppers | A TEMPO slide value (double tap reverts to what it was when opened), no steppers. | Tap the readout, slide, double tap. |
+| 12 | The FM-1 key blank at start | It shows the project's name from the projects area until the core's `top.project` has one. | Start without a save or load. |
+| 13 | Mix row name dropped words ("War") | The name shrinks to fit (down to 10 sp). | A long track name reads whole. |
+| 14 | Save (user sound) and Save here (project) never asked a name | A name field in place, the current name filled in, Save and Cancel; over a used slot it then asks to replace. | Save a sound into an empty slot; Save here on an empty project slot. |
+| – | Readout never showed Once or Song | It reads "120 SONG" / "120 ONCE" when the mode isn't Loop. | Set Song, look at the readout. |
+| – | Labs time-across wording | "Not built yet: the Timeline runs time down". | – |
+| – | Erase menu opened over the finger | A menu with no room on either side opens above the finger. | Hold a used user slot in the right column. |
+
+**Not changed, and why:** the Magnifier doesn't show while sliding PASSES in a block menu (the menu is a window above it; the value is large there, as in the Mix row's menu); the project dot means "playing now", not "changed" (the "changed" word is in the Load confirm); **USER › FLUTE reading "Sample · Piano" and the slot not ticked** is the core's (PickUser sends the slot; check what the FM-1 does with it).

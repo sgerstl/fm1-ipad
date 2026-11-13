@@ -47,6 +47,8 @@ data class TimelineUi(
     val trackNames: List<String> = emptyList(),
     /** How many blocks name each pattern, across every track: a pattern used nowhere else is erased when its block goes. */
     val uses: Map<Int, Int> = emptyMap(),
+    /** Entries in use on each track, of 16: where the next block would go, and whether one more fits. */
+    val entries: Map<Int, Int> = emptyMap(),
 )
 
 class TimelineActions(
@@ -61,6 +63,12 @@ class TimelineActions(
     val delete: (BlockUi) -> Unit,
     val stop: () -> Unit,
     val openSounds: (track: Int) -> Unit,
+    /** A new entry at [at] holding [pattern] (65 is a REST); the ones from there move on. */
+    val insert: (track: Int, at: Int, pattern: Int) -> Unit,
+    /** A new empty pattern after the track's last entry. */
+    val newBlock: (track: Int) -> Unit,
+    val chain: (BlockUi) -> Unit,
+    val split: (BlockUi) -> Unit,
 )
 
 private fun TimelineBlock.toUi(track: Int) = BlockUi(
@@ -72,6 +80,7 @@ fun TimelineState.toUi(selected: Int?, selectedTrack: Int) = TimelineUi(
     totalBars = kotlin.math.ceil(bars).toInt().coerceAtLeast(1),
     selected = selected, selectedTrack = selectedTrack, kept = kept, trackNames = tracks.map { it.name.substringAfter(" · ") },
     uses = tracks.flatMap { t -> t.blocks.mapNotNull { it.pattern } }.groupingBy { it }.eachCount(),
+    entries = tracks.associate { it.track to it.entriesUsed },
 )
 
 /**
@@ -110,6 +119,10 @@ fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions,
             delete = { core.send(BlockDelete(it.track, it.id, confirmed = true)); selected = null },
             stop = { core.send(Intent.Stop) },
             openSounds = { sounds.open(it) },
+            insert = { t, at, p -> core.send(com.scottgerstl.lupe.core.BlockInsert(t, at, p)) },
+            newBlock = { core.send(com.scottgerstl.lupe.core.BlockNew(it)) },
+            chain = { core.send(com.scottgerstl.lupe.core.BlockChain(it.track, it.id)) },
+            split = { core.send(com.scottgerstl.lupe.core.BlockSplit(it.track, it.id)) },
         )
     }
     return Triple(ui, actions, head)

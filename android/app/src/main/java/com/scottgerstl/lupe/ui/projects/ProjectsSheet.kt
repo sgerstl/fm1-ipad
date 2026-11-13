@@ -90,7 +90,8 @@ private sealed interface Pending {
     data class Save(val slot: ProjectSlotUi, val armedAt: Long) : Pending
     /** Save the playing project into a used slot: replaces that project. */
     data class SaveAs(val slot: ProjectSlotUi, val armedAt: Long) : Pending
-    data class Rename(val slot: ProjectSlotUi) : Pending
+    /** The name field in place: a Rename, or (with [save]) the name for Save here, defaulting to the playing project's. */
+    data class Rename(val slot: ProjectSlotUi, val save: Boolean = false) : Pending
 }
 
 /**
@@ -185,7 +186,13 @@ private fun SlotRow(slot: ProjectSlotUi, playing: ProjectSlotUi?, pending: Pendi
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         BasicText("${slot.index}", Modifier.width(22.dp), style = LupeType.number.copy(fontSize = 24.sp, color = if (slot.empty) Tok.text2 else Tok.text))
-        if (renaming) RenameField(slot, { setPending(null) }) { actions.rename(slot.index, it); setPending(null) }
+        if (renaming) {
+            val save = (pending as Pending.Rename).save
+            RenameField(if (save) (playing?.name.orEmpty()) else slot.name, slot.index, { setPending(null) }) {
+                if (save) actions.saveAs(slot.index, it, false) else actions.rename(slot.index, it)
+                setPending(null)
+            }
+        }
         else Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 BasicText(if (slot.empty) "Empty" else slot.name, style = LupeType.key.copy(fontSize = 16.sp, color = if (slot.empty) Tok.text2 else Tok.text), maxLines = 1)
@@ -196,7 +203,7 @@ private fun SlotRow(slot: ProjectSlotUi, playing: ProjectSlotUi?, pending: Pendi
         if (!renaming) {
             when {
                 slot.current -> Key({ setPending(Pending.Save(slot, System.currentTimeMillis())) }, "Save ${slot.name}", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
-                slot.empty -> Key({ actions.saveAs(slot.index, playing?.name?.ifEmpty { null } ?: "Project ${slot.index}", false) }, "Save here as a new project in slot ${slot.index}", width = 92.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save here", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                slot.empty -> Key({ setPending(Pending.Rename(slot, save = true)) }, "Save here as a new project in slot ${slot.index}: asks for a name", width = 92.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Save here", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
                 else -> Key({
                     if (ui.changes != null) setPending(Pending.Load(slot, System.currentTimeMillis())) else { actions.load(slot.index, false); closeSheet() }
                 }, "Load ${slot.name}", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Load", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
@@ -217,14 +224,14 @@ private fun SlotRow(slot: ProjectSlotUi, playing: ProjectSlotUi?, pending: Pendi
 
 /** The name in place: a text field with Done on the keyboard and a Cancel; the project keeps its name until Done. */
 @Composable
-private fun RenameField(slot: ProjectSlotUi, cancel: () -> Unit, done: (String) -> Unit) {
-    var text by remember { mutableStateOf(slot.name) }
+private fun RenameField(initial: String, index: Int, cancel: () -> Unit, done: (String) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
     val focus = remember { FocusRequester() }
     androidx.compose.runtime.LaunchedEffect(Unit) { focus.requestFocus() }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         BasicTextField(
             text, { text = it.take(16) }, Modifier.weight(1f).focusRequester(focus).background(Tok.well, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 12.dp)
-                .semantics { contentDescription = "Name of project ${slot.index}" },
+                .semantics { contentDescription = "Name of project $index" },
             textStyle = LupeType.key.copy(fontSize = 16.sp), singleLine = true, cursorBrush = SolidColor(Tok.text),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { if (text.isNotBlank()) done(text.trim()) }),
         )

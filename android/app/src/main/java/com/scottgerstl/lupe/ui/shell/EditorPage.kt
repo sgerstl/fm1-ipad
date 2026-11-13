@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 import com.scottgerstl.lupe.ui.slide.slideToTurn
 import com.scottgerstl.lupe.ui.slide.MagnifierFace
@@ -106,13 +107,13 @@ fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, auto: com.s
     var drawing by rememberSaveable { mutableStateOf(false) }
     val track = Tok.track[(ed.track - 1).coerceAtLeast(0) % Tok.track.size]
     if (ed.steps.isEmpty()) { Placeholder("No pattern", "Pick a pad: hold it, then Edit steps", modifier); return }
-    if (drawing && auto.lanes.isNotEmpty()) { AutomationFull(ed, auto, core, track, { drawing = false }, modifier); return }
+    if (drawing && auto.lane.isNotEmpty()) { AutomationFull(ed, auto, core, track, { drawing = false }, modifier); return }
     Column(modifier.fillMaxSize()) {
         Ruler(ed, track, core)
         Spacer(Modifier.height(0.dp))
         Grid(ed, track, core, Modifier.weight(1f).padding(top = 0.dp))
-        // the core sends no lanes until MOTION is read (P1's recordings): then there is no lane to show
-        if (autoFraction > 0.02f && auto.lanes.isNotEmpty()) {
+        // the lane shows for every pattern: with no locks or recorded motion yet it is a parameter picker, so a fresh pattern has a way in
+        if (autoFraction > 0.02f) {
             Spacer(Modifier.height(12.dp * autoFraction))
             AutoLane(ed, auto, track, core, { drawing = true }, Modifier.height(150.dp * autoFraction).graphicsLayer { alpha = autoFraction })
         }
@@ -439,21 +440,24 @@ private fun LockRow(param: String, value: Int, locked: Boolean, track: Color, on
 @Composable
 private fun AutoLane(ed: EditorState, auto: com.scottgerstl.lupe.core.AutomationState, track: Color, core: LupeCore, onDraw: () -> Unit, modifier: Modifier) {
     var open by remember { mutableStateOf(false) }
+    val page by core.page.collectAsStateWithLifecycle()
+    val params = com.scottgerstl.lupe.ui.automation.automationParams(auto, page)
     Column(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
-                Key({ open = true }, "Automation lane ${auto.lane}, ${auto.lanes.indexOfFirst { it.param == auto.lane } + 1} of ${auto.lanes.size}. Pick another", width = 120.dp, height = 28.dp, minTarget = 32.dp) { fg ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel(auto.lane, fg, style = LupeType.key.copy(fontSize = 13.sp)); Chevron(fg) }
+                Key({ open = true }, if (auto.lane.isEmpty()) "Pick a parameter to automate" else "Automation lane ${auto.lane}. Pick another", width = 140.dp, height = 28.dp, minTarget = 32.dp) { fg ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel(auto.lane.ifEmpty { "Pick a parameter" }, fg, style = LupeType.key.copy(fontSize = 13.sp)); Chevron(fg) }
                 }
                 LupeMenu(open, { open = false }) {
                     MenuHeading("Lane")
-                    auto.lanes.map { it.param }.forEach { l -> MenuRow(l, { core.send(com.scottgerstl.lupe.core.AutomationLanePick(l)); open = false }, checked = l == auto.lane) }
+                    params.forEach { l -> MenuRow(l, { core.send(com.scottgerstl.lupe.core.AutomationLanePick(l)); open = false }, checked = l == auto.lane) }
+                    if (params.isEmpty()) BasicText("Open a sound page on the FM-1: its knobs are the parameters to draw.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = LupeType.small)
                 }
             }
             Spacer(Modifier.width(6.dp))
-            Key(onDraw, "Draw on the lane: opens it full size", width = 64.dp, height = 28.dp, minTarget = 32.dp) { fg -> KeyLabel("Draw", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+            Key(onDraw, "Draw on the lane: opens it full size", width = 64.dp, height = 28.dp, minTarget = 32.dp, enabled = auto.lane.isNotEmpty()) { fg -> KeyLabel("Draw", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
             Spacer(Modifier.weight(1f))
-            BasicText("${auto.lanes.indexOfFirst { it.param == auto.lane } + 1} of ${auto.lanes.size} lanes · ◆ = a lock", style = LupeType.small, maxLines = 1)
+            BasicText(if (auto.lane.isEmpty()) "Pick a parameter, then Draw" else "${auto.lanes.indexOfFirst { it.param == auto.lane } + 1} of ${auto.lanes.size} lanes · ◆ = a lock", style = LupeType.small, maxLines = 1)
         }
         Spacer(Modifier.height(4.dp))
         Canvas(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(8.dp)).background(Tok.well)

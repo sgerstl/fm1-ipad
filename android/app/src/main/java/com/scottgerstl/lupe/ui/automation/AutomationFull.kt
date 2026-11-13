@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.scottgerstl.lupe.core.ClearLane
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +83,14 @@ private data class LaneInfo(val lane: String, val locks: Int, val recorded: Bool
 
 private fun laneInfo(auto: AutomationState, lane: String): LaneInfo = auto.lanes.firstOrNull { it.param == lane }.let { LaneInfo(lane, it?.locks ?: 0, (it?.recorded ?: 0) > 0) }
 
+/**
+ * The parameters a lane can be drawn on: the lanes the pattern already has, plus the controls of the sound page the FM-1 is on
+ * (what its knobs turn). TODO: the core's automation area should list every drawable parameter of the track; until it does a
+ * fresh pattern offers the page's own.
+ */
+fun automationParams(auto: AutomationState, page: com.scottgerstl.lupe.core.PageState): List<String> =
+    (auto.lanes.map { it.param } + page.controls.filterNotNull().filter { !it.ringless && !it.fixed }.map { it.label }).distinct()
+
 /** A raw value as a percent of the lane's range (the lane is drawn 0..100), and back. */
 private fun AutomationState.pct(v: Int) = if (max > min) ((v - min) * 100f / (max - min)).coerceIn(0f, 100f) else 0f
 private fun AutomationState.raw(pct: Int) = min + (pct * (max - min) / 100f).roundToInt()
@@ -103,6 +113,8 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
     // the yes of decision 16, for this lane: until it changes, touches draw at once
     var armedLane by remember { mutableStateOf<String?>(null) }
     var asking by remember { mutableStateOf<Long?>(null) }
+    var clearing by remember { mutableStateOf<Long?>(null) }
+    val page by core.page.collectAsStateWithLifecycle()
     val trail = remember { mutableStateListOf<Offset>() }
     var drawnSteps by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -122,7 +134,7 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                 // each lane says how many locks it has, or that it's recorded
                 LupeMenu(pickerOpen, { pickerOpen = false }, alignEnd = true, width = 232.dp) {
                     MenuHeading("Lane")
-                    auto.lanes.map { it.param }.forEach { l ->
+                    automationParams(auto, page).forEach { l ->
                         val i = laneInfo(auto, l)
                         Row(
                             Modifier.fillMaxWidth().height(48.dp)
@@ -136,6 +148,8 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                             BasicText(laneWords(i), style = LupeType.small.copy(fontSize = 12.sp))
                         }
                     }
+                    // the lane's records and locks gone: asked in place over the lane
+                    com.scottgerstl.lupe.ui.shell.MenuRow("Clear this lane…", { pickerOpen = false; clearing = System.currentTimeMillis() }, enabled = info.locks + (if (info.recorded) 1 else 0) > 0, sub = "Takes off its locks and recorded changes")
                 }
             }
             Key(onDone, "Done: back to the editor", width = 56.dp, height = 32.dp, minTarget = 40.dp) { fg -> KeyLabel("Done", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
@@ -232,6 +246,19 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                             .padding(12.dp),
                     ) { BasicText(words, style = LupeType.key) }
                     WideKey("Cancel", { asking = null })
+                }
+            }
+            // ClearLane, asked in place: the lane's recorded changes and locks both go
+            LupeCrossfade(clearing, Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) { at ->
+                if (at != null) Column(Modifier.background(Tok.panel, RoundedCornerShape(8.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val words = "Clear all of $lane's locks and recorded changes? It can't be undone."
+                    Box(
+                        Modifier.fillMaxWidth().drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
+                            .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Confirm: $words"; onClick { if (System.currentTimeMillis() - at > 400) { core.send(ClearLane(lane, confirmed = true)); clearing = null; true } else false } }
+                            .pointerInput(at) { detectTapGestures { if (System.currentTimeMillis() - at > 400) { core.send(ClearLane(lane, confirmed = true)); clearing = null } } }
+                            .padding(12.dp),
+                    ) { BasicText(words, style = LupeType.key) }
+                    WideKey("Cancel", { clearing = null })
                 }
             }
         }
