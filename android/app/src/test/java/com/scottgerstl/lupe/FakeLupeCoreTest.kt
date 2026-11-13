@@ -28,7 +28,7 @@ class FakeLupeCoreTest {
         val core = fake(this)
         core.send(com.scottgerstl.lupe.core.PickPage("ENV")); advanceTimeBy(10)
         assertEquals(com.scottgerstl.lupe.core.BottomKind.Page, core.shell.value.bottom.kind)
-        core.send(Intent.GoHome); advanceTimeBy(10)
+        core.send(com.scottgerstl.lupe.core.GoHome); advanceTimeBy(10)
         assertEquals(com.scottgerstl.lupe.core.BottomKind.Editor, core.shell.value.bottom.kind)
     }
 

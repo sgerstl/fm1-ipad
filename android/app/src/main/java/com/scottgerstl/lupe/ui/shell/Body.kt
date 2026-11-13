@@ -121,7 +121,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     // Decision 19: while a sound page shows (and only then), the back gesture is HOME on the FM-1. Registered before the
     // content, so the Sounds browser's own BackHandler (composed later) wins while it is open.
     val soundPageUp = shell.bottom.kind == BottomKind.Page
-    androidx.activity.compose.BackHandler(enabled = soundPageUp) { core.send(Intent.GoHome) }
+    androidx.activity.compose.BackHandler(enabled = soundPageUp) { core.send(com.scottgerstl.lupe.core.GoHome) }
     androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.slide.LocalBackGoesHome provides soundPageUp) {
     // Labs (decision 20): the sound page pushes up under the steps; the whole area is one vertical scroll
     val soundsOpen = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current.request != null
