@@ -64,3 +64,11 @@ Also: the tempo popover still has −10 / −1 / +1 / +10 steppers (decision 10 
 | 9 | The grip crossed a 1-bar block's number | A short block's grip is a small notch at its very foot. | Select a 1-bar block. |
 | 10 | The head ring sat on track 1 | It rings the FM-1's selected track (the pads' selection). | Select track 3 or 5 on the FM-1. |
 | 11 | Playing squashed the rows | The Stop strip overlays the foot; the rows keep their scale and the song scrolls up to clear it. | Press Play. |
+
+## Fix for Scott's hands on the device (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| 5, 6 | A foot drag or a body drag looked right but wasn't kept, and the blocks below didn't move | The drag's end handler read the numbers from when the gesture began (no movement yet), so it sent nothing. The drag state now lives with the track and the end reads it when the finger lifts, so BlockMove and BlockStretch go out. While you stretch, the blocks after it slide by the change in length; while you move, the ones it passes slide the other way and open a gap at the landing slot, all eased (150 ms; Reduce Motion: near-instant). | Select a block, drag its foot: the blocks below move with it, and on release the length is kept (the FM-1 reads it back). Drag a block past a neighbour: the neighbour slides out of the way, a tick as you pass, the order is kept. |
+
+**Known:** on release the dragged block is drawn back at the core's old state until the FM-1's reply arrives (a beat), then lands; it isn't held at the drop point.

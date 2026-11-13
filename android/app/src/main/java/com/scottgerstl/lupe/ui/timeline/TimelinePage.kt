@@ -128,10 +128,11 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                             }
                             for (t in 1..6) {
                                 val colour = Tok.track[(t - 1) % Tok.track.size]
+                                val drag = remember(t) { TrackDrag() }
                                 Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Tok.well)) {
                                     TrackEnd(t, ui, actions, barH, !playing)
                                     ui.blocks.filter { it.track == t && !it.gap }.forEach { b ->
-                                        key(b.key) { BlockView(b, colour, b.key == ui.selected, barH, bars, ui, actions, !playing) }
+                                        key(b.key) { BlockView(b, colour, b.key == ui.selected, barH, bars, ui, actions, !playing, drag) }
                                     }
                                 }
                             }
@@ -166,7 +167,7 @@ private enum class BlockMenu { Root, Pattern, PatternConfirm, Delete, Insert }
  * its foot sets its REPS (whole passes, so whole multiples of its pass). Only a selected block drags.
  */
 @Composable
-private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androidx.compose.ui.unit.Dp, totalBars: Int, ui: TimelineUi, actions: TimelineActions, editable: Boolean) {
+private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androidx.compose.ui.unit.Dp, totalBars: Int, ui: TimelineUi, actions: TimelineActions, editable: Boolean, drag: TrackDrag) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
@@ -174,28 +175,23 @@ private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androi
     var menuMode by remember { mutableStateOf(BlockMenu.Root) }
     var pendingPattern by remember { mutableStateOf(0) }
     var armedAt by remember { mutableStateOf(0L) }
-    var dragging by remember { mutableStateOf(false) }
-    var resizing by remember { mutableStateOf(false) }
-    var accPx by remember { mutableFloatStateOf(0f) }
     var tickKey by remember { mutableIntStateOf(0) }
+    val reduce = com.scottgerstl.lupe.ui.theme.LocalReduceMotion.current
     val barPx = with(density) { barH.toPx() }
     val edgePx = with(density) { 28.dp.toPx() }
     val mine = ui.blocks.filter { it.track == b.track && !it.gap }.sortedBy { it.start }
     val idx = mine.indexOfFirst { it.id == b.id }
 
-    // where a drag would land it: the slot (a count of places earlier or later) whose centre is nearest its own
-    fun placesFor(offsetBars: Float): Int {
-        val c = b.start + b.length / 2 + offsetBars
-        var best = 0; var bestD = kotlin.math.abs(c - (b.start + b.length / 2))
-        for (k in 1..(mine.size - 1 - idx)) { val centre = b.start + (mine.subList(idx + 1, idx + k + 1).sumOf { it.length.toDouble() }.toFloat()) + b.length / 2; val dd = kotlin.math.abs(c - centre); if (dd < bestD) { best = k; bestD = dd } }
-        for (k in 1..idx) { val centre = b.start - (mine.subList(idx - k, idx).sumOf { it.length.toDouble() }.toFloat()) + b.length / 2; val dd = kotlin.math.abs(c - centre); if (dd < bestD) { best = -k; bestD = dd } }
-        return best
-    }
-    val offsetBars = accPx / barPx
-    val places = if (dragging && !resizing) placesFor(offsetBars) else 0
-    val repsNow = if (dragging && resizing) ((b.length + offsetBars) / b.passBars).let { kotlin.math.floor(it + 0.5f) }.toInt().coerceIn(1, 16) else b.reps
-    val shownStart = if (dragging && !resizing) (b.start + offsetBars).coerceIn(0f, (totalBars - b.length).coerceAtLeast(0f)) else b.start
-    val shownLen = if (dragging && resizing) repsNow * b.passBars else b.length
+    val dragging = drag.source?.key == b.key
+    val resizing = dragging && drag.resizing
+    val offsetBars = drag.offsetBars
+    val places = if (dragging && !resizing) placesFor(mine, b.id, offsetBars) else 0
+    val repsNow = if (resizing) repsFor(b, offsetBars) else b.reps
+    // a neighbour makes room: it slides by what the dragged block takes or gives up, with the same easing as everything else (nothing pops)
+    val shiftTarget = if (!dragging) siblingShift(b, mine, drag.source, drag.resizing, offsetBars) else 0f
+    val shift = animatedFloat(shiftTarget, if (reduce) 1 else Dur.STATE)
+    val shownStart = if (dragging && !resizing) (b.start + offsetBars).coerceIn(0f, (totalBars - b.length).coerceAtLeast(0f)) else b.start + shift.value
+    val shownLen = if (resizing) repsNow * b.passBars else b.length
     val fill = if (b.rest) Tok.page else lerp(Tok.page, colour, 0.45f)
     val name = ui.trackNames.getOrNull(b.track - 1).orEmpty()
     val what = if (b.rest) "rest" else "pattern ${"%02d".format(b.pattern ?: 0)}"
@@ -207,7 +203,7 @@ private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androi
         Modifier
             .offset { IntOffset(0, (shownStart * barPx).toInt()) }
             .fillMaxWidth().height(barH * shownLen - 2.dp)
-            .graphicsLayer { if (dragging) { shadowElevation = 8.dp.toPx(); shape = RoundedCornerShape(6.dp) } }
+            .graphicsLayer { if (dragging && !resizing) { shadowElevation = 8.dp.toPx(); shape = RoundedCornerShape(6.dp) } }
             .clip(RoundedCornerShape(6.dp)).background(fill)
             .drawBehind {
                 if (b.rest) drawRoundRect(Tok.outline, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(5.dp.toPx()), style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))))
@@ -236,15 +232,17 @@ private fun BlockView(b: BlockUi, colour: Color, selected: Boolean, barH: androi
             // only a selected block drags (an unselected one's drag is the page's scroll)
             .then(if (selected && editable) Modifier.pointerInput(b.key, b.start, b.reps, mine.size) {
                 detectDragGestures(
-                    onDragStart = { at -> resizing = at.y > size.height - edgePx; dragging = true; accPx = 0f; tickKey = 0 },
+                    onDragStart = { at -> drag.start(b, at.y > size.height - edgePx, barPx); tickKey = 0 },
                     onDragEnd = {
-                        if (resizing) { if (repsNow != b.reps) actions.stretch(b, repsNow) } else if (places != 0) actions.moveBy(b, places)
-                        dragging = false; accPx = 0f
+                        // what the finger did, read now (not what it had done when the gesture began)
+                        if (drag.resizing) { val r = repsFor(b, drag.offsetBars); if (r != b.reps) actions.stretch(b, r) }
+                        else { val p = placesFor(mine, b.id, drag.offsetBars); if (p != 0) actions.moveBy(b, p) }
+                        drag.end()
                     },
-                    onDragCancel = { dragging = false; accPx = 0f },
-                ) { change, drag ->
-                    change.consume(); accPx += drag.y
-                    val k = if (resizing) repsNow else places
+                    onDragCancel = { drag.end() },
+                ) { change, dragAmount ->
+                    change.consume(); drag.accPx += dragAmount.y
+                    val k = if (drag.resizing) repsFor(b, drag.offsetBars) else placesFor(mine, b.id, drag.offsetBars)
                     if (k != tickKey) { tickKey = k; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
                 }
             } else Modifier),
