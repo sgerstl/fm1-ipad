@@ -24,7 +24,7 @@ import org.junit.Test
 class FakePagesTest {
     private fun fake(scope: TestScope, name: String): FakeLupeCore {
         val scenarios = File("../fixtures/state").listFiles { f -> f.extension == "json" }!!.associate { it.nameWithoutExtension to Scenario.parse(it.nameWithoutExtension, it.readText()) }
-        return FakeLupeCore(scope, scenarios, name).also { scope.testScheduler.advanceTimeBy(10) }
+        return FakeLupeCore(scope.backgroundScope, scenarios, name).also { scope.testScheduler.advanceTimeBy(10) }
     }
 
     @Test fun envScenarioPutsTheShellOnTheEnvPage() = runTest(StandardTestDispatcher()) {
@@ -36,11 +36,12 @@ class FakePagesTest {
 
     @Test fun setParamMovesTheNumberAndTheGraph() = runTest(StandardTestDispatcher()) {
         val core = fake(this, "page-env")
+        val max = core.page.value.controls[1]!!.max
         core.send(SetParam(1, 100))
-        assertEquals("100", core.page.value.controls[1]!!.value)
+        assertEquals(100, core.page.value.controls[1]!!.raw)
         assertEquals(100, core.page.value.graph.values[1])
         core.send(SetParam(1, 999))
-        assertEquals(127, core.page.value.controls[1]!!.raw)   // clamped to the control's range
+        assertEquals(max, core.page.value.controls[1]!!.raw)   // clamped to the control's range
     }
 
     @Test fun pickPageSwitchesToAKnownPageAndFollowsInTheShell() = runTest(StandardTestDispatcher()) {

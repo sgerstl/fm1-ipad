@@ -180,3 +180,47 @@ public struct SoundPage: Identifiable, Sendable {
         return name.isEmpty ? title : "\(title) · \(name)"
     }
 }
+
+/// A parameter's value as text, as the FM-1 shows it (EDITOR_PROTOCOL.md "fmt"; the curves for TIME,
+/// LFOHZ, CUTOFF and DB are SLOOP's own, in DeviceDisplay).
+public func formatValue(_ d: ParamDesc?, _ v: Int, skiff: Bool = false) -> (shown: String, spoken: String) {
+    guard let d else { return ("\(v)", "\(v)") }
+    // as the FM-1's screen: its curves for times, rates, cutoffs and levels, and name lists on numbers
+    if let (text, u) = DeviceDisplay.value(d, v) {
+        let shown = u.isEmpty ? text : u == "%" ? "\(text)%" : "\(text) \(u)"
+        let spoken = u == "%" ? "\(text) percent" : u == "dB" ? "\(text) decibels" : shown
+        return (shown, spoken)
+    }
+    let unit = d.unit.isEmpty ? "" : " \(d.unit.lowercased())"
+    switch d.format {
+    // Skiff's BIPCT (params.c): v × 100 / 64 below zero, / 63 above, cut
+    case 2 where skiff: let p = v < 0 ? v * 100 / 64 : v * 100 / 63; return (p > 0 ? "+\(p)%" : "\(p)%", "\(p) percent")
+    case 2: let p = Int((Double(v) * 100 / 64).rounded()); return (p > 0 ? "+\(p)%" : "\(p)%", "\(p) percent")
+    case 7: return (v > 0 ? "+\(v) st" : "\(v) st", "\(v) semitones")
+    case 8:
+        let k = v - d.min
+        let n = k >= 0 && k < d.names.count ? d.names[k] : "\(v)"
+        return (n, n.lowercased())
+    case 10: return (Music.noteNames[((v % 12) + 12) % 12], Music.spokenNoteNames[((v % 12) + 12) % 12])
+    case 11: return (v != 0 ? "ON" : "OFF", v != 0 ? "on" : "off")
+    case 12: return (v > 0 ? "+\(v)" : "\(v)", "octave \(v)")
+    // Skiff's ST16 (params.c): ±12 semitones in 3/16 steps, shown in tenths, rounded half away from zero
+    case 14 where skiff:
+        let t = (v - 64) * 30, x = (t + (t < 0 ? -8 : 8)) / 16
+        let s = "\(x < 0 ? "-" : x > 0 ? "+" : "")\(abs(x) / 10).\(abs(x) % 10)"
+        return ("\(s) st", "\(s) semitones")
+    case 14: let p = 50 + v / 4; return ("\(p)%", "\(p) percent swing")
+    // Skiff 2.5's F_SHAPE (FILTR's SHAPE): LP, BP, HP, between two "30 BP"
+    case 15 where skiff:
+        let (t, u) = SkiffDisplay.shape(v)
+        let names = ["LP": "low pass", "BP": "band pass", "HP": "high pass"]
+        return u.isEmpty ? (t, names[t] ?? t) : ("\(t) \(u)", "\(t) percent toward \(names[u] ?? u)")
+    // Skiff 2.5's STRUM (U_MS): 0 is OFF, the chord at once
+    case 0 where skiff && d.unit.lowercased() == "ms" && v == 0: return ("OFF", "off")
+    case 15:
+        if v == 0 { return ("OFF", "off") }
+        let p = Int((Double(abs(v)) * 100 / 64).rounded())
+        return (v < 0 ? "LP \(p)%" : "HP \(p)%", v < 0 ? "low pass \(p) percent" : "high pass \(p) percent")
+    default: return ("\(v)\(unit)", "\(v)\(unit)")
+    }
+}
