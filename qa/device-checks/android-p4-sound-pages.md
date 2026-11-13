@@ -6,13 +6,13 @@ Scott's run (2026-11-13) found six faults; P1 fixed them on its branch and check
 
 | # | Do this | You should see | Result |
 |---|---|---|---|
-| R1 | (P3's top-only finding) Drag the divider to top only. Then tap **Editor ⌃** at the bottom. Also try dragging the handle back up. | At top only a full-width "Editor ⌃" strip sits above the gesture bar, the handle just above it; the tap goes to split; the drag works without Android taking it home. | ☐ pass ☐ fail: |
-| R2 | (P4 check 10) Open the FM-1 key's menu (top left) and scroll it. Use **Bottom: ENV page**, then **Bottom: editor**. | The menu stops above the navigation bar and scrolls; every row is reachable; check 10's behaviour as written. | ☐ pass ☐ fail: |
-| R3 | (fault 4) Launch `page-drive`. Tap DELAY in the page row. | It opens on **DRIVE** (TYPE TUBE). DELAY shows SEND · TIME · FEEDBACK · COLOR, not DRIVE's types. | ☐ pass ☐ fail: |
-| R4 | (fault 5) Launch `page-edit1`. | The saw has no stray marks. | ☐ pass ☐ fail: |
-| R5 | (fault 6) Launch `page-env`, at split and at bottom full. | Each ADSR handle is just its small square, no dark block behind it. | ☐ pass ☐ fail: |
-| R6 | (the "+ by 3" watch) On `page-env`, tap ATTACK, then tap **+** five times quickly. | ATTACK goes up by exactly 5 (12 → 17 on the emulator). Cause: the keys sat inside the control's double-tap reset. | ☐ pass ☐ fail: |
-| R7 | (new, Scott 2026-11-14: "use the sliding gestures") In the editor's step panel, slide sideways across VELOCITY (and the other columns), including the right-hand one from near the edge. Then drag up and down over the panel. | A sideways slide turns the value, a tick a step, the whole range in about 240 dp (the iPad's column slide); − / + still work; an up-and-down drag doesn't change values; the right-hand column's slide doesn't trigger Back. | ☐ pass ☐ fail: |
+| R1 | (P3's top-only finding) Drag the divider to top only. Then tap **Editor ⌃** at the bottom. Also try dragging the handle back up. | At top only a full-width "Editor ⌃" strip sits above the gesture bar, the handle just above it; the tap goes to split; the drag works without Android taking it home. | ☑ pass: Scott, 2026-11-13 on the Pixel (P2 build 7d85d02) |
+| R2 | (P4 check 10) Open the FM-1 key's menu (top left) and scroll it. Use **Bottom: ENV page**, then **Bottom: editor**. | The menu stops above the navigation bar and scrolls; every row is reachable; check 10's behaviour as written. | ☑ pass: Scott, 2026-11-13 on the Pixel (P2 build 7d85d02) |
+| R3 | (fault 4) Launch `page-drive`. Tap DELAY in the page row. | It opens on **DRIVE** (TYPE TUBE). DELAY shows SEND · TIME · FEEDBACK · COLOR, not DRIVE's types. | ☑ pass: Scott, 2026-11-13 on the Pixel (P2 build 7d85d02) |
+| R4 | (fault 5) Launch `page-edit1`. | The saw has no stray marks. | ☑ pass: Scott, 2026-11-13 on the Pixel (P2 build 7d85d02) |
+| R5 | (fault 6) Launch `page-env`, at split and at bottom full. | Each ADSR handle is just its small square, no dark block behind it. | ☑ pass: Scott, 2026-11-13 on the Pixel (P2 build 7d85d02) |
+| R6 | (the "+ by 3" watch) On `page-env`, tap ATTACK, then tap **+** five times quickly. | ATTACK goes up by exactly 5 (12 → 17 on the emulator). Cause: the keys sat inside the control's double-tap reset. | ⏭ moot: the + keys are gone (decision 10) |
+| R7 | (new, Scott 2026-11-14: "use the sliding gestures") In the editor's step panel, slide sideways across VELOCITY (and the other columns), including the right-hand one from near the edge. Then drag up and down over the panel. | A sideways slide turns the value, a tick a step, the whole range in about 240 dp (the iPad's column slide); − / + still work; an up-and-down drag doesn't change values; the right-hand column's slide doesn't trigger Back. | ⏭ superseded by android-p2-sliders.md (up and down, no − / +) |
 
 Also fixed, no check needed beyond a look: the link debug screen's "Make read-only" stays reachable (buttons above the readout, which scrolls).
 

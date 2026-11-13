@@ -343,12 +343,12 @@ private fun StepPanel(ed: EditorState, track: Color, core: LupeCore, tab: PanelT
                         dpPerStep = 22f, tick = true, locked = false) { send(StepField.Move, it) }
                     SlideColumn("LENGTH", "${s.length}", "Length", track, key = "length" to ed.selected, num = s.length, min = 1, max = 16,
                         dpPerStep = 16f, tick = false, locked = s.isLocked("LENGTH")) { send(StepField.Length, it) }
-                    SlideColumn("VELOCITY", "${s.velocity}", "Velocity", track, key = "velocity" to ed.selected, num = s.velocity, min = 1, max = 127,
+                    SlideColumn("VELOCITY", "${s.velocity}", "Velocity", track, key = "velocity" to ed.selected, num = s.velocity, min = 1, max = 127, unit = 4,
                         dpPerStep = 3f, tick = false, locked = s.isLocked("VELOCITY")) { send(StepField.Velocity, it) }
                 }
                 t == PanelTab.Feel -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     val send = { f: StepField, d: Int -> core.send(Intent.StepAdjust(f, d)) }
-                    SlideColumn("CHANCE", "${s.chance}%", "Chance", track, key = "chance" to ed.selected, num = s.chance, min = 0, max = 100,
+                    SlideColumn("CHANCE", "${s.chance}%", "Chance", track, key = "chance" to ed.selected, num = s.chance, min = 0, max = 100, unit = 5,
                         dpPerStep = 4f, tick = false, locked = s.isLocked("CHANCE")) { send(StepField.Chance, it) }
                     SlideColumn("RATCHET", "${s.ratchet}", "Ratchet", track, key = "ratchet" to ed.selected, num = s.ratchet, min = 1, max = 4,
                         dpPerStep = 28f, tick = true, locked = s.isLocked("RATCHET")) { send(StepField.Ratchet, it) }
@@ -461,7 +461,7 @@ private fun Step.isLocked(param: String) = values.any { it.locked && it.param ==
 @Composable
 private fun SlideColumn(
     label: String, value: String, name: String, tint: Color, key: Any, dpPerStep: Float, tick: Boolean, locked: Boolean,
-    num: Int? = null, min: Int = 0, max: Int = 0, bipolar: Boolean = false, onSteps: (Int) -> Unit,
+    num: Int? = null, min: Int = 0, max: Int = 0, bipolar: Boolean = false, unit: Int = 1, onSteps: (Int) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     val send by rememberUpdatedState(onSteps)
@@ -483,7 +483,8 @@ private fun SlideColumn(
                 role = Role.Button
                 if (num != null) {
                     progressBarRangeInfo = ProgressBarRangeInfo(num.toFloat(), min.toFloat()..max.toFloat(), max - min - 1)
-                    setProgress { v -> step(v.roundToInt() - num); true }
+                    // one step is `unit` of the value (VELOCITY 4, CHANCE 5: StepAdjust's units, P1's 9533897)
+                    setProgress { v -> step((v.roundToInt() - num) / unit); true }
                 }
                 customActions = listOf(
                     CustomAccessibilityAction("Increase $name") { step(1); true },
