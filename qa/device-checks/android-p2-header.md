@@ -16,3 +16,15 @@ Built (Kotlin tests pass, APK builds); **not run on a screen**. Nothing here wri
 Pre-flight (design-standards) ran: tokens only (`outline`, `control`, `text`, `text2`, `rec`); header words are 48 dp targets and rounds 48 dp around a 40 dp circle; tab words are 36 dp tall (the row's old height), under the 44 dp touch ideal but over the 24 dp floor; focus rings on words and rounds (2 dp, text on page). Colour pairs are the existing tokens, not newly computed. `check-tells.sh` scans web sources only and found nothing here, so that is not a pass. No rendered check was possible.
 
 Known edges: the hairline spans the content width (8 dp in from each edge), not the full screen. The tab words' left edge is the grid's.
+
+## Readout moves left of Record and Play (decision 23b), 2026-11-13
+
+| # | Do | See |
+|---|----|-----|
+| 9 | Look at the top bar | Project and Loop at the left; the readout (bar · beat over BPM) to the left of Record; Record then Play at the far right edge, Play outermost. The readout still opens tempo and the Loop · Song · Once menu |
+
+## HOME knobs: long list values
+
+| # | Do | See |
+|---|----|-----|
+| 10 | WHEEL track with a long value such as GOSPEL | The value shrinks one size at a time to fit the ring (22 down to 13 sp); if it still cannot, it is cut to the letters that fit at 13 sp, as the FM-1 does with its short forms. Never wraps or touches the ring |

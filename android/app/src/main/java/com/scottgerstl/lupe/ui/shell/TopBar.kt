@@ -56,7 +56,7 @@ private val PlaybackMode.word get() = name
 fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf<Menu?>(null) }
     Row(
-        modifier.fillMaxWidth().padding(end = 6.dp).height(48.dp),
+        modifier.fillMaxWidth().padding(end = 4.dp).height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // FM-1 key: Projects…, Settings, Labs. Later phases fill them in (P5, Labs); none exist yet, so they say so.
@@ -89,18 +89,6 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
             }
         }
         Spacer(Modifier.weight(1f))
-        // REC: a ring (outline) with the red dot. On, it latches: the circle fills REC red and the dot goes dark (6:1).
-        RoundButton({ core.send(Intent.Rec) }, "Record", lit = top.rec, litColour = Tok.rec, role = Role.Switch, state = if (top.rec) "On" else "Off") { _ ->
-            val lit = animatedFloat(if (top.rec) 1f else 0f, Dur.STATE)
-            Canvas(Modifier.size(14.dp)) { drawCircle(lerp(Tok.rec, Tok.onColour, lit.value)) }
-        }
-        Spacer(Modifier.width(4.dp))
-        // Play: a ring with the triangle; filled white with a dark stop square while playing
-        RoundButton({ core.send(if (top.playing) Intent.Stop else Intent.Play) }, if (top.playing) "Stop" else "Play", lit = top.playing, litColour = Tok.text) { fg ->
-            val stop = animatedFloat(if (top.playing) 1f else 0f, Dur.STATE)
-            PlayStopIcon(stop.value, fg)
-        }
-        Spacer(Modifier.width(4.dp))
         // Readout: bar · beat, tempo; opens tempo and Loop · Song · Once
         Box {
             Column(
@@ -129,6 +117,19 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
                 }
             }
         }
+        Spacer(Modifier.width(4.dp))
+        // REC: a ring (outline) with the red dot. On, it latches: the circle fills REC red and the dot goes dark (6:1).
+        RoundButton({ core.send(Intent.Rec) }, "Record", lit = top.rec, litColour = Tok.rec, role = Role.Switch, state = if (top.rec) "On" else "Off") { _ ->
+            val lit = animatedFloat(if (top.rec) 1f else 0f, Dur.STATE)
+            Canvas(Modifier.size(14.dp)) { drawCircle(lerp(Tok.rec, Tok.onColour, lit.value)) }
+        }
+        Spacer(Modifier.width(4.dp))
+        // Play: a ring with the triangle; filled white with a dark stop square while playing
+        RoundButton({ core.send(if (top.playing) Intent.Stop else Intent.Play) }, if (top.playing) "Stop" else "Play", lit = top.playing, litColour = Tok.text) { fg ->
+            val stop = animatedFloat(if (top.playing) 1f else 0f, Dur.STATE)
+            PlayStopIcon(stop.value, fg)
+        }
+
     }
 }
 

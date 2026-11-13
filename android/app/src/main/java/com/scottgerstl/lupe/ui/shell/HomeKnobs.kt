@@ -101,15 +101,29 @@ private fun RoundKnob(slot: Int, label: String, value: String, raw: Int, min: In
                     drawArc(Tok.control, 135f, 270f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
                     if (frac > 0.003f) drawArc(ring, 135f, 270f * frac, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
                 }
-                BasicText(
-                    value, Modifier.padding(horizontal = 10.dp),
-                    style = LupeType.number.copy(fontSize = 22.sp, color = Tok.text, textAlign = TextAlign.Center), maxLines = 1,
-                    autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 22.sp, stepSize = 1.sp),
-                )
+                FittedValue(value)
             }
             BasicText(label, Modifier.padding(top = 4.dp), style = LupeType.number.copy(fontSize = 12.sp, color = lerp(Tok.text2Raised, Tok.text, on), letterSpacing = 0.5.sp), maxLines = 1)
         }
         // the whole knob and its label is the target; it says its own name and value to TalkBack
         PictureSlider(slot, pc, Modifier, 84.dp, 88.dp, onHot = { sliding = it })
     }
+}
+
+/**
+ * The value inside the ring: 22 sp shrinking one step at a time to fit the ring's inner width, floor 13 sp. A list value
+ * too long even then ("GOSPEL" on a WHEEL track, seen on the real FM-1) is cut to the letters that fit, as the FM-1 does with
+ * its short forms, rather than shrinking past reading.
+ */
+@Composable
+private fun FittedValue(value: String) {
+    val tm = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val inner = with(density) { 46.dp.roundToPx() }
+    val base = LupeType.number.copy(color = Tok.text, textAlign = TextAlign.Center)
+    fun fits(t: String, sp: Int) = tm.measure(t, base.copy(fontSize = sp.sp), maxLines = 1, softWrap = false).size.width <= inner
+    var size = 13; var text = value
+    for (sp in 22 downTo 13) if (fits(value, sp)) { size = sp; break }
+    if (!fits(value, size)) { var n = value.length; while (n > 1 && !fits(value.take(n), 13)) n--; text = value.take(n) }
+    BasicText(text, style = base.copy(fontSize = size.sp, lineHeight = size.sp), maxLines = 1, softWrap = false)
 }
