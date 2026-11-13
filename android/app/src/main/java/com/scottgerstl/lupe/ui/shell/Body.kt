@@ -22,6 +22,11 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
+import com.scottgerstl.lupe.ui.slide.LocalPhoneSettings
+import com.scottgerstl.lupe.core.BottomPage
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -90,6 +95,12 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    // Labs: the bottom half can hold its page for 3 s after a touch, or be pinned (it stops following the FM-1)
+    val labs = LocalPhoneSettings.current
+    var bottomTouches by remember { mutableIntStateOf(0) }
+    val shown = followedBottom(shell.bottom, labs.pinBottom, labs.pauseFollowing, bottomTouches)
+    val shellShown = if (shown == shell.bottom) shell else shell.copy(bottom = shown)
+    val onBottomTouch = { bottomTouches++ ; Unit }
     val pads by core.pads.collectAsStateWithLifecycle()
     val editor by core.editor.collectAsStateWithLifecycle()
 
@@ -133,9 +144,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         }
 
         if (reduce) {
-            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shell, pads, editor, core, hb, ::topAt) }
+            LupeCrossfade(shell.divider) { d -> Layers(d.index().toFloat(), shellShown, pads, editor, core, hb, ::topAt, onBottomTouch) }
         } else {
-            Layers(place.value, shell, pads, editor, core, hb, ::topAt)
+            Layers(place.value, shellShown, pads, editor, core, hb, ::topAt, onBottomTouch)
         }
 
         // The divider's touch target: 48 dp tall around the 16 dp band, over both halves.
@@ -204,7 +215,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 
 /** The picture at one divider place. */
 @Composable
-private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float) {
+private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit) {
     val density = LocalDensity.current
     fun dp(v: Float) = with(density) { v.dp.toPx() }
     // tabs fade out and the strip fades in as the divider goes past split
@@ -233,7 +244,13 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 .heightPx { (hb - topAt(p) - dp(HANDLE_H) - dp(GAP)).toInt() }
                 .clipToBounds()
                 // at top only the Editor strip takes this room: the page fades out under it
-                .graphicsLayer { alpha = (p / 0.4f).coerceIn(0f, 1f) },
+                .graphicsLayer { alpha = (p / 0.4f).coerceIn(0f, 1f) }
+                // any new touch down in this half is counted (Labs: pause following), and passes on unconsumed
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) { val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); if (e.changes.any { it.pressed && !it.previousPressed }) onBottomTouch() }
+                    }
+                },
         ) {
             // the lane fits only when the bottom half is nearly full height
             val autoFraction = (((hb - topAt(p) - dp(HANDLE_H) - dp(GAP)) - dp(560f)) / dp(100f)).coerceIn(0f, 1f)
@@ -242,4 +259,18 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
             }
         }
     }
+}
+
+
+/**
+ * Which page the bottom half shows. It follows the FM-1 ([actual]) unless a Labs trial says otherwise: [pin] stops
+ * following altogether; [pause] holds the page it's on for 3 s after each touch in the bottom half, then catches up.
+ */
+@Composable
+private fun followedBottom(actual: BottomPage, pin: Boolean, pause: Boolean, touches: Int): BottomPage {
+    var shown by remember { mutableStateOf(actual) }
+    var held by remember { mutableStateOf(false) }
+    LaunchedEffect(touches) { if (pause && touches > 0) { held = true; delay(3000); held = false } }
+    LaunchedEffect(actual, pin, held) { if (!pin && !held) shown = actual }
+    return shown
 }
