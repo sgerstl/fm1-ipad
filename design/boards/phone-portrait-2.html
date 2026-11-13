@@ -755,6 +755,104 @@ board2(71, 'Header: three ways to set it apart', [
   'A is the quietest and changes the least. My pick is A with B\'s band if A still doesn\'t separate enough on the Pixel; C is the bolder rearrangement.',
 ]);
 
+section('The FM-1\'s button block, on the phone');
+
+// the FM-1's 2 × 6 block, key for key (decision 24): the lit key is the FM-1's current family
+const BLOCK = [['FX', 'SEL', 'ENV', 'LFO', 'EDIT', 'GLO'], ['HOME', 'SAVE', 'ARP', 'SEQ', 'PLAY', 'REC']];
+function fmBlock(y, lit) {
+  let h = el('', 4, y - 4, 404, 80, 'border-radius:12px;background:#050506');
+  const w = (396 - 5 * 4) / 6, kh = 34;
+  BLOCK.forEach((row, r) => row.forEach((k, c) => {
+    const on = k === lit, x = 8 + c * (w + 4), yy = y + r * (kh + 4);
+    let col = on ? '#101012' : 'var(--text)';
+    if (k === 'PLAY') col = '#FF4D4D';
+    if (k === 'REC') col = '#FF4D4D';
+    const label = k === 'PLAY' ? '<span style="line-height:1;font-size:11px;text-align:center">PLAY<br>STOP</span>' : k;
+    h += el('key', x, yy, w, kh, `font-family:'Barlow Condensed';letter-spacing:.06em;font-size:14px;color:${col};${on ? 'background:#EDEDF0;' : ''}`,
+      label, `role="button" aria-pressed="${on}" aria-label="${k === 'PLAY' ? 'Play or stop' : k}"`);
+  }));
+  return h;
+}
+// the editor at split with the block under the grid; below the block: the HOME knobs, or a sound page
+// compact steps for a short grid: the note centred, the number small at the left, the length a hairline
+function miniGrid(y0, h0) {
+  let h = '';
+  const gap = 4, cw = (396 - 3 * gap) / 4, ch = Math.floor((h0 - 3 * gap) / 4);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    const i = r * 4 + c, s = STEPS[i], x = 8 + c * (cw + gap), y = y0 + r * (ch + gap);
+    let st = 'border-radius:6px;' + (s ? `background:${mix(COL[SEL], 18 + Math.round((s.v / 127) * 26))};` : 'background:var(--empty);');
+    if (i === NOWSTEP) st += `outline:2px solid ${COL[SEL]};outline-offset:-2px;`;
+    let inner = `<span class="abs" style="left:6px;top:${ch / 2 - 7}px;font-size:11px;color:var(--text2)">${i + 1}</span>`;
+    if (s) {
+      inner += `<span class="abs cond" style="left:28px;top:${ch / 2 - 10}px;font-size:18px;line-height:20px;color:var(--text)">${s.n}</span>`;
+      inner += `<span class="abs" style="left:6px;bottom:3px;height:2px;width:${Math.min(s.l, 4) * ((cw - 12) / 4)}px;border-radius:1px;background:${COL[SEL]}"></span>`;
+    }
+    if (LOCKS.has(i)) inner += `<span class="dia" style="right:8px;top:${ch / 2 - 4}px;background:#EDEDF0" aria-label="locked"></span>`;
+    h += el('', x, y, cw, ch, st, inner, `aria-label="Step ${i + 1}${s ? ', ' + s.n : ', empty'}"`);
+  }
+  return h;
+}
+function blockEditor(y0, h0, o = {}) {
+  let h = el('', 8, y0, 300, 32, 'display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap',
+    `<span style="width:10px;height:10px;border-radius:5px;background:${COL[SEL]}"></span><span style="font-weight:600">5 Piano</span><span style="color:var(--text2r)">· B · pattern 12 · C min</span>`);
+  h += el('key', 340, y0, 64, 32, '', 'Step ⋯', 'aria-label="Step menu"');
+  const blockH = 76, under = o.sound ? (o.full ? 360 : 156) : 122;
+  const gy = y0 + 40, gh = h0 - 40 - 8 - blockH - 8 - under;
+  h += (gh < 220 ? miniGrid(gy, gh) : grid(gy, gh, { noSel: true }));
+  const by = gy + gh + 12;
+  h += fmBlock(by, o.sound ? 'FX' : 'HOME');
+  const uy = by + blockH + 4;
+  if (!o.sound) {
+    // the HOME knobs (board 70)
+    h += el('', 8, uy, 300, 24, 'display:flex;align-items:center;gap:8px;font-size:14px;white-space:nowrap', `<span style="font-weight:600">Sound</span><span style="color:var(--text2r)">ANALOG · the FM-1's four knobs</span>`);
+    HOME4.forEach((c, i) => { h += miniKnob(8 + i * 100, uy + 28, c[0], c[1], c[2], false); });
+  } else {
+    // the FX page: its row, the picture at bottom full, then the four controls
+    const pages = ['FX', 'DELAY', 'REVERB', 'DRIVE', 'INSERT', 'SLICER'];
+    let x = 12;
+    pages.forEach((p, i) => { const on = i === 0, w = p.length * 9 + 10;
+      h += el('', x, uy, w, 26, `display:flex;align-items:center;font-size:14px;font-weight:600;color:${on ? 'var(--text)' : 'var(--text2)'}`, p);
+      if (on) h += el('', x, uy + 24, w, 2, 'border-radius:1px;background:#EDEDF0'); x += w + 14; });
+    let ky = uy + 34;
+    if (o.full) {
+      h += el('', 8, ky, 396, 196, 'border-radius:12px;background:var(--panel)');
+      [['DIST', .26], ['CHORUS', .22], ['DELAY', .38], ['REVERB', .9]].forEach((f, i) => {
+        const cx = 58 + i * 100, top = ky + 24, bh = 132;
+        h += el('', cx - 2, top, 4, bh, 'border-radius:2px;background:var(--control)');
+        h += el('', cx - 2, top + bh * (1 - f[1]), 4, bh * f[1], `border-radius:2px;background:${COL[SEL]}`);
+        h += el('', cx - 18, top + bh * (1 - f[1]) - 4, 36, 8, `border-radius:4px;background:${COL[SEL]}`, '', `role="slider" aria-label="${f[0]}"`);
+        h += el('lab', cx - 40, top + bh + 12, 80, 14, 'text-align:center', f[0]);
+      });
+      ky += 204;
+    }
+    [['DIST', '26%', 26], ['CHORUS', '22%', 22], ['DELAY', '38%', 38], ['REVERB', '90%', 90]].forEach((k, i) => { h += miniKnob(8 + i * 100, ky, k[0], k[1], k[2] / 100, false); });
+  }
+  return h;
+}
+
+// board 71 A as built (decision 23 + Scott's move): readout left of Record and Play, Play at the edge
+function headA2(o) {
+  let h = el('', 12, 44, 120, 44, 'display:flex;align-items:center;font-size:17px;font-weight:600;color:var(--text)', 'TESTBED' + chev, 'role="button"');
+  h += el('', 140, 44, 80, 44, 'display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--text2r)', 'Loop' + chev, 'role="button"');
+  h += el('', 236, 44, 60, 44, 'display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.05',
+    `<span class="cond" style="font-size:22px;color:var(--text)">10·3</span><span style="font-size:12px;color:var(--text2r)">120 BPM</span>`);
+  h += rKey(312, 46, 40, recDot, { ring: true, label: 'Record' });
+  h += rKey(362, 46, 40, playTri, { lit: true, label: 'Stop' });
+  h += lineTabs(96, o.tab || 'Pads', { left: true });
+  h += el('', 0, 132, W, 1, 'background:var(--control)');
+  return h;
+}
+board2(72, 'The FM-1\'s button block, under the steps', [
+  { cap: 'HOME: the block, then the HOME knobs', head: headA2, bottom: (y, h) => blockEditor(y, h, {}), label: 'Steps, the button block with HOME lit, the HOME knobs', discs: [[1, 396, 690], [2, 396, 820]] },
+  { cap: 'FX pressed, at split', head: headA2, bottom: (y, h) => blockEditor(y, h, { sound: true }), label: 'Steps, the block with FX lit, the FX page\'s controls', discs: [[3, 380, 796]] },
+  { cap: 'FX at bottom full: the picture comes back', head: headA2, mode: 'bottom', bottom: (y, h) => blockEditor(y, h, { sound: true, full: true }), label: 'Bottom full: steps, block, FX picture and controls', discs: [[4, 380, 560]] },
+], [
+  'The phone copies the FM-1\'s 2 × 6 button block key for key and in its places (decision 24, from Scott\'s photo): FX SEL ENV LFO EDIT GLO over HOME SAVE ARP SEQ PLAY/STOP REC. The lit key is the FM-1\'s current family, as the device lights it; idle keys stay readable. PLAY/STOP and REC are red words, as printed on the FM-1.',
+  'It\'s always there, between the steps and what\'s under them, so HOME and every page are one tap away. Under it: the HOME knobs on HOME (board 70), or the sound page (decision 20c: the dials row gives way, never two sets of dials). <span class="q">Open:</span> the block sits under the steps here; it could sit at the very bottom for the thumb, with the knobs above it.',
+  'At split a sound page shows its page row and four controls; the steps compress to about 30 dp rows (note and number on one line). <b>The cost:</b> the block\'s 80 dp comes out of the steps, so at split they\'re tight; they\'re roomy at bottom full. Keys that open the phone\'s own place: GLO the Mix tab at the same section, SAVE the Sounds or Projects sheet, SEQ the editor (AUTOMATION and SONG on its pages). Each also sends the FM-1 there.',
+  'At bottom full there\'s room for the page\'s picture, and every slider it draws turns its control (decision 22). The header is as built: board 71\'s A with C\'s tabs, the readout left of Record and Play.',
+]);
+
 document.getElementById('boards').innerHTML = B2.join('');
 </script>
 </body>
