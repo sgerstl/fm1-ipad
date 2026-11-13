@@ -401,11 +401,11 @@
       "title": "FX"
      },
      {
-      "index": 41,
+      "index": 46,
       "title": "DELAY"
      },
      {
-      "index": 42,
+      "index": 47,
       "title": "REVERB"
      },
      {
@@ -486,11 +486,11 @@
       "title": "FX"
      },
      {
-      "index": 41,
+      "index": 46,
       "title": "DELAY"
      },
      {
-      "index": 42,
+      "index": 47,
       "title": "REVERB"
      },
      {
@@ -514,7 +514,7 @@
       "title": "DUCK"
      }
     ],
-    "page": 42,
+    "page": 47,
     "track": 1,
     "trackName": "Acid",
     "controls": [
@@ -571,11 +571,11 @@
       "title": "FX"
      },
      {
-      "index": 41,
+      "index": 46,
       "title": "DELAY"
      },
      {
-      "index": 42,
+      "index": 47,
       "title": "REVERB"
      },
      {
@@ -659,11 +659,11 @@
       "title": "FX"
      },
      {
-      "index": 41,
+      "index": 46,
       "title": "DELAY"
      },
      {
-      "index": 42,
+      "index": 47,
       "title": "REVERB"
      },
      {
@@ -687,7 +687,7 @@
       "title": "DUCK"
      }
     ],
-    "page": 41,
+    "page": 46,
     "track": 1,
     "trackName": "Acid",
     "controls": [

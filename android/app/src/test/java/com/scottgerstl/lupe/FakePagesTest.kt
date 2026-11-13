@@ -65,4 +65,16 @@ class FakePagesTest {
         assertNull(s.controls[1]); assertEquals(4, s.controls.size)
         assertEquals("""{"intent":"setParam","slot":2,"value":64}""", lupeJson.encodeToString(com.scottgerstl.lupe.core.Intent.serializer(), SetParam(2, 64)))
     }
+
+    /** Page numbers above the driver are Skiff 2.2's (SkiffPageMap): 41-45 are NOTES, FEEL, PATTERN, AUTOMATION and SONG, so no sound page may use them. */
+    @Test fun noSoundPageNumberCollidesWithTheSeqPages() {
+        val files = File("../fixtures/state").listFiles { f -> f.name.startsWith("page-") && f.extension == "json" }!!
+        for (f in files) for (fr in Scenario.parse(f.nameWithoutExtension, f.readText()).frames.filter { it.area == "page" }) {
+            val p = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.PageState.serializer(), fr.state)
+            for (r in p.pages) assertTrue("${f.name}: ${r.title} is page ${r.index}", r.index !in 41..45)
+        }
+        val fx = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.PageState.serializer(),
+            Scenario.parse("d", File("../fixtures/state/page-drive.json").readText()).frames.last { it.area == "page" }.state).pages
+        assertEquals(46, fx.first { it.title == "DELAY" }.index); assertEquals(47, fx.first { it.title == "REVERB" }.index)
+    }
 }

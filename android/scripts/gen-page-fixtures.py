@@ -17,8 +17,8 @@ def lst(label, names, i, **kw): return c(label, names[i], i, 0, len(names) - 1, 
 ROWS = {
  "ENV": [(0,"ENV"),(1,"ENV 2")],
  "LFO": [(2,"LFO"),(3,"LFO 2"),(4,"MOD")],
- # Skiff 2.5.1 (the FM-1 P1 found): DELAY and REVERB follow FX. Their page numbers (41, 42) are MY stand-ins: the real ones come with P1's recording.
- "FX": [(5,"FX"),(41,"DELAY"),(42,"REVERB"),(6,"DRIVE"),(7,"INSERT"),(8,"INSERT 2"),(9,"SLICER"),(10,"DUCK")],
+ # Skiff 2.5.1 (the FM-1 P1 found): DELAY and REVERB follow FX. Skiff 2.2 numbering, 46 and 47: the real ones come with P1's recording.
+ "FX": [(5,"FX"),(46,"DELAY"),(47,"REVERB"),(6,"DRIVE"),(7,"INSERT"),(8,"INSERT 2"),(9,"SLICER"),(10,"DUCK")],
  "SEL": [(11,"SCALE"),(12,"CHORD"),(13,"FOLLOW")],
  "EDIT-ANALOG": [(14,"EDIT 1"),(15,"EDIT 2"),(28,"VOICE"),(29,"VOICE 2")],
  "EDIT-DRUM": [(14,"EDIT 1"),(15,"EDIT 2"),(18,"LANES"),(20,"LANE MIX"),(28,"VOICE"),(29,"VOICE 2")],
@@ -63,8 +63,8 @@ PAGES["MOD"] = [page("LFO","LFO",4,5,"Piano",fixed_(1),dict(kind="mod",routes=ro
 PAGES["DRIVE"] = [
   page("FX","FX",5,1,"Acid",[num("DIST",72),num("CHORUS",20),num("DELAY",30),num("REVERB",40)],dict(kind="fx",values=[72,20,30,40])),
   # 2.5: knob 1 is the track's SEND, knobs 2 to 4 are the shared bus (no graph yet: TODO)
-  page("FX","FX",41,1,"Acid",[num("SEND",30),c("TIME","1/8",2,0,5,list=True),num("FEEDBACK",40),num("COLOR",64)],dict(kind="none")),
-  page("FX","FX",42,1,"Acid",[num("SEND",40),lst("TYPE",["ROOM","HALL","PLATE"],1),num("SIZE",70),num("DAMP",30)],dict(kind="none")),
+  page("FX","FX",46,1,"Acid",[num("SEND",30),c("TIME","1/8",2,0,5,list=True),num("FEEDBACK",40),num("COLOR",64)],dict(kind="none")),
+  page("FX","FX",47,1,"Acid",[num("SEND",40),lst("TYPE",["ROOM","HALL","PLATE"],1),num("SIZE",70),num("DAMP",30)],dict(kind="none")),
   page("FX","FX",6,1,"Acid",[num("DIST",72),lst("TYPE",DRIVE,0),num("TONE",40),None],dict(kind="drive",values=[72,0,40],caption="SOFT",side="drive 72 · tone 40")),
 ]
 PAGES["DRIVE"][1]["controls"][1] = lst("TYPE",["TUBE","HARD","FOLD","CRUSH","FUZZ"],0)
