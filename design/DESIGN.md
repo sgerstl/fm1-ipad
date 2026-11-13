@@ -56,6 +56,6 @@ two read apart at a glance.
 
 - **Project and launch** are words with a ⌄ (Barlow 17 semibold for the project, 14 for Loop in the secondary grey), no box. They open menus.
 - **Record and Play are round**, as the FM-1's buttons are: Record a ring (`outline`) with the red dot, Play filled white while playing. 40 across, 44 or more of touch.
-- **The readout** (bar · beat over BPM) stays plain at the right.
+- **The readout** (bar · beat over BPM) stays plain, **left of Record and Play**, which sit at the far right edge (Scott, 2026-11-13, after using it).
 - **Tabs** (Pads · Timeline · Mix) are a left-aligned row of words, Barlow 17 semibold, 24 apart: the one showing in `text` with a 3 px white underline the width of its word, the others in `text2`. The underline glides to the new tab (about 200 ms, ease-out); with Reduce Motion it cross-fades. White, not a track colour.
 - A 1 px hairline (`control`) under the tabs ends the header.
