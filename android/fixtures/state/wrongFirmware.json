@@ -5,6 +5,6 @@
     {"atMs": 0, "area": "link", "state": {"phase":"searching"}},
     {"atMs": 0, "area": "top", "state": {"bar":1,"beat":1,"launch":"loop","mode":"loop","playing":false,"project":"","rec":false,"tempo":120,"waiting":0}},
     {"atMs": 19, "area": "link", "state": {"phase":"connecting"}},
-    {"atMs": 225, "area": "link", "state": {"firmware":"FELUCCA SLOOP 2.9.0","phase":"wrongFirmware"}}
+    {"atMs": 226, "area": "link", "state": {"firmware":"FELUCCA SLOOP 2.9.0","phase":"wrongFirmware"}}
   ]
 }

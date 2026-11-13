@@ -67,6 +67,13 @@ class FakePagesTest {
         assertEquals(5, core.page.value.tiles!!.picked)
     }
 
+    @Test fun theRecordedSheetsCarryTheirTilesWindowAndTitle() = runTest(StandardTestDispatcher()) {
+        val op = fake(this, "page-operator").page.value
+        assertTrue(op.title.startsWith("OPERATOR")); assertEquals("pick", op.tiles!!.kind); assertTrue(op.window != null); assertTrue(op.controls.any { it != null })
+        val mod = fake(this, "page-mod").page.value
+        assertEquals("routes", mod.tiles!!.kind); assertEquals(11, mod.tiles!!.routes.size)
+    }
+
     @Test fun theNewPageShapeDecodes() {
         val s = lupeJson.decodeFromString(com.scottgerstl.lupe.core.PageState.serializer(),
             """{"family":"EDIT","title":"OPERATOR 4","controls":[{"label":"RATE 1","value":"99"},null,null,null],"tiles":{"kind":"pick","labels":["OP1","OP2","OP3","OP4"],"picked":3,"routes":[]},"window":{"count":5,"index":1,"title":"ENV 1"}}""")
