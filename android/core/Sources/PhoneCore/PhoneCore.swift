@@ -24,8 +24,17 @@ public final class PhoneCore {
     var pickedLane: String?
     var copiedStep: SynthStep?
     var notesIn = 0
+    /// P5's screen-local state (P5Areas.swift): the Mix section on screen, Lupe's solos, the Sounds browser's target
+    /// and the engine browsed, a project op going on.
+    var mixSection = "mixer"
+    var soloTracks: Set<Int> = []
+    var soundsTrack: Int?          // nil: the selected track
+    var soundsEntry: Int?
+    var soundsViewing: Int?
+    var projectBusy = false
     private var motionTask: Task<Void, Never>?
     private var followTask: Task<Void, Never>?
+    private var sendsTask: Task<Void, Never>?
     /// Whether writes may go to the FM-1 now (the link's read-only switch). Write intents are refused up front
     /// while false, so Session's optimistic copy never shows what the FM-1 didn't get.
     let canWrite: () -> Bool
@@ -57,6 +66,10 @@ public final class PhoneCore {
             // shell.bottom only (tab and divider are Kotlin's): the sound page the FM-1 shows, else the editor
             AreaWatch(name: "shell", build: { [unowned self] in self.shellArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
+            // P5: once the FM-1 has been read, as pads and editor
+            AreaWatch(name: "mix", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.mixArea()) : nil }, publish: publish),
+            AreaWatch(name: "sounds", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.soundsArea()) : nil }, publish: publish),
+            AreaWatch(name: "projects", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.projectsArea()) : nil }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]
         areas.forEach { $0.start() }
@@ -101,6 +114,14 @@ public final class PhoneCore {
             }
             running?.task.cancel()
         }
+        // Every track's REVERB send for the Mix rows (TRACK_PARAM reads), every 3 s, as the iPad's Mix strips read it
+        sendsTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                if self.session.isConnected, let id = self.reverbSendID { await self.session.readEveryTrack(id: id); self.poke(["mix"]) }
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
         // The editor's locks and automation (MOTION, a read): the editor's track every 3 s, at once when it changes.
         motionTask = Task { [weak self] in
             var last = -1
@@ -126,6 +147,7 @@ public final class PhoneCore {
         projectTask?.cancel(); projectTask = nil
         motionTask?.cancel(); motionTask = nil
         followTask?.cancel(); followTask = nil
+        sendsTask?.cancel(); sendsTask = nil
         areas.forEach { $0.stop() }; areas = []
     }
 

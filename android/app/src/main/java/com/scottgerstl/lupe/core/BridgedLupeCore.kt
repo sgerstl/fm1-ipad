@@ -20,12 +20,18 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _editor = MutableStateFlow(EditorState())
     /** P4's page: not published by PhoneCore yet (android/notes/p1-page-area-brief.md), so it stays at its default. */
     private val _page = MutableStateFlow(PageState())
+    private val _mix = MutableStateFlow(MixState())
+    private val _sounds = MutableStateFlow(SoundsState())
+    private val _projects = MutableStateFlow(ProjectsState())
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
     override val pads: StateFlow<PadsState> = _pads
     override val editor: StateFlow<EditorState> = _editor
     override val page: StateFlow<PageState> = _page
+    override val mix: StateFlow<MixState> = _mix
+    override val sounds: StateFlow<SoundsState> = _sounds
+    override val projects: StateFlow<ProjectsState> = _projects
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -43,6 +49,9 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "pads" -> _pads.value = lupeJson.decodeFromString(PadsState.serializer(), json)
                 "editor" -> _editor.value = lupeJson.decodeFromString(EditorState.serializer(), json)
                 "page" -> _page.value = lupeJson.decodeFromString(PageState.serializer(), json)
+                "mix" -> _mix.value = lupeJson.decodeFromString(MixState.serializer(), json)
+                "sounds" -> _sounds.value = lupeJson.decodeFromString(SoundsState.serializer(), json)
+                "projects" -> _projects.value = lupeJson.decodeFromString(ProjectsState.serializer(), json)
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {
