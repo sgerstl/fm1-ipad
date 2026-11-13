@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scottgerstl.lupe.core.BottomKind
+import com.scottgerstl.lupe.ui.mix.MixPage
+import com.scottgerstl.lupe.ui.mix.rememberMock
 import com.scottgerstl.lupe.core.EditorState
 import com.scottgerstl.lupe.core.PadsState
 import com.scottgerstl.lupe.core.Divider
@@ -217,6 +219,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 @Composable
 private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorState, core: LupeCore, hb: Float, topAt: (Float) -> Float, onBottomTouch: () -> Unit) {
     val density = LocalDensity.current
+    val mix = rememberMock()   // stand-in until the core's mix area lands
     fun dp(v: Float) = with(density) { v.dp.toPx() }
     // tabs fade out and the strip fades in as the divider goes past split
     val tabsAlpha = ((1.6f - p) / 0.6f).coerceIn(0f, 1f)
@@ -234,7 +237,7 @@ private fun Layers(p: Float, shell: ShellState, pads: PadsState, editor: EditorS
                 .heightPx { (topAt(p) - dp(GAP) - dp(TOP_OFFSET)).toInt() }
                 .clipToBounds()
                 .graphicsLayer { alpha = (1f - stripAlpha * 2f).coerceIn(0f, 1f) },
-        ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { if (it == Tab.Pads) PadsPage(pads, core) else TopPlaceholder(it) } }
+        ) { LupeCrossfade(shell.tab, Modifier.fillMaxSize(), Dur.STATE) { when (it) { Tab.Pads -> PadsPage(pads, core); Tab.Mix -> MixPage(mix.ui, mix.actions); else -> TopPlaceholder(it) } } }
 
         // bottom half: from 4 dp under the divider band to the bottom; it follows the FM-1's page
         Box(
