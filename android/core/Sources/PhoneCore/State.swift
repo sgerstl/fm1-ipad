@@ -142,7 +142,8 @@ public struct DiagArea: Codable, Equatable, Sendable {
 // MARK: intents
 
 /// What the person did, as Compose sends it: `{"intent": "play"}`, `{"intent": "setTempo", "bpm": 128.0}`.
-/// P1 handles `retry`, `play` and `stop`; the rest decode (so P2 can send them) and are logged as not yet done.
+/// PhoneCore handles the transport, the readout (tempo, rec, launch), the playback mode and the selections; P3 names it
+/// doesn't do here decode as `notYet` and are logged.
 public enum PhoneIntent: Equatable, Sendable {
     case retry, play, stop, rec, cancelWaiting
     case setTempo(Double)
