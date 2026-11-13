@@ -76,4 +76,12 @@ class FakeLupeCoreTest {
         assertEquals(1, core.editor.value.pattern)
         assertEquals(4, core.pads.value.selected.track)
     }
+
+    @Test fun noteNamesUseSloopKitsSharpSign() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.StepSelect(3)); core.fm1Key(61)
+        assertEquals("C♯4", core.editor.value.steps[3].note)
+        core.send(Intent.StepSelect(3)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Pitch, 1))
+        assertEquals("D4", core.editor.value.steps[3].note)
+    }
 }

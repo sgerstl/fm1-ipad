@@ -94,7 +94,8 @@ fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, modifier: M
         Ruler(ed, track, core)
         Spacer(Modifier.height(0.dp))
         Grid(ed, track, core, Modifier.weight(1f).padding(top = 0.dp))
-        if (autoFraction > 0.02f) {
+        // the core sends no lanes until MOTION is read (P1's recordings): then there is no lane to show
+        if (autoFraction > 0.02f && ed.lanes.isNotEmpty()) {
             Spacer(Modifier.height(12.dp * autoFraction))
             AutoLane(ed, track, core, Modifier.height(150.dp * autoFraction).graphicsLayer { alpha = autoFraction })
         }

@@ -13,11 +13,12 @@ object FakeData {
     val rollLanes = listOf("CUTOFF", "DECAY", "RESONANCE", "ATTACK")
     val drumAutoLanes = listOf("LEVEL", "TUNE", "DECAY")
     val conds = listOf("ALWAYS", "1:2", "2:2", "1:4", "FILL")
-    private val names = arrayOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+    // SloopKit writes the sharp sign "♯" (C♯4); parseNote also takes "#"
+    private val names = arrayOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
     fun noteName(midi: Int) = names[midi % 12] + (midi / 12 - 1)
     fun parseNote(n: String): Int {
         val oct = n.takeLastWhile { it.isDigit() || it == '-' }.toIntOrNull() ?: 4
-        return (names.indexOf(n.dropLastWhile { it.isDigit() || it == '-' }).coerceAtLeast(0)) + (oct + 1) * 12
+        return (names.indexOf(n.dropLastWhile { it.isDigit() || it == '-' }.replace('#', '♯')).coerceAtLeast(0)) + (oct + 1) * 12
     }
     // C minor
     private val minor = intArrayOf(0, 2, 3, 5, 7, 8, 10)
