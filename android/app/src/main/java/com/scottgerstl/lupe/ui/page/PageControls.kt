@@ -155,8 +155,13 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
                         CustomAccessibilityAction("Put $spoken back to ${openedRaw}") { set(openedRaw); true },
                     )
                 }
-            }
-            .then(if (!editable) Modifier else Modifier
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      // Tap, double tap and drag belong to the ring, label and value only. The − / + keys sat inside the same
+      // tap detector, so quick taps on + read as a double tap on the control, which puts the value back
+      // (Scott's run 2026-11-13: five taps on + raised ATTACK by 3; over adb by 0).
+      Column(Modifier.fillMaxWidth().then(if (!editable) Modifier else Modifier
                 .pointerInput(c.max, c.min, openedRaw) {
                     detectTapGestures(onTap = { armed = !armed }, onDoubleTap = { armed = false; set(openedRaw) })
                 }
@@ -170,9 +175,7 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
                         acc -= dy   // up is more
                         set(base + (acc / (stepDp(c).dp.toPx())).toInt())
                     }
-                }),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+                }), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(RING_BOX).padding(top = 2.dp), contentAlignment = Alignment.Center) {
             if (!c.ringless) Canvas(Modifier.fillMaxSize().padding(4.dp)) {
                 val w = 5.dp.toPx()
@@ -195,6 +198,7 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
                 autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 24.sp, stepSize = 1.sp),
             )
         }
+      }
         // − / + under the value after a tap (board 59): one step at a time
         Row(Modifier.height(48.dp).fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             if (armed && editable) {

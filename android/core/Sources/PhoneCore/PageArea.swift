@@ -263,6 +263,8 @@ extension PhoneCore {
         guard let w = try? JSONDecoder().decode(PageWire.self, from: Data(json.utf8)),
               ["setParam", "pickPage", "pickRoute", "pickTile"].contains(w.intent) else { return false }
         guard session.isConnected, session.dialect == .skiff else { log("\(w.intent): no Skiff FM-1 connected"); return true }
+        // All four are writes: refused up front while read-only, so Session's optimistic copy never shows what the guard then drops
+        guard canWrite() else { log("read-only: \(w.intent) not sent (allow writes to send it)"); return true }
         // pickPage works from anywhere (HOME too); the rest act on the sound page showing
         let screen = session.deviceScreen
         var shape: SoundPage?

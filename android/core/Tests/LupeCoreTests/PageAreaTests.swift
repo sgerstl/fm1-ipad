@@ -165,4 +165,30 @@ import Testing
         #expect(fake.gotoWire.isEmpty, "SCREEN_GOTO was dropped by the guard, never reached the FM-1: \(fake.gotoWire)")
         #expect(core.session.deviceScreen?.home == true, "the screen is where the FM-1 left it")
     }
+
+    @Test func readOnlyRefusesPageWritesUpFront() async throws {
+        let r = Recorder()
+        let fake = try linkedFake(track: 5)
+        let plug = Plug(fake)
+        plug.gate.readOnly = false
+        let logged = LogBox()
+        let core = PhoneCore(session: DeviceSession(transport: { plug.gate.makeTransport() }), publish: r.publish,
+                             log: { logged.add($0) }, canWrite: { false })
+        core.start()
+        defer { core.stop(); plug.unplug() }
+        plug.plugIn()
+        try await waitFor(10, "ready") { core.linkArea().phase == .ready }
+        try await waitFor(5, "the screen link") { core.session.screenLinked }
+        core.handle(json: "{\"intent\": \"pickPage\", \"family\": \"ENV\"}")
+        core.handle(json: "{\"intent\": \"setParam\", \"slot\": 1, \"value\": 90}")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(core.session.deviceScreen?.home == true && core.pageArea() == nil, "no optimistic page change")
+        #expect(logged.lines.filter { $0.hasPrefix("read-only:") }.count == 2, "\(logged.lines)")
+    }
+
+    final class LogBox: @unchecked Sendable {
+        private let l = NSLock(); private var v: [String] = []
+        func add(_ s: String) { l.withLock { v.append(s) } }
+        var lines: [String] { l.withLock { v } }
+    }
 }
