@@ -168,6 +168,29 @@ The iPad's Mix holds six strips across the top and the four effect cards under t
 
 Nothing changes on the iPad's Mix.
 
+## The Android phone with a Skiff FM-1 (Pixel, portrait; decided 2026-11-12, boards 53–58)
+
+*Boards 53–58: `design/boards/phone-portrait.html` (screenshots in `phone-portrait/`). Board 53: **Select** at the end of the scenes row is the visible way to "Edit steps" (Scott, 2026-11-13); with it on, a pad tap picks the pad for the editor and launches nothing. Board 58 (time down) picked for the Timeline, 2026-11-13.*
+
+*Scott, 2026-11-12, through the build plan deck (vault `Projects/Dev/fm1-ipad/phone-skiff-decisions-2026-11-12.md`; research in `phone-design-research-2026-11-12.md`; mockup `design/boards/phone-pixel.html`). Skiff only, portrait only for v1. Out: firmware flashing, SLOOP, Bluetooth, landscape, sample import, exports, audio through the phone, sample recording. The landscape iPhone section above stays as it is.*
+
+**Two FM-1 screens stacked.** A top bar, then the **top half** (the play surface: what you're playing) and the **bottom half** (what the FM-1's screen shows), with the iPad's divider between them in three positions: top only · split · bottom full.
+
+| Part | What it holds |
+|---|---|
+| **Top bar** | The FM-1 key ⌄ (Projects…, Settings, Labs), Launch ⌄ (Loop Bar Beat Now, what waits, Cancel), REC, Play, the readout ⌄ (tempo; Loop · Song · Once) |
+| **Top half's tabs** | **Pads · Timeline · Mix.** No Sounds tab (as the iPad since 2026-11-10); Mix shows GLO's five pages one at a time |
+| **Bottom half** | **Always follows the FM-1's screen**: ENV LFO FX SEL EDIT ARP open their sound page there; SEQ the editor (NOTES, FEEL, PATTERN, AUTOMATION); SEQ's SONG and GLO and ARP held change the top half instead. HOME goes back to the editor. The Sounds browser opens here (the track name ⌄, SAVE, a hold menu) |
+| **Sound pages** | A family row and a page row in place of the 12 keys (the FM-1 is beside the phone), the page's graph where it has one, then four controls in the FM-1's knob order. Dense EDIT pages (operators, zones, slices, lanes) are four controls first; their pictures come later |
+| **Editor** | The roll or drum grid; under it, in the strip, **the step panel** (not over the grid). **Notes go in from the FM-1's keys only**, into the selected step (Chord adds up to 4). Automation: **one lane at a time** under the grid, with a lane picker |
+| **Locks** | **Holding a step** locks knob turns to it while held (the FM-1's gesture), and the step panel's **Lock** key latches the same. Long-press on a step means only this; step menus go to a visible key. Each ◆ row clears on its own, and "Clear all locks" confirms in place. Locked steps carry a ◆ in the grid (board first) |
+| **Pads** | The grid as on the iPhone; **Edit steps** has a visible way in from the selected pad as well as the hold menu |
+| **Timeline** | **Time down** (six track columns, bars run down the screen; Scott, 2026-11-13, board 58). Top only shows 20 bars, so a 16-bar song fits whole |
+
+**Labs, to try on the device:** following pauses after a phone touch; pin the bottom half's page; the phone piano under the grid; the Timeline with time across (board 57).
+
+**Android rules** (research, 2026-11-12): nothing draggable at the side edges (the back gesture); the bottom ~24 dp clear for the home gesture; edge-to-edge with insets; Back closes the newest layer (a menu, a sheet, the bottom half's page) and never stops the song; pads answer on the phone without waiting for the FM-1's echo.
+
 ## The FM-1 disconnected (2026-11-09, board 42: pick before building)
 
 *Scott, 2026-11-09: "a dedicated pattern and state" for a lost FM-1; today the Song tab falls back to the old Arrange page, dimmed, and other tabs show a page whose title and first line both say "FM-1 disconnected". Both cut in. The motion rule (`design/DESIGN.md`) applies.*

@@ -1,0 +1,1204 @@
+<!doctype html>
+<!-- Lupe on a Pixel 10 Pro: a clickable phone mock. v1 2026-11-12: landscape = boards 46–50 (Pads · Edit · Mix · Sounds); portrait = two stacked panes, Pads/Mix/Sounds above and the pattern as a 4 × 4 step grid below. v2 2026-11-12: editing. Drums by step (lane toggles for the picked step) or by lane; a one-octave piano with Chord (up to 4 notes); − / + for pitch, move, length and velocity in the step panel; hold a pad for "Edit steps" (selects without launching, opens Edit with the panel). Nothing talks to the FM-1. Published copy: https://claude.ai/artifact/1pEcMyaYggSUbCHc4xwNYD (private). Screens in phone-pixel/. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style></head><body>
+<title>Lupe on Pixel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600&display=swap">
+<style>
+/* Layout: one screen, no page scroll.
+   Landscape = Lupe's phone with a Skiff FM-1 (boards 46–50): a 44 pt top bar, then one job a tab (Pads · Edit · Mix · Sounds).
+   Portrait  = two stacked panes, like two FM-1 screens: Pads / Mix / Sounds above, the pattern's 16 steps as a 4 × 4 below.
+   Colours and sizes are Lupe's own (tokens/tokens.json, design/boards/phone-skiff.html). Lupe is dark-only, so one theme. */
+:root {
+  --page: #0D0D0F; --well: #111114; --panel: #1A1A1E; --control: #26262B; --lifted: #34343B; --held: #3E3E46;
+  --edge: #0A0A0C; --empty: #2A2A30; --outside: #18181C; --outline: #4A4A52;
+  --text: #EDEDF0; --text2: #A1A1AA; --text2r: #C4C4CC; --text3: #71717A; --on: #101012; --rec: #FF2C34; --bar: #3A3A42;
+  --f-word: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --f-num: 'Barlow Condensed', 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --t-state: 150ms; --t-finger: 200ms; --t-panel: 300ms;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--page); color: var(--text);
+  font: 400 14px/1.3 var(--f-word); font-variant-numeric: tabular-nums;
+  overflow: hidden; padding-block: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+button { font: inherit; color: inherit; border: 0; margin: 0; padding: 0; background: none; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+[hidden] { display: none !important; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+.app { height: 100%; max-width: 1100px; margin: 0 auto; padding-block: 8px; display: flex; flex-direction: column; gap: 8px; animation: fade var(--t-state) var(--ease-out); }
+.app.narrow { max-width: 430px; }
+.spacer { flex: 1 1 auto; min-width: 0; }
+
+/* the chiclet key: a flat top on a hard 2 pt base edge; pressed moves the top down onto it */
+.key {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--control); color: var(--text); border-radius: 8px; box-shadow: 0 2px 0 var(--edge);
+  font-weight: 600; font-size: 14px;
+  transition: background-color var(--t-state), color var(--t-state), box-shadow 100ms, transform 100ms;
+}
+.key:active { transform: translateY(2px); box-shadow: 0 0 0 var(--edge); transition-duration: 60ms; }
+.key[aria-pressed="true"], .key.lit { background: var(--text); color: var(--on); }
+.key:disabled { background: transparent; box-shadow: inset 0 0 0 1px var(--empty); color: var(--text3); cursor: default; transform: none; }
+.well { background: var(--well); border-radius: 10px; padding: 4px; display: flex; gap: 2px; }
+
+/* top bar */
+.top { flex: none; height: 44px; display: flex; gap: 8px; }
+.chip {
+  flex: none; width: 44px; border-radius: 8px; background: var(--c); color: var(--on);
+  box-shadow: inset 0 0 0 2px var(--text); font: 600 22px/1 var(--f-num);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  transition: background-color var(--t-state);
+}
+.chip::after { content: ""; width: 14px; height: 3px; border-radius: 2px; background: rgba(16, 16, 18, .5); }
+.tabs { flex: 1 1 auto; min-width: 0; }
+.tab { flex: 1 1 0; min-width: 0; border-radius: 6px; font-weight: 600; font-size: 14px; color: var(--text2); transition: background-color var(--t-state), color var(--t-state), box-shadow var(--t-state); }
+.tab[aria-selected="true"], .tab[aria-pressed="true"] { background: var(--control); color: var(--text); box-shadow: 0 2px 0 var(--edge); }
+.launch { flex: none; height: 44px; padding: 0 12px; white-space: nowrap; }
+.launch small { font-size: 13px; font-weight: 400; color: var(--text2r); transition: color var(--t-state); }
+.transport { flex: none; align-items: center; padding-right: 10px; }
+.recb { width: 40px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.recb i { width: 14px; height: 14px; border-radius: 50%; background: var(--rec); transition: box-shadow var(--t-state); }
+.recb[aria-pressed="true"] i { box-shadow: 0 0 0 3px var(--well), 0 0 0 5px var(--rec); }
+.playb { width: 40px; height: 34px; border-radius: 6px; }
+.pos { padding-left: 8px; min-width: 56px; line-height: 1.15; }
+.pos b { display: block; font: 600 16px/1.1 var(--f-num); }
+.pos span { font-size: 11px; color: var(--text2); }
+.more { flex: none; width: 44px; height: 42px; }
+
+/* sliding pages: something moves, so it travels */
+.stage { flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden; }
+.slider { display: flex; height: 100%; transition: transform var(--t-panel) var(--ease-out); }
+.slider > .view { flex: 0 0 100%; min-width: 0; height: 100%; position: relative; display: flex; flex-direction: column; gap: 8px; }
+
+/* portrait panes: two FM-1 screens, one above the other */
+.panes { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.pane { flex: 1 1 0; min-height: 0; position: relative; display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--well); border-radius: 16px; overflow: hidden; }
+.pane.upper { border-radius: 18px 18px 16px 16px; }
+.ptabs { flex: none; height: 40px; background: var(--page); }
+
+/* Pads: one row a track, one column an entry */
+.pads { --bgk: var(--page); flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.portrait .pads { --bgk: var(--well); }
+.padscroll { flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+.padscroll::-webkit-scrollbar { display: none; }
+.padgrid { --headw: 72px; --padw: 78px; display: grid; height: 100%; width: max-content; gap: 4px; padding: 2px 2px 2px 0; grid-template-rows: repeat(6, minmax(28px, 1fr)); }
+.rowbg { z-index: 0; margin: -2px 0; border-radius: 10px; transition: background-color var(--t-state); }
+.rowbg.sel { background: color-mix(in srgb, var(--c) 16%, transparent); }
+.head {
+  position: sticky; left: 0; z-index: 3; display: flex; align-items: center; gap: 4px;
+  margin: -2px -4px -2px 0; padding: 2px 4px 2px 2px; border-radius: 10px 0 0 10px;
+  background: var(--bgk); transition: background-color var(--t-state);
+}
+.head.sel { background: color-mix(in srgb, var(--c) 16%, var(--bgk)); }
+.num { flex: none; width: 32px; height: 32px; border-radius: 8px; background: var(--c); color: var(--on); font: 600 17px/1 var(--f-num); transition: box-shadow var(--t-state); }
+.num.sel { box-shadow: 0 0 0 2px var(--text); }
+.mute { flex: none; width: 32px; height: 32px; font-size: 13px; color: var(--text2r); }
+.pad {
+  --ri: 0 0 #0000; --ro: 0 0 #0000;
+  position: relative; z-index: 1; min-width: 0; overflow: hidden;
+  display: flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 8px;
+  background: var(--control); color: var(--text); text-align: left; box-shadow: var(--ri), var(--ro);
+  transition: background-color var(--t-state), color var(--t-state), box-shadow var(--t-state);
+}
+.pad .pn { flex: none; font: 600 17px/1 var(--f-num); }
+.pad .pr { flex: none; font-size: 11px; color: var(--text2); white-space: nowrap; transition: color var(--t-state); }
+.portrait .pad.pass .pr { display: none; }
+.pad .pp { margin-left: auto; font: 600 12px/1 var(--f-num); }
+.pad .wb { margin-left: auto; padding: 2px 4px 1px; border-radius: 5px; background: var(--text); color: var(--on); font: 600 11px/1 var(--f-num); display: none; }
+.pad .pb { position: absolute; left: 6px; right: 6px; bottom: 4px; height: 3px; border-radius: 2px; background: rgba(16, 16, 18, .3); opacity: 0; transition: opacity var(--t-state); }
+.pad .pb i { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--on); }
+.pad.rest { background: transparent; --ri: inset 0 0 0 1px var(--outline); }
+.pad.rest .pn { font: 600 12px/1 var(--f-word); color: var(--text2); }
+.pad.snd { clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%); }
+.pad.cur { background: var(--c); color: var(--on); }
+.pad.cur .pr, .pad.cur.rest .pn { color: var(--on); }
+.pad.cur .pb { opacity: 1; }
+.pad.cur.muted { background: var(--control); color: var(--text); --ri: inset 0 0 0 2px var(--c); }
+.pad.cur.muted .pr { color: var(--text2); }
+.pad.cur.muted .pb { background: var(--bar); }
+.pad.cur.muted .pb i { background: var(--c); }
+.pad.wait { outline: 2px dashed var(--c); outline-offset: -2px; }
+.pad.wait:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; } /* focus wins; the label still says "waiting" */
+.pad.wait .wb { display: block; }
+.pad.wait .pp { display: none; }
+.pad.sel { --ro: 0 0 0 2px var(--text); }
+.cell-empty { z-index: 1; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--empty); }
+.scenes { flex: none; height: 36px; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.scenes::-webkit-scrollbar { display: none; }
+.scenes .key { flex: 1 0 32px; height: 34px; font-size: 13px; }
+.scenes .store { flex: 0 0 56px; }
+.scenes .unkept { background: transparent; box-shadow: inset 0 0 0 1px var(--empty); color: var(--text2); }
+
+/* Edit */
+.editor { flex: 1 1 auto; min-height: 0; position: relative; display: flex; flex-direction: column; gap: 8px; }
+.ruler { flex: none; height: 36px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rchip { flex: none; width: 28px; height: 28px; border-radius: 7px; background: var(--c); color: var(--on); font: 600 16px/1 var(--f-num); display: flex; align-items: center; justify-content: center; }
+.rtitle { font-size: 16px; font-weight: 600; white-space: nowrap; }
+.rsub { font-size: 13px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ruler .key { flex: none; height: 34px; padding: 0 12px; }
+.ebody { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; animation: fade var(--t-state) var(--ease-out); }
+.empty-state { margin: auto; max-width: 34ch; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; }
+.empty-state b { font-size: 16px; font-weight: 600; }
+.empty-state p { margin: 0; color: var(--text2); font-size: 14px; line-height: 1.5; }
+.empty-state .key { height: 44px; padding: 0 16px; margin-top: 8px; }
+
+.rollscroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-radius: 8px; scrollbar-width: thin; }
+.rollgrid { --lw: 48px; --rh: 44px; position: relative; display: grid; grid-template-columns: var(--lw) repeat(16, 1fr); grid-auto-rows: calc(var(--rh) - 1px); row-gap: 1px; background: var(--page); }
+.rl { display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 13px; color: var(--text2); background: var(--page); }
+.rc { position: relative; background: var(--well); transition: background-color var(--t-state); }
+.rc.alt { background: var(--outside); }
+.rc.scol { background: var(--panel); }
+.rc.hit::after, .rc.selc::before { content: ""; position: absolute; inset: 5px 3px; border-radius: 6px; }
+.rc.hit::after { background: var(--c); animation: fade var(--t-state) var(--ease-out); }
+.rc.selc::before { inset: 3px 1px; border-radius: 8px; box-shadow: 0 0 0 2px var(--text); z-index: 1; }
+.note {
+  position: absolute; pointer-events: none; z-index: 1; height: calc(var(--rh) - 9px); border-radius: 8px; background: var(--c);
+  top: calc(var(--r) * var(--rh) + 4px);
+  left: calc(var(--lw) + (100% - var(--lw)) * var(--s) / 16 + 2px);
+  width: calc((100% - var(--lw)) * var(--l) / 16 - 4px);
+  transition: top var(--t-finger) var(--ease-out), left var(--t-finger) var(--ease-out), width var(--t-finger) var(--ease-out), box-shadow var(--t-state), opacity 120ms var(--ease-in);
+}
+.note.sel { box-shadow: 0 0 0 2px var(--text); }
+.note { opacity: var(--v, 1); } /* softer notes read lighter */
+.note.off { display: none; } /* a pitch outside the roll's range */
+.pad { -webkit-touch-callout: none; }
+.note.enter { animation: noteIn var(--t-state) var(--ease-out); }
+.note.leave { opacity: 0; }
+@keyframes noteIn { from { opacity: 0; transform: scale(.9); } }
+.playhead { position: absolute; z-index: 2; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text2r); pointer-events: none; left: calc(var(--lw) + (100% - var(--lw)) * var(--p) / 16); }
+
+.g4 { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 4px; }
+.sc {
+  --ph: 0 0 #0000; --ro: 0 0 #0000;
+  position: relative; min-width: 0; min-height: 0; border-radius: 8px; background: var(--empty); color: var(--text);
+  display: flex; align-items: center; justify-content: center; box-shadow: var(--ph), var(--ro);
+  transition: background-color var(--t-state), color var(--t-state), box-shadow var(--t-state);
+}
+.sc .sn { position: absolute; left: 8px; top: 6px; font-size: 11px; color: var(--text2); transition: color var(--t-state); }
+.sc .sv { font: 600 22px/1 var(--f-num); }
+.sc.on { background: var(--c); color: var(--on); }
+.sc.on .sn { color: var(--on); }
+.sc.hold { background: color-mix(in srgb, var(--c) 22%, var(--empty)); }
+.sc.hold .sn { color: var(--text2r); }
+.sc.ph { --ph: inset 0 -4px 0 var(--text); }
+.sc.sel { --ro: 0 0 0 2px var(--text); }
+.sc .dots { position: absolute; right: 7px; top: 7px; display: grid; grid-template-columns: repeat(4, 5px); gap: 2px; }
+.sc .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--outline); }
+.sc .dots i.on { background: var(--text2r); }
+.sc.on .dots i { background: rgba(16, 16, 18, .25); }
+.sc.on .dots i.on { background: var(--on); }
+.strip { flex: none; height: 44px; display: flex; gap: 4px; }
+.strip .key { flex: 1 1 0; min-width: 0; height: 42px; padding: 0; font-size: 13px; }
+.strip.hits .key[aria-pressed="true"] { background: var(--c); color: var(--on); } /* a hit: the track colour; a picked lane stays white */
+.portrait .ruler .key { padding: 0 10px; }
+.rtitle { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.rseg { flex: none; height: 36px; padding: 3px; }
+.rseg .tab { flex: none; padding: 0 10px; font-size: 13px; }
+/* drums by step: every lane's hit as a dot, bigger, since the dots are the content */
+.g4.bystep .sc .dots { position: static; grid-template-columns: repeat(4, 9px); gap: 5px 6px; }
+.g4.bystep .sc .dots i { width: 9px; height: 9px; }
+.g4.bystep .sc .dots i.on { background: var(--c); }
+/* the piano: one octave, white keys across and black keys over them */
+.pianorow { flex: none; height: 76px; display: flex; gap: 4px; }
+.pianorow .oct { flex: 0 0 32px; height: 74px; }
+.piano { position: relative; flex: 1 1 auto; min-width: 0; }
+.pk { position: absolute; top: 0; display: flex; align-items: flex-end; justify-content: center; font-weight: 600; transition: background-color var(--t-state), color var(--t-state); }
+.pk.w { bottom: 2px; left: calc(var(--i) * 100% / 7 + 1px); width: calc(100% / 7 - 2px); padding-bottom: 6px; border-radius: 0 0 8px 8px; background: var(--held); color: var(--text); box-shadow: 0 2px 0 var(--edge); font-size: 12px; }
+.pk.b { z-index: 2; height: 46px; width: calc(100% / 7 * .7); left: calc((var(--i) + 1) * 100% / 7 - 100% / 7 * .35); padding-bottom: 5px; border-radius: 0 0 6px 6px; background: var(--page); color: var(--text2r); box-shadow: inset 0 0 0 1px var(--outline), 0 2px 0 var(--edge); font-size: 11px; }
+.pk:not(.in).w { background: var(--control); color: var(--text2r); }
+.pk:not(.in).b { background: var(--edge); }
+.pk.in::before { content: ""; position: absolute; top: 7px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor; opacity: .75; }
+.pk[aria-pressed="true"] { background: var(--c) !important; color: var(--on) !important; }
+.pk:active { filter: brightness(1.15); }
+.pk:disabled { opacity: .4; }
+
+/* the step panel: in from the right, out quicker */
+.insp {
+  position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: min(320px, 100%);
+  display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto;
+  background: var(--panel); border-radius: 14px; box-shadow: 0 6px 16px rgba(0, 0, 0, .35);
+  transform: translateX(calc(100% + 24px)); visibility: hidden;
+  transition: transform 200ms var(--ease-in), visibility 0s linear 200ms;
+}
+.insp.open { transform: none; visibility: visible; transition: transform var(--t-panel) var(--ease-out), visibility 0s; }
+.landscape .insp { top: 44px; }
+.portrait .insp { left: 0; width: auto; border-radius: 16px; }
+.ih { flex: none; display: flex; align-items: flex-start; gap: 4px; }
+.ih .t { flex: 1 1 auto; min-width: 0; }
+.ih small { display: block; font-size: 13px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ih b { display: block; margin-top: 4px; font-size: 20px; font-weight: 600; line-height: 1.2; }
+.ih .key { flex: none; width: 40px; height: 40px; }
+.ibody { display: flex; flex-direction: column; gap: 4px; }
+.fields { display: grid; gap: 4px; }
+.f2 { grid-template-columns: 1fr 1fr; }
+.f4 { grid-template-columns: repeat(4, 1fr); }
+.fld { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 10px; background: var(--control); border-radius: 8px; }
+.fl { font: 600 12px/1 var(--f-num); letter-spacing: .04em; color: var(--text2r); }
+.fk { position: absolute; right: 8px; top: 6px; width: 18px; height: 18px; border-radius: 9px; background: var(--lifted); color: var(--text2r); font: 600 11px/18px var(--f-num); text-align: center; }
+.fv { font: 600 22px/1.1 var(--f-num); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f4 .fv { font-size: 19px; }
+.fb { height: 3px; border-radius: 2px; background: var(--bar); }
+.fst { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.fst .fb { flex: 1 1 auto; }
+.fsb { flex: none; width: 36px; height: 32px; font-size: 18px; }
+.fld.adj { padding-bottom: 8px; }
+.fb i { display: block; height: 100%; border-radius: 2px; background: var(--c); }
+.ihint { margin: 4px 0 0; font-size: 13px; color: var(--text2r); line-height: 1.45; }
+.ifoot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.txtb { height: 40px; font-weight: 600; font-size: 14px; color: var(--text); text-align: left; }
+.ifoot .key { height: 40px; padding: 0 16px; }
+
+/* Mix */
+.mix { flex: 1 1 auto; min-height: 0; display: flex; gap: 8px; }
+.msel { flex: 0 0 112px; display: flex; flex-direction: column; gap: 4px; }
+.msel .key { flex: 1 1 0; max-height: 44px; min-height: 32px; font-size: 13px; }
+.mpage { flex: 1 1 auto; min-width: 0; display: flex; }
+.mrows { flex: 1 1 auto; min-width: 0; display: grid; grid-template-rows: repeat(6, minmax(28px, 1fr)); gap: 4px; }
+.mrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mrow .nm { flex: 0 0 64px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fader { position: relative; flex: 1 1 auto; min-width: 0; height: 28px; border-radius: 8px; background: var(--control); overflow: hidden; }
+.fader i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
+.mdb { flex: 0 0 52px; text-align: right; font: 600 14px/1 var(--f-num); color: var(--text2r); }
+.mnote { margin: auto; max-width: 36ch; text-align: center; color: var(--text2); font-size: 14px; line-height: 1.5; }
+
+/* Sounds */
+.sounds { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.sounds h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.sounds h2 span { font-weight: 400; color: var(--text2); }
+.slist { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px; align-content: start; padding-bottom: 2px; }
+.slist .key { height: 44px; justify-content: flex-start; padding: 0 12px; }
+
+/* menus open beside the finger */
+.scrim { position: fixed; inset: 0; z-index: 20; }
+.pop {
+  position: fixed; z-index: 21; width: 260px; max-width: calc(100vw - 32px); max-height: calc(100% - 16px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  background: var(--held); border-radius: 14px; box-shadow: 0 12px 28px rgba(0, 0, 0, .6);
+  transform-origin: top center; animation: popIn var(--t-finger) var(--ease-out);
+}
+.pop.out { animation: popOut var(--t-state) var(--ease-in) forwards; }
+@keyframes popIn { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
+@keyframes popOut { to { opacity: 0; transform: scale(.97); } }
+.pop h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.pop p { margin: 0; font-size: 13px; color: var(--text2r); line-height: 1.45; }
+.pop .lab { font: 600 12px/1 var(--f-num); letter-spacing: .06em; color: var(--text2r); }
+.pop .well { height: 44px; }
+.pop .tab { color: var(--text2r); }
+.pop .tab[aria-pressed="true"] { background: var(--control); color: var(--text); box-shadow: 0 2px 0 var(--edge); }
+.pop .key { height: 44px; }
+.prow { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px; border-radius: 8px; text-align: left; transition: background-color var(--t-state); }
+.prow:hover, .prow[aria-current="true"] { background: var(--lifted); }
+.prow .rchip { width: 28px; height: 28px; }
+.prow b { font-weight: 600; }
+.prow span { margin-left: auto; font-size: 13px; color: var(--text2r); }
+.readout { font: 600 14px/1.3 var(--f-num); color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .slider { transition: none; }
+  .slider > .view.on { animation: fade var(--t-state) linear; }
+  .insp, .insp.open { transform: none; opacity: 0; transition: opacity var(--t-state), visibility 0s linear var(--t-state); }
+  .insp.open { opacity: 1; transition: opacity var(--t-state), visibility 0s; }
+  .note { transition: box-shadow var(--t-state), opacity var(--t-state); }
+  @keyframes noteIn { from { opacity: 0; } }
+  @keyframes popIn { from { opacity: 0; } }
+  @keyframes popOut { to { opacity: 0; } }
+}
+</style>
+
+<div id="app" class="app" aria-label="Lupe phone mockup"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- data: the demo song from board 46 ---------- */
+const TR = [
+  { name: 'Acid',     c: '#FF5A36', kind: 'syn',  eng: '303 presets', lo: 53, hi: 63 },
+  { name: 'Pad',      c: '#22C3B4', kind: 'syn',  eng: 'FM presets',  lo: 60, hi: 72 },
+  { name: 'Pulse Ld', c: '#FFBF00', kind: 'syn',  eng: 'VA presets',  lo: 63, hi: 75 },
+  { name: 'Drum Kit', c: '#9580FF', kind: 'drum', eng: 'kits' },
+  { name: 'Piano',    c: '#FF6FAE', kind: 'syn',  eng: 'FM6 presets', lo: 55, hi: 65 },
+  { name: 'Perc Kit', c: '#A3E635', kind: 'drum', eng: 'kits' },
+];
+const LET = 'ABCDEFGHI';
+const NCOL = 9;
+// one array a track, one slot a column (entry A, B, …); null = empty, 'x' = covered by the chain before it
+const RAW = [
+  [['01', 4], ['02', 4], ['02', 2], ['03', 4], ['04', 4]],
+  [['REST', 4], ['05', 1], ['07', 2, 'chain'], 'x', ['05', 4]],
+  [['08', 8, 'snd'], ['09', 4, 'snd'], ['08', 8]],
+  [['10', 12], ['11', 8]],
+  [['REST', 8], ['12', 4], ['13', 4], ['12', 4]],
+  [['14', 2], ['14', 2], ['15', 2], ['14', 2], ['14', 2], ['15', 2], ['14', 2], ['16', 6]],
+];
+const ENT = RAW.map(row => Array.from({ length: NCOL }, (_, i) => {
+  const e = row[i];
+  if (e == null) return null;
+  if (e === 'x') return 'x';
+  return { p: e[0], reps: e[1], chain: e[2] === 'chain', snd: e[2] === 'snd', rest: e[0] === 'REST' };
+}));
+const isE = e => e && e !== 'x';
+const LANES = ['Kick', 'Snare', 'Closed hat', 'Open hat', 'Clap', 'Low tom', 'High tom', 'Rim'];
+const LANE_SHORT = ['Kick', 'Snare', 'CH', 'OH', 'Clap', 'Tom L', 'Tom H', 'Rim'];
+const PRESETS = [
+  ['Squelch', 'Rubber', 'Low Acid', 'Sub Line', 'Bite', 'Night Bus', 'Wire', 'Glide'],
+  ['Glass Pad', 'Warm Air', 'Choir', 'Slow Sweep', 'Dust', 'Haze', 'Strings', 'Cloud'],
+  ['Square Ld', 'Saw Lead', 'Pluck', 'Chip', 'Sync', 'Hollow', 'Thin', 'Brass'],
+  ['808', '909', 'Tape Kit', 'Lo-fi', 'Dry Room', 'Clicks', 'Boom', 'Snap'],
+  ['Grand', 'Felt', 'E-Piano', 'Toy', 'Bell Piano', 'Soft', 'Honky', 'Tine'],
+  ['Bongos', 'Shaker', 'Woods', 'Metal', 'Hand Kit', 'Rims', 'Congas', 'Bells'],
+];
+const SCALE = [0, 2, 3, 5, 7, 8, 10]; // C minor
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const nn = m => NAMES[m % 12] + (Math.floor(m / 12) - 1);
+const octOf = m => Math.floor(m / 12) - 1;
+const ROWS = []; for (let m = 75; m >= 53; m--) if (SCALE.includes(m % 12)) ROWS.push(m);
+
+/* ---------- patterns, made once per pattern number and shared by every entry that plays it ---------- */
+const PAT = {};
+let NID = 0;
+// a step's note: up to 4 pitches (Skiff's chord limit), one length and velocity; the id lets it travel when edited
+const mkNote = (ms, len, vel) => ({ id: ++NID, ms: ms.slice().sort((a, b) => a - b), len, vel });
+const MAXCHORD = 4;
+function rng(seed) { let s = seed * 7919 + 13; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
+function patFor(id, k) {
+  if (PAT[id]) return PAT[id];
+  const r = rng(parseInt(id, 10) || 1);
+  if (TR[k].kind === 'drum') {
+    const L = LANES.map(() => Array(16).fill(0));
+    for (let s = 0; s < 16; s++) {
+      if (s % 4 === 0 || r() < .12) L[0][s] = 1;
+      if (s === 4 || s === 12 || r() < .06) L[1][s] = 1;
+      if (s % 2 === 0 && r() < .9) L[2][s] = 1;
+      if ((s === 6 || s === 14) && r() < .7) L[3][s] = 1;
+      if (r() < .1) L[4][s] = 1;
+      if (r() < .07) L[5][s] = 1;
+      if (r() < .07) L[6][s] = 1;
+      if (r() < .12) L[7][s] = 1;
+    }
+    return (PAT[id] = { drum: true, lanes: L });
+  }
+  const steps = Array(16).fill(null);
+  if (id === '12') { // board 50's Piano pattern
+    [[0, 60, 2], [2, 56, 1], [4, 60, 2], [6, 58, 1], [8, 56, 1], [10, 63, 1], [12, 60, 2], [14, 62, 1]]
+      .forEach(([s, m, len]) => steps[s] = mkNote([m], len, 100));
+    steps[10].ms.push(67); // one chord, so chords show from the start
+  } else {
+    const pool = ROWS.filter(m => m >= TR[k].lo && m <= TR[k].hi);
+    for (let s = 0; s < 16; s++) {
+      if (r() < .45) {
+        const len = r() < .3 ? 2 : 1;
+        steps[s] = mkNote([pool[Math.floor(r() * pool.length)]], len, 90 + Math.floor(r() * 30));
+        s += len - 1;
+      }
+    }
+  }
+  return (PAT[id] = { drum: false, steps });
+}
+
+/* ---------- state ---------- */
+const S = {
+  tick: 152, running: false, launch: 'Bar', layout: 'auto', tab: 'pads', ptab: 'pads', insp: false, rec: false,
+  sel: 4, selStep: 4, oct: 4, lane: 0, lastNote: 60, scene: 1, storeMode: false, mixPage: 'Mixer',
+  chord: false, drumMode: 'step',
+  cur: [1, 1, 0, 0, 1, 3], wait: [4, null, null, null, 2, null], muted: [false, false, false, false, false, true],
+  sound: [0, 0, 0, 1, 1, 0], level: [72, 64, 58, 80, 70, 62],
+};
+S.selEntry = S.cur.slice();
+S.start = [1, 0, 2, 4, 0, 1].map(passes => S.tick - 8 - 16 * passes);
+const KEPT = new Set([0, 1, 2, 3, 5, 6]);
+
+/* ---------- helpers ---------- */
+const app = document.getElementById('app');
+let R = {};
+let built = null;
+const mqP = matchMedia('(orientation: portrait)');
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null) continue;
+    if (v === false) { if (k.startsWith('aria-')) e.setAttribute(k, 'false'); continue; }
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k === 'html') e.innerHTML = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? 'true' : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c));
+  return e;
+}
+const ICON = {
+  prev: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  next: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  close: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  play: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2.5v11l9.5-5.5z" fill="currentColor"/></svg>',
+  stop: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="1.5" fill="currentColor"/></svg>',
+  more: '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><circle cx="3" cy="8" r="1.6" fill="currentColor"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/><circle cx="13" cy="8" r="1.6" fill="currentColor"/></svg>',
+  down: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const layout = () => S.layout === 'auto' ? (mqP.matches ? 'portrait' : 'landscape') : S.layout;
+const edEntry = () => ENT[S.sel][S.selEntry[S.sel]];
+const edPat = () => { const e = edEntry(); return isE(e) && !e.rest ? patFor(e.p, S.sel) : null; };
+function coverIdx(steps, s) { for (let j = s; j >= 0; j--) if (steps[j]) return j + steps[j].len > s ? j : -1; return -1; }
+// put pitch m on step s. Chord on: m is added (or taken out) beside what's there, up to 4. Chord off: m replaces it.
+function placeNote(steps, s, m, chord) {
+  const j = coverIdx(steps, s);
+  if (j >= 0 && j < s) steps[j].len = s - j;
+  const n = steps[s];
+  if (!n) { steps[s] = mkNote([m], 1, 100); return; }
+  if (!chord) { n.ms = [m]; return; }
+  const at = n.ms.indexOf(m);
+  if (at >= 0) { if (n.ms.length > 1) n.ms.splice(at, 1); }
+  else if (n.ms.length < MAXCHORD) { n.ms.push(m); n.ms.sort((a, b) => a - b); }
+}
+const chordName = n => n.ms.map(nn).join(' ');
+// the furthest a note on step s can reach before the next note starts
+function maxLen(steps, s) { for (let t = s + 1; t < 16; t++) if (steps[t]) return t - s; return 16 - s; }
+function setText(el, t) { if (el.textContent !== t) el.textContent = t; }
+function landLabel() {
+  if (S.launch === 'Bar') return 'b' + (Math.floor(S.tick / 16) + 2);
+  if (S.launch === 'Beat') return 'beat';
+  if (S.launch === 'Loop') return 'end';
+  return 'now';
+}
+const db = lv => ((lv - 80) / 4).toFixed(1).replace('-', '−') + ' dB';
+
+/* ---------- clock: 120 BPM, a sixteenth every 125 ms ---------- */
+let timer = null;
+function setRunning(on) {
+  S.running = on; clearInterval(timer);
+  if (on) timer = setInterval(step, 125);
+  updateTop(); updatePads();
+}
+function nextEntry(k, i) {
+  const row = ENT[k];
+  for (let d = 1; d <= row.length; d++) { const j = (i + d) % row.length; if (isE(row[j])) return j; }
+  return i;
+}
+function step() {
+  const t = ++S.tick;
+  for (let k = 0; k < 6; k++) {
+    const e = ENT[k][S.cur[k]];
+    const ends = isE(e) && t - S.start[k] >= e.reps * 16;
+    const w = S.wait[k];
+    if (w != null) {
+      const land = S.launch === 'Now' || (S.launch === 'Beat' && t % 4 === 0) || (S.launch === 'Bar' && t % 16 === 0) || (S.launch === 'Loop' && ends);
+      if (land) { S.cur[k] = w; S.wait[k] = null; S.start[k] = t; continue; }
+    }
+    if (ends) { S.cur[k] = nextEntry(k, S.cur[k]); S.start[k] = t; }
+  }
+  updatePads(); updatePlayhead(); updateTop();
+}
+
+/* ---------- actions ---------- */
+function firstStep() {
+  const p = edPat();
+  S.selStep = 0;
+  if (p && !p.drum) {
+    const i = p.steps.findIndex(Boolean);
+    S.selStep = Math.max(0, i);
+    if (i >= 0) S.oct = octOf(p.steps[i].ms[0]);
+  }
+}
+// "Edit steps" from a pad's hold menu: select that pad without launching it, and show its steps with the panel open
+function editEntry(k, i) {
+  const e = ENT[k][i];
+  if (!isE(e) || e.rest) return;
+  S.sel = k; S.selEntry[k] = i; firstStep();
+  if (built === 'landscape') setTab('edit');
+  refreshEditor(); renderSounds(); updatePads(); updateTop(); updateMix();
+  setInsp(true);
+}
+function tapPad(k, i) {
+  const e = ENT[k][i];
+  if (!isE(e)) return;
+  if (k === S.sel && S.selEntry[k] !== i) { S.selEntry[k] = i; firstStep(); refreshEditor(); }
+  if (!S.running || S.launch === 'Now') { S.cur[k] = i; S.wait[k] = null; S.start[k] = S.tick; }
+  else if (S.wait[k] === i) S.wait[k] = null;
+  else S.wait[k] = i;
+  updatePads(); updatePlayhead(); updateTop();
+}
+function selectTrack(k) {
+  if (S.sel === k) return;
+  S.sel = k; firstStep();
+  refreshEditor(); renderSounds(); updatePads(); updateTop(); updateMix();
+}
+function toggleMute(k) { S.muted[k] = !S.muted[k]; updatePads(); updateMix(); }
+function tapScene(k) {
+  if (S.storeMode) { KEPT.add(k); S.storeMode = false; S.scene = k; updatePads(); return; }
+  if (!KEPT.has(k)) return;
+  S.scene = k;
+  for (let t = 0; t < 6; t++) {
+    const list = ENT[t].map((e, i) => isE(e) ? i : -1).filter(i => i >= 0);
+    const j = list[k % list.length];
+    if (S.running && S.launch !== 'Now') S.wait[t] = j === S.cur[t] ? null : j;
+    else { S.cur[t] = j; S.start[t] = S.tick; S.wait[t] = null; }
+  }
+  updatePads(); updatePlayhead(); updateTop();
+}
+function stepEdited() { updateEditor(); updateInspector(); }
+function tapRoll(s, m) {
+  const st = edPat().steps, j = coverIdx(st, s);
+  if (j >= 0 && st[j].ms.includes(m)) {
+    // a note already there: select its step; with Chord on, a tap on one of its pitches takes that pitch out
+    if (S.chord && j === s && st[j].ms.length > 1) placeNote(st, s, m, true);
+    S.selStep = j;
+  } else { placeNote(st, s, m, S.chord); S.selStep = s; S.lastNote = m; }
+  stepEdited();
+}
+function toggleHit(l, s) { const L = edPat().lanes; L[l][s] = L[l][s] ? 0 : 1; stepEdited(); }
+function setDrumMode(m) { S.drumMode = m; refreshEditor(); }
+function setChord(on) { S.chord = on; if (R.chordKey) R.chordKey.setAttribute('aria-pressed', on); updateEditor(); }
+// the step panel's − / + keys
+function adjust(what, d) {
+  const p = edPat(); if (!p) return;
+  const s = S.selStep;
+  if (p.drum) {
+    if (what === 'lane') S.lane = (S.lane + d + 8) % 8;
+    if (what === 'hit') p.lanes[S.lane][s] = d > 0 ? 1 : 0;
+    return stepEdited();
+  }
+  const st = p.steps, n = st[s];
+  if (!n) return;
+  if (what === 'pitch') { // one scale degree, the whole chord moving together
+    const root = n.ms[0], deg = ROWS.slice().reverse(), at = deg.indexOf(root);
+    const to = deg[Math.max(0, Math.min(deg.length - 1, (at < 0 ? deg.findIndex(m => m > root) : at) + d))];
+    if (to != null && to !== root) { const shift = to - root; n.ms = n.ms.map(m => m + shift); S.lastNote = n.ms[0]; S.oct = octOf(n.ms[0]); }
+  }
+  if (what === 'move') {
+    const t = s + d;
+    if (t < 0 || t > 15) return;
+    const others = st.slice(); others[s] = null;
+    if (others[t] || coverIdx(others, t) >= 0) return; // never onto or into another note
+    st[s] = null; st[t] = n; n.len = Math.min(n.len, maxLen(st, t)); S.selStep = t;
+  }
+  if (what === 'len') n.len = Math.max(1, Math.min(maxLen(st, s), n.len + d));
+  if (what === 'vel') n.vel = Math.max(1, Math.min(127, n.vel + d * 8));
+  stepEdited();
+}
+function tapDrum(l, s) {
+  const L = edPat().lanes;
+  L[l][s] = L[l][s] ? 0 : 1; S.lane = l; S.selStep = s;
+  stepEdited();
+}
+function tapG4(i) {
+  const p = edPat();
+  if (p.drum) {
+    // By step: a tap picks the step, and the lane keys under the grid say what hits on it.
+    // By lane: a tap toggles the picked lane on that step.
+    if (S.drumMode === 'lane') p.lanes[S.lane][i] = p.lanes[S.lane][i] ? 0 : 1;
+    S.selStep = i; return stepEdited();
+  }
+  const st = p.steps;
+  if (S.selStep === i && !st[i]) placeNote(st, i, S.lastNote, false);
+  S.selStep = i;
+  if (st[i]) S.oct = octOf(st[i].ms[0]);
+  stepEdited();
+}
+function pickNote(m) { const st = edPat().steps; placeNote(st, S.selStep, m, S.chord); S.lastNote = m; stepEdited(); }
+function clearStep() {
+  const p = edPat();
+  if (p.drum) { p.lanes[S.lane][S.selStep] = 0; }
+  else { const j = coverIdx(p.steps, S.selStep); if (j >= 0) p.steps[j] = null; }
+  stepEdited();
+}
+function moveStep(d) {
+  S.selStep = (S.selStep + d + 16) % 16;
+  const p = edPat();
+  if (p && !p.drum && p.steps[S.selStep]) S.oct = octOf(p.steps[S.selStep].ms[0]);
+  stepEdited();
+}
+function setInsp(on, focusBack) {
+  S.insp = on;
+  if (R.insp) R.insp.classList.toggle('open', on);
+  if (R.stepKey) { R.stepKey.setAttribute('aria-pressed', on); if (focusBack) R.stepKey.focus({ preventScroll: true }); }
+}
+function setSlide(slider, views, names, n, tabs, instant) {
+  const idx = names.indexOf(n);
+  if (instant) slider.style.transition = 'none';
+  slider.style.transform = `translateX(${-idx * 100}%)`;
+  if (instant) { void slider.offsetWidth; slider.style.transition = ''; }
+  names.forEach(x => {
+    views[x].inert = x !== n; views[x].classList.toggle('on', x === n);
+    tabs[x].setAttribute('aria-selected', x === n);
+  });
+}
+const TABS = ['pads', 'edit', 'mix', 'sounds'], PTABS = ['pads', 'mix', 'sounds'];
+function setTab(n, instant) { S.tab = n; setSlide(R.slider, R.views, TABS, n, R.tabs, instant); }
+function setPTab(n, instant) { S.ptab = n; setSlide(R.slider, R.views, PTABS, n, R.tabs, instant); }
+
+/* ---------- top bar ---------- */
+function buildTop(withTabs) {
+  const top = h('div', { class: 'top' });
+  R.chip = h('button', { class: 'chip', 'aria-haspopup': 'dialog', onclick: () => openTrackPop(R.chip) });
+  top.append(R.chip);
+  if (withTabs) {
+    const tabs = h('div', { class: 'well tabs', role: 'tablist', 'aria-label': 'Pages' });
+    R.tabs = {};
+    TABS.forEach(n => { R.tabs[n] = h('button', { class: 'tab', role: 'tab', id: 'tab-' + n, 'aria-controls': 'view-' + n, onclick: () => setTab(n), text: n[0].toUpperCase() + n.slice(1) }); tabs.append(R.tabs[n]); });
+    top.append(tabs);
+  }
+  R.launch = h('button', { class: 'key launch', 'aria-haspopup': 'dialog', onclick: () => openLaunchPop(R.launch) });
+  top.append(R.launch);
+  if (!withTabs) top.append(h('span', { class: 'spacer' }));
+  const tp = h('div', { class: 'well transport' });
+  R.rec = h('button', { class: 'recb', 'aria-label': 'Record', 'aria-pressed': S.rec, html: '<i></i>', onclick: () => { S.rec = !S.rec; R.rec.setAttribute('aria-pressed', S.rec); } });
+  R.play = h('button', { class: 'key playb', onclick: () => setRunning(!S.running) });
+  R.pos = h('div', { class: 'pos' });
+  tp.append(R.rec, R.play, R.pos);
+  R.more = h('button', { class: 'key more', 'aria-label': 'Mockup info and layout', 'aria-haspopup': 'dialog', html: ICON.more, onclick: () => openMorePop(R.more) });
+  top.append(tp, R.more);
+  return top;
+}
+function updateTop() {
+  if (!R.chip) return;
+  const t = TR[S.sel];
+  R.chip.style.setProperty('--c', t.c);
+  setText(R.chip.firstChild || R.chip.appendChild(document.createTextNode('')), String(S.sel + 1));
+  R.chip.setAttribute('aria-label', `Track ${S.sel + 1}, ${t.name}. Change track`);
+  const n = S.wait.filter(x => x != null).length;
+  R.launch.innerHTML = `${S.launch}${n ? `<small>· ${n} wait</small>` : ''}`;
+  R.launch.setAttribute('aria-label', `Launch at ${S.launch.toLowerCase()}${n ? `, ${n} waiting` : ''}. Open launch menu`);
+  R.play.innerHTML = S.running ? ICON.stop : ICON.play;
+  R.play.setAttribute('aria-label', S.running ? 'Stop' : 'Play');
+  const t16 = S.tick;
+  R.pos.innerHTML = `<b>${Math.floor(t16 / 16) + 1}.${Math.floor((t16 % 16) / 4) + 1}.${(t16 % 4) + 1}</b><span>120 BPM</span>`;
+}
+
+/* ---------- Pads ---------- */
+function buildPads(host) {
+  const wrap = h('div', { class: 'pads' });
+  const scroll = h('div', { class: 'padscroll' });
+  const grid = h('div', { class: 'padgrid', role: 'group', 'aria-label': 'Pads: one row a track' });
+  grid.style.gridTemplateColumns = `var(--headw) repeat(${NCOL}, var(--padw))`;
+  R.pads = []; R.heads = []; R.rowbg = [];
+  for (let k = 0; k < 6; k++) {
+    const c = TR[k].c, row = `grid-row:${k + 1};--c:${c};`;
+    const bg = h('div', { class: 'rowbg', style: row + 'grid-column:1 / -1', 'aria-hidden': 'true' });
+    R.rowbg.push(bg); grid.append(bg);
+    const num = h('button', { class: 'num', text: String(k + 1), 'aria-label': `Select track ${k + 1}, ${TR[k].name}`, onclick: () => selectTrack(k) });
+    const mute = h('button', { class: 'key mute', text: 'M', 'aria-label': `Mute ${TR[k].name}`, onclick: () => toggleMute(k) });
+    const head = h('div', { class: 'head', style: row + 'grid-column:1' }, num, mute);
+    R.heads.push({ head, num, mute }); grid.append(head);
+    for (let i = 0; i < NCOL; i++) {
+      const e = ENT[k][i];
+      if (e === 'x') continue;
+      const gc = row + `grid-column:${i + 2}${e && e.chain ? ' / span 2' : ''}`;
+      if (!e) { grid.append(h('div', { class: 'cell-empty', style: gc, 'aria-hidden': 'true' })); continue; }
+      const pp = h('span', { class: 'pp' }), wb = h('span', { class: 'wb' }), bar = h('i');
+      const b = h('button', { class: 'pad' + (e.rest ? ' rest' : '') + (e.snd ? ' snd' : ''), style: gc, 'aria-haspopup': 'menu',
+        onclick: () => { if (b._held) { b._held = false; return; } tapPad(k, i); } },
+        h('span', { class: 'pn', text: e.rest ? 'REST' : e.p }), h('span', { class: 'pr', text: (e.chain ? 'chain ' : '') + '×' + e.reps }), pp, wb, h('span', { class: 'pb' }, bar));
+      holdable(b, (x, y) => openPadMenu(b, k, i, x, y));
+      R.pads.push({ el: b, k, i, e, pp, wb, bar });
+      grid.append(b);
+    }
+  }
+  scroll.append(grid);
+  const scenes = h('div', { class: 'scenes', role: 'group', 'aria-label': 'Scenes' });
+  R.store = h('button', { class: 'key store', text: 'Store', onclick: () => { S.storeMode = !S.storeMode; updatePads(); } });
+  scenes.append(R.store);
+  R.scenes = [];
+  for (let s = 0; s < 16; s++) { const b = h('button', { class: 'key', text: String(s + 1), onclick: () => tapScene(s) }); R.scenes.push(b); scenes.append(b); }
+  wrap.append(scroll, scenes);
+  host.append(wrap);
+  R.padscroll = scroll; R.padgrid = grid;
+}
+// hold 450 ms (or right-click, or the keyboard's menu key / Shift+F10) opens the pad's menu; the tap that ends a hold is swallowed
+function holdable(el, onHold) {
+  let t = null, sx = 0, sy = 0;
+  const cancel = () => clearTimeout(t);
+  el.addEventListener('pointerdown', ev => {
+    if (ev.button > 0) return;
+    el._held = false; sx = ev.clientX; sy = ev.clientY; cancel();
+    t = setTimeout(() => { el._held = true; onHold(sx, sy); }, 450);
+  });
+  el.addEventListener('pointerup', cancel); el.addEventListener('pointercancel', cancel); el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointermove', ev => { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) cancel(); });
+  el.addEventListener('contextmenu', ev => { ev.preventDefault(); if (!el._held) { el._held = true; onHold(ev.clientX, ev.clientY); } });
+  el.addEventListener('keydown', ev => {
+    if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) {
+      ev.preventDefault(); const r = el.getBoundingClientRect(); onHold(r.left + r.width / 2, r.bottom);
+    }
+  });
+}
+function openPadMenu(anchor, k, i, x, y) {
+  const e = ENT[k][i], t = TR[k];
+  const items = [h('span', { class: 'lab', text: `${t.name.toUpperCase()} · ${LET[i]} · ${e.rest ? 'REST' : 'PATTERN ' + e.p} · ×${e.reps}` })];
+  if (e.rest) items.push(h('p', { text: 'A REST has no steps to edit.' }));
+  else items.push(h('button', { class: 'prow', onclick: () => { closePop(true); editEntry(k, i); } },
+    h('b', { text: 'Edit steps' }), h('span', { text: built === 'landscape' ? 'opens Edit' : 'shows below' })));
+  const waiting = S.wait[k] === i;
+  items.push(h('button', { class: 'prow', onclick: () => { closePop(); const keep = S.selEntry[k]; tapPad(k, i); if (k !== S.sel || keep !== S.selEntry[k]) { /* tap rules decide */ } } },
+    h('b', { text: waiting ? 'Take back launch' : S.running ? 'Launch next' : 'Launch now' }), h('span', { text: S.running && !waiting ? `at ${S.launch.toLowerCase()}` : '' })));
+  openPopAt(x, y, anchor, `${t.name} entry ${LET[i]}`, items);
+}
+function sizePads() {
+  if (!R.padscroll) return;
+  const w = R.padscroll.clientWidth;
+  let pw;
+  if (built === 'portrait') pw = Math.max(60, Math.floor((w - 72 - 4 - 12 - 2) / 4));
+  else { const fit = Math.floor((w - 76 - 4 * (NCOL - 1) - 2) / NCOL); pw = fit >= 78 ? Math.min(fit, 104) : 78; }
+  R.padgrid.style.setProperty('--padw', pw + 'px');
+}
+function updatePads() {
+  if (!R.pads) return;
+  const lb = landLabel();
+  for (const p of R.pads) {
+    const { el, k, i, e } = p;
+    const cur = S.cur[k] === i, wait = S.wait[k] === i, sel = S.sel === k && S.selEntry[k] === i;
+    el.classList.toggle('cur', cur); el.classList.toggle('wait', wait); el.classList.toggle('sel', sel); el.classList.toggle('muted', S.muted[k]);
+    let pass = '', prog = 0;
+    if (cur) {
+      const el16 = Math.max(0, S.tick - S.start[k]);
+      if (e.reps > 1) pass = `${Math.floor(el16 / 16) % e.reps + 1}/${e.reps}`;
+      prog = (el16 % (e.reps * 16)) / (e.reps * 16);
+    }
+    setText(p.pp, pass); setText(p.wb, wait ? lb : '');
+    el.classList.toggle('pass', !!pass);
+    p.bar.style.width = (prog * 100).toFixed(1) + '%';
+    el.setAttribute('aria-label', `${TR[k].name}, entry ${LET[i]}, ${e.rest ? 'rest' : 'pattern ' + e.p}, ${e.reps} passes${cur ? (S.running ? ', playing' : ', current') : ''}${wait ? ', waiting, lands ' + lb : ''}${sel ? ', selected' : ''}`);
+  }
+  R.heads.forEach(({ head, num, mute }, k) => {
+    head.classList.toggle('sel', S.sel === k); num.classList.toggle('sel', S.sel === k);
+    mute.setAttribute('aria-pressed', S.muted[k]);
+  });
+  R.rowbg.forEach((r, k) => r.classList.toggle('sel', S.sel === k));
+  R.store.setAttribute('aria-pressed', S.storeMode);
+  R.scenes.forEach((b, s) => {
+    const kept = KEPT.has(s);
+    b.classList.toggle('lit', s === S.scene); b.classList.toggle('unkept', !kept && s !== S.scene);
+    b.setAttribute('aria-label', `Scene ${s + 1}${kept ? '' : ', empty'}${s === S.scene ? ', last recalled' : ''}`);
+  });
+}
+
+/* ---------- Edit ---------- */
+function buildEditorShell(host) {
+  R.ruler = h('div', { class: 'ruler' });
+  R.ebody = h('div', { class: 'ebody' });
+  host.append(R.ruler, R.ebody);
+}
+function emptyState(e) {
+  const portrait = built === 'portrait';
+  const lead = e ? `Entry ${LET[S.selEntry[S.sel]]} is a REST: the track stays silent for ${e.reps} passes.` : 'Nothing in this entry yet.';
+  const box = h('div', { class: 'empty-state' }, h('b', { text: 'Nothing to edit here' }), h('p', { text: lead + (portrait ? ' Pick a pattern pad above to edit its steps.' : ' Pick a pattern pad on Pads to edit its steps.') }));
+  if (!portrait) box.append(h('button', { class: 'key', text: 'Go to Pads', onclick: () => setTab('pads') }));
+  return box;
+}
+function refreshEditor() {
+  if (!R.ruler) return;
+  const k = S.sel, e = edEntry(), t = TR[k], letter = LET[S.selEntry[k]];
+  R.ruler.replaceChildren(); R.ebody.replaceChildren();
+  R.ebody.style.animation = 'none'; void R.ebody.offsetWidth; R.ebody.style.animation = '';
+  R.notes = R.rollCells = R.drumCells = R.g4 = R.strip = R.piano = R.ph = R.clearKey = R.stepKey = R.chordKey = null;
+  R.ruler.append(h('span', { class: 'rchip', style: `--c:${t.c}`, text: String(k + 1), 'aria-hidden': 'true' }), h('span', { class: 'rtitle', text: `${t.name} · ${letter}` }));
+  if (!isE(e) || e.rest) {
+    R.ruler.append(h('span', { class: 'rsub', text: isE(e) ? 'rest' : 'empty' }));
+    R.ebody.append(emptyState(isE(e) ? e : null));
+    setInsp(false); updateInspector();
+    return;
+  }
+  const drum = t.kind === 'drum', roll = built !== 'portrait';
+  if (roll) R.ruler.append(h('span', { class: 'rsub', text: `pattern ${e.p} · ${drum ? '8 lanes' : 'C minor'} · 16 steps` }));
+  R.ruler.append(h('span', { class: 'spacer' }));
+  if (drum && !roll) {
+    const w = h('div', { class: 'well rseg', role: 'group', 'aria-label': 'Edit drums by' });
+    ['step', 'lane'].forEach(m => w.append(h('button', { class: 'tab', text: m === 'step' ? 'By step' : 'By lane', 'aria-pressed': S.drumMode === m, onclick: () => setDrumMode(m) })));
+    R.ruler.append(w);
+  } else {
+    if (!drum) { R.chordKey = h('button', { class: 'key', text: 'Chord', 'aria-pressed': S.chord, onclick: () => setChord(!S.chord) }); R.ruler.append(R.chordKey); }
+    R.clearKey = h('button', { class: 'key', text: 'Clear', onclick: clearStep });
+    R.ruler.append(R.clearKey);
+  }
+  R.stepKey = h('button', { class: 'key', 'aria-controls': 'insp', 'aria-pressed': S.insp, onclick: () => setInsp(!S.insp) });
+  R.ruler.append(R.stepKey);
+  R.ebody.style.setProperty('--c', t.c);
+  if (roll) (drum ? buildDrumRoll : buildRoll)(R.ebody); else (drum ? buildDrumG4 : buildG4)(R.ebody);
+  updateEditor(); updatePlayhead(); updateInspector();
+}
+function buildRoll(host) {
+  const sc = h('div', { class: 'rollscroll' }), g = h('div', { class: 'rollgrid' });
+  R.rollCells = Array.from({ length: 16 }, () => []);
+  ROWS.forEach(m => {
+    g.append(h('div', { class: 'rl', text: nn(m), 'aria-hidden': 'true' }));
+    for (let s = 0; s < 16; s++) {
+      const b = h('button', { class: 'rc' + (Math.floor(s / 4) % 2 ? ' alt' : ''), 'aria-label': `Step ${s + 1}, ${nn(m)}`, onclick: () => tapRoll(s, m) });
+      R.rollCells[s].push(b); g.append(b);
+    }
+  });
+  R.ph = h('div', { class: 'playhead', 'aria-hidden': 'true' });
+  g.append(R.ph);
+  R.notes = new Map(); R.noteLayer = g;
+  sc.append(g); host.append(sc);
+  requestAnimationFrame(() => {
+    const p = edPat(); if (!p || p.drum) return;
+    const first = p.steps[S.selStep] || p.steps.find(Boolean);
+    const r = ROWS.indexOf(first ? first.ms[0] : 60);
+    sc.scrollTop = Math.max(0, r * 44 - sc.clientHeight / 2 + 22);
+  });
+}
+function buildDrumRoll(host) {
+  const sc = h('div', { class: 'rollscroll' }), g = h('div', { class: 'rollgrid' });
+  g.style.setProperty('--rh', '40px');
+  R.drumCells = LANES.map((name, l) => {
+    g.append(h('div', { class: 'rl', text: LANE_SHORT[l], 'aria-hidden': 'true' }));
+    return Array.from({ length: 16 }, (_, s) => { const b = h('button', { class: 'rc' + (Math.floor(s / 4) % 2 ? ' alt' : ''), onclick: () => tapDrum(l, s) }); g.append(b); return b; });
+  });
+  R.ph = h('div', { class: 'playhead', 'aria-hidden': 'true' });
+  g.append(R.ph);
+  sc.append(g); host.append(sc);
+}
+function buildG4(host) {
+  const g = h('div', { class: 'g4', role: 'group', 'aria-label': 'Sixteen steps, one beat a row' });
+  R.g4 = Array.from({ length: 16 }, (_, i) => {
+    const sv = h('span', { class: 'sv' });
+    const el = h('button', { class: 'sc', onclick: () => tapG4(i) }, h('span', { class: 'sn', text: String(i + 1), 'aria-hidden': 'true' }), sv);
+    g.append(el); return { el, sv };
+  });
+  // one octave of piano: white keys across, black keys over them; in-scale keys carry a dot, the rest are dimmer but play
+  const row = h('div', { class: 'pianorow' });
+  const down = h('button', { class: 'key oct', html: ICON.prev, onclick: () => { S.oct = Math.max(2, S.oct - 1); updateEditor(); } });
+  const up = h('button', { class: 'key oct', html: ICON.next, onclick: () => { S.oct = Math.min(5, S.oct + 1); updateEditor(); } });
+  const kb = h('div', { class: 'piano', role: 'group', 'aria-label': 'Piano, one octave' });
+  const keys = [];
+  [0, 2, 4, 5, 7, 9, 11].forEach((pc, i) => keys.push({ pc, el: h('button', { class: 'pk w' + (SCALE.includes(pc) ? ' in' : ''), style: `--i:${i}`, onclick: () => pickNote(12 * (S.oct + 1) + pc) }, h('span', { class: 'pl' })) }));
+  [[1, 0], [3, 1], [6, 3], [8, 4], [10, 5]].forEach(([pc, after]) => keys.push({ pc, el: h('button', { class: 'pk b' + (SCALE.includes(pc) ? ' in' : ''), style: `--i:${after}`, onclick: () => pickNote(12 * (S.oct + 1) + pc) }, h('span', { class: 'pl' })) }));
+  keys.forEach(k => kb.append(k.el));
+  row.append(down, kb, up);
+  R.piano = { down, up, keys };
+  host.append(g, row);
+}
+function buildDrumG4(host) {
+  const g = h('div', { class: 'g4', role: 'group', 'aria-label': 'Sixteen steps of the selected lane, one beat a row' });
+  R.g4 = Array.from({ length: 16 }, (_, i) => {
+    const dots = h('span', { class: 'dots', 'aria-hidden': 'true' }, LANES.map(() => h('i')));
+    const el = h('button', { class: 'sc', onclick: () => tapG4(i) }, h('span', { class: 'sn', text: String(i + 1), 'aria-hidden': 'true' }), dots);
+    g.append(el); return { el, dots };
+  });
+  // By step: the eight lanes as toggles for the selected step (lit in the track colour = it hits).
+  // By lane: the eight lanes as a picker (lit white = the lane the grid shows).
+  const byStep = S.drumMode === 'step';
+  const strip = h('div', { class: 'strip lanes' + (byStep ? ' hits' : ''), role: 'group', 'aria-label': byStep ? 'Lanes that hit on the selected step' : 'Lane the grid shows' });
+  R.strip = { lanes: LANE_SHORT.map((n, l) => { const b = h('button', { class: 'key', text: n, onclick: () => { if (S.drumMode === 'step') toggleHit(l, S.selStep); else { S.lane = l; stepEdited(); } } }); strip.append(b); return b; }) };
+  g.classList.toggle('bystep', byStep);
+  host.append(g, strip);
+}
+function updateEditor() {
+  const p = edPat();
+  if (!p) return;
+  const s = S.selStep;
+  if (R.notes) { // landscape piano roll
+    // one block per pitch, keyed by the note's id and its place in the chord, so an edited note travels
+    const seen = new Set();
+    p.steps.forEach((n, i) => {
+      if (!n) return;
+      n.ms.forEach((m, x) => {
+        const key = n.id + ':' + x;
+        seen.add(key);
+        let el = R.notes.get(key);
+        if (!el) { el = h('div', { class: 'note enter', 'aria-hidden': 'true' }); R.noteLayer.append(el); R.notes.set(key, el); setTimeout(() => el.classList.remove('enter'), 160); }
+        el.style.setProperty('--s', i); el.style.setProperty('--l', n.len); el.style.setProperty('--r', ROWS.indexOf(m));
+        el.style.setProperty('--v', (.45 + .55 * n.vel / 127).toFixed(2));
+        el.classList.toggle('off', !ROWS.includes(m));
+        el.classList.toggle('sel', i === s);
+      });
+    });
+    for (const [key, el] of R.notes) if (!seen.has(key)) { R.notes.delete(key); el.classList.add('leave'); setTimeout(() => el.remove(), 130); }
+    R.rollCells.forEach((col, i) => col.forEach(b => b.classList.toggle('scol', i === s)));
+  }
+  if (R.drumCells) {
+    R.drumCells.forEach((row, l) => row.forEach((b, i) => {
+      const on = !!p.lanes[l][i];
+      b.classList.toggle('hit', on); b.classList.toggle('selc', l === S.lane && i === s);
+      b.setAttribute('aria-label', `${LANES[l]}, step ${i + 1}, ${on ? 'hit' : 'empty'}`);
+    }));
+  }
+  if (R.g4 && !p.drum) {
+    R.g4.forEach(({ el, sv }, i) => {
+      const n = p.steps[i], j = n ? i : coverIdx(p.steps, i), hold = !n && j >= 0;
+      el.classList.toggle('on', !!n); el.classList.toggle('hold', hold); el.classList.toggle('sel', i === s);
+      setText(sv, n ? nn(n.ms[0]) + (n.ms.length > 1 ? ' +' + (n.ms.length - 1) : '') : '');
+      el.setAttribute('aria-label', `Step ${i + 1}, ${n ? chordName(n) + (n.len > 1 ? `, ${n.len} steps long` : '') : hold ? 'held from step ' + (j + 1) : 'empty'}${i === s ? ', selected' + (n ? '' : '. Tap again to add ' + nn(S.lastNote)) : ''}`);
+    });
+    const cur = p.steps[s];
+    R.piano.keys.forEach(({ pc, el }) => {
+      const m = 12 * (S.oct + 1) + pc, on = !!cur && cur.ms.includes(m);
+      setText(el.firstChild, el.classList.contains('b') ? NAMES[pc] : nn(m)); el.setAttribute('aria-pressed', on);
+      el.setAttribute('aria-label', `${nn(m)}${SCALE.includes(pc) ? '' : ', outside C minor'}. ${S.chord ? (on ? 'Take out of' : 'Add to') + ' the chord on' : 'Set'} step ${s + 1}`);
+    });
+    R.piano.down.disabled = S.oct <= 2; R.piano.up.disabled = S.oct >= 5;
+    R.piano.down.setAttribute('aria-label', `Octave down, now ${S.oct}`); R.piano.up.setAttribute('aria-label', `Octave up, now ${S.oct}`);
+  }
+  if (R.g4 && p.drum) {
+    const byStep = S.drumMode === 'step';
+    R.g4.forEach(({ el, dots }, i) => {
+      const hits = LANES.map((_, l) => !!p.lanes[l][i]), n = hits.filter(Boolean).length;
+      const on = byStep ? false : hits[S.lane];
+      el.classList.toggle('on', on); el.classList.toggle('sel', i === s);
+      [...dots.children].forEach((d, l) => d.classList.toggle('on', hits[l]));
+      el.setAttribute('aria-label', byStep
+        ? `Step ${i + 1}, ${n ? hits.map((x, l) => x ? LANES[l] : '').filter(Boolean).join(', ') : 'no hits'}${i === s ? ', selected' : ''}`
+        : `${LANES[S.lane]}, step ${i + 1}, ${on ? 'hit' : 'empty'}${i === s ? ', selected' : ''}`);
+    });
+    R.strip.lanes.forEach((b, l) => {
+      const hit = !!p.lanes[l][s];
+      b.setAttribute('aria-pressed', byStep ? hit : l === S.lane);
+      b.setAttribute('aria-label', byStep ? `${LANES[l]} on step ${s + 1}` : `Show ${LANES[l]}`);
+    });
+  }
+  if (R.clearKey) R.clearKey.disabled = p.drum ? !p.lanes[S.lane][s] : coverIdx(p.steps, s) < 0;
+  if (R.stepKey) R.stepKey.textContent = `Step ${s + 1}`;
+}
+function updatePlayhead() {
+  if (!R.ruler) return;
+  const k = S.sel, playing = S.cur[k] === S.selEntry[k];
+  const pos = playing ? ((S.tick - S.start[k]) % 16 + 16) % 16 : -1;
+  if (R.ph) { R.ph.hidden = pos < 0; R.ph.style.setProperty('--p', pos + .5); }
+  if (R.g4) R.g4.forEach(({ el }, i) => el.classList.toggle('ph', i === pos));
+}
+
+/* ---------- step panel ---------- */
+function buildInsp() {
+  R.insp = h('div', { class: 'insp' + (S.insp ? ' open' : ''), id: 'insp', role: 'region', 'aria-label': 'Step panel' });
+  R.ihT = h('div', { class: 't' });
+  const prev = h('button', { class: 'key', html: ICON.prev, 'aria-label': 'Previous step', onclick: () => moveStep(-1) });
+  const next = h('button', { class: 'key', html: ICON.next, 'aria-label': 'Next step', onclick: () => moveStep(1) });
+  const close = h('button', { class: 'key', html: ICON.close, 'aria-label': 'Close step panel', onclick: () => setInsp(false, true) });
+  R.iBody = h('div', { class: 'ibody' });
+  R.iBody.addEventListener('click', ev => {
+    const l = ev.target.closest('[data-lock]'); if (l) l.setAttribute('aria-pressed', l.getAttribute('aria-pressed') !== 'true');
+    const a = ev.target.closest('[data-adj]'); if (a && !a.disabled) adjust(a.dataset.adj, +a.dataset.d);
+  });
+  R.insp.append(h('div', { class: 'ih' }, R.ihT, prev, next, close), R.iBody);
+  return R.insp;
+}
+// a field: label, the FM-1 knob that turns it, its value, and either a bar or − bar + (adj = [name, canLess, canMore, lessLabel, moreLabel])
+const fld = (label, value, frac, knob, adj) => {
+  const bar = `<span class="fb"><i style="width:${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%"></i></span>`;
+  const ctl = adj
+    ? `<span class="fst"><button class="key fsb" data-adj="${adj[0]}" data-d="-1" aria-label="${adj[3]}"${adj[1] ? '' : ' disabled'}>−</button>${bar}<button class="key fsb" data-adj="${adj[0]}" data-d="1" aria-label="${adj[4]}"${adj[2] ? '' : ' disabled'}>+</button></span>`
+    : bar;
+  return `<div class="fld${adj ? ' adj' : ''}"><span class="fl">${label}</span>${knob ? `<span class="fk" aria-hidden="true">${knob}</span>` : ''}<span class="fv">${value}</span>${ctl}</div>`;
+};
+function updateInspector() {
+  if (!R.insp) return;
+  const p = edPat(), t = TR[S.sel], s = S.selStep;
+  R.insp.style.setProperty('--c', t.c);
+  if (!p) { R.ihT.innerHTML = ''; R.iBody.innerHTML = ''; return; }
+  let sub, notes, hint = '';
+  if (p.drum) {
+    const on = !!p.lanes[S.lane][s];
+    sub = LANES[S.lane];
+    notes = fld('LANE', LANE_SHORT[S.lane], (S.lane + 1) / 8, 1, ['lane', true, true, 'Previous lane', 'Next lane'])
+      + fld('HIT', on ? 'On' : 'Off', on ? 1 : 0, 2, ['hit', on, !on, `Take the ${LANES[S.lane]} hit off step ${s + 1}`, `Put a ${LANES[S.lane]} hit on step ${s + 1}`])
+      + fld('VELOCITY', on ? '100' : '—', on ? .79 : 0, 3) + fld('LENGTH', '1 step', 1 / 16, 4);
+    if (!on) hint = built === 'portrait' ? 'No hit on this lane here. Use HIT +, or the lane keys under the grid.' : 'No hit here. Use HIT +, or tap its cell in the grid.';
+  } else {
+    const j = coverIdx(p.steps, s), n = j === s ? p.steps[s] : null;
+    sub = n ? chordName(n) : j >= 0 ? `held from step ${j + 1}` : 'empty';
+    const others = n ? p.steps.slice() : null; if (others) others[s] = null;
+    const free = t2 => others && t2 >= 0 && t2 < 16 && !others[t2] && coverIdx(others, t2) < 0;
+    const lo = ROWS[ROWS.length - 1], hi = ROWS[0];
+    notes = fld(n && n.ms.length > 1 ? 'CHORD' : 'PITCH', n ? chordName(n) : '—', n ? (n.ms[0] - 53) / 22 : 0, 1, ['pitch', !!n && n.ms[0] > lo, !!n && n.ms[n.ms.length - 1] < hi, 'Pitch down a scale step', 'Pitch up a scale step'])
+      + fld('MOVE', `Step ${s + 1}`, s / 15, 2, ['move', free(s - 1), free(s + 1), 'Move the note a step earlier', 'Move the note a step later'])
+      + fld('LENGTH', n ? `${n.len} step${n.len > 1 ? 's' : ''}` : '—', n ? n.len / 16 : 0, 3, ['len', !!n && n.len > 1, !!n && n.len < maxLen(p.steps, s), 'Shorter', 'Longer'])
+      + fld('VELOCITY', n ? String(n.vel) : '—', n ? n.vel / 127 : 0, 4, ['vel', !!n && n.vel > 1, !!n && n.vel < 127, 'Softer', 'Harder']);
+    if (!n) hint = built === 'portrait' ? `Empty step. Tap it again in the grid to add ${nn(S.lastNote)}, or play a key on the piano.` : 'Empty step. Tap a cell in this step\'s column to add a note.';
+  }
+  const had = document.activeElement && R.iBody.contains(document.activeElement) && document.activeElement.dataset.adj
+    ? `[data-adj="${document.activeElement.dataset.adj}"][data-d="${document.activeElement.dataset.d}"]` : null;
+  R.ihT.innerHTML = `<small>T${S.sel + 1} ${t.name} · ${sub}</small><b>Step ${s + 1}</b>`;
+  R.iBody.innerHTML = `<div class="fields f2">${notes}</div><div class="fields f4">${fld('CHANCE', '100%', 1)}${fld('RATCHET', '×1', .12)}${fld('COND', '—', 0)}${fld('NUDGE', '0', .5)}</div>`
+    + (hint ? `<p class="ihint">${hint}</p>` : '')
+    + `<div class="ifoot"><button class="txtb" title="Not in this mockup">Sound at this step ${ICON.down}</button><span class="spacer"></span><button class="key" data-lock aria-pressed="false">Lock</button></div>`;
+  // keep keyboard focus on the − / + that was pressed (or its partner, if that end is reached)
+  if (had) { const b = R.iBody.querySelector(had); const alt = R.iBody.querySelector(had.replace(/\[data-d="-?1"\]/, ':not(:disabled)')); const f = b && !b.disabled ? b : alt; if (f) f.focus({ preventScroll: true }); }
+}
+
+/* ---------- Mix ---------- */
+function buildMix(host, withSel) {
+  const wrap = h('div', { class: 'mix' });
+  R.msel = null;
+  if (withSel) {
+    R.msel = h('div', { class: 'msel', role: 'group', 'aria-label': 'Mix pages' });
+    ['Mixer', 'Delay', 'Reverb', 'Chorus', 'Global'].forEach(n => R.msel.append(h('button', { class: 'key', text: n, onclick: () => { S.mixPage = n; renderMixPage(); } })));
+    wrap.append(R.msel);
+  }
+  R.mpage = h('div', { class: 'mpage' });
+  wrap.append(R.mpage); host.append(wrap);
+  renderMixPage();
+}
+function renderMixPage() {
+  const page = R.msel ? S.mixPage : 'Mixer';
+  if (R.msel) [...R.msel.children].forEach(b => b.setAttribute('aria-pressed', b.textContent === page));
+  R.mpage.replaceChildren(); R.mix = null;
+  if (page !== 'Mixer') { R.mpage.append(h('p', { class: 'mnote', text: `${page} isn't in this mockup. On the phone it's the iPad's ${page} card, filling this space.` })); return; }
+  const rows = h('div', { class: 'mrows' });
+  R.mix = TR.map((t, k) => {
+    const lv = S.level[k];
+    const num = h('button', { class: 'num', text: String(k + 1), 'aria-label': `Select track ${k + 1}, ${t.name}`, onclick: () => selectTrack(k) });
+    const mute = h('button', { class: 'key mute', text: 'M', 'aria-label': `Mute ${t.name}`, onclick: () => toggleMute(k) });
+    rows.append(h('div', { class: 'mrow', style: `--c:${t.c}` }, num, h('span', { class: 'nm', text: t.name }),
+      h('div', { class: 'fader', role: 'img', 'aria-label': `${t.name} level ${db(lv)}`, html: `<i style="width:${lv}%"></i>` }), h('span', { class: 'mdb', text: db(lv), 'aria-hidden': 'true' }), mute));
+    return { num, mute };
+  });
+  R.mpage.append(rows);
+  updateMix();
+}
+function updateMix() {
+  if (!R.mix) return;
+  R.mix.forEach(({ num, mute }, k) => { num.classList.toggle('sel', S.sel === k); mute.setAttribute('aria-pressed', S.muted[k]); });
+}
+
+/* ---------- Sounds ---------- */
+function buildSounds(host) { R.snd = h('div', { class: 'sounds' }); host.append(R.snd); renderSounds(); }
+function renderSounds() {
+  if (!R.snd) return;
+  const k = S.sel, t = TR[k];
+  const list = h('div', { class: 'slist', role: 'group', 'aria-label': `${t.name} ${t.eng}` });
+  const keys = PRESETS[k].map((n, i) => h('button', { class: 'key', text: n, 'aria-pressed': S.sound[k] === i, onclick: () => { S.sound[k] = i; keys.forEach((b, x) => b.setAttribute('aria-pressed', x === i)); } }));
+  list.append(...keys);
+  R.snd.replaceChildren(h('h2', {}, `${k + 1} ${t.name}`, h('span', { text: ` · ${t.eng}` })), list);
+  R.snd.style.animation = 'none'; void R.snd.offsetWidth; R.snd.style.animation = `fade var(--t-state) var(--ease-out)`;
+}
+
+/* ---------- menus at the finger ---------- */
+function openPop(anchor, label, content) {
+  closePop(true);
+  const scrim = h('div', { class: 'scrim', onpointerdown: () => closePop() });
+  const pop = h('div', { class: 'pop', role: 'dialog', 'aria-label': label }, content);
+  document.body.append(scrim, pop);
+  const a = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  const x = Math.max(16, Math.min(a.left + a.width / 2 - pw / 2, innerWidth - 16 - pw));
+  let y = a.bottom + 8;
+  if (y + ph > innerHeight - 8) y = Math.max(8, a.top - 8 - ph);
+  pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  R.pop = { pop, scrim, anchor };
+  const first = pop.querySelector('button:not(:disabled)');
+  if (first) first.focus({ preventScroll: true });
+}
+// a menu at the finger: just below the touch point (above it when there's no room), kept on screen
+function openPopAt(fx, fy, anchor, label, content) {
+  closePop(true);
+  const scrim = h('div', { class: 'scrim', onpointerdown: () => closePop() });
+  const pop = h('div', { class: 'pop', role: 'dialog', 'aria-label': label }, content);
+  document.body.append(scrim, pop);
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  const x = Math.max(16, Math.min(fx - pw / 2, innerWidth - 16 - pw));
+  let y = fy + 20, origin = 'top';
+  if (y + ph > innerHeight - 8) { y = Math.max(8, fy - 20 - ph); origin = 'bottom'; }
+  pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  pop.style.transformOrigin = `${Math.round(fx - x)}px ${origin}`;
+  R.pop = { pop, scrim, anchor };
+  const first = pop.querySelector('button:not(:disabled)');
+  if (first) first.focus({ preventScroll: true });
+}
+function closePop(now) {
+  const p = R.pop; if (!p) return;
+  R.pop = null; p.scrim.remove();
+  if (now) { p.pop.remove(); return; }
+  p.pop.classList.add('out'); setTimeout(() => p.pop.remove(), 150);
+  if (p.anchor && p.anchor.isConnected) p.anchor.focus({ preventScroll: true });
+}
+function seg(options, current, onPick) {
+  const w = h('div', { class: 'well' });
+  const bs = options.map(o => h('button', { class: 'tab', text: o, 'aria-pressed': o === current, onclick: () => { bs.forEach(b => b.setAttribute('aria-pressed', b === bs[options.indexOf(o)])); onPick(o); } }));
+  w.append(...bs); return w;
+}
+function openLaunchPop(anchor) {
+  const info = h('p');
+  const cancel = h('button', { class: 'key', text: 'Cancel waiting', onclick: () => { S.wait = S.wait.map(() => null); fill(); updatePads(); updateTop(); } });
+  function fill() {
+    const w = S.wait.map((x, k) => x == null ? null : `${TR[k].name} ${LET[x]}`).filter(Boolean);
+    info.textContent = w.length ? `${w.length} waiting: ${w.join(', ')}. ${S.launch === 'Bar' ? 'They land at bar ' + (Math.floor(S.tick / 16) + 2) + '.' : ''}` : 'Nothing waiting. While playing, a pad you tap waits for the launch point.';
+    cancel.disabled = !w.length;
+  }
+  fill();
+  openPop(anchor, 'Launch', [h('span', { class: 'lab', text: 'LAUNCH AT' }), seg(['Loop', 'Bar', 'Beat', 'Now'], S.launch, o => { S.launch = o; fill(); updatePads(); updateTop(); }), info, cancel]);
+}
+function openTrackPop(anchor) {
+  const rows = TR.map((t, k) => h('button', { class: 'prow', 'aria-current': S.sel === k, onclick: () => { selectTrack(k); closePop(); } },
+    h('span', { class: 'rchip', style: `--c:${t.c}`, text: String(k + 1), 'aria-hidden': 'true' }), h('b', { text: t.name }), h('span', { text: t.kind === 'drum' ? 'drums' : 'synth' })));
+  openPop(anchor, 'Tracks', [h('span', { class: 'lab', text: 'TRACK' }), ...rows]);
+}
+function openMorePop(anchor) {
+  const pane = document.querySelector('.pane');
+  const size = `${Math.round(innerWidth)} × ${Math.round(innerHeight)} px · ${built}` + (pane ? ` · each pane ${Math.round(pane.clientWidth)} × ${Math.round(pane.clientHeight)}` : '');
+  const kids = [
+    h('h3', { text: 'Lupe phone mockup' }),
+    h('p', { text: 'Taps work, nothing talks to the FM-1. Rotate the phone to switch layouts. Hold a pad for its menu (Edit steps). In the step panel, − and + change pitch, move, length and velocity; the FEEL row is for show.' }),
+    h('span', { class: 'lab', text: 'THIS SCREEN' }), h('span', { class: 'readout', text: size }),
+    h('span', { class: 'lab', text: 'LAYOUT' }),
+    seg(['Auto', 'Landscape', 'Portrait'], S.layout[0].toUpperCase() + S.layout.slice(1), o => { S.layout = o.toLowerCase(); closePop(true); build(); }),
+  ];
+  if (document.fullscreenEnabled) {
+    const fs = h('button', { class: 'key', text: document.fullscreenElement ? 'Leave full screen' : 'Full screen', onclick: () => {
+      const done = () => { closePop(true); setTimeout(sizePads, 300); };
+      (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).then(done, () => { fs.disabled = true; fs.textContent = 'Full screen not allowed here'; });
+    } });
+    kids.push(fs);
+  }
+  openPop(anchor, 'Mockup info', kids);
+}
+
+/* ---------- build ---------- */
+function build() {
+  closePop(true);
+  const L = layout();
+  built = L; R = {};
+  app.className = 'app ' + L + (L === 'portrait' && !mqP.matches ? ' narrow' : '');
+  app.replaceChildren();
+  if (L === 'landscape') {
+    const top = buildTop(true);
+    const stage = h('div', { class: 'stage' });
+    R.slider = h('div', { class: 'slider' }); R.views = {};
+    TABS.forEach(n => { R.views[n] = h('section', { class: 'view', id: 'view-' + n, role: 'tabpanel', 'aria-labelledby': 'tab-' + n }); R.slider.append(R.views[n]); });
+    stage.append(R.slider); app.append(top, stage);
+    buildPads(R.views.pads);
+    const ed = h('div', { class: 'editor' }); R.views.edit.append(ed); buildEditorShell(ed); ed.append(buildInsp());
+    buildMix(R.views.mix, true); buildSounds(R.views.sounds);
+    setTab(S.tab, true);
+  } else {
+    const top = buildTop(false);
+    const panes = h('div', { class: 'panes' });
+    const up = h('section', { class: 'pane upper', 'aria-label': 'Pads, Mix and Sounds' });
+    const lo = h('section', { class: 'pane lower', 'aria-label': 'Pattern steps' });
+    const pt = h('div', { class: 'well tabs ptabs', role: 'tablist', 'aria-label': 'Upper screen' });
+    R.tabs = {};
+    PTABS.forEach(n => { R.tabs[n] = h('button', { class: 'tab', role: 'tab', id: 'tab-' + n, 'aria-controls': 'view-' + n, onclick: () => setPTab(n), text: n[0].toUpperCase() + n.slice(1) }); pt.append(R.tabs[n]); });
+    const stage = h('div', { class: 'stage' });
+    R.slider = h('div', { class: 'slider' }); R.views = {};
+    PTABS.forEach(n => { R.views[n] = h('section', { class: 'view', id: 'view-' + n, role: 'tabpanel', 'aria-labelledby': 'tab-' + n }); R.slider.append(R.views[n]); });
+    stage.append(R.slider); up.append(pt, stage);
+    const ed = h('div', { class: 'editor' }); lo.append(ed); buildEditorShell(ed); lo.append(buildInsp());
+    panes.append(up, lo); app.append(top, panes);
+    buildPads(R.views.pads); buildMix(R.views.mix, false); buildSounds(R.views.sounds);
+    setPTab(S.ptab, true);
+  }
+  refreshEditor(); updatePads(); updateTop();
+  sizePads(); requestAnimationFrame(sizePads);
+}
+
+mqP.addEventListener('change', () => { if (S.layout === 'auto') build(); });
+addEventListener('resize', () => requestAnimationFrame(sizePads));
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (R.pop) closePop(); else if (S.insp) setInsp(false, true);
+});
+document.fonts && document.fonts.ready.then(() => requestAnimationFrame(sizePads));
+build();
+})();
+</script>
+
+</body></html>
