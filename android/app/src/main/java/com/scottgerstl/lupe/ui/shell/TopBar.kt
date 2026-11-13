@@ -56,14 +56,14 @@ private val PlaybackMode.word get() = name
 fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf<Menu?>(null) }
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 6.dp).height(48.dp),
+        modifier.fillMaxWidth().padding(end = 6.dp).height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // FM-1 key: Projects…, Settings, Labs. Later phases fill them in (P5, Labs); none exist yet, so they say so.
         Box {
             val projects by core.projects.collectAsStateWithLifecycle()
             val project = top.project.ifEmpty { projects.name.ifEmpty { "FM-1" } }   // the core's top.project stays empty until a save or load; projects knows it
-            Key({ menu = Menu.Fm1 }, "FM-1 menu, project $project", width = 128.dp) { fg -> MenuLabel(project, fg, textMax = 98.dp) }
+            HeaderWord({ menu = Menu.Fm1 }, "FM-1 menu, project $project", project, 17, primary = true, textMax = 120.dp)
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
                 val sheets = LocalSheetHost.current
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
@@ -72,12 +72,11 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }
             }
         }
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(8.dp))
         // Launch: how a launch waits (Loop Bar Beat Now), and what is waiting
         Box {
-            Key({ menu = Menu.Launch }, "Launch quantize, ${top.launch.word}" + if (top.waiting > 0) ", ${top.waiting} waiting" else "", width = 96.dp) { fg ->
-                MenuLabel(top.launch.word, fg, sub = if (top.waiting > 0) "${top.waiting} waiting" else null)
-            }
+            HeaderWord({ menu = Menu.Launch }, "Launch quantize, ${top.launch.word}" + if (top.waiting > 0) ", ${top.waiting} waiting" else "", top.launch.word, 14, primary = false,
+                sub = if (top.waiting > 0) "${top.waiting} waiting" else null)
             LupeMenu(menu == Menu.Launch, { menu = null }) {
                 MenuHeading("Launch at")
                 LaunchQuantize.entries.forEach { q ->
@@ -90,16 +89,14 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
             }
         }
         Spacer(Modifier.weight(1f))
-        // REC
-        // On, REC latches: the key fills with REC red and the dot goes dark (6:1); off, a red dot on the key.
-        Key({ core.send(Intent.Rec) }, "Record", on = top.rec, role = Role.Switch, state = if (top.rec) "On" else "Off",
-            litTop = Tok.rec, litEdge = lerp(Tok.rec, Tok.chicletEdge, 0.5f)) { _ ->
+        // REC: a ring (outline) with the red dot. On, it latches: the circle fills REC red and the dot goes dark (6:1).
+        RoundButton({ core.send(Intent.Rec) }, "Record", lit = top.rec, litColour = Tok.rec, role = Role.Switch, state = if (top.rec) "On" else "Off") { _ ->
             val lit = animatedFloat(if (top.rec) 1f else 0f, Dur.STATE)
             Canvas(Modifier.size(14.dp)) { drawCircle(lerp(Tok.rec, Tok.onColour, lit.value)) }
         }
         Spacer(Modifier.width(4.dp))
-        // Play
-        Key({ core.send(if (top.playing) Intent.Stop else Intent.Play) }, if (top.playing) "Stop" else "Play", on = top.playing) { fg ->
+        // Play: a ring with the triangle; filled white with a dark stop square while playing
+        RoundButton({ core.send(if (top.playing) Intent.Stop else Intent.Play) }, if (top.playing) "Stop" else "Play", lit = top.playing, litColour = Tok.text) { fg ->
             val stop = animatedFloat(if (top.playing) 1f else 0f, Dur.STATE)
             PlayStopIcon(stop.value, fg)
         }
