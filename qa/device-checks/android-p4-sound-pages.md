@@ -9,7 +9,7 @@ cd ~/code/fm1-ipad/.claude/worktrees/android-p4-sound-pages-7e2a23/android && ./
 ```
 
 Open a page straight away with `adb shell am start -n com.scottgerstl.lupe/.MainActivity --es scenario page-env`. The scenarios: `page-env`, `page-env-lock`, `page-lfo`, `page-edit1`, `page-drive`, `page-mod`, `page-scale`, `page-lanes`, `page-operator`, `page-arp`. Inside the app, the family row and page row switch pages (pages the fixtures don't carry come up with empty wells and no graph). `Demo ⌄` still has the old "Bottom: …" fake-core rows.
-**Back up first?** No. Nothing here talks to the FM-1.
+**Back up first?** No. Nothing here talks to the FM-1. Once P1's real core drives the `page` area, `setParam` and `pickPage` are writes, so the phone build drops them until writes are allowed (P1: read-only by default, BRIDGE.md). Checks 2 and 3 then only show on the fake core.
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
