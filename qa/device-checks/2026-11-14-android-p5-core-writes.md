@@ -36,3 +36,28 @@ While writes are off, every one of these is refused on the phone and logged ("re
 **Not covered here:** firmware installs, sample import and SLOOP (out of scope); user samples (USR slots) in the Sounds list (sample import is out, so the phone shows the 32 sound slots only); the Projects sheet's iPad-side files (the phone has only the FM-1's four slots).
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device".
+
+## Run on build 40c8629, real FM-1 (Skiff 2.5.1, TESTBED), writes allowed, over adb by Claude, 2026-11-13 evening
+
+Phone-side results read back from the core (LupeState); "FM-1 screen" items are for Scott.
+
+| # | Result |
+|---|---|
+| 1 | ✓ phone: T2 level −4 → −11.5 dB, held through the polls (only after an up-and-down drag; see P5 screens). FM-1 MIXER: Scott |
+| 2 | ✓ phone: PAN in the row's hold menu, C → L29. FM-1: Scott |
+| 3 | ✓ phone: T2's reverb send 69 → 81 % (same menu). FM-1: Scott |
+| 4 | ✗ no Solo on screen |
+| 5 | ✓ FEEDBACK 50 → 63 % read back. FM-1 shows GLO › DELAY: Scott |
+| 6 | ✗ DELAY MODE can't be changed (plain text on the real core) |
+| 7 | ✓ T1 ANALOG › PHASE PD BRASS: the track reads "Phase · Pd Brass". Light-track refusal not tried (every engine is offered) |
+| 8 | ✓ T4 kit DRUM KIT → WAR DRUMS |
+| 9 | ✓ on drum track 6: pad A took DEEP KIT, cut corner shown, the track kept Soft Kit; "Use the track's own sound" cleared it. ✗ on melodic track 5 it changed the whole track |
+| 10 | ✓ saved into user slot 1 (named FLUTE automatically, no name asked) |
+| 11 | ✓ "Replace user slot 1 (FLUTE) with this sound?" with Cancel |
+| 12 | ? T3 took slot 1 but reads "Sample · Piano"; Scott to listen |
+| 13 | ✓ "Erase user slot 1 (FLUTE)? It can't be undone." → slot empty |
+| 14 | ✓ Save here into slot 4 stored at once (busy flashed); copied the name, none asked |
+| 15 | ✓ changed a level, Load 3 asked in place, confirm loaded TESTBED (tempo 82, new mix) |
+| 16 | ✓ "Save over 4 LUPE TEST?" then saved (busy) |
+| 17 | ✓ renamed slot 4 to LUPE TEST; the top bar follows. FM-1 SAVE › PROJECT: Scott |
+| 18 | deferred: writes stay on for Scott's hands-on checks |

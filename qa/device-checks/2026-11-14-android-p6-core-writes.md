@@ -55,3 +55,18 @@ Stop the transport before you start. The FM-1 refuses some list and MOTION write
 - Firmware installs, sample import and SLOOP: out of scope.
 
 **After the run:** failures go on the batch list with the check number. Passes move their batch items to "On the device".
+
+## Run on build 40c8629, real FM-1 (TESTBED, 18 bars), writes allowed, over adb by Claude, 2026-11-13 evening
+
+| # | Result |
+|---|---|
+| 1 | phone shows T1 06 · 30 · 31; compare with SONG: Scott |
+| 2 | ✓ via the hold menu's PASSES: 1 → 5, the block grew, the blocks below moved. The grip drag couldn't be driven over adb (slow events read as a hold): Scott |
+| 3 | ☐ Move by drag: Scott (adb can't drag fast enough) |
+| 4 | ✓ Duplicate: a second 06 (5 passes) right after |
+| 5–8 | ✗ no control on screen for Insert, Chain, Split or New on the Timeline (intents exist in `P6State.kt`) |
+| 9 | ✓ Pattern ⌄ → 07. The list offers all 58 patterns as kept, so the "holds nothing" refusal can't happen |
+| 10 | ✓ "Delete pattern 07 (5.00000 bars) from track 1? It is used nowhere else, so it's erased." → gone |
+| 11 | ✓ readout › Playback Once → `mode once`, Loop → `mode loop`. FM-1 SONG: Scott |
+| 12–15 | ☐ no pattern has a lane; making one needs a step held while an FM-1 knob turns: Scott |
+| 16 | deferred (writes stay on for Scott) |

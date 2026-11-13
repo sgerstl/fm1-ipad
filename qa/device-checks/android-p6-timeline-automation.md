@@ -36,3 +36,20 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 **Not covered:** chains (BlockChain, BlockSplit have no screen yet), BlockInsert/New (no add-a-block key yet), gaps (not drawn), pinch to zoom (board 57's idea; the time-down view has no zoom), time across (the Labs toggle exists, the layout doesn't), "Add a lane…" in the picker, and playing the song with the order locked on the real FM-1.
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device" (TalkBack: release pass).
+
+## Run on build 40c8629, real FM-1, over adb by Claude, 2026-11-13 evening
+
+| # | Result |
+|---|---|
+| 1 | ✓ heads, ruler, blocks, REST dashed. ✗ the ring sits on track 1 when the FM-1's selected track is 5 or 3 (only right after tapping a head) |
+| 2 | ✓ 20 bars at top only |
+| 3 | n/a: both songs fit the view |
+| 4 | ✓ ring + grip, second tap lets go, head tap selects on the FM-1. ✗ on a 1-bar block the grip crosses the number ("53" reads struck through) |
+| 5, 6 | ☐ drags: Scott |
+| 7 | ✓ items right. ✗ "PASSES · 1.00000 bars" (float format), header "BARS 2–2" for one bar |
+| 8 | ✓ PASSES slides live, Pattern, Duplicate, Delete (asks, names the erase). ✗ no Magnifier seen while sliding PASSES; "5.00000 bars" in the delete question |
+| 9 | ✓ playhead, "Stop to change the song" with ■ Stop, editing blocked, Stop clears. ✗ the whole timeline squashes to fit the strip (bar rows shrink while playing) |
+| 10–13 | ☐ the lane is hidden when a pattern has no locks or recorded motion, so a fresh pattern offers no way into AUTOMATION. Needs a lock made on the FM-1 first: Scott |
+| 14, 15 | ☐ TalkBack, Remove animations: later |
+
+Also: the tempo popover still has −10 / −1 / +1 / +10 steppers (decision 10 says none); the readout never shows Once or Song once set.

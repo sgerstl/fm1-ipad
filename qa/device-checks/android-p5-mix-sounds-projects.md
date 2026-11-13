@@ -59,3 +59,24 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 | 10 | A saved user slot was named "ANALOG ·" | Named for the sound ("ACID", 8 characters). | Save a sound: the slot carries its name, not the engine's. |
 | 11 | After a pad's Select sound › Done an empty ENV card showed | The fake no longer sends the bottom half to a SEL page for it; Done returns to what was there. | Select sound › Done returns to the editor. |
 | – | FM-1 key cut ("SONG…"); DRUM cut by the hint; Off switches too faint; Settings said "connected over USB" on the fake | The key is wider (names to 12 characters show); the engine list has room at its foot; an Off switch has a 2 dp outline and a lighter thumb (about 6:1, the 3:1 rule); the fake says "A fake core: no FM-1 is connected". | Eyeball each. |
+
+## Re-run on build 40c8629, real FM-1 (Skiff 2.5.1), over adb by Claude, 2026-11-13 evening
+
+| # | Result |
+|---|---|
+| 7b | ✗ fail (real core): DELAY MODE reads "DLY MODE · STEREO" as plain text, no switch; taps and slides do nothing. Cause: the real core publishes the setting without `names` (and as "DLY MODE"), so `MixPage.kt:249` falls back to text. Raw is 1 for STEREO, so the fake's order (STEREO · PING-PONG · MONO) isn't the FM-1's. At split the setting sits below the fold. |
+| 13 | ✓ pass (real core): Load over changes asks in place ("Load 3 TESTBED? LUPE TEST's changes since its last save go.") with Save first and Cancel in full; Rename shows the field above the keyboard, Done beside Cancel. |
+| 15 | ✓ pass: menu › Labs shows the Labs heading and the last line whole (the sheet fits the screen, so no scroll was needed). |
+| 17 | ☐ for Scott (needs ENV then LFO pressed on the FM-1). Pause following is still ON. |
+| 18 | ✓ pass: piano and time-across switch and persist (`lupe_settings.xml`); set back off. Stale copy: "Arrives with the Timeline" though the Timeline is built (time across isn't). |
+
+New faults seen:
+- **Project button blank** at start on the real core (`top.project` is ""), though Projects knows TESTBED is playing. It fills only after a save or load.
+- **Mix level faders ignore a sideways drag** while Slide to turn is Up and down; they're drawn as horizontal faders, so they should follow the finger along the fader whatever the setting.
+- **No Solo control** anywhere (the `TrackSolo` intent exists, no UI). Blocks write check 4.
+- **Mix row name drops words**: "Drum · War Drums" shows as "War".
+- **Pad › Select sound on a melodic track changes the whole track**: on track 5 (Sample) the sheet said "Choose a sound for track 5" and FLUTE replaced the track's sound. On drum track 6 it opened "Sound for pad A on track 6" and worked. LupeLog says "padSelectSound not wired: the entry's sound picker is a later phase" on every use.
+- **User slot load names the wrong sound**: USER › FLUTE on track 3 left the track reading "Sample · Piano", and the slot wasn't ticked as current. Scott to listen.
+- **SAVE and Save here never ask for a name**: the user slot took "FLUTE", the project slot copied "TESTBED".
+- **The erase menu on a user slot opens over the finger**, not beside it.
+- **The playing project's dot** shows when the core says unchanged.
