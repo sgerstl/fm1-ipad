@@ -25,6 +25,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _sounds = MutableStateFlow(SoundsState())
     private val _projects = MutableStateFlow(ProjectsState())
     private val _meters = MutableStateFlow(MetersState())
+    private val _timeline = MutableStateFlow(TimelineState())
+    private val _automation = MutableStateFlow(AutomationState())
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
@@ -36,6 +38,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
     override val meters: StateFlow<MetersState> = _meters
+    override val timeline: StateFlow<TimelineState> = _timeline
+    override val automation: StateFlow<AutomationState> = _automation
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -58,6 +62,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "sounds" -> _sounds.value = lupeJson.decodeFromString(SoundsState.serializer(), json)
                 "projects" -> _projects.value = lupeJson.decodeFromString(ProjectsState.serializer(), json)
                 "meters" -> _meters.value = lupeJson.decodeFromString(MetersState.serializer(), json)
+                "timeline" -> _timeline.value = lupeJson.decodeFromString(TimelineState.serializer(), json)
+                "automation" -> _automation.value = lupeJson.decodeFromString(AutomationState.serializer(), json)
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {

@@ -161,6 +161,15 @@ The schema is `P5State.swift` mirrored by `P5State.kt`, the builders `P5Areas.sw
 
 Device check: `qa/device-checks/2026-11-14-android-p5-core-writes.md`.
 
+### P6 core: timeline and automation (P1, 2026-11-14)
+
+The schema is `P6State.swift` mirrored by `P6State.kt` (published first, 100a607). The builders are in `P6Areas.swift` and the intents in `P6Intents.swift`.
+- **Timeline:** each track's list as blocks in bars. It comes from `SkiffSongStore.blocks` and `marks`; bars are ticks ÷ `SongPlacement.ticksPerBar`. The block edits (insert, new, move, stretch, delete, set pattern, duplicate, chain, split) are a **port of the iPad's ArrangeEdits** (`ios/FM1/SkiffArrangeParts.swift`): the same SloopKit pieces in the same order, ending in the store's `rewrite`. Playback mode is `store.send(.song(_))`. **Follow-up:** move ArrangeEdits into SloopKit, so both apps share one copy. That touches the iPad and needs its own device check.
+- **Automation:** one lane at a time (decision 7). It draws through `MotionPaint.plan` and `Session.paintMotion`, as the iPad's lanes do, and clears with `clearMotionLane`. The lane shown is the screen's own (`automationLane`), so it is not a write.
+- **Confirm in place:** drawing (or locking) where the lane shows recorded data, including a change held from an earlier step (decision 16, judged by `TrackMotion.value(of:at:base:).source`); clearing a lane; and a block edit that would erase a pattern used nowhere else (`store.erased`).
+
+Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
+
 ### Read-only by default (P1, 2026-11-13)
 
 `LinkGate.readOnly` (on by default) wraps every connection in `GuardedTransport`. Only frames that Skiff's own protocol table (`skiff-src web/EDITOR_PROTOCOL.md`) calls queries reach the FM-1; anything else is dropped and logged ("read-only: blocked cmd N…"). The allowlist is in `ReadOnlyGuard.swift`. Tests show Session and PhoneCore reach ready and keep running over FakeSkiff (with and without the screen link) with nothing blocked. The guard was added for Scott's approved overnight read-only tests on the real FM-1. **There is deliberately no button that turns writes on**: a stray tap from another session's screenshot script hit one on the shared emulator. Writes need `adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity --ez allowWrites true`. Making it read-only again is one tap. So Play from the phone does nothing until writes are allowed.

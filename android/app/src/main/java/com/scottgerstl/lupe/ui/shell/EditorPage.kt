@@ -84,6 +84,7 @@ import com.scottgerstl.lupe.core.LupeCore
 import com.scottgerstl.lupe.core.Step
 import com.scottgerstl.lupe.core.StepActionKind
 import com.scottgerstl.lupe.core.StepField
+import com.scottgerstl.lupe.ui.automation.AutomationFull
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.LupeCrossfade
 import com.scottgerstl.lupe.ui.theme.LupeType
@@ -99,18 +100,21 @@ private enum class PanelTab(val label: String) { Notes("NOTES"), Feel("FEEL"), S
  * from the FM-1's keys only, so there is no piano. [autoFraction] is 0..1: how much of the lane fits.
  */
 @Composable
-fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, modifier: Modifier = Modifier) {
+fun EditorPage(ed: EditorState, core: LupeCore, autoFraction: Float, auto: com.scottgerstl.lupe.core.AutomationState = com.scottgerstl.lupe.core.AutomationState(), modifier: Modifier = Modifier) {
     var tab by rememberSaveable { mutableStateOf(PanelTab.Notes) }
+    // the whole bottom half for one lane (board 69): drawn on with a finger. Done, or Back, returns to the editor
+    var drawing by rememberSaveable { mutableStateOf(false) }
     val track = Tok.track[(ed.track - 1).coerceAtLeast(0) % Tok.track.size]
     if (ed.steps.isEmpty()) { Placeholder("No pattern", "Pick a pad: hold it, then Edit steps", modifier); return }
+    if (drawing && auto.lanes.isNotEmpty()) { AutomationFull(ed, auto, core, track, { drawing = false }, modifier); return }
     Column(modifier.fillMaxSize()) {
         Ruler(ed, track, core)
         Spacer(Modifier.height(0.dp))
         Grid(ed, track, core, Modifier.weight(1f).padding(top = 0.dp))
         // the core sends no lanes until MOTION is read (P1's recordings): then there is no lane to show
-        if (autoFraction > 0.02f && ed.lanes.isNotEmpty()) {
+        if (autoFraction > 0.02f && auto.lanes.isNotEmpty()) {
             Spacer(Modifier.height(12.dp * autoFraction))
-            AutoLane(ed, track, core, Modifier.height(150.dp * autoFraction).graphicsLayer { alpha = autoFraction })
+            AutoLane(ed, auto, track, core, { drawing = true }, Modifier.height(150.dp * autoFraction).graphicsLayer { alpha = autoFraction })
         }
         Spacer(Modifier.height(12.dp))
         StepPanel(ed, track, core, tab, { tab = it })
@@ -154,7 +158,7 @@ private fun LockBanner(ed: EditorState, track: Color) {
 private fun Diamond(color: Color, size: Dp, modifier: Modifier = Modifier) =
     Canvas(modifier.size(size + 2.dp)) { diamond(color, this.size.width / 2, this.size.height / 2, size.toPx() / 2) }
 
-private fun DrawScope.diamond(color: Color, cx: Float, cy: Float, r: Float) =
+internal fun DrawScope.diamond(color: Color, cx: Float, cy: Float, r: Float) =
     drawPath(Path().apply { moveTo(cx, cy - r * 1.2f); lineTo(cx + r * 1.2f, cy); lineTo(cx, cy + r * 1.2f); lineTo(cx - r * 1.2f, cy); close() }, color)
 
 private enum class StepMenuMode { Root, ClearConfirm, PasteConfirm }
@@ -231,7 +235,7 @@ fun ConfirmBox(text: String, description: String, armedAt: Long, modifier: Modif
 // ---- the grid
 
 @Composable
-private fun Grid(ed: EditorState, track: Color, core: LupeCore, modifier: Modifier) {
+internal fun Grid(ed: EditorState, track: Color, core: LupeCore, modifier: Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val gap = 4.dp
         val cw = (maxWidth - gap * 3) / 4
@@ -433,33 +437,35 @@ private fun LockRow(param: String, value: Int, locked: Boolean, track: Color, on
 // ---- one automation lane, for bottom full
 
 @Composable
-private fun AutoLane(ed: EditorState, track: Color, core: LupeCore, modifier: Modifier) {
+private fun AutoLane(ed: EditorState, auto: com.scottgerstl.lupe.core.AutomationState, track: Color, core: LupeCore, onDraw: () -> Unit, modifier: Modifier) {
     var open by remember { mutableStateOf(false) }
     Column(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
-                Key({ open = true }, "Automation lane ${ed.lane}, ${ed.lanes.indexOf(ed.lane) + 1} of ${ed.lanes.size}. Pick another", width = 120.dp, height = 28.dp, minTarget = 32.dp) { fg ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel(ed.lane, fg, style = LupeType.key.copy(fontSize = 13.sp)); Chevron(fg) }
+                Key({ open = true }, "Automation lane ${auto.lane}, ${auto.lanes.indexOfFirst { it.param == auto.lane } + 1} of ${auto.lanes.size}. Pick another", width = 120.dp, height = 28.dp, minTarget = 32.dp) { fg ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel(auto.lane, fg, style = LupeType.key.copy(fontSize = 13.sp)); Chevron(fg) }
                 }
                 LupeMenu(open, { open = false }) {
                     MenuHeading("Lane")
-                    ed.lanes.forEach { l -> MenuRow(l, { core.send(Intent.LanePick(l)); open = false }, checked = l == ed.lane) }
+                    auto.lanes.map { it.param }.forEach { l -> MenuRow(l, { core.send(com.scottgerstl.lupe.core.AutomationLanePick(l)); open = false }, checked = l == auto.lane) }
                 }
             }
+            Spacer(Modifier.width(6.dp))
+            Key(onDraw, "Draw on the lane: opens it full size", width = 64.dp, height = 28.dp, minTarget = 32.dp) { fg -> KeyLabel("Draw", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
             Spacer(Modifier.weight(1f))
-            BasicText("${ed.lanes.indexOf(ed.lane) + 1} of ${ed.lanes.size} lanes · ◆ = a lock", style = LupeType.small, maxLines = 1)
+            BasicText("${auto.lanes.indexOfFirst { it.param == auto.lane } + 1} of ${auto.lanes.size} lanes · ◆ = a lock", style = LupeType.small, maxLines = 1)
         }
         Spacer(Modifier.height(4.dp))
         Canvas(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(8.dp)).background(Tok.well)
-            .semantics { contentDescription = "Lane ${ed.lane} across the 16 steps" + ed.steps.withIndex().filter { (_, s) -> s.values.any { it.locked && it.param == ed.lane } }.joinToString("") { ", locked on step ${it.index + 1}" } }) {
+            .semantics { contentDescription = "Lane ${auto.lane} across the ${auto.points.size} steps" + auto.points.filter { it.source == "lock" }.joinToString("") { ", locked on step ${it.step + 1}" } }) {
             val pad = 12.dp.toPx(); val vp = 10.dp.toPx()
-            val vals = ed.laneValues.ifEmpty { return@Canvas }
+            val vals = auto.points.map { if (auto.max > auto.min) ((it.value - auto.min) * 100f / (auto.max - auto.min)).toInt().coerceIn(0, 100) else 0 }.ifEmpty { return@Canvas }
             fun x(i: Int) = pad + i * (size.width - 2 * pad) / (vals.size - 1)
             fun y(v: Int) = size.height - vp - (v / 100f) * (size.height - 2 * vp)
             val line = Path().apply { vals.forEachIndexed { i, v -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) } }
             if (ed.playhead >= 0) drawLine(Tok.text3, Offset(x(ed.playhead), 0f), Offset(x(ed.playhead), size.height), 1.dp.toPx())
             drawPath(line, track, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-            ed.steps.forEachIndexed { i, s -> if (s.values.any { it.locked && it.param == ed.lane }) diamond(Tok.text, x(i), y(vals[i]), 4.dp.toPx()) }
+            auto.points.forEach { p -> if (p.source == "lock") diamond(Tok.text, x(p.step), y(vals[p.step]), 4.dp.toPx()) }
         }
     }
 }

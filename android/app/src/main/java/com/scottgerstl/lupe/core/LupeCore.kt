@@ -22,6 +22,9 @@ interface LupeCore {
     val meters: StateFlow<MetersState> get() = P5Defaults.meters
     /** FREE TAKE: the offer, the FM-1's picker, the landing (FreeTakeState.kt). */
     val freeTake: StateFlow<FreeTakeState> get() = FreeTakeDefaults.state
+    /** P6 (P6State.kt). */
+    val timeline: StateFlow<TimelineState> get() = P6Defaults.timeline
+    val automation: StateFlow<AutomationState> get() = P6Defaults.automation
 
     fun send(intent: Intent)
 }

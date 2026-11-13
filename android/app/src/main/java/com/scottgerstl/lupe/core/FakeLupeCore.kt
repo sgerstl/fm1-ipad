@@ -70,6 +70,11 @@ class FakeLupeCore(
     private val _projects = MutableStateFlow(ProjectsState())
     private val _meters = MutableStateFlow(MetersState())
     override val meters: StateFlow<MetersState> = _meters
+    private val _timeline = MutableStateFlow(TimelineState())
+    private val _automation = MutableStateFlow(AutomationState())
+    override val timeline: StateFlow<TimelineState> = _timeline
+    override val automation: StateFlow<AutomationState> = _automation
+    private var autoLane = ""
     override val mix: StateFlow<MixState> = _mix
     override val freeTake: StateFlow<FreeTakeState> = _freeTake
     override val sounds: StateFlow<SoundsState> = _sounds
@@ -128,6 +133,7 @@ class FakeLupeCore(
         if (_mix.value.rows.isEmpty() && rows.isNotEmpty()) _mix.value = FakeP5.seedMix(rows.map { it.name }, _pads.value.selected.track)
         if (_sounds.value.engines.isEmpty() && rows.isNotEmpty()) _sounds.value = FakeP5.seedSounds(_pads.value.selected.track, rows.getOrNull(_pads.value.selected.track - 1)?.name.orEmpty())
         if (_projects.value.slots.isEmpty()) _projects.value = FakeP5.seedProjects()
+        if (_timeline.value.tracks.isEmpty() && rows.isNotEmpty()) _timeline.value = FakeP6.seedTimeline(_pads.value)
     }
 
     private fun apply(area: String, state: JsonElement) {
@@ -140,6 +146,8 @@ class FakeLupeCore(
             "mix" -> _mix.value = lupeJson.decodeFromJsonElement(MixState.serializer(), state)
             "sounds" -> _sounds.value = lupeJson.decodeFromJsonElement(SoundsState.serializer(), state)
             "projects" -> _projects.value = lupeJson.decodeFromJsonElement(ProjectsState.serializer(), state)
+            "timeline" -> _timeline.value = lupeJson.decodeFromJsonElement(TimelineState.serializer(), state)
+            "automation" -> _automation.value = lupeJson.decodeFromJsonElement(AutomationState.serializer(), state)
             "pads" -> {
                 _pads.value = lupeJson.decodeFromJsonElement(PadsState.serializer(), state)
                 seedP5()
@@ -168,7 +176,7 @@ class FakeLupeCore(
             is Intent.SetPlaybackMode -> _top.update { it.copy(mode = intent.mode) }
             is Intent.PadTap -> launch(intent.track, intent.entry)
             is Intent.PadSelect -> selectPad(intent.track, intent.entry)
-            is Intent.PadSelectSound -> { selectPad(intent.track, intent.entry); showBottom(BottomPage(BottomKind.Page, "SEL", "SOUNDS")) }
+            is Intent.PadSelectSound -> selectPad(intent.track, intent.entry)   // the Sounds browser is the screen for it (Done returns to whatever the bottom half was on)
             is Intent.PadNew -> padNew(intent.track, intent.entry)
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is Intent.PadClear -> editEntry(intent.track, intent.entry) { PadEntry() }
@@ -214,8 +222,26 @@ class FakeLupeCore(
                 _freeTake.update { FakeTake.apply(it, intent, ed.track, ed.trackName) }
                 _shell.update { it.copy(bottom = if (_freeTake.value.picker != null) BottomPage(BottomKind.FreeTake) else if (it.bottom.kind == BottomKind.FreeTake) BottomPage() else it.bottom) }
             }
+            is BlockMove, is BlockStretch, is BlockDelete, is BlockSetPattern, is BlockDuplicate, is BlockInsert -> _timeline.update { FakeP6.timeline(it, intent) }
+            is BlockNew -> _timeline.update { FakeP6.timeline(it, BlockInsert(intent.track, Int.MAX_VALUE, _timeline.value.kept.maxOrNull()?.plus(1) ?: 1)) }
+            is AutomationLanePick -> { autoLane = intent.lane; emitEditor() }
+            is DrawLane -> {
+                val st = _editor.value.selected
+                val p = intent.param
+                // refused unless confirmed when any painted step shows recorded data (one held from an earlier step counts), as the core
+                val pts = FakeP6.automation(_editor.value, p).points
+                val hasRecorded = (intent.from until intent.from + intent.values.size).any { pts.getOrNull(it)?.source == "recorded" }
+                if (!(hasRecorded && !intent.confirmed)) {          // drawing over recorded changes is refused unless confirmed
+                    intent.values.forEachIndexed { n, v ->
+                        val k = intent.from + n
+                        if (k in 0..15) { model[k].values.removeAll { it.param == p }; model[k].values.add(StepValue(p, v.coerceIn(0, 127), locked = intent.lock)) }
+                    }
+                    emitEditor()
+                }
+            }
+            is ClearLane -> if (intent.confirmed) { model.forEach { m -> m.values.removeAll { it.param == intent.param } }; emitEditor() }
             // P5's intents (P5State.kt): mix, sounds, projects
-            is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam -> _mix.update { FakeP5.mix(it, intent) }
+            is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam, is SetMixSetting -> _mix.update { FakeP5.mix(it, intent) }
             is SoundsTargetPick, is SoundsView, is PickPreset, is PickUser, ClearEntrySound, is SaveSound, is EraseUser -> _sounds.update { FakeP5.sounds(it, intent) }
             is ProjectLoad, is ProjectSave, is ProjectSaveAs, is ProjectRename -> _projects.update { FakeP5.projects(it, intent) }
             else -> {}
@@ -237,6 +263,8 @@ class FakeLupeCore(
             st.toStep(drum).copy(maxLength = next - i, heldFrom = if (!st.on && owner != null) owner else -1)
         }
         _editor.value = e.copy(steps = steps, laneValues = lv)
+        // the automation area follows the pattern (unless a recording supplied its own, which the next frame replaces)
+        if (e.lanes.isNotEmpty()) _automation.value = FakeP6.automation(_editor.value, autoLane.ifEmpty { e.lane })
     }
 
     private fun adjust(field: StepField, delta: Int) {
@@ -345,6 +373,7 @@ class FakeLupeCore(
         if (!on) {
             _editor.update { it.copy(playhead = -1) }
             _meters.value = MetersState()
+            _timeline.update { it.copy(playing = false, playheadBar = null) }
             _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map { it.copy(progress = null) }) }) }
         }
         syncTicker(on)
@@ -364,6 +393,7 @@ class FakeLupeCore(
                 val beat = (stepCount / 4) % 4 + 1
                 val newBar = stepCount % 16 == 0
                 _top.update { it.copy(bar = bar, beat = beat) }
+                _timeline.update { it.copy(playing = true, playheadBar = (bar - 1) + (beat - 1) / 4.0) }
                 if (newBar) _pads.update { p -> p.copy(rows = p.rows.map { r ->
                     val landing = r.entries.indexOfFirst { it.play == PadPlay.Waiting && (it.bar ?: 0) <= bar }
                     if (landing < 0) r else r.copy(entries = r.entries.mapIndexed { i, x ->

@@ -127,7 +127,7 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
                         .pointerInput(p) { detectTapGestures { if (System.currentTimeMillis() - p.armedAt > 400) { actions.save(true); pending = null } } }
                         .padding(14.dp),
                 ) { BasicText(words, style = LupeType.key) }
-                Key({ pending = null }, "Cancel", Modifier.fillMaxWidth(), height = 44.dp) { fg -> KeyLabel("Cancel", fg) }
+                Key({ pending = null }, "Cancel", Modifier.fillMaxWidth(), height = 44.dp, fill = true) { fg -> KeyLabel("Cancel", fg) }
             }
         }
         // Save as over a used slot names the project it replaces
@@ -145,7 +145,7 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
                         .pointerInput(p) { detectTapGestures { if (System.currentTimeMillis() - p.armedAt > 400) go() } }
                         .padding(14.dp),
                 ) { BasicText(words, style = LupeType.key) }
-                Key({ pending = null }, "Cancel", Modifier.fillMaxWidth(), height = 44.dp) { fg -> KeyLabel("Cancel", fg) }
+                Key({ pending = null }, "Cancel", Modifier.fillMaxWidth(), height = 44.dp, fill = true) { fg -> KeyLabel("Cancel", fg) }
             }
         }
         // a Load that would lose changes: a red-outlined row naming what goes, Save first and Cancel
@@ -165,8 +165,8 @@ fun ProjectsSheet(ui: ProjectsUi, actions: ProjectActions) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // Save first writes the playing project, then loads the other
                     Key({ actions.save(true); actions.load(p.slot.index, true); pending = null; host.close() }, "Save the playing project first, then load ${p.slot.name}",
-                        Modifier.weight(1f), height = 44.dp) { fg -> KeyLabel("Save first", fg) }
-                    Key({ pending = null }, "Cancel", Modifier.weight(1f), height = 44.dp) { fg -> KeyLabel("Cancel", fg) }
+                        Modifier.weight(1f), height = 44.dp, fill = true) { fg -> KeyLabel("Save first", fg) }
+                    Key({ pending = null }, "Cancel", Modifier.weight(1f), height = 44.dp, fill = true) { fg -> KeyLabel("Cancel", fg) }
                 }
             }
         }
@@ -228,7 +228,8 @@ private fun RenameField(slot: ProjectSlotUi, cancel: () -> Unit, done: (String) 
             textStyle = LupeType.key.copy(fontSize = 16.sp), singleLine = true, cursorBrush = SolidColor(Tok.text),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { if (text.isNotBlank()) done(text.trim()) }),
         )
-        Key({ cancel() }, "Cancel renaming", width = 64.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+        Key({ if (text.isNotBlank()) done(text.trim()) }, "Done renaming", width = 56.dp, height = 36.dp, minTarget = 48.dp, on = true) { fg -> KeyLabel("Done", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+        Key({ cancel() }, "Cancel renaming", width = 68.dp, height = 36.dp, minTarget = 48.dp) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
     }
 }
 

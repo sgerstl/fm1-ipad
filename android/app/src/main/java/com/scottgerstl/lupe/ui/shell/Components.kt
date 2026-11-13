@@ -73,6 +73,8 @@ fun Key(
     state: String? = null,
     onLongClick: (() -> Unit)? = null,
     minTarget: Dp = 48.dp,
+    /** Fill the width it is given (a Cancel under a confirm) instead of a fixed one: a key's width is never allowed to cut its label. */
+    fill: Boolean = false,
     litTop: Color = Tok.primaryTop,
     litEdge: Color = Tok.primaryEdge,
     content: @Composable BoxScope.(Color) -> Unit,
@@ -85,7 +87,7 @@ fun Key(
     Box(
         modifier
             .defaultMinSize(minTarget, minTarget)
-            .width(maxOf(width ?: 44.dp, minTarget))
+            .then(if (fill) Modifier else Modifier.width(maxOf(width ?: 44.dp, minTarget)))
             .semantics(mergeDescendants = true) {
                 contentDescription = description
                 this.role = role
@@ -101,7 +103,7 @@ fun Key(
         val fg = lerp(Tok.text, Tok.onColour, lit.value).let { if (enabled) it else Tok.text2 }
         Box(
             Modifier
-                .width(width ?: 44.dp)
+                .then(if (fill) Modifier.fillMaxWidth() else Modifier.width(width ?: 44.dp))
                 .height(height)
                 .drawBehind {
                     val r = CornerRadius(Tok.CHICLET_RADIUS.dp.toPx())
@@ -124,10 +126,10 @@ fun KeyLabel(text: String, color: Color, modifier: Modifier = Modifier, style: T
 
 /** A label with a ⌄ after it, drawn (not a glyph), for the keys that open a menu. */
 @Composable
-fun MenuLabel(text: String, color: Color, sub: String? = null) {
+fun MenuLabel(text: String, color: Color, sub: String? = null, textMax: Dp = 62.dp) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            KeyLabel(text, color, Modifier.widthIn(max = 62.dp))
+            KeyLabel(text, color, Modifier.widthIn(max = textMax))
             Spacer(Modifier.width(4.dp))
             Chevron(Tok.text2Raised.takeIf { color == Tok.text } ?: color)
         }

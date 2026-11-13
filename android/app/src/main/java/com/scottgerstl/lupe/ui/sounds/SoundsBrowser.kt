@@ -75,6 +75,9 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 
 private data class SlotConfirm(val slot: Int, val armedAt: Long, val erase: Boolean)
 
+/** A user slot's name from the track's: the core names tracks "Engine · Sound", and the slot should carry the sound (8 characters, as the FM-1 keeps). */
+internal fun saveName(trackName: String) = trackName.substringAfter(" · ").trim().take(8).uppercase().ifEmpty { "SOUND" }
+
 private const val USER = -1   // the left list's last entry: the FM-1's 32 user slots
 
 /**
@@ -110,7 +113,7 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
             Key(onDone, "Done: keep this sound and go back", width = 64.dp, height = 32.dp, minTarget = 40.dp) { fg -> KeyLabel("Done", fg) }
         }
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LazyColumn(Modifier.width(112.dp).fillMaxHeight()) {
+            LazyColumn(Modifier.width(112.dp).fillMaxHeight(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp)) {
                 items(engines.map { it.index } + USER) { e ->
                     val name = if (e == USER) "USER" else engines.first { it.index == e }.name
                     val on = e == viewing
@@ -140,7 +143,7 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
                                 haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                 when {
                                     saving && u.used -> confirmSlot = SlotConfirm(u.slot, System.currentTimeMillis(), false)          // over a used slot: ask in place
-                                    saving -> { core.send(SaveSound(u.slot, s.trackName.take(8).uppercase().ifEmpty { "SOUND" })); saving = false }
+                                    saving -> { core.send(SaveSound(u.slot, saveName(s.trackName))); saving = false }
                                     u.used -> core.send(PickUser(u.slot))
                                 }
                             }
@@ -163,7 +166,7 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
                         val words = if (c.erase) "Erase $slotWords? It can't be undone." else "Replace $slotWords with this sound?"
                         val go = {
                             if (c.erase) core.send(EraseUser(c.slot, confirmed = true))
-                            else { core.send(SaveSound(c.slot, s.trackName.take(8).uppercase().ifEmpty { "SOUND" }, confirmed = true)); saving = false }
+                            else { core.send(SaveSound(c.slot, saveName(s.trackName), confirmed = true)); saving = false }
                             confirmSlot = null
                         }
                         Box(
