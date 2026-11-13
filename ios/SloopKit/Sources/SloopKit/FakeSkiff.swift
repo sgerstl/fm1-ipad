@@ -60,6 +60,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     let clockSink: AsyncStream<ClockEvent>.Continuation
     private var clockTimer: DispatchSourceTimer?
     private let lock = NSLock()
+    /// Plain MIDI sent to the FM-1 (notes from the editor's keys), as it arrived.
+    public private(set) var midiIn: [[UInt8]] = []
     private let fx: SkiffFixture
     /// 2.5.1: every engine's EDIT descriptors and presets (nil on 2.2: DESC and PRESET as recorded).
     private let engineTable: SkiffEngineTable?
@@ -827,7 +829,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     }
 
     public func send(_ frame: [UInt8]) {
-        guard let (cmd, a) = Frame.decode(frame) else { return }     // plain MIDI: no reply
+        guard let (cmd, a) = Frame.decode(frame) else {               // plain MIDI: no reply; kept for the tests
+            lock.lock(); midiIn.append(frame); lock.unlock()
+            return
+        }
         lock.lock()
         if busy { dropped += 1; lock.unlock(); return }               // one incoming frame at a time
         busy = true

@@ -31,6 +31,8 @@ public final class PhoneCore {
     var soundsEntry: Int?
     var soundsViewing: Int?
     var projectBusy = false
+    /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
+    var auditions: [Int: Task<Void, Never>] = [:]
     /// The page lag's timing (LagTrace.swift), opened by pickPage and goHome.
     lazy var lag = LagTrace(log: log)
     private var lastScreen: UIState?
@@ -241,7 +243,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects

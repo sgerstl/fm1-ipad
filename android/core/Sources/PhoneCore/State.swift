@@ -84,8 +84,16 @@ public struct EditorArea: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable { case roll, drum }
     public enum Lock: String, Codable, Sendable { case off, held, latched }
     public struct Value: Codable, Equatable, Sendable { public var param: String; public var value: Int; public var locked: Bool }
+    public struct Hit: Codable, Equatable, Sendable { public var lane: Int; public var accent: Bool }
     public struct Step: Codable, Equatable, Sendable {
         public var on = false
+        /// The step's notes as MIDI numbers, in the FM-1's order (a chord: up to `maxNotes`); empty on a kit track.
+        public var notes: [Int] = []
+        /// A kit track's hits on this step: the lane (0…7) and whether it's accented. Skiff keeps no velocity per
+        /// lane: the step's `velocity` is every hit's.
+        public var hits: [Hit] = []
+        /// The step carries a parameter lock (any of its `values` locked).
+        public var locked = false
         public var note = ""
         public var extra = 0
         public var length = 1
@@ -118,6 +126,12 @@ public struct EditorArea: Codable, Equatable, Sendable {
     public var lanes: [String]
     public var lane: String
     public var laneValues: [Int]
+    /// How many notes a step holds (Skiff's chord: 4). 0 on a kit track.
+    public var maxNotes = 4
+    /// A kit track's eight lanes, short ("BD") and the MIDI note each plays (playNote's `lane` sounds it); empty on a
+    /// note track.
+    public var kitLanes: [String] = []
+    public var kitNotes: [Int] = []
 }
 
 // MARK: diag

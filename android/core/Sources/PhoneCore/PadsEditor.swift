@@ -79,11 +79,13 @@ extension PhoneCore {
             if kit {
                 let lanes = (0..<8).filter { st.kitLanes.has($0) }
                 e.on = !lanes.isEmpty
+                e.hits = lanes.map { EditorArea.Hit(lane: $0, accent: st.kitLanes.level($0) != 0) }
                 e.note = lanes.map { Self.laneShort[$0] }.joined(separator: " ")
                 e.pitchText = e.note
             } else {
                 e.on = st.isOn
                 if e.on {
+                    e.notes = st.notes
                     e.note = Music.noteName(st.notes[0])
                     e.extra = st.notes.count - 1
                     e.pitchText = st.notes.map(Music.noteName).joined(separator: " ")
@@ -112,6 +114,7 @@ extension PhoneCore {
         for (k, _) in steps.enumerated() {
             steps[k].values = m.events.filter { $0.step == k }.sorted { ($0.lock ? 0 : 1, label($0.id)) < ($1.lock ? 0 : 1, label($1.id)) }
                 .map { EditorArea.Value(param: label($0.id), value: $0.value, locked: $0.lock) }
+            steps[k].locked = steps[k].values.contains { $0.locked }
         }
         let laneIDs = Array(Set(m.events.map(\.id))).sorted { label($0) < label($1) }
         let lanes = laneIDs.map(label)
@@ -135,7 +138,8 @@ extension PhoneCore {
             scale: kit ? "" : "\(Music.noteNames[((tr.root % 12) + 12) % 12]) \(scaleName)",
             kind: kit ? .drum : .roll, steps: steps, selected: selectedStep, playhead: playhead,
             chord: false, lock: heldStep != nil ? .held : lockLatched ? .latched : .off,
-            lanes: lanes, lane: lane, laneValues: laneValues)
+            lanes: lanes, lane: lane, laneValues: laneValues,
+            maxNotes: kit ? 0 : Self.maxStepNotes, kitLanes: kit ? Self.laneShort : [], kitNotes: kit ? Music.skiffLaneNotes : [])
     }
 }
 
