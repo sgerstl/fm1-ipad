@@ -18,7 +18,6 @@ public enum PadEditIntent: Equatable, Sendable {
     case sceneRecall(Int)
     case stepHold(step: Int, down: Bool)
     case stepAdjust(field: String, delta: Int)
-    case chordToggle
     case lockToggle
     case lockClear(step: Int, param: String)
     case locksClearAll(step: Int)
@@ -47,7 +46,6 @@ public enum PadEditIntent: Equatable, Sendable {
         case "sceneRecall": return .sceneRecall(try need(w.scene, "scene"))
         case "stepHold": return .stepHold(step: try need(w.step, "step"), down: try need(w.down, "down"))
         case "stepAdjust": return .stepAdjust(field: try need(w.field, "field"), delta: try need(w.delta, "delta"))
-        case "chordToggle": return .chordToggle
         case "lockToggle": return .lockToggle
         case "lockClear": return .lockClear(step: try need(w.step, "step"), param: try need(w.param, "param"))
         case "locksClearAll": return .locksClearAll(step: try need(w.step, "step"))
@@ -60,7 +58,7 @@ public enum PadEditIntent: Equatable, Sendable {
     /// Whether it changes the FM-1 (refused while read-only). Select, hold, Chord and the lane are the screen's own.
     var writes: Bool {
         switch self {
-        case .chordToggle, .lanePick, .stepHold, .lockToggle: false
+        case .lanePick, .stepHold, .lockToggle: false
         case .stepAction(_, let a): a != "copy"
         default: true
         }
@@ -140,9 +138,6 @@ extension PhoneCore {
         case .lockToggle:
             lockLatched.toggle()
             syncLockStep()
-        case .chordToggle:
-            chordMode.toggle()
-            pokeAreas(["editor"])
         case .lanePick(let lane):
             pickedLane = lane
             pokeAreas(["editor"])
@@ -232,55 +227,5 @@ extension PhoneCore {
         default:
             log("unknown step field \(field)")
         }
-    }
-
-    // MARK: the FM-1's keys into the selected step (decision 5)
-
-    /// A key on the FM-1 writes the selected step of the editor's track, through the same write a pitch edit uses.
-    /// Chord on: the note joins the step (up to four), the cursor stays. Chord off: the note replaces the step's
-    /// and the cursor moves on. A kit track: the key's lane joins (Chord on) or replaces (off) the step's hits.
-    /// Only while stopped: playing, Skiff's sequencer sends its notes on the same channels and they can't be told
-    /// from the keys. A write: refused while read-only.
-    func keyIntoStep(_ e: NoteEvent) {
-        guard e.on else { return }                                   // (a note-on with velocity 0 is a note-off)
-        let s = session, t = editorTrack(), i = selectedStep
-        let name = Music.noteName(Int(e.note))
-        // every key logged with what became of it (Scott's run, 2026-11-14: a key did nothing and left no trace)
-        func say(_ what: String) { log("FM-1 key \(name) ch \(Int(e.channel) + 1) vel \(e.velocity): \(what)") }
-        guard s.isConnected, s.tracks.indices.contains(t), s.tracks[t].steps.indices.contains(i) else { say("ignored: no editor"); return }
-        guard !s.playing else { say("ignored: playing (the sequencer's notes share the channels)"); return }
-        guard Int(e.channel) == t else {
-            say("ignored: not track \(t + 1)'s channel (keys go out on the track that sounds; the FM-1's selected track is \(s.selectedTrack + 1))")
-            return
-        }
-        // Skiff sounds a step when it's written (STEP PREVIEW goes out through the same funnel): our own write
-        // coming back as a note mustn't be entered into the next step
-        if let w = lastKeyWrite, w.note == Int(e.note), Date().timeIntervalSince(w.at) < 0.3 { say("ignored: the FM-1 sounding the step just written"); return }
-        guard canWrite() else { say("not written: read-only"); return }
-        let n = Int(e.note)
-        var st = s.tracks[t].steps[i]
-        if s.isKit(t) {
-            let lane = SynthStep.lane(ofNote: n)
-            let base = chordMode ? st.kitLanes : DrumStep.empty
-            st = st.withHits(base.setting(lane, on: true))
-        } else if chordMode, st.isOn {
-            guard !st.notes.contains(n) else { say("ignored: step \(i + 1) already has it"); return }
-            guard st.notes.count < 4 else { say("refused: step \(i + 1) already holds four notes"); return }
-            st.notes.append(n)
-            st.levels = Array((st.levels + [0]).prefix(st.notes.count))
-            st.ratchets = Array(repeating: st.ratchets.first ?? 0, count: st.notes.count)
-        } else {
-            let keep = st.extra                    // chance, ratchet, COND, NUDGE stay
-            st = SynthStep(notes: [n], time: .note, accent: st.accent, slide: st.slide, velocity: Int(e.velocity) == 0 ? 100 : Int(e.velocity))
-            st.extra = keep
-        }
-        s.write(track: t, index: i, st)
-        lastKeyWrite = (n, Date())
-        say("written to T\(t + 1) step \(i + 1)\(chordMode ? " (chord: \(st.notes.count) notes)" : "")")
-        if !chordMode {
-            selectedStep = (i + 1) % min(16, max(1, s.tracks[t].length))
-            if lockLatched { syncLockStep() }
-        }
-        pokeAreas(["editor"])
     }
 }

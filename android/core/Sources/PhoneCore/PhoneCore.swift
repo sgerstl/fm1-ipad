@@ -17,15 +17,12 @@ public final class PhoneCore {
     /// Screen-local choices (nothing sent to the FM-1): the pad the editor shows, the step selected.
     var pickedPad: PadsArea.Ref?
     var selectedStep = 0
-    /// The editor's own state (PadsEditorIntents.swift): a step held, Lock latched, Chord entry, the lane shown, the
+    /// The editor's own state (PadsEditorIntents.swift): a step held, Lock latched, the lane shown, the
     /// step copied. None of it is sent to the FM-1 except through Session.lockStep.
     var heldStep: Int?
     var lockLatched = false
-    var chordMode = false
     var pickedLane: String?
     var copiedStep: SynthStep?
-    /// The note the last key wrote and when (the FM-1 sounds a written step: not a new key).
-    var lastKeyWrite: (note: Int, at: Date)?
     var notesIn = 0
     private var motionTask: Task<Void, Never>?
     private var followTask: Task<Void, Never>?
@@ -44,10 +41,11 @@ public final class PhoneCore {
         guard runTask == nil else { return }
         let s = session
         runTask = Task { await s.run() }
-        s.onDeviceNote = { [weak self] e in                            // the FM-1's keys into the step (decision 5)
-            guard let self else { return }
-            if e.on { self.notesIn += 1; self.pokeAreas(["diag"]) }
-            self.keyIntoStep(e)
+        // The FM-1's keys play its sound and never write from the phone (decision 5 revised, Scott 2026-11-14: "the
+        // fm1 keys should work just like they do on the ipad"). The notes are only counted, for the debug screen.
+        s.onDeviceNote = { [weak self] e in
+            guard let self, e.on else { return }
+            self.notesIn += 1; self.pokeAreas(["diag"])
         }
         areas = [
             AreaWatch(name: "link", build: { [unowned self] in AreaJSON.encode(self.linkArea()) }, publish: publish),

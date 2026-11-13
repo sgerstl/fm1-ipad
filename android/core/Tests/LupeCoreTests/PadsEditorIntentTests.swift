@@ -190,12 +190,10 @@ import Testing
         #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
 
-    @Test func chordAndLaneAreTheScreens() async throws {
+    @Test func lockAndLaneAreTheScreens() async throws {
         let box = Box(); box.writes = false                                                  // not writes: allowed read-only
         let (core, _) = try await connected(box)
         defer { core.stop() }
-        send(core, #"{"intent":"chordToggle"}"#)
-        #expect(core.editorArea().chord)
         send(core, #"{"intent":"lockToggle"}"#)
         #expect(core.session.lockStep == 0)
         #expect(!box.log.contains { $0.hasPrefix("read-only:") })
