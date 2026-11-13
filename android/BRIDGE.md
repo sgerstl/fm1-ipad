@@ -130,7 +130,14 @@ The area structs live in one place: Swift `Codable` types in `PhoneCore/State.sw
 
 ### The one real risk: the main actor
 
-`Session` is `@MainActor`. On iOS the main actor runs on the main dispatch queue, which UIKit drains. On Android nothing drains that queue unless it's tied to the app's main `Looper`. **P1's first job after "it compiles" is a main-actor executor driven by Android's main Looper**, proven with a test that hops to `@MainActor` from the MIDI thread and back. If that can't be done cleanly, the fallback is a serial actor of our own for Session on Android, which touches every `@MainActor` annotation in SloopKit: much bigger, and the reason this goes first. [speculative: Claude; check the Swift Android workgroup's guidance before building]
+`Session` is `@MainActor`. On iOS the main actor runs on the main dispatch queue, which UIKit drains. On Android nothing drains that queue unless it's tied to the app's main `Looper`.
+
+**Settled at gate 2 (2026-11-13): no annotation changes.** The stock main-actor executor still targets the main dispatch queue on Android. libdispatch exposes that queue's wake-up eventfd for CoreFoundation (`_dispatch_get_main_queue_port_4CF`) and a drain call (`_dispatch_main_queue_callback_4CF`). `MainLooper.install()` (`android/core/Sources/MainLooper`) registers the fd on the UI thread's `ALooper`, so Android's own main loop drains the queue, and every existing `@MainActor` in SloopKit runs on the UI thread. Skip's `swift-android-native` does the same. Two rules come with it, and `install()` checks the first:
+
+- `install()` runs on the UI thread (gettid == getpid, the same test the Swift runtime uses for the main actor).
+- **`System.loadLibrary("LupeNative")` runs on the UI thread, before any other thread touches Swift**, because libdispatch binds its main queue to the thread that loads it. In practice: `Application.onCreate`.
+
+Proof: `android/scripts/looper-probe.sh` runs on an arm64 Android 16 emulator. A detached task and a raw pthread (like the MIDI handler thread) hop to `@MainActor` and back; each side checks its thread, and `MainActor.assumeIsolated` agrees. 1,000 round trips take about 6–10 µs each, and `DispatchQueue.main.async` lands on the UI thread too. A control run without the hook never reaches the main actor. The same check runs inside the app on the debug screen (gate 3), because the APK's UI thread is the real test. *(P1, 2026-11-13: was "speculative"; the serial-actor fallback isn't needed.)*
 
 ---
 
