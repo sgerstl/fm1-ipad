@@ -48,6 +48,8 @@ public final class PhoneCore {
             // Only once the FM-1 has been read: before that Session holds placeholder tracks, not the FM-1's.
             AreaWatch(name: "pads", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.padsArea()) : nil }, publish: publish),
             AreaWatch(name: "editor", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.editorArea()) : nil }, publish: publish),
+            // Only while the FM-1's screen is on a sound page (nil otherwise: the last page stays; the shell says what shows).
+            AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]
         areas.forEach { $0.start() }
@@ -166,6 +168,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
+        if handlePageJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             handle(try PhoneIntent.decode(json))

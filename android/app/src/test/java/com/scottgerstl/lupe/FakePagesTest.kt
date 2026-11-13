@@ -24,7 +24,7 @@ import org.junit.Test
 class FakePagesTest {
     private fun fake(scope: TestScope, name: String): FakeLupeCore {
         val scenarios = File("../fixtures/state").listFiles { f -> f.extension == "json" }!!.associate { it.nameWithoutExtension to Scenario.parse(it.nameWithoutExtension, it.readText()) }
-        return FakeLupeCore(scope, scenarios, name).also { scope.testScheduler.advanceTimeBy(10) }
+        return FakeLupeCore(scope.backgroundScope, scenarios, name).also { scope.testScheduler.advanceTimeBy(10) }
     }
 
     @Test fun envScenarioPutsTheShellOnTheEnvPage() = runTest(StandardTestDispatcher()) {
@@ -36,11 +36,12 @@ class FakePagesTest {
 
     @Test fun setParamMovesTheNumberAndTheGraph() = runTest(StandardTestDispatcher()) {
         val core = fake(this, "page-env")
+        val max = core.page.value.controls[1]!!.max
         core.send(SetParam(1, 100))
-        assertEquals("100", core.page.value.controls[1]!!.value)
+        assertEquals(100, core.page.value.controls[1]!!.raw)
         assertEquals(100, core.page.value.graph.values[1])
         core.send(SetParam(1, 999))
-        assertEquals(127, core.page.value.controls[1]!!.raw)   // clamped to the control's range
+        assertEquals(max, core.page.value.controls[1]!!.raw)   // clamped to the control's range
     }
 
     @Test fun pickPageSwitchesToAKnownPageAndFollowsInTheShell() = runTest(StandardTestDispatcher()) {
@@ -48,9 +49,17 @@ class FakePagesTest {
         core.send(PickPage("ENV", 1))
         assertEquals(1, core.page.value.page)
         assertEquals("ENV 2", core.shell.value.bottom.page)
-        core.send(PickPage("FX"))      // a family the scenario never showed: its first page, empty wells
+        core.send(PickPage("FX"))      // a family the scenario never showed: built from the map (FakePageMap)
         assertEquals("FX", core.page.value.family)
-        assertTrue(core.page.value.controls.all { it == null })
+        assertEquals(listOf("DIST", "CHORUS", "DELAY", "REVERB"), core.page.value.controls.map { it!!.label })
+        assertEquals(GraphKind.Fx, core.page.value.graph.kind)
+        assertTrue(core.page.value.trackName.isNotEmpty())
+        for (family in listOf("LFO", "SEL", "EDIT", "ARP")) {       // every family key opens a filled page, with the track's name
+            core.send(PickPage(family))
+            val p = core.page.value
+            assertTrue("$family has controls", p.controls.any { it != null })
+            assertTrue("$family has a name", p.trackName.isNotEmpty())
+        }
     }
 
     @Test fun modRoutePickMovesTheTile() = runTest(StandardTestDispatcher()) {

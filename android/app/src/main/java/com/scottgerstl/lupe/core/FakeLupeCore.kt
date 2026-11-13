@@ -190,7 +190,7 @@ class FakeLupeCore(
                 emitEditor()
             }
             is SetParam -> _page.update { pageFake.setParam(it, intent.slot, intent.value) }
-            is PickPage -> { _page.update { pageFake.pick(it, intent.family, intent.page) }; _shell.update { it.copy(bottom = BottomPage(BottomKind.Page, _page.value.family, _page.value.pages.firstOrNull { r -> r.index == _page.value.page }?.title)) } }
+            is PickPage -> { _page.update { pageFake.pick(it, intent.family, intent.page, _editor.value.track, _editor.value.trackName) }; _shell.update { it.copy(bottom = BottomPage(BottomKind.Page, _page.value.family, _page.value.pages.firstOrNull { r -> r.index == _page.value.page }?.title)) } }
             is PickRoute -> _page.update { pageFake.pickRoute(it, intent.route) }
             is PickTile -> _page.update { pageFake.pickTile(it, intent.tile) }
             is Intent.LanePick -> emitEditor { it.copy(lane = intent.lane) }

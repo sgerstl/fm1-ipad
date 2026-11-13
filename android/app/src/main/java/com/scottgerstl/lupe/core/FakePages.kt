@@ -42,12 +42,13 @@ class FakePages {
         return p.copy(controls = controls, graph = graph)
     }
 
-    fun pick(p: PageState, family: String, page: Int?): PageState {
+    fun pick(p: PageState, family: String, page: Int?, track: Int = p.track, trackName: String = p.trackName): PageState {
         val row = rows[family] ?: defaults[family] ?: emptyList()
         val ref = (if (page == null) row.firstOrNull() else row.firstOrNull { it.index == page }) ?: return p.copy(family = family)
-        library[ref.title]?.let { return it.copy(track = p.track, trackName = p.trackName, lock = p.lock, turned = -1) }
-        // a page the fixtures don't carry: the row and the name, four empty wells, no graph
-        return p.copy(family = family, pages = row, page = ref.index, controls = List(4) { null }, graph = PageGraph(), turned = -1)
+        library[ref.title]?.let { return it.copy(track = track, trackName = trackName, lock = p.lock, turned = -1) }
+        // a page the fixtures don't carry: built from the map (FakePageMap), else four empty wells
+        val (controls, graph) = FakePageMap.build(ref.title) ?: (List<PageControl?>(4) { null } to PageGraph())
+        return p.copy(family = family, pages = row, page = ref.index, track = track, trackName = trackName, controls = controls, graph = graph, turned = -1)
     }
 
     fun pickRoute(p: PageState, route: Int): PageState =

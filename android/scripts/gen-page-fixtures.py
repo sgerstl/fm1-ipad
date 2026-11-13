@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes android/fixtures/state/page-*.json: PROVISIONAL, hand-written `page` area scenarios for P4 (design/phone-sound-pages.md).
 Each file replays link/top/shell/pads/editor (copied from drums.json) and then every page of the shown family, the shown
-one last, so FakeLupeCore can learn the row and PickPage works. P1 replaces these with recordings of PhoneCore over FakeSkiff.
+one last, so FakeLupeCore can learn the row and PickPage works. Seven of the ten are now recordings (see RECORDED below).
 Run: python3 android/scripts/gen-page-fixtures.py"""
 import json, os
 here = os.path.dirname(os.path.abspath(__file__))
@@ -96,7 +96,12 @@ PAGES["ARP"] = [
   page("ARP","ARP",40,5,"Piano",[num("SWING",0),c("CHANCE","100%",127),lst("HOLD",["OFF","ON"],0),lst("ORDER",["UP","DOWN"],0)],dict(kind="arp",values=[1,3,2,76,0,127,0,0],side="UP · 2 oct · 1/16 · gate 60%")),
 ]
 
+# Recorded from PhoneCore over FakeSkiff 2.5.1 (android/core/Tests/LupeCoreTests/PageAreaTests.swift, RECORD_FIXTURES=1):
+# this script no longer writes them. Still hand-written here: page-env-lock (a held step), page-lanes, page-operator.
+RECORDED = {"page-env", "page-lfo", "page-mod", "page-drive", "page-edit1", "page-scale", "page-arp"}
+
 def scenario(name, lib, shown, note, page=None):
+    if name in RECORDED: return
     pages = PAGES[lib]
     if page is not None: shown = next(i for i, p in enumerate(pages) if p["page"] == page)   # opens on that page number
     frames = [dict(f) for f in base]
