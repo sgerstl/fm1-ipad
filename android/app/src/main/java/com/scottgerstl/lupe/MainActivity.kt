@@ -13,7 +13,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.scottgerstl.lupe.core.FakeLupeCore
+import androidx.compose.runtime.CompositionLocalProvider
 import com.scottgerstl.lupe.ui.shell.LupeShell
+import com.scottgerstl.lupe.ui.slide.LocalSlideSettings
+import com.scottgerstl.lupe.ui.slide.SlideDirection
+import com.scottgerstl.lupe.ui.slide.SlideSettings
 import com.scottgerstl.lupe.ui.theme.LupeTheme
 
 class MainActivity : ComponentActivity() {
@@ -39,7 +43,13 @@ class MainActivity : ComponentActivity() {
         // adb shell am start -n com.scottgerstl.lupe/.MainActivity --es scenario lost
         intent.getStringExtra("scenario")?.let { (core as? FakeLupeCore)?.play(it) }
 
-        setContent { LupeTheme(reduceMotion) { LupeShell(core) } }
+        // Settings arrive in P5; until then the slide direction and the Magnifier are flipped by launch extras and kept:
+        // adb shell am start -n com.scottgerstl.lupe/.MainActivity --es slide sideways|updown|both --ez magnifier false
+        val slide = SlideSettings.from(this)
+        intent.getStringExtra("slide")?.let { SlideDirection.from(it)?.let(slide::chooseDirection) }
+        if (intent.hasExtra("magnifier")) slide.chooseMagnifier(intent.getBooleanExtra("magnifier", true))
+
+        setContent { LupeTheme(reduceMotion) { CompositionLocalProvider(LocalSlideSettings provides slide) { LupeShell(core) } } }
     }
 
     override fun onDestroy() {

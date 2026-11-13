@@ -6,7 +6,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +59,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.scottgerstl.lupe.core.PageControl
+import com.scottgerstl.lupe.ui.slide.MagnifierFace
+import com.scottgerstl.lupe.ui.slide.slideToTurn
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.EaseOut
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
@@ -115,8 +116,6 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
     var optimistic by remember { mutableIntStateOf(Int.MIN_VALUE) }
     LaunchedEffect(c.raw) { if (optimistic == c.raw) optimistic = Int.MIN_VALUE }
     val raw = if (optimistic != Int.MIN_VALUE) optimistic else c.raw
-    var armed by remember { mutableStateOf(false) }
-    LaunchedEffect(armed, raw) { if (armed) { delay(3500); armed = false } }
 
     val editable = !c.ringless && !c.fixed
     // The value right now, read from state rather than from `raw` (fixed at the last recomposition): taps that come
@@ -124,6 +123,7 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
     // 2026-11-13).
     val latest by rememberUpdatedState(c)   // the gesture blocks outlive recompositions: read the control through this
     val latestOnSet by rememberUpdatedState(onSet)
+    var slideBase by remember { mutableIntStateOf(0) }
     fun now() = if (optimistic != Int.MIN_VALUE) optimistic else latest.raw
     fun set(v: Int) {
         val n = v.coerceIn(c.min, c.max)
@@ -156,21 +156,15 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
                     )
                 }
             }
+            // double tap puts it back; sliding turns it (the direction is the setting's), the Magnifier floats the value
             .then(if (!editable) Modifier else Modifier
-                .pointerInput(c.max, c.min, openedRaw) {
-                    detectTapGestures(onTap = { armed = !armed }, onDoubleTap = { armed = false; set(openedRaw) })
-                }
-                .pointerInput(c.max, c.min) {
-                    var acc = 0f; var base = 0
-                    detectVerticalDragGestures(
-                        onDragStart = { acc = 0f; base = now(); armed = false },
-                        onDragEnd = { }, onDragCancel = { },
-                    ) { change, dy ->
-                        change.consume()
-                        acc -= dy   // up is more
-                        set(base + (acc / (stepDp(c).dp.toPx())).toInt())
-                    }
-                }),
+                .pointerInput(c.max, c.min, openedRaw) { detectTapGestures(onDoubleTap = { set(openedRaw) }) }
+                .slideToTurn(
+                    enabled = true, stepDp = stepDp(c),
+                    face = remember(c.label, colour) { MagnifierFace(c.label, { latest.value }, { val l = latest; if (l.max > l.min) (now() - l.min).toFloat() / (l.max - l.min) else 0f }, ring = true, tint = colour) },
+                    onStart = { slideBase = now() },
+                    onSlide = { steps -> set(slideBase + steps) },
+                )),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.size(RING_BOX).padding(top = 2.dp), contentAlignment = Alignment.Center) {
@@ -195,24 +189,7 @@ private fun PageKnob(slot: Int, c: PageControl, colour: Color, litKey: Int, open
                 autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 24.sp, stepSize = 1.sp),
             )
         }
-        // − / + under the value after a tap (board 59): one step at a time
-        Row(Modifier.height(48.dp).fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            if (armed && editable) {
-                StepButton("−", "Decrease $spoken") { set(now() - 1); armed = true }
-                StepButton("+", "Increase $spoken") { set(now() + 1); armed = true }
-            }
-        }
     }
-}
-
-@Composable
-private fun StepButton(glyph: String, description: String, onClick: () -> Unit) {
-    Box(
-        Modifier.size(48.dp).padding(2.dp).clip(RoundedCornerShape(8.dp)).background(Tok.control)
-            .semantics { contentDescription = description; role = Role.Button }
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { BasicText(glyph, style = LupeType.number.copy(fontSize = 22.sp)) }
 }
 
 /** ◆ drawn, not a glyph from a font: a step's lock on this control. */

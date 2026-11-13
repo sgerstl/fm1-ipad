@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.scottgerstl.lupe.ui.slide.LocalMagnifier
+import com.scottgerstl.lupe.ui.slide.MagnifierHost
+import com.scottgerstl.lupe.ui.slide.MagnifierState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,7 +65,9 @@ fun LupeShell(core: LupeCore) {
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    val magnifier = remember { MagnifierState() }
     Box(Modifier.fillMaxSize().background(Tok.page)) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier) {
         Column(
             Modifier.fillMaxSize().statusBarsPadding()
                 .greyedBy { grey.value }
@@ -72,6 +78,7 @@ fun LupeShell(core: LupeCore) {
             // the bottom ~24 dp stays clear for the home gesture; board 53 ends the body 32 dp up
             ShellBody(shell, core, Modifier.padding(bottom = maxOf(navBottom, 24.dp) + 8.dp))
         }
+      }
 
         if (page.value > 0.001f || card.value > 0.001f || mode != LinkMode.Normal) {
             // read-only: swallow touches over the held page
@@ -92,5 +99,7 @@ fun LupeShell(core: LupeCore) {
                 },
             )
         }
+        // the Magnifier floats over everything, above the finger
+        MagnifierHost(magnifier)
     }
 }
