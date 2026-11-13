@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lupe phone, P4 to P6</title>
+<!-- Boards 59–69: the Android phone with a Skiff FM-1, portrait, phases 4 to 6 (sound pages; Mix, Sounds, Projects;
+     Timeline and automation). Drafted overnight 2026-11-13 → 14 for Scott to correct. Page map: design/phone-sound-pages.md. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600&display=swap">
+<link rel="stylesheet" href="phone-kit.css">
+<style>
+.sec { font-size: 18px; font-weight: 600; margin: 8px 0 20px; color: #EDEDF0; }
+</style>
+</head>
+<body>
+<h1>Lupe on the phone with a Skiff FM-1: phases 4 to 6</h1>
+<p class="lede">Pixel 10 Pro, 412 × 915 dp, portrait, the same frame as boards 53–58. Drafted overnight for Scott to correct: every call that's his is marked <b>Open</b> in the notes, with a recommendation. The page list comes from Skiff's own PAGES table (design/phone-sound-pages.md).</p>
+<div id="boards"></div>
+
+<script src="phone-kit.js"></script>
+<script>
+// ---------------------------------------------------------------- frame
+// split: tabs 96–132, top 140–442, divider 446–462, bottom 466–883
+// top only: content 140–863, divider 867–883
+// bottom full: strip 96–136, divider 140–156, bottom 160–883
+function frame(o) {
+  let h = statusBar() + topBar(o) + gestureBar();
+  const mode = o.mode || 'split';
+  const top = o.top || ((y, hh) => pads(y, hh, {}));
+  if (mode === 'split') {
+    h += tabs(96, o.tab || 'Pads') + top(140, 302) + divider(446) + o.bottom(466, 417);
+  } else if (mode === 'top') {
+    h += tabs(96, o.tab || 'Pads') + top(140, 723) + divider(867);
+  } else {
+    h += padsStrip(96) + divider(140) + o.bottom(160, 723);
+  }
+  if (o.over) h += o.over();
+  return `<div class="screen" role="img" aria-label="${o.label || 'Phone board'}">${h}${(o.discs || []).map(d => disc(...d)).join('')}</div>`;
+}
+const B2 = [];
+function board2(n, title, phones, notes) {
+  B2.push(`<section class="board"><h2>Board ${n} · ${title}</h2><div class="phones">${phones.map(p =>
+    `<div>${p.cap ? `<p class="cap">${p.cap}</p>` : ''}${frame(p)}</div>`).join('')}</div><div class="ann"><ol>${notes.map(n => `<li>${n}</li>`).join('')}</ol></div></section>`);
+}
+function section(t) { B2.push(`<h2 class="sec">${t}</h2>`); }
+const svg = (x, y, w, h, body, label = '') =>
+  `<svg class="abs" style="left:${x}px;top:${y}px" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}>${body}</svg>`;
+
+// ---------------------------------------------------------------- sound page parts
+const FAMS = ['ENV', 'LFO', 'FX', 'SEL', 'EDIT', 'ARP'];
+function famRow(y, cur, col) {
+  let h = '';
+  FAMS.forEach((f, i) => {
+    const on = f === cur;
+    h += el(on ? '' : 'key', 8 + i * 67, y, 63, 36, on ? `border-radius:8px;background:${col};color:#101012;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600` : '', f, `aria-pressed="${on}"`);
+  });
+  return h;
+}
+function pageRow(y, pages, cur, scroll = 0) {
+  let x = 0, inner = '';
+  pages.forEach((p, i) => {
+    const w = Math.round(p.length * 8.6 + 20);
+    inner += `<div class="abs" style="left:${x}px;top:0;width:${w}px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;white-space:nowrap;${i === cur ? 'color:var(--text);border-bottom:2px solid #EDEDF0' : 'color:var(--text2)'}">${p}</div>`;
+    x += w + 8;
+  });
+  const total = x - 8;
+  let h = el('', 8, y, 396, 30, 'overflow:hidden', `<div style="position:relative;left:${-scroll}px;width:${total}px;height:30px">${inner}</div>`, 'role="tablist"');
+  if (total - scroll > 396) h += el('', 356, y, 48, 30, 'background:linear-gradient(90deg,rgba(13,13,15,0),#0D0D0F)');
+  if (scroll > 0) h += el('', 8, y, 48, 30, 'background:linear-gradient(270deg,rgba(13,13,15,0),#0D0D0F)');
+  return h;
+}
+function banner(y, text, col, right = 'let go to stop') {
+  return el('', 8, y - 2, 396, 34, `border-radius:8px;background:${mix(col, 30)};display:flex;align-items:center;gap:8px;padding:0 12px;font-size:14px;font-weight:600`,
+    `<span class="dia" style="position:static;background:${col}"></span>${text}<span style="margin-left:auto;font-weight:400;color:var(--text2r)">${right}</span>`);
+}
+function trackLine(x, y, t) {
+  return el('', x, y, 200, 16, 'display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2r);white-space:nowrap',
+    `<span style="width:8px;height:8px;border-radius:4px;background:${COL[t]}"></span>${t + 1} ${NAMES[t]}`);
+}
+// k: {l, v (0–127), t (text), moving, empty, lock, grey, tapped}
+function ctl(x, y, k, col) {
+  if (k.empty) return el('', x + 16, y, 64, 64, 'border-radius:32px;background:var(--well)', '', 'aria-label="Empty knob"');
+  const r = 28, c = 2 * Math.PI * r, arc = c * 0.75, frac = (k.v ?? 64) / 127;
+  const ring = k.moving ? '#EDEDF0' : k.grey ? '#4A4A52' : col;
+  let h = k.l === 'ROUTE' ? el('', x + 16, y, 64, 64, 'border-radius:32px;background:var(--well)') :
+    svg(x + 16, y, 64, 64, `<circle cx="32" cy="32" r="${r}" fill="none" stroke="#26262B" stroke-width="6" stroke-dasharray="${arc} ${c}" transform="rotate(135 32 32)" stroke-linecap="round"/>
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="${ring}" stroke-width="6" stroke-dasharray="${arc * frac} ${c}" transform="rotate(135 32 32)" stroke-linecap="round"/>`);
+  h += el('lab', x, y + 70, 96, 14, `display:flex;align-items:center;justify-content:center;gap:5px;${k.moving ? 'color:var(--text)' : ''}`,
+    `${k.lock ? `<span class="dia" style="position:static;width:7px;height:7px;background:${col}"></span>` : ''}${k.l}`);
+  const txt = k.t ?? String(k.v), len = txt.length;
+  const fs = k.moving ? 30 : len <= 4 ? 24 : len <= 6 ? 21 : 18;
+  h += el('cond', x, y + 86, 96, 30, `text-align:center;font-size:${fs}px;white-space:nowrap;overflow:hidden;color:${k.grey ? 'var(--text2)' : 'var(--text)'}`, txt);
+  if (k.tapped) {
+    h += el('key', x + 2, y + 120, 44, 32, 'font-size:18px', '−', `aria-label="${k.l} down"`);
+    h += el('key', x + 50, y + 120, 44, 32, 'font-size:18px', '+', `aria-label="${k.l} up"`);
+    h += el('', x + 4, y - 4, 88, 124, 'border-radius:12px;box-shadow:inset 0 0 0 2px #4A4A52');
+  }
+  return h;
+}
+// s: {fam, pages, cur, scroll, t (track), graph(x,y,w,h), gh, knobs[4], banner, note}
+function soundPage(y0, h0, s) {
+  const col = COL[s.t];
+  let h = famRow(y0, s.fam, col);
+  h += s.banner ? banner(y0 + 46, s.banner, col, s.bannerRight) : pageRow(y0 + 46, s.pages, s.cur, s.scroll || 0);
+  const big = h0 > 600;
+  const gy = y0 + 88, gh = (s.gh ?? 140) + (big ? h0 - 417 : 0);   // bottom full: the graph takes the extra height, the controls stay where they sit at split
+  h += el('', 8, gy, 396, gh, 'border-radius:10px;background:var(--panel)');
+  if (s.graph) h += s.graph(8, gy, 396, gh, col);
+  h += trackLine(20, gy + 10, s.t);
+  const ky = gy + gh + 24;
+  s.knobs.forEach((k, i) => { h += ctl(8 + i * 100, ky, k, col); });
+  if (s.note) h += el('', 8, ky + 160, 396, 20, 'font-size:12px;color:var(--text2r);text-align:center', s.note);
+  return h;
+}
+
+// ---------------------------------------------------------------- graphs
+const G = {
+  analog(x, y, w, h, col) {   // EDIT 1, ANALOG: the oscillator (saw + noise) and the filter's curve
+    const mid = y + h / 2 + 8;
+    let saw = ''; for (let i = 0; i < 4; i++) { const sx = 24 + i * 40; saw += `L${sx + 40} ${36} L${sx + 40} ${h - 22} `; }
+    const osc = `<path d="M24 ${h - 22} ${saw}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    const flt = `<path d="M212 52 L300 52 Q330 52 338 36 Q346 22 354 60 Q362 ${h - 22} 384 ${h - 22}" fill="none" stroke="#EDEDF0" stroke-width="2.5"/>`;
+    const lab = `<text x="24" y="${h - 6}" fill="#A1A1AA" font-size="11" font-family="Barlow">OSC · SAW · 2 voices</text><text x="212" y="${h - 6}" fill="#A1A1AA" font-size="11" font-family="Barlow">FILTER · 710 Hz</text>`;
+    return svg(x, y, w, h, osc + flt + lab, 'Oscillator saw wave and the low-pass filter curve, the detune being changed');
+  },
+  drive(x, y, w, h, col) {   // DRIVE: the transfer curve
+    let p = ''; for (let i = 0; i <= 60; i++) { const u = -1 + i / 30, v = Math.tanh(u * 3.2) / Math.tanh(3.2); p += `${i ? 'L' : 'M'}${120 + u * 70} ${h / 2 - v * (h / 2 - 22)} `; }
+    const lin = `<path d="M50 ${h - 22} L190 22" stroke="#34343B" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+    return svg(x, y, w, h, lin + `<path d="${p}" fill="none" stroke="${col}" stroke-width="3"/>` +
+      `<text x="230" y="58" fill="#EDEDF0" font-size="20" font-family="Barlow Condensed" font-weight="600">TUBE</text><text x="230" y="78" fill="#A1A1AA" font-size="12" font-family="Barlow">drive 72 · tone 40</text>`, 'Drive curve, tube type');
+  },
+  mod(x, y, w, h, col) {   // MOD: the eleven routes as tiles, three rows
+    const rows = [['LFO →', ['PITCH', 'CUTOFF', 'SHAPE', 'AMP'], [10, 62, 0, 30]], ['ENV →', ['PITCH', 'CUTOFF', 'SHAPE'], [0, 48, 0]], ['SLOTS', ['1 ENV2', '2 VEL', '3 —', '4 —'], [40, 22, 0, 0]]];
+    let out = '';
+    const lw = 52, tw = (w - 24 - lw - 3 * 6) / 4, th = 36;
+    rows.forEach(([lab, tiles, amt], r) => {
+      const ty = y + 32 + r * (th + 6);
+      out += el('lab', x + 12, ty, lw, th, 'display:flex;align-items:center', lab);
+      tiles.forEach((t, i) => {
+        const on = r === 0 && i === 1, empty = t.endsWith('—');
+        const tx = x + 12 + lw + i * (tw + 6);
+        out += el('', tx, ty, tw, th, `border-radius:8px;background:${on ? mix(col, 40) : 'var(--control)'};${on ? 'box-shadow:0 0 0 2px #EDEDF0;' : ''}padding:4px 8px;font-size:12px;font-weight:600;color:${empty ? 'var(--text2)' : 'var(--text)'}`,
+          `${t}<span class="abs" style="left:8px;bottom:6px;height:3px;border-radius:2px;width:${(tw - 16) * amt[i] / 100}px;background:${on ? '#EDEDF0' : col}"></span>`, `aria-label="Route ${lab.replace('→', 'to')} ${t}${on ? ', picked' : ''}"`);
+      });
+    });
+    return out;
+  },
+  scale(x, y, w, h, col) {   // SCALE: an octave, C minor lit from the root
+    const whites = ['C', 'D', 'E', 'F', 'G', 'A', 'B'], inScale = new Set([0, 2, 3, 5, 7, 8, 10]);
+    const kw = 44, kx = x + (w - 7 * kw) / 2, ky = y + 30, kh = h - 44;
+    const semis = [0, 2, 4, 5, 7, 9, 11];
+    let out = '';
+    whites.forEach((n, i) => {
+      const s = semis[i], on = inScale.has(s);
+      out += el('', kx + i * kw, ky, kw - 3, kh, `border-radius:0 0 6px 6px;background:${on ? mix(col, 88) : '#3A3A40'};display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-size:12px;font-weight:600;color:${on ? '#101012' : 'var(--text2r)'}`,
+        n + (s === 0 ? ' ●' : ''));
+    });
+    [[1, 0], [3, 1], [6, 3], [8, 4], [10, 5]].forEach(([s, i]) => {
+      const on = inScale.has(s);
+      out += el('', kx + (i + 1) * kw - 15, ky, 27, kh * 0.58, `border-radius:0 0 5px 5px;background:${on ? col : '#16161A'};box-shadow:0 0 0 2px var(--panel)`);
+    });
+    return out + el('', x + w - 140, y + 8, 128, 16, 'font-size:12px;color:var(--text2r);text-align:right', 'C minor · ● root');
+  },
+  lanes(x, y, w, h, col) {   // LANES: knob 1's lane as tiles
+    const names = ['BD', 'SD', 'CP', 'CH', 'OH', 'TM', 'RS', 'CB'], full = ['KICK', 'SNARE', 'CLAP', 'CL HAT', 'OP HAT', 'TOM', 'RIM', 'BELL'];
+    const tw = (w - 24 - 3 * 6) / 4, th = (h - 32 - 12 - 6) / 2;
+    let out = '';
+    names.forEach((n, i) => {
+      const r = Math.floor(i / 4), c = i % 4, on = i === 1;
+      out += el('', x + 12 + c * (tw + 6), y + 32 + r * (th + 6), tw, th, `border-radius:8px;background:${on ? col : 'var(--control)'};display:flex;align-items:center;justify-content:center;color:${on ? '#101012' : 'var(--text)'}`,
+        `<span class="cond" style="font-size:18px">${full[i]}</span>`, `aria-label="Lane ${full[i]}${on ? ', picked' : ''}"`);
+    });
+    return out;
+  },
+  dense(x, y, w, h, col) {   // OPERATOR (FM6): no knobs from PAGES; name the page and the FM-1's cursor
+    return el('', x + 12, y + 32, w - 24, h - 44, 'border-radius:8px;background:var(--well);display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:6px',
+      `<span class="cond" style="font-size:22px;color:var(--text)">OP 2 · RATIO</span><span style="font-size:13px;color:var(--text2r);line-height:1.4">The FM-1's cursor is here. This page is edited on the FM-1 for now; its phone picture comes after v1.</span>`);
+  },
+  arp(x, y, w, h, col) {   // ARP: up, 2 octaves, gate 60, over a bar
+    const n = 16, cw = (w - 24) / n; let out = '';
+    const seq = [0, 2, 4, 7, 12, 14, 16, 19, 0, 2, 4, 7, 12, 14, 16, 19];
+    seq.forEach((s, i) => {
+      const bx = x + 12 + i * cw, by = y + h - 18 - (s / 19) * (h - 64);
+      out += el('', bx + 1, by - 8, cw * 0.6, 8, `border-radius:3px;background:${i === 5 ? '#EDEDF0' : col}`);
+    });
+    return out + el('', x + w - 200, y + 8, 188, 16, 'font-size:12px;color:var(--text2r);text-align:right', 'UP · 2 oct · 1/16 · gate 60%');
+  },
+  env(x, y, w, h, col) {
+    return svg(x, y, w, h, `<path d="M16 ${h - 16} L80 ${30} L170 ${h * 0.45} L300 ${h * 0.45} L380 ${h - 16}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round"/>`, 'Envelope');
+  },
+};
+
+// ---------------------------------------------------------------- Mix (top half)
+const MIXP = ['Mixer', 'Delay', 'Reverb', 'Chorus', 'Global'];
+function mixSel(y, cur) {
+  let h = el('rec', 8, y, 396, 34, 'padding:3px');
+  const w = (396 - 6 - 8) / 5;
+  MIXP.forEach((t, i) => {
+    const on = t === cur;
+    h += el(on ? 'key' : '', 11 + i * (w + 2), y + 3, w, 28, on ? 'font-size:13px' : 'display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text2)', t);
+  });
+  return h;
+}
+const LVL = [0.78, 0.62, 0.7, 0.85, 0.55, 0.66], DB = ['−2.1', '−6.0', '−3.9', '−0.8', '−8.4', '−5.0'], PAN = ['C', 'L12', 'R8', 'C', 'R20', 'L6'];
+function mixer(y0, h0, o = {}) {
+  let h = mixSel(y0, 'Mixer');
+  const ry = y0 + 42, rh = Math.min(Math.floor((h0 - 42 - 5 * 4) / 6), 96);
+  for (let t = 0; t < 6; t++) {
+    const y = ry + t * (rh + 4), big = rh > 60;
+    h += el('', 8, y, 396, rh, 'border-radius:8px;background:var(--panel)');
+    h += el('', 8, y, 36, rh, `border-radius:8px 0 0 8px;background:${COL[t]};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#101012;${t === SEL ? 'box-shadow:0 0 0 2px #EDEDF0' : ''}`, String(t + 1));
+    h += el('', 52, y + (big ? 10 : 4), 80, 16, 'font-size:13px;font-weight:600;white-space:nowrap', NAMES[t]);
+    h += el('', 52, y + (big ? 30 : rh - 18), 80, 14, 'font-size:12px;color:var(--text2r)', `${DB[t]} dB · ${PAN[t]}`);
+    // level fader
+    const fx = 136, fw = 196, fy = y + rh / 2 - 4;
+    h += el('', fx, fy, fw, 8, 'border-radius:4px;background:var(--well)');
+    h += el('', fx, fy, fw * LVL[t], 8, `border-radius:4px;background:${MUTED[t] ? '#4A4A52' : COL[t]}`);
+    h += el('', fx + fw * LVL[t] - 10, fy - 8, 20, 24, 'border-radius:6px;background:#EDEDF0;box-shadow:0 1px 0 #0A0A0C');
+    if (big) {   // top only: meters and the reverb send
+      h += el('', fx, y + rh - 22, fw, 4, 'border-radius:2px;background:var(--well)');
+      h += el('', fx, y + rh - 22, fw * (0.3 + 0.08 * t), 4, `border-radius:2px;background:${mix(COL[t], 60)}`);
+      h += el('', fx, y + 8, fw, 14, 'font-size:11px;color:var(--text2r)', `LEVEL · send REV ${[20, 45, 10, 0, 35, 15][t]}`);
+    }
+    h += el('key', 344, y + rh / 2 - 18, 52, 36, MUTED[t] ? 'background:#EDEDF0;color:#101012;font-size:13px' : 'font-size:13px', 'Mute', `aria-pressed="${MUTED[t]}"`);
+  }
+  return h;
+}
+function busPage(y0, h0, name, knobs, graph) {
+  let h = mixSel(y0, name);
+  const gy = y0 + 42, gh = h0 - 42 - 128;
+  h += el('', 8, gy, 396, gh, 'border-radius:10px;background:var(--panel)');
+  h += graph(8, gy, 396, gh);
+  h += el('', 20, gy + 10, 240, 16, 'font-size:12px;color:var(--text2r)', 'Every track · the shared bus');
+  knobs.forEach((k, i) => { h += ctl(8 + i * 100, gy + gh + 8, k, '#EDEDF0'); });
+  return h;
+}
+function delayGraph(x, y, w, h) {
+  let out = ''; const taps = [1, 0.72, 0.52, 0.37, 0.27, 0.19, 0.14];
+  taps.forEach((a, i) => { const tx = x + 30 + i * 48, th = (h - 50) * a; out += el('', tx, y + h - 16 - th, 10, th, `border-radius:3px;background:${i ? '#A1A1AA' : '#EDEDF0'}`); });
+  return out + el('', x + w - 160, y + 10, 148, 16, 'font-size:12px;color:var(--text2r);text-align:right', '3/16 · feedback 62');
+}
+
+// ---------------------------------------------------------------- Sounds browser (bottom half)
+function sounds(y0, h0, o = {}) {
+  const col = COL[o.t ?? SEL];
+  let h = el('', 8, y0, 300, 32, 'display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;white-space:nowrap',
+    `<span style="width:10px;height:10px;border-radius:5px;background:${col}"></span>Choose a sound for track ${(o.t ?? SEL) + 1}`);
+  h += el('key', 340, y0, 64, 32, 'font-size:13px', 'Done');
+  const groups = ['ANALOG', 'DIGITAL', 'PHASE', 'LOFI', 'SAMPLE', 'VOICE', 'TRIO', 'WHEEL', 'GRAIN', 'FM6', 'PHYS', 'NOISE', 'User', 'Samples'];
+  // engine column
+  const ly = y0 + 42, lh = h0 - 42;
+  h += el('', 8, ly, 112, lh, 'border-radius:8px;background:var(--well);overflow:hidden',
+    groups.map((g, i) => `<div style="height:40px;display:flex;align-items:center;padding:0 10px;font-size:13px;font-weight:600;${g === 'SAMPLE' ? `background:var(--control);color:var(--text);box-shadow:inset 3px 0 0 ${col}` : 'color:var(--text2r)'}">${g}</div>`).join(''), 'role="listbox" aria-label="Engines"');
+  h += el('', 8, ly + lh - 40, 112, 40, 'border-radius:0 0 8px 8px;background:linear-gradient(180deg,rgba(17,17,20,0),#111114)');
+  const presets = ['PIANO', 'PIANO 2', 'FLUTE', 'SAX', 'E PIANO', 'LOFI PIANO', 'MUSIC BOX', 'FLUTE PAD', 'DARK SAX', 'KOTO'];
+  presets.forEach((p, i) => {
+    const r = Math.floor(i / 2), c = i % 2, on = i === 0;
+    const px = 128 + c * 140, py = ly + r * 44;
+    if (py + 40 > y0 + h0) return;
+    h += el('', px, py, 134, 40, `border-radius:8px;background:${on ? mix(col, 45) : 'var(--control)'};${on ? 'box-shadow:0 0 0 2px #EDEDF0;' : ''}display:flex;align-items:center;padding:0 10px;font-size:13px;font-weight:600;color:var(--text)`,
+      `${p}${on ? '<span style="margin-left:auto;font-size:12px;color:var(--text)">✓</span>' : ''}`, `aria-label="Preset ${p}${on ? ', current' : ''}"`);
+  });
+  if (o.hint) h += el('', 128, y0 + h0 - 24, 276, 20, 'font-size:12px;color:var(--text2r)', o.hint);
+  return h;
+}
+
+// ---------------------------------------------------------------- sheets
+function scrim() { return el('', 0, 0, W, H, 'background:rgba(0,0,0,0.55)'); }
+function sheet(y, h, title, body) {
+  let s = el('', 0, y, W, H - y, 'border-radius:20px 20px 0 0;background:var(--panel)');
+  s += el('', 182, y + 8, 48, 4, 'border-radius:2px;background:#5A5A62');
+  s += el('', 20, y + 24, 300, 28, 'font-size:20px;font-weight:600', title);
+  s += el('key', 348, y + 22, 48, 36, 'font-size:16px', '✕', 'aria-label="Close"');
+  return s + body;
+}
+function projects(y) {
+  const P = [['1', 'Night Drive', 'saved today 22:40', true], ['2', 'Koto sketch', 'saved 11 Nov', false], ['3', 'Empty', '', false], ['4', 'Acid test', 'saved 2 Nov', false]];
+  let b = el('', 20, y + 58, 372, 16, 'font-size:12px;color:var(--text2r)', 'The FM-1 keeps four projects. Playing now: 1 Night Drive, changed since its save.');
+  P.forEach(([n, name, when, cur], i) => {
+    const ry = y + 100 + i * 64;
+    b += el('', 12, ry, 388, 56, `border-radius:10px;background:${cur ? 'var(--control)' : 'var(--well)'};${cur ? 'box-shadow:inset 3px 0 0 #EDEDF0;' : ''}`);
+    b += el('cond', 24, ry + 8, 28, 40, 'font-size:24px;color:var(--text2r);display:flex;align-items:center', n);
+    b += el('', 56, ry + 10, 200, 18, `font-size:15px;font-weight:600;color:${name === 'Empty' ? 'var(--text2)' : 'var(--text)'}`, name + (cur ? ' ●' : ''));
+    b += el('', 56, ry + 30, 200, 16, 'font-size:12px;color:var(--text2r)', when || 'nothing saved here');
+    b += el('key', 268, ry + 10, 68, 36, 'font-size:13px', cur ? 'Save' : name === 'Empty' ? 'Save here' : 'Load');
+    b += el('key', 344, ry + 10, 44, 36, 'font-size:16px', '⋯', `aria-label="More for project ${n}"`);
+  });
+  // a load confirm in place on row 2
+  const cy = y + 100 + 4 * 64 + 8;
+  b += el('', 12, cy, 388, 44, 'border-radius:10px;box-shadow:inset 0 0 0 2px var(--rec);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;padding:0 12px;text-align:center',
+    'Load 2 Koto sketch? Night Drive\'s changes since 22:40 go.');
+  b += el('key', 12, cy + 52, 190, 40, 'font-size:14px', 'Save first');
+  b += el('key', 210, cy + 52, 190, 40, 'font-size:14px', 'Cancel');
+  return sheet(y, 0, 'Projects', b);
+}
+function settings(y) {
+  let b = '';
+  const rows = [
+    ['FM-1', 'Skiff-Lupe 2.2 · connected over USB', null],
+    ['Theme', 'Follows the FM-1 (SKIFF)', null],
+    ['Haptics', 'On pads and value steps', true],
+  ];
+  rows.forEach(([a, c, t], i) => {
+    const ry = y + 70 + i * 56;
+    b += el('', 20, ry, 280, 18, 'font-size:15px;font-weight:600', a);
+    b += el('', 20, ry + 22, 300, 16, 'font-size:12px;color:var(--text2r)', c);
+    if (t !== null) b += el('', 344, ry + 6, 48, 28, `border-radius:14px;background:${t ? '#EDEDF0' : 'var(--control)'}`, `<span class="abs" style="top:4px;left:${t ? 24 : 4}px;width:20px;height:20px;border-radius:10px;background:${t ? '#101012' : 'var(--text2)'}"></span>`, `role="switch" aria-checked="${t}" aria-label="${a}"`);
+  });
+  const ly = y + 70 + 3 * 56 + 12;
+  b += el('', 20, ly, 372, 1, 'background:var(--lifted)');
+  b += el('', 20, ly + 16, 300, 22, 'font-size:17px;font-weight:600', 'Labs');
+  b += el('', 20, ly + 40, 372, 32, 'font-size:12px;color:var(--text2r);line-height:1.35', 'Settings to try on the phone. Each starts off; keep what works.');
+  const labs = [
+    ['Pause following after a touch', 'The bottom half holds your page for 3 s after you touch it', false],
+    ['Pin the bottom half\'s page', 'A pin on the page row stops it following the FM-1', false],
+    ['Piano under the grid', 'A one-octave piano for entering notes without the FM-1', false],
+    ['Timeline: time across', 'Tracks as lanes, as on the FM-1 and the iPad', false],
+  ];
+  labs.forEach(([a, c, t], i) => {
+    const ry = ly + 84 + i * 56;
+    b += el('', 20, ry, 300, 18, 'font-size:15px;font-weight:600', a);
+    b += el('', 20, ry + 22, 310, 16, 'font-size:12px;color:var(--text2r);white-space:nowrap;overflow:hidden;text-overflow:ellipsis', c);
+    b += el('', 344, ry + 6, 48, 28, 'border-radius:14px;background:var(--control)', `<span class="abs" style="top:4px;left:4px;width:20px;height:20px;border-radius:10px;background:var(--text2)"></span>`, `role="switch" aria-checked="false" aria-label="${a}"`);
+  });
+  return sheet(y, 0, 'Settings', b);
+}
+
+// ---------------------------------------------------------------- Timeline down, editing
+function tlMenu(x, y) {   // a block's hold menu, beside the finger
+  const items = ['Pattern 12 ⌄', 'Bars: 4  − +', 'Duplicate', 'Select sound', 'Delete…'];
+  let h = el('', x, y, 188, items.length * 44 + 8, 'border-radius:12px;background:var(--lifted);box-shadow:0 8px 24px rgba(0,0,0,.5)');
+  items.forEach((t, i) => { h += el('', x, y + 4 + i * 44, 188, 44, `display:flex;align-items:center;padding:0 14px;font-size:14px;font-weight:600;color:${t.startsWith('Delete') ? '#FF8A8A' : 'var(--text)'}`, t); });
+  return h;
+}
+function stopStrip(y) {
+  return el('', 8, y, 396, 40, 'border-radius:8px;background:var(--control);display:flex;align-items:center;gap:10px;padding:0 6px 0 12px;font-size:14px;font-weight:600',
+    'Stop to change the song<span style="margin-left:auto"></span>') + el('key', 330, y + 4, 70, 32, 'background:#EDEDF0;color:#101012;font-size:13px', '■ Stop');
+}
+
+// ---------------------------------------------------------------- automation lane, picker open
+function autoFull(y0, h0, o = {}) {
+  const col = COL[SEL];
+  let h = el('', 8, y0, 250, 32, 'display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap',
+    `<span style="width:10px;height:10px;border-radius:5px;background:${col}"></span><span style="font-weight:600">5 Piano</span><span style="color:var(--text2r)">· AUTOMATION</span>`);
+  h += el('key', 300, y0, 104, 32, 'font-size:13px;gap:6px', `<span style="font-weight:600">CUTOFF</span><span style="color:var(--text2)">⌄</span>`, 'aria-label="Lane: CUTOFF, change"');
+  const gy = y0 + 40, gh = 300;
+  h += grid(gy, 236, { noSel: true });
+  const ly = gy + 248, lh = h0 - 40 - 248 - 40 - 20;
+  h += el('', 8, ly, 396, lh, 'border-radius:8px;background:var(--well)');
+  const vals = [40, 42, 84, 60, 58, 84, 70, 66, 50, 48, 92, 80, 70, 64, 52, 44];
+  const px = i => 8 + 12 + i * 23.4, py = v => ly + lh - 14 - (v / 100) * (lh - 28);
+  h += svg(0, 0, W, H, `<polyline points="${vals.map((v, i) => `${px(i)},${py(v)}`).join(' ')}" fill="none" stroke="${col}" stroke-width="2.5"/>`
+    + (o.drawing ? `<path d="M${px(11)} ${py(80)} C ${px(12)} ${py(30)}, ${px(13)} ${py(20)}, ${px(14)} ${py(26)}" fill="none" stroke="#EDEDF0" stroke-width="4" stroke-linecap="round"/>` : ''));
+  vals.forEach((v, i) => { if (LOCKS.has(i)) h += `<span class="dia" style="left:${px(i) - 4}px;top:${py(v) - 4}px;background:#EDEDF0"></span>`; });
+  if (o.drawing) h += el('', px(14) - 22, py(26) - 22, 44, 44, 'border-radius:22px;background:rgba(237,237,240,.18);box-shadow:0 0 0 2px #EDEDF0');
+  h += el('', 8, ly + lh + 8, 396, 32, 'display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text2r)',
+    o.drawing ? '<span>Drawing steps 12–15: each step you pass becomes a lock</span><span>◆ = a lock</span>' : '<span>Drag along the lane to draw · tap a ◆ to select its step</span><span>◆ = a lock</span>');
+  if (o.picker) {
+    const items = [['CUTOFF', '3 locks', true], ['DECAY', '1 lock', false], ['RESONANCE', 'recorded', false], ['＋ Add a lane…', '', false]];
+    const mx = 196, my = y0 + 38;
+    h += el('', mx, my, 208, items.length * 48 + 8, 'border-radius:12px;background:var(--lifted);box-shadow:0 8px 24px rgba(0,0,0,.5)');
+    items.forEach(([a, c, on], i) => {
+      h += el('', mx, my + 4 + i * 48, 208, 48, `display:flex;align-items:center;gap:8px;padding:0 14px;font-size:14px;font-weight:600;${on ? `box-shadow:inset 3px 0 0 ${col}` : ''}`,
+        `${a}<span style="margin-left:auto;font-size:12px;font-weight:400;color:var(--text2r)">${c}</span>`);
+    });
+  }
+  return h;
+}
+
+// ================================================================= boards
+section('P4 · Sound pages (bottom half)');
+
+board2(59, 'A sound page with a list value, and the FX row that scrolls', [
+  { cap: 'EDIT 1 on an ANALOG track', bottom: (y, h) => soundPage(y, h, {
+      fam: 'EDIT', pages: ['EDIT 1', 'EDIT 2', 'VOICE', 'VOICE 2'], cur: 0, t: 0, graph: G.analog,
+      knobs: [{ l: 'WAVE', v: 40, t: 'SAW' }, { l: 'DETUNE', v: 22, moving: true }, { l: 'MIX', v: 64 }, { l: 'NOISE', v: 6 }] }),
+    label: 'EDIT 1 page, ANALOG engine', discs: [[1, 392, 517], [2, 100, 556], [3, 84, 832], [4, 182, 832]] },
+  { cap: 'FX › DRIVE, the row scrolled', bottom: (y, h) => soundPage(y, h, {
+      fam: 'FX', pages: ['FX', 'DRIVE', 'INSERT', 'INSERT 2', 'SLICER', 'DUCK'], cur: 1, scroll: 0, t: 0, graph: G.drive,
+      knobs: [{ l: 'DIST', v: 72 }, { l: 'TYPE', v: 30, t: 'TUBE', tapped: true }, { l: 'TONE', v: 40 }, { empty: true }] }),
+    label: 'DRIVE page, row scrolls, TYPE tapped', discs: [[5, 330, 546], [6, 136, 866], [7, 336, 708]] },
+], [
+  'The page row has the full width now: the track line moved into the graph\'s corner. On an ANALOG track EDIT\'s four pages fit.',
+  '"1 Acid" names the track the page edits, in its colour (the family key is lit in it too).',
+  'A list value shows its name, SAW, and shrinks from 24 to 18 for long names before it truncates.',
+  'Knob 2 turning on the FM-1: DETUNE lights white and grows, as board 55.',
+  '<span class="q">Open 1:</span> FX has six pages (eight on Skiff 2.5), more than 396 dp. The row scrolls and keeps the current page in view; the fade says there\'s more. Recommended over a "FX ⌄ 2 of 6" list key: every page stays one tap away.',
+  '<span class="q">Open 2:</span> tap a control and − / + appear under it for one step at a time; drag up or down on it for big moves, with a haptic tick on each list step. Double tap reverts to the value it had when the page opened.',
+  'Knob 4 has no parameter on DRIVE (the FM-1\'s 0xFF), so it stays an empty well: knob 4 on the phone is always knob 4 on the FM-1.',
+]);
+
+board2(60, 'MOD: the route list in place of knob 1', [
+  { cap: 'LFO › MOD, LFO → CUTOFF picked', bottom: (y, h) => soundPage(y, h, {
+      fam: 'LFO', pages: ['LFO', 'LFO 2', 'MOD'], cur: 2, t: 4, graph: G.mod, gh: 170,
+      knobs: [{ l: 'ROUTE', t: 'LFO→CUT' }, { l: 'SRC', v: 0, t: 'LFO', grey: true }, { l: 'DEST', v: 0, t: 'CUTOFF', grey: true }, { l: 'AMT', v: 62 }] }),
+    label: 'MOD page with eleven routes', discs: [[1, 380, 556], [2, 4, 776], [3, 316, 852]] },
+], [
+  'Knob 1 on the FM-1 picks one of eleven routes. The phone lays them out: the LFO\'s four fixed routes, the envelope\'s three, then the matrix\'s four slots. Each tile shows its amount as a bar. Tap a tile to pick it (it turns knob 1).',
+  'Knob 1\'s place says ROUTE and names the pick; it has no ring because it isn\'t a value.',
+  'On a fixed route only AMOUNT turns, so SRC and DEST show their fixed values in grey. On a slot all three are live. ENV DEST and LFO DEST of before are these routes; that\'s why there\'s no ENV DEST page (board 55 corrected).',
+]);
+
+board2(61, 'SCALE, and a sound page while a step is held', [
+  { cap: 'SEL › SCALE', bottom: (y, h) => soundPage(y, h, {
+      fam: 'SEL', pages: ['SCALE', 'CHORD', 'FOLLOW'], cur: 0, t: 4, graph: G.scale,
+      knobs: [{ l: 'ROOT', v: 0, t: 'C' }, { l: 'SCALE', v: 20, t: 'MINOR' }, { l: 'QUANTIZE', v: 127, t: 'ON' }, { l: 'TRANSP', v: 64, t: '0' }] }),
+    label: 'SCALE page with an octave', discs: [[1, 392, 700]] },
+  { cap: 'ENV with step 6 held on the FM-1', bottom: (y, h) => soundPage(y, h, {
+      fam: 'ENV', pages: ['ENV', 'ENV 2'], cur: 0, t: 4, graph: G.env, banner: 'Locking to step 6', bannerRight: 'held on the FM-1',
+      knobs: [{ l: 'ATTACK', v: 12 }, { l: 'DECAY', v: 30, lock: true, moving: true }, { l: 'SUSTAIN', v: 64 }, { l: 'RELEASE', v: 90 }] }),
+    label: 'ENV page with a lock banner', discs: [[2, 392, 556], [3, 150, 852]] },
+], [
+  'SCALE draws the octave from ROOT with the scale\'s notes lit; the root carries ●. Holding SCL on the FM-1 (the keys\' map) opens this page with "Keys: SCALE" in the banner\'s place.',
+  'A step held, on the FM-1 or on the phone\'s editor: the page row becomes the lock banner, as board 56\'s ruler. Every turn now locks to step 6.',
+  'DECAY already carries a lock on step 6: ◆ beside its label. SAMPLES and GLO\'s pages can\'t be locked (Skiff\'s SC_GLOBAL); there the banner says "Not lockable".',
+]);
+
+board2(62, 'EDIT on a drum track: lane tiles, and a dense page', [
+  { cap: 'EDIT › LANES (DRUM)', bottom: (y, h) => soundPage(y, h, {
+      fam: 'EDIT', pages: ['EDIT 1', 'EDIT 2', 'LANES', 'LANE MIX', 'VOICE', 'VOICE 2'], cur: 2, scroll: 80, t: 3, graph: G.lanes,
+      knobs: [{ l: 'LANE', t: 'SNARE' }, { l: 'LEVEL', v: 100 }, { l: 'TUNE', v: 58, t: '−3' }, { l: 'DECAY', v: 44 }] }),
+    label: 'LANES page with lane tiles', discs: [[1, 392, 517], [2, 300, 640]] },
+  { cap: 'EDIT › OPERATOR (FM6)', bottom: (y, h) => soundPage(y, h, {
+      fam: 'EDIT', pages: ['EDIT 1', 'EDIT 2', 'OPERATOR', 'ALL OPS', 'VOICE', 'VOICE 2'], cur: 2, scroll: 80, t: 1, graph: G.dense,
+      knobs: [{ empty: true }, { empty: true }, { empty: true }, { empty: true }] }),
+    label: 'OPERATOR page, edited on the FM-1', discs: [[3, 380, 600], [4, 380, 718]] },
+], [
+  'The EDIT row shows only the pages this track\'s engine has (Skiff\'s page_visible): a DRUM track adds LANES and LANE MIX, so its row scrolls; an ANALOG track\'s fits (board 59).',
+  'Knob 1 on LANES picks the lane the other three edit. The phone shows the eight lanes as tiles; tapping one turns knob 1. LANE MIX, DRUM-X\'s SOUND and SAMPLES pick the same way.',
+  '<span class="q">Open 4:</span> OPERATOR, ALL OPS, SLICES and DRUM-X\'s SOUND get their knobs from code on the FM-1, not from PAGES, and the screen link carries the page and cursor but not pixels. Recommended for v1: name the page and the FM-1\'s cursor, edited on the FM-1; the iPad\'s pictures port after v1. Porting them now roughly doubles P4.',
+  'The four knob places stay empty wells rather than vanishing, so the page keeps its shape.',
+]);
+
+board2(63, 'ARP at bottom full, and a sound page opened at top only', [
+  { cap: 'ARP, bottom full: the graph grows', mode: 'bottom', bottom: (y, h) => soundPage(y, h, {
+      fam: 'ARP', pages: ['ARP', 'ARP 2'], cur: 0, t: 4, graph: G.arp,
+      knobs: [{ l: 'MODE', v: 10, t: 'UP' }, { l: 'RATE', v: 50, t: '1/16' }, { l: 'OCTAVE', v: 30, t: '2' }, { l: 'GATE', v: 76, t: '60%' }] }),
+    label: 'ARP page at bottom full', discs: [[1, 392, 252]] },
+  { cap: 'At top only, the FM-1 opens ENV', mode: 'top', label: 'Top only before a sound page opens', discs: [[2, 236, 864]] },
+], [
+  'At bottom full the graph takes all the extra height and the four controls stay exactly where they sit at split, so your thumb finds them in the same place whichever way the divider is.',
+  '<span class="q">Open 5:</span> at top only the bottom half is hidden. When the FM-1 opens a sound page, the divider glides to split so following never hides what the FM-1 opened, and glides back when the FM-1 goes HOME. AUTOMATION already moves it to bottom full.',
+]);
+
+section('P5 · Mix, Sounds, Projects, Settings');
+
+board2(64, 'Mix: the mixer as six rows', [
+  { cap: 'Split: Mix over the editor', tab: 'Mix', top: (y, h) => mixer(y, h), bottom: (y, h) => editor(y, h, {}), label: 'Mix tab at split', discs: [[1, 392, 140], [2, 50, 176], [3, 300, 176], [4, 384, 214]] },
+  { cap: 'Top only: rows grow, meters and sends show', tab: 'Mix', mode: 'top', top: (y, h) => mixer(y, h), label: 'Mix tab at top only', discs: [[5, 392, 190]] },
+], [
+  'GLO\'s five pages one at a time (the structure map\'s Mix), in the FM-1\'s order. GLO on the FM-1 steps through them and the top half follows; the bottom half keeps the editor or sound page.',
+  'Each track a row, as the Pads rows: number (tap: select), name, its dB and pan.',
+  'LEVEL on a horizontal fader in the track\'s colour; drag the thumb. Rows are 41 tall at split, so PAN and the reverb send wait for top only or a row\'s hold menu.',
+  'Mute, labelled, filled when on (6 Perc Kit is muted, its fader greys).',
+  'At top only rows grow to 96: each gains its level meter and its reverb send line. <span class="q">Open 6:</span> PAN on the row at top only, or only in the row\'s hold menu? Recommended: the hold menu, so the row keeps one fader and nothing small to miss.',
+]);
+
+board2(65, 'Mix: a bus page', [
+  { cap: 'Delay, the shared bus', tab: 'Mix', top: (y, h) => busPage(y, h, 'Delay', [{ l: 'TIME', v: 40, t: '3/16' }, { l: 'FEEDBACK', v: 62 }, { l: 'COLOR', v: 70 }, { l: 'MIX', v: 30 }], delayGraph), bottom: (y, h) => editor(y, h, {}), label: 'Delay bus page at split', discs: [[1, 392, 184], [2, 380, 300]] },
+], [
+  'Delay, Reverb, Chorus and Global are the shared buses, so the knobs are white, not a track\'s colour: changing them changes every track. The line in the corner says so.',
+  'At split the graph is short (130) and the four controls sit under it. The bus pages need no row of their own in the bottom half: FX › DELAY on Skiff 2.5 (a track\'s send) stays a sound page.',
+]);
+
+board2(66, 'The Sounds browser in the bottom half', [
+  { cap: 'From the track\'s number (held) or SAVE', bottom: (y, h) => sounds(y, h, { hint: 'Tap a preset to hear it on the track · Done keeps it' }), label: 'Sounds browser', discs: [[1, 318, 474], [2, 100, 690], [3, 202, 512]] },
+], [
+  'Opens in the bottom half, over the editor, from the track\'s number held on Pads, SAVE (PRESETS, USER) on the FM-1, or a pad\'s hold menu. Back or Done closes it; the editor comes back.',
+  'The engines at 40 tall, scrolling, then User (the FM-1\'s 32 user slots) and Samples (its USR1–3, read-only on the phone: sample import is out of scope).',
+  'Presets in two columns at 40 tall. Tapping one puts the track on it at once (the iPad\'s behaviour), so you hear it; ✓ marks what the track plays. <span class="q">Open 7:</span> the iPad\'s kits and a pad\'s own sound come with it; kits show on track 4 only. Same as the iPad, nothing new.',
+]);
+
+board2(67, 'Projects and Settings, as sheets', [
+  { cap: 'FM-1 ⌄ › Projects…', bottom: (y, h) => editor(y, h, {}), over: () => scrim() + projects(300), label: 'Projects sheet with a load confirm', discs: [[1, 380, 356], [2, 380, 740]] },
+  { cap: 'FM-1 ⌄ › Settings, with Labs', bottom: (y, h) => editor(y, h, {}), over: () => scrim() + settings(120), label: 'Settings sheet with Labs', discs: [[3, 380, 390]] },
+], [
+  'The FM-1 keeps four projects (Skiff\'s slots). The sheet rises from the bottom; drag it down, ✕ or Back closes it. The one playing has ● and Save; the others Load; an empty slot Save here. ⋯ holds Rename.',
+  'Load asks in place, naming what goes ("Night Drive\'s changes since 22:40 go"), with Save first beside Cancel (DESIGN.md: confirm in place; it ignores taps for 0.4 s).',
+  'Labs holds the four settings to try from the decisions, all off. The piano and time across come from decisions 5 and 6.',
+]);
+
+section('P6 · Timeline and automation');
+
+board2(68, 'Timeline down: editing a block', [
+  { cap: 'Stopped: hold a block', tab: 'Timeline', mode: 'top', playing: false, top: (y, h) => timelineDown(y, h, 0, 20), over: () => tlMenu(150, 330), label: 'Timeline block menu', discs: [[1, 344, 368], [2, 92, 504]] },
+  { cap: 'Playing: the order is locked', tab: 'Timeline', mode: 'top', top: (y, h) => timelineDown(y, h, 0, 18) + stopStrip(822), label: 'Timeline while playing', discs: [[3, 392, 812]] },
+], [
+  'Hold a block and its menu opens beside your finger (the standing rule): its pattern, its bars with − / +, Duplicate, Select sound, Delete… (asks in place). Drag a block to move it; drag its bottom edge to change its bars, snapping to whole bars.',
+  'Columns are tracks, so a block moves along its own column only: down or up in time, never sideways to another track (the FM-1\'s song is per track).',
+  'While the song plays the FM-1 refuses changes to the order, as on the iPad: the strip says so, with Stop beside it. Blocks still show and the playhead runs.',
+]);
+
+board2(69, 'Automation: one lane, its picker, drawing', [
+  { cap: 'SEQ › AUTOMATION: the lane picker', mode: 'bottom', bottom: (y, h) => autoFull(y, h, { picker: true }), label: 'Automation lane picker', discs: [[1, 386, 196]] },
+  { cap: 'Drawing on the lane', mode: 'bottom', bottom: (y, h) => autoFull(y, h, { drawing: true }), label: 'Drawing automation', discs: [[2, 330, 700], [3, 300, 830]] },
+], [
+  'One lane at a time (decision 7), picked from the list: each lane says how many locks it has or that it\'s recorded. "Add a lane…" opens the track\'s parameters by family.',
+  'Drag along the lane to draw: each step you pass becomes a lock at the height you drew. Tap a ◆ to select its step (and the step panel follows).',
+  '<span class="q">Open 8:</span> drawing writes locks step by step (what the FM-1 stores). Recorded motion (knob moves while REC is on) shows as the line between ◆s and isn\'t drawn over. Recommended: drawing over recorded motion asks once, in place, whether to replace it.',
+]);
+
+document.getElementById('boards').innerHTML = B2.join('');
+</script>
+</body>
+</html>
