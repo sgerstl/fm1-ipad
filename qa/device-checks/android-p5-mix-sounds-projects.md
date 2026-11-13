@@ -117,3 +117,14 @@ New faults seen:
 | – | Tempo slide doesn't respond | **The screen slides and sends; the core doesn't handle the intent.** On the fake (emulator) a 120 px swipe took 120 → 139 BPM and the readout followed. On the real core, `PhoneCore.handle(_ intent: PhoneIntent)` has cases for retry, play, stop, padSelect, stepSelect, setPlaybackMode and cancelWaiting only: `setTempo` (and `rec`, `setLaunch`) fall to `default: log("intent not handled yet")`, so nothing reaches the FM-1 and `top.tempo` never changes. P1 to wire them; nothing more to do in the UI. (The old − / + keys sent the same intent, so they could not have worked on the FM-1 either.) | After P1 wires setTempo: slide the readout's TEMPO; the FM-1's tempo moves and the readout follows. Rec and Launch at have the same gap. |
 | – | A soloed row showed only a faint "·" | A lit **SOLO** pill beside the row's name (a word on a light ground, not colour alone); TalkBack reads "solo". | Solo a row. |
 | – | At split the Delay card's DELAY MODE switch was cut off | The bus graph takes only what the four controls and the settings leave (it shrinks, or goes, at split), so MONO · STEREO · PING-PONG sits whole above the divider. Checked on the emulator at split. | Delay page at split. |
+
+## Recheck on the merge ff2d34c (P2 9f36c62 + P1 8b79d17), real FM-1, over adb by Claude, 2026-11-13 evening
+
+Core 68 tests in 8 suites pass, Kotlin tests pass.
+
+- ✓ Tempo reaches the FM-1 (P1's setTempo): a sideways slide in the readout popover set 176, then 86, then 81 (`top.tempo` read back).
+- ✗ **Up and down (the phone's default) does nothing on the tempo slide**: slow and fast vertical slides send nothing, so the popover seems to take the vertical drag (its menu scrolls). Only sideways reaches it.
+- ✗ **Tempo is far too touchy**: `stepDp = 1.5f` (TopBar.kt:127) means a 450 px sideways swipe moved 82 → 176 BPM. Something nearer one BPM per 8–10 dp, as the knobs feel, with the Magnifier.
+- ✗ Double tap didn't revert the tempo (176 stayed 176) when tapped by adb; recheck by hand.
+- ✓ DELAY MODE is whole above the divider at split.
+- ? Solo: on, then off, worked; once, after several toggles, track 4 came back unmuted when it had been muted before the solo. It may have been my taps landing while the menu was still open; Scott to watch for it. The hold menu stays open after tapping Solo, so the row's new SOLO pill is hidden until the menu closes.
