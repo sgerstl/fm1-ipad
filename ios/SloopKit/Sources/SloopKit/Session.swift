@@ -1831,10 +1831,17 @@ public final class DeviceSession {
         guard let c = driver else { return }
         Task {
             // the FM-1 answers with what it loaded: a sound it kept is shown again, not the one asked for
-            guard let r = try? await c.preset(engine: e, index: i), r.engine != e, tracks[t].engine == e else { return }
-            tracks[t].engine = was.engine; tracks[t].preset = was.preset
-            tracks[t].engineName = was.engineName; tracks[t].presetName = was.presetName
-            refuseSound(track: t, engine: e)
+            guard let r = try? await c.preset(engine: e, index: i) else { return }
+            if r.engine != e, tracks[t].engine == e {
+                tracks[t].engine = was.engine; tracks[t].preset = was.preset
+                tracks[t].engineName = was.engineName; tracks[t].presetName = was.presetName
+                refuseSound(track: t, engine: e)
+                return
+            }
+            // Skiff pushes nothing for a PRESET the editor sent (editor.c ed_load_after takes the load into its watch's
+            // copy; SLOOP pushes RELOAD): the engine's descriptors and the loaded values are read here, or the EDIT
+            // pages kept the last engine's names until the track was selected again
+            if dialect == .skiff, selectedTrack == t { try? await readSoundParams(descs: false) }
         }
     }
 

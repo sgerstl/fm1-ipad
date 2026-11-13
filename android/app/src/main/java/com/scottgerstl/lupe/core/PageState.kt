@@ -188,3 +188,8 @@ data class PickRoute(val route: Int) : Intent
 /** LANES, LANE MIX, SOUND, SAMPLES: pick a tile (turns knob 1). */
 @Serializable @SerialName("pickTile")
 data class PickTile(val tile: Int) : Intent
+
+/** Back to the pattern (decision 19: Android's back gesture, no visible key): SCREEN_GOTO 127, a HOME tap on the FM-1.
+ *  JSON `{"intent":"goHome"}`. A write: refused while read-only. The shell's bottom returns to the editor. */
+@Serializable @SerialName("goHome")
+data object GoHome : Intent

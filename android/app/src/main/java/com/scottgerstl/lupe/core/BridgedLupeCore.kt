@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.core
 
+import android.os.SystemClock
+import android.view.Choreographer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -45,9 +47,33 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
         LupeNative.stateListener = { area, json -> receive(area, json) }
     }
 
+    /** The page lag's Kotlin half (PhoneCore's LagTrace.swift is the Swift half; both read CLOCK_MONOTONIC): set when a
+     *  family key or the back gesture sends, then for 1.5 s each shell or page arriving is logged with its decode time
+     *  and the display frame after it. Lines start "lag kotlin" in LupeLog. */
+    private var lagSince = 0L
+    private var lagWhat = ""
+
+    private fun lagMark(line: String) {
+        if (lagSince == 0L) return
+        val dt = SystemClock.uptimeMillis() - lagSince
+        if (dt > 1500) { lagSince = 0L; return }
+        LinkLog.add("lag kotlin $lagWhat +$dt ms: $line")
+    }
+
     /** Swift calls this on the UI thread (the main actor). */
     fun receive(area: String, json: String) {
+        val t = if (lagSince != 0L && (area == "page" || area == "shell")) SystemClock.uptimeMillis() else 0L
         LinkLog.area(area, json)
+        if (t != 0L) {
+            val doneAt = { lagMark("$area decoded in ${SystemClock.uptimeMillis() - t} ms (${json.length} bytes)") }
+            receiveArea(area, json); doneAt()
+            Choreographer.getInstance().postFrameCallback { lagMark("$area: next frame") }
+            return
+        }
+        receiveArea(area, json)
+    }
+
+    private fun receiveArea(area: String, json: String) {
         try {
             when (area) {
                 "link" -> _link.value = lupeJson.decodeFromString(LinkState.serializer(), json)
@@ -72,6 +98,10 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     }
 
     override fun send(intent: Intent) {
+        if (intent is PickPage || intent is GoHome) {
+            lagSince = SystemClock.uptimeMillis(); lagWhat = intent.toString()
+            LinkLog.add("lag kotlin $lagWhat +0 ms: sent (clock $lagSince)")
+        }
         when (intent) {
             is Intent.SetTab -> _shell.value = _shell.value.copy(tab = intent.tab)
             is Intent.SetDivider -> _shell.value = _shell.value.copy(divider = intent.position)

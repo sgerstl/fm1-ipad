@@ -186,7 +186,7 @@ public struct SoundPage: Identifiable, Sendable {
 public func formatValue(_ d: ParamDesc?, _ v: Int, skiff: Bool = false) -> (shown: String, spoken: String) {
     guard let d else { return ("\(v)", "\(v)") }
     // as the FM-1's screen: its curves for times, rates, cutoffs and levels, and name lists on numbers
-    if let (text, u) = DeviceDisplay.value(d, v) {
+    if let (text, u) = DeviceDisplay.value(d, v, skiff: skiff) {
         let shown = u.isEmpty ? text : u == "%" ? "\(text)%" : "\(text) \(u)"
         let spoken = u == "%" ? "\(text) percent" : u == "dB" ? "\(text) decibels" : shown
         return (shown, spoken)

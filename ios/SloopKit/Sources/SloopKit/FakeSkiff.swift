@@ -20,6 +20,24 @@ public struct SkiffFixture: Codable, Sendable {
     }
 }
 
+/// Skiff 2.5.1's engines as its own tables have them (tests/descdump.c, by android/scripts/skiff-page-dump.sh): each
+/// engine's EDIT descriptors, which DESC answers for the track's engine (editor.c ED_DESC: param_desc_of), and its
+/// presets' values, which PRESET loads (hostsim.c host_preset_values, as ui.c apply_preset_to). The recorded fixture
+/// holds the DESC of one engine only (the track's when it was recorded).
+struct SkiffEngineTable: Decodable, Sendable {
+    struct Desc: Decodable, Sendable { var label: String; var fmt: Int; var min: Int; var max: Int; var def: Int; var names: [String]?; var unit: String }
+    struct Preset: Decodable, Sendable { var name: String; var e: [Int]; var env: [Int]; var mono: Int; var more: [[Int]] }
+    struct Engine: Decodable, Sendable { var name: String; var edit: [Desc]; var presets: [Preset] }
+    var P_E0: Int
+    var engines: [Engine]
+
+    static func load(_ firmware: SkiffFirmware) -> SkiffEngineTable? {
+        guard firmware == .v2_5_1, let url = Bundle.module.url(forResource: "skiff-2.5.1-engines", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SkiffEngineTable.self, from: data)
+    }
+}
+
 /// A pretend Skiff 2.2 or 2.5.1 (the fixture it's built on says which), built on what the sim answered: the recorded INFO, DESC and NAMES as they are, and
 /// steps, parameters, the selection and the transport kept as state from the recorded starting point. Like
 /// the device, it holds one request at a time: a frame that arrives before the last is answered is dropped.
@@ -43,6 +61,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     private var clockTimer: DispatchSourceTimer?
     private let lock = NSLock()
     private let fx: SkiffFixture
+    /// 2.5.1: every engine's EDIT descriptors and presets (nil on 2.2: DESC and PRESET as recorded).
+    private let engineTable: SkiffEngineTable?
     private let pCount: Int, gCount: Int
 
     var selected = 0
@@ -255,6 +275,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     public init(_ fx: SkiffFixture) {
         self.fx = fx
+        engineTable = SkiffEngineTable.load(SkiffInfo(fx.info)?.firmware ?? .v2_2)
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self)
         (notes, notesSink) = AsyncStream.makeStream(of: NoteEvent.self)
         (clock, clockSink) = AsyncStream.makeStream(of: ClockEvent.self)
@@ -795,6 +816,29 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     }
 
     func v14(_ v: Int) -> [UInt8] { Frame.v14(v) }
+
+    /// DESC of an engine parameter on 2.5.1, for the selected track's engine, as editor.c writes it: scope and id as
+    /// asked, FMT, MIN MAX DEF, the label and unit (8 letters, 0-terminated), a list's names (up to 24).
+    private func engineDesc(_ pid: Int, _ a0: UInt8, _ a1: UInt8) -> [UInt8]? {
+        guard let t = engineTable, (t.P_E0..<(t.P_E0 + 8)).contains(pid), let eng = t.engines[safe: engines[selected].engine],
+              let d = eng.edit[safe: pid - t.P_E0] else { return nil }
+        func str(_ s: String) -> [UInt8] { Array(s.utf8.prefix(8)).map { $0 & 0x7F } + [0] }
+        var b: [UInt8] = [a0, a1, UInt8(d.fmt)] + v14(d.min) + v14(d.max) + v14(d.def) + str(d.label) + str(d.unit)
+        if d.fmt == 8, let n = d.names { for x in n.prefix(min(24, d.max - d.min + 1)) { b += str(x) } }
+        return b
+    }
+
+    /// PRESET's values on 2.5.1 (hostsim.c host_preset_values: the engine's eight, the ENV, VOICE from MONO, the
+    /// preset's other values). No push follows: editor.c ed_load_after takes the load into the watch's copy, so the
+    /// editor that asked hears nothing (the phone reads the track again itself).
+    private func loadPresetValues(engine e: Int, preset pi: Int) {
+        guard let t = engineTable, let p = t.engines[safe: e]?.presets[safe: pi], selected < params.count else { return }
+        let s = selected
+        for (k, v) in p.e.enumerated() where t.P_E0 + k < pCount { params[s][t.P_E0 + k] = v }
+        for (k, v) in p.env.enumerated() where 1 + k < pCount { params[s][1 + k] = v }          // P_ATK P_DEC P_SUS P_REL
+        if 37 < pCount { params[s][37] = p.mono != 0 ? 2 : 0 }                                   // P_VOICE: V_LEGATO or V_POLY
+        for m in p.more where m.count == 2 && m[0] < pCount { params[s][m[0]] = m[1] }
+    }
     private func id(_ scope: UInt8, _ i: UInt8) -> Int { scope == 2 ? Int(i) + 128 : Int(i) }
 
     private func trackList() -> [UInt8] {
@@ -967,8 +1011,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             guard Int(a[0]) == SkiffMenu.usbLevel else { return [1, a[0]] + v14(v) }
             usbLevel = max(0, min(1, v))
             return [0, a[0]] + v14(usbLevel)
-        case (5, 2) where a == SkiffDriver.wire(pCount - 8) && engines[selected].engine == 4:
-            // SAMPLE's SET (E0: 138 on 2.2, 140 on 2.5.1): the built-in sets, then the user's (eng_sample.c SMP_ALL_NAMES)
+        case (5, 2) where engineTable == nil && a == SkiffDriver.wire(pCount - 8) && engines[selected].engine == 4:
+            // SAMPLE's SET on 2.2 (E0 138): the built-in sets, then the user's (eng_sample.c SMP_ALL_NAMES); 2.5.1's from engineTable
             return a + [8] + v14(0) + v14(5) + v14(0) + Array("SET".utf8) + [0, 0]
                 + ["PIANO", "STRINGS", "CHOIR", "USR1", "USR2", "USR3"].flatMap { Array($0.utf8) + [0] }
         case (68, 2) where a[0] == 0 && Int(a[1]) < fm6.count: return [0, a[1], 0] + fm6[Int(a[1])].bytes
@@ -987,7 +1031,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let s = Int(a[0])
             if !mixZones[s].isEmpty { mixValues[s] = a[1...].map(Int.init) }
             return mixReply(s)
-        case (5, 2): return fx.desc["\(a[0] == 1 ? 1 : 0).\(a[0] == 1 ? Int(a[1]) : id(a[0], a[1]))"]
+        case (5, 2):
+            if a[0] != 1, let b = engineDesc(id(a[0], a[1]), a[0], a[1]) { return b }
+            return fx.desc["\(a[0] == 1 ? 1 : 0).\(a[0] == 1 ? Int(a[1]) : id(a[0], a[1]))"]
         case (10, 1): return fx.names["\(a[0])"]
         case (27, 0): return trackList()
         case (27, 1):
@@ -1098,7 +1144,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             return poolReply(a[0], 0)
         case (20, 1): return [a[0], 1]
         case (8, 2):
-            engines[selected] = (Int(a[0]), Int(a[1])); return [a[0], a[1]]
+            engines[selected] = (Int(a[0]), Int(a[1]))
+            loadPresetValues(engine: Int(a[0]), preset: Int(a[1]))
+            return [a[0], a[1]]
         case (80, 0): return performReply(0, 0)
         case (80, _): return performOp(a)
         case (82, 0): return listReply(0, 0)

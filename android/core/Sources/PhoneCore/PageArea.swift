@@ -207,10 +207,12 @@ extension PhoneCore {
                                 names: d.flatMap { $0.names.isEmpty ? nil : Array(repeating: "", count: max(0, $0.min)) + $0.names })
     }
 
-    /// The control on knob k of the page's own ids.
+    /// The control on knob k of the page's own ids. A parameter the FM-1 labels "-" (an engine's unused knob: SAMPLE's
+    /// EDIT 2) is a blank column there (ui_draw.c), so it is none here.
     func knob(_ k: Int) -> PageArea.Control? {
         guard let id = page.ids[safe: k] ?? nil else { return nil }
-        return control(scope: page.scope(of: k), id: id, label: page.knobLabels[safe: k] ?? nil)
+        let c = control(scope: page.scope(of: k), id: id, label: page.knobLabels[safe: k] ?? nil)
+        return c.label.isEmpty || c.label.hasPrefix("-") ? nil : c
     }
 
     func controls() -> [PageArea.Control?] {
@@ -399,15 +401,24 @@ extension PhoneCore {
         let slot: Int?, value: Int?, family: String?, page: Int?, route: Int?, tile: Int?
     }
 
-    /// The four page intents (setParam, pickPage, pickRoute, pickTile). True when `json` was one of them. All four are
+    /// The page intents (setParam, pickPage, pickRoute, pickTile, goHome). True when `json` was one of them. All are
     /// writes to the FM-1 (SET, SCREEN_GOTO): AndroidLink's ReadOnlyGuard drops and logs them while the phone build is
     /// read-only, so nothing else gates them here.
     func handlePageJSON(_ json: String) -> Bool {
         guard let w = try? JSONDecoder().decode(PageWire.self, from: Data(json.utf8)),
-              ["setParam", "pickPage", "pickRoute", "pickTile"].contains(w.intent) else { return false }
+              ["setParam", "pickPage", "pickRoute", "pickTile", "goHome"].contains(w.intent) else { return false }
         guard session.isConnected, session.dialect == .skiff else { log("\(w.intent): no Skiff FM-1 connected"); return true }
         // All four are writes: refused up front while read-only, so Session's optimistic copy never shows what the guard then drops
         guard canWrite() else { log("read-only: \(w.intent) not sent (allow writes to send it)"); return true }
+        // goHome (decision 19: Android's back gesture): SCREEN_GOTO 127, a HOME tap, as the iPad's HOME key sends it. The
+        // screen is set to HOME at once and then to the FM-1's reply; the shell and page areas follow `deviceScreen`, so
+        // the bottom half is the editor again without waiting for the reply.
+        if w.intent == "goHome" {
+            lag.start("goHome")
+            session.showOnDevice(page: 127)
+            publishNow(["shell", "page"])
+            return true
+        }
         // pickPage works from anywhere (HOME too); the rest act on the sound page showing
         let screen = session.deviceScreen
         var shape: SoundPage?
@@ -424,11 +435,15 @@ extension PhoneCore {
         case "pickPage":
             guard let family = w.family.flatMap(SoundFamily.init(rawValue:)) else { log("pickPage: unknown family"); break }
             let target = w.page ?? SoundPage.reached(session, family).first?.fw
-            if let target { session.showOnDevice(page: target) }
+            if let target {
+                lag.start("pickPage \(family.rawValue) \(target)")
+                session.showOnDevice(page: target)
+                publishNow(["shell", "page"])      // the page as Session's optimistic screen has it, in this same call
+            }
         case "pickRoute":
-            if let r = w.route, let page = shape { session.showOnDevice(page: page.fw, cursor: min(max(r, 0), 10)) }
+            if let r = w.route, let page = shape { session.showOnDevice(page: page.fw, cursor: min(max(r, 0), 10)); publishNow(["page"]) }
         default: // pickTile: a lane (LANES, LANE MIX)
-            if let t = w.tile, let page = shape { session.showOnDevice(page: page.fw, cursor: min(max(t, 0), 7)) }
+            if let t = w.tile, let page = shape { session.showOnDevice(page: page.fw, cursor: min(max(t, 0), 7)); publishNow(["page"]) }
         }
         return true
     }

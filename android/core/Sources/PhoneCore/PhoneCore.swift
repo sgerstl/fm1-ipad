@@ -31,6 +31,9 @@ public final class PhoneCore {
     var soundsEntry: Int?
     var soundsViewing: Int?
     var projectBusy = false
+    /// The page lag's timing (LagTrace.swift), opened by pickPage and goHome.
+    lazy var lag = LagTrace(log: log)
+    private var lastScreen: UIState?
     private var motionTask: Task<Void, Never>?
     private var followTask: Task<Void, Never>?
     private var sendsTask: Task<Void, Never>?
@@ -56,6 +59,15 @@ public final class PhoneCore {
             self.notesIn += 1; self.pokeAreas(["diag"])
         }
         areas = [
+            // marks the screen's changes in an open lag trace (the optimistic one, then the FM-1's reply or push)
+            AreaWatch(name: "screenTrace", build: { [unowned self] in
+                let sc = self.session.deviceScreen
+                if sc != self.lastScreen {
+                    self.lastScreen = sc
+                    if self.lag.active { self.lag.mark("screen now page \(sc?.page ?? -1) home \(sc?.home ?? false)") }
+                }
+                return nil
+            }, publish: { _, _ in }),
             AreaWatch(name: "link", build: { [unowned self] in AreaJSON.encode(self.linkArea()) }, publish: publish),
             AreaWatch(name: "top", build: { [unowned self] in AreaJSON.encode(self.topArea()) }, publish: publish),
             // Only once the FM-1 has been read: before that Session holds placeholder tracks, not the FM-1's.
@@ -78,6 +90,12 @@ public final class PhoneCore {
             AreaWatch(name: "automation", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.automationArea()) : nil }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]
+        for a in areas {
+            a.trace = { [weak self] name, ms, bytes, published in
+                guard let self, self.lag.active else { return }
+                self.lag.mark(String(format: "%@ built in %.1f ms, %d bytes%@", name, ms, bytes, published ? ", published" : ""))
+            }
+        }
         areas.forEach { $0.start() }
         // The clock count isn't observed (Session samples it per frame on the iPad), so while playing the top
         // area is rebuilt every 50 ms; it is only sent when the bar or beat actually moved.
@@ -147,6 +165,8 @@ public final class PhoneCore {
 
     private func poke(_ names: [String]) { for n in names { areas.first { $0.name == n }?.poke() } }
     func pokeAreas(_ names: [String]) { poke(names) }
+    /// The named areas built and published at once (AreaWatch.now).
+    func publishNow(_ names: [String]) { for n in names { areas.first { $0.name == n }?.now() } }
 
     public func stop() {
         session.onDeviceNote = nil
@@ -291,6 +311,8 @@ final class AreaWatch {
     private var last: String?
     private var scheduled = false
     private var live = false
+    /// Set by PhoneCore: called after every build (area, build time ms, bytes, published), for the lag trace.
+    var trace: ((String, Double, Int, Bool) -> Void)?
 
     init(name: String, build: @escaping () -> String?, publish: @escaping (String, String) -> Void) {
         self.name = name; self.build = build; self.publish = publish
@@ -301,14 +323,21 @@ final class AreaWatch {
 
     private func evaluate() {
         guard live else { return }
+        let t = trace == nil ? 0 : LagClock.now()
         let json = withObservationTracking { build() } onChange: { [weak self] in
             Task { @MainActor in self?.changed() }
         }
-        if let json, json != last { last = json; publish(name, json) }
+        let fresh = json != nil && json != last
+        if let json, fresh { last = json; publish(name, json) }
+        if let trace { trace(name, LagClock.now() - t, json?.utf8.count ?? 0, fresh) }
     }
 
     /// Rebuild soon even though nothing observed changed (the clock count).
     func poke() { changed() }
+    /// Rebuild now, without the frame's wait: for an intent the person is watching (a family key, the back gesture),
+    /// after Session has set its optimistic copy. An unchanged build sends nothing, and a rebuild already scheduled
+    /// finds nothing new.
+    func now() { evaluate() }
 
     private func changed() {
         guard live, !scheduled else { return }

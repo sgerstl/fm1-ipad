@@ -56,9 +56,22 @@ public enum DeviceDisplay {
         return (v < 0 ? "-" : "") + "\(a / p)." + String(repeating: "0", count: d - frac.count) + frac
     }
 
+    /// Skiff's fmt_fix (libc.c): v with `d` decimals and no 0 before the point (".05" for 5, 2; "-.5" for -5, 1).
+    static func skiffFix(_ v: Int, _ d: Int) -> String {
+        var a = abs(v), t = "", n = 0
+        repeat {
+            t = String(a % 10) + t; a /= 10; n += 1
+            if n == d { t = "." + t; n += 1 }
+        } while a > 0 || n <= d
+        return (v < 0 ? "-" : "") + t
+    }
+
     /// A value as the FM-1 shows it: the number and its unit (TIME, LFOHZ, CUTOFF, DB and name lists).
-    /// nil for the formats the app shows its own way.
-    public static func value(_ d: ParamDesc, _ v: Int) -> (text: String, unit: String)? {
+    /// nil for the formats the app shows its own way. `skiff`: Skiff 2.5.1's param_format (params.c), checked against
+    /// it value by value (android/core PageParityTests): PCT a share of 127 unless the range is 0..100, no 0 before a
+    /// point, CUTOFF in tenths of a kHz to the top, DB always to a tenth. Without it, SLOOP 2.8.4's.
+    public static func value(_ d: ParamDesc, _ v: Int, skiff: Bool = false) -> (text: String, unit: String)? {
+        if skiff { return skiffValue(d, v) }
         switch d.format {
         case Format.pct: return ("\(d.max > 0 ? (v * 100 + d.max / 2) / d.max : v)", "%")
         case Format.time:
@@ -86,6 +99,32 @@ public enum DeviceDisplay {
         default: return nil
         }
     }
+
+    /// params.c param_format's numbers (Skiff 2.5.1).
+    static func skiffValue(_ d: ParamDesc, _ v: Int) -> (text: String, unit: String)? {
+        switch d.format {
+        case Format.pct: return ("\(d.max == 100 ? v : (v * 100 + 63) / 127)", "%")
+        case Format.time:
+            let ms10 = timeMsX10[v & 127]
+            if ms10 < 100 { return (skiffFix(ms10, 1), "ms") }
+            if ms10 < 10000 { return ("\((ms10 + 5) / 10)", "ms") }
+            return (ms10 >= 100_000 ? skiffFix(ms10 / 1000, 1) : skiffFix(ms10 / 100, 2), "s")
+        case Format.lfoHz:
+            let h = lfoHzX100[v & 127]
+            return (h < 1000 ? skiffFix(h, 2) : skiffFix(h / 10, 1), "Hz")
+        case Format.cutoff:
+            let h = cutoffHz[v & 127]
+            return h < 1000 ? ("\(h)", "Hz") : (skiffFix(h / 100, 1), "kHz")
+        case Format.db:
+            guard v > 0 else { return ("OFF", "") }
+            return (skiffFix(levelDbX10[min(v, 127)], 1), "dB")
+        case Format.int where !d.names.isEmpty:
+            let k = d.names.count, span = max(1, d.max - d.min + 1)
+            let i = (min(max(v, d.min), d.max) - d.min) * k / span
+            return (d.names[min(k - 1, max(0, i))], d.unit)
+        default: return nil
+        }
+    }
 }
 
 extension DeviceSession {
@@ -104,6 +143,8 @@ extension DeviceSession {
 /// lists (analog_desc, phys_desc, lofi_desc, noise_desc). The rest of Skiff's engines have no hook.
 public enum SkiffDisplay {
     static let analogSyncWave = 5, analogSubWave = 6                        // eng_analog.c AW_SYNC, AW_SUB
+    static let fm6Algos = ["PAT"] + (1...32).map(String.init)                    // eng_fm6.c N_FM6_ALG (2.5.1)
+    static let fm6Patches = (1...8).map { "F\($0)" } + ["OWN"]                  // N_FM6_PATCH
     static let physChords = ["OCT", "5TH", "4TH", "MAJ", "MIN", "SUS", "7TH", "ROOT"]
     static let lofiWaves = ["SQ50", "SQ25", "SQ12", "SINE", "TRI", "SAW", "SAW2", "BAS1",
                             "BAS2", "ORGN", "HOLW", "VOXA", "VOXO", "VOXE", "BUZZ", "STAIR"]
@@ -148,6 +189,11 @@ public enum SkiffDisplay {
         case "NOISE":
             if k == 5, e0 >= 2 { return ("LEN", F.int, e0 == 2 ? noiseLong : noiseMeta, "") }   // NZ_LFSR, NZ_META
             if k == 7, e0 >= 2 { return ("CLK", F.int, [], "st") }
+        case "FM6":
+            // ALGO and PATCH are numbers with a name list (eng_fm6.c N_FM6_ALG, N_FM6_PATCH): DESC sends names only for
+            // a list (editor.c ED_DESC), so the FM-1's "PAT" and "F1".."OWN" are written here
+            if k == 0 { return ("ALGO", F.int, fm6Algos, "") }
+            if k == 7 { return ("PATCH", F.int, fm6Patches, "") }
         default: break
         }
         return nil
