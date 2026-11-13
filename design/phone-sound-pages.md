@@ -1,5 +1,7 @@
 # The phone's sound pages (P4): page by page
 
+*Note, 2026-11-14 night: P1 read the real FM-1 over the Pixel and it runs **Skiff 2.5.1** (INFO "FELUCCA v2.5.1"), not 2.2. So the 2.5 rows below are the primary ones (FX has eight pages; CHORD has STRUM and DIR; GLO's DELAY has MODE), and the 2.2 tables are the fallback the page builder already handles.*
+
 *Drafted overnight 2026-11-13 → 14 by Claude for Scott to correct. Source of truth for the pages: Skiff's `PAGES[]` (firmware `params.c`, the Skiff-Lupe 2.2 tree in `~/code/skiff-src`) and SloopKit's `SkiffPages` (SkiffDriver.swift), which already builds them per firmware release. Boards 59–63 in `design/boards/phone-portrait-2.html`. Decisions this rests on: the bottom half always follows the FM-1 (D3), four controls first (D8), one page at a time.*
 
 ## What stays the same on every page
