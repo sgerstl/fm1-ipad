@@ -39,16 +39,17 @@ class PlaceFollower {
             if (open && !projectsOpen) { out += PlaceAction.ShowProjects; ownProjects = true }
             if (!open && ownProjects) { if (projectsOpen) out += PlaceAction.CloseProjects; ownProjects = false }
         }
-        fun restore(keepTab: Boolean = false, keepDivider: Boolean = false) {
-            sounds(false); projects(false)
+        fun restore(keepTab: Boolean = false, keepDivider: Boolean = false, keepSounds: Boolean = false, keepProjects: Boolean = false) {
+            if (!keepSounds) sounds(false)
+            if (!keepProjects) projects(false)
             if (!keepTab) { savedTab?.let { if (it != tab) out += PlaceAction.Tab(it) }; savedTab = null }
             if (!keepDivider) { savedDivider?.let { if (it != divider) out += PlaceAction.Divider(it) }; savedDivider = null }
         }
         when (screen.key) {
             "GLO" -> { restore(keepTab = true); goTab(Tab.Mix) }
             "SAVE" -> when (screen.title) {
-                "PRESETS", "USER" -> { projects(false); restore(keepTab = true); sounds(true) }
-                "PROJECT" -> { sounds(false); restore(keepTab = true); projects(true) }
+                "PRESETS", "USER" -> { projects(false); restore(keepTab = true, keepSounds = true); sounds(true) }
+                "PROJECT" -> { sounds(false); restore(keepTab = true, keepProjects = true); projects(true) }
                 else -> restore(keepTab = true)
             }
             "SEQ" -> when (screen.title) {
