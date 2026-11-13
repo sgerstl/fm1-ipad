@@ -55,7 +55,8 @@ fun MixState.toUi(): MixUi {
     val keys = sections.map { it.key }.ifEmpty { listOf("mixer", "delay", "reverb", "chorus", "global") }
     return MixUi(
         pages = titles, page = keys.indexOf(section).coerceAtLeast(0),
-        tracks = rows.map { MixTrackUi(it.track, it.name, it.level, it.levelText, it.pan + 64, it.panText, it.reverb ?: 0, it.reverbText ?: "…", it.mute, null, it.selected) },
+        // the core names a track "Engine · Sound" ("Analog · Acid"); the row has room for the sound's name
+        tracks = rows.map { MixTrackUi(it.track, it.name.substringAfter(" · "), it.level, it.levelText, it.pan + 64, it.panText, it.reverb ?: 0, it.reverbText ?: "…", it.mute, null, it.selected) },
         bus = card?.controls.orEmpty(),
     )
 }

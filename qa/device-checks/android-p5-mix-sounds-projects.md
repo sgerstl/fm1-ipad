@@ -1,0 +1,43 @@
+# Device check: android-p5-mix-sounds-projects (claude/android-p2-shell-02c86f), 2026-11-14
+
+Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on the Pixel 10 Pro; the branch merges to `main` only after it passes.
+
+**What this is:** P5's screens: the Mix tab (boards 64, 65), the Sounds browser in the bottom half (board 66), the Projects sheet (board 67), and Settings with Labs (board 67, plus the Slide to turn and Magnifier switches that replace the adb extras). They read P1's `mix`, `sounds` and `projects` areas (bbf9693) and send its intents. With the real FM-1 writes depend on P1's read-only guard: if the app is still in read-only mode, a change shows on the phone and the FM-1 refuses it; say so in the result.
+**Setup:** the Pixel on USB or Wi-Fi adb; `./gradlew :app:installDebug` from `android/` (the main session installs). **Without an FM-1** add `--es scenario ready` (the fake core, recordings from P1's core): everything below works there except the FM-1's own knobs and screen.
+**Back up first?** **Yes on the real FM-1 for checks 9, 10, 12 and 13** (Projects Load/Save, user-slot Save): they write the FM-1's flash. Take a project backup from the iPad first (Lupe › Projects), and don't run them with the only copy of a song on the FM-1.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 1 | Tap Mix. Compare with board 64 (`design/boards/phone-portrait-2/board-64.png`). | A page row (Mixer · Delay · Reverb · Chorus · Global, Mixer lit) and six track rows: number in the track's colour (the selected track ringed), the sound's name, "−4 dB · C", a fader in the track's colour with a white thumb, a labelled Mute key. | – | ☐ pass ☐ fail: |
+| 2 | Slide a track's fader. By default that is up and down; the Settings sheet (check 14) changes it. | The thumb follows; the dB changes; the Magnifier floats the value above your finger ("LEVEL · Acid", big digits); on the real FM-1 the track's level moves. A sideways drag does nothing (Settings › Slide to turn › Sideways turns that round). | RAM only | ☐ pass ☐ fail: |
+| 3 | Double-tap a fader. | It goes back to what it was when the tab opened. | – | ☐ pass ☐ fail: |
+| 4 | Hold a track row (not the number). | A menu opens beside your finger with PAN and REVERB SEND (large values, each turned by sliding) and "Sounds…". There is no PAN on the row itself (decision 14). | – | ☐ pass ☐ fail: |
+| 5 | Tap Mute on a row, then again. | The key fills while muted, the row's fader greys; the Pads' M for that row follows. | – | ☐ pass ☐ fail: |
+| 6 | Drag the divider to top only. | The rows grow tall; each gains its "LEVEL · send REV n" line and a thin send bar (and a meter when the core sends one). | – | ☐ pass ☐ fail: |
+| 7 | Tap Delay, then Reverb, Chorus, Global. | A short picture and four white controls (not a track's colour), the corner words "Shared by every track". Sliding a control changes it (and on the FM-1 the effect). On the real FM-1 the FM-1's GLO button steps the page and the top half follows. | RAM only | ☐ pass ☐ fail: |
+| 8 | On Pads, hold a track's **number**. Or hold a row in Mix › Sounds…. | The Sounds browser replaces the bottom half (the editor): "Choose a sound for track N", Save and Done, the engines down the left (ANALOG … DRUM, then USER), presets in two columns, a tick on what the track plays. At top only the divider glides to split. Back or Done brings the editor back. | – | ☐ pass ☐ fail: |
+| 9 | In the browser tap an engine, then a preset. | The presets change; the track takes the sound at once and the tick moves (on the real FM-1 you hear it). | **Yes** (changes the track's sound in RAM; don't Save) | ☐ pass ☐ fail: |
+| 10 | Tap Save, then an **empty** user slot, then Save again and a **used** slot. | Empty: it stores at once. Used: a red-outlined row says "Replace user slot N (NAME) with this sound?" with Cancel under it; a tap in the first 0.4 s does nothing. | **Yes** (writes a user slot in flash) | ☐ pass ☐ fail: |
+| 11 | On Pads hold a drum pad, Select sound. | The browser reads "Sound for pad B on track 4". A pick sets that pad's own sound (its corner is cut, as every pad with a sound); "Use the track's own sound" appears to take it off. The track's sound is untouched. (Decision 15.) | **Yes** (writes the pad's entry) | ☐ pass ☐ fail: |
+| 12 | FM-1 key menu › Projects…. Compare with board 67. | A sheet rises from the bottom (scrim fades in): "The FM-1 keeps four projects", four rows, the playing one with a dot and Save, the others Load, an empty one Save here, ⋯ for Rename. ✕, Back, the scrim or a drag down closes it. | – | ☐ pass ☐ fail: |
+| 13 | Load another project while the playing one has changes; try Cancel, then Save first, then Load again; Save on the playing one; Save here on an empty slot; Rename. | Load over changes asks in place, naming what goes ("… changes since its last save go"), Save first and Cancel under it, taps ignored for 0.4 s. Save on the playing project asks too ("It replaces what the slot held"). Save here stores at once. Rename is a text field with Done. | **Yes** (writes flash) | ☐ pass ☐ fail: |
+| 14 | FM-1 key menu › Settings. | Slide to turn (Sideways · Up and down · Both), Magnifier and Haptics switches, then Labs: four switches each marked TRIAL and each off. Switching Slide to turn changes the next slide at once and is kept after you close the app. Magnifier off: no floating copy. Haptics off: no ticks anywhere. (The adb extras `--es slide` / `--ez magnifier` still work for testing.) | – | ☐ pass ☐ fail: |
+| 15 | FM-1 key menu › Labs. | Settings opens already scrolled to Labs. | – | ☐ pass ☐ fail: |
+| 16 | Labs: switch on "Pin the bottom half's page". Press ENV on the FM-1 (or Play "page-env" in the fake menu). Switch it off. | Pinned, the bottom half stays on the editor (or the page it was on) while the FM-1 moves; off, it follows again. | – | ☐ pass ☐ fail: |
+| 17 | Labs: switch on "Pause following after a touch". Touch the editor, then press ENV on the FM-1 within 3 s. | The bottom half holds its page for about 3 s after your touch, then catches up to the FM-1's page. | – | ☐ pass ☐ fail: |
+| 18 | Labs: the piano and "time across" rows. | Both switch and are kept, and each says what it waits on ("Not built yet", "Arrives with the Timeline"). Nothing else changes. | – | ☐ pass ☐ fail: |
+| 19 | TalkBack on: the Mix fader, a row's menu, the browser's presets, a Projects row, a Settings switch. | Fader: "Level, Acid, −4 dB", adjustable (swipe up/down), Increase / Decrease / Put back. Presets read as buttons with "Playing on this track". A Settings switch reads its name and On/Off, the Labs ones "trial". A sheet reads as its own pane and the page behind it is skipped. | – | ☐ pass ☐ fail: |
+| 20 | Remove animations on; repeat 8, 12 and 14. | The sheet and the browser fade instead of travelling; switches blend instead of sliding. | – | ☐ pass ☐ fail: |
+
+**Calls I made without Scott:**
+- **A track's name on a Mix row** is the part after "·" ("Acid" from "Analog · Acid"), because the core names tracks "Engine · Sound" and the row has room for one. TalkBack still reads the whole name where it matters.
+- **Pan is in the hold menu only** (decision 14), as boards 64's note recommends; the row shows level and Mute.
+- **The Magnifier doesn't show inside menus** (the menu is a window above it); the value is large there instead.
+- **Slots show "kept on the FM-1"** for a used slot: the core sends no saved-at time, so the board's "saved today 22:40" is not drawn.
+- **Labs "Pause following" and "Pin"** are real (in `Body.kt`); "Piano" and "Timeline: time across" are switches that are kept and do nothing yet (the Timeline is phase 6, the piano isn't built).
+- **Select sound on a drum pad** decides "drum track" by its name (Drum, Kit, Perc) until the core says so; any other track's Select sound sets the track's sound.
+- **Haptics** is one gate over every haptic in the app (Settings › Haptics).
+
+**Not covered:** the board's meter on the Mix row (the core sends none yet, so none is drawn), the iPad's Solo (the core has it; no key on the phone row), Sounds' "Samples (USR1–3)" (not in the core's areas), and anything about the FM-1 over Bluetooth.
+
+**After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device" (TalkBack: release pass).
