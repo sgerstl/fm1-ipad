@@ -92,6 +92,10 @@ data class BottomPage(
     val page: String? = null,
 )
 
+/** What Swift's `shell` area carries: the bottom half only (tab and divider are Kotlin's). */
+@Serializable
+data class ShellBottom(val bottom: BottomPage)
+
 @Serializable
 data class ShellState(
     val tab: Tab = Tab.Pads,

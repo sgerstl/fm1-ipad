@@ -2,6 +2,7 @@ package com.scottgerstl.lupe.core
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -37,7 +38,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
             when (area) {
                 "link" -> _link.value = lupeJson.decodeFromString(LinkState.serializer(), json)
                 "top" -> _top.value = lupeJson.decodeFromString(TopState.serializer(), json)
-                "shell" -> _shell.value = lupeJson.decodeFromString(ShellState.serializer(), json)
+                // Swift sends only `bottom` (what the FM-1 shows); tab and divider stay the screens' own
+                "shell" -> _shell.update { it.copy(bottom = lupeJson.decodeFromString(ShellBottom.serializer(), json).bottom) }
                 "pads" -> _pads.value = lupeJson.decodeFromString(PadsState.serializer(), json)
                 "editor" -> _editor.value = lupeJson.decodeFromString(EditorState.serializer(), json)
                 "page" -> _page.value = lupeJson.decodeFromString(PageState.serializer(), json)

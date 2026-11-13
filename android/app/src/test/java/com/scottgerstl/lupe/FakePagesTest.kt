@@ -86,4 +86,12 @@ class FakePagesTest {
             Scenario.parse("d", File("../fixtures/state/page-drive.json").readText()).frames.last { it.area == "page" }.state).pages
         assertEquals(46, fx.first { it.title == "DELAY" }.index); assertEquals(47, fx.first { it.title == "REVERB" }.index)
     }
+
+    /** What Swift's shell area carries: only the bottom half (BridgedLupeCore merges it in; tab and divider stay Kotlin's). */
+    @Test fun shellBottomFromSwiftDecodes() {
+        val b = lupeJson.decodeFromString(com.scottgerstl.lupe.core.ShellBottom.serializer(), """{"bottom":{"family":"ENV","kind":"page","page":"ENV 2"}}""").bottom
+        assertEquals(BottomKind.Page, b.kind); assertEquals("ENV", b.family); assertEquals("ENV 2", b.page)
+        val e = lupeJson.decodeFromString(com.scottgerstl.lupe.core.ShellBottom.serializer(), """{"bottom":{"kind":"editor"}}""").bottom
+        assertEquals(BottomKind.Editor, e.kind)
+    }
 }

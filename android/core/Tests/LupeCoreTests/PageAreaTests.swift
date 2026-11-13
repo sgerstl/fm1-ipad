@@ -191,4 +191,34 @@ import Testing
         func add(_ s: String) { l.withLock { v.append(s) } }
         var lines: [String] { l.withLock { v } }
     }
+
+    // MARK: shell.bottom follows the FM-1's screen (decision 3)
+
+    func bottoms(_ r: Recorder) -> [ShellArea.Bottom] {
+        r.frames.filter { $0.area == "shell" }.compactMap { try? JSONDecoder().decode(ShellArea.self, from: Data($0.json.utf8)).bottom }
+    }
+
+    @Test func aSoundPageOnTheFM1ShowsOnThePhoneAndHomeBringsTheEditorBack() async throws {
+        let r = Recorder()
+        let fake = try linkedFake(track: 5)
+        let (core, plug) = try await readyCore(fake, r, writes: false)      // the FM-1's own buttons: nothing is written
+        defer { core.stop(); plug.unplug() }
+        try await waitFor(3, "the editor first") { self.bottoms(r).last?.kind == "editor" }
+        fake.pressOnDevice(page: 2)                                          // LFO
+        try await waitFor(3, "LFO") { self.bottoms(r).last == ShellArea.Bottom(kind: "page", family: "LFO", page: "LFO") }
+        fake.pressOnDevice(page: 1)
+        try await waitFor(3, "ENV 2") { self.bottoms(r).last == ShellArea.Bottom(kind: "page", family: "ENV", page: "ENV 2") }
+        fake.pressOnDevice(page: SkiffPageMap.fxDelay)                       // 2.5.1's FX › DELAY
+        try await waitFor(3, "DELAY") { self.bottoms(r).last == ShellArea.Bottom(kind: "page", family: "FX", page: "DELAY") }
+        fake.pressOnDevice(page: 41)                                         // SEQ › NOTES (device page 42 on 2.5.1)
+        try await waitFor(3, "NOTES: the editor") { self.bottoms(r).last?.kind == "editor" }
+        #expect(core.pageArea() == nil, "no sound page on NOTES")
+        fake.pressOnDevice(page: 0)
+        try await waitFor(3, "ENV") { self.bottoms(r).last?.page == "ENV" }
+        fake.pressOnDevice(page: nil)                                        // HOME
+        try await waitFor(3, "HOME: the editor") { self.bottoms(r).last?.kind == "editor" }
+        // only `bottom` is sent: the tab and divider are the screens' own
+        let json = try #require(r.frames.last { $0.area == "shell" }?.json)
+        #expect(!json.contains("tab") && !json.contains("divider"), Comment(rawValue: json))
+    }
 }

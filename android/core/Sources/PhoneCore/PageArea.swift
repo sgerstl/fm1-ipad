@@ -60,6 +60,20 @@ public struct PageArea: Codable, Equatable, Sendable {
     public var lock: Lock?
 }
 
+/// `shell`'s part Swift owns: what the bottom half shows. Only `bottom` is sent; tab and divider stay the screens' own
+/// (BridgedLupeCore merges it in). The bottom half always follows the FM-1 (decision 3): a sound page while the FM-1
+/// shows one, the editor for everything else (HOME, SEQ, GLO, SAVE, a layer, a menu).
+public struct ShellArea: Codable, Equatable, Sendable {
+    public struct Bottom: Codable, Equatable, Sendable {
+        /// "editor" or "page"
+        public var kind: String
+        public var family: String?
+        /// The page's title (what the page row underlines), only for "page".
+        public var page: String?
+    }
+    public var bottom: Bottom
+}
+
 // MARK: building it
 
 let pageLaneNames = ["KICK", "SNARE", "CLAP", "CL HAT", "OP HAT", "TOM", "RIM", "BELL"]
@@ -74,6 +88,16 @@ extension PhoneCore {
         if screen.menu == 0, screen.layer == 0, !screen.home, [SkiffPageMap.fxDelay, SkiffPageMap.fxReverb].contains(screen.page) { return screen.page }
         if case .shape(let fw)? = SkiffButtonMap.place(for: screen) { return fw }
         return nil
+    }
+
+    /// nil until the FM-1 is read and its screen reports (before that the shell keeps its own default, the editor).
+    public func shellArea() -> ShellArea? {
+        let s = session
+        guard s.isConnected, s.dialect == .skiff, s.screenLinked, let screen = s.deviceScreen else { return nil }
+        if let fw = Self.soundPage(of: screen), let page = SoundPage.page(s, fw: fw) {
+            return ShellArea(bottom: .init(kind: "page", family: page.family.rawValue, page: page.title))
+        }
+        return ShellArea(bottom: .init(kind: "editor", family: nil, page: nil))
     }
 
     /// The sound page the FM-1 shows, or nil when it shows none (HOME, the sequencer, GLO, a layer), when the firmware

@@ -54,6 +54,8 @@ public final class PhoneCore {
             AreaWatch(name: "pads", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.padsArea()) : nil }, publish: publish),
             AreaWatch(name: "editor", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.editorArea()) : nil }, publish: publish),
             // Only while the FM-1's screen is on a sound page (nil otherwise: the last page stays; the shell says what shows).
+            // shell.bottom only (tab and divider are Kotlin's): the sound page the FM-1 shows, else the editor
+            AreaWatch(name: "shell", build: { [unowned self] in self.shellArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
         ]
