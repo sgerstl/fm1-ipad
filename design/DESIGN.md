@@ -48,3 +48,14 @@ name exactly what goes ("Clear all 5 pads on T4 Drum Kit, erasing pattern 07"), 
 rows fade. The confirm ignores taps for 0.4 s, so a double tap can't go through it. Tapping away, Escape or VoiceOver's
 two-finger scrub cancels; VoiceOver focuses the confirm and announces its words. Where the change can be undone instead
 (a step clear, kept for Undo), Undo wins over a confirm.
+
+## The header is chrome, not content (Scott, 2026-11-13, board 71: A with C's tabs)
+
+The square key is the content's shape: pads, steps, values, the keys inside panels. The header never uses it, so the
+two read apart at a glance.
+
+- **Project and launch** are words with a ⌄ (Barlow 17 semibold for the project, 14 for Loop in the secondary grey), no box. They open menus.
+- **Record and Play are round**, as the FM-1's buttons are: Record a ring (`outline`) with the red dot, Play filled white while playing. 40 across, 44 or more of touch.
+- **The readout** (bar · beat over BPM) stays plain at the right.
+- **Tabs** (Pads · Timeline · Mix) are a left-aligned row of words, Barlow 17 semibold, 24 apart: the one showing in `text` with a 3 px white underline the width of its word, the others in `text2`. The underline glides to the new tab (about 200 ms, ease-out); with Reduce Motion it cross-fades. White, not a track colour.
+- A 1 px hairline (`control`) under the tabs ends the header.
