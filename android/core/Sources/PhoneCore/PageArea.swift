@@ -407,7 +407,7 @@ extension PhoneCore {
         if w.intent == "goHome" {
             lag.start("goHome")
             session.showOnDevice(page: 127)
-            publishNow(["shell", "page"])
+            publishNow(["shell", "page", "fm1Screen"])
             return true
         }
         // pickPage works from anywhere (HOME too); the rest act on the sound page showing
@@ -429,7 +429,7 @@ extension PhoneCore {
             if let target {
                 lag.start("pickPage \(family.rawValue) \(target)")
                 session.showOnDevice(page: target)
-                publishNow(["shell", "page"])      // the page as Session's optimistic screen has it, in this same call
+                publishNow(["shell", "page", "fm1Screen"])      // the page as Session's optimistic screen has it, in this same call
             }
         case "pickRoute":
             if let r = w.route, let page = shape { session.showOnDevice(page: page.fw, cursor: min(max(r, 0), 10)); publishNow(["page"]) }
