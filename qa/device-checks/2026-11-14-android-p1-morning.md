@@ -24,7 +24,9 @@ adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity
 **Already verified overnight on this Pixel and FM-1 (read-only):**
 - Gate 3: the FM-1 was found by its real strings (manufacturer "Hügelton Instruments", product "Felucca", USB 0x1209:0001) and opened; raw mode's INFO came back decoded ("FELUCCA v2.5.1", 6 tracks, 15 engines, supported).
 - Gate 4 (except unplug/replug): Session reached ready (searching → connecting → reading → ready), tempo 72 read, the screen link live (home page, track 3 selected), nothing blocked by the guard.
-- Soak: see the commit and the hand-over note for the 10-minute result.
+- Soak: 11 minutes on the debug screen (02:27–02:38) with the link staying `ready`, nothing lost, nothing blocked.
+- P2/P3's shell on the real FM-1 (02:39): the Pads tab showed the FM-1's own patterns (track 2 A 57 · B 58, track 5 A 53 · B 56, track 6 A 32 · B 33 · C 48 · D 52), 72 BPM, and the editor on track 3 "Phase · Pd Organ". Check 3 asks you to confirm those match what the FM-1 itself shows.
+- The project name came back empty: the FM-1 reported no saved slot for the music playing (PROJ_NAME). If your project is saved in a slot, that's a bug: note it in check 3.
 
 **Not covered here:** pad launches, step edits, locks and automation (P3 intents not wired in the core yet); MOTION reads; TalkBack (release pass); background behaviour with the FM-1 plugged in for a long time.
 
