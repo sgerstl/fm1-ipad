@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lupe phone, landscape</title>
+<!-- Boards 73–74: the Android phone turned landscape (Pixel 10 Pro, 915 × 412 dp), Scott's question 2026-11-14:
+     "would it just be easier to make it landscape, and have it better mirror how the ipad works". Starts from the
+     iPhone's landscape boards 46–50 (phone-skiff.html), restyled with decisions 23 (the header), 25 (dials) and 27. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600&display=swap">
+<link rel="stylesheet" href="phone-kit.css">
+<style>
+.screen.land { width: 915px; height: 412px; border-radius: 28px; }
+.sec { font-size: 18px; font-weight: 600; margin: 8px 0 20px; color: #EDEDF0; }
+</style>
+</head>
+<body>
+<h1>Lupe on the phone, landscape: the step editor and the pads</h1>
+<p class="lede">Pixel 10 Pro turned sideways, 915 × 412 dp, the status bar hidden while Lupe runs (the system shows it on a swipe), the camera on the left (40 dp kept clear). One job a tab, as the iPhone's landscape boards 46–50: Pads · Edit · Timeline · Mix. The core under it (the FM-1 link, the areas, the intents, the label check, the following) doesn't change; only the screens do.</p>
+<div id="boards"></div>
+
+<script src="phone-kit.js"></script>
+<script>
+const LW = 915, LH = 412, X0 = 40, X1 = 899;
+const LB = [];
+function section(t) { LB.push(`<h2 class="sec">${t}</h2>`); }
+function board(n, title, phones, notes) {
+  LB.push(`<section class="board"><h2>Board ${n} · ${title}</h2><div class="phones" style="flex-direction:column">${phones.map(p =>
+    `<div>${p.cap ? `<p class="cap">${p.cap}</p>` : ''}<div class="screen land" role="img" aria-label="${p.label}">${p.body()}${(p.discs || []).map(d => disc(...d)).join('')}</div></div>`).join('')}</div><div class="ann"><ol>${notes.map(n => `<li>${n}</li>`).join('')}</ol></div></section>`);
+}
+const chev = '<span style="color:var(--text2);font-weight:400;margin-left:4px">⌄</span>';
+function rKey(x, y, d, inner, o = {}) {
+  const st = `border-radius:${d / 2}px;display:flex;align-items:center;justify-content:center;` + (o.lit ? 'background:#EDEDF0;color:#101012;' : 'box-shadow:inset 0 0 0 2px var(--outline);');
+  return el('', x, y, d, d, st, inner, `role="button" aria-label="${o.label || ''}"`);
+}
+// one header line: project, launch, the four tabs as underlined words, the readout, Record and Play at the edge
+function topBar(tab) {
+  let h = el('', X0, 8, 130, 44, 'display:flex;align-items:center;font-size:17px;font-weight:600', 'TESTBED' + chev, 'role="button"');
+  h += el('', X0 + 136, 8, 76, 44, 'display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--text2r)', 'Loop' + chev, 'role="button"');
+  let x = X0 + 240;
+  ['Pads', 'Edit', 'Timeline', 'Mix'].forEach(t => {
+    const on = t === tab, w = t.length * 9.6 + 4;
+    h += el('', x, 8, w, 44, `display:flex;align-items:center;font-size:17px;font-weight:600;color:${on ? 'var(--text)' : 'var(--text2)'}`, t, `role="tab" aria-selected="${on}"`);
+    if (on) h += el('', x, 46, w, 3, 'border-radius:2px;background:#EDEDF0');
+    x += w + 26;
+  });
+  h += el('', 710, 8, 70, 44, 'display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.05',
+    `<span class="cond" style="font-size:22px">10·3</span><span style="font-size:12px;color:var(--text2r)">120 BPM</span>`);
+  h += rKey(796, 10, 40, '<span style="width:14px;height:14px;border-radius:7px;background:var(--rec)"></span>', { label: 'Record' });
+  h += rKey(848, 10, 40, '<span style="font-size:16px;margin-left:2px">▶</span>', { lit: true, label: 'Stop' });
+  h += el('', 0, 56, LW, 1, 'background:var(--control)');
+  h += el('', 418, 404, 80, 4, 'border-radius:2px;background:#5A5A62');
+  return h;
+}
+function ruler(y, text, right = '') {
+  let h = el('', X0, y, 600, 28, 'display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap',
+    `<span style="width:10px;height:10px;border-radius:5px;background:${text.col}"></span><span style="font-weight:600">${text.name}</span><span style="color:var(--text2r)">${text.rest}</span>`);
+  if (right) h += right;
+  return h;
+}
+// sixteen columns across the width, grouped in fours like the FM-1's steps
+const GAP_IN = 4, GAP_BEAT = 12;
+function colX(i, x0, w0) { const cw = (w0 - 12 * GAP_IN - 3 * GAP_BEAT) / 16; return { x: x0 + i * cw + (i - Math.floor(i / 4)) * GAP_IN + Math.floor(i / 4) * GAP_BEAT, w: cw }; }
+// the dial (as the app's, decision 25): value in a 52 ring, label under
+function dial(x, y, label, value, frac, col, hot) {
+  const r = 22, c = 2 * Math.PI * r, arc = c * 0.75;
+  let h = `<svg class="abs" style="left:${x + 20}px;top:${y}px" width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="${r}" fill="none" stroke="#26262B" stroke-width="5" stroke-dasharray="${arc} ${c}" transform="rotate(135 26 26)" stroke-linecap="round"/><circle cx="26" cy="26" r="${r}" fill="none" stroke="${hot ? '#EDEDF0' : col}" stroke-width="5" stroke-dasharray="${arc * frac} ${c}" transform="rotate(135 26 26)" stroke-linecap="round"/></svg>`;
+  h += el('cond', x + 20, y + 15, 52, 22, 'text-align:center;font-size:18px;line-height:22px', value, `role="slider" aria-label="${label} ${value}"`);
+  h += el('lab', x, y + 56, 92, 14, 'text-align:center', label);
+  return h;
+}
+// a keyboard strip, an octave and a half, for writing the picked step's note(s)
+function keys(x, y, w, h, lit, col, o = {}) {
+  const whites = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C', 'D', 'E', 'F'], n = whites.length, kw = w / n;
+  let out = el('', x, y, w, h, 'border-radius:8px;background:#050506');
+  whites.forEach((k, i) => {
+    const name = k + (i < 7 ? '4' : '5'), on = lit.includes(name);
+    out += el('', x + i * kw + 1, y + 1, kw - 2, h - 2, `border-radius:0 0 6px 6px;background:${on ? col : '#D8D8DE'}`, `<span class="abs" style="left:0;right:0;bottom:4px;text-align:center;font-size:11px;font-weight:600;color:#101012">${name}</span>`, `role="button" aria-label="${name}${on ? ', on the step' : ''}"`);
+  });
+  [0, 1, 3, 4, 5, 7, 8].forEach(i => {
+    const nm = ['C#', 'D#', '', 'F#', 'G#', 'A#'][i % 7] + (i < 7 ? '4' : '5'), on = lit.includes(nm);
+    out += el('', x + (i + 1) * kw - kw * 0.3, y + 1, kw * 0.6, h * 0.58, `border-radius:0 0 4px 4px;background:${on ? col : '#18181C'};box-shadow:0 0 0 1px #050506`, '', `role="button" aria-label="${nm}"`);
+  });
+  if (o.label) out += el('', x, y - 22, w, 18, 'font-size:12px;color:var(--text2r);display:flex;justify-content:space-between', o.label);
+  return out;
+}
+// the step panel under the row: Step N with ‹ ›, the three tabs, Lock; the four dials left; the keyboard right
+function stepPanel(y, o) {
+  const col = o.col;
+  let h = el('', 0, y - 6, LW, 1, 'background:var(--control)');
+  h += el('key', X0, y, 84, 28, 'font-size:14px;gap:6px', `Step ${o.step} <span style="color:var(--text2r);font-weight:400">✕</span>`, `aria-label="Step ${o.step} picked; close"`);
+  h += el('key', X0 + 90, y, 28, 28, 'font-size:14px', '‹', 'aria-label="Previous step"');
+  h += el('key', X0 + 122, y, 28, 28, 'font-size:14px', '›', 'aria-label="Next step"');
+  h += el('rec', X0 + 158, y, 168, 28, 'padding:2px');
+  ['NOTES', 'FEEL', 'SOUND'].forEach((t, i) => { const on = i === 0;
+    h += el(on ? 'key' : 'lab', X0 + 160 + i * 55, y + 2, 53, 24, on ? "font-size:12px;font-family:'Barlow Condensed';letter-spacing:.04em" : 'display:flex;align-items:center;justify-content:center', t); });
+  h += el('key', X0 + 334, y, 72, 28, 'font-size:13px', '◇ Lock');
+  o.dials.forEach((d, i) => { h += dial(X0 + i * 100, y + 38, d[0], d[1], d[2], col); });
+  if (o.keys) {
+    h += el('key', 470, y, 76, 28, o.chord ? 'background:#EDEDF0;color:#101012;font-size:13px' : 'font-size:13px', 'Chord', `aria-pressed="${!!o.chord}"`);
+    h += el('', 554, y, 345, 28, 'display:flex;align-items:center;font-size:12px;color:var(--text2r)', o.keysHint);
+    h += keys(470, y + 36, 429, 72, o.lit, col);
+  }
+  return h;
+}
+
+// ---------------------------------------------------------------- data
+const PIANO = COL[4];
+const MEL = [ // pattern 12: note, length in steps, velocity
+  ['C4', 2, 100], null, ['D#4', 1, 88], null, ['G4', 1, 96], ['C5', 3, 100], null, null,
+  ['A#3', 2, 72], null, ['G4', 1, 110], ['F4', 1, 64], ['D#4', 2, 92], null, ['D4', 1, 80], null];
+const CHO = [ // a chord track: the notes, root first
+  ['C4', 'D#4', 'G4'], null, null, null, ['G#3', 'C4', 'D#4'], null, null, null,
+  ['A#3', 'D4', 'F4'], null, null, ['A#3', 'D4', 'F4', 'A4'], ['F3', 'G#3', 'C4'], null, null, null];
+const CHL = [4, 0, 0, 0, 4, 0, 0, 0, 3, 0, 0, 1, 4, 0, 0, 0];
+const DRUMS = ['BD', 'SD', 'CH', 'OH', 'CP', 'RS', 'LT', 'HT'];
+const HITS = { BD: [0, 4, 8, 11, 12], SD: [4, 12], CH: [0, 2, 4, 6, 8, 10, 12, 14], OH: [7, 15], CP: [12], RS: [3, 10], LT: [14], HT: [] };
+const VEL = { 'BD,11': 64, 'CH,2': 70, 'CH,6': 70, 'CH,10': 70, 'CH,14': 70 };
+
+// melodic: one note a step, a length bar that runs on through the steps it holds
+function melodicRow(y, h0, sel) {
+  let h = ''; let ties = '';
+  MEL.forEach((s, i) => {
+    const { x, w } = colX(i, X0, X1 - X0);
+    let st = 'border-radius:8px;' + (s ? `background:${mix(PIANO, 18 + Math.round(s[2] / 127 * 26))};` : 'background:var(--empty);');
+    if (i === sel) st += 'box-shadow:0 0 0 2px #EDEDF0;';
+    if (i === 9) st += `outline:2px solid ${PIANO};outline-offset:-2px;`;
+    let inner = `<span class="abs" style="left:7px;top:6px;font-size:12px;color:var(--text2)">${i + 1}</span>`;
+    if (s) {
+      inner += `<span class="abs cond" style="left:7px;top:${h0 / 2 - 14}px;font-size:22px">${s[0]}</span>`;
+      inner += `<span class="abs" style="left:7px;right:7px;bottom:16px;height:${Math.round(s[2] / 127 * 28)}px;border-radius:2px;background:${PIANO};opacity:.35"></span>`;
+    }
+    h += el('', x, y, w, h0, st, inner, `aria-label="Step ${i + 1}${s ? ', ' + s[0] + ', velocity ' + s[2] : ', empty'}"`);
+    if (s && s[1] > 1) { const end = colX(Math.min(15, i + s[1] - 1), X0, X1 - X0); ties += el('', x + 7, y + h0 - 7, end.x + end.w - 7 - (x + 7), 4, `border-radius:2px;background:${PIANO}`, '', 'aria-hidden="true"'); }
+  });
+  return h + ties;
+}
+function chordRow(y, h0, sel) {
+  let h = ''; let ties = '';
+  CHO.forEach((s, i) => {
+    const { x, w } = colX(i, X0, X1 - X0);
+    let st = 'border-radius:8px;' + (s ? `background:${mix(PIANO, 34)};` : 'background:var(--empty);');
+    if (i === sel) st += 'box-shadow:0 0 0 2px #EDEDF0;';
+    let inner = `<span class="abs" style="left:7px;top:6px;font-size:12px;color:var(--text2)">${i + 1}</span>`;
+    if (s) {
+      inner += `<span class="abs cond" style="left:7px;top:28px;font-size:20px">${s[0]}</span>`;
+      s.slice(1).forEach((n, k) => { inner += `<span class="abs cond" style="left:7px;top:${54 + k * 18}px;font-size:15px;color:var(--text2r)">${n}</span>`; });
+    }
+    h += el('', x, y, w, h0, st, inner, `aria-label="Step ${i + 1}${s ? ', chord ' + s.join(' ') : ', empty'}"`);
+    if (s && CHL[i] > 1) { const end = colX(Math.min(15, i + CHL[i] - 1), X0, X1 - X0); ties += el('', x + 7, y + h0 - 7, end.x + end.w - 7 - (x + 7), 4, `border-radius:2px;background:${PIANO}`, '', 'aria-hidden="true"'); }
+  });
+  return h + ties;
+}
+function drumGrid(y, rh, sel) {
+  const col = COL[3]; let h = '';
+  DRUMS.forEach((d, r) => {
+    const yy = y + r * (rh + 3);
+    h += el('lab', X0, yy, 40, rh, `display:flex;align-items:center;font-size:13px;color:${sel && sel[0] === d ? 'var(--text)' : 'var(--text2r)'}`, d);
+    for (let i = 0; i < 16; i++) {
+      const { x, w } = colX(i, X0 + 46, X1 - X0 - 46), on = HITS[d].includes(i), v = VEL[d + ',' + i] || 100;
+      let st = 'border-radius:5px;' + (on ? `background:${mix(col, 30 + Math.round(v / 127 * 60))};` : 'background:var(--empty);');
+      if (sel && sel[0] === d && sel[1] === i) st += 'box-shadow:0 0 0 2px #EDEDF0;';
+      h += el('', x, yy, w, rh, st, '', `aria-label="${d} step ${i + 1}${on ? ', hit' : ''}"`);
+    }
+  });
+  return h;
+}
+
+section('Edit: what\'s on a step, and writing it');
+
+board(73, 'Edit, landscape: a single-note track, a chord track, a kit', [
+  { cap: 'A · One note a step (5 Piano)', label: 'Edit tab, a melodic track, step 6 picked',
+    body: () => topBar('Edit') + ruler(64, { col: PIANO, name: '5 Piano · B', rest: '· pattern 12 · C min · 16 steps' }, el('key', 827, 64, 72, 28, '', 'Step ⋯')) +
+      melodicRow(98, 160, 5) + stepPanel(272, { col: PIANO, step: 6, keys: true, lit: ['C5'], keysHint: 'Tap a key: step 6 plays it', dials: [['PITCH', 'C5', .55], ['MOVE', '6', .37], ['LENGTH', '3', .19], ['VELOCITY', '100', .79]] }),
+    discs: [[1, 24, 120], [2, 300, 252], [3, 456, 274], [4, 22, 268]] },
+  { cap: 'B · A chord a step (Chord on)', label: 'Edit tab, chords, step 1 picked',
+    body: () => topBar('Edit') + ruler(64, { col: PIANO, name: '5 Piano · B', rest: '· pattern 14 · C min · chords' }, el('key', 827, 64, 72, 28, '', 'Step ⋯')) +
+      chordRow(98, 160, 0) + stepPanel(272, { col: PIANO, step: 1, keys: true, chord: true, lit: ['C4', 'D#4', 'G4'], keysHint: 'Tap keys to add or take notes · 3 of 4', dials: [['ROOT', 'C4', .5], ['NOTES', '3', .75], ['LENGTH', '4', .25], ['VELOCITY', '100', .79]] }),
+    discs: [[5, 24, 140], [6, 456, 330]] },
+  { cap: 'C · A kit (4 Drum Kit): lanes by steps', label: 'Edit tab, the drum grid, SD on step 5 picked',
+    body: () => topBar('Edit') + ruler(64, { col: COL[3], name: '4 Drum Kit · B', rest: '· pattern 04 · 8 lanes' }, el('key', 827, 64, 72, 28, '', 'Step ⋯')) +
+      drumGrid(98, 25, ['SD', 4]) +
+      el('', 0, 330, LW, 1, 'background:var(--control)') +
+      el('key', X0, 340, 116, 28, 'font-size:14px;gap:6px', 'SD · step 5 <span style="color:var(--text2r);font-weight:400">✕</span>') +
+      [['VELOCITY', '100'], ['CHANCE', '100%'], ['RATCHET', '×1'], ['NUDGE', '0'], ['PITCH', '0 st'], ['DECAY', '64']].map((k, i) =>
+        el('', X0 + 128 + i * 122, 336, 114, 56, 'border-radius:10px;background:var(--panel)', `<span class="abs lab" style="left:10px;top:8px">${k[0]}</span><span class="abs cond" style="left:10px;top:24px;font-size:22px">${k[1]}</span>`, `role="slider" aria-label="${k[0]} ${k[1]}"`)).join(''),
+    discs: [[7, 14, 150], [8, 14, 344]] },
+], [
+  'The pattern\'s sixteen steps run left to right in fours, the way the FM-1\'s steps and keys run, so the phone lines up with the device beside it. Each step shows what\'s on it: the note in the big figure, the velocity as the fill\'s strength and a bar inside, a length that holds on as a bar running into the steps it ties over. ◆ marks a lock; the playing step is outlined in the track\'s colour.',
+  'Tapping a step picks it (white ring) and opens the step panel under the row: Step 6 with ✕ and ‹ ›, NOTES · FEEL · SOUND, Lock, and the four dials (decision 25\'s dial, the FM-1\'s knobs 1–4 on SEQ\'s NOTES page).',
+  '<span class="q">New, the note-entry answer:</span> a keyboard strip beside the dials. With a step picked, tapping a key writes that note to the step (and plays it). It writes only to the picked step and only on a tap of the phone\'s own keys: the FM-1\'s keys still never write from the phone (decision 5), so nothing lands by accident. With no step picked the keys only play.',
+  'Nothing picked: the panel shows the track\'s four sound knobs instead (decision 21, round dials) and the keys play the track.',
+  'A chord step shows its root large and the other notes under it (up to the FM-1\'s four). The tie bar runs as on a single note.',
+  '<b>Chord</b> on: each key tapped adds that note to the step or takes it off, lit while it\'s on the step, up to four. Off: a tap replaces the step\'s note. ROOT and NOTES dials do the same from the dials; Chord is the FM-1\'s own chord step, not a phone invention.',
+  'A kit is lanes by steps (the iPad\'s DrumGrid): eight lanes as the kit names them, sixteen steps in fours. A tap toggles a hit; the fill\'s strength is its velocity (BD on 12 is softer). Hold a cell to pick it without toggling.',
+  'The picked hit\'s values in one row of boxes under the grid (the kit has more than four per hit, so boxes, not dials): VELOCITY, CHANCE, RATCHET, NUDGE, the lane\'s PITCH and DECAY. A lane name tapped plays it; held, its sound (decision 15).',
+]);
+
+section('Pads: big targets for picking a sound and muting');
+
+function padsLand() {
+  let h = topBar('Pads');
+  const y0 = 64, rh = 42, gap = 4, headW = 196;
+  const engines = ['Analog', 'Fm6', 'Phase', 'Drum', 'Sample', 'Drum-X'];
+  for (let t = 0; t < 6; t++) {
+    const y = y0 + t * (rh + gap), sel = t === SEL;
+    h += el('', X0, y, 132, rh, `border-radius:8px;background:${sel ? mix(COL[t], 30) : 'var(--control)'};${sel ? 'box-shadow:0 0 0 2px #EDEDF0;' : ''}`,
+      `<span class="abs" style="left:0;top:0;bottom:0;width:30px;border-radius:8px 0 0 8px;background:${COL[t]};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#101012">${t + 1}</span>
+       <span class="abs" style="left:38px;top:5px;font-size:15px;font-weight:600;white-space:nowrap">${NAMES[t]}</span>
+       <span class="abs" style="left:38px;top:23px;font-size:12px;color:var(--text2r)">${engines[t]} ⌄</span>`, `role="button" aria-label="Track ${t + 1}, ${NAMES[t]}. Tap: select. Hold: its sounds"`);
+    h += el('', X0 + 138, y, 54, rh, `border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;${MUTED[t] ? 'background:#EDEDF0;color:#101012' : 'background:var(--control);color:var(--text2r)'}`, 'MUTE', `role="switch" aria-checked="${MUTED[t]}" aria-label="Mute ${NAMES[t]}"`);
+    let row = '';
+    for (let i = 0; i < 9; i++) row += padFace(t, i < 5 ? i : 9, i * 84, 0, 80, rh);
+    h += el('', X0 + headW + 4, y, X1 - X0 - headW - 4, rh, 'overflow:hidden', `<div style="position:relative;width:760px;height:${rh}px">${row}</div>`);
+  }
+  const ys = 346;
+  h += el('key', X0, ys, 132, 40, 'font-size:14px', 'Store scene');
+  for (let s = 0; s < 16; s++) h += el('', X0 + 138 + s * 45, ys, 41, 40, `border-radius:8px;background:${s === 1 ? '#EDEDF0' : s < 4 ? 'var(--control)' : 'var(--well)'};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:${s === 1 ? '#101012' : s < 4 ? 'var(--text)' : 'var(--text2)'}`, String(s + 1));
+  return h;
+}
+board(74, 'Pads, landscape: the track heads as the big targets', [
+  { cap: 'Pads with the wide track heads', label: 'Pads tab: six rows with wide track heads and Mute keys', body: padsLand, discs: [[1, 30, 58], [2, 230, 58], [3, 520, 58], [4, 30, 340]] },
+], [
+  'Each track\'s head is 132 wide: its number in the track\'s colour, the sound\'s name large and the engine under it. Tap: select the track (the editor and the sound knobs follow). Hold, or tap the engine line: its sounds (the Sounds browser for that track). That\'s the "pick a sound without tiny buttons" target, the whole head instead of a 28 dp number.',
+  'MUTE beside it, 54 × 42, the word on it, white when muted (track 6). Over the 44 dp touch aim across, near it in height.',
+  'Pads as on the iPhone (board 46): about 8 in view, the rest by a pan sideways; tap launches, hold opens the pad\'s menu, and the selected pad has the white ring.',
+  'Store and the sixteen scenes across the foot at 41 × 40, all sixteen in view (portrait showed seven).',
+]);
+
+document.getElementById('boards').innerHTML = LB.join('');
+</script>
+</body>
+</html>
