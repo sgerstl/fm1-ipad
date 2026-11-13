@@ -67,6 +67,7 @@ public final class PhoneCore {
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             // P5: once the FM-1 has been read, as pads and editor
             AreaWatch(name: "mix", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.mixArea()) : nil }, publish: publish),
+            AreaWatch(name: "meters", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.metersArea()) : nil }, publish: publish),
             AreaWatch(name: "sounds", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.soundsArea()) : nil }, publish: publish),
             AreaWatch(name: "projects", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.projectsArea()) : nil }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
@@ -78,6 +79,8 @@ public final class PhoneCore {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(50))
                 guard let self else { return }
+                // the meters fall back after the notes stop: sampled while connected (sent only when they move)
+                if self.session.isConnected { self.areas.first { $0.name == "meters" }?.poke() }
                 if self.session.playing {
                     self.areas.first { $0.name == "top" }?.poke()
                     for n in ["diag", "pads", "editor"] { self.areas.first { $0.name == n }?.poke() }

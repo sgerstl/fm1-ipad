@@ -66,6 +66,13 @@ extension PhoneCore {
         return MixArea(sections: sections, section: mixSection, rows: rows, card: card)
     }
 
+    public func metersArea() -> MetersArea {
+        let s = session, perf = s.skiffSong?.perform
+        return MetersArea(levels: s.trackIndices.map { t in
+            (s.meters.level(track: t, muted: perf?.muted[safe: t] ?? s.tracks[t].mute) * 100).rounded() / 100
+        })
+    }
+
     // MARK: sounds
 
     func isKitEngine(_ e: Int) -> Bool {
