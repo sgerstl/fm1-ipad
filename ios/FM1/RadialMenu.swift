@@ -189,13 +189,13 @@ struct RadialMenu: View {
                     // wheel a small triangle past each end in the track colour while there are choices beyond that end
                     let rimP = reduceMotion ? 1 : min(1, max(0, (e - 100) / 260))
                     if rimP > 0 {
-                        let ink = colour.opacity(0.55 * (reduceMotion ? fade : 1))
                         let reachY = CGFloat(visible - 1) / 2 * Self.step + Self.itemH / 2
                         let half = asin(min(1, reachY / Self.rim)) * 180 / .pi
                         let base = left ? 180.0 : 0.0
                         var rimPath = Path()
                         rimPath.addArc(center: centre, radius: Self.rim, startAngle: .degrees(base - half * rimP), endAngle: .degrees(base + half * rimP), clockwise: false)
-                        ctx.stroke(rimPath, with: .color(ink), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        // a dashed knob scale (board 78, tile 8): 3 pt dashes, 1.5 thick, 5 pt gaps, the track colour at 80 %
+                        ctx.stroke(rimPath, with: .color(colour.opacity(0.8 * (reduceMotion ? fade : 1))), style: StrokeStyle(lineWidth: 1.5, lineCap: .butt, dash: [3, 5]))
                         if wheel {
                             // more above (the wheel turned on from the first) and more below (not yet at the last), each blending out
                             // as that end is reached
@@ -223,10 +223,10 @@ struct RadialMenu: View {
                         if drawn > 0 {
                             var line = Path(); line.move(to: sp.foot)
                             line.addLine(to: CGPoint(x: sp.foot.x + (sp.node.x - sp.foot.x) * drawn, y: sp.foot.y + (sp.node.y - sp.foot.y) * drawn))
-                            ctx.stroke(line, with: .color(colour.opacity(a)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                            ctx.stroke(line, with: .color(Theme.textTertiary.opacity(a)), style: StrokeStyle(lineWidth: 1, lineCap: .round))   // (1 pt mid-grey, tile 8)
                         }
                         let nodeA = (reduceMotion ? 1 : min(1, max(0, (e - d0 - 140) / 120))) * a
-                        if nodeA > 0 { ctx.fill(Path(ellipseIn: CGRect(x: sp.node.x - 3, y: sp.node.y - 3, width: 6, height: 6)), with: .color(colour.opacity(nodeA))) }
+                        if nodeA > 0 { ctx.fill(Path(CGRect(x: sp.node.x - 3, y: sp.node.y - 3, width: 6, height: 6)), with: .color(Theme.textSecondary.opacity(nodeA))) }   // (a 6 pt square node)
                     }
                 }
                 .allowsHitTesting(false)
@@ -294,13 +294,22 @@ struct RadialMenu: View {
         let asking = confirming == k
         // a tap picks, never a drag that ends somewhere else (a drag to scroll ended on Clear and cleared a pad, 2026-11-14)
         return Group {
-            HStack(spacing: 8) {
+            // board 78, tile 6: a fully round pill on the dark panel, the icon in a 30 pt disc of the track colour at the left
+            // (drawn in the dark on-colour), the label after it in Barlow regular; no edge bar
+            HStack(spacing: 10) {
                 if asking {
                     Text(item.confirm ?? item.title).font(.lupe(14, .semibold)).lineLimit(2).minimumScaleFactor(0.8)
                         .multilineTextAlignment(.leading)
+                        .padding(.leading, 6)
                 } else {
-                    if let i = item.icon { Image(systemName: i).font(.system(size: 15, weight: .semibold)).frame(width: 20) }
-                    Text(item.title).font(.lupe(item.title.count > 20 ? 14 : 17)).lineLimit(2).minimumScaleFactor(0.85)
+                    ZStack {
+                        Circle().fill(item.enabled ? colour : colour.opacity(0.4))
+                        if let i = item.icon {
+                            Image(systemName: i).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.onColour)
+                        }
+                    }
+                    .frame(width: 30, height: 30)
+                    Text(item.title).font(.lupe(item.title.count > 20 ? 14 : 16)).lineLimit(2).minimumScaleFactor(0.85)
                         .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(item.enabled ? Theme.text : Theme.textTertiary)
                 }
@@ -309,17 +318,13 @@ struct RadialMenu: View {
                 if item.children != nil { Text("›").font(.lupe(17, .semibold)).foregroundStyle(Theme.textSecondary) }
             }
             .foregroundStyle(Theme.text)
-            .padding(.leading, sp.left ? 14 : 16).padding(.trailing, sp.left ? 16 : 14)
+            .padding(.leading, 9).padding(.trailing, 16)            // (the disc 9 in: centred on the pill's end curve)
             .frame(width: Self.itemW, height: Self.itemH)
             .background {
-                RoundedRectangle(cornerRadius: 12).fill(Theme.panel)
-                    .overlay(alignment: sp.left ? .trailing : .leading) {
-                        // the edge the line arrives at carries the track's colour
-                        if !asking { RoundedRectangle(cornerRadius: 1.5).fill(colour).frame(width: 3).padding(.vertical, 8) }
-                    }
-                    .overlay { if asking { RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.recText, lineWidth: 2) } }
+                Capsule().fill(Theme.panel)
+                    .overlay { if asking { Capsule().strokeBorder(Theme.recText, lineWidth: 2) } }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(Capsule())
         }
         .onTapGesture { pick(k, item) }      // (a choice that can't be made: its words in the tertiary grey; pick() refuses it)
         .accessibilityElement(children: .combine)
