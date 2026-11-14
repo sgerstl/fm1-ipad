@@ -156,70 +156,77 @@ class HoldMenuState {
 
 val LocalHoldMenu = compositionLocalOf<HoldMenuState?> { null }
 
-/** Where one choice sits: its near edge ([edgeX], [cy]) and which way it opens. In dp. */
-class HoldSpot(val edgeX: Float, val cy: Float, val left: Boolean)
-
 /** The circle under the finger is 64 dp across; a choice's stalk runs from its edge. */
 const val HUB_R = 32f
-/**
- * How far past the circle's edge the nearest choice sits: the stalk's length (decision 36, Scott 2026-11-14: "shorter stalks", about a
- * quarter of the first 88 dp). The choices hug the circle.
- */
+/** Every choice's stalk: this far out from the circle's edge, the same for all (decision 36, Scott 2026-11-14; the iPhone's 22 pt). */
 const val STALK = 22f
 
 /**
- * Where the choices sit (decision 36). One column, [step] apart: each choice's near edge is where its height meets a circle of
- * [HUB_R] + [STALK] round the finger, so the column bows round the circle and its stalks are short; a choice above or below that circle
- * sits [MIN_DX] out. They open to the left when the finger is too near the right edge, or (right-handed, [preferLeft]) whenever there is
- * room on the left. A column taller than the screen is not cut into pages: it scrolls ([maxScroll]) inside [viewTop]…[viewBottom], and the
- * choices slide along the arc as it does. All in dp.
+ * One choice's place on the wheel, in dp: its row's top-left corner ([rowX], [rowY]), the end of its stalk ([tipX], [tipY]) and how much
+ * of it shows ([alpha], 1 on the arc, falling to 0 past its ends).
  */
-class HoldLayout(val x: Float, val y: Float, val n: Int, val screenW: Float, val screenH: Float, val left: Boolean, val itemW: Float = 200f, val itemH: Float = 48f, val step: Float = 56f) {
-    val viewTop = 8f
-    val viewBottom = screenH - 16f
-    private val content = (n - 1) * step + itemH
-    /** How far the column can scroll; 0 when it fits. */
-    val maxScroll = (content - (viewBottom - viewTop)).coerceAtLeast(0f)
-    /** The first choice's centre with nothing scrolled: the column centred on the finger's height where it fits, kept on the screen. */
-    private val top = if (maxScroll > 0f) viewTop + itemH / 2 else (y - (n - 1) * step / 2).coerceAtMost(viewBottom - itemH / 2 - (n - 1) * step).coerceAtLeast(viewTop + itemH / 2)
+class WheelSpot(val rowX: Float, val rowY: Float, val tipX: Float, val tipY: Float, val alpha: Float, val left: Boolean)
 
-    fun spot(k: Int, scroll: Float = 0f): HoldSpot {
-        val cy = top + k * step - scroll; val dy = cy - y; val r = HUB_R + STALK
-        val dx = kotlin.math.max(sqrt((r * r - dy * dy).coerceAtLeast(0f)), MIN_DX)
-        // kept on the screen sideways too
-        val edge = if (left) (x - dx).coerceAtLeast(8f + itemW) else (x + dx).coerceAtMost(screenW - 8f - itemW)
-        return HoldSpot(edge, cy, left)
+/**
+ * The hold menu as a wheel (decision 36, Scott 2026-11-14). Up to five choices sit on a short arc hugging the circle under the finger,
+ * each on a stalk of the same [STALK] length leaving the circle's edge; a drag turns the wheel, so the other choices roll into the arc,
+ * fading as they near its ends. It opens with the first choice at the arc's top; five or fewer is just the arc.
+ *
+ * The arc has five slots, −2 (top) … 2 (bottom). A slot's row is [ROW_H] tall and the rows stack [ROW_H] apart, so the rows at ±1 meet
+ * their stalks on their near edge and the rows at ±2 on the edge that faces the circle: that is what lets five rows share one stalk
+ * length round a 32 dp circle. A choice between slots (the wheel turning) is placed between them. Near the top of the screen (under the
+ * header, [top]) or its foot the arc loses the slots that would leave it, so fewer choices show and the rest are a turn away. The rows
+ * open to the right of the finger, or to the left near the right edge and (right-handed, [preferLeft]) wherever the left has room.
+ */
+class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val screenH: Float, preferLeft: Boolean = false, val top: Float = 60f, val itemW: Float = 200f) {
+    val left: Boolean = (HUB_R + STALK + itemW + 24f).let { room -> if (preferLeft) x >= room else x > screenW - room }
+    /** The slots the screen has room for: the arc's top and bottom slot. */
+    val firstSlot: Int = when { y - 2.5f * ROW_H >= top -> -2; y - 1.5f * ROW_H >= top -> -1; else -> 0 }
+    val lastSlot: Int = when { y + 2.5f * ROW_H <= screenH - 16f -> 2; y + 1.5f * ROW_H <= screenH - 16f -> 1; else -> 0 }
+    /** How many choices show at once, and how far the wheel can turn (in choices). */
+    val count: Int = minOf(n, lastSlot - firstSlot + 1)
+    val maxTurn: Float = (n - count).coerceAtLeast(0).toFloat()
+    /** With fewer choices than slots they sit in the middle of the slots there are. */
+    private val origin: Float = firstSlot + (lastSlot - firstSlot + 1 - count) / 2f
+
+    /** Where choice [k] is on the arc, as a slot number (not whole while the wheel turns), with the wheel turned by [turn] choices. */
+    fun slot(k: Int, turn: Float = 0f): Float = origin + k - turn
+
+    /** The place of a choice at slot [u]. */
+    fun spot(u: Float): WheelSpot {
+        val a = kotlin.math.abs(u); val sign = if (u < 0) -1f else 1f
+        val theta = Math.toRadians(lerpAt(a, THETA).toDouble())
+        val tx = (HUB_R + STALK) * cos(theta).toFloat(); val ty = sign * (HUB_R + STALK) * sin(theta).toFloat()
+        val near = lerpAt(a, NEAR)                       // the row's near edge, out from the finger
+        // how much shows: all of it on the arc, none a slot past either end (or past the last slot the screen has room for)
+        val over = maxOf(firstSlot - u, u - lastSlot, 0f)
+        val alpha = (1f - over / 0.75f).coerceIn(0f, 1f)
+        val rowX = if (left) x - near - itemW else x + near
+        return WheelSpot(rowX, y + u * ROW_H - ROW_H / 2, if (left) x - tx else x + tx, y + ty, alpha, left)
     }
+    fun spot(k: Int, turn: Float): WheelSpot = spot(slot(k, turn))
 
-    /** How much of a choice shows at [cy]: 1 inside the view, falling to 0 as it leaves an edge that has more beyond it (the fade at the clipped edge). */
-    fun shown(cy: Float, scroll: Float): Float {
-        val fromTop = if (scroll > 0.5f) ((cy + itemH / 2 - viewTop) / itemH).coerceIn(0f, 1f) else 1f
-        val fromBottom = if (scroll < maxScroll - 0.5f) ((viewBottom - (cy - itemH / 2)) / itemH).coerceIn(0f, 1f) else 1f
-        return kotlin.math.min(fromTop, fromBottom)
-    }
-
-    /** A held finger near an edge that has more beyond it pulls the column that way: −1 (up) … 1 (down), 0 elsewhere. */
-    fun pull(fingerY: Float, scroll: Float): Float = when {
-        maxScroll <= 0f -> 0f
-        fingerY < viewTop + EDGE && scroll > 0f -> -((viewTop + EDGE - fingerY) / EDGE).coerceIn(0f, 1f)
-        fingerY > viewBottom - EDGE && scroll < maxScroll -> ((fingerY - (viewBottom - EDGE)) / EDGE).coerceIn(0f, 1f)
-        else -> 0f
+    /** A held finger past an end of the arc that has more beyond it turns the wheel that way: −1 … 1 (choices a second scale with it), 0 elsewhere. */
+    fun pull(fingerY: Float, turn: Float): Float {
+        val u = (fingerY - y) / ROW_H
+        return when {
+            maxTurn <= 0f -> 0f
+            u < firstSlot - 0.5f && turn > 0f -> -((firstSlot - 0.5f - u) / 1f).coerceIn(0.25f, 1f)
+            u > lastSlot + 0.5f && turn < maxTurn -> ((u - lastSlot - 0.5f) / 1f).coerceIn(0.25f, 1f)
+            else -> 0f
+        }
     }
 
     companion object {
-        const val MIN_DX = 12f
-        /** The band at the view's top and bottom where a held finger scrolls the column. */
-        const val EDGE = 40f
-        fun of(x: Float, y: Float, n: Int, screenW: Float, screenH: Float, preferLeft: Boolean = false, itemW: Float = 200f): HoldLayout {
-            val room = HUB_R + STALK + itemW + 24f
-            return HoldLayout(x, y, n, screenW, screenH, left = if (preferLeft) x >= room else x > screenW - room, itemW = itemW)
-        }
+        /** A choice's row: 36 dp tall, the rows touching (each is drawn 1 dp inside its slot, so 2 dp shows between them). */
+        const val ROW_H = 36f
+        /** By slot 0, 1, 2 and (off the arc) 3: the angle its stalk leaves the circle at, from level, in degrees… */
+        private val THETA = floatArrayOf(0f, 41.8f, 80f, 100f)
+        /** …and how far out from the finger its row's near edge is (at ±2 the row runs over the circle's top or foot, its stalk meeting the edge that faces the circle). */
+        private val NEAR = floatArrayOf(54f, 40.2f, -4.6f, -30f)
+        private fun lerpAt(a: Float, t: FloatArray): Float { val c = a.coerceIn(0f, 3f); val i = c.toInt().coerceAtMost(2); return t[i] + (t[i + 1] - t[i]) * (c - i) }
     }
 }
-
-/** The choices' places with nothing scrolled. */
-fun holdSpots(x: Float, y: Float, n: Int, screenW: Float, screenH: Float, preferLeft: Boolean = false): List<HoldSpot> =
-    HoldLayout.of(x, y, n, screenW, screenH, preferLeft).let { l -> List(n) { l.spot(it) } }
 
 /** The circle's size as it grows in: past its size ([spring] 0…1 sets how far), one undershoot, settle. [p] is 0…1 through the entrance. */
 fun hubScale(p: Float, spring: Float): Float {
@@ -235,9 +242,9 @@ fun hubScale(p: Float, spring: Float): Float {
 }
 
 /**
- * Decision 36 (Scott, 2026-11-14): the choices hug the circle on short stalks ([STALK]); every choice is in one column, and a column
- * taller than the screen scrolls (a drag or a fling anywhere on the menu; a held finger resting at the top or bottom edge) while the circle
- * stays put and the stalks follow the choices that show, each fading as it leaves the edge. There is no "More…" page.
+ * Decision 36 (Scott, 2026-11-14): the menu is a wheel ([HoldWheel]). About five choices sit on a short arc hugging the circle, every
+ * stalk the same [STALK]; a drag (or a fling, or a held finger resting past the arc's end) turns the wheel so the rest roll into the arc,
+ * fading near its ends, and it settles on a whole choice. There is no "More…" page. The rows are 36 dp tall so five fit round the circle.
  *
  * Draws the hold menu over everything. A filled circle in the track's colour at about 45 % over the page grows exactly under the finger
  * (64 dp at rest, an elastic grow-in); lines 1.5 dp in the track's colour run out from its edge one by one to each choice, each ending in a
@@ -269,47 +276,62 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
     val m = shown ?: return
     BackHandler(enabled = live != null) { state.close() }
     var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    // how far the column is scrolled and how far it can go (dp): kept out here so the whole layer can take the drag
-    var scroll by remember(m) { mutableFloatStateOf(0f) }
-    var maxScroll by remember(m) { mutableFloatStateOf(0f) }
+    // how far the wheel is turned and how far it can go, in choices: kept out here so the whole layer can take the drag
+    var turn by remember(m) { mutableFloatStateOf(0f) }
+    var maxTurn by remember(m) { mutableFloatStateOf(0f) }
     val scrollable = androidx.compose.foundation.gestures.rememberScrollableState { d ->
-        val old = scroll; scroll = (scroll - with(density) { d.toDp().value }).coerceIn(0f, maxScroll); with(density) { (old - scroll).dp.toPx() }
+        // a finger moving one row's height turns the wheel one choice
+        val old = turn; turn = (turn - with(density) { d.toDp().value } / HoldWheel.ROW_H).coerceIn(0f, maxTurn); with(density) { ((old - turn) * HoldWheel.ROW_H).dp.toPx() }
+    }
+    // let go between two choices and the wheel settles on the nearer one (150 ms; with Reduce Motion it is simply there)
+    LaunchedEffect(m, scrollable.isScrollInProgress, state.held == null) {
+        if (!scrollable.isScrollInProgress && state.held == null) {
+            val to = kotlin.math.round(turn).coerceIn(0f, maxTurn)
+            if (kotlin.math.abs(to - turn) > 0.001f) { if (reduce) turn = to else unscaled { androidx.compose.animation.core.animate(turn, to, animationSpec = tween(150)) { v, _ -> turn = v } } }
+        }
     }
     BoxWithConstraints(
         modifier.fillMaxSize().onGloballyPositioned { origin = it }
             // the page behind is dimmed and can't be touched; a tap outside the choices closes the menu
             .drawBehind { drawRect(Color.Black.copy(alpha = 0.45f * (1f - leave.value) * (elapsed.value / 150f).coerceAtMost(1f))) }
             .pointerInput(Unit) { detectTapGestures { state.close() } }
-            // a column taller than the screen scrolls with a drag anywhere on the menu (and flings); the circle stays put
-            .scrollable(scrollable, androidx.compose.foundation.gestures.Orientation.Vertical, enabled = maxScroll > 0f)
-            .semantics { paneTitle = "Menu"; isTraversalGroup = true },
+            // more choices than the arc holds: a drag anywhere on the menu turns the wheel (and it flings); the circle stays put
+            .scrollable(scrollable, androidx.compose.foundation.gestures.Orientation.Vertical, enabled = maxTurn > 0f)
+            .semantics {
+                paneTitle = "Menu"; isTraversalGroup = true
+                // the way to the rest of the wheel that isn't a drag (WCAG 2.5.7)
+                if (maxTurn > 0f) customActions = listOf(
+                    androidx.compose.ui.semantics.CustomAccessibilityAction("Later choices") { turn = (kotlin.math.round(turn) + 3f).coerceIn(0f, maxTurn); true },
+                    androidx.compose.ui.semantics.CustomAccessibilityAction("Earlier choices") { turn = (kotlin.math.round(turn) - 3f).coerceIn(0f, maxTurn); true },
+                )
+            },
     ) {
         val w = maxWidth.value; val h = maxHeight.value
         // the finger, in this layer's dp
         val fingerPx = origin?.takeIf { it.isAttached }?.windowToLocal(m.at) ?: m.at
         val fx = with(density) { fingerPx.x.toDp().value }; val fy = with(density) { fingerPx.y.toDp().value }
-        val layout = remember(m, w, h, fx, fy, labs.leftHanded) { HoldLayout.of(fx, fy, m.items.size, w, h, preferLeft = !labs.leftHanded) }
-        // how far the column is scrolled (dp): a drag on the menu, a fling, or the held finger at an edge
-        maxScroll = layout.maxScroll
-        val spots = List(m.items.size) { layout.spot(it, scroll) }
-        val itemW = layout.itemW; val itemH = layout.itemH
-        // slide-to-pick past the end scrolls: while the held finger rests in the top or bottom band, the column moves under it
-        LaunchedEffect(m, layout) {
+        val wheel = remember(m, w, h, fx, fy, labs.leftHanded) { HoldWheel(fx, fy, m.items.size, w, h, preferLeft = !labs.leftHanded) }
+        maxTurn = wheel.maxTurn
+        val spots = List(m.items.size) { wheel.spot(it, turn) }
+        val itemW = wheel.itemW; val itemH = HoldWheel.ROW_H
+        // slide-to-pick past the arc's end turns the wheel: while the held finger rests beyond the top or bottom choice, the rest roll in under it
+        LaunchedEffect(m, wheel) {
             var last = 0L
             while (true) androidx.compose.runtime.withFrameMillis { now ->
                 val dt = if (last == 0L) 0L else now - last; last = now
                 val p = state.held
-                if (p != null && layout.maxScroll > 0f) {
+                if (p != null && wheel.maxTurn > 0f) {
                     val local = origin?.takeIf { it.isAttached }?.windowToLocal(p) ?: p
-                    val pull = layout.pull(with(density) { local.y.toDp().value }, scroll)
-                    if (pull != 0f) { scroll = (scroll + pull * 420f * dt / 1000f).coerceIn(0f, layout.maxScroll); state.drag(p) }
+                    val pull = wheel.pull(with(density) { local.y.toDp().value }, turn)
+                    if (pull != 0f) { turn = (turn + pull * 5f * dt / 1000f).coerceIn(0f, wheel.maxTurn); state.drag(p) }
                 }
             }
         }
+        // the choice under a point: only one that shows more than half (a fading one at the arc's end can't be picked)
         state.hit = { pos ->
             val local = origin?.takeIf { it.isAttached }?.windowToLocal(pos) ?: pos
             val px = with(density) { local.x.toDp().value }; val py = with(density) { local.y.toDp().value }
-            spots.indexOfFirst { s -> val l = if (s.left) s.edgeX - itemW else s.edgeX; px in l..(l + itemW) && py in (s.cy - itemH / 2)..(s.cy + itemH / 2) && layout.shown(s.cy, scroll) > 0.5f }
+            spots.indexOfFirst { s -> s.alpha > 0.5f && px in s.rowX..(s.rowX + itemW) && py in s.rowY..(s.rowY + itemH) }
         }
         val fadeAll = 1f - (leave.value / 0.86f).coerceAtMost(1f)   // choices and lines: gone in 120 of the 140 ms
         Canvas(Modifier.fillMaxSize()) {
@@ -320,12 +342,13 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
             drawCircle(lerp(Tok.page, m.colour, 0.45f).copy(alpha = hubA), 32.dp.toPx() * scale, c)
             drawCircle(m.colour.copy(alpha = hubA), 32.dp.toPx() * scale, c, style = Stroke(1.5.dp.toPx()))
             spots.forEachIndexed { k, s ->
-                val vis = layout.shown(s.cy, scroll)
+                val vis = s.alpha
                 if (vis <= 0f) return@forEachIndexed
-                val end = Offset(s.edgeX.dp.toPx(), s.cy.dp.toPx())
+                // every stalk the same length: from the circle's edge straight out to its end, where the choice's row meets it
+                val end = Offset(s.tipX.dp.toPx(), s.tipY.dp.toPx())
                 val ang = atan2(end.y - c.y, end.x - c.x)
-                val start = Offset(c.x + cos(ang) * 32.dp.toPx(), c.y + sin(ang) * 32.dp.toPx())
-                val d0 = 160f + minOf(k, 7) * 30f
+                val start = Offset(c.x + cos(ang) * HUB_R.dp.toPx(), c.y + sin(ang) * HUB_R.dp.toPx())
+                val d0 = 160f + (wheel.slot(k, turn) - wheel.firstSlot).coerceIn(0f, 4f) * 30f
                 // the line draws out from the circle's edge (with Reduce Motion it only fades in)
                 val drawn = if (reduce) 1f else ((elapsed.value - d0) / 180f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
                 val a = (if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else 1f) * fadeAll * vis * (if (state.confirming >= 0 && state.confirming != k) 0.3f else 1f)
@@ -337,26 +360,26 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         }
         m.items.forEachIndexed { k, item ->
             val s = spots[k]
-            // a choice scrolled out of the view isn't there (to a finger or to TalkBack's focus); one at the edge fades
-            val vis = layout.shown(s.cy, scroll)
+            // a choice turned off the arc isn't there (to a finger or to TalkBack's focus); one near its end fades
+            val vis = s.alpha
             if (vis <= 0f) return@forEachIndexed
-            val d0 = 160f + k * 30f
+            val d0 = 160f + (wheel.slot(k, turn) - wheel.firstSlot).coerceIn(0f, 4f) * 30f
             val inP = if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else ((elapsed.value - d0 - 100f) / 220f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
             val confirming = state.confirming == k
             val dimmed = state.confirming >= 0 && !confirming
             Box(
-                Modifier.offset { IntOffset(((if (s.left) s.edgeX - itemW else s.edgeX).dp.toPx()).roundToInt(), ((s.cy - itemH / 2).dp.toPx()).roundToInt()) }
-                    .width(itemW.dp).height(itemH.dp)
+                Modifier.offset { IntOffset((s.rowX.dp.toPx()).roundToInt(), ((s.rowY + 1f).dp.toPx()).roundToInt()) }
+                    .width(itemW.dp).height((itemH - 2f).dp)
                     .graphicsLayer {
                         alpha = inP * fadeAll * vis * (if (dimmed) 0.3f else 1f)
                         if (!reduce) { translationX = (if (s.left) 10.dp.toPx() else -10.dp.toPx()) * (1f - inP); val sc = 0.96f + 0.04f * inP; scaleX = sc; scaleY = sc }
                     }
                     .drawBehind {
-                        val r = CornerRadius(12.dp.toPx())
+                        val r = CornerRadius(10.dp.toPx())
                         drawRoundRect(if (state.hot == k && !confirming) Tok.lifted else Tok.panel, cornerRadius = r)
-                        if (confirming) drawRoundRect(Tok.rec, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(11.dp.toPx()), style = Stroke(2.dp.toPx()))
+                        if (confirming) drawRoundRect(Tok.rec, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx()))
                         // the edge the line arrives at carries the track's colour
-                        else drawRoundRect(m.colour, Offset(if (s.left) size.width - 3.dp.toPx() else 0f, 8.dp.toPx()), Size(3.dp.toPx(), size.height - 16.dp.toPx()), CornerRadius(1.5.dp.toPx()))
+                        else drawRoundRect(m.colour, Offset(if (s.left) size.width - 3.dp.toPx() else 0f, 7.dp.toPx()), Size(3.dp.toPx(), size.height - 14.dp.toPx()), CornerRadius(1.5.dp.toPx()))
                     }
                     .then(if (item.slide != null) Modifier.pointerInput(k, m) { detectTapGestures { } } else Modifier.semantics(mergeDescendants = true) {
                         role = Role.Button
@@ -372,11 +395,11 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                 // the iPad's row: the title at 17, a small second line, a tick for the current choice; a choice that can't be made is dimmer
                 val ink = if (!item.enabled) Tok.text3 else Tok.text
                 if (item.slide != null) HoldSlideRow(item.title, item.slide)
-                else if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                else if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 13.sp, lineHeight = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        BasicText(item.title, style = LupeType.body.copy(fontSize = 17.sp, lineHeight = 20.sp, color = ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        BasicText(item.title, style = LupeType.body.copy(fontSize = 16.sp, lineHeight = 18.sp, color = ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (item.checked) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
                     if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(color = Tok.text2)) }
@@ -409,9 +432,9 @@ private fun HoldSlideRow(title: String, sl: HoldSlide) {
     ) {
         Row(Modifier.align(Alignment.CenterStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BasicText(title, Modifier.weight(1f), style = LupeType.label.copy(color = Tok.text2Raised), maxLines = 1)
-            BasicText(text, style = LupeType.number.copy(fontSize = 20.sp, lineHeight = 22.sp), maxLines = 1)
+            BasicText(text, style = LupeType.number.copy(fontSize = 18.sp, lineHeight = 20.sp), maxLines = 1)
         }
-        Canvas(Modifier.align(Alignment.BottomStart).padding(bottom = 5.dp).fillMaxWidth().height(3.dp)) {
+        Canvas(Modifier.align(Alignment.BottomStart).padding(bottom = 3.dp).fillMaxWidth().height(2.dp)) {
             drawRect(Tok.stepEmpty)
             val span = (sl.max - sl.min).coerceAtLeast(1).toFloat()
             val x = (raw - sl.min) / span * size.width

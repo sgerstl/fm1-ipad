@@ -5,8 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import com.scottgerstl.lupe.ui.shell.HoldItem
 import com.scottgerstl.lupe.ui.shell.HoldMenuState
-import com.scottgerstl.lupe.ui.shell.holdSpots
-import com.scottgerstl.lupe.ui.shell.HoldLayout
+import com.scottgerstl.lupe.ui.shell.HoldWheel
 import com.scottgerstl.lupe.ui.shell.HUB_R
 import com.scottgerstl.lupe.ui.shell.STALK
 import com.scottgerstl.lupe.ui.shell.hubScale
@@ -19,50 +18,76 @@ import kotlin.math.hypot
 
 /** The hold menu (design/boards/radial-menu.html): where the choices sit, how the circle grows, how a choice is picked. */
 class HoldMenuTest {
-    @Test fun theChoicesHugTheCircleOnShortStalks() {
-        val s = holdSpots(300f, 200f, 5, 915f, 412f)
-        assertEquals(5, s.size)
-        s.zipWithNext().forEach { (a, b) -> assertEquals(56f, b.cy - a.cy, 0.01f) }        // stacked 56 dp apart
-        assertEquals(200f, s[2].cy, 0.01f)                                                    // centred on the finger's height
-        // the one level with the finger sits a stalk (22 dp) past the 32 dp circle's edge; the first stalks were 88
-        assertEquals(HUB_R + STALK, s[2].edgeX - 300f, 0.01f); assertEquals(22f, STALK, 0f)
-        // its neighbours' stalks are short too, and no choice touches the circle
-        listOf(s[1], s[3]).forEach { assertTrue(hypot(it.edgeX - 300f, it.cy - 200f) - HUB_R < 30f) }
-        s.forEach { val nearestY = (200f).coerceIn(it.cy - 24f, it.cy + 24f); assertTrue(hypot(it.edgeX - 300f, nearestY - 200f) >= HUB_R) }
+    private fun wheel(n: Int, x: Float = 300f, y: Float = 200f) = HoldWheel(x, y, n, 915f, 412f)
+
+    @Test fun everyStalkIsTheSameShortLength() {
+        val w = wheel(5)
+        assertEquals(22f, STALK, 0f)
+        (0 until 5).forEach { k -> val s = w.spot(k, 0f); assertEquals(HUB_R + STALK, hypot(s.tipX - 300f, s.tipY - 200f), 0.01f); assertEquals(1f, s.alpha, 0f) }
+        // …and while the wheel turns, too
+        listOf(-1.6f, -0.3f, 0.5f, 1.25f, 2.4f).forEach { u -> val s = w.spot(u); assertEquals(HUB_R + STALK, hypot(s.tipX - 300f, s.tipY - 200f), 0.01f) }
     }
 
-    @Test fun aColumnTallerThanTheScreenScrollsInsteadOfPaging() {
-        val l = HoldLayout.of(300f, 200f, 12, 915f, 412f)
-        assertTrue(l.maxScroll > 0f)
-        assertEquals(0f, HoldLayout.of(300f, 200f, 5, 915f, 412f).maxScroll, 0f)              // five fit: nothing scrolls
-        // scrolled to the end the last choice is wholly in view, and the first has gone
-        val last = l.spot(11, l.maxScroll)
-        assertEquals(l.viewBottom, last.cy + 24f, 0.01f)
-        assertEquals(1f, l.shown(last.cy, l.maxScroll), 0f)
-        assertEquals(0f, l.shown(l.spot(0, l.maxScroll).cy, l.maxScroll), 0f)
-        // at the top the choice half past the foot is half faded; with nothing beyond an edge nothing fades there
-        assertEquals(0.5f, l.shown(l.viewBottom, 0f), 0.01f)
-        assertEquals(1f, l.shown(l.spot(0).cy, 0f), 0f)
-        // the choices slide along the arc as they scroll: one level with the finger is the furthest out
-        assertTrue(l.spot(3, 0f).edgeX != l.spot(3, 40f).edgeX || l.spot(4, 0f).edgeX != l.spot(4, 40f).edgeX)
+    @Test fun fiveRowsSitRoundTheCircleEachMeetingItsStalk() {
+        val w = wheel(5)
+        val rows = (0 until 5).map { w.spot(it, 0f) }
+        rows.zipWithNext().forEach { (a, b) -> assertEquals(36f, b.rowY - a.rowY, 0.01f) }      // stacked, touching
+        assertEquals(200f - 18f, rows[2].rowY, 0.01f)                                            // the middle one level with the finger
+        rows.forEach { s ->
+            // the stalk's end is on the row's edge (within a pixel or so)
+            val dx = maxOf(s.rowX - s.tipX, 0f, s.tipX - (s.rowX + 200f)); val dy = maxOf(s.rowY - s.tipY, 0f, s.tipY - (s.rowY + 36f))
+            assertTrue("stalk end off its row by $dx, $dy", hypot(dx, dy) <= 1.5f)
+            // no row touches the circle
+            val nx = (300f).coerceIn(s.rowX, s.rowX + 200f); val ny = (200f).coerceIn(s.rowY, s.rowY + 36f)
+            assertTrue(hypot(nx - 300f, ny - 200f) >= HUB_R)
+        }
     }
 
-    @Test fun aHeldFingerAtAnEdgeWithMoreBeyondPullsTheColumn() {
-        val l = HoldLayout.of(300f, 200f, 12, 915f, 412f)
-        assertTrue(l.pull(l.viewBottom - 5f, 0f) > 0f)                // at the foot, more below: scrolls on
-        assertEquals(0f, l.pull(l.viewBottom - 5f, l.maxScroll), 0f)   // nothing more below
-        assertEquals(0f, l.pull(l.viewTop + 5f, 0f), 0f)               // at the top with nothing above
-        assertTrue(l.pull(l.viewTop + 5f, 30f) < 0f)
-        assertEquals(0f, l.pull(200f, 30f), 0f)                        // in the middle: no pull
+    @Test fun itOpensWithTheFirstChoiceAtTheTopAndTurnsToTheRest() {
+        val w = wheel(9)
+        assertEquals(5, w.count); assertEquals(4f, w.maxTurn, 0f)
+        assertEquals(-2f, w.slot(0), 0f)                         // the first choice at the arc's top
+        assertEquals(1f, w.spot(4, 0f).alpha, 0f); assertEquals(0f, w.spot(5, 0f).alpha, 0f)
+        // turned all the way, the last five are on the arc and the first has rolled off
+        assertEquals(2f, w.slot(8, w.maxTurn), 0f); assertEquals(0f, w.spot(0, w.maxTurn).alpha, 0f)
+        // half way between two choices, the ones at the ends are fading
+        val half = w.spot(0, 0.5f).alpha
+        assertTrue(half > 0f && half < 1f)
     }
 
-    @Test fun nearTheRightEdgeTheyOpenToTheLeftAndTheyStayOnTheScreen() {
-        val right = holdSpots(880f, 200f, 3, 915f, 412f)
-        assertTrue(right.all { it.left && it.edgeX < 880f })
-        val low = holdSpots(300f, 400f, 5, 915f, 412f)                                        // a finger at the foot of the screen
-        assertTrue(low.last().cy + 24f <= 412f - 16f + 0.01f)
-        val high = holdSpots(300f, 4f, 5, 915f, 412f)
-        assertTrue(high.first().cy - 24f >= 8f - 0.01f)
+    @Test fun fiveOrFewerIsJustTheArc() {
+        assertEquals(0f, wheel(5).maxTurn, 0f)
+        val three = wheel(3)
+        assertEquals(0f, three.maxTurn, 0f)
+        assertEquals(listOf(-1f, 0f, 1f), (0 until 3).map { three.slot(it) })      // centred on the finger
+    }
+
+    @Test fun itStaysBelowTheHeaderAndOnTheScreen() {
+        val high = HoldWheel(300f, 90f, 9, 915f, 412f)                               // a finger just under the header
+        assertTrue(high.firstSlot > -2); assertTrue(high.count < 5); assertTrue(high.maxTurn > 4f)
+        (0 until 9).map { high.spot(it, 0f) }.filter { it.alpha > 0f }.forEach { assertTrue(it.rowY >= 60f - 36f * 0.75f - 0.01f) }
+        assertTrue(high.spot(0, 0f).rowY >= 60f)                                    // what is wholly shown is below the header
+        val low = HoldWheel(300f, 370f, 9, 915f, 412f)
+        assertTrue(low.lastSlot < 2)
+        assertTrue(low.spot(low.count - 1, 0f).rowY + 36f <= 412f - 16f + 0.01f)
+    }
+
+    @Test fun itFlipsSideNearTheRightEdgeAndForARightHandedHold() {
+        assertFalse(wheel(5).left)
+        assertTrue(HoldWheel(880f, 200f, 5, 915f, 412f).left)
+        val l = HoldWheel(600f, 200f, 5, 915f, 412f, preferLeft = true)
+        assertTrue(l.left); assertTrue(l.spot(2, 0f).rowX + 200f <= 600f - 54f + 0.01f)
+        assertFalse(HoldWheel(100f, 200f, 5, 915f, 412f, preferLeft = true).left)   // no room on the left: it opens right
+    }
+
+    @Test fun aHeldFingerPastTheArcsEndTurnsTheWheel() {
+        val w = wheel(9)
+        assertTrue(w.pull(200f + 3.2f * 36f, 0f) > 0f)                // below the last choice, more to come
+        assertEquals(0f, w.pull(200f + 3.2f * 36f, w.maxTurn), 0f)     // nothing more that way
+        assertEquals(0f, w.pull(200f - 3.2f * 36f, 0f), 0f)            // above the first with nothing before it
+        assertTrue(w.pull(200f - 3.2f * 36f, 2f) < 0f)
+        assertEquals(0f, w.pull(200f, 2f), 0f)                         // on the arc: no pull
+        assertEquals(0f, wheel(4).pull(400f, 0f), 0f)                  // nothing to turn
     }
 
     @Test fun theCircleGoesPastItsSizeUndershootsOnceAndSettles() {
@@ -71,6 +96,18 @@ class HoldMenuTest {
         assertEquals(1f - 0.1f * 0.6f, hubScale(0.75f, 0.6f), 0.001f)         // one undershoot
         assertEquals(1f, hubScale(1f, 0.6f), 0.001f)
         assertTrue((1..99).all { hubScale(it / 100f, 0f) <= 1f })              // Spring 0: a plain ease-out, never past
+    }
+
+    @Test fun aDragThatEndsOffAChoicePicksNothing() {
+        // the iPhone's fault (a drag that began on Clear and ended elsewhere cleared the pad): only the choice under the finger at the lift is picked
+        var cleared = false
+        val m = HoldMenuState()
+        m.open(Offset(100f, 100f), Color.Red, listOf(HoldItem("Edit steps"), HoldItem("Clear") { cleared = true }))
+        m.rects = listOf(Rect(200f, 50f, 400f, 98f), Rect(200f, 106f, 400f, 154f))
+        m.drag(Offset(250f, 120f)); assertEquals(1, m.hot)          // on Clear…
+        m.drag(Offset(600f, 300f)); assertEquals(-1, m.hot)         // …then off every choice
+        m.release()
+        assertFalse(cleared); assertTrue(m.menu != null)
     }
 
     @Test fun aLetGoOnALitChoicePicksItAndOnNothingLeavesTheMenuOpen() {
