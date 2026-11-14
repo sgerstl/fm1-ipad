@@ -122,10 +122,10 @@ class HoldMenuTest {
         assertEquals(270f - (62f - 400f), b.centreX, 0.01f)
     }
 
-    /** The black backing (iPhone d0797f9): an annular sector from 366 to 612 round the curve's centre, ±(reach + 14) tall, 88 % black, feathered 8. */
+    /** The black backing (iPhone d0797f9): an annular sector from 366 to 612 round the curve's centre, ±(reach + 14) tall, 53 % black, feathered 8. */
     @Test fun theBlackFieldIsAnAnnularSectorBehindTheArc() {
         assertEquals(366f, HoldWheel.FIELD_INNER, 0f); assertEquals(612f, HoldWheel.FIELD_OUTER, 0f)
-        assertEquals(0.88f, HoldWheel.FIELD_ALPHA, 0f); assertEquals(8f, HoldWheel.FIELD_FEATHER, 0f)
+        assertEquals(0.53f, HoldWheel.FIELD_ALPHA, 0f); assertEquals(8f, HoldWheel.FIELD_FEATHER, 0f)
         val five = HoldWheel(500f, 200f, 5, 915f, 412f)
         assertEquals(136f + 14f, five.fieldHalf, 0.01f)                                // reach 136, no triangles
         assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 366.0)), five.fieldInnerSweep.toDouble(), 0.01)

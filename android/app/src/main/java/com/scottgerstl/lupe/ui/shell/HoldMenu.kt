@@ -247,11 +247,11 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
         /** …on a curve of this radius (shallow: nearly a straight column), with the rim a stalk inside it. */
         const val CURVE = 400f
         const val RIM = CURVE - STALK
-        /** The black field behind the arc, a backing (iPhone d0797f9): 12 inside the rim and 12 past the rows, 14 past the top and bottom choices, 88 %, feathered 8. */
+        /** The black field behind the arc, a backing (iPhone d0797f9): 12 inside the rim and 12 past the rows, 14 past the top and bottom choices, 53 %, feathered 8. */
         const val FIELD_INNER = RIM - 12f
         const val FIELD_OUTER = CURVE + ROW_W + 12f
         const val FIELD_PAD = 14f
-        const val FIELD_ALPHA = 0.88f
+        const val FIELD_ALPHA = 0.53f
         const val FIELD_FEATHER = 8f
         /** Under the header's line. */
         const val HEADER = 56f
@@ -364,7 +364,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         val itemW = HoldWheel.ROW_W; val itemH = HoldWheel.ROW_H
         val fadeAll = 1f - (leave.value / 0.86f).coerceAtMost(1f)   // choices and lines: gone in 120 of the 140 ms
         // A black backing behind the arc (Scott, 2026-11-14: the pads underneath competed): an annular sector round the curve's centre,
-        // 88 % black with a narrow soft edge, drawn first, the only darkening there is, under the circle, rim, stalks and choices.
+        // 53 % black with a narrow soft edge, drawn first, the only darkening there is, under the circle, rim, stalks and choices.
         Canvas(Modifier.fillMaxSize().graphicsLayer {
             renderEffect = androidx.compose.ui.graphics.BlurEffect(HoldWheel.FIELD_FEATHER.dp.toPx(), HoldWheel.FIELD_FEATHER.dp.toPx(), androidx.compose.ui.graphics.TileMode.Decal)
         }) {
