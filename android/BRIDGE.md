@@ -221,6 +221,9 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
 - **The pictures' data** (decision 30: pictures are a setting), in `PagePictures.swift`: the page area's `graph` is
   back as it was before b672052 (the picture values, `fm6`, `sheet`), beside `title`, `tiles` and `window`. Mix's bus
   cards carry a `graph` too: kind delay, reverb, chorus or global, with the four knobs' values.
+  The FX family's DELAY, REVERB, INSERT, SLICER and DUCK send graphs too (kinds fxdelay, fxreverb, insert, slicer,
+  duck), with what their own knobs don't hold: the delay bus's MIX, INSERT's MIX, and DUCK's source hits and release
+  as parts of a bar.
 
 ### Read-only by default (P1, 2026-11-13)
 

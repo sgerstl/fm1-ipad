@@ -11,6 +11,15 @@ extension PageArea {
         case none, env, lfo, drive, fx, scale, arp, analog, mod, tiles, card, fm6op, fm6all, sound
         /// Mix's bus cards: `values` are the card's knobs in the FM-1's order.
         case delay, reverb, chorus, global
+        /// A track's FX pages, as the iPad draws them (ios/FM1/PageGraphs.swift). What their own four knobs don't
+        /// hold comes with them: the delay bus's MIX, INSERT's MIX, DUCK's source hits.
+        /// - fxdelay: `values` TIME, FEEDBACK, COLOR, the bus's MIX; `send` the track's send; `caption` the time.
+        /// - fxreverb: `values` TYPE, SIZE, DAMP; `send`; `caption` the type's name.
+        /// - insert: `values` TYPE, A, B, C, MIX; `caption` knob A as shown (FILTR's cutoff).
+        /// - slicer: `values` SLICER, PATTERN, RATE, DEPTH.
+        /// - duck: `values` DEPTH, RELEASE in thousandths of a bar; `notes` where in the bar the source hits, in
+        ///   thousandths (empty: no source).
+        case fxdelay, fxreverb, insert, slicer, duck
     }
     public struct Tile: Codable, Equatable, Sendable { public var label: String }
 
@@ -60,6 +69,8 @@ extension PageArea {
         public var title: String?
         public var fm6: Fm6?
         public var sheet: Sheet?
+        /// fxdelay and fxreverb: the track's send to the bus (0…127).
+        public var send = 127
     }
 
 }
@@ -123,6 +134,16 @@ extension PageArea {
                               note: "The kit is the project's: every DRUM-X track plays it, MORPH blending A into B.")
     }
 
+    /// The page's own knob k: its raw value (0 for an empty knob) and its text.
+    func raw4(_ k: Int) -> Int {
+        guard let id = page.ids[safe: k] ?? nil else { return 0 }
+        return page.scope(of: k) == 0 ? session.cell(id).value : session.globalCell(id).value
+    }
+    func shown4(_ k: Int) -> String? {
+        guard let id = page.ids[safe: k] ?? nil else { return nil }
+        return control(scope: page.scope(of: k), id: id).value
+    }
+
     func graph() -> PageArea.Graph {
         var g = PageArea.Graph()
         switch page.title {
@@ -180,6 +201,37 @@ extension PageArea {
             g.kind = .card
             g.title = cursor.map { "\(page.title) · \($0 + 1)" } ?? page.title
             if let sheet = soundSheet() { g.kind = .sound; g.sheet = sheet }
+        case "DELAY" where page.family == .fx:
+            // the send, then the bus's TIME FEEDBACK COLOR; the bus's MIX is GLO › DELAY's knob 4
+            let glo = SoundPage.pages(session).first { $0.title == "DELAY" && $0.family != .fx && $0.scope == 1 }
+            let mix = (glo?.ids[safe: 3] ?? nil).map { session.globalCell($0).value } ?? 127
+            g.kind = .fxdelay; g.send = raw4(0); g.values = [raw4(1), raw4(2), raw4(3), mix]; g.caption = shown4(1)
+        case "REVERB" where page.family == .fx:
+            g.kind = .fxreverb; g.send = raw4(0); g.values = [raw4(1), raw4(2), raw4(3)]; g.caption = shown4(1)
+        case "INSERT":
+            // its MIX is INSERT 2's knob (the PRESETS encoder on 2.5.1)
+            let mixID = SoundPage.pages(session).first { $0.title == "INSERT 2" }?.ids.first ?? nil
+            g.kind = .insert; g.values = (0..<4).map(raw4) + [mixID.map { session.cell($0).value } ?? 127]; g.caption = shown4(1)
+        case "SLICER":
+            g.kind = .slicer; g.values = (0..<4).map(raw4)
+        case "DUCK":
+            // BY, DEPTH, RELEASE. The source's steps over a bar at its division (a kit ducks on its KICK lane only),
+            // and RELEASE as a part of the bar at the tempo, as the iPad's DuckDrawing has them
+            g.kind = .duck
+            let src = raw4(0)
+            var release = 0
+            if src > 0, src - 1 < session.tracks.count, src - 1 != track {
+                let st = session.tracks[src - 1]
+                let ticks = CountedPlayhead.divisionTicks[safe: st.division] ?? 6, len = max(1, st.length)
+                let nb = max(1, Int(96 / ticks)), kit = session.isKit(src - 1)
+                g.notes = (0..<min(nb, 64)).filter { i in
+                    let k = i % len
+                    return k < st.steps.count && (kit ? st.gridSteps[k].has(0) : st.isOn(k))
+                }.map { Int((Double($0) * ticks / 96 * 1000).rounded()) }
+                let bar = 4 * 60 / Double(max(40, session.bpm))
+                release = Int((SkiffLFO.fadeSeconds(max(1, raw4(2))) / bar * 1000).rounded())
+            }
+            g.values = [raw4(1), release]
         case "SLICES":
             g.kind = .card      // the markers can't be read or moved from here (no command reaches them): the card says so
             g.title = "SLICES"

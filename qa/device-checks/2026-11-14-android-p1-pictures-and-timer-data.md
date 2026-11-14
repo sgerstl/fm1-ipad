@@ -28,6 +28,16 @@ adb logcat -s LupeLog | grep "wait"
 | 5 | While playing, press a Mute key. | The log shows `wait: T… mute lands at <tick> (clock running, …)`, then `wait over`. Note whether the outline drew. | – | ☐ pass ☐ fail: |
 | 6 | Read the lines from 4 and 5. | Each has a tick and "clock running". If one says "no tick" or "no clock", it's a core fault: send the lines. If they're right and no outline drew, it's the drawing. | – | ☐ pass ☐ fail: |
 
+## The FX family's pictures (added after P2's e546ff3)
+
+The core now sends DELAY, REVERB, INSERT, SLICER and DUCK as pictures, with the three values P2 had to assume.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 7 | Pictures on. FX › DELAY on a track with some send. Then Mix › Delay: turn MIX down. Go back to FX › DELAY. | The track's echoes in the picture are smaller than before. | – | ☐ pass ☐ fail: |
+| 8 | FX › INSERT, TYPE SOFT. Turn INSERT's MIX down on the FM-1 (its PRESETS encoder). | The picture's curve moves toward the straight dry line. | – | ☐ pass ☐ fail: |
+| 9 | FX › DUCK: set BY to a track that has a few steps on. | The picture shows a dip at each of that track's hits across the bar. With BY off, the box is empty. | – | ☐ pass ☐ fail: |
+
 **Not covered here:**
 
 - LAUNCH on NOW or BEAT: the launch lands at once or within a beat, so there is little or nothing to draw.
