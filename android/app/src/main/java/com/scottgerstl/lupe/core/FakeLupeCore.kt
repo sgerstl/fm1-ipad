@@ -201,8 +201,10 @@ class FakeLupeCore(
                 val at = row.entries.indexOfFirst { it.play == PadPlay.Playing }.takeIf { it >= 0 } ?: row.entries.indexOfFirst { it.kind == PadKind.Pattern }
                 if (at >= 0) selectPad(intent.track, at)
             }
-            is Intent.TrackMute -> { _mix.update { FakeP5.mix(it, intent) }; _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(muted = !it.muted) else it }) } }
-            is Intent.SceneRecall -> recall(intent.scene)
+            // while it plays a mute waits for the launch point, as on the FM-1 (a second press takes the wait back); stopped, it lands at once
+            is Intent.TrackMute -> if (_top.value.playing) _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(mutePending = !it.mutePending, pendingTicks = ticksToBar()) else it }) }
+                else { _mix.update { FakeP5.mix(it, intent) }; _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(muted = !it.muted) else it }) } }
+            is Intent.SceneRecall -> { recall(intent.scene); if (_top.value.playing) _pads.update { p -> p.copy(scenes = p.scenes.mapIndexed { i, sc -> sc.copy(pending = i == intent.scene, pendingTicks = ticksToBar()) }) } }
             is Intent.SceneStore -> if (_pads.value.scenes.getOrNull(intent.scene)?.stored == true && !intent.confirmed) Unit /* the core refuses: must confirm */ else store(intent.scene)
             is Intent.StepSelect -> emitEditor { it.copy(selected = intent.step.coerceIn(0, 15)) }
             is Intent.StepHold -> emitEditor {
@@ -390,6 +392,9 @@ class FakeLupeCore(
             if (i == entry) x.copy(play = PadPlay.Playing, bar = null, progress = null)
             else if (x.play != PadPlay.Idle) x.copy(play = PadPlay.Idle, bar = null, progress = null) else x }) }) }
 
+    /** Clock ticks (24 a quarter, 6 a sixteenth) until the next bar. */
+    private fun ticksToBar(): Double = (16 - stepCount % 16) * 6.0
+
     private fun recount() = _top.update { t -> t.copy(waiting = _pads.value.rows.sumOf { r -> r.entries.count { it.play == PadPlay.Waiting } }) }
 
     private fun store(n: Int) {
@@ -411,7 +416,7 @@ class FakeLupeCore(
             _editor.update { it.copy(playhead = -1) }
             _meters.value = MetersState()
             _timeline.update { it.copy(playing = false, playheadBar = null) }
-            _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map { it.copy(progress = null) }) }) }
+            _pads.update { p -> p.copy(ticksPerSecond = 0.0, scenes = p.scenes.map { it.copy(pending = false, pendingTicks = null) }, rows = p.rows.map { r -> r.copy(mutePending = false, soloPending = false, pendingTicks = null, entries = r.entries.map { it.copy(progress = null, ticksToLaunch = null, passTicks = null) }) }) }
         }
         syncTicker(on)
     }
@@ -436,8 +441,21 @@ class FakeLupeCore(
                     if (landing < 0) r else r.copy(entries = r.entries.mapIndexed { i, x ->
                         if (i == landing) x.copy(play = PadPlay.Playing, bar = null) else if (x.play == PadPlay.Playing) x.copy(play = PadPlay.Idle) else x })
                 }) }
-                _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map {
-                    if (it.play == PadPlay.Playing) it.copy(progress = (stepCount % 16) / 16f) else it }) }) }
+                // what waited for the bar lands on it: mutes, and the recalled scene
+                if (newBar) {
+                    _pads.value.rows.filter { it.mutePending }.forEach { r -> _mix.update { FakeP5.mix(it, Intent.TrackMute(r.track)) } }
+                    _pads.update { p -> p.copy(rows = p.rows.map { if (it.mutePending) it.copy(muted = !it.muted, mutePending = false, pendingTicks = null) else it }, scenes = p.scenes.map { it.copy(pending = false, pendingTicks = null) }) }
+                }
+                val left = ticksToBar()
+                _pads.update { p -> p.copy(ticksPerSecond = _top.value.tempo / 60.0 * 24.0, scenes = p.scenes.map { if (it.pending) it.copy(pendingTicks = left) else it }, rows = p.rows.map { r -> r.copy(
+                    pendingTicks = if (r.mutePending || r.soloPending) left else null,
+                    entries = r.entries.map {
+                        when (it.play) {
+                            PadPlay.Playing -> it.copy(progress = (stepCount % 16) / 16f, passTicks = 96.0, ticksToLaunch = null)
+                            PadPlay.Waiting -> it.copy(ticksToLaunch = left + 96.0 * (((it.bar ?: 0) - (startBar + stepCount / 16) - 1).coerceAtLeast(0)))
+                            else -> if (it.ticksToLaunch != null || it.passTicks != null) it.copy(ticksToLaunch = null, passTicks = null) else it
+                        }
+                    }) }) }
                 recount()
                 _editor.update { it.copy(playhead = stepCount % 16) }
                 // the meters move while it plays: each track near its level, never louder

@@ -132,6 +132,10 @@ data class PadEntry(
     val progress: Float? = null,
     /** The entry carries a sound (the iPad cuts the pad's top right corner). */
     val hasSound: Boolean = false,
+    /** A waiting launch: clock ticks (24 a quarter note) until it lands, as of this publish; null when there is no clock (joined mid-play). PROVISIONAL until P1's shapes. */
+    val ticksToLaunch: Double? = null,
+    /** The playing entry's pass length in clock ticks, so the pass bar can move between publishes; null when not known. PROVISIONAL. */
+    val passTicks: Double? = null,
 )
 
 @Serializable
@@ -141,12 +145,17 @@ data class PadRow(
     /** The track's sound name ("Acid", "Drum Kit"). */
     val name: String,
     val muted: Boolean = false,
+    /** A mute (or un-mute), or a solo, that waits for the launch point; [pendingTicks] is the clock ticks until it lands (null: no clock). PROVISIONAL until P1's shapes. */
+    val mutePending: Boolean = false,
+    val soloPending: Boolean = false,
+    val pendingTicks: Double? = null,
     /** One per column: entries A… up to the last any track uses, plus one empty. */
     val entries: List<PadEntry> = emptyList(),
 )
 
+/** [pending]: recalled and waiting for the launch point, [pendingTicks] clock ticks away (null: no clock). PROVISIONAL until P1's shapes. */
 @Serializable
-data class Scene(val stored: Boolean = false, val current: Boolean = false)
+data class Scene(val stored: Boolean = false, val current: Boolean = false, val pending: Boolean = false, val pendingTicks: Double? = null)
 
 /** [entry] is 0-based (A = 0). */
 @Serializable
@@ -162,6 +171,9 @@ data class PadsState(
     /** The pattern numbers (1…64) the FM-1 holds: the only ones Set pattern can name (LIST SET refuses an empty one).
      *  P1, 2026-11-14 (Scott's run: Set to 60 refused). */
     val kept: List<Int> = emptyList(),
+    /** The clock's rate now, in ticks a second (24 a quarter note at the tempo); 0 when stopped or not known. The screen moves the pass bars and the waiting
+     *  outlines by it between publishes. PROVISIONAL until P1's shapes. */
+    val ticksPerSecond: Double = 0.0,
 )
 
 // ---- editor (P3)
