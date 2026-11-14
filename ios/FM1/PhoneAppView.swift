@@ -328,12 +328,14 @@ struct PhonePianoRoll: View {
         VStack(spacing: 6) {
                 HStack(alignment: .top, spacing: 2) {
                     VStack(spacing: 0) {
+                        // the piano edge (board 75, decision 31): white and black keys, C named; a key plays its note
                         ForEach(rows, id: \.self) { n in
-                            AuditionLabel(text: Music.noteName(n) + (Music.inScale(n, root: t.root, scale: t.scale) ? "" : " ∗"),
-                                          spoken: Music.spokenNoteName(n),
-                                          down: { session.noteDown(n) }, up: { session.noteUp(n) })
+                            PianoEdgeKey(note: n, inScale: Music.inScale(n, root: t.root, scale: t.scale),
+                                         down: { session.noteDown(n) }, up: { session.noteUp(n) })
                         }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(.trailing, 4)
                     .offset(y: -offset.y)
                     .frame(width: grid.labelWidth, height: h, alignment: .top)
                     .clipped()
@@ -453,5 +455,52 @@ struct TrackPickerLayer: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: ui.trackPicker)
+    }
+}
+
+/// One key of the phone's piano edge (board 75): a white key in light grey, a black key's dark bar across 62 % of it from
+/// the left, a hairline under a white key, every C named. Pressed, it plays its note (as the note names did) and dims.
+/// Board 75's own greys: the app's tokens have no piano-key colours (a token gap, noted in the device check).
+struct PianoEdgeKey: View {
+    @Environment(\.grid) private var grid
+    let note: Int
+    let inScale: Bool
+    let down: () -> Void
+    let up: () -> Void
+    @State private var pressed = false
+
+    static let white = Color(hex: 0xC9C9CF), black = Color(hex: 0x1E1E22), edge = Color(hex: 0x8A8A92), ink = Color(hex: 0x3A3A40)
+    static func isBlack(_ n: Int) -> Bool { [1, 3, 6, 8, 10].contains(((n % 12) + 12) % 12) }
+
+    var body: some View {
+        let blackKey = Self.isBlack(note)
+        ZStack(alignment: .leading) {
+            Self.white
+            Rectangle().fill(Self.edge).frame(height: 1).frame(maxHeight: .infinity, alignment: .bottom)
+            if blackKey {
+                UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 3, topTrailingRadius: 3)
+                    .fill(Self.black)
+                    .frame(width: (grid.labelWidth - 4) * 0.62)
+                    .padding(.vertical, -1)
+            }
+            if note % 12 == 0 {
+                Text(Music.noteName(note)).font(.lupe(10, .semibold)).foregroundStyle(Self.ink)
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 4)
+            }
+            Color.black.opacity(pressed ? 0.25 : 0)
+        }
+        .frame(width: grid.labelWidth - 4, height: grid.rowHeight)
+        .animation(.easeOut(duration: pressed ? 0.06 : 0.15), value: pressed)
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in if !pressed { pressed = true; down() } }
+            .onEnded { _ in pressed = false; up() })
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Play \(Music.spokenNoteName(note))" + (inScale ? "" : ", outside the scale"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            down()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { up() }
+        }
     }
 }
