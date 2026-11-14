@@ -5,47 +5,49 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * When the sound panel is up over Pads and the Timeline (Scott, 2026-11-14: on a page change or any knob turned on the FM-1; it shows what the
- * FM-1 shows, the page's header, four dials and tiles, and nothing else). It rises when the FM-1 *changes* to a
- * sound page (a sound key, or a page step within the family), never because the FM-1 is resting on one: the first page seen after launch or
- * a reconnect is only the baseline. A knob turned on the FM-1 brings it back for that page. It leaves on HOME (no sound page), on a swipe
- * down, or [holdMs] after the last knob turn or touch on it. Clock-driven by `now` so tests can run it.
+ * When the sound panel is docked at the right of Pads, Edit and the Timeline (decision 32, the iPad's panel rule). It comes in when the FM-1
+ * *changes* to a sound page (a sound key on the FM-1 or on the phone's rail, or a page step within the family), never because the FM-1 is
+ * resting on one: the first page seen after launch or a reconnect is only the baseline. A knob turned on the FM-1 brings it back for that
+ * page. It **stays** until HOME (no sound page), its close key, or another tab. There is no timeout (decision 32: the 8 s pop-up rule went).
  */
 class SoundPanelModel {
     var up by mutableStateOf(false); private set
-    /** When it leaves if nothing else happens; a state so the screen can wait for it. */
-    var deadline by mutableStateOf(0L); private set
-    var holdMs = 8000L
     private var primed = false
     private var last: String? = null
     private var lastTurn: Int? = null
 
-    /** The link dropped: the next page seen is a new baseline, and the panel is down. */
+    /** The link dropped: the next page seen is a new baseline, and the panel is shut. */
     fun reset() { primed = false; last = null; lastTurn = null; up = false }
 
     /** The sound page the FM-1 shows ([key] names it: family and page), or null when it shows none (HOME, SEQ, GLO…). */
-    fun page(key: String?, now: Long) {
+    fun page(key: String?) {
         if (!primed) { primed = true; last = key; return }
         if (key == last) return
         last = key
-        if (key == null) up = false else show(now)
+        up = key != null
     }
 
     /** The page area's knob counter: a new value is a knob turned on the FM-1. */
-    fun turn(seq: Int, now: Long) {
+    fun turn(seq: Int) {
         if (lastTurn == null) { lastTurn = seq; return }
         if (seq == lastTurn) return
         lastTurn = seq
-        if (last != null) show(now)
+        if (last != null) up = true
     }
 
-    /** A touch on the panel (a dial, a tile): it stays while you're shaping. */
-    fun touch(now: Long) { if (up) deadline = now + holdMs }
-
-    /** A swipe down on it. */
+    /** Its close key, or another tab chosen. The FM-1 stays where it is; its next page change or knob turn opens the panel again. */
     fun dismiss() { up = false }
+}
 
-    fun tick(now: Long) { if (up && now >= deadline) up = false }
+/** The phone's sound keys, in the iPad's order (decision 32). */
+val SOUND_KEYS = listOf("FX", "SEL", "ENV", "LFO", "EDIT", "ARP")
 
-    private fun show(now: Long) { up = true; deadline = now + holdMs }
+/**
+ * What a sound key on the rail asks the FM-1 for: a family whose panel is shut opens on the page it is on (null: the FM-1's own choice); the
+ * open family's key again steps to its next page, round to the first, as the FM-1's own key does. [pages] are the open family's page numbers.
+ */
+fun railTarget(family: String, openFamily: String?, pages: List<Int>, page: Int): Int? {
+    if (family != openFamily || pages.isEmpty()) return null
+    val at = pages.indexOf(page)
+    return pages[(at + 1).mod(pages.size)]
 }

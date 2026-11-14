@@ -51,7 +51,7 @@ fun isSoundFamily(family: String?) = family in PageFamilies
  * [notice] is the Labs "held here" line, shown in the header's place of the track line.
  */
 @Composable
-fun SoundDials(page: PageState, core: LupeCore, modifier: Modifier = Modifier, notice: String? = null, inline: Boolean = false) {
+fun SoundDials(page: PageState, core: LupeCore, modifier: Modifier = Modifier, notice: String? = null, inline: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
     val colour = trackColour(page.track)
     // the value each control had when this page opened, for double-tap to put it back (not a factory default: the FM-1 has none per sound)
     val opened = remember(page.track, page.page, page.family) { mutableMapOf<Int, Int>() }
@@ -74,7 +74,7 @@ fun SoundDials(page: PageState, core: LupeCore, modifier: Modifier = Modifier, n
     }
     Column(modifier) {
         Box(Modifier.fillMaxWidth().height(32.dp)) {
-            LupeCrossfade(page.lock, Modifier.fillMaxSize(), Dur.STATE) { lock -> if (lock == null) PageHeader(page, colour, notice) else LockBanner(lock, colour) }
+            LupeCrossfade(page.lock, Modifier.fillMaxSize(), Dur.STATE) { lock -> if (lock == null) PageHeader(page, colour, notice, trailing) else LockBanner(lock, colour) }
         }
         Spacer(Modifier.height(4.dp))
         if (page.controls.any { it != null }) PageControlsRow(
@@ -91,7 +91,7 @@ fun SoundDials(page: PageState, core: LupeCore, modifier: Modifier = Modifier, n
  * moves it). The track line is at the right, or the held notice.
  */
 @Composable
-private fun PageHeader(page: PageState, colour: Color, notice: String?) {
+private fun PageHeader(page: PageState, colour: Color, notice: String?, trailing: (@Composable () -> Unit)? = null) {
     val at = page.pages.indexOfFirst { it.index == page.page }
     val place = page.family + if (at >= 0) " ${at + 1}/${page.pages.size}" else ""
     val name = page.title.ifEmpty { page.pages.getOrNull(at)?.title.orEmpty() }
@@ -103,6 +103,7 @@ private fun PageHeader(page: PageState, colour: Color, notice: String?) {
         page.window?.let { w -> BasicText("  ${w.title} · ${w.index + 1} of ${w.count}", style = LupeType.small.copy(color = Tok.text2Raised), maxLines = 1) }
         Spacer(Modifier.weight(1f))
         if (notice != null) BasicText(notice, style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised), maxLines = 1)
+        else if (trailing != null) trailing()      // the docked panel: its close key, where the track line would be (the panel's tint says the track)
         else Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(colour))
             Spacer(Modifier.width(6.dp))

@@ -1,5 +1,8 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -107,38 +110,71 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val soundPage = if (moved) snap else live
     val notice = if (moved) "The FM-1 is on ${live.family} · held here" else null
 
+    // The sound panel, docked at the right of all three tabs (decision 32, the iPad's rule): it comes in when the FM-1 changes to a sound page
+    // (its own sound key, or the phone's rail) or a knob turns on one, and stays until HOME, its close key or another tab. No timeout.
+    val panel = remember { SoundPanelModel() }
+    val linkNow by core.link.collectAsStateWithLifecycle()
+    val linked = linkNow.phase == LinkPhase.Ready
+    val pageKey = if (soundUp) "${soundPage.family}/${soundPage.page}" else null
+    LaunchedEffect(linked) { if (!linked) panel.reset() }
+    LaunchedEffect(pageKey, linked) { if (linked) panel.page(pageKey) }
+    LaunchedEffect(live.turnSeq, live.turned, linked) { if (linked) panel.turn(live.turnSeq * 8 + live.turned) }
+    // another tab shuts it (the first tab seen is only where the app opened)
+    var tabSeen by remember { mutableStateOf(shell.tab) }
+    LaunchedEffect(shell.tab) { if (shell.tab != tabSeen) { tabSeen = shell.tab; panel.dismiss() } }
+    val docked = panel.up && pageKey != null && shell.bottom.kind != BottomKind.FreeTake
+    val dockT = animatedFloat(if (docked) 1f else 0f, if (docked) Dur.PANEL else Dur.FINGER, if (docked) EaseOut else EaseIn)
+    // a Magnifier never outlives its dial: the tab changing or the panel leaving takes it down (Scott's stuck ATTACK overlay)
+    val magnifier = com.scottgerstl.lupe.ui.slide.LocalMagnifier.current
+    LaunchedEffect(shell.tab, panel.up, shell.bottom.kind) { magnifier?.hideAll() }
+    // Settings › Sound keys: the rail down the right edge takes its width from every tab; the panel docks beside it
+    val rail = labs.soundKeys && shell.bottom.kind != BottomKind.FreeTake
+
     CompositionLocalProvider(LocalBackGoesHome provides (shell.bottom.kind == BottomKind.Page)) {
-        Box(modifier.fillMaxSize()) {
-            LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
-                if (take) com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
-                else TabPager(shell.tab, Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size], labs.tabSlideMs) { tab ->
-                    when (tab) {
-                        Tab.Pads -> PadsPage(pads, core)
-                        Tab.Edit -> Box(Modifier.fillMaxSize()) {
-                            EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), sound = if (soundUp) soundPage else null, soundCore = soundCore, notice = notice, graphics = labs.showGraphics)
-                            // the FREE TAKE offer and the landing sit on top of the editor
-                            com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
+        Row(modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
+                    if (take) com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
+                    else TabPager(shell.tab, Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size], labs.tabSlideMs) { tab ->
+                        when (tab) {
+                            Tab.Pads -> PadsPage(pads, core)
+                            Tab.Edit -> Box(Modifier.fillMaxSize()) {
+                                // the grid keeps its step width and scrolls under the docked panel (decision 35, B)
+                                EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = DOCK_W * dockT.value)
+                                // the FREE TAKE offer and the landing sit on top of the editor
+                                com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
+                            }
+                            Tab.Timeline -> TimelineSlot(core)
                         }
-                        Tab.Timeline -> TimelineSlot(core)
                     }
                 }
+                SoundPanel(dockT.value, docked, soundPage, soundCore, notice, { panel.dismiss() }, Modifier.align(Alignment.TopEnd).countTouches(onSoundTouch), graphics = labs.showGraphics)
             }
-            // Pads and the Timeline: the sound page's header and dials in a short panel that rises only when the FM-1 changes page or a knob turns
-            // on it, and leaves on HOME, a swipe down, or a few seconds after the last turn or touch (Scott, 2026-11-14)
-            val panel = remember { SoundPanelModel() }
-            panel.holdMs = labs.panelHoldSeconds * 1000L
-            val linkNow by core.link.collectAsStateWithLifecycle()
-            val linked = linkNow.phase == LinkPhase.Ready
-            val pageKey = if (soundUp) "${soundPage.family}/${soundPage.page}" else null
-            LaunchedEffect(linked) { if (!linked) panel.reset() }
-            LaunchedEffect(pageKey, linked) { if (linked) panel.page(pageKey, System.currentTimeMillis()) }
-            LaunchedEffect(live.turnSeq, live.turned, linked) { if (linked) panel.turn(live.turnSeq * 8 + live.turned, System.currentTimeMillis()) }
-            // a Magnifier never outlives its dial: the tab changing or the panel falling takes it down (Scott's stuck ATTACK overlay)
-            val magnifier = com.scottgerstl.lupe.ui.slide.LocalMagnifier.current
-            LaunchedEffect(shell.tab, panel.up, shell.bottom.kind) { magnifier?.hideAll() }
-            LaunchedEffect(panel.up, panel.deadline) { if (panel.up) { delay((panel.deadline - System.currentTimeMillis()).coerceAtLeast(0) + 20); panel.tick(System.currentTimeMillis()) } }
-            SoundPanel(panel.up && pageKey != null && shell.tab != Tab.Edit && shell.bottom.kind != BottomKind.FreeTake, soundPage, soundCore, notice, { panel.dismiss() },
-                Modifier.align(Alignment.BottomEnd).countTouches { panel.touch(System.currentTimeMillis()); onSoundTouch() }, graphics = labs.showGraphics)
+            if (rail) {
+                Spacer(Modifier.width(4.dp))
+                SoundKeysRail(open = if (docked) soundPage.family else null, onKey = { family ->
+                    // the open family's key again steps its pages, as on the FM-1; another opens that family (the FM-1 goes there and the panel follows)
+                    askCore.send(com.scottgerstl.lupe.core.PickPage(family, railTarget(family, if (docked) soundPage.family else null, soundPage.pages.map { it.index }, soundPage.page)))
+                })
+            }
+        }
+    }
+}
+
+/**
+ * Settings › Sound keys (decision 32, board 75.4): a 48 dp rail down the right edge, FX SEL ENV LFO EDIT ARP in the iPad's order, so the phone
+ * can open the sound panel too. The open family's key is lit in the track's colour. A key sends the FM-1 to that family (a write: nothing
+ * happens while the link is read-only), and the panel follows the FM-1 as always.
+ */
+@Composable
+private fun SoundKeysRail(open: String?, onKey: (String) -> Unit) {
+    androidx.compose.foundation.layout.Column(Modifier.width(48.dp).fillMaxHeight().semantics { isTraversalGroup = true }, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+        for (family in SOUND_KEYS) {
+            val on = family == open
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Key({ onKey(family) }, "$family sound pages", width = 48.dp, height = 40.dp, minTarget = 44.dp, on = on, role = androidx.compose.ui.semantics.Role.Button,
+                    state = if (on) "Open: again for its next page" else null) { fg -> KeyLabel(family, fg, style = com.scottgerstl.lupe.ui.theme.LupeType.key.copy(fontSize = 12.sp)) }
+            }
         }
     }
 }
@@ -214,56 +250,57 @@ private fun TimelineSlot(core: LupeCore) {
 }
 
 /**
- * The sound page over Pads or the Timeline (decisions 25, 27, 28): the header and four dials, in a panel the dials' width at the right; a page
- * with tiles gets the full width for them. It rises from the bottom in 300 ms and falls in 200 (with Reduce Motion it only fades); a swipe down
- * on it (not on a dial) sends it away. It is a pane of its own for TalkBack, with Dismiss as an action. [reveal] 0…1 grows it to show the page's
- * picture under the dials (decision 30).
+ * The docked sound panel (decisions 25, 27, 30, 32; board 75): the FM-1's page as a header, four dials, its tiles if it has any, and its picture
+ * under them when Show graphics is on, in a panel [DOCK_W] wide down the right side, tinted with the track's muted colour. It slides in from the
+ * right in 300 ms and out in 200 ([t] 0…1; with Reduce Motion it only fades). Its close key, or a swipe to the right that no dial took, shuts
+ * it. It is a pane of its own for TalkBack, with Close as an action.
  */
 @Composable
-private fun SoundPanel(visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true) {
+private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true) {
     val reduce = LocalReduceMotion.current
-    val t = animatedFloat(if (visible) 1f else 0f, if (visible) Dur.PANEL else Dur.FINGER, if (visible) EaseOut else EaseIn)
     var last by remember { mutableStateOf(page) }
     if (visible) last = page
-    if (!visible && t.value <= 0.001f) return
+    if (t <= 0.001f) return
     val colour = trackColour(last.track)
     val tiles = last.tiles
-    // Show graphics: the page's picture is there from the start, under the dials; the panel is as tall as both
     val picture = com.scottgerstl.lupe.ui.page.pictureOf(last)
     val pictured = graphics && com.scottgerstl.lupe.ui.page.hasPicture(picture)
-    val tall = animatedFloat(if (pictured) 1f else 0f, Dur.STATE)
     // It stands out from the page: the track's colour muted, 35 % over the page. Computed for all six track colours (2026-11-14): white text is
     // 6.7:1 or better on it, the raised grey of the labels 4.5:1 or better (lime is the least, 4.52), the track's own colour (the dials' arcs)
-    // 3.6:1 or better. At 40 % the labels fall under 4.5:1 on yellow and lime, so 35 it is. A line in the track's colour marks its top edge.
+    // 3.6:1 or better. At 40 % the labels fall under 4.5:1 on yellow and lime, so 35 it is. A line in the track's colour marks its left edge.
     val surface = androidx.compose.ui.graphics.lerp(Tok.page, colour, PANEL_TINT)
     androidx.compose.foundation.layout.Column(
-        modifier.then(if (tiles != null) Modifier.fillMaxWidth() else Modifier.width(444.dp)).height(134.dp + 118.dp * tall.value)
-            .graphicsLayer { alpha = if (reduce) t.value else 1f; if (!reduce) translationY = (1f - t.value) * size.height; shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(topStart = 12.dp.toPx(), topEnd = 12.dp.toPx()); clip = true }
+        modifier.width(DOCK_W).fillMaxHeight()
+            .graphicsLayer { alpha = if (reduce) t else 1f; if (!reduce) translationX = (1f - t) * size.width; shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(12.dp.toPx()); clip = true }
             .background(surface)
-            .drawBehind { drawRect(colour, size = androidx.compose.ui.geometry.Size(size.width, 1.5.dp.toPx())) }
-            // a swipe down that no dial took sends it away; taps on the panel don't reach the pads under it
+            .drawBehind { drawRect(colour, size = androidx.compose.ui.geometry.Size(1.5.dp.toPx(), size.height)) }
+            // a swipe to the right that no dial took shuts it; taps on the panel don't reach what is under it
             .pointerInput(Unit) {
                 var total = 0f
-                detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 32.dp.toPx()) onDismiss() }) { change, dy -> change.consume(); total += dy }
+                detectHorizontalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 32.dp.toPx()) onDismiss() }) { change, dx -> change.consume(); total += dx }
             }
             .pointerInput(Unit) { detectTapGestures { } }
             .semantics {
                 paneTitle = "Sound page ${last.family}"; isTraversalGroup = true
-                customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Dismiss the sound panel") { onDismiss(); true })
+                customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the sound panel") { onDismiss(); true })
             }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(12.dp),
     ) {
-        Row(Modifier.fillMaxWidth().height(110.dp)) {
-            SoundDials(last, core, Modifier.width(420.dp).fillMaxHeight(), notice)
-            if (tiles != null) {
-                Spacer(Modifier.width(16.dp))
-                PageTilesContent(tiles, colour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)))
+        SoundDials(last, core, Modifier.fillMaxWidth().height(110.dp), notice, trailing = {
+            Key(onDismiss, "Close the sound panel", width = 32.dp, height = 28.dp, minTarget = 32.dp) { fg ->
+                androidx.compose.foundation.Canvas(Modifier.size(9.dp)) { val w = 1.5.dp.toPx(); drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round); drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round) }
             }
-        }
-        if (tall.value > 0.001f) {
+        })
+        if (tiles != null) {
             Spacer(Modifier.height(8.dp))
-            com.scottgerstl.lupe.ui.page.GraphContent(picture, colour, if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1,
-                Modifier.then(if (tiles != null) Modifier.width(420.dp) else Modifier.fillMaxWidth()).height(110.dp).graphicsLayer { alpha = tall.value }.background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+            PageTilesContent(tiles, colour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(8.dp)))
+        }
+        // Show graphics: the page's picture, under the dials, in what height is left
+        if (pictured) {
+            Spacer(Modifier.height(8.dp))
+            LupeCrossfade(picture.kind to last.page, Modifier.fillMaxWidth().weight(1f), Dur.STATE) { _ ->
+                com.scottgerstl.lupe.ui.page.GraphContent(picture, colour, if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+            }
         }
     }
 }

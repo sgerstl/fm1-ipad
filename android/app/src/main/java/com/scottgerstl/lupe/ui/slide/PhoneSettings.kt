@@ -49,6 +49,14 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         private set
     fun chooseShowGraphics(on: Boolean) { showGraphics = on; put(GRAPHICS, on) }
 
+    /**
+     * Sound keys (decision 32, off by default): a rail down the right edge, FX SEL ENV LFO EDIT ARP, so the phone can open the sound panel too.
+     * Off, the FM-1 drives (decision 27).
+     */
+    var soundKeys by mutableStateOf(prefs?.getBoolean(SOUND_KEYS, false) ?: false)
+        private set
+    fun chooseSoundKeys(on: Boolean) { soundKeys = on; put(SOUND_KEYS, on) }
+
     /** Labs feel values (CLAUDE.md rule 3; added 2026-11-14, review 2026-11-28). The tab change's length in ms (the track thread mockup): default 380, 150 to 700. */
     var tabSlideMs by mutableStateOf(prefs?.getInt(TAB_MS, 380) ?: 380)
         private set
@@ -76,6 +84,7 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val MENU_SPRING = "labs_menu_spring"
         const val MENU_SPEED = "labs_menu_speed"
         const val GRAPHICS = "show_graphics"
+        const val SOUND_KEYS = "soundKeys"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"
