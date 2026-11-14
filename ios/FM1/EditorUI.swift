@@ -60,7 +60,12 @@ final class EditorUI {
             if shell, page == .sequencer, !phone { page = .song }
             // the iPad has no Sounds tab on Skiff: whatever asks for it (the FM-1's SAVE, a launch flag) gets the sounds
             // panel over the tab that was up
-            if shell, page == .library, Page.padHasNoSoundsTab {
+            // the phone (decision 33): Mix is the GLO pop-up and Sounds a sheet, never tabs; whatever asks for them gets those
+            if shell, phone, page == .mixer {
+                page = oldValue == .mixer ? .song : oldValue
+                mixPopup = true
+            }
+            if shell, page == .library, Page.padHasNoSoundsTab || phone {
                 page = oldValue == .library ? .song : oldValue
                 presetsPanel = true
             }
@@ -203,6 +208,9 @@ final class EditorUI {
         return SoundPanelState(family: f)
     }()
     var projectsOpen = false
+    /// The phone's Mix pop-up (GLO's pages, board 77), and its Settings sheet (from the song-name menu).
+    var mixPopup = false
+    var phoneSettingsOpen = LaunchArgs.all.contains("-settings")
     /// When a swipe up from the foot of the Song tab last moved the divider: the pad or scene key the swipe began on
     /// drops the tap its lift makes (Scott, 2026-11-07: the zone is the scene row's own keys).
     var pulledAt = Date.distantPast

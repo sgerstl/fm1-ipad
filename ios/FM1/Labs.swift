@@ -43,6 +43,17 @@ enum Labs {
     static let songSlide = LabItem(
         key: "labs.songSlide", title: "Switch between Pads and Timeline", detail: "How long the switch between Pads and the Timeline takes. 0 switches at once.",
         range: 0...0.6, step: 0.02, standard: 0.3, format: "%.2f s", added: "2026-11-08", review: "2026-11-23")
+    /// The phone's tab change with the track thread (design/boards/tab-thread.html; Android's default). Added 2026-11-14.
+    static let tabChange = LabItem(
+        key: "labs.tabChange", title: "Tab change (iPhone)", detail: "How long Pads, Edit and Timeline take to slide past each other, the track's outline travelling between them.",
+        range: 0.15...0.7, step: 0.01, standard: 0.38, format: "%.2f s", added: "2026-11-14", review: "2026-11-28")
+    /// The phone's hold menu (design/boards/radial-menu.html): how far its circle springs past its size, and its speed.
+    static let menuSpring = LabItem(
+        key: "labs.menuSpring", title: "Hold menu spring (iPhone)", detail: "How far the hold menu's circle springs past its size as it opens. 0 is a plain ease-out.",
+        range: 0...100, step: 5, standard: 60, format: "%.0f", added: "2026-11-14", review: "2026-11-28")
+    static let menuSpeed = LabItem(
+        key: "labs.menuSpeed", title: "Hold menu speed (iPhone)", detail: "How quickly the hold menu draws out, in percent of the mockup's timing.",
+        range: 50...200, step: 10, standard: 100, format: "%.0f %%", added: "2026-11-14", review: "2026-11-28")
     static let padPlayFade = LabItem(
         key: "labs.padPlayFade", title: "Pad colour fade on play", detail: "How gently pads light up when play starts (and go out, a little quicker, on stop). 0: at once.",
         range: 0...0.5, step: 0.05, standard: 0.2, format: "%.2f s", added: "2026-11-09", review: "2026-11-23")
@@ -77,11 +88,12 @@ enum Labs {
     /// How fast a flick of the editor's tab moves it one place on.
     static let flickSpeed: CGFloat = 700
 
-    static let sections: [(title: String, items: [LabItem])] = [
-        ("Motion", [menuOpen, songSlide, padPlayFade]),
+    /// (the iPhone's three only on the phone: the iPad's Labs stay as they were)
+    @MainActor static var sections: [(title: String, items: [LabItem])] { [
+        ("Motion", [menuOpen, songSlide, padPlayFade] + (UIDevice.current.userInterfaceIdiom == .phone ? [tabChange, menuSpring, menuSpeed] : [])),
         ("Touch", [holdToPaint, padSlideStart, padSlideDwell]),
-    ]
-    static var all: [LabItem] { sections.flatMap(\.items) }
+    ] }
+    @MainActor static var all: [LabItem] { sections.flatMap(\.items) }
 
     /// Once: values set under keys that merged carry over (the old pad-drag-after-a-hold distance into the one pad-drag
     /// distance, when only it was set). The divider's springs carry over in DividerFeel.

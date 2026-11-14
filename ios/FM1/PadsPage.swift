@@ -195,6 +195,15 @@ struct PadsPage: View {
             .background(alignment: .topLeading) {
                 GeometryReader { g in lanes(tracks, r, width: g.size.width) }
             }
+            // where the tab change's track thread lands: the selected row, head to the last pad (PhoneTabPager)
+            .overlay(alignment: .topLeading) {
+                if let k = tracks.firstIndex(of: t) {
+                    Color.clear.frame(height: r.rowHeight).frame(maxWidth: .infinity)
+                        .offset(y: CGFloat(k) * (r.rowHeight + r.rowGap))
+                        .phoneTrackAnchor()
+                        .allowsHitTesting(false)
+                }
+            }
             sceneRow
                 .accessibilityElement(children: .contain)
                 .accessibilitySortPriority(Self.rowOrder(tracks.count))

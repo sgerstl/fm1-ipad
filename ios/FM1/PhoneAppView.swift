@@ -11,36 +11,43 @@ struct PhoneAppView: View {
     @State private var size = CGSize(width: 852, height: 393)
     @State private var padsReturn: Page?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AudioThrough.self) private var through
+    @Environment(ProjectStore.self) private var projects
 
-    /// The page under the top bar.
-    @ViewBuilder private var page: some View {
-        switch ui.page {
-        case .sequencer: PhoneSequence(session: session, ui: ui)
-        case .sound: PhoneShape(session: session, ui: ui)
-        case .library: PhoneBrowse(session: session, ui: ui)
-        case .mixer: PhoneMix(session: session, ui: ui)
-        case .song:
+    /// A tab's page (Pads · Edit · Timeline, decision 28). SLOOP's song has one Song page for Pads and the Timeline.
+    @ViewBuilder private func tabPage(_ t: PhoneTab) -> some View {
+        switch t {
+        case .edit: PhoneSequence(session: session, ui: ui)
+        case .pads, .timeline:
             if session.capabilities.contains(.sloopSong) { SongPage(session: session, ui: ui, compact: true) }
             else if let store = session.skiffSong {
-                // Skiff's Pads, the grid (board 40, 46): six rows of 40, the scenes under them
-                PadsPage(session: session, store: store, ui: ui, layout: .phone)
+                if t == .pads {
+                    // Skiff's Pads, the grid (board 40, 46): six rows, the scenes under them
+                    PadsPage(session: session, store: store, ui: ui, layout: .phone)
+                } else {
+                    PhoneTimeline(session: session, store: store, ui: ui)
+                }
             } else { NotOnThisFirmware.arrange(session) }
         }
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            PhoneTopBar(session: session, ui: ui, useDemo: $useDemo)
+        VStack(spacing: 0) {
+            PhoneHeader(session: session, ui: ui, useDemo: $useDemo)
+            // the hairline that ends the header runs the full width
+            Rectangle().fill(Theme.control).frame(height: 1).padding(.horizontal, -8).accessibilityHidden(true)
             if session.isConnected {
                 Group {
+                    let pager = PhoneTabPager(tab: ui.phoneTab, colour: Theme.track[session.selectedTrack]) { t in tabPage(t) }
                     // Skiff: the sound panel comes in from the right over every tab, the FM-1's sound keys (and the
                     // rail, Settings › Sound buttons) opening it, as on the iPad (Scott, 2026-11-10)
                     if ui.songTab {
-                        SoundPanelHost(session: session, ui: ui) { page }
+                        SoundPanelHost(session: session, ui: ui) { pager }
                     } else {
-                        page
+                        pager
                     }
                 }
+                .padding(.top, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 // a button pressed on the FM-1 brings up the tab that shows its screen, as on the iPad
                 .onChange(of: session.deviceScreen) { _, s in
@@ -67,7 +74,7 @@ struct PhoneAppView: View {
         // another tab closes the sound panel (the FM-1's key or the rail brings it back)
         .onChange(of: ui.page) { _, _ in if ui.songTab { ui.soundPanel = nil } }
         .padding(.horizontal, 8)
-        .padding(.top, 6)
+        .padding(.top, 0)
         // a held knob's full-size ring, over everything and kept on the screen, as on the iPad
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .environment(\.canvasSize, size)
@@ -97,6 +104,16 @@ struct PhoneAppView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: ui.sampler)
+        // the sheets the song-name menu and the FM-1 open (decision 33)
+        .sheet(isPresented: Binding(get: { ui.phoneSettingsOpen }, set: { ui.phoneSettingsOpen = $0 })) {
+            SettingsSheet(session: session).environment(through)
+        }
+        .sheet(isPresented: Binding(get: { ui.projectsOpen }, set: { ui.projectsOpen = $0 })) {
+            ProjectsSheet(store: projects, session: session)
+        }
+        .sheet(isPresented: Binding(get: { ui.mixPopup }, set: { ui.mixPopup = $0 })) {
+            PhoneMix(session: session, ui: ui).padding(16).presentationBackground(Theme.page)
+        }
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { TrackPickerLayer(session: session, ui: ui) }
         .overlay { KnobPanelLayer(ui: ui) }
@@ -106,187 +123,6 @@ struct PhoneAppView: View {
         .foregroundStyle(Theme.text)
         .font(.lupe(15))
         .monospacedDigit()
-    }
-}
-
-// MARK: - The top bar
-
-/// One 44 pt row: the four tracks, the four jobs, then REC, play / stop and the position. iPad audio
-/// and the demo go into the ⋯ menu.
-struct PhoneTopBar: View {
-    let session: DeviceSession
-    let ui: EditorUI
-    @Binding var useDemo: Bool
-    @Environment(AudioThrough.self) private var through
-    @Environment(FirmwareCentre.self) private var firmware
-    @State private var moreFrame: CGRect = .zero
-    /// Settings (Sound buttons, Handedness, Labs…): on the phone too, from ⋯ (2026-11-10: the rail's setting needs a way in)
-    @State private var settingsOpen = LaunchArgs.all.contains("-settings")      // (-settings: open on Settings, for captures)
-
-    private var recording: Bool { session.isRecordingAnything }
-    @State private var chipFrames: [Int: CGRect] = [:]
-    @State private var pressAt = CGPoint(x: 40, y: 30)
-    @State private var readoutFrame: CGRect = .zero
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // more than four tracks (Skiff's six): one chip, the current track's; a tap opens all of them by
-            // the finger (Scott, 2026-11-05). SLOOP's four stay four chips.
-            HStack(spacing: 4) {
-                if session.trackCount > 4 { chip(session.selectedTrack, picker: true) }
-                else { ForEach(session.trackIndices, id: \.self) { chip($0) } }
-            }
-                .disabled(!session.isConnected)
-                .opacity(session.isConnected ? 1 : 0.45)
-            if session.isConnected { tabs } else { Spacer() }
-            if session.isConnected, ui.songTab, let store = session.skiffSong { PhoneLaunchKey(session: session, store: store, ui: ui) }
-            transport
-            more
-        }
-        .frame(height: 44)
-    }
-
-    // A track: the selected one lit in its colour (dark number on it, as the iPad's chip), the others
-    // raised with a bar of their colour under the number.
-    private func chip(_ t: Int, picker: Bool = false) -> some View {
-        let on = session.selectedTrack == t
-        return Button {
-            // (a tap on the chip while the picker is open is the touch that closed it: it stays shut)
-            if picker { ui.trackPicker = ui.trackPicker == nil && !OutsideTouch.justClosed ? pressAt : nil } else { session.select(track: t) }
-        } label: {
-            VStack(spacing: 5) {
-                Text("\(t + 1)").font(.lupe(15, .semibold))
-                Capsule().fill(on ? Theme.onColour.opacity(0.5) : Theme.track[t]).frame(width: 16, height: 3)
-            }
-            .foregroundStyle(on ? Theme.onColour : Theme.text)
-            .frame(width: 40, height: 44)
-            .background {
-                if on {
-                    // lit in its colour and lifted (elevation 2, with the ring), so it reads as selected
-                    RoundedRectangle(cornerRadius: 8).fill(Theme.track[t])
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, lineWidth: 2))
-                        .elevationShadow(.selected)
-                } else { Color.clear.raisedKey() }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressSink())
-        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space)).onChanged { pressAt = $0.location })
-        .accessibilityHint(picker ? "Shows all \(session.trackCount) tracks to pick another" : "")
-        // held: the track's menu (its sound, a sample, clearing), beside the chip
-        .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
-            let f = chipFrames[t] ?? .zero
-            ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: f.midX, y: f.maxY + 50))
-        })
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(AppView.space)) } action: { chipFrames[t] = $0 }
-        .accessibilityLabel("Track \(t + 1)" + (session.isDrums(t) ? ", drums" : ""))
-        .accessibilityAddTraits(on ? .isSelected : [])
-        .accessibilityAction(named: "Track menu") {
-            let f = chipFrames[t] ?? .zero
-            ui.trackMenu = TrackMenu(track: t, at: CGPoint(x: f.midX, y: f.maxY + 50))
-        }
-    }
-
-    private var tabs: some View {
-        HStack(spacing: 2) {
-            ForEach(ui.songTab ? Page.phoneSkiffTabs : Page.sloopTabs) { p in
-                let current = ui.page == p
-                Button {
-                    ui.page = p
-                    TopBar.driveDevice(session: session, ui: ui, to: p)
-                } label: {
-                    Text(p.title(skiff: ui.songTab, phone: true))
-                        .font(.lupe(13, .semibold))
-                        .foregroundStyle(current ? Theme.text : Theme.textSecondary)
-                        .lineLimit(1).minimumScaleFactor(0.85)
-                        .frame(maxWidth: .infinity).frame(height: 36)
-                        .background { if current { Color.clear.selectedKey(8) } }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(current ? [.isSelected] : [])
-            }
-        }
-        .padding(4)
-        .recessed(10)
-    }
-
-    private var transport: some View {
-        let pos = session.positions[session.selectedTrack]
-        return HStack(spacing: 2) {
-            Button { session.toggleRec() } label: {
-                Circle().fill(recording ? Theme.text : Theme.rec).frame(width: 14, height: 14)
-                    .frame(width: 44, height: 44)
-                    .background { if recording { RoundedRectangle(cornerRadius: 9).fill(Theme.rec) } }
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .accessibilityLabel("Record")
-            .accessibilityValue(session.song.songRecording ? "song recording" : session.recording ? "recording" : "off")
-            Button { session.setPlaying(!session.playing) } label: {
-                Image(systemName: session.playing ? "stop.fill" : "play.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 40, height: 36)
-                    .background { Color.clear.raisedKey() }
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .accessibilityLabel(session.playing ? "Stop" : "Play")
-            // a tap opens the tempo under it
-            Button { if !OutsideTouch.justClosed { ui.tempoAt = CGPoint(x: readoutFrame.minX, y: readoutFrame.maxY) } } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(session.playing ? "\(pos.step / 16 + 1).\(pos.step % 16 / 4 + 1).\(pos.step % 4 + 1)" : "–")
-                        .font(.lupe(13, .semibold))
-                        .foregroundStyle(recording ? Theme.recText : Theme.text)
-                    Text(recording ? "REC" : "\(session.bpm) BPM").font(.lupe(11)).foregroundStyle(Theme.textSecondary)
-                }
-                .frame(width: 62, alignment: .leading)
-                .padding(.leading, 6)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .globalFrame($readoutFrame)
-            .accessibilityElement(children: .combine)
-            .accessibilityHint("Opens the tempo")
-            .accessibilityAddTraits(.isButton)
-        }
-        .padding(.trailing, 4)
-        .frame(height: 44)
-        .background {
-            if recording { RoundedRectangle(cornerRadius: 10).fill(Theme.recWell) } else { Color.clear.recessed(10) }
-        }
-        .disabled(!session.isConnected)
-        .opacity(session.isConnected ? 1 : 0.45)
-    }
-
-    /// The ⋯ menu, Lupe's own (2026-11-05): the phone's audio, the source, Developer.
-    private var more: some View {
-        Button {
-            ui.menu = AppMenu(title: "Lupe", groups: {
-                var g: [[MenuItem]] = []
-                var audio = [MenuItem(title: "Play through the iPhone", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
-                if through.enabled { audio.append(.note(through.summary)) }
-                g.append(audio)
-                // the source, as the iPad's connection menu (TopBar.connectionGroups): the FM-1, or a demo running
-                // Skiff or SLOOP (2026-11-10: the phone had only a demo on/off, which always opened SLOOP)
-                g.append([MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !useDemo) { useDemo = false },
-                          MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: useDemo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
-                          MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: useDemo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }])
-                g.append([MenuItem(title: "Settings…", icon: "gearshape") { settingsOpen = true }])
-                if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
-                return g
-            }, at: CGPoint(x: moreFrame.maxX - MenuPanel.width, y: moreFrame.maxY), fromKey: true)
-        } label: {
-            Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold))
-                .frame(width: 44, height: 44)
-                .background { Color.clear.raisedKey() }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressSink())
-        .globalFrame($moreFrame)
-        .accessibilityLabel("More")
-        .sheet(isPresented: $settingsOpen) { SettingsSheet(session: session).environment(through) }
     }
 }
 
@@ -313,20 +149,10 @@ struct PhoneLaunchKey: View {
         // (redrawn with the pads' clock: what waits changes as launches land)
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             let w = waiting
-            Button {
+            // a word with ⌄ beside the readout (decision 29), what waits under it, as Android's
+            HeaderWord(text: Self.name(launch), size: 14, primary: false, sub: w > 0 ? "\(w) waiting" : nil) {
                 if !OutsideTouch.justClosed { open() }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(Self.name(launch)).font(.lupe(13, .semibold))
-                    if w > 0 { Text("· \(w) wait").font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised) }
-                }
-                .lineLimit(1)
-                .padding(.horizontal, 10)
-                .frame(minWidth: 56, minHeight: 44)
-                .background { Color.clear.raisedKey() }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(PressSink())
             .globalFrame($frame)
             .disabled(store.offline)
             .accessibilityLabel("Launch at")
@@ -390,6 +216,7 @@ struct PhoneSequence: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .onGeometryChange(for: CGSize.self) { $0.size } action: { gridArea = $0 }
+            .phoneTrackAnchor()       // the tab change's track thread lands on the step grid
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .environment(\.grid, metrics)
