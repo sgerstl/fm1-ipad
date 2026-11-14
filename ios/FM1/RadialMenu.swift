@@ -33,6 +33,8 @@ struct RadialMenu: View {
     @State private var dragFrom: Double?
     /// Takes touches once the opening finger is up (HoldFinger), or after 3 s whatever happens.
     @State private var timedOut = false
+    /// How far the layer sits in from the screen's physical left and right edges (the safe area's margins).
+    @State private var margins = (leading: CGFloat(0), trailing: CGFloat(0))
     private var armed: Bool { (!HoldFinger.shared.down || timedOut) && !closing }
     /// Set as it's told to close: while it fades out it takes no touches, so a hold that starts at once reaches the pad
     /// under it rather than the menu that's leaving (2026-11-14: that hold was lost with the menu).
@@ -64,33 +66,35 @@ struct RadialMenu: View {
     /// How far out the middle choice's near edge can sit on that side: `near`, or less where the screen's edge is closer,
     /// down to `minNear` (the rim then still clears the hub).
     static let minNear: CGFloat = hub + stalk
-    static func room(_ x: CGFloat, _ w: CGFloat, left: Bool) -> CGFloat {
-        left ? x - 8 - itemW : w - 8 - itemW - x
+    /// `edges`: the screen's physical left and right edges in the menu layer's coordinates (the layer sits inside the
+    /// safe area; the menu may run into its margins, the Dynamic Island's side included: Scott, 2026-11-14).
+    static func room(_ x: CGFloat, _ edges: ClosedRange<CGFloat>, left: Bool) -> CGFloat {
+        left ? x - edges.lowerBound - 8 - itemW : edges.upperBound - 8 - itemW - x
     }
     /// Which side the arc opens on (Scott, 2026-11-14): always away from the playing hand (Settings › Handedness), left
     /// of the finger for the right hand, wherever the press is; the other side only when the choices can't fit there.
-    static func opensLeft(_ x: CGFloat, _ w: CGFloat, hand: Handedness) -> Bool {
+    static func opensLeft(_ x: CGFloat, _ edges: ClosedRange<CGFloat>, hand: Handedness) -> Bool {
         let away = hand == .right
-        if room(x, w, left: away) >= minNear { return away }
-        if room(x, w, left: !away) >= minNear { return !away }
-        return room(x, w, left: true) >= room(x, w, left: false)
+        if room(x, edges, left: away) >= minNear { return away }
+        if room(x, edges, left: !away) >= minNear { return !away }
+        return room(x, edges, left: true) >= room(x, edges, left: false)
     }
 
     /// The curve's centre: level with the arc's middle, `bow − near` behind the finger (on the side away from the choices).
-    static func centre(finger: CGPoint, mid: CGFloat, left: Bool, w: CGFloat) -> CGPoint {
-        let n = max(minNear, min(near, room(finger.x, w, left: left)))      // closer in where the edge is near
+    static func centre(finger: CGPoint, mid: CGFloat, left: Bool, edges: ClosedRange<CGFloat>) -> CGPoint {
+        let n = max(minNear, min(near, room(finger.x, edges, left: left)))      // closer in where the edge is near
         return CGPoint(x: left ? finger.x - n + bow : finger.x + n - bow, y: mid)
     }
 
     /// The choice at position `p` on the arc (0 the middle, ±2 its ends; between whole choices while the wheel turns):
     /// its centre height, its near edge where that height meets the curve, the node there, and the stalk's foot 22 pt
     /// in toward the curve's centre, on the rim.
-    static func spot(p: Double, centre c: CGPoint, left: Bool, w: CGFloat) -> Spot {
+    static func spot(p: Double, centre c: CGPoint, left: Bool, edges: ClosedRange<CGFloat>) -> Spot {
         let cy = c.y + CGFloat(p) * step
         let dy = cy - c.y
         let dx = sqrt(max(0, bow * bow - dy * dy))
         var node = CGPoint(x: left ? c.x - dx : c.x + dx, y: cy)
-        node.x = left ? max(8 + itemW, node.x) : min(w - 8 - itemW, node.x)        // kept on screen sideways
+        node.x = left ? max(edges.lowerBound + 8 + itemW, node.x) : min(edges.upperBound - 8 - itemW, node.x)   // 8 in from the physical edge
         let vx = node.x - c.x, vy = node.y - c.y, len = max(1, sqrt(vx * vx + vy * vy))
         let foot = CGPoint(x: node.x - vx / len * stalk, y: node.y - vy / len * stalk)
         return Spot(edgeX: node.x, cy: cy, left: left, node: node, foot: foot)
@@ -131,7 +135,8 @@ struct RadialMenu: View {
         let wheel = n > Self.inView
         let visible = min(n, Self.inView)
         let most = Double(max(0, n - Self.inView))
-        let left = Self.opensLeft(at.x, layer.width, hand: hand)
+        let edges = (-margins.leading)...(layer.width + margins.trailing)
+        let left = Self.opensLeft(at.x, edges, hand: hand)
         let mid = Self.mid(at.y, shown: visible, layer.height, arrows: wheel)
         TimelineView(.animation) { tl in
             // ms since it opened, at the Labs speed
@@ -141,8 +146,8 @@ struct RadialMenu: View {
             // each choice's place on the arc, and how much of it shows: whole within the arc, fading past its ends
             let pos: [Double] = (0..<n).map { Double($0) - tn - Double(visible - 1) / 2 }
             // the shallow curve's centre, far behind the finger, level with the arc's middle
-            let centre = Self.centre(finger: at, mid: mid, left: left, w: layer.width)
-            let spots = pos.map { Self.spot(p: $0, centre: centre, left: left, w: layer.width) }
+            let centre = Self.centre(finger: at, mid: mid, left: left, edges: edges)
+            let spots = pos.map { Self.spot(p: $0, centre: centre, left: left, edges: edges) }
             let seen: [Double] = pos.map { p in
                 guard wheel else { return 1 }
                 return min(1, max(0, 1 - (abs(p) - 2) / 0.8))
@@ -150,6 +155,7 @@ struct RadialMenu: View {
             ZStack(alignment: .topLeading) {
                 // the page behind, dimmed; a tap outside the choices closes
                 Color.black.opacity(0.45 * fade)
+                    .padding(.leading, -margins.leading).padding(.trailing, -margins.trailing)   // (over the margins too)
                     .contentShape(Rectangle())
                     .onTapGesture { dismiss() }
                     .accessibilityHidden(true)
@@ -159,7 +165,7 @@ struct RadialMenu: View {
                     // competing (Scott, 2026-11-14): 70 %, feathered by a blur, faded in with the menu
                     do {
                         let reachY = CGFloat(visible - 1) / 2 * Self.step + Self.itemH / 2 + (wheel ? Self.arrowGap + Self.arrowH : 0) + 14
-                        let r0 = Self.rim - 16, r1 = Self.bow + Self.itemW + 16
+                        let r0 = Self.rim - 12, r1 = Self.bow + Self.itemW + 12
                         let a0 = asin(min(1, reachY / r0)) * 180 / .pi, a1 = asin(min(1, reachY / r1)) * 180 / .pi
                         let base = left ? 180.0 : 0.0
                         var field = Path()
@@ -167,8 +173,8 @@ struct RadialMenu: View {
                         field.addArc(center: centre, radius: r0, startAngle: .degrees(base + a0), endAngle: .degrees(base - a0), clockwise: true)
                         field.closeSubpath()
                         ctx.drawLayer { l in
-                            l.addFilter(.blur(radius: 18))
-                            l.fill(field, with: .color(.black.opacity(0.7 * fade)))
+                            l.addFilter(.blur(radius: 8))
+                            l.fill(field, with: .color(.black.opacity(0.88 * fade)))
                         }
                     }
                     let s = reduceMotion ? 1 : Self.hubScale(min(1, e / 460), spring: Labs.menuSpring.value / 100)
@@ -242,6 +248,11 @@ struct RadialMenu: View {
             }
         }
         .frame(width: layer.width, height: layer.height, alignment: .topLeading)
+        // the layer's place on the screen: how far its sides sit in from the physical edges (the safe area's margins)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { f in
+            let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? f.maxX
+            margins = (max(0, f.minX), max(0, screen - f.maxX))
+        }
         // not until the finger that opened it lifts: taking touches under a finger still down cancelled the held pad's
         // gesture mid-press, and the next hold anywhere opened nothing (2026-11-14)
         .allowsHitTesting(armed)
