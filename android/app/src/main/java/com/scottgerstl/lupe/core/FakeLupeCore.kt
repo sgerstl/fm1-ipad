@@ -66,6 +66,12 @@ class FakeLupeCore(
     override val page: StateFlow<PageState> = _page
     private val _clock = MutableStateFlow(ClockState())
     override val clock: StateFlow<ClockState> = _clock
+    private val _notice = MutableStateFlow(CoreNotice())
+    override val notice: StateFlow<CoreNotice> = _notice
+    /** The FM-1 refusing something, as the real one does (its reason, for the screen). */
+    fun refuse(reason: String) { _notice.value = CoreNotice(_notice.value.seq + 1, refusalWords(reason)) }
+    /** For looking at the full-pool case: the fake says no pattern number is free, and refuses New pattern as Skiff does. */
+    fun fillPool(full: Boolean) { _pads.value = _pads.value.copy(patternsFree = if (full) 0 else null) }
     private val _fm1Screen = MutableStateFlow(Fm1ScreenState(key = "HOME"))
     override val fm1Screen: StateFlow<Fm1ScreenState> = _fm1Screen
     private val _home = MutableStateFlow(FakeHome.seed())
@@ -202,7 +208,7 @@ class FakeLupeCore(
             is Intent.PadTap -> launch(intent.track, intent.entry)
             is Intent.PadSelect -> selectPad(intent.track, intent.entry)
             is Intent.PadSelectSound -> selectPad(intent.track, intent.entry)   // the Sounds browser is the screen for it (Done returns to whatever the bottom half was on)
-            is Intent.PadNew -> padNew(intent.track, intent.entry)
+            is Intent.PadNew -> if (_pads.value.patternsFree == 0) refuse("All 64 patterns are taken. Clear unused ones to free a number") else padNew(intent.track, intent.entry)
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is Intent.PadClear -> editEntry(intent.track, intent.entry) { PadEntry() }
             is Intent.TrackSelect -> {

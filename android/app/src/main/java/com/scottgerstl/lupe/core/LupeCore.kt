@@ -33,5 +33,8 @@ interface LupeCore {
     /** The clock reference for per-frame movement (ClockState.kt). */
     val clock: StateFlow<ClockState> get() = ClockDefaults.clock
 
+    /** The last thing refused, to show on screen (Notice.kt). */
+    val notice: StateFlow<CoreNotice> get() = NoticeDefaults.notice
+
     fun send(intent: Intent)
 }

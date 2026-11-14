@@ -135,6 +135,8 @@ fun LupeShell(core: LupeCore) {
                 lastRequest?.let { com.scottgerstl.lupe.ui.sounds.SoundsBrowser(core, it, { soundsHost.close() }) }
             }
         }
+        // what the FM-1 refused: at the foot of the page (or the sheet) where the action was taken, until it is dismissed
+        RefusalStrip(core, Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 4.dp))
         // the hold menu: over the page and the sheets, under the finger that opened it
         HoldMenuHost(holdMenu)
         // the Magnifier floats over everything, above the finger
