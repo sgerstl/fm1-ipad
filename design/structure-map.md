@@ -168,7 +168,7 @@ The iPad's Mix holds six strips across the top and the four effect cards under t
 
 Nothing changes on the iPad's Mix.
 
-## The Android phone with a Skiff FM-1 (Pixel, portrait; decided 2026-11-12, boards 53–58)
+## The Android phone with a Skiff FM-1 (Pixel, portrait; decided 2026-11-12, boards 53–58; **retired 2026-11-14 by decision 28, see the landscape section below**)
 
 *Boards 53–58: `design/boards/phone-portrait.html` (screenshots in `phone-portrait/`). Board 53: **Select** at the end of the scenes row is the visible way to "Edit steps" (Scott, 2026-11-13); with it on, a pad tap picks the pad for the editor and launches nothing. Board 58 (time down) picked for the Timeline, 2026-11-13.*
 
@@ -192,6 +192,20 @@ Nothing changes on the iPad's Mix.
 **Labs, to try on the device:** following pauses after a phone touch; pin the bottom half's page; the phone piano under the grid; the Timeline with time across (board 57).
 
 **Android rules** (research, 2026-11-12): nothing draggable at the side edges (the back gesture); the bottom ~24 dp clear for the home gesture; edge-to-edge with insets; Back closes the newest layer (a menu, a sheet, the bottom half's page) and never stops the song; pads answer on the phone without waiting for the FM-1's echo.
+
+## The Android phone, landscape (decision 28, 2026-11-14, boards 73–74; replaces the portrait section above)
+
+*Scott, 2026-11-14: the phone sits on the table and does the horizontal jobs the FM-1 does clumsily; sound shaping stays on the FM-1. Locked to landscape, status bar hidden, the camera cutout and gesture bar kept clear by the window's insets. The portrait divider, split and top-only states are retired.*
+
+| Where | What |
+|---|---|
+| **Header, one line** | project ⌄ (Projects…, Mix…, Settings, Labs) · Loop ⌄ (launch quantize, what waits) · tabs **Pads · Edit · Timeline** as underlined words · readout (tempo, Loop · Song · Once) · Record · Play |
+| **Pads** (board 74) | six rows: a 132 dp track head (number, sound, engine ⌄; tap selects, hold or the engine line opens that track's Sounds), MUTE, the pads panning sideways; Store scene and all sixteen scenes across the foot |
+| **Edit** (board 73) | the ruler; sixteen steps across in fours (a kit: lanes by steps); under them the dials area (HOME's four sound knobs, the picked step's controls under "Step N ✕", or the FM-1's sound page as header and four dials) and beside it the keyboard strip that writes the picked step (Chord adds and takes notes), or the one-lane automation view (Lane), or a sound page's tiles |
+| **Timeline** | time across, as the FM-1 and the iPad (P4, `ui/timeline`) |
+| **Sheets** | Mix (the FM-1's GLO, or the project menu), Sounds (a track head, a pad's menu, the FM-1's SAVE › PRESETS and USER), Projects (the menu, SAVE › PROJECT), Settings and Labs |
+| **A sound page on the FM-1** | Edit: its header and four dials take the dials area. Pads and Timeline: a short panel rises over the foot. HOME on the FM-1, or the back gesture, lowers it |
+| **The FM-1's keys** | FX SEL ENV LFO EDIT ARP: the sound page as above. GLO: the Mix sheet. SAVE: Sounds or Projects. SEQ: the Edit tab (AUTOMATION its lane view, SONG the Timeline). HOME: back to where the phone was |
 
 ## The FM-1 disconnected (2026-11-09, board 42: pick before building)
 
