@@ -475,8 +475,7 @@ private fun TrackEnd(track: Int, ui: TimelineUi, actions: TimelineActions, barPx
                         val e = awaitPointerEvent()
                         val ch = e.changes.firstOrNull { it.id == down.id } ?: break
                         ch.consume()
-                        if (!ch.pressed) { holdMenu.release(); break }
-                        holdMenu.drag(c.localToWindow(ch.position))
+                        if (!ch.pressed) break   // (decision 36: the menu's choices are picked by a tap; the held finger only opens it)
                     }
                 }
             },
