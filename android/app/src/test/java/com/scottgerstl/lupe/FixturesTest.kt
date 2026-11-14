@@ -42,6 +42,8 @@ class FixturesTest {
                 "automation" -> { val a = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.AutomationState.serializer(), fr.state); assertTrue(a.lane.isEmpty() || a.points.size == a.steps) }
                 "projects" -> assertEquals(4, lupeJson.decodeFromJsonElement(ProjectsState.serializer(), fr.state).slots.size)
                 "freetake" -> lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.FreeTakeState.serializer(), fr.state)
+                // P1's clock reference (ClockArea.swift): no Kotlin class yet (P2's to add), so only its shape is checked
+                "clock" -> assertTrue("${f.name}: clock", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("running"))
                 "fm1Screen" -> { val sc = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.Fm1ScreenState.serializer(), fr.state); assertTrue("${f.name}: ${sc.key}", sc.key in setOf("", "HOME", "FX", "SEL", "ENV", "LFO", "EDIT", "ARP", "GLO", "SAVE", "SEQ")) }
                 "homeKnobs" -> { val h = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.HomeKnobsState.serializer(), fr.state); assertEquals("${f.name}: HOME's four", 4, h.controls.size); assertTrue(h.hot in -1..3) }
                 else -> error("${f.name}: unknown area ${fr.area}")

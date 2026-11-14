@@ -19,8 +19,11 @@ extension PhoneCore {
             guard Self.mixSectionKeys.contains(key) else { log("no Mix section \(key)"); return }
             mixSection = key
             // linked, the FM-1 shows the same GLO page (the iPad's Mix does); that part is a write
+            // (not when the FM-1 is on that page already: a SCREEN_GOTO landing late could pull it back from a page
+            // pressed since)
             if s.screenLinked, canWrite(), let k = Self.mixSectionKeys.firstIndex(of: key) {
-                s.showOnDevice(page: SkiffButtonMap.MixerTab.allCases[k].page)
+                let page = SkiffButtonMap.MixerTab.allCases[k].page
+                if fm1GloPage() != page { s.showOnDevice(page: page) }
             }
             pokeAreas(["mix"])
         case .setLevel(let t1, let v):

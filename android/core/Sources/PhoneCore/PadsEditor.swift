@@ -38,6 +38,7 @@ extension PhoneCore {
                     if marks.queued != nil {
                         p.play = .waiting
                         if let left = s.ticksToLaunch(t), s.clockTicks >= 0 { p.bar = (s.clockTicks + Int(left)) / 96 + 1 }
+                        p.launchTick = launchTick(t)
                     } else {
                         p.play = .next
                     }
@@ -47,10 +48,18 @@ extension PhoneCore {
                 entries.append(p)
             }
             let muted = perf?.muted[safe: t] ?? s.tracks[t].mute
-            rows.append(PadsArea.Row(track: t + 1, name: s.tracks[t].displayName, muted: muted, entries: entries))
+            var row = PadsArea.Row(track: t + 1, name: s.tracks[t].displayName, muted: muted, entries: entries)
+            if let pc = passClock(t) { row.passTicks = pc.ticks; row.passStartTick = pc.start }
+            switch perf?.staged[safe: t] ?? PerformState.Staged.none { case .mute: row.mutePending = "mute"; case .unmute: row.mutePending = "unmute"; case .none: break }
+            row.soloPending = store?.soloWaiting[t] != nil
+            let waits = row.mutePending != "none" || row.soloPending || entries.contains { $0.play == .waiting }
+            if waits { row.launchTick = launchTick(t) }
+            rows.append(row)
         }
-        let scenes = (0..<16).map { i in
-            PadsArea.Scene(stored: perf?.kept[safe: i] ?? false, current: perf?.lastScene == i)
+        let scenes = (0..<16).map { i -> PadsArea.Scene in
+            var sc = PadsArea.Scene(stored: perf?.kept[safe: i] ?? false, current: perf?.lastScene == i)
+            if let w = store?.recallWaiting, w.scene == i { sc.waiting = true; sc.launchTick = w.tracks.compactMap { launchTick($0) }.max() }
+            return sc
         }
         let kept = (0..<64).filter { (store?.pool?.patterns[safe: $0]?.length ?? 0) > 0 }.map { $0 + 1 }
         return PadsArea(rows: rows, scenes: scenes, selected: selectedPad(), kept: kept)
@@ -58,7 +67,7 @@ extension PhoneCore {
 
     /// The pad the editor shows: the one the screen picked (padSelect), else the selected track's current entry.
     func selectedPad() -> PadsArea.Ref {
-        if let p = pickedPad { return p }
+        if let p = pickedPad, pickedOnTrack == session.selectedTrack { return p }
         let t = session.selectedTrack
         return PadsArea.Ref(track: t + 1, entry: session.skiffSong?.song?.tracks[safe: t]?.entryOn ?? 0)
     }

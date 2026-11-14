@@ -15,7 +15,11 @@ public final class PhoneCore {
     private var clockTask: Task<Void, Never>?
     private var projectTask: Task<Void, Never>?
     /// Screen-local choices (nothing sent to the FM-1): the pad the editor shows, the step selected.
-    var pickedPad: PadsArea.Ref?
+    var pickedPad: PadsArea.Ref? { didSet { pickedOnTrack = pickedPad == nil ? nil : session.selectedTrack } }
+    /// The track selected when the pad was picked. The pick holds only while that is still the selected track: a track
+    /// head tapped on the phone or a track pressed on the FM-1 moves the selection, and the pads and the editor follow
+    /// it (Scott's Pixel, 2026-11-14: they stayed on the picked pad's track while the FM-1 had moved on).
+    var pickedOnTrack: Int?
     var selectedStep = 0
     /// The editor's own state (PadsEditorIntents.swift): a step held, Lock latched, the lane shown, the
     /// step copied. None of it is sent to the FM-1 except through Session.lockStep.
@@ -27,6 +31,8 @@ public final class PhoneCore {
     /// P5's screen-local state (P5Areas.swift): the Mix section on screen, Lupe's solos, the Sounds browser's target
     /// and the engine browsed, a project op going on.
     var mixSection = "mixer"
+    /// The FM-1's GLO page when it was last looked at (P5Areas.followGloPage).
+    var lastGloPage: Int?
     var soundsTrack: Int?          // nil: the selected track
     var soundsEntry: Int?
     var soundsViewing: Int?
@@ -40,6 +46,9 @@ public final class PhoneCore {
     private var followTask: Task<Void, Never>?
     private var sendsTask: Task<Void, Never>?
     private var sheetTask: Task<Void, Never>?
+    private var stampTask: Task<Void, Never>?
+    /// The pulse count and when it was seen (ClockArea.swift), nil with no clock.
+    var clockRef: (ticks: Int, atMs: Double)?
     /// Whether writes may go to the FM-1 now (the link's read-only switch). Write intents are refused up front
     /// while false, so Session's optimistic copy never shows what the FM-1 didn't get.
     let canWrite: () -> Bool
@@ -73,6 +82,8 @@ public final class PhoneCore {
             }, publish: { _, _ in }),
             AreaWatch(name: "link", build: { [unowned self] in AreaJSON.encode(self.linkArea()) }, publish: publish),
             AreaWatch(name: "top", build: { [unowned self] in AreaJSON.encode(self.topArea()) }, publish: publish),
+            // the clock reference the screens interpolate from (ClockArea.swift)
+            AreaWatch(name: "clock", build: { [unowned self] in AreaJSON.encode(self.clockArea()) }, publish: publish),
             // Only once the FM-1 has been read: before that Session holds placeholder tracks, not the FM-1's.
             AreaWatch(name: "pads", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.padsArea()) : nil }, publish: publish),
             AreaWatch(name: "editor", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.editorArea()) : nil }, publish: publish),
@@ -88,6 +99,7 @@ public final class PhoneCore {
             // the FM-1 key whose screen is up (decision 24: the phone's button block lights it)
             AreaWatch(name: "fm1Screen", build: { [unowned self] in self.fm1ScreenArea().map(AreaJSON.encode) }, publish: publish),
             // P5: once the FM-1 has been read, as pads and editor
+            AreaWatch(name: "mixFollow", build: { [unowned self] in self.followGloPage() }, publish: { _, _ in }),   // the section follows GLO's page
             AreaWatch(name: "mix", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.mixArea()) : nil }, publish: publish),
             AreaWatch(name: "meters", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.metersArea()) : nil }, publish: publish),
             AreaWatch(name: "sounds", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.soundsArea()) : nil }, publish: publish),
@@ -147,6 +159,7 @@ public final class PhoneCore {
             }
             running?.task.cancel()
         }
+        stampTask = Task { [weak self] in await self?.runClockStamp() }
         // A sheet showing (OPERATOR, ALL OPS, SOUND): its patch or sound read again every 300 ms. The FM-1 pushes
         // neither when its own knobs turn them (EDITOR_PROTOCOL.md "FM6 patches", "DRUM-X kit"), so this is how the
         // phone's four follow them; the store skips a read within a second of the phone's own edit
@@ -194,6 +207,7 @@ public final class PhoneCore {
         followTask?.cancel(); followTask = nil
         sendsTask?.cancel(); sendsTask = nil
         sheetTask?.cancel(); sheetTask = nil
+        stampTask?.cancel(); stampTask = nil
         areas.forEach { $0.stop() }; areas = []
     }
 
@@ -224,13 +238,9 @@ public final class PhoneCore {
             return s.skiffSong?.marks(t, launchIn: nil).queued != nil
         }.count
         let selectedArmed = s.armedTracks & (1 << s.selectedTrack) != 0
-        var bar = 1, beat = 1
-        if s.playing, s.clockTicks >= 0 {
-            let beats = s.clockTicks / 24             // MIDI clock: 24 pulses a beat
-            bar = beats / 4 + 1; beat = beats % 4 + 1
-        }
+        let (bar, beat, bars) = readout()
         return TopArea(project: s.skiffProjects?.name ?? "", playing: s.playing, rec: selectedArmed || s.isRecordingAnything,
-                       tempo: Double(s.bpm), mode: mode, launch: launch, waiting: waiting, bar: bar, beat: beat)
+                       tempo: Double(s.bpm), mode: mode, launch: launch, waiting: waiting, bar: bar, beat: beat).with(bars: bars)
     }
 
     public func diagArea() -> DiagArea {
@@ -274,6 +284,7 @@ public final class PhoneCore {
                     Task { await store.send(.play(track: t, entry: entry)) }
                 }
             }
+            pickedOnTrack = session.selectedTrack      // (after the select: the pick belongs to the track now selected)
             poke(["pads", "editor"])
         case .stepSelect(let i):
             selectedStep = max(0, min(15, i))

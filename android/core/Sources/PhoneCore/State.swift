@@ -39,11 +39,18 @@ public struct TopArea: Codable, Equatable, Sendable {
     /// The readout's position, 1-based, counted from MIDI clock in 4/4 (1·1 when stopped or unknown).
     public var bar: Int
     public var beat: Int
+    /// The bars `bar` counts within (Loop: the selected track's block; Song and Once: the song); nil when unknown,
+    /// and then `bar` counts up from Start.
+    public var bars: Int? = nil
     public init(project: String = "", playing: Bool = false, rec: Bool = false, tempo: Double = 120, mode: Mode = .loop,
                 launch: Launch = .bar, waiting: Int = 0, bar: Int = 1, beat: Int = 1) {
         self.project = project; self.playing = playing; self.rec = rec; self.tempo = tempo; self.mode = mode
         self.launch = launch; self.waiting = waiting; self.bar = bar; self.beat = beat
     }
+}
+
+extension TopArea {
+    func with(bars: Int?) -> TopArea { var t = self; t.bars = bars; return t }
 }
 
 // MARK: pads (P3's PadsState)
@@ -57,6 +64,8 @@ public struct PadsArea: Codable, Equatable, Sendable {
         public var play: Play = .idle
         /// Where a waiting launch lands, 1-based.
         public var bar: Int?
+        /// A waiting launch: the clock pulse it lands on (ClockArea.swift), nil with no clock (a dashed outline).
+        public var launchTick: Double?
         /// REPS (nil when 1) and the pass playing.
         public var passes: Int?, pass: Int?
         public var progress: Double?
@@ -67,8 +76,23 @@ public struct PadsArea: Codable, Equatable, Sendable {
         public var name: String
         public var muted: Bool
         public var entries: [Entry]
+        /// The playing entry's pass in clock pulses, and the pulse this pass began on: the pass bar each frame is
+        /// ((ticksNow − passStartTick) / passTicks) mod 1. nil stopped or with no clock.
+        public var passTicks: Double? = nil
+        public var passStartTick: Double? = nil
+        /// A mute waiting for the launch point (PERFORM's staged mute): "none", "mute" or "unmute".
+        public var mutePending = "none"
+        /// This track's solo has mutes still waiting on other tracks.
+        public var soloPending = false
+        /// The pulse this track's launch point comes on (its waiting pad, mute or solo lands there); nil with no clock.
+        public var launchTick: Double? = nil
     }
-    public struct Scene: Codable, Equatable, Sendable { public var stored: Bool; public var current: Bool }
+    public struct Scene: Codable, Equatable, Sendable {
+        public var stored: Bool; public var current: Bool
+        /// Recalled while playing, some of its tracks not in yet; the pulse the last of them lands on (nil: no clock).
+        public var waiting = false
+        public var launchTick: Double? = nil
+    }
     public struct Ref: Codable, Equatable, Sendable { public var track: Int; public var entry: Int }   // track 1-based, entry 0-based
     public var rows: [Row]
     public var scenes: [Scene]

@@ -8,6 +8,27 @@ extension PhoneCore {
 
     static let mixSectionKeys = ["mixer", "delay", "reverb", "chorus", "global"]
 
+    /// The GLO page the FM-1's screen is on (30…34: MIXER, DELAY, REVERB, CHORUS, GLOBAL), nil on any other screen.
+    func fm1GloPage() -> Int? {
+        guard session.screenLinked, let sc = session.deviceScreen, !sc.home, sc.menu == 0, sc.layer == 0, (30...34).contains(sc.page) else { return nil }
+        return sc.page
+    }
+
+    /// The Mix section follows the FM-1's GLO page by itself (no write): each time the FM-1 comes onto a GLO page, or
+    /// steps to another, the section is that page's. Run as an area watch's builder, so the screen moving re-runs it.
+    /// The phone's own choice stays until the FM-1's GLO page next changes.
+    func followGloPage() -> String? {
+        let page = fm1GloPage()
+        if page != lastGloPage {
+            lastGloPage = page
+            if let page, let key = Self.mixSectionKeys[safe: page - 30], key != mixSection {
+                mixSection = key
+                pokeAreas(["mix"])
+            }
+        }
+        return nil
+    }
+
     /// The REVERB send's id: the FX page's fourth knob (MixerPanel.revID).
     var reverbSendID: Int? { SoundPage.pages(session).first { $0.title == "FX" }?.ids[safe: 3] ?? nil }
 
