@@ -371,9 +371,12 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     if (e.hasSound && !empty) drawPath(Path().apply { moveTo(size.width - 10.dp.toPx(), 0f); lineTo(size.width, 0f); lineTo(size.width, 10.dp.toPx()); close() }, Tok.page)
                     if (press.value > 0f) drawRoundRect(Color.Black.copy(alpha = 0.25f * press.value), cornerRadius = r)
                     // the selected pad: a ring in the track's colour (never white), with a dark gap inside it so it reads on a filled, playing pad
-                    if (sel.value > 0f) {
-                        drawRoundRect(color.copy(alpha = sel.value), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
-                        drawRoundRect(Tok.page.copy(alpha = sel.value), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius(5.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                    // …but not while it waits: a tap selects the pad it launches, and the ring (the same colour, the same place) hid the waiting outline
+                    // drawn over it (Scott, 2026-11-14: "the outline timer still doesn't show"). The outline says both until it lands.
+                    val ringA = sel.value * (1f - wait.value)
+                    if (ringA > 0f) {
+                        drawRoundRect(color.copy(alpha = ringA), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
+                        drawRoundRect(Tok.page.copy(alpha = ringA), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius(5.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
                     }
                 }
                 .semantics(mergeDescendants = true) {
