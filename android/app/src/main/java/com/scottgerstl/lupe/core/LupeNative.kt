@@ -48,7 +48,5 @@ object LupeNative {
         val l = stateListener
         if (l == null) android.util.Log.w("LupeState", "onState($area) with no listener") else l(area, json)
     }
-    @JvmStatic fun onDebug(line: String) { LinkLog.add(line); debugListener?.invoke(line) }
-    /** Each log line from Swift, as it arrives (any thread): the core reads its refusals from them (Notice.kt). */
-    @Volatile var debugListener: ((String) -> Unit)? = null
+    @JvmStatic fun onDebug(line: String) { LinkLog.add(line) }
 }

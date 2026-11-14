@@ -10,29 +10,13 @@ import kotlinx.serialization.Serializable
  * 2026-11-14: New pattern "did nothing" on the Pixel; the FM-1 had refused it and only the log said so). [seq] grows with each one, so the
  * same words twice still show twice; 0 is "none yet". [track] (1…6) and [entry] (0-based) say where, when the core knows.
  *
- * The `notice` area, when the core publishes one. Until it does, the real core's refusals are read from its log lines ([refusalFromLog]).
+ * The core's `notice` area, and nothing else: the log is never read for these (a startup line "read-only: OFF…" once showed as a refusal,
+ * Scott's Pixel 10, 2026-11-14).
  */
 @Serializable
 data class CoreNotice(val seq: Int = 0, val text: String = "", val track: Int? = null, val entry: Int? = null)
 
 object NoticeDefaults { val notice: StateFlow<CoreNotice> = MutableStateFlow(CoreNotice()) }
-
-/**
- * A core log line that says an action was not done, as words for the screen; null for any other line. The core writes its refusals to the
- * log ("FM-1 refused: …", "read-only: … not sent", "the FM-1 refused …"): this is the stopgap that puts them on screen until the core
- * publishes a `notice` area. Each says what happened and what to do.
- */
-fun refusalFromLog(line: String): String? {
-    val l = line.trim()
-    if (l.startsWith("lag ") || l.startsWith("clock:")) return null
-    if (l.startsWith("read-only:")) return "Lupe is read-only on this phone, so nothing was sent to the FM-1. Turn on Allow writes (the link debug screen) to change it."
-    val text = when {
-        l.startsWith("FM-1 refused: ") -> l.removePrefix("FM-1 refused: ")
-        l.contains("refused", ignoreCase = true) -> l.replaceFirstChar { it.uppercase() }
-        else -> return null
-    }
-    return refusalWords(text)
-}
 
 /** The FM-1's own reason, with what to do where its words stop short. */
 fun refusalWords(reason: String): String {

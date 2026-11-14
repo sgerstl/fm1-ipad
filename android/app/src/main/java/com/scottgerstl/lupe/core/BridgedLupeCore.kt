@@ -51,17 +51,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val clock: StateFlow<ClockState> = _clock
     private val _notice = MutableStateFlow(CoreNotice())
     override val notice: StateFlow<CoreNotice> = _notice
-    /** A refusal for the screen: from the core's `notice` area when it has one, else from its log line. */
-    /** The core has published a `notice` area: its log lines are no longer read for refusals. */
-    @Volatile private var noticeArea = false
-    private fun refuse(text: String) { _notice.value = CoreNotice(_notice.value.seq + 1, text) }
 
     init {
-        // the core says what it refused only in its log: put those lines on the screen (posted to the UI thread; Swift may log from any)
-        // …but only from a core that has no `notice` area. One that has it still writes the same lines, so a log refusal waits a quarter of a
-        // second and is dropped if the area spoke meanwhile (or ever has): each refusal shows once.
-        val ui = android.os.Handler(android.os.Looper.getMainLooper())
-        LupeNative.debugListener = { line -> if (!noticeArea) refusalFromLog(line)?.let { words -> ui.postDelayed({ if (!noticeArea) refuse(words) }, 250) } }
         LupeNative.stateListener = { area, json -> receive(area, json) }
     }
 
@@ -119,7 +110,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                     if (c.running && !clockChecked) { clockChecked = true; LinkLog.add("clock: atMs ${c.atMs}, uptimeMillis $now, apart $skew ms" + if (kotlin.math.abs(skew) > 1000) " (too far: using the arrival time)" else "") }
                     _clock.value = if (c.running && kotlin.math.abs(skew) > 1000) c.copy(atMs = now) else c
                 }
-                "notice" -> { noticeArea = true; val n = lupeJson.decodeFromString(CoreNotice.serializer(), json); if (n.text.isNotEmpty()) _notice.value = n.copy(seq = _notice.value.seq + 1, text = refusalWords(n.text)) }
+                "notice" -> { val n = lupeJson.decodeFromString(CoreNotice.serializer(), json); if (n.text.isNotEmpty()) _notice.value = n.copy(seq = _notice.value.seq + 1, text = refusalWords(n.text)) }
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {

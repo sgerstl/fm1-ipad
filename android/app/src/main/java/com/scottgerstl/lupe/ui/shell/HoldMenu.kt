@@ -69,6 +69,7 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.scottgerstl.lupe.ui.slide.LocalPhoneSettings
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
@@ -408,11 +409,17 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                 // the iPad's row: the title at 17, a small second line, a tick for the current choice; a choice that can't be made is dimmer
                 val ink = if (!item.enabled) Tok.text3 else Tok.text
                 if (item.slide != null) HoldSlideRow(item.title, item.slide, takes)
-                else if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // what a confirm says goes must be readable whole: up to three lines, the type stepping down before anything is cut
+                else if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 1.15.em), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 1.sp))
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        BasicText(item.title, style = LupeType.body.copy(fontSize = 17.sp, lineHeight = 20.sp, color = ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // a long title wraps to a second line when it has the row to itself ("Clear 12 unused patterns…" was cut on the Pixel
+                        // 10); with a second line under it, it stays on one and steps its size down instead. Nothing is cut until 13 sp fails
+                        BasicText(item.title, style = LupeType.body.copy(fontSize = 17.sp, lineHeight = 1.15.em, color = ink), maxLines = if (item.sub == null) 2 else 1, overflow = TextOverflow.Ellipsis,
+                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 13.sp, maxFontSize = 17.sp, stepSize = 1.sp))
+                        if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 1.15.em), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 12.sp, stepSize = 1.sp))
                     }
                     if (item.checked) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
                     if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(color = Tok.text2)) }

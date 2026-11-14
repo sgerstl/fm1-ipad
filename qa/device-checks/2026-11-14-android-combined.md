@@ -45,6 +45,8 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 35a | Hold something just under the header, and at the foot of the screen | All five choices still show: the column sits lower (or higher) than the finger so it stays between the header and the foot, triangles included | – | ☐ pass ☐ fail: |
 | 35b | Track head › slide along LEVEL, then PAN | The value follows a slide along the row | Yes | ☐ pass ☐ fail: |
 | 35c | Hold a pad, tap away to close its menu, and at once hold another pad | The second menu opens. (Before: nothing opened, because the closing menu still took touches while it faded) | – | ☐ pass ☐ fail: |
+| 36a | Start Lupe on a real FM-1 with writes on | No notice at start (the log's "read-only: OFF…" line used to show as "Lupe is read-only on this phone"). A notice appears only for something the core publishes in its notice area | – | ☐ pass ☐ fail: |
+| 36b | Look at every long choice in the pad, track-head and block menus ("Clear 12 unused patterns…", "Duplicate after · The track's 16 entries are full", "Play once more · The chain: ×3 to ×4") | Each is readable whole: a title alone wraps to two lines or steps its size down; with a second line under it the type steps down (never under 13 sp for the title) before anything is cut | – | ☐ pass ☐ fail: |
 | 36 | With all 64 patterns taken and some unused: hold an empty slot | New pattern dimmed, "All 64 patterns are taken"; under it "Clear N unused patterns…" (dimmed with "Stop first" while playing). With none unused: "No unused patterns · Other saved projects hold them" | – | ☐ pass ☐ fail: |
 | 37 | Tap Clear N unused patterns…, read the confirm, tap it | The row turns into a red-outlined confirm naming the numbers ("Clears 03, 17, 22 · can't be undone"); a tap in the first 0.4 s does nothing. Confirmed: the FM-1's answer shows in the strip at the foot, and New pattern works again | Yes | ☐ pass ☐ fail: |
 | 38 | Song name › Clear N unused patterns… | The same, in the menu: the row becomes the red-outlined confirm with Cancel under it; closing the menu drops it | Yes | ☐ pass ☐ fail: |
@@ -53,6 +55,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 - Row 3's Pads page: the band under track 1, outlined slots A to H, the Store key and scenes.
 - Row 24's no-FM-1 card (the greyed header, the words with Skiff 2.5.1, the moving bar, the button) and row 25's "Use the demo FM-1" filling the app.
 - Rows 32 and 33, the wheel in its final shape: an empty slot's three choices in the nearly straight column with the rim and the stalks and no spoke; a pad's nine choices opened on the first, with the lower triangle only; after a drag it had rolled on by two and showed both triangles.
+- Row 36b, partly: with the fake core's full pool, "Clear 7 unused patterns…" and its "Stop first" line, and "New pattern · All 64 patterns are taken", showed whole in the wheel.
 - Row 35c: on the build before the fix a hold begun right after closing a menu opened nothing; on the build with it, the same sequence (a hold 60 ms after the tap away) opened the second menu.
 - Rows 7 and 8's track-head menu, drawn in the first column shape only (Sounds, LEVEL with its gauge, PAN from the middle, Mute, Solo); not looked at again as the wheel, and the rows were not slid.
 
