@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Board 77 · The Mix pop-up's pictures</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--page:#0D0D0F;--panel:#1A1A1E;--control:#26262B;--lifted:#34343B;--held:#3E3E46;--t1:#EDEDF0;--t2:#A1A1AA;--t3:#71717A;--trk:#FF5A36}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;color:var(--t1);font:15px/1.4 Barlow,system-ui,sans-serif;padding:32px 24px 64px}
+h1{font-size:22px;font-weight:600;margin-bottom:6px}
+.lede{color:var(--t2);max-width:76ch;margin-bottom:28px}
+.row{display:flex;flex-wrap:wrap;gap:28px 32px;margin-bottom:40px}
+figure{width:874px;max-width:100%}
+figcaption{color:var(--t2);margin-top:10px}figcaption b{color:var(--t1);font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--t2);border:1px solid var(--held);border-radius:4px;padding:1px 6px;margin-right:6px}
+.phone{position:relative;width:874px;height:402px;background:var(--page);border-radius:54px;overflow:hidden;outline:6px solid #222226}
+.under{position:absolute;inset:0;opacity:.35;padding:16px 24px;font:600 17px Barlow;color:var(--t3)}
+.sheet{position:absolute;left:20px;right:16px;top:14px;bottom:12px;background:var(--panel);border-radius:18px;box-shadow:0 12px 28px rgba(0,0,0,.6);padding:6px 14px 14px}
+.top{display:flex;align-items:center;height:44px;gap:24px}
+.tab{font-size:17px;font-weight:600;color:var(--t3);position:relative;padding:8px 0}
+.tab.on{color:var(--t1)}.tab.on:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--t1)}
+.pg{font:600 15px 'Barlow Condensed';color:var(--t3)}
+.x{margin-left:auto;width:32px;height:32px;border-radius:50%;background:var(--control);display:grid;place-items:center}
+.main{display:flex;gap:14px;margin-top:10px;height:calc(100% - 54px)}
+.dials{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:6px}
+.dial{background:var(--control);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.dial .ring{width:56px;height:56px;border-radius:50%;border:4px solid #3A3A42;display:grid;place-items:center;font:600 17px 'Barlow Condensed'}
+.dial .l{font-size:11px;font-weight:600;color:var(--t2);letter-spacing:.05em}
+.dial.empty{background:none;border:1.5px solid #2E2E34}
+.pic{height:100%;aspect-ratio:936/552;border-radius:8px;overflow:hidden;background:#181818}
+.pic img{width:100%;height:100%;display:block;image-rendering:pixelated}
+.pair{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.pair img{width:280px;image-rendering:pixelated;border-radius:6px}
+.notes{color:var(--t2);max-width:84ch}.notes li{margin:6px 0}.notes b{color:var(--t1);font-weight:600}
+h2{font-size:17px;font-weight:600;margin:8px 0 10px}
+</style></head><body>
+<h1>Board 77 · The Mix pop-up: no title, tabs beside the close key, the FM-1’s own pictures</h1>
+<p class="lede">iPhone 17 Pro in landscape, 874 × 402 pt, at 1:1. GLO on the FM-1 (or the song-name menu) opens the pop-up. Decision 31: no “Mix” title; the five tabs sit in line with the close key, and the room goes to the picture. The pictures here are <b>the FM-1’s own drawings</b>, rendered by Skiff 2.5.1’s drawing code (its render harness, 240 × 240 screen, the graph panel cropped), shown at the FM-1’s proportions and in the selected track’s colour. The build redraws them as vectors from the same formulas; these are the target.</p>
+<div class="row" id="r1"></div><div class="row" id="r2"></div>
+<h2>What moves (each pair is the same page at two settings, from the FM-1)</h2>
+<div class="pair" id="pairs"></div>
+<h2 style="margin-top:28px">What the build has to change, and one decision</h2>
+<ul class="notes">
+<li><b>Decision needed: colour.</b> On 2026-11-06 the iPad drew every GLO picture grey (“white is global”). The FM-1 draws DELAY, REVERB, CHORUS and GLOBAL in the <b>selected track’s colour</b>. The grey is the main reason the reverb doesn’t look like the FM-1’s: its bright body under a dark DAMP band, beside white reflections, loses its contrast. Proposal: pictures follow the FM-1 (track colour); the tabs, dials and the sheet itself stay neutral, so the global rule still holds for the controls.</li>
+<li><b>Proportions:</b> the FM-1’s graph panel is 1.7 : 1. The iPad stretched it into a 128 pt card two to a row; here it keeps 1.7 : 1 at about 476 × 280 pt.</li>
+<li><b>Finish:</b> square bar corners, 1 px stepped tails, no gradients or opacity fades the FM-1 doesn’t draw.</li>
+<li><b>Android:</b> today it draws no GLO pictures at all (MixPage “no graph”); CHORUS and GLOBAL have no drawing. FX › DELAY also assumes the bus MIX is 127 where the FM-1 uses GLO › DELAY’s MIX (default 90), so its first echo is ~40 % too tall.</li>
+<li><b>MIXER</b> keeps its levels and pans (not shown).</li>
+<li><b>Theme:</b> CRYPT, NEON and QUARK draw these pages completely differently. Which theme is Scott’s FM-1 on (MENU › THEME)? If it isn’t SKIFF, the phone should match that theme or say it shows SKIFF’s.</li>
+<li>Source and formulas, file and line: <code>design/boards/fm1-screens/NOTES.md</code>.</li>
+</ul>
+<script>
+const P=[
+ ['DELAY','2/5',[['1/8','TIME'],['60%','FEEDBK'],['71%','MIX'],['STEREO','MODE']],'delay_a_default_1-8_fb60_mix90_stereo'],
+ ['REVERB','3/5',[['ROOM','TYPE'],['71%','SIZE'],['47%','DAMP'],null],'reverb_a_room_size90_damp60'],
+ ['CHORUS','4/5',[['1.2 Hz','RATE'],['47%','DEPTH'],['CHORUS','MODE'],['0%','FEEDBK']],'chorus_a_chorus_rate40_depth60_fb0'],
+ ['GLOBAL','5/5',[['124','BPM'],['50%','SWING+'],null,null],'global_b_swing50']];
+const TABS=['MIXER','DELAY','REVERB','CHORUS','GLOBAL'];
+function frame(p,i){const [name,pg,d,img]=p;
+ const dials=d.map(x=>x?`<div class="dial"><div class="ring" style="border-top-color:#EDEDF0;border-right-color:#EDEDF0;font-size:${x[0].length>5?11:x[0].length>4?13:17}px">${x[0]}</div><div class="l">${x[1]}</div></div>`:'<div class="dial empty"></div>').join('');
+ return `<figure><div class="phone" role="img" aria-label="Mix pop-up on ${name}"><div class="under">SONG ONE ⌄  Pads  Edit  Timeline</div><div class="sheet"><div class="top">${TABS.map(t=>`<span class="tab ${t==name?'on':''}">${t}</span>`).join('')}<span class="pg">${pg}</span><span class="x" aria-label="Close">✕</span></div><div class="main"><div class="dials">${dials}</div><div class="pic"><img src="fm1-screens/crop/${img}.png" alt="FM-1 ${name} picture"></div></div></div></div><figcaption><span class="tag">77.${i+1}</span><b>${name}.</b> The FM-1’s ${name} drawing at its own proportions; four dials beside it, white because they are global.</figcaption></figure>`}
+document.getElementById('r1').innerHTML=frame(P[0],0)+frame(P[1],1);
+document.getElementById('r2').innerHTML=frame(P[2],2)+frame(P[3],3);
+const pairs=[['delay_b_1-4_fb100_mix127_ping','DELAY 1/4 PING, more feedback'],['reverb_d_hall_size127_damp127','REVERB HALL, size and damp up'],['reverb_c_spring_size90_damp60','REVERB SPRING'],['chorus_d_flanger_depth60_fb60','CHORUS as FLANGER'],['chorus_f_phaser_depth60_fb60','CHORUS as PHASER'],['global_c_swing100','GLOBAL swing 100']];
+document.getElementById('pairs').innerHTML=pairs.map(([f,c])=>`<figure style="width:280px"><img src="fm1-screens/crop/${f}.png" alt="${c}"><figcaption>${c}</figcaption></figure>`).join('');
+</script></body></html>
