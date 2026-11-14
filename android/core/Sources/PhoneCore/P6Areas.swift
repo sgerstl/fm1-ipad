@@ -40,7 +40,7 @@ extension PhoneCore {
         let bars = tracks.map(\.endBar).max() ?? 0
         let head: Double? = s.playing && s.clockTicks >= 0 ? (Double(s.clockTicks) / perBar * 100).rounded() / 100 : nil
         let kept = (0..<64).filter { (store?.pool?.patterns[safe: $0]?.length ?? 0) > 0 }.map { $0 + 1 }
-        return TimelineArea(mode: mode, tracks: tracks, bars: bars, playheadBar: head, playing: s.playing, kept: kept)
+        return TimelineArea(mode: mode, tracks: tracks, bars: bars, playheadBar: head, playing: s.playing, kept: kept, patternsFree: store?.pool?.free)
     }
 
     // MARK: automation

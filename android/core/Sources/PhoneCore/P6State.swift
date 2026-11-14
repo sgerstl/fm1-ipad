@@ -52,6 +52,8 @@ public struct TimelineArea: Codable, Equatable, Sendable {
     public var playing: Bool
     /// The pattern numbers the FM-1 holds (what Set pattern may name).
     public var kept: [Int]
+    /// How many pattern numbers are free (as the pads area's): New and Duplicate need one. nil until the pool is read.
+    public var patternsFree: Int? = nil
 }
 
 // MARK: automation (decision 7: one lane at a time under the grid; SEQ › AUTOMATION opens it)

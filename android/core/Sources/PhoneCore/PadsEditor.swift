@@ -62,7 +62,9 @@ extension PhoneCore {
             return sc
         }
         let kept = (0..<64).filter { (store?.pool?.patterns[safe: $0]?.length ?? 0) > 0 }.map { $0 + 1 }
-        return PadsArea(rows: rows, scenes: scenes, selected: selectedPad(), kept: kept)
+        let pool = store?.pool
+        let unused = (0..<64).filter { pool?.patterns[safe: $0].map { $0.length > 0 && $0.uses == 0 } ?? false }.map { $0 + 1 }
+        return PadsArea(rows: rows, scenes: scenes, selected: selectedPad(), kept: kept, patternsFree: pool?.free, unused: unused)
     }
 
     /// The pad the editor shows: the one the screen picked (padSelect), else the selected track's current entry.
