@@ -267,7 +267,6 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
     val link by core.link.collectAsStateWithLifecycle()
     val linked = link.phase == LinkPhase.Ready
     LaunchedEffect(linked) { if (!linked) place.reset() }
-    val mix by core.mix.collectAsStateWithLifecycle()
     var settledKey by remember { mutableStateOf("") }
     LaunchedEffect(screen.key, screen.page, screen.title, linked) {
         if (!linked) return@LaunchedEffect
@@ -281,8 +280,6 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
                 is PlaceAction.Lane -> editUi.lane = a.on
                 PlaceAction.OpenMix -> sheets.show(SheetKind.Mix)
                 PlaceAction.CloseMix -> if (sheets.open == SheetKind.Mix) sheets.close()
-                // the mix area's section is the core's: asking for the one the FM-1 is already on changes what the sheet shows and where nothing else
-                is PlaceAction.MixSection -> if (mix.section != a.section) core.send(com.scottgerstl.lupe.core.MixSectionPick(a.section))
                 PlaceAction.OpenSounds -> sounds.open(pads.selected.track.coerceAtLeast(1))
                 PlaceAction.CloseSounds -> sounds.close()
                 is PlaceAction.SoundsView -> sounds.show(a.user)

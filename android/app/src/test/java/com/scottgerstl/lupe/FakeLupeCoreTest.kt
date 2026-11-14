@@ -126,15 +126,9 @@ class FakeLupeCoreTest {
         val seen = mutableListOf<String>()
         for ((n, _) in com.scottgerstl.lupe.core.ScreenPages.GLO) {
             core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", n)); advanceTimeBy(10)    // the FM-1's GLO pressed again
-            follower.follow(core.fm1Screen.value, com.scottgerstl.lupe.ui.shell.PlaceNow(com.scottgerstl.lupe.core.Tab.Pads, mixOpen = open)).forEach { a ->
-                when (a) {
-                    com.scottgerstl.lupe.ui.shell.PlaceAction.OpenMix -> open = true
-                    is com.scottgerstl.lupe.ui.shell.PlaceAction.MixSection -> core.send(com.scottgerstl.lupe.core.MixSectionPick(a.section))
-                    else -> {}
-                }
-            }
-            advanceTimeBy(10)
-            seen += core.mix.value.section
+            val actions = follower.follow(core.fm1Screen.value, com.scottgerstl.lupe.ui.shell.PlaceNow(com.scottgerstl.lupe.core.Tab.Pads, mixOpen = open))
+            if (com.scottgerstl.lupe.ui.shell.PlaceAction.OpenMix in actions) open = true
+            seen += core.mix.value.section    // the mix area follows by itself; the follower sends nothing for it
         }
         assertTrue(open)
         assertEquals(listOf("mixer", "delay", "reverb", "chorus", "global"), seen)

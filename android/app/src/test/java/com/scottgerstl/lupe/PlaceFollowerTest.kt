@@ -24,29 +24,22 @@ class PlaceFollowerTest {
 
     @Test fun gloOpensTheMixSheetAndHomeClosesIt() {
         val f = primed()
-        assertEquals(listOf(PlaceAction.OpenMix, PlaceAction.MixSection("mixer")), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Timeline)))
-        assertEquals(listOf(PlaceAction.MixSection("chorus")), f.follow(s("GLO", 33, "CHORUS"), PlaceNow(Tab.Timeline, mixOpen = true)))
+        assertEquals(listOf(PlaceAction.OpenMix), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Timeline)))
+        assertTrue(f.follow(s("GLO", 33, "CHORUS"), PlaceNow(Tab.Timeline, mixOpen = true)).isEmpty())   // within GLO the section is the core's: nothing is sent
         assertEquals(listOf(PlaceAction.CloseMix), f.follow(s("HOME"), PlaceNow(Tab.Timeline, mixOpen = true)))
     }
 
-    @Test fun gloPressedFiveTimesStepsTheSheetThroughAllFiveSectionsAndReopensItIfDismissed() {
+    @Test fun gloPressedAgainAfterTheSheetWasDismissedReopensIt() {
         val f = primed()
-        val pages = listOf(30 to "MIXER", 31 to "DELAY", 32 to "REVERB", 33 to "CHORUS", 34 to "GLOBAL")
-        val sections = pages.mapIndexed { i, (n, t) -> f.follow(s("GLO", n, t), PlaceNow(Tab.Pads, mixOpen = i > 0)).filterIsInstance<PlaceAction.MixSection>().single().section }
-        assertEquals(listOf("mixer", "delay", "reverb", "chorus", "global"), sections)
-        // dismissed by hand, then GLO again on the FM-1 (it wraps to MIXER): the sheet comes back at that page
-        assertEquals(listOf(PlaceAction.OpenMix, PlaceAction.MixSection("mixer")), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Pads, mixOpen = false)))
-    }
-
-    @Test fun theFakeStepsGloThroughItsFivePages() {
-        // the fake's fm1Screen, as the follower reads it: screenGoto with each page lands on it
-        val pages = com.scottgerstl.lupe.core.ScreenPages.GLO
-        assertEquals(listOf("mixer", "delay", "reverb", "chorus", "global"), pages.map { PlaceFollower.mixSection(it.first) })
+        assertEquals(listOf(PlaceAction.OpenMix), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Pads)))
+        assertTrue(f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Pads, mixOpen = true)).isEmpty())
+        // dismissed by hand, then GLO again on the FM-1: the sheet comes back (on the page the core's mix area is now on)
+        assertEquals(listOf(PlaceAction.OpenMix), f.follow(s("GLO", 32, "REVERB"), PlaceNow(Tab.Pads, mixOpen = false)))
     }
 
     @Test fun aMixSheetThePersonOpenedIsLeftOpen() {
         val f = primed()
-        assertEquals(listOf(PlaceAction.MixSection("mixer")), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Pads, mixOpen = true)))
+        assertTrue(f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Pads, mixOpen = true)).isEmpty())
         assertTrue(f.follow(s("HOME"), PlaceNow(Tab.Pads, mixOpen = true)).isEmpty())
     }
 

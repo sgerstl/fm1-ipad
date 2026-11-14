@@ -188,6 +188,8 @@ class FakeLupeCore(
                 val pages = ScreenPages.of(intent.screen)
                 val (n, title) = pages.firstOrNull { it.first == intent.page } ?: pages.firstOrNull() ?: return
                 _fm1Screen.value = Fm1ScreenState(key = intent.screen, page = n, title = title)
+                // as the real core: the mix area's section follows the FM-1's GLO page by itself
+                if (intent.screen == "GLO") listOf("mixer", "delay", "reverb", "chorus", "global").getOrNull(n - 30)?.let { sec -> _mix.update { FakeP5.mix(it, MixSectionPick(sec)) } }
                 if (intent.screen == "SEQ") _shell.update { it.copy(bottom = BottomPage()) }
             }
             is com.scottgerstl.lupe.core.GoHome -> { _shell.update { it.copy(bottom = BottomPage()) }; _fm1Screen.value = Fm1ScreenState(key = "HOME") }

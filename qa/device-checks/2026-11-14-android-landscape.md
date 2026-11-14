@@ -98,4 +98,4 @@ Built (tests pass), not run on a screen.
 | 41 | Press GLO on the FM-1 five times, about twice a second | The Mix sheet opens on Mixer and steps Delay, Reverb, Chorus, Global with the FM-1, the selector gliding | – | ☐ pass ☐ fail: |
 | 42 | Dismiss the Mix sheet, press GLO again | It comes back on the page the FM-1 is now on | – | ☐ pass ☐ fail: |
 | 43 | Press SAVE on the FM-1 four times | Sounds on the presets, then its USER list, then nothing (PATTERNS), then the Projects sheet | – | ☐ pass ☐ fail: |
-| 44 | Press GLO fast (as fast as you can) and watch the FM-1 | The FM-1 never jumps back a page. *If it does: the phone asks the core for the section the FM-1 is on, which is a write; tell me and the core should follow by itself instead* | – | ☐ pass ☐ fail: |
+| 44 | Press GLO fast (as fast as you can) and watch the FM-1 | The FM-1 never jumps back a page: the phone sends nothing when the FM-1 changes GLO page (the core's mix area follows by itself; needs P1's commit) | – | ☐ pass ☐ fail: |
