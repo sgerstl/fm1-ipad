@@ -36,6 +36,37 @@ Could someone plausibly propose the opposite? Then log it: dated one line, the w
 
 Not a stored flag. A section is ready when section 1 has no `[open]` on the part being built and section 2 covers it. Work it out when asked.
 
-## The trial
+## The trial, and ending it early
 
-One component, the pattern pad, starting 2026-11-13. The question: with its CRD read first, does the next round of device-check fixes on the pad get shorter, and does anything ruled out come back? Judge after the next Pads batch has been through Scott's hands. No more CRDs until then.
+The trial was one component, the pattern pad, from 2026-11-13. The question was whether, with its CRD read first, the next round of device-check fixes on the pad gets shorter, and whether anything ruled out comes back. **Ended early on 2026-11-14 (Scott's call):** every user-facing component got a CRD the same day as the Figma UI kit. The question still stands, so ask it of the next Pads batch anyway.
+
+Most of the new CRDs are `draft`, and many carry `[open]` lines. That's expected: they were written from the code and the vault on one day, not from a design round. An `[open]` still means stop and ask.
+
+## Figma
+
+The [Lupe UI kit](https://www.figma.com/design/RLZwUtsJDEfLyIZGXIlM9n) is a sketch kit reverse-engineered from the code (vault: `Projects/Dev/fm1-ipad/figma-ui-kit.md`). Each CRD lists its component sets under `figma:`, and each set's description names its CRD. Figma is never a source of behaviour or of numbers. The code and tokens are.
+
+## Index
+
+| CRD | What it covers |
+|---|---|
+| `pattern-pad.md` | One entry on the Pads grid (iPad and phone) |
+| `track-head.md` | Row heads, badges, mute and solo, lanes, the track chip |
+| `scene-row.md` | Store and the 16 scenes |
+| `top-row.md` | The iPad's top row, its tools, transport and status strip |
+| `phone-header.md` | The phone's header, app menu and launch menu |
+| `keys.md` | Chiclet keys, LEDs, segmented keys, chips: the shared press behaviour |
+| `column-face.md` | The knob tile, dial, big control and magnifier |
+| `faders.md` | Level, pan and send faders |
+| `pattern-editor.md` | The editor under the divider, piano roll, drum grid, phone Edit |
+| `step-inspector.md` | The selected step's notes, columns, locks |
+| `timeline.md` | The Song tab's Timeline and its blocks |
+| `sound-panel.md` | The sound panel, its cards, the FM-1's 12 keys, the rail |
+| `sounds-panel.md` | The sound browser (panel on the iPad, sheet on the phone) |
+| `mix.md` | Mix strips, FX pages, the phone's Mix pop-up |
+| `hold-menus.md` | Fan menus, placed menus, the phone's callout menu, confirm in place |
+| `tempo-popup.md` | Tempo, tap and playback mode |
+| `connection-states.md` | No FM-1, lost, reading, wrong firmware |
+| `sampler.md` | Recording and importing samples into the FM-1's slots |
+| `projects-sheet.md` | Projects on the FM-1 and on the device |
+| `settings-sheet.md` | Settings and Labs |

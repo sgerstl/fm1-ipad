@@ -12,6 +12,11 @@ code:
   - ios/FM1/PadThumb.swift        # the pattern picture
   - ios/SloopKit/Sources/SloopKit/SkiffSongStore.swift   # launches
 boards: [35, 36, 39, 41, 42, 46, 49, 53, "design/motion/liquid-pads.html"]
+figma:
+  - https://www.figma.com/design/RLZwUtsJDEfLyIZGXIlM9n?node-id=10-250   # No grid
+  - https://www.figma.com/design/RLZwUtsJDEfLyIZGXIlM9n?node-id=10-304   # Half
+  - https://www.figma.com/design/RLZwUtsJDEfLyIZGXIlM9n?node-id=10-334   # Max
+  - https://www.figma.com/design/RLZwUtsJDEfLyIZGXIlM9n?node-id=7-148    # Phone
 ---
 
 # Pattern pad

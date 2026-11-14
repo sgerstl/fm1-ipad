@@ -8,6 +8,7 @@ status:                # the document, per section: empty · draft · complete
   usage: empty
 code: []               # Swift files that draw it
 boards: []             # canvas boards and mockups
+figma: []              # component sets in the Lupe UI kit (a sketch kit, never a source of behaviour)
 ---
 
 # {Name}
