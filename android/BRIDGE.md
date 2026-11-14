@@ -199,6 +199,15 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
   lost `graph` (its picture values, `fm6`, `sheet`) and gained `title`, `tiles` (MOD's routes, or the names a knob
   picks from) and `window`. P2 owns `PageState.kt`. The phone can't move a sheet's window: see
   `android/notes/page-parity.md`.
+- **Note entry** (decision 28, board 73: the landscape Edit tab's keyboard strip), in `NoteEntry.swift`:
+  - `setStepNotes` (step, notes): one note, a chord of up to four, or `[]` to clear.
+  - `toggleStepNote` (step, note).
+  - `toggleHit` (lane, step), for kit tracks.
+  - `playNote` (note or lane, on): a note-on and note-off on the track's channel, written nowhere.
+
+  They go through `Session.write`, `Session.toggle` and `noteDown` / `noteUp`, the iPad's calls. All are refused while
+  read-only. Skiff takes step writes while it plays, so none is refused for playing. The editor area's steps gain
+  `notes`, `hits` and `locked`; the area gains `maxNotes`, `kitLanes` and `kitNotes`. P2 owns the Kotlin classes.
 
 ### Read-only by default (P1, 2026-11-13)
 
