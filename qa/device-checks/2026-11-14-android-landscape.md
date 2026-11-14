@@ -76,7 +76,7 @@ Chosen or left open:
 
 ## The waiting outline and the pass display (the iPad's LaunchTrace and TraceOutline), 2026-11-14
 
-Built against the fake (tests pass, APK builds), **not run on a screen**. The data fields are **provisional** until P1's shapes arrive: `ticksToLaunch` and `passTicks` on a pad entry, `mutePending`, `soloPending` and `pendingTicks` on a row, `pending` and `pendingTicks` on a scene, `ticksPerSecond` on the pads area. On the real FM-1 nothing below shows until P1's side is merged and these are switched to its names.
+Built against the fake (tests pass, APK builds), **not run on a screen**. The data is P1's shapes: the `clock` area (a pulse count with its time, renewed every beat), `launchTick` on waiting entries, rows and scenes, `passTicks` and `passStartTick` on a row, `mutePending` ("none", "mute", "unmute"), `soloPending`, a scene's `waiting`. On the real FM-1 it needs P1's commit merged into this branch.
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|

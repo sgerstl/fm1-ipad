@@ -45,13 +45,6 @@ class TraceProgress {
     }
 }
 
-/** Clock ticks left now, [ticks] having been true [sinceMs] ago at [ticksPerSecond]: what moves a waiting outline between the core's publishes. */
-fun ticksLeftNow(ticks: Double, ticksPerSecond: Double, sinceMs: Long): Double = (ticks - ticksPerSecond * sinceMs / 1000.0).coerceAtLeast(0.0)
-
-/** A pass's progress now, [progress] having been true [sinceMs] ago: the pass bar's smooth movement between publishes. It stops at the pass's end. */
-fun passProgressNow(progress: Float, passTicks: Double?, ticksPerSecond: Double, sinceMs: Long): Float =
-    if (passTicks == null || passTicks <= 0 || ticksPerSecond <= 0) progress else (progress + (ticksPerSecond * sinceMs / 1000.0 / passTicks).toFloat()).coerceIn(0f, 1f)
-
 /**
  * A rounded rectangle's outline from its top left corner, counter-clockwise on the screen: the corner, down the left, along the bottom, up the
  * right, back along the top (the iPad's TraceOutline). [inset] is half the line's width, so the line sits inside the shape; the corner radius

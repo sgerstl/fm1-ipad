@@ -58,6 +58,8 @@ data class TopState(
     /** The readout's position, 1-based: "10·3". */
     val bar: Int = 1,
     val beat: Int = 1,
+    /** How many bars [bar] counts before it wraps (Loop: the selected track's block; Song: the song); null: it counts up from Start. */
+    val bars: Int? = null,
 )
 
 // ---- shell (P2)
@@ -132,10 +134,8 @@ data class PadEntry(
     val progress: Float? = null,
     /** The entry carries a sound (the iPad cuts the pad's top right corner). */
     val hasSound: Boolean = false,
-    /** A waiting launch: clock ticks (24 a quarter note) until it lands, as of this publish; null when there is no clock (joined mid-play). PROVISIONAL until P1's shapes. */
-    val ticksToLaunch: Double? = null,
-    /** The playing entry's pass length in clock ticks, so the pass bar can move between publishes; null when not known. PROVISIONAL. */
-    val passTicks: Double? = null,
+    /** A waiting entry: the clock pulse its launch point comes on (the `clock` area counts them); null when there is no clock. */
+    val launchTick: Double? = null,
 )
 
 @Serializable
@@ -145,17 +145,22 @@ data class PadRow(
     /** The track's sound name ("Acid", "Drum Kit"). */
     val name: String,
     val muted: Boolean = false,
-    /** A mute (or un-mute), or a solo, that waits for the launch point; [pendingTicks] is the clock ticks until it lands (null: no clock). PROVISIONAL until P1's shapes. */
-    val mutePending: Boolean = false,
+    /** A mute waiting for the launch point: "none", "mute" or "unmute". */
+    val mutePending: String = "none",
+    /** This track's solo still has mutes waiting on other tracks. */
     val soloPending: Boolean = false,
-    val pendingTicks: Double? = null,
+    /** The pulse this track's launch point comes on, while the row has a waiting pad, a pending mute or a pending solo; null: no clock. */
+    val launchTick: Double? = null,
+    /** The playing entry's pass in clock pulses, and the pulse it began on: its bar each frame is ((ticksNow − passStartTick) / passTicks) mod 1. */
+    val passTicks: Double? = null,
+    val passStartTick: Double? = null,
     /** One per column: entries A… up to the last any track uses, plus one empty. */
     val entries: List<PadEntry> = emptyList(),
 )
 
-/** [pending]: recalled and waiting for the launch point, [pendingTicks] clock ticks away (null: no clock). PROVISIONAL until P1's shapes. */
+/** [waiting]: recalled while playing and its last track isn't in yet; [launchTick] is the pulse it lands on (null: no clock). */
 @Serializable
-data class Scene(val stored: Boolean = false, val current: Boolean = false, val pending: Boolean = false, val pendingTicks: Double? = null)
+data class Scene(val stored: Boolean = false, val current: Boolean = false, val waiting: Boolean = false, val launchTick: Double? = null)
 
 /** [entry] is 0-based (A = 0). */
 @Serializable
@@ -171,9 +176,6 @@ data class PadsState(
     /** The pattern numbers (1…64) the FM-1 holds: the only ones Set pattern can name (LIST SET refuses an empty one).
      *  P1, 2026-11-14 (Scott's run: Set to 60 refused). */
     val kept: List<Int> = emptyList(),
-    /** The clock's rate now, in ticks a second (24 a quarter note at the tempo); 0 when stopped or not known. The screen moves the pass bars and the waiting
-     *  outlines by it between publishes. PROVISIONAL until P1's shapes. */
-    val ticksPerSecond: Double = 0.0,
 )
 
 // ---- editor (P3)

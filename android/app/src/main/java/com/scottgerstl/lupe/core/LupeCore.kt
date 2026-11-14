@@ -30,5 +30,8 @@ interface LupeCore {
     /** The FM-1 key whose screen is up (decision 24): ScreenState.kt. */
     val fm1Screen: StateFlow<Fm1ScreenState> get() = ScreenDefaults.fm1Screen
 
+    /** The clock reference for per-frame movement (ClockState.kt). */
+    val clock: StateFlow<ClockState> get() = ClockDefaults.clock
+
     fun send(intent: Intent)
 }
