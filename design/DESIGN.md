@@ -59,3 +59,10 @@ two read apart at a glance.
 - **The readout** (bar · beat over BPM) stays plain, **left of Record and Play**, which sit at the far right edge (Scott, 2026-11-13, after using it).
 - **Tabs** (Pads · Timeline · Mix) are a left-aligned row of words, Barlow 17 semibold, 24 apart: the one showing in `text` with a 3 px white underline the width of its word, the others in `text2`. The underline glides to the new tab (about 200 ms, ease-out); with Reduce Motion it cross-fades. White, not a track colour.
 - A 1 px hairline (`control`) under the tabs ends the header.
+
+## White is global, the track's colour is the track's (Scott, 2026-11-14)
+
+White marks what belongs to the whole instrument: the transport (Play lit), the tab underline, the picked step,
+global switches. Anything that belongs to a track (the selected track, the selected pad) is drawn in **that
+track's colour**, never white. The selected track carries a 2 dp outline in its colour across its whole row (head,
+Mute, pads), on Pads and the Timeline alike.
