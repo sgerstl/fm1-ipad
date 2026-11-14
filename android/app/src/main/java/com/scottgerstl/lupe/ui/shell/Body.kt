@@ -2,6 +2,7 @@ package com.scottgerstl.lupe.ui.shell
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -116,8 +118,19 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                     }
                 }
             }
-            // Pads and the Timeline: the sound page's header and dials in a short panel that rises over the lower rows; HOME lowers it
-            SoundPanel(soundUp && shell.tab != Tab.Edit && shell.bottom.kind != BottomKind.FreeTake, soundPage, soundCore, notice, Modifier.align(Alignment.BottomCenter).countTouches(onSoundTouch))
+            // Pads and the Timeline: the sound page's header and dials in a short panel that rises only when the FM-1 changes page or a knob turns
+            // on it, and leaves on HOME, a swipe down, or a few seconds after the last turn or touch (Scott, 2026-11-14)
+            val panel = remember { SoundPanelModel() }
+            panel.holdMs = labs.panelHoldSeconds * 1000L
+            val linkNow by core.link.collectAsStateWithLifecycle()
+            val linked = linkNow.phase == LinkPhase.Ready
+            val pageKey = if (soundUp) "${soundPage.family}/${soundPage.page}" else null
+            LaunchedEffect(linked) { if (!linked) panel.reset() }
+            LaunchedEffect(pageKey, linked) { if (linked) panel.page(pageKey, System.currentTimeMillis()) }
+            LaunchedEffect(live.turnSeq, live.turned, linked) { if (linked) panel.turn(live.turnSeq * 8 + live.turned, System.currentTimeMillis()) }
+            LaunchedEffect(panel.up, panel.deadline) { if (panel.up) { delay((panel.deadline - System.currentTimeMillis()).coerceAtLeast(0) + 20); panel.tick(System.currentTimeMillis()) } }
+            SoundPanel(panel.up && pageKey != null && shell.tab != Tab.Edit && shell.bottom.kind != BottomKind.FreeTake, soundPage, soundCore, notice, { panel.dismiss() },
+                Modifier.align(Alignment.BottomEnd).countTouches { panel.touch(System.currentTimeMillis()); onSoundTouch() })
         }
     }
 }
@@ -139,27 +152,37 @@ private fun TimelineSlot(core: LupeCore) {
 }
 
 /**
- * The sound page over Pads or the Timeline (decisions 25, 27, 28): the header and four dials, and tiles beside them where a knob picks from
- * names. It rises from the bottom in 300 ms and leaves in 200 (with Reduce Motion it only fades). It is a pane of its own for TalkBack.
+ * The sound page over Pads or the Timeline (decisions 25, 27, 28): the header and four dials, in a panel the dials' width at the right; a page
+ * with tiles gets the full width for them. It rises from the bottom in 300 ms and falls in 200 (with Reduce Motion it only fades); a swipe down
+ * on it (not on a dial) sends it away. It is a pane of its own for TalkBack, with Dismiss as an action.
  */
 @Composable
-private fun SoundPanel(visible: Boolean, page: PageState, core: LupeCore, notice: String?, modifier: Modifier = Modifier) {
+private fun SoundPanel(visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val reduce = LocalReduceMotion.current
     val t = animatedFloat(if (visible) 1f else 0f, if (visible) Dur.PANEL else Dur.FINGER, if (visible) EaseOut else EaseIn)
     var last by remember { mutableStateOf(page) }
     if (visible) last = page
     if (!visible && t.value <= 0.001f) return
     val colour = trackColour(last.track)
+    val tiles = last.tiles
     Row(
-        modifier.fillMaxWidth().height(134.dp)
+        modifier.then(if (tiles != null) Modifier.fillMaxWidth() else Modifier.width(444.dp)).height(134.dp)
             .graphicsLayer { alpha = if (reduce) t.value else 1f; if (!reduce) translationY = (1f - t.value) * size.height; shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(topStart = 12.dp.toPx(), topEnd = 12.dp.toPx()); clip = true }
             .background(Tok.panel)
-            .pointerInput(Unit) { detectTapGestures { } }   // taps on the panel don't reach the pads under it
-            .semantics { paneTitle = "Sound page ${last.family}"; isTraversalGroup = true }
+            // a swipe down that no dial took sends it away; taps on the panel don't reach the pads under it
+            .pointerInput(Unit) {
+                var total = 0f
+                detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 32.dp.toPx()) onDismiss() }) { change, dy -> change.consume(); total += dy }
+            }
+            .pointerInput(Unit) { detectTapGestures { } }
+            .semantics {
+                paneTitle = "Sound page ${last.family}"; isTraversalGroup = true
+                customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Dismiss the sound panel") { onDismiss(); true })
+            }
             .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
         SoundDials(last, core, Modifier.width(420.dp).fillMaxHeight(), notice)
-        last.tiles?.let { tiles ->
+        if (tiles != null) {
             Spacer(Modifier.width(16.dp))
             PageTilesContent(tiles, colour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)))
         }

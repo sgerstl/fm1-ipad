@@ -102,6 +102,8 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         }
         SwitchRow("Pause following after a touch", "The sound page you touched holds for 3 s before it follows the FM-1 again", phone.pauseFollowing, trial = true) { phone.choosePauseFollowing(it) }
         SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
+        // a feel value to tune by hand (added 2026-11-14, review 2026-11-28): slide it
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("SOUND PANEL STAYS · SECONDS", "${phone.panelHoldSeconds} s", phone.panelHoldSeconds, 2, 12, "How long the sound panel stays after the last knob turn or touch", stepDp = 18f, revertTo = 4) { phone.choosePanelHold(it) }
         SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
         SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
     }
