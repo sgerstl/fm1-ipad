@@ -42,7 +42,7 @@ struct PhoneAppView: View {
                     // Skiff: the sound panel comes in from the right over every tab, the FM-1's sound keys (and the
                     // rail, Settings › Sound buttons) opening it, as on the iPad (Scott, 2026-11-10)
                     if ui.songTab {
-                        SoundPanelHost(session: session, ui: ui) { pager }
+                        PhoneSoundHost(session: session, ui: ui) { pager }
                     } else {
                         pager
                     }
@@ -72,7 +72,7 @@ struct PhoneAppView: View {
             }
         }
         // another tab closes the sound panel (the FM-1's key or the rail brings it back)
-        .onChange(of: ui.page) { _, _ in if ui.songTab { ui.soundPanel = nil } }
+        .onChange(of: ui.phoneTab) { _, _ in if ui.songTab { ui.soundPanel = nil } }
         .padding(.horizontal, 8)
         .padding(.top, 0)
         // a held knob's full-size ring, over everything and kept on the screen, as on the iPad
@@ -310,6 +310,7 @@ struct PhoneSequence: View {
 /// header and step numbers (the ruler above says where you are); the velocity lane on a toggle.
 struct PhonePianoRoll: View {
     @Environment(\.grid) private var grid
+    @Environment(\.soundPanelRoom) private var panelRoom      // the sound panel over the grid: it scrolls on under it
     let session: DeviceSession
     let ui: EditorUI
     let track: Int
@@ -337,7 +338,7 @@ struct PhonePianoRoll: View {
                     .frame(width: grid.labelWidth, height: h, alignment: .top)
                     .clipped()
                     ZStack(alignment: .topLeading) {
-                        TwoFingerScrollView(contentSize: CGSize(width: CGFloat(session.stepCount) * grid.stepWidth, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
+                        TwoFingerScrollView(contentSize: CGSize(width: CGFloat(session.stepCount) * grid.stepWidth + panelRoom, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
                                             offset: $offset, request: request,
                                             rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth,
                                             holdRing: PianoRollContent.holdTime,
@@ -375,6 +376,7 @@ struct PhonePianoRoll: View {
 /// Scott 2026-11-04). Lane names play the sound and pick the lane, as on the iPad.
 struct PhoneDrumGrid: View {
     @Environment(\.grid) private var grid
+    @Environment(\.soundPanelRoom) private var panelRoom
     let session: DeviceSession
     let ui: EditorUI
     let height: CGFloat
@@ -395,7 +397,7 @@ struct PhoneDrumGrid: View {
                 .frame(width: grid.labelWidth, height: h, alignment: .top)
                 .clipped()
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth,
+                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width + panelRoom, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth,
                                         holdRing: DrumGridContent.holdTime) {
                         DrumGridContent(grid: grid, session: session, ui: ui)
                     }

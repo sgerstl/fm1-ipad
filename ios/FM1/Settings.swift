@@ -70,6 +70,19 @@ enum Magnifier {
 /// Settings' switch for the rail of FX…SEQ keys down the side. Off by default (Scott, 2026-11-08): the page gets the
 /// whole width, and an open sound panel carries the FM-1's twelve buttons along its foot instead. A new key, so the
 /// old default (on) doesn't carry over.
+/// The phone's Settings › Show graphics (decision 30, on by default): each sound page's picture under its four dials.
+enum ShowGraphics {
+    static let key = "showGraphics"
+    static let standard = true
+}
+
+extension EnvironmentValues {
+    /// A sound card draws no picture (the phone with Show graphics off).
+    @Entry var pageGraphHidden = false
+    /// A sound card with no surface of its own (the phone's panel is its surface).
+    @Entry var soundCardBare = false
+}
+
 enum SoundButtons {
     static let key = "soundRail.v2"
     static let standard = false

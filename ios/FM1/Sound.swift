@@ -470,6 +470,9 @@ struct SoundCard: View, Equatable {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The highlight moving between cards: Skiff's quick ease-out (about 135–200 ms), beside a carousel's snap.
     static let focusMove: Animation = .easeOut(duration: 0.18)
+    /// The phone's Settings › Show graphics off: dials only (decision 30).
+    @Environment(\.pageGraphHidden) private var graphHidden
+    @Environment(\.soundCardBare) private var cardBare
 
     /// The same pages with the same state objects: nothing to redraw from the parent (what the card shows it
     /// observes itself), so a rebuilt scroll doesn't rebuild every card.
@@ -515,8 +518,9 @@ struct SoundCard: View, Equatable {
             if session.dialect == .skiff, first.title == "SLICES" { SlicesNote(session: session, page: first) }
             graph(for: first, rows: rows)
         }
-        .padding(16)
-        .panel()
+        // the phone's sound panel: the card's surface is the panel's own tint (no card inside a card)
+        .padding(cardBare ? 0 : 16)
+        .modifier(CardSurface(bare: cardBare))
         .modifier(CardForward(session: session, ui: ui, rows: rows))
         // a tap anywhere on an inactive card makes it the active one (on the FM-1 too); touching a column does as well
         // (read when tapped, not while drawing: the card's body doesn't follow the FM-1's page)
@@ -579,7 +583,7 @@ struct SoundCard: View, Equatable {
         // the knob being turned, here or on the FM-1 (marked), lights its point
         let turning = ui.knobGrab.flatMap { g in p.ids.indices.first { p.key($0) == g.id } }
             ?? marks.key.flatMap { m in p.ids.indices.first { p.key($0) == m } }
-        if PageGraph.has(p, session) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: modRoute(p)) }
+        if !graphHidden, PageGraph.has(p, session) { PageGraph(session: session, page: p, rows: rows, hot: turning, modRoute: modRoute(p)) }
     }
 
     /// KNOB 1's pick on an engine page (the lane, …): picked here, the FM-1's cursor goes there too, as MOD's route.
@@ -896,4 +900,12 @@ struct PageSetting: View {
 
     /// "DLY MODE" on a DELAY card says MODE: the card already names the delay.
     static func title(_ label: String) -> String { label.hasPrefix("DLY ") ? String(label.dropFirst(4)) : label }
+}
+
+/// A sound card's surface: the panel grey, or none (the phone's sound panel draws its own).
+private struct CardSurface: ViewModifier {
+    let bare: Bool
+    func body(content: Content) -> some View {
+        if bare { content } else { content.panel() }
+    }
 }
