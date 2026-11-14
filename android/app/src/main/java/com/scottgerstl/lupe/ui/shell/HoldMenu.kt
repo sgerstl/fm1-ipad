@@ -58,6 +58,12 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.fillMaxWidth
+import com.scottgerstl.lupe.ui.slide.slideToTurn
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -80,8 +86,17 @@ import kotlin.math.sqrt
  */
 class HoldItem(
     val title: String, val sub: String? = null, val checked: Boolean = false, val enabled: Boolean = true,
-    val confirm: String? = null, val children: (() -> List<HoldItem>)? = null, val action: () -> Unit = {},
+    val confirm: String? = null, val children: (() -> List<HoldItem>)? = null,
+    /** A value set by sliding on the row (LEVEL, PAN on a track's head): the row stays, the menu stays open. */
+    val slide: HoldSlide? = null,
+    val action: () -> Unit = {},
 )
+
+/**
+ * A value in a hold menu, set by sliding a finger along its row (decision 10: no − / + anywhere). [raw] and [text] are read as the row draws,
+ * so they should read Compose state. TalkBack gets the range, Increase and Decrease (the way in that isn't a drag).
+ */
+class HoldSlide(val raw: () -> Int, val text: () -> String, val min: Int, val max: Int, val bipolarAt: Int? = null, val stepDp: Float = 3f, val onSet: (Int) -> Unit)
 
 /** The hold menu that is open: where the finger was when the hold fired (window pixels), the track's colour, the choices. */
 class HoldMenuOpen(val at: Offset, val colour: Color, val items: List<HoldItem>, val title: String?)
@@ -122,7 +137,7 @@ class HoldMenuState {
     fun pick(k: Int) {
         val m = menu ?: return
         val item = m.items.getOrNull(k) ?: return
-        if (!item.enabled) return
+        if (!item.enabled || item.slide != null) return   // a slide row is slid, not picked
         when {
             item.children != null -> { menu = HoldMenuOpen(m.at, m.colour, paged(item.children.invoke())); hot = -1; confirming = -1; opened++ }
             item.confirm != null && confirming != k -> { confirming = k; confirmAt = System.currentTimeMillis(); hot = -1 }
@@ -148,8 +163,9 @@ class HoldSpot(val edgeX: Float, val cy: Float, val left: Boolean)
  * each pushed out to where its height meets a circle of [radius] round the finger, so the stack bows with the circle. They open to the left when
  * the finger is too near the right edge. All in dp.
  */
-fun holdSpots(x: Float, y: Float, n: Int, screenW: Float, screenH: Float, itemW: Float = 200f, itemH: Float = 48f, radius: Float = 120f, step: Float = 56f): List<HoldSpot> {
-    val left = x > screenW - (radius + itemW + 24f)
+fun holdSpots(x: Float, y: Float, n: Int, screenW: Float, screenH: Float, itemW: Float = 200f, itemH: Float = 48f, radius: Float = 120f, step: Float = 56f, preferLeft: Boolean = false): List<HoldSpot> {
+    // [preferLeft] (Settings › Handedness, right-handed): to the left of the finger whenever there is room there, so the hand doesn't cover them
+    val left = if (preferLeft) x >= radius + itemW + 24f else x > screenW - (radius + itemW + 24f)
     val lowest = screenH - 16f - itemH / 2 - (n - 1) * step
     val top = (y - (n - 1) * step / 2).coerceAtMost(lowest).coerceAtLeast(8f + itemH / 2)
     return List(n) { k ->
@@ -216,7 +232,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         // the finger, in this layer's dp
         val fingerPx = origin?.takeIf { it.isAttached }?.windowToLocal(m.at) ?: m.at
         val fx = with(density) { fingerPx.x.toDp().value }; val fy = with(density) { fingerPx.y.toDp().value }
-        val spots = remember(m, w, h) { holdSpots(fx, fy, m.items.size, w, h) }
+        val spots = remember(m, w, h, labs.leftHanded) { holdSpots(fx, fy, m.items.size, w, h, preferLeft = !labs.leftHanded) }
         val itemW = 200f; val itemH = 48f
         // where the choices are, in window pixels, for the held finger
         state.rects = spots.map { s ->
@@ -267,20 +283,21 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                         // the edge the line arrives at carries the track's colour
                         else drawRoundRect(m.colour, Offset(if (s.left) size.width - 3.dp.toPx() else 0f, 8.dp.toPx()), Size(3.dp.toPx(), size.height - 16.dp.toPx()), CornerRadius(1.5.dp.toPx()))
                     }
-                    .semantics(mergeDescendants = true) {
+                    .then(if (item.slide != null) Modifier.pointerInput(k, m) { detectTapGestures { } } else Modifier.semantics(mergeDescendants = true) {
                         role = Role.Button
                         contentDescription = if (confirming) "Confirm: ${item.confirm}" else item.title + (item.sub?.let { ", $it" } ?: "")
                         if (item.checked) selected = true
                         if (!item.enabled) disabled()
                         onClick { state.pick(k); true }
                     }
-                    .pointerInput(k, m) { detectTapGestures { state.pick(k) } }
+                    .pointerInput(k, m) { detectTapGestures { state.pick(k) } })
                     .padding(start = if (s.left) 14.dp else 16.dp, end = if (s.left) 16.dp else 14.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 // the iPad's row: the title at 17, a small second line, a tick for the current choice; a choice that can't be made is dimmer
                 val ink = if (!item.enabled) Tok.text3 else Tok.text
-                if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (item.slide != null) HoldSlideRow(item.title, item.slide)
+                else if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         BasicText(item.title, style = LupeType.body.copy(fontSize = 17.sp, lineHeight = 20.sp, color = ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -290,6 +307,41 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                     if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(color = Tok.text2)) }
                 }
             }
+        }
+    }
+}
+
+/** A slide row's inside: the name, the value large at the right, a gauge along the foot; a finger slid along it (either way) sets the value. */
+@Composable
+private fun HoldSlideRow(title: String, sl: HoldSlide) {
+    val raw = sl.raw(); val text = sl.text()
+    val latest by rememberUpdatedState(raw)
+    var base by remember { mutableIntStateOf(0) }
+    fun set(v: Int) { val n = v.coerceIn(sl.min, sl.max); if (n != latest) sl.onSet(n) }
+    Box(
+        Modifier.fillMaxSize()
+            .semantics(mergeDescendants = true) {
+                contentDescription = title; stateDescription = text; role = Role.Button
+                progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(raw.toFloat(), sl.min.toFloat()..sl.max.toFloat(), sl.max - sl.min - 1)
+                setProgress { v -> set(v.roundToInt()); true }
+                customActions = listOf(
+                    androidx.compose.ui.semantics.CustomAccessibilityAction("Increase $title") { set(latest + 1); true },
+                    androidx.compose.ui.semantics.CustomAccessibilityAction("Decrease $title") { set(latest - 1); true },
+                )
+            }
+            .slideToTurn(enabled = true, stepDp = sl.stepDp, face = null, forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Both,
+                onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (sl.min - latest)..(sl.max - latest) }),
+    ) {
+        Row(Modifier.align(Alignment.CenterStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(title, Modifier.weight(1f), style = LupeType.label.copy(color = Tok.text2Raised), maxLines = 1)
+            BasicText(text, style = LupeType.number.copy(fontSize = 20.sp, lineHeight = 22.sp), maxLines = 1)
+        }
+        Canvas(Modifier.align(Alignment.BottomStart).padding(bottom = 5.dp).fillMaxWidth().height(3.dp)) {
+            drawRect(Tok.stepEmpty)
+            val span = (sl.max - sl.min).coerceAtLeast(1).toFloat()
+            val x = (raw - sl.min) / span * size.width
+            val from = if (sl.bipolarAt != null) (sl.bipolarAt - sl.min) / span * size.width else 0f
+            drawRect(Tok.text, Offset(minOf(from, x), 0f), Size(maxOf(kotlin.math.abs(x - from), if (sl.bipolarAt != null) 2.dp.toPx() else 0f), size.height))
         }
     }
 }

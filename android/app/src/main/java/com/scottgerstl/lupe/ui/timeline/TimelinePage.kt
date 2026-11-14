@@ -208,14 +208,31 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                     // one finger pans, two zoom; a selected block's own drag is taken first by the block (it consumes it)
                     .pointerInput(Unit) { detectTransformGestures { c, pan, zoom, _ -> view.touchedAt = System.currentTimeMillis(); if (zoom != 1f) zoomTo(latest.value.second * zoom, c.x - HEAD.toPx() - GAP.toPx()); view.scroll = scrollNow() - pan.x } },
             ) {
+                // The selected track: its colour muted over the page (28 %) under its whole row, head and lane, as Pads draws it (decision 31,
+                // board 76; the 2 dp outline is the launch timer's alone now). It glides to the newly selected row, behind everything. While
+                // the tab pages slide the shell's travelling band stands in for it (selectedTrackAnchor).
+                if (ui.selectedTrack in 1..6) {
+                    val rh = (maxHeight - GAP * 5) / 6
+                    val at = animatedFloat((ui.selectedTrack - 1).toFloat(), Dur.STATE)
+                    val travelling = LocalTabTravelling.current
+                    val band = com.scottgerstl.lupe.ui.shell.trackBand(Tok.track[(ui.selectedTrack - 1) % Tok.track.size])
+                    Box(
+                        Modifier.fillMaxWidth().height(rh + 4.dp).offset { IntOffset(0, ((rh + GAP).toPx() * at.value - 2.dp.toPx()).toInt()) }
+                            .selectedTrackAnchor()
+                            .drawBehind { if (!travelling) drawRoundRect(band, cornerRadius = CornerRadius(10.dp.toPx())) }
+                            .clearAndSetSemantics { },
+                    )
+                }
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(GAP)) {
                     for (t in 1..6) {
                         val colour = Tok.track[(t - 1) % Tok.track.size]
                         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GAP)) {
                             TrackHead(t, ui.trackNames.getOrNull(t - 1).orEmpty(), colour, ui.selectedTrack == t) { actions.selectTrack(t) }
                             val drag = remember(t) { TrackDrag() }
+                            // the selected track's lane lets its band show through: the well fades out as the band arrives
+                            val onBand = animatedFloat(if (ui.selectedTrack == t) 1f else 0f, Dur.STATE)
                             Box(
-                                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Tok.well)
+                                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(6.dp)).drawBehind { if (onBand.value < 1f) drawRect(Tok.well.copy(alpha = 1f - onBand.value)) }
                                     .drawBehind {
                                         // the bar lines, every fourth a little stronger
                                         val sc = scrollNow(); val first = (sc / barPx).toInt().coerceAtLeast(0)
@@ -237,21 +254,6 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                 Canvas(Modifier.fillMaxSize().padding(start = HEAD + GAP).clip(RoundedCornerShape(6.dp)).clearAndSetSemantics { }) {
                     val p = head.value
                     if (p != null) { val x = p.toFloat() * barPx - scrollNow(); if (x >= 0f && x <= size.width) drawLine(Tok.text, Offset(x, 0f), Offset(x, size.height), 2.dp.toPx()) }
-                }
-                // The selected track: a 2 dp outline in its own colour across its whole row (head and lane), never white (DESIGN.md "White is
-                // global, the track's colour is the track's"; decision 29), as Pads draws it. It glides to the newly selected row and draws
-                // nothing a finger can hit. While the tab pages slide the shell's travelling outline stands in for it (selectedTrackAnchor).
-                if (ui.selectedTrack in 1..6) {
-                    val rh = (maxHeight - GAP * 5) / 6
-                    val at = animatedFloat((ui.selectedTrack - 1).toFloat(), Dur.STATE)
-                    val travelling = LocalTabTravelling.current
-                    val colour = Tok.track[(ui.selectedTrack - 1) % Tok.track.size]
-                    Box(
-                        Modifier.fillMaxWidth().height(rh + 4.dp).offset { IntOffset(0, ((rh + GAP).toPx() * at.value - 2.dp.toPx()).toInt()) }
-                            .selectedTrackAnchor()
-                            .drawBehind { if (!travelling) drawRoundRect(colour, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx())) }
-                            .clearAndSetSemantics { },
-                    )
                 }
             }
         }
@@ -322,6 +324,8 @@ private fun BlockView(
     fun blockItems(): List<HoldItem> = buildList {
         val erases = !b.rest && b.pattern != null && (ui.uses[b.pattern] ?: 0) <= 1
         val old = "%02d".format(b.pattern ?: 0)
+        // the iPad's block menu opens with Edit pattern (decision 31: the full set): the Edit tab, on this block's pattern
+        if (!b.rest) add(HoldItem("Edit steps") { actions.selectTrack(b.track); actions.select(b.key); actions.edit(b) })
         add(HoldItem("Set pattern…", sub = if (b.rest) "REST" else "Pattern $old", children = {
             ui.kept.map { p ->
                 val n = "%02d".format(p)
@@ -337,6 +341,10 @@ private fun BlockView(
             listOf(HoldItem("REST") { actions.insert(b.track, b.id, 65) }) + ui.kept.map { p -> HoldItem("Pattern ${"%02d".format(p)}") { actions.insert(b.track, b.id, p) } }
         }))
         add(HoldItem("Select sound") { actions.openSounds(b.track) })
+        // the way to reorder that isn't a drag (WCAG 2.5.7), as the iPad's Move earlier / Move later
+        val at = mine.indexOfFirst { it.key == b.key }
+        add(HoldItem("Move earlier", enabled = at > 0) { actions.moveBy(b, -1) })
+        add(HoldItem("Move later", enabled = at in 0 until mine.size - 1) { actions.moveBy(b, 1) })
         val gone = if (b.rest) "the REST" else "pattern $old"
         add(HoldItem("Delete…", confirm = "Delete block: $gone (${barsText(b.length)}) from track ${b.track}" + if (erases) ". It is used nowhere else, so it's erased" else "") { actions.delete(b) })
         // a chain plays its patterns as one block; Chain joins this block to the next, Split takes a chain apart

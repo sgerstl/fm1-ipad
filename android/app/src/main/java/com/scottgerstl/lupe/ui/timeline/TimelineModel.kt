@@ -70,6 +70,8 @@ class TimelineActions(
     val newBlock: (track: Int) -> Unit,
     val chain: (BlockUi) -> Unit,
     val split: (BlockUi) -> Unit,
+    /** Open the Edit tab on this block's pattern (its first entry). */
+    val edit: (BlockUi) -> Unit = {},
 )
 
 private fun TimelineBlock.toUi(track: Int) = BlockUi(
@@ -124,6 +126,7 @@ fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions,
             newBlock = { core.send(com.scottgerstl.lupe.core.BlockNew(it)) },
             chain = { core.send(com.scottgerstl.lupe.core.BlockChain(it.track, it.id)) },
             split = { core.send(com.scottgerstl.lupe.core.BlockSplit(it.track, it.id)) },
+            edit = { core.send(com.scottgerstl.lupe.core.Intent.PadSelect(it.track, it.id)); core.send(com.scottgerstl.lupe.core.Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) },
         )
     }
     return Triple(ui, actions, head)

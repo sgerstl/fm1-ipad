@@ -49,7 +49,8 @@ class MainActivity : ComponentActivity() {
         reduceMotion = readReduceMotion()
         contentResolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
 
-        val core = (application as LupeApp).core
+        val app = application as LupeApp
+        val core = app.core
         // adb shell am start -n com.scottgerstl.lupe/.MainActivity --es scenario lost
         intent.getStringExtra("scenario")?.let { (core as? FakeLupeCore)?.play(it) }
 
@@ -62,8 +63,11 @@ class MainActivity : ComponentActivity() {
         val phone = PhoneSettings.from(this)
         setContent {
             LupeTheme(reduceMotion) {
-                CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone, com.scottgerstl.lupe.ui.page.LocalPictureCore provides core) {
-                    GatedHaptics(phone) { LupeShell(core) }
+                // the core on screen: the one that looks for the FM-1, or the demo once the no-FM-1 card's button starts it (decision 33)
+                val shown = app.core
+                val demo = com.scottgerstl.lupe.ui.shell.DemoControl(canStart = shown !is FakeLupeCore, inDemo = app.inDemo, start = { app.useDemo() }, leave = { app.leaveDemo() })
+                CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone, com.scottgerstl.lupe.ui.page.LocalPictureCore provides shown, com.scottgerstl.lupe.ui.shell.LocalDemo provides demo) {
+                    GatedHaptics(phone) { androidx.compose.runtime.key(shown) { LupeShell(shown) } }
                 }
             }
         }

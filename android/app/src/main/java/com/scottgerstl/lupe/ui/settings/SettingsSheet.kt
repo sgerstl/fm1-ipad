@@ -61,7 +61,8 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 import com.scottgerstl.lupe.ui.theme.unscaled
 
 /**
- * Settings, from the FM-1 key's menu (board 67): what the phone does (Slide to turn, the Magnifier, Haptics), and
+ * Settings, from the song-name menu (board 67; decision 33: the grouped sheet with both phones' options): the FM-1, Touch (Slide to turn,
+ * the Magnifier, Handedness, Haptics), Sound pages (Show graphics, Sound keys), and
  * Labs, the trials, each off until you switch it on. These replace the adb extras (`--es slide`, `--ez magnifier`),
  * which stay for testing. Everything is kept the moment it changes.
  */
@@ -82,7 +83,7 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         )
         Plain("Theme", "Follows the FM-1 (SKIFF)")
 
-        Section("Turning values")
+        Section("Touch")
         Text2("Slide to turn", "Which way a finger slides a value. Up and right raise it.")
         Segmented(
             options = SlideDirection.entries.map { it.title },
@@ -91,8 +92,15 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         ) { slide.chooseDirection(SlideDirection.entries[it]) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Magnifier", "A bigger copy of the value floats above your finger as you slide", slide.magnifier) { slide.chooseMagnifier(it) }
+        Text2("Handedness", if (phone.leftHanded) "Menus open to the right of your finger, so your hand doesn't cover them. The sound keys sit on the left."
+            else "Menus open to the left of your finger, so your hand doesn't cover them. The sound keys sit on the right.")
+        Segmented(options = listOf("Right-handed", "Left-handed"), selected = if (phone.leftHanded) 1 else 0, name = "Handedness") { phone.chooseLeftHanded(it == 1) }
+        Spacer(Modifier.height(8.dp))
         SwitchRow("Haptics", "On pads and value steps", phone.haptics) { phone.chooseHaptics(it) }
-        SwitchRow("Show graphics", "Turning a knob slides the dials up to show the page's picture; the Mix pages show theirs. Off: dials only", phone.showGraphics) { phone.chooseShowGraphics(it) }
+
+        Section("Sound pages")
+        SwitchRow("Show graphics", "Each sound page shows its picture with its dials, and the Mix pages show theirs. Off: dials only", phone.showGraphics) { phone.chooseShowGraphics(it) }
+        SwitchRow("Sound keys", "Off, sound pages open from the FM-1's own keys. On, FX SEL ENV LFO EDIT ARP stay down the side, so the phone can open them too", phone.soundKeys) { phone.chooseSoundKeys(it) }
 
         Column(Modifier.onGloballyPositioned { labsY = it.positionInParent().y.toInt() }) {
             Spacer(Modifier.height(12.dp))
