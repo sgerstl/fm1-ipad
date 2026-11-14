@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scottgerstl.lupe.core.BlockDelete
 import com.scottgerstl.lupe.core.BlockDuplicate
@@ -126,4 +127,14 @@ fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions,
         )
     }
     return Triple(ui, actions, head)
+}
+
+/**
+ * The Timeline tab's one entry point for the landscape shell (agreed with P2): it collects its own state from [core]
+ * and fills what it is given (the body under the header line; the shell has already inset it, so no window insets here).
+ */
+@Composable
+fun TimelineTab(core: LupeCore, modifier: Modifier = Modifier) {
+    val t = rememberTimeline(core)
+    TimelinePage(t.first, t.second, t.third, core.top.collectAsStateWithLifecycle(), modifier)
 }
