@@ -34,6 +34,8 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 25 | Tap Use the demo FM-1; then song name › Leave the demo | The app fills with the demo song and works; Leave the demo brings the card back | – | ☐ pass ☐ fail: |
 | 26 | In the demo, plug the FM-1 in; Leave the demo | Lupe shows the real FM-1 (it kept looking while the demo ran) | – | ☐ pass ☐ fail: |
 
+**What the building session saw on a screen:** only row 3's Pads page (the band under track 1, outlined slots A to H, the Store key and scenes), on its own emulator against the fake core. Everything else here (the Timeline's band, the hold menus and their slide rows, the Mix pop-up and its four pictures, Settings, the launch footer, the no-FM-1 card and the demo switch) was built and unit-tested but **not seen on any screen**: the emulator kept restarting under the Mac's load. Nothing was run on a Pixel or a real FM-1.
+
 **Not covered here:** TalkBack (release pass); the largest text size; the Sound keys switch does nothing until P4's rail reads it; Make unique, Copy to another track, Move to a named pad and the Patterns pool are not in the pad menu (the core has no way to ask for them yet).
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device".
