@@ -49,6 +49,8 @@ public final class PhoneCore {
     private var stampTask: Task<Void, Never>?
     /// The pulse count and when it was seen (ClockArea.swift), nil with no clock.
     var clockRef: (ticks: Int, atMs: Double)?
+    /// What was waiting for the launch point when the pads area was last published (ClockArea.logWaits).
+    var loggedWaits: Set<String> = []
     /// Whether writes may go to the FM-1 now (the link's read-only switch). Write intents are refused up front
     /// while false, so Session's optimistic copy never shows what the FM-1 didn't get.
     let canWrite: () -> Bool
@@ -85,7 +87,12 @@ public final class PhoneCore {
             // the clock reference the screens interpolate from (ClockArea.swift)
             AreaWatch(name: "clock", build: { [unowned self] in AreaJSON.encode(self.clockArea()) }, publish: publish),
             // Only once the FM-1 has been read: before that Session holds placeholder tracks, not the FM-1's.
-            AreaWatch(name: "pads", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.padsArea()) : nil }, publish: publish),
+            AreaWatch(name: "pads", build: { [unowned self] in
+                guard self.session.isConnected else { return nil }
+                let a = self.padsArea()
+                self.logWaits(a)
+                return AreaJSON.encode(a)
+            }, publish: publish),
             AreaWatch(name: "editor", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.editorArea()) : nil }, publish: publish),
             // Only while the FM-1's screen is on a sound page (nil otherwise: the last page stays; the shell says what shows).
             // shell.bottom only (tab and divider are Kotlin's): the sound page the FM-1 shows, else the editor
