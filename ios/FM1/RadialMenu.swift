@@ -20,18 +20,19 @@ struct RadialMenu: View {
     @State private var start = Date()
     @State private var scroll = ScrollPosition(y: 0)
     @State private var scrollY: CGFloat = 0
+    @AppStorage(Handedness.key) private var hand = Handedness.right
     @State private var confirming: Int?
     @State private var confirmAt = Date.distantPast
     @AccessibilityFocusState private var confirmFocused: Bool
 
     /// Under the header line (48 pt and its hairline), so no choice sits over the tabs.
     static let headerClear: CGFloat = 56
-    static let itemW: CGFloat = 236, itemH: CGFloat = 48, step: CGFloat = 56, hub: CGFloat = 32
+    static let itemW: CGFloat = 200, itemH: CGFloat = 48, step: CGFloat = 56, hub: CGFloat = 32
     /// The stalks (decision 36, Scott 2026-11-14): about a quarter of the first build's, so the options hug the circle.
     static let stalk: CGFloat = 22
     static var radius: CGFloat { hub + stalk }
     /// Rows above or below the circle's reach still sit this far out from the finger, so the column bends along the arc.
-    static let minReach: CGFloat = 14
+    static let minReach: CGFloat = 12
 
     private var colour: Color { tint.map { Theme.track[$0] } ?? Theme.text }
 
@@ -43,9 +44,11 @@ struct RadialMenu: View {
     static func scrolls(_ n: Int, _ h: CGFloat) -> Bool { CGFloat(n - 1) * step > window(h).upperBound - window(h).lowerBound }
 
     /// One option's near edge at centre height `cy`: out from the finger to where that height meets the circle of
-    /// `radius`, never nearer than `minReach`, so the column hugs the circle along its arc. Opens left near the right edge.
-    static func spot(_ x: CGFloat, _ y: CGFloat, cy: CGFloat, _ w: CGFloat) -> Spot {
-        let left = x > w - (radius + itemW + 24)
+    /// `radius`, never nearer than `minReach`, so the column hugs the circle along its arc. Android's side: left of the
+    /// finger for a right-handed player when there's room, else right; mirrored for the left hand (Settings › Handedness).
+    static func spot(_ x: CGFloat, _ y: CGFloat, cy: CGFloat, _ w: CGFloat, hand: Handedness) -> Spot {
+        let reach = radius + itemW + 24
+        let left = hand == .right ? x >= reach : x > w - reach
         let dy = cy - y
         let dx = max(minReach, sqrt(max(0, radius * radius - dy * dy)))
         let edge = left ? max(8 + itemW, x - dx) : min(w - 8 - itemW, x + dx)
@@ -76,12 +79,18 @@ struct RadialMenu: View {
         let win = Self.window(layer.height)
         // scrolling: the column's rows from the window's top, moved by the scroll; otherwise round the finger
         let centres = scrolling ? (0..<list.count).map { win.lowerBound + CGFloat($0) * Self.step - scrollY } : Self.fitted(at.y, list.count, layer.height)
-        let spots = centres.map { Self.spot(at.x, at.y, cy: $0, layer.width) }
+        let spots = centres.map { Self.spot(at.x, at.y, cy: $0, layer.width, hand: hand) }
         // a row scrolled past the window's edge fades over its own height (and its stalk with it)
+        let most = CGFloat(list.count - 1) * Self.step - (win.upperBound - win.lowerBound)
         let seen: [Double] = centres.map { cy in
             guard scrolling else { return 1 }
-            let over = max(win.lowerBound - cy, cy - win.upperBound)
-            return Double(min(1, max(0, 1 - over / (Self.itemH * 0.8))))
+            // Android's rule: the share of the row inside the view, at an edge with more beyond it; none where nothing is
+            let top = cy - Self.itemH / 2, bottom = cy + Self.itemH / 2
+            let viewTop = win.lowerBound - Self.itemH / 2, viewBottom = win.upperBound + Self.itemH / 2
+            var f: CGFloat = 1
+            if scrollY > 0.5, top < viewTop { f = min(f, (bottom - viewTop) / Self.itemH) }
+            if scrollY < most - 0.5, bottom > viewBottom { f = min(f, (viewBottom - top) / Self.itemH) }
+            return Double(min(1, max(0, f)))
         }
         TimelineView(.animation) { tl in
             // ms since it opened, at the Labs speed
@@ -129,11 +138,12 @@ struct RadialMenu: View {
                             Color.clear.contentShape(Rectangle()).onTapGesture { close() }
                             ForEach(Array(list.enumerated()), id: \.offset) { k, item in
                     let sp = spots[k]
-                    let d0 = 160 + Double(min(k, 8)) * 30
+                    let d0 = 160 + Double(min(k, 7)) * 30
                     let t = min(1, max(0, (e - d0 - 100) / 220))
                     let inP = reduceMotion ? fade : 1 - (1 - t) * (1 - t)
                     row(k, item, sp)
-                        .opacity(inP * (confirming != nil && confirming != k ? 0.3 : 1))
+                        .opacity(inP * (confirming != nil && confirming != k ? 0.3 : 1) * seen[k])
+                        .allowsHitTesting(seen[k] >= 0.5)
                         .scaleEffect(reduceMotion ? 1 : 0.96 + 0.04 * inP)
                         .offset(x: (sp.left ? sp.edgeX - Self.itemW : sp.edgeX) + (reduceMotion ? 0 : (sp.left ? 10 : -10) * (1 - inP)),
                                 y: CGFloat(k) * Self.step)
@@ -145,16 +155,11 @@ struct RadialMenu: View {
                     .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y }) { _, y in scrollY = y }
                     .scrollIndicators(.visible)
                     .frame(width: layer.width, height: win.upperBound - win.lowerBound + Self.itemH)
-                    .mask {
-                        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.12),
-                                               .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
-                                       startPoint: .top, endPoint: .bottom)
-                    }
                     .offset(y: win.lowerBound - Self.itemH / 2)
                 } else {
                     ForEach(Array(list.enumerated()), id: \.offset) { k, item in
                     let sp = spots[k]
-                    let d0 = 160 + Double(min(k, 8)) * 30
+                    let d0 = 160 + Double(min(k, 7)) * 30
                     let t = min(1, max(0, (e - d0 - 100) / 220))
                     let inP = reduceMotion ? fade : 1 - (1 - t) * (1 - t)
                     row(k, item, sp)
@@ -169,15 +174,8 @@ struct RadialMenu: View {
         .frame(width: layer.width, height: layer.height, alignment: .topLeading)
         .onAppear {
             start = Date()
-            // scrolling: open with the rows round the finger's height, as far as the column goes
-            let n = (shown.isEmpty ? items : shown).count
-            if Self.scrolls(n, layer.height) {
-                let win = Self.window(layer.height)
-                let natural = at.y - CGFloat(n - 1) * Self.step / 2
-                let most = CGFloat(n - 1) * Self.step - (win.upperBound - win.lowerBound)
-                let y = min(max(win.lowerBound - natural, 0), most)
-                scroll = ScrollPosition(y: y); scrollY = y
-            }
+            // scrolling: the first choice starts at the top (Android's)
+            scroll = ScrollPosition(y: 0); scrollY = 0
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
@@ -188,7 +186,8 @@ struct RadialMenu: View {
 
     private func row(_ k: Int, _ item: MenuItem, _ sp: Spot) -> some View {
         let asking = confirming == k
-        return Button { pick(k, item) } label: {
+        // a tap picks, never a drag that ends somewhere else (a drag to scroll ended on Clear and cleared a pad, 2026-11-14)
+        return Group {
             HStack(spacing: 8) {
                 if asking {
                     Text(item.confirm ?? item.title).font(.lupe(14, .semibold)).lineLimit(2).minimumScaleFactor(0.8)
@@ -216,8 +215,10 @@ struct RadialMenu: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .buttonStyle(PressSink())
-        .disabled(!item.enabled)
+        .onTapGesture { pick(k, item) }      // (a choice that can't be made: its words in the tertiary grey; pick() refuses it)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { pick(k, item) }
         .accessibilityLabel(asking ? "Confirm: \(item.confirm ?? item.title)" : item.title)
         .accessibilityAddTraits(item.checked ? .isSelected : [])
         .accessibilityFocused($confirmFocused, equals: true)
