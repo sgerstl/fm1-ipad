@@ -2,7 +2,8 @@ import SwiftUI
 
 // The phone's hold menu (design/boards/radial-menu.html; Android's HoldMenuHost, Scott 2026-11-14, decisions 31 and 36):
 // the iPad's and iPhone's options, drawn as a wheel. A filled circle in the track's colour at about 45 % over the page
-// grows under the finger (64 pt, an elastic grow-in: Labs › Hold menu spring); round it a thin rim, the wheel, and on a
+// grows under the finger (64 pt, an elastic grow-in: Labs › Hold menu spring); round it a thin rim, the wheel, linked
+// back to the hub by one spoke level with the finger (Scott's option A, 2026-11-14), and on a
 // short arc beyond the rim up to five choices, each on its own 22 pt stalk from the rim, so every stalk is the same short
 // length. More than five: a drag turns the wheel and the others roll into the arc along the curve, fading as they near
 // its ends; it opens with the first choice at the arc's top and settles on a choice when the finger lifts. Five or fewer
@@ -113,7 +114,9 @@ struct RadialMenu: View {
             let tn = wheel ? turn(tl.date) : 0
             // each choice's place on the arc, and how much of it shows: whole within the arc, fading past its ends
             let pos: [Double] = (0..<n).map { Double($0) - tn - Double(visible - 1) / 2 }
-            let spots = pos.map { Self.spot(p: $0, finger: at, mid: mid, left: left, w: layer.width) }
+            // the arc and its rim centre on the finger's x and the arc's middle (level with the finger unless the screen's edge moved it)
+            let centre = CGPoint(x: at.x, y: mid)
+            let spots = pos.map { Self.spot(p: $0, finger: centre, mid: mid, left: left, w: layer.width) }
             let seen: [Double] = pos.map { p in
                 guard wheel else { return 1 }
                 return min(1, max(0, 1 - (abs(p) - 2) / 0.8))
@@ -133,14 +136,24 @@ struct RadialMenu: View {
                     ctx.fill(circle, with: .color(SelectionTint.fill(tint ?? 0, percent: 45).opacity(tint == nil ? 0 : hubA)))
                     if tint == nil { ctx.fill(circle, with: .color(Theme.control.opacity(hubA))) }
                     ctx.stroke(circle, with: .color(colour.opacity(hubA)), lineWidth: 1.5)
-                    // the wheel: a thin rim round the hub, drawing round as the menu opens
+                    // the wheel: a thin rim round the arc's centre, drawing round as the menu opens, and one spoke from the hub
+                    // to the rim's middle (Scott's option A: the rim links the stalks back to the hub)
                     let rimP = reduceMotion ? 1 : min(1, max(0, (e - 100) / 260))
                     if rimP > 0 {
                         let rr = Self.rim * (reduceMotion ? 1 : 0.9 + 0.1 * rimP)
                         let base = left ? 180.0 : 0.0
+                        let ink = colour.opacity(0.55 * (reduceMotion ? fade : 1))
                         var rimPath = Path()
-                        rimPath.addArc(center: c, radius: rr, startAngle: .degrees(base - 70 * rimP), endAngle: .degrees(base + 70 * rimP), clockwise: false)
-                        ctx.stroke(rimPath, with: .color(colour.opacity(0.55 * (reduceMotion ? fade : 1))), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        rimPath.addArc(center: centre, radius: rr, startAngle: .degrees(base - 70 * rimP), endAngle: .degrees(base + 70 * rimP), clockwise: false)
+                        ctx.stroke(rimPath, with: .color(ink), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        let dir: CGFloat = left ? -1 : 1
+                        let rimMid = CGPoint(x: centre.x + dir * rr, y: centre.y)
+                        let vx = rimMid.x - c.x, vy = rimMid.y - c.y, len = max(1, sqrt(vx * vx + vy * vy))
+                        let from = CGPoint(x: c.x + vx / len * Self.hub, y: c.y + vy / len * Self.hub)
+                        var spoke = Path()
+                        spoke.move(to: from)
+                        spoke.addLine(to: CGPoint(x: from.x + (rimMid.x - from.x) * rimP, y: from.y + (rimMid.y - from.y) * rimP))
+                        ctx.stroke(spoke, with: .color(ink), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     }
                     for (k, sp) in spots.enumerated() where seen[k] > 0 {
                         let d0 = 160 + Double(min(max(0, k - Int(tn)), 7)) * 30
