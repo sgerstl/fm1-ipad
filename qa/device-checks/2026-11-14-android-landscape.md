@@ -4,7 +4,7 @@ Written by the session that built it (`CLAUDE.md`, rule 2). Scott runs it with t
 
 **Setup:** Skiff 2.5.1 on the FM-1 · Lupe Android build from this branch · USB cable · the phone lying on its side.
 **Back up first?** Yes for checks 13–16 and 19 (they write steps to the FM-1's pattern). Back up in Lupe › project ⌄ › Projects…, or pick a scratch pattern.
-**Note entry is provisional:** the keyboard's intents (`keyPlay`, `stepNote`, `stepChordNote`, `drumHit`) are my names until P1's core side lands; on the real FM-1 checks 13–16 and 18–19 do nothing until then.
+**Note entry** uses P1's intents (`setStepNotes`, `toggleStepNote`, `toggleHit`, `playNote`; P1's aae214f). On the real FM-1 checks 13–15 and 18–19 need P1's branch merged into this one. The phone sends no `playNote` while REC is armed and playing (the FM-1 would record it).
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
@@ -25,7 +25,7 @@ Written by the session that built it (`CLAUDE.md`, rule 2). Scott runs it with t
 | 15 | No step picked: tap keys; play the FM-1's own keys with a step picked | The phone's keys only play. The FM-1's keys never write the step | Yes | ☐ pass ☐ fail: |
 | 16 | ‹ › at the right of the strip | The keys move an octave | – | ☐ pass ☐ fail: |
 | 17 | Tap Lane | The keyboard gives way to one automation lane: pick a parameter, drag to draw (each step a lock ◆); over recorded motion it asks first, in place. Lane again brings the keys back | Yes (drawing) | ☐ pass ☐ fail: |
-| 18 | Edit, a kit pattern | Lanes down, 16 steps across in fours; tap a cell: a hit goes on or off | Yes | ☐ pass ☐ fail: |
+| 18 | Edit, a kit pattern | Lanes down, 16 steps across in fours; tap a cell: a hit goes on or off. Press a lane's name: it plays | Yes | ☐ pass ☐ fail: |
 | 19 | Hold a cell | It is picked without toggling (white ring); under the grid "SD · step 5 ✕" and boxes VELOCITY CHANCE RATCHET NUDGE that slide; PITCH and DECAY show "—" (not wired yet) | Yes | ☐ pass ☐ fail: |
 | 20 | Press FX on the FM-1 while on Edit | The dials area becomes "FX 1/7 FX" and the page's four dials; the keyboard stays. On MOD or LANES the tiles take the keyboard's place | – | ☐ pass ☐ fail: |
 | 21 | Press FX on the FM-1 while on Pads or Timeline | A short panel rises from the bottom with the header and four dials; HOME on the FM-1, or the back gesture, lowers it | – | ☐ pass ☐ fail: |
@@ -40,7 +40,7 @@ Written by the session that built it (`CLAUDE.md`, rule 2). Scott runs it with t
 - **A sound page's tiles take the keyboard's place** on Edit (MOD, LANES, SOUND, OPERATOR): the dials area has no room for them. The brief said the keyboard stays; it does on every page without tiles.
 - **A kit's panel is one row, 76 dp** (the hit's boxes, or the four sound dials with no header, or a sound page with its header beside the dials), so eight lanes keep rows of about 23 dp; six lanes get about 31. Eight lanes are a hair under the 24 dp floor in height.
 - **The Lane toggle is on the keyboard's header**, so kits (no keyboard) have no lane view yet.
-- **A lane name on a kit doesn't play or open its sound** yet (board note 8): there is no intent for it.
+- **A lane name on a kit plays it while pressed**; holding it for its sound (board note 8, decision 15) isn't wired.
 - **Select on Pads is gone** (the board has none): hold › Edit steps picks a pad for the editor and opens the Edit tab.
 - **The keyboard's colours** use existing tokens (text2Raised for white keys, panel for black, the track's colour when on the step): there are no keyboard tokens.
 - **Dials are 52 dp rings in an 84 × 74 dp target** everywhere now (HOME knobs, step dials, sound pages, the Mix buses), down from 60, to fit the panel.

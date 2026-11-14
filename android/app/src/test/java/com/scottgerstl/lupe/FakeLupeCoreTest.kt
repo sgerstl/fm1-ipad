@@ -66,27 +66,41 @@ class FakeLupeCoreTest {
     @Test fun aKeyWritesThePickedStepAndChordAddsAndTakesUpToFour() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.PadSelect(5, 1)); advanceTimeBy(10)   // Piano, a melodic track
-        core.send(com.scottgerstl.lupe.core.StepNote(2, 72)); advanceTimeBy(10)
-        assertEquals("C5", core.editor.value.steps[2].pitchText)
-        for (n in listOf(75, 79, 82)) core.send(com.scottgerstl.lupe.core.StepChordNote(2, n))
+        core.send(com.scottgerstl.lupe.core.SetStepNotes(2, listOf(72))); advanceTimeBy(10)
+        assertEquals(listOf(72), core.editor.value.steps[2].notes)
+        for (n in listOf(75, 79, 82)) core.send(com.scottgerstl.lupe.core.ToggleStepNote(2, n))
         advanceTimeBy(10)
-        assertEquals(4, core.editor.value.steps[2].pitchText.split(" ").size)
-        core.send(com.scottgerstl.lupe.core.StepChordNote(2, 84)); advanceTimeBy(10)    // a fifth: refused
-        assertEquals(4, core.editor.value.steps[2].pitchText.split(" ").size)
-        core.send(com.scottgerstl.lupe.core.StepChordNote(2, 75)); advanceTimeBy(10)    // tapped again: taken off
-        assertEquals(3, core.editor.value.steps[2].pitchText.split(" ").size)
+        assertEquals(4, core.editor.value.steps[2].notes.size)
+        core.send(com.scottgerstl.lupe.core.ToggleStepNote(2, 84)); advanceTimeBy(10)    // a fifth: the full step is left alone
+        assertEquals(4, core.editor.value.steps[2].notes.size)
+        core.send(com.scottgerstl.lupe.core.ToggleStepNote(2, 75)); advanceTimeBy(10)    // tapped again: taken off
+        assertEquals(listOf(72, 79, 82), core.editor.value.steps[2].notes)
+        core.send(com.scottgerstl.lupe.core.SetStepNotes(2, listOf(60, 62, 64, 65, 67))); advanceTimeBy(10)   // five: refused whole
+        assertEquals(listOf(72, 79, 82), core.editor.value.steps[2].notes)
         val before = core.editor.value.steps
-        core.send(com.scottgerstl.lupe.core.KeyPlay(60)); advanceTimeBy(10)             // no step picked: it only plays
+        core.send(com.scottgerstl.lupe.core.PlayNote(note = 60, on = true)); advanceTimeBy(10)      // playing writes nothing
         assertEquals(before, core.editor.value.steps)
+        assertEquals(4, core.editor.value.maxNotes)
     }
 
     @Test fun aKitCellTogglesItsHit() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.PadSelect(4, 1)); advanceTimeBy(10)   // Drum Kit
-        val had = "SD" in core.editor.value.steps[1].note.split(" ")
-        core.send(com.scottgerstl.lupe.core.DrumHit(1, "SD")); advanceTimeBy(10)
-        assertEquals(!had, "SD" in core.editor.value.steps[1].note.split(" "))
-        assertTrue(core.editor.value.drumLanes.isNotEmpty())
+        val had = core.editor.value.steps[1].hits.any { it.lane == 1 }
+        core.send(com.scottgerstl.lupe.core.ToggleHit(1, 1)); advanceTimeBy(10)
+        assertEquals(!had, core.editor.value.steps[1].hits.any { it.lane == 1 })
+        assertTrue(core.editor.value.kitLanes.isNotEmpty()); assertEquals(0, core.editor.value.maxNotes)
+        core.send(com.scottgerstl.lupe.core.SetStepNotes(1, listOf(60))); advanceTimeBy(10)   // refused on a kit
+        assertTrue(core.editor.value.steps[1].notes.isEmpty())
+    }
+
+    @Test fun theNoteEntryIntentsEncodeAsP1Reads() {
+        fun j(i: Intent) = com.scottgerstl.lupe.core.lupeJson.encodeToString(Intent.serializer(), i)
+        assertEquals("""{"intent":"setStepNotes","step":3,"notes":[60,64,67]}""", j(com.scottgerstl.lupe.core.SetStepNotes(3, listOf(60, 64, 67))))
+        assertEquals("""{"intent":"toggleHit","lane":2,"step":5}""", j(com.scottgerstl.lupe.core.ToggleHit(2, 5)))
+        assertEquals("""{"intent":"toggleStepNote","step":3,"note":64}""", j(com.scottgerstl.lupe.core.ToggleStepNote(3, 64)))
+        assertEquals("""{"intent":"playNote","note":60,"on":true}""", j(com.scottgerstl.lupe.core.PlayNote(note = 60, on = true)))
+        assertEquals("""{"intent":"playNote","lane":2,"on":false}""", j(com.scottgerstl.lupe.core.PlayNote(lane = 2, on = false)))
     }
 
     @Test fun launchWaitsWhilePlayingAndCountsInTheTopBar() = runTest(StandardTestDispatcher()) {

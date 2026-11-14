@@ -200,9 +200,18 @@ data class Step(
     /** A TIE step: the step (0-based) whose note it holds, else -1. Pasting into it or clearing it shortens that note,
      *  which the paste and clear confirms should say (Scott's run, 2026-11-14). */
     val heldFrom: Int = -1,
+    /** The step's notes as MIDI numbers, in the FM-1's order (up to four); empty on a kit step. */
+    val notes: List<Int> = emptyList(),
+    /** A kit step's hits. Skiff keeps no per-lane velocity: the step's velocity is every hit's. */
+    val hits: List<StepHit> = emptyList(),
+    /** The core's own word that the step carries a parameter lock. */
+    @SerialName("locked") val hasLock: Boolean = false,
 ) {
-    val locked: Boolean get() = values.any { it.locked }
+    val locked: Boolean get() = hasLock || values.any { it.locked }
 }
+
+@Serializable
+data class StepHit(val lane: Int, val accent: Boolean = false)
 
 @Serializable
 enum class LockMode {
@@ -234,6 +243,9 @@ data class EditorState(
     val lanes: List<String> = emptyList(),
     val lane: String = "",
     val laneValues: List<Int> = emptyList(),
-    /** A kit's lanes in its own order ("BD", "SD"…), for the drum grid. PROVISIONAL until P1 publishes them: empty means "the lanes the steps name". */
-    val drumLanes: List<String> = emptyList(),
+    /** How many notes a step takes: 4 on a note track (any note track takes chords), 0 on a kit. */
+    val maxNotes: Int = 4,
+    /** A kit's lanes in its own order ("BD", "SD"…) and the notes they play; both empty on a note track. */
+    val kitLanes: List<String> = emptyList(),
+    val kitNotes: List<Int> = emptyList(),
 )

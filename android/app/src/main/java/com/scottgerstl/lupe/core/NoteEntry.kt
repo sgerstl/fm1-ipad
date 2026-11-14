@@ -3,17 +3,24 @@ package com.scottgerstl.lupe.core
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Note entry from the phone's own keyboard strip (decision 28, board 73). Only these write: the FM-1's keys never write steps
-// from the phone (decision 5). PROVISIONAL names and shapes: P1 is adding the core side and will send the real ones.
+// Note entry from the phone's own keyboard strip and kit grid (decision 28, board 73); P1's shapes (aae214f). Only these write: the FM-1's
+// keys never write steps from the phone (decision 5). All four writes are refused while read-only and allowed while playing. They act on
+// the editor's track; [step] is 0–15.
 
-/** A key tapped with no step picked: it only plays the selected track. [note] is a MIDI number. */
-@Serializable @SerialName("keyPlay") data class KeyPlay(val note: Int) : Intent
+/**
+ * The step's notes become [notes] (MIDI numbers): one replaces what was there, two to four make a chord, more than four is refused whole,
+ * and none clears the note (the step's locks stay). Velocity, length and the other step bytes are kept. Refused on a kit track.
+ */
+@Serializable @SerialName("setStepNotes") data class SetStepNotes(val step: Int, val notes: List<Int>) : Intent
 
-/** A key tapped with a step picked and Chord off: the step's note becomes [note] (and it plays). */
-@Serializable @SerialName("stepNote") data class StepNote(val step: Int, val note: Int) : Intent
+/** Adds [note] to the step if it's absent and there's room (four), or takes it off; taking off the last empties the step. Refused on a kit track. */
+@Serializable @SerialName("toggleStepNote") data class ToggleStepNote(val step: Int, val note: Int) : Intent
 
-/** A key tapped with a step picked and Chord on: [note] is added to the step, or taken off if it is on it; at most the FM-1's four. */
-@Serializable @SerialName("stepChordNote") data class StepChordNote(val step: Int, val note: Int) : Intent
+/** A kit cell: the hit on [lane] (0–7) at [step] goes on or off, at the step's velocity. Refused on a note track. */
+@Serializable @SerialName("toggleHit") data class ToggleHit(val lane: Int, val step: Int) : Intent
 
-/** A kit cell tapped: the hit on [lane] at [step] goes on or off. */
-@Serializable @SerialName("drumHit") data class DrumHit(val step: Int, val lane: String) : Intent
+/**
+ * Plays [note], or a kit's [lane], on the editor's track; it writes nothing. Send [on] true on the key going down and false on its release (a
+ * note never released stops after 5 s). The FM-1 records what it is sent while REC is armed and playing, so the screen doesn't send it then.
+ */
+@Serializable @SerialName("playNote") data class PlayNote(val note: Int? = null, val lane: Int? = null, val on: Boolean) : Intent

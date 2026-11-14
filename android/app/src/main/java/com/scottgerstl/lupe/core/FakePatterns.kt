@@ -41,7 +41,8 @@ class FStep(
     fun toStep(drum: Boolean): Step {
         val note = if (!on) "" else if (drum) lanes.sorted().joinToString(" ") { FakeData.drumLanes[it] } else FakeData.noteName(midi)
         val pitch = if (!on) "" else if (drum) note else notes().joinToString(" ") { FakeData.noteName(it) }
-        return Step(on, note, if (drum) 0 else extra, length, velocity, chance, ratchet, cond, nudge, pitch, values.toList())
+        return Step(on, note, if (drum) 0 else extra, length, velocity, chance, ratchet, cond, nudge, pitch, values.toList(),
+            notes = if (drum) emptyList() else notes(), hits = if (drum && on) lanes.sorted().map { StepHit(it) } else emptyList())
     }
 
     companion object {

@@ -1,9 +1,9 @@
 package com.scottgerstl.lupe.ui.shell
 
-import com.scottgerstl.lupe.core.StepNote
-import com.scottgerstl.lupe.core.StepChordNote
-import com.scottgerstl.lupe.core.KeyPlay
-import com.scottgerstl.lupe.core.DrumHit
+import com.scottgerstl.lupe.core.SetStepNotes
+import com.scottgerstl.lupe.core.ToggleStepNote
+import com.scottgerstl.lupe.core.PlayNote
+import com.scottgerstl.lupe.core.ToggleHit
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.layout.offset
@@ -326,8 +326,8 @@ private fun colX(i: Int, w: Dp): Pair<Dp, Dp> {
     return (cw * i + GAP_IN * (i - i / 4) + GAP_BEAT * (i / 4)) to cw
 }
 
-/** The notes on a step as its PITCH text names them ("C5 D♯5"): MIDI numbers, root first. */
-private fun stepNotes(s: Step): List<Int> = if (!s.on) emptyList() else s.pitchText.ifEmpty { s.note }.split(" ").filter { it.isNotEmpty() }.map { com.scottgerstl.lupe.core.FakeData.parseNote(it) }
+/** The notes on a step: the core's MIDI numbers, or (an older recording) what its PITCH text names. */
+private fun stepNotes(s: Step): List<Int> = if (!s.on) emptyList() else s.notes.ifEmpty { s.pitchText.ifEmpty { s.note }.split(" ").filter { it.isNotEmpty() }.map { com.scottgerstl.lupe.core.FakeData.parseNote(it) } }
 
 /**
  * A melodic pattern (board 73 A and B): each step shows its note large (a chord: the root large and the other notes under it), its velocity
@@ -368,7 +368,7 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
     val haptic = LocalHapticFeedback.current
     val longPress = LocalViewConfiguration.current.longPressTimeoutMillis
     val fillOn = lerp(Tok.page, track, (18 + vel.value * 26) / 100f)
-    val notes = s.pitchText.ifEmpty { s.note }.split(" ").filter { it.isNotEmpty() }
+    val notes = if (s.notes.isNotEmpty()) s.notes.map { com.scottgerstl.lupe.core.FakeData.noteName(it) } else s.pitchText.ifEmpty { s.note }.split(" ").filter { it.isNotEmpty() }
     Box(
         Modifier.width(w).height(h)
             .graphicsLayer { translationY = -2.dp.toPx() * lift.value }
@@ -430,7 +430,8 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
  */
 @Composable
 private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, onPick: (Pair<String, Int>?) -> Unit) {
-    val lanes = ed.drumLanes.ifEmpty { ed.steps.flatMap { it.note.split(" ") }.filter { it.isNotEmpty() }.distinct() }.ifEmpty { listOf("—") }
+    val lanes = ed.kitLanes.ifEmpty { ed.steps.flatMap { it.note.split(" ") }.filter { it.isNotEmpty() }.distinct() }.ifEmpty { listOf("—") }
+    val top by core.top.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val gap = 3.dp
@@ -438,12 +439,15 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
         val labelW = 44.dp
         val gw = maxWidth - labelW
         Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-            lanes.forEach { lane ->
+            lanes.forEachIndexed { k, lane ->
                 Box(Modifier.fillMaxWidth().height(rh)) {
-                    BasicText(lane, Modifier.align(Alignment.CenterStart).width(labelW - 4.dp), style = LupeType.label.copy(fontSize = 13.sp, color = if (hit?.first == lane) Tok.text else Tok.text2Raised), maxLines = 1)
+                    // the lane's name plays it while pressed (not while recording: the FM-1 would record it)
+                    BasicText(lane, Modifier.align(Alignment.CenterStart).width(labelW - 4.dp)
+                        .semantics { role = Role.Button; contentDescription = "Play $lane" }
+                        .pointerInput(k) { detectTapGestures(onPress = { if (!(top.rec && top.playing)) { core.send(PlayNote(lane = k, on = true)); tryAwaitRelease(); core.send(PlayNote(lane = k, on = false)) } }) }, style = LupeType.label.copy(fontSize = 13.sp, color = if (hit?.first == lane) Tok.text else Tok.text2Raised), maxLines = 1)
                     for (i in 0 until 16) {
                         val s = ed.steps.getOrNull(i) ?: Step()
-                        val on = s.on && lane in s.note.split(" ")
+                        val on = s.on && (if (s.hits.isNotEmpty()) s.hits.any { it.lane == k } else lane in s.note.split(" "))
                         val picked = hit?.first == lane && hit.second == i
                         val (x, cw) = colX(i, gw)
                         val onF = animatedFloat(if (on) 1f else 0f, Dur.STATE)
@@ -460,12 +464,12 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                 .semantics(mergeDescendants = true) {
                                     role = Role.Button
                                     contentDescription = "$lane, step ${i + 1}" + (if (on) ", hit" else ", empty") + if (picked) ", picked" else ""
-                                    onClick { core.send(DrumHit(i, lane)); true }
+                                    onClick { core.send(ToggleHit(k, i)); true }
                                     customActions = listOf(CustomAccessibilityAction("Pick this hit without changing it") { onPick(lane to i); core.send(Intent.StepSelect(i)); true })
                                 }
-                                .pointerInput(lane, i) {
+                                .pointerInput(k, i) {
                                     detectTapGestures(
-                                        onTap = { core.send(DrumHit(i, lane)) },
+                                        onTap = { core.send(ToggleHit(k, i)) },
                                         onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i)) },
                                     )
                                 },
@@ -646,7 +650,14 @@ private fun KeyboardStrip(ed: EditorState, track: Color, core: LupeCore, picked:
     val base = (ui.octave + 1) * 12                        // C of the octave shown
     val whites = listOf(0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17)
     val blacks = listOf(0 to 1, 1 to 3, 3 to 6, 4 to 8, 5 to 10, 7 to 13, 8 to 15)   // after white [first]: semitone [second]
-    fun tap(midi: Int) = core.send(when { picked == null -> KeyPlay(midi); ed.chord -> StepChordNote(picked, midi); else -> StepNote(picked, midi) })
+    val top by core.top.collectAsStateWithLifecycle()
+    val max = ed.maxNotes.coerceAtLeast(1)
+    // a key going down plays (never while REC is armed and playing: the FM-1 would record it); with a step picked it also writes
+    fun down(midi: Int) {
+        if (picked != null) core.send(if (ed.chord) ToggleStepNote(picked, midi) else SetStepNotes(picked, listOf(midi)))
+        if (!(top.rec && top.playing)) core.send(PlayNote(note = midi, on = true))
+    }
+    fun up(midi: Int) { if (!(top.rec && top.playing)) core.send(PlayNote(note = midi, on = false)) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             Key({ core.send(Intent.ChordToggle) }, "Chord", width = 64.dp, height = 28.dp, minTarget = 32.dp, on = ed.chord, role = Role.Switch,
@@ -655,7 +666,7 @@ private fun KeyboardStrip(ed: EditorState, track: Color, core: LupeCore, picked:
             LaneKey(ui)
             Spacer(Modifier.width(8.dp))
             BasicText(
-                when { picked == null -> "Keys play the track"; ed.chord -> "Tap keys to add or take notes · ${onStep.size} of 4"; else -> "Tap a key: step ${picked + 1} plays it" },
+                when { picked == null -> "Keys play the track"; ed.chord -> "Tap keys to add or take notes · ${onStep.size} of $max"; else -> "Tap a key: step ${picked + 1} plays it" },
                 Modifier.weight(1f), style = LupeType.small.copy(color = Tok.text2Raised), maxLines = 1,
             )
             Key({ ui.octave = (ui.octave - 1).coerceAtLeast(0) }, "Keys an octave lower", width = 28.dp, height = 28.dp, minTarget = 32.dp, enabled = ui.octave > 0) { fg -> Chevron90(fg, true) }
@@ -670,8 +681,8 @@ private fun KeyboardStrip(ed: EditorState, track: Color, core: LupeCore, picked:
                 val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
                 Box(
                     Modifier.offset(x = kw * i).width(kw).fillMaxHeight().padding(1.dp).clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp)).drawBehind { drawRect(lerp(Tok.text2Raised, track, lit.value)) }
-                        .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = name + if (on) ", on the step" else "" }
-                        .pointerInput(midi, picked, ed.chord) { detectTapGestures { tap(midi) } },
+                        .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = name + if (on) ", on the step" else ""; onClick { down(midi); up(midi); true } }
+                        .pointerInput(midi, picked, ed.chord) { detectTapGestures(onPress = { down(midi); tryAwaitRelease(); up(midi) }) },
                 ) { BasicText(name, Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp), style = LupeType.label.copy(fontSize = 11.sp, color = Tok.onColour), maxLines = 1) }
             }
             blacks.forEach { (after, semi) ->
@@ -680,8 +691,8 @@ private fun KeyboardStrip(ed: EditorState, track: Color, core: LupeCore, picked:
                 Box(
                     Modifier.offset(x = kw * (after + 1) - kw * 0.32f).width(kw * 0.64f).fillMaxHeight(0.58f).clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
                         .drawBehind { drawRect(Tok.chicletEdge); drawRect(lerp(Tok.panel, track, lit.value), Offset(1.dp.toPx(), 0f), Size(size.width - 2.dp.toPx(), size.height - 1.dp.toPx())) }
-                        .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = name + if (on) ", on the step" else "" }
-                        .pointerInput(midi, picked, ed.chord) { detectTapGestures { tap(midi) } },
+                        .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = name + if (on) ", on the step" else ""; onClick { down(midi); up(midi); true } }
+                        .pointerInput(midi, picked, ed.chord) { detectTapGestures(onPress = { down(midi); tryAwaitRelease(); up(midi) }) },
                 )
             }
         }
