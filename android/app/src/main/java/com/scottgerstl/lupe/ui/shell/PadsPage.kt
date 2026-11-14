@@ -56,6 +56,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.stateDescription
@@ -228,10 +229,17 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
     val soundsHost = LocalSoundsHost.current
     val haptic = LocalHapticFeedback.current
     val longPress = androidx.compose.ui.platform.LocalViewConfiguration.current.longPressTimeoutMillis
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
     var pressed by remember { mutableStateOf(false) }
     val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100)
-    Box(Modifier.width(HEAD_W).height(h)) {
+    val holdMenu = LocalHoldMenu.current
+    var headCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    // the head's hold menu (the iPad's rows): its sounds, mute, solo
+    fun headItems() = listOf(
+        HoldItem("Sounds…", sub = engine.ifEmpty { null }) { soundsHost.open(r.track) },
+        HoldItem("Mute", checked = r.muted) { core.send(Intent.TrackMute(r.track)) },
+        HoldItem("Solo", sub = "Plays this track alone", checked = solo) { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)) },
+    )
+    Box(Modifier.width(HEAD_W).height(h).onGloballyPositioned { headCoords = it }) {
         Row(
             Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
                 .drawBehind {
@@ -241,25 +249,14 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
                 .semantics(mergeDescendants = true) {
                     role = Role.Button; contentDescription = "Track ${r.track}, $sound" + (if (engine.isNotEmpty()) ", $engine" else "") + (if (solo) ", solo" else ""); stateDescription = if (selected) "Selected" else ""
                     onClick("Select track") { core.send(Intent.TrackSelect(r.track)); true }
-                    onLongClick("Track menu") { menuAt = Offset(40f, 20f); true }
+                    onLongClick("Track menu") { headCoords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), color, headItems()) }; true }
                     // every hold has a non-hold way in (WCAG 2.5.7)
                     customActions = listOf(
                         CustomAccessibilityAction("Choose a sound for this track") { soundsHost.open(r.track); true },
                         CustomAccessibilityAction(if (solo) "Solo off" else "Solo") { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)); true },
                     )
                 }
-                .pointerInput(r.track) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        pressed = true
-                        var cancelled = false
-                        val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
-                        pressed = false
-                        if (cancelled) return@awaitEachGesture
-                        if (up != null) core.send(Intent.TrackSelect(r.track))
-                        else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = down.position; waitForUpOrCancellation() }
-                    }
-                },
+                .tapOrHoldMenu(r.track, color, { headItems() }, onTap = { core.send(Intent.TrackSelect(r.track)) }, pressed = { pressed = it }),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(30.dp).fillMaxHeight().background(color), contentAlignment = Alignment.Center) { BasicText("${r.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
@@ -275,12 +272,6 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
         }
         // a solo that waits for the launch point: the head's outline drawn as it comes, in the track's colour
         if (r.soloPending) LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) }, color, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
-        LupeMenu(menuAt != null, { menuAt = null }, width = 224.dp, at = menuAt) {
-            MenuHeading("${r.track} $sound")
-            MenuRow("Sounds…", { menuAt = null; soundsHost.open(r.track) }, sub = engine.ifEmpty { null })
-            MenuRow("Mute", { core.send(Intent.TrackMute(r.track)); menuAt = null }, checked = r.muted)
-            MenuRow("Solo", { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)); menuAt = null }, checked = solo, sub = "Plays this track alone")
-        }
     }
 }
 
@@ -342,9 +333,33 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
     var pressed by remember { mutableStateOf(false) }
     val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100)
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
     val letter = ('A' + idx).toString()
     val empty = e.kind == PadKind.Empty
+    val holdMenu = LocalHoldMenu.current
+    val soundsHost = LocalSoundsHost.current
+    var padCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    /**
+     * The pad's hold menu (the iPad's rows): Edit steps, Select sound, New, Set pattern, Clear. Set lists only the kept patterns (Skiff's LIST SET
+     * refuses an empty number; "New pattern" is the way to a new one). Clear asks in place only when it would erase a pattern nothing else uses;
+     * if another entry names it, the pattern stays and the entry clears at once, as on the iPad.
+     */
+    fun padItems(): List<HoldItem> = buildList {
+        val others = if (e.kind == PadKind.Pattern && e.pattern != null) otherUsers(pads, row.track, idx, e.pattern) else emptyList()
+        if (e.kind == PadKind.Pattern) {
+            add(HoldItem("Edit steps") { core.send(Intent.PadSelect(row.track, idx)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
+            // the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
+            add(HoldItem("Select sound", sub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, idx)); soundsHost.open(row.track, letter) })
+        }
+        if (empty) add(HoldItem("New pattern") { core.send(Intent.PadNew(row.track, idx)) })
+        val kept = keptPatterns(pads)
+        add(HoldItem("Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else null, enabled = kept.isNotEmpty(),
+            children = { kept.map { p -> HoldItem("Pattern %02d".format(p), checked = e.pattern == p) { core.send(Intent.PadSet(row.track, idx, p)) } } }))
+        if (!empty) {
+            val erases = e.kind == PadKind.Pattern && others.isEmpty()
+            add(HoldItem("Clear", sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null,
+                confirm = if (erases) "Clear $letter: erases pattern %02d".format(e.pattern ?: 0) else null) { core.send(Intent.PadClear(row.track, idx)) })
+        }
+    }
     val what = when (e.kind) { PadKind.Empty -> "empty"; PadKind.Rest -> "rest"; PadKind.Pattern -> "pattern ${e.pattern}" }
     val stateWord = when (e.play) {
         PadPlay.Playing -> ", playing" + if (row.muted) " but muted" else ""
@@ -357,7 +372,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     // a tap selects the pad and its track (the editor follows) and still launches it (decision 29)
     fun tap() { core.send(Intent.PadSelect(row.track, idx)); if (!selectMode) core.send(Intent.PadTap(row.track, idx)) }
 
-    Box(modifier.width(PAD_W).height(h)) {
+    Box(modifier.width(PAD_W).height(h).onGloballyPositioned { padCoords = it }) {
         Box(
             Modifier.matchParentSize()
                 .drawBehind {
@@ -383,7 +398,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     role = Role.Button
                     contentDescription = desc
                     onClick { tap(); true }
-                    onLongClick("Pad menu") { menuAt = Offset(40f, 20f); true }
+                    onLongClick("Pad menu") { padCoords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), color, padItems()) }; true }
                     // every long-press has a non-hold way in (WCAG 2.5.7)
                     customActions = buildList {
                         if (e.kind == PadKind.Pattern) { add(CustomAccessibilityAction("Edit steps") { core.send(Intent.PadSelect(row.track, idx)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); true }); add(CustomAccessibilityAction("Select sound") { core.send(Intent.PadSelectSound(row.track, idx)); true }) }
@@ -391,13 +406,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                         if (!empty) add(CustomAccessibilityAction("Clear pad") { core.send(Intent.PadClear(row.track, idx)); true })
                     }
                 }
-                .pointerInput(row.track, idx, selectMode, empty) {
-                    detectTapGestures(
-                        onPress = { pressed = true; tryAwaitRelease(); pressed = false },
-                        onTap = { tap() },
-                        onLongPress = { at -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = at },
-                    )
-                },
+                .tapOrHoldMenu(Triple(row.track, idx, e.kind), color, { padItems() }, onTap = { tap() }, pressed = { pressed = it }),
         ) {
             val fg = Color.lerp(Tok.text, Tok.onColour, fill.value)
             if (e.kind == PadKind.Rest) {
@@ -422,13 +431,10 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             // waiting for the launch point: the outline drawn as that comes, in the track's colour; dashed when there is no clock
             if (wait.value > 0f) LaunchTrace({ clock.value.ticksLeft(e.launchTick ?: row.launchTick, android.os.SystemClock.uptimeMillis()) }, color, 8.dp, 2.dp, Modifier.matchParentSize().graphicsLayer { alpha = wait.value })
         }
-        PadMenu(row, idx, e, pads, menuAt, { menuAt = null }, core)
     }
 }
 
 private fun Color.Companion.lerp(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
-
-private enum class PadMenuMode { Root, Set, ClearConfirm }
 
 /** Where else a pattern is used: "T2 B". Skiff erases a pattern only when no other entry names it (P1, 2026-11-14). */
 private fun otherUsers(pads: PadsState, track: Int, idx: Int, pattern: Int): List<String> =
@@ -437,65 +443,6 @@ private fun otherUsers(pads: PadsState, track: Int, idx: Int, pattern: Int): Lis
 /** The pattern numbers the FM-1 holds: from the core, or (an older recording) the ones the pads name. */
 private fun keptPatterns(pads: PadsState): List<Int> =
     pads.kept.ifEmpty { pads.rows.flatMap { r -> r.entries.mapNotNull { if (it.kind == PadKind.Pattern) it.pattern else null } }.distinct().sorted() }
-
-/**
- * The pad's hold menu, opened beside the finger: Edit steps, Select sound, New, Set, Clear. Set lists only the
- * kept patterns (Skiff's LIST SET refuses an empty number; "New pattern" is the way to a new one), a list so no
- * tap can be taken for half a double tap. Clear asks only when it would erase a pattern nothing else uses; if
- * another entry names it, the pattern stays and the entry clears at once, as on the iPad.
- */
-@Composable
-private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, pads: PadsState, at: Offset?, close: () -> Unit, core: LupeCore) {
-    var mode by remember { mutableStateOf(PadMenuMode.Root) }
-    var armedAt by remember { mutableStateOf(0L) }
-    val open = at != null
-    // start from the root each time it opens
-    if (!open && mode != PadMenuMode.Root) mode = PadMenuMode.Root
-    val letter = ('A' + idx).toString()
-    val soundsHost = LocalSoundsHost.current
-    val others = if (e.kind == PadKind.Pattern && e.pattern != null) otherUsers(pads, row.track, idx, e.pattern) else emptyList()
-    LupeMenu(open, { close() }, width = 240.dp, at = at) {
-        LupeCrossfade(mode) { m ->
-            Column {
-                when (m) {
-                    PadMenuMode.Root -> {
-                        if (e.kind == PadKind.Pattern) {
-                            MenuRow("Edit steps", { core.send(Intent.PadSelect(row.track, idx)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); close() })
-                            // opens the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
-                            MenuRow("Select sound", { core.send(Intent.PadSelectSound(row.track, idx)); close(); soundsHost.open(row.track, ('A' + idx).toString()) })
-                        }
-                        if (e.kind == PadKind.Empty) MenuRow("New pattern", { core.send(Intent.PadNew(row.track, idx)); close() })
-                        MenuRow("Set pattern…", { mode = PadMenuMode.Set })
-                        if (e.kind != PadKind.Empty) {
-                            val erases = e.kind == PadKind.Pattern && others.isEmpty()
-                            MenuRow("Clear", { if (erases) { mode = PadMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() } else { core.send(Intent.PadClear(row.track, idx)); close() } },
-                                sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null)
-                        }
-                    }
-                    PadMenuMode.Set -> {
-                        val kept = keptPatterns(pads)
-                        MenuHeading("Pattern for $letter on ${row.name}")
-                        if (kept.isEmpty()) BasicText("No patterns yet. Use New pattern on an empty pad.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = LupeType.body.copy(fontSize = 14.sp))
-                        kept.forEach { p -> MenuRow("Pattern %02d".format(p), { core.send(Intent.PadSet(row.track, idx, p)); close() }, checked = e.pattern == p) }
-                        MenuRow("Back", { mode = PadMenuMode.Root })
-                    }
-                    PadMenuMode.ClearConfirm -> {
-                        // nothing else names this pattern, so Clear erases it: a button outlined in REC red that says so; it ignores taps for 0.4 s
-                        val words = "Clear entry $letter on T${row.track} ${row.name}. Pattern %02d is used nowhere else, so it's erased; can't be undone".format(e.pattern ?: 0)
-                        Box(
-                            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
-                                .drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
-                                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Confirm: $words" }
-                                .pointerInput(Unit) { detectTapGestures { if (System.currentTimeMillis() - armedAt > 400) { core.send(Intent.PadClear(row.track, idx)); close() } } }
-                                .padding(12.dp),
-                        ) { BasicText(words, style = LupeType.key) }
-                        MenuRow("Cancel", { mode = PadMenuMode.Root })
-                    }
-                }
-            }
-        }
-    }
-}
 
 /** The playing pad's pass bar: [progress] is read every frame, so it glides. */
 @Composable

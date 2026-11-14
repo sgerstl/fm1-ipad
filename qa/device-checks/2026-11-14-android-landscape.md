@@ -121,3 +121,28 @@ Chosen or left open:
 - **The picture is 110 dp tall** (76 on a kit). FM6's ALL OPS chart is cramped at that height: operator boxes on two rows overlap.
 - **Tile pages** (MOD, LANES) have tiles, not pictures, so nothing slides there. OPERATOR and SOUND show their picture as well as their tiles.
 - The SLICES card is not restored (it was words, not a picture).
+
+## The hold menu and the track thread (the two mockups Scott approved, 2026-11-14)
+
+Built; tests pass and the APK builds. **Seen on my emulator with the fake core:** the hold menu on a pad (the circle under the finger, the lines, the choices, Set pattern's second level with "More…"), a tap outside closing it, and the thread resting round Edit's step row. **Not seen:** the drag-onto-a-choice pick, the elastic grow-in in motion, the thread travelling, anything on the real FM-1.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 53 | Hold a pad (about a third of a second) | A filled circle in the track's colour grows exactly under your finger (64 dp, springing past its size and back), no white dot; lines run out one by one from its edge to the choices, each ending in a small node | – | ☐ pass ☐ fail: |
+| 54 | Keep the finger down, slide onto a choice, let go | The choice lights (its line goes white, a tick) and is picked in the one gesture | – | ☐ pass ☐ fail: |
+| 55 | Hold, let go on nothing, then tap a choice; hold again and tap outside | The menu stays for the tap; outside closes it (choices and lines fade, the circle shrinks out faster than it came) | – | ☐ pass ☐ fail: |
+| 56 | Hold a pad near the right edge and near the bottom | The choices open to the left, and stay on the screen | – | ☐ pass ☐ fail: |
+| 57 | Hold a pad › Clear, where nothing else uses its pattern | Clear turns into a red-outlined button naming what goes; the others dim; a quick second tap does nothing; a tap after 0.4 s clears | Yes | ☐ pass ☐ fail: |
+| 58 | Hold a pad › Set pattern… | A second set of choices in the same place: the kept patterns, the current one ticked, "More…" for the rest | Yes | ☐ pass ☐ fail: |
+| 59 | Hold a track head; hold an empty slot; hold a used USER slot in Sounds | The same menu: Sounds…, Mute, Solo; New pattern, Set pattern…; Erase user slot | – | ☐ pass ☐ fail: |
+| 60 | Settings › Labs › HOLD MENU · SPRING and · SPEED | Spring 0 is a plain ease-out, 100 the biggest overshoot (default 60); Speed 100 is the mockup's timing (50 to 200) | – | ☐ pass ☐ fail: |
+| 61 | Switch tabs | The pages slide in the tab's direction; the selected track's outline in its colour never leaves the screen: it travels from the Pads row to Edit's step row (or the Timeline lane) and lands with the incoming page. Edit's step row keeps the outline at rest | – | ☐ pass ☐ fail: |
+| 62 | Settings › Labs › TAB CHANGE · MS | 380 by default, 150 to 700 | – | ☐ pass ☐ fail: |
+| 63 | Remove animations on: hold a pad; switch tabs | The menu only fades in and out; the pages cross-fade and the outline cross-fades between its two places | – | ☐ pass ☐ fail: |
+
+Chosen or left open:
+- **The Mix row's hold menu is unchanged** (the old menu beside the finger): its rows are sliders (PAN, the reverb send), which the hold menu's pick-and-go choices can't be.
+- **The Timeline's block menus are P4's** (`ui/timeline`): `Modifier.tapOrHoldMenu` and `HoldItem` are public for them.
+- **More than six choices** go behind "More…" (six fit the screen's height at 56 dp apart).
+- **TalkBack** opens the same choices from the item's long-click action, at its centre; each choice is a button.
+- The Step ⋯, project, Loop and readout menus open on a tap, so they keep the plain menu.

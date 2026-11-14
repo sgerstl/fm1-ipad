@@ -76,9 +76,10 @@ fun LupeShell(core: LupeCore) {
     val magnifier = remember { MagnifierState() }
     val sheets = remember { SheetHost() }
     val soundsHost = remember { SoundsHost() }
+    val holdMenu = remember { HoldMenuState() }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu) {
         Column(
             Modifier.fillMaxSize()
                 .greyedBy { grey.value }
@@ -116,7 +117,7 @@ fun LupeShell(core: LupeCore) {
             )
         }
         // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
-        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost) {
+        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu) {
             SettingsSheet(link, fake = core is com.scottgerstl.lupe.core.FakeLupeCore)
             val projects = rememberProjects(core)
             ProjectsSheet(projects.first, projects.second)
@@ -133,6 +134,8 @@ fun LupeShell(core: LupeCore) {
                 lastRequest?.let { com.scottgerstl.lupe.ui.sounds.SoundsBrowser(core, it, { soundsHost.close() }) }
             }
         }
+        // the hold menu: over the page and the sheets, under the finger that opened it
+        HoldMenuHost(holdMenu)
         // the Magnifier floats over everything, above the finger
         MagnifierHost(magnifier)
     }

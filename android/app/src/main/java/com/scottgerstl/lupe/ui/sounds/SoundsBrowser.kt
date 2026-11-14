@@ -1,5 +1,6 @@
 package com.scottgerstl.lupe.ui.sounds
 
+import com.scottgerstl.lupe.ui.shell.tapOrHoldMenu
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -141,7 +142,7 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
                                 text = if (u.used) u.name else "${u.slot + 1} · empty", current = u.current, dim = !u.used && !saving, colour = colour,
                                 description = "User slot ${u.slot + 1}, " + if (u.used) u.name else "empty", state = if (u.current) "Playing on this track" else "",
                                 // held: its menu beside the finger, Erase asked in place (a used slot only)
-                                menu = if (u.used) { close -> MenuRow("Erase user slot ${u.slot + 1}…", { close(); confirmSlot = SlotConfirm(u.slot, System.currentTimeMillis(), true) }) } else null,
+                                menu = if (u.used) ({ listOf(com.scottgerstl.lupe.ui.shell.HoldItem("Erase user slot ${u.slot + 1}…") { confirmSlot = SlotConfirm(u.slot, System.currentTimeMillis(), true) }) }) else null,
                                 actionLabel = if (u.used) "Erase user slot ${u.slot + 1}" else null,
                                 onAction = { confirmSlot = SlotConfirm(u.slot, System.currentTimeMillis(), true) },
                             ) {
@@ -224,10 +225,9 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
 @Composable
 private fun Tile(
     text: String, current: Boolean, dim: Boolean, colour: androidx.compose.ui.graphics.Color, description: String, state: String,
-    menu: (@Composable (close: () -> Unit) -> Unit)? = null, actionLabel: String? = null, onAction: () -> Unit = {}, onTap: () -> Unit,
+    menu: (() -> List<com.scottgerstl.lupe.ui.shell.HoldItem>)? = null, actionLabel: String? = null, onAction: () -> Unit = {}, onTap: () -> Unit,
 ) {
     val lit = animatedFloat(if (current) 1f else 0f, Dur.STATE)
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
     Box(Modifier.fillMaxWidth().height(40.dp)) {
         Box(
             Modifier.matchParentSize().clip(RoundedCornerShape(8.dp))
@@ -238,7 +238,7 @@ private fun Tile(
                     // every hold has a non-hold way in (WCAG 2.5.7)
                     if (actionLabel != null) customActions = listOf(CustomAccessibilityAction(actionLabel) { onAction(); true })
                 }
-                .pointerInput(onTap, menu != null) { detectTapGestures(onTap = { onTap() }, onLongPress = { at -> if (menu != null) menuAt = at }) }
+                .then(if (menu != null) Modifier.tapOrHoldMenu(text, colour, menu, onTap) else Modifier.pointerInput(onTap) { detectTapGestures(onTap = { onTap() }) })
                 .padding(horizontal = 10.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -248,6 +248,5 @@ private fun Tile(
                 drawPath(path, Tok.text, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
-        if (menu != null) LupeMenu(menuAt != null, { menuAt = null }, width = 232.dp, at = menuAt) { menu { menuAt = null } }
     }
 }
