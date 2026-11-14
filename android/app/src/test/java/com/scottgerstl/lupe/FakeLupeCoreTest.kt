@@ -63,6 +63,32 @@ class FakeLupeCoreTest {
         assertEquals(com.scottgerstl.lupe.core.BottomKind.Editor, core.shell.value.bottom.kind)
     }
 
+    @Test fun aKeyWritesThePickedStepAndChordAddsAndTakesUpToFour() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.PadSelect(5, 1)); advanceTimeBy(10)   // Piano, a melodic track
+        core.send(com.scottgerstl.lupe.core.StepNote(2, 72)); advanceTimeBy(10)
+        assertEquals("C5", core.editor.value.steps[2].pitchText)
+        for (n in listOf(75, 79, 82)) core.send(com.scottgerstl.lupe.core.StepChordNote(2, n))
+        advanceTimeBy(10)
+        assertEquals(4, core.editor.value.steps[2].pitchText.split(" ").size)
+        core.send(com.scottgerstl.lupe.core.StepChordNote(2, 84)); advanceTimeBy(10)    // a fifth: refused
+        assertEquals(4, core.editor.value.steps[2].pitchText.split(" ").size)
+        core.send(com.scottgerstl.lupe.core.StepChordNote(2, 75)); advanceTimeBy(10)    // tapped again: taken off
+        assertEquals(3, core.editor.value.steps[2].pitchText.split(" ").size)
+        val before = core.editor.value.steps
+        core.send(com.scottgerstl.lupe.core.KeyPlay(60)); advanceTimeBy(10)             // no step picked: it only plays
+        assertEquals(before, core.editor.value.steps)
+    }
+
+    @Test fun aKitCellTogglesItsHit() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.PadSelect(4, 1)); advanceTimeBy(10)   // Drum Kit
+        val had = "SD" in core.editor.value.steps[1].note.split(" ")
+        core.send(com.scottgerstl.lupe.core.DrumHit(1, "SD")); advanceTimeBy(10)
+        assertEquals(!had, "SD" in core.editor.value.steps[1].note.split(" "))
+        assertTrue(core.editor.value.drumLanes.isNotEmpty())
+    }
+
     @Test fun launchWaitsWhilePlayingAndCountsInTheTopBar() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.Play); advanceTimeBy(10)
