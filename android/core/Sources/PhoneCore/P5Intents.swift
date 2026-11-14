@@ -9,7 +9,7 @@ import SloopKit
 extension PhoneCore {
     func handle(_ i: P5Intent) {
         if i.writes && !canWrite() {
-            log("read-only: \(i) not sent (allow writes to send it)")
+            refuseReadOnly("\(i)")
             return
         }
         let s = session
@@ -64,7 +64,7 @@ extension PhoneCore {
             s.loadPreset(engine: e, index: p)
         case .pickUser(let slot):
             if let entry = soundsEntry { setEntrySound(entry, SloopKit.EntrySound(s0: 64 + slot, s1: 0)); return }
-            guard let p = s.userPresets.first(where: { $0.slot == slot }) else { log("user slot \(slot + 1) is empty"); return }
+            guard let p = s.userPresets.first(where: { $0.slot == slot }) else { refuse("User slot \(slot + 1) is empty, so there is no sound to load."); return }
             guard selectSoundsTrack() else { return }
             s.loadUserPreset(p)
         case .clearEntrySound:
@@ -76,31 +76,31 @@ extension PhoneCore {
                 log("user slot \(slot + 1) holds \(old.name): the screen must confirm before replacing it"); return
             }
             guard selectSoundsTrack() else { return }
-            Task { let rc = await s.storeUserPreset(slot: slot, name: name); if rc != 0 { log("FM-1 refused SAVE into slot \(slot + 1) (rc \(rc))") } }
+            Task { let rc = await s.storeUserPreset(slot: slot, name: name); if rc != 0 { refuse("The FM-1 refused to save the sound into slot \(slot + 1) (code \(rc)). Try again, or pick another slot.") } }
         case .eraseUser(let slot, let confirmed):
             guard confirmed else { log("erasing user slot \(slot + 1) needs the screen's confirm"); return }
-            Task { let rc = await s.eraseUserPreset(slot: slot); if rc != 0 { log("FM-1 refused erasing slot \(slot + 1) (rc \(rc))") } }
+            Task { let rc = await s.eraseUserPreset(slot: slot); if rc != 0 { refuse("The FM-1 refused to erase slot \(slot + 1) (code \(rc)). Try again.") } }
 
         // MARK: projects (the FM-1's four slots)
         case .projectLoad(let slot, let confirmed):
-            guard s.skiffProjects?.slots[safe: slot]?.used == true else { log("project slot \(slot + 1) is empty"); return }
+            guard s.skiffProjects?.slots[safe: slot]?.used == true else { refuse("Project slot \(slot + 1) is empty, so there is nothing to load."); return }
             if s.skiffProjects?.changed == true, !confirmed {
                 log("the music has unsaved changes: loading slot \(slot + 1) loses them, so the screen must confirm"); return
             }
-            projectOp { if !(await s.loadSkiffProject(slot: slot)) { self.log("FM-1 didn't load slot \(slot + 1)") } }
+            projectOp { if !(await s.loadSkiffProject(slot: slot)) { self.refuse("The FM-1 didn't load project slot \(slot + 1). Stop playback and try again.") } }
         case .projectSave(let confirmed):
-            guard let slot = s.skiffProjects?.musicSlot else { log("the music has no slot yet: use Save as"); return }
+            guard let slot = s.skiffProjects?.musicSlot else { refuse("This music has no project slot yet. Use Save as to pick one."); return }
             guard confirmed else { log("saving replaces what slot \(slot + 1) held: the screen must confirm"); return }
             let name = s.skiffProjects?.name ?? ""
-            projectOp { let rc = await s.saveSkiffProject(slot: slot, name: name); if rc != 0 { self.log("FM-1 refused the save (rc \(rc))") } }
+            projectOp { let rc = await s.saveSkiffProject(slot: slot, name: name); if rc != 0 { self.refuse("The FM-1 refused the save (code \(rc)). Stop playback and try again.") } }
         case .projectSaveAs(let slot, let name, let confirmed):
             guard (0..<4).contains(slot) else { return }
             if let old = s.skiffProjects?.slots[safe: slot], old.used, !confirmed {
                 log("slot \(slot + 1) holds \(old.name): the screen must confirm before saving over it"); return
             }
-            projectOp { let rc = await s.saveSkiffProject(slot: slot, name: name); if rc != 0 { self.log("FM-1 refused Save as (rc \(rc))") } }
+            projectOp { let rc = await s.saveSkiffProject(slot: slot, name: name); if rc != 0 { self.refuse("The FM-1 refused Save as (code \(rc)). Stop playback and try again.") } }
         case .projectRename(let slot, let name):
-            projectOp { let rc = await s.renameSkiffProject(slot: slot, name: name); if rc != 0 { self.log("FM-1 refused the rename (rc \(rc): an empty slot?)") } }
+            projectOp { let rc = await s.renameSkiffProject(slot: slot, name: name); if rc != 0 { self.refuse("The FM-1 refused the rename (code \(rc)). An empty slot can't be renamed.") } }
         }
     }
 
@@ -115,7 +115,7 @@ extension PhoneCore {
     func selectSoundsTrack() -> Bool {
         let t = soundsTrack ?? session.selectedTrack
         if t != session.selectedTrack {
-            log("the FM-1 selected track \(session.selectedTrack + 1) since: pick track \(t + 1) in the browser again"); return false
+            refuse("The FM-1 selected track \(session.selectedTrack + 1) in the meantime. Pick track \(t + 1) in the browser again.", track: t + 1); return false
         }
         return true
     }
@@ -132,7 +132,7 @@ extension PhoneCore {
 
     /// One project op at a time, `busy` shown meanwhile.
     func projectOp(_ op: @escaping @MainActor () async -> Void) {
-        guard !projectBusy else { log("a project load or save is still going"); return }
+        guard !projectBusy else { refuse("A project load or save is still going. Wait for it to finish."); return }
         projectBusy = true; pokeAreas(["projects"])
         Task { await op(); self.projectBusy = false; self.pokeAreas(["projects", "top"]) }
     }

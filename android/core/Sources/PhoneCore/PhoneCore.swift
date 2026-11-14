@@ -39,6 +39,8 @@ public final class PhoneCore {
     var projectBusy = false
     /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
     var auditions: [Int: Task<Void, Never>] = [:]
+    /// When the read-only notice last went to the screen (Notice.swift).
+    var readOnlySaidAt = Date.distantPast
     /// The page lag's timing (LagTrace.swift), opened by pickPage and goHome.
     lazy var lag = LagTrace(log: log)
     private var lastScreen: UIState?
@@ -203,6 +205,8 @@ public final class PhoneCore {
     private func poke(_ names: [String]) { for n in names { areas.first { $0.name == n }?.poke() } }
     func pokeAreas(_ names: [String]) { poke(names) }
     /// The named areas built and published at once (AreaWatch.now).
+    /// An event, not a watched state: sent as it happens (Notice.swift).
+    func publishNotice(_ n: NoticeArea) { publish("notice", AreaJSON.encode(n)) }
     func publishNow(_ names: [String]) { for n in names { areas.first { $0.name == n }?.now() } }
 
     public func stop() {
@@ -260,7 +264,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects
@@ -278,7 +282,7 @@ public final class PhoneCore {
             let s = session
             runTask = Task { await s.run() }
         case .play, .stop:
-            guard canWrite() else { log("read-only: \(intent) not sent (allow writes to send it)"); return }
+            guard canWrite() else { refuseReadOnly("\(intent)"); return }
             session.setPlaying(intent == .play)
         case .padSelect(let track, let entry):
             pickedPad = PadsArea.Ref(track: track, entry: entry)
@@ -298,19 +302,19 @@ public final class PhoneCore {
             if lockLatched { syncLockStep() }   // a latched lock follows the selection (the iPad's Lock does)
             poke(["editor"])
         case .setPlaybackMode(let m):
-            guard canWrite() else { log("read-only: setPlaybackMode not sent"); return }
+            guard canWrite() else { refuseReadOnly("setPlaybackMode"); return }
             let mode: SongMode = switch m { case .loop: .off; case .song: .on; case .once: .once }
             if let store = session.skiffSong { Task { if !(await store.send(.song(mode))) { self.reportRefusal(store) } } }
         case .cancelWaiting:
-            guard canWrite() else { log("read-only: cancelWaiting not sent"); return }
+            guard canWrite() else { refuseReadOnly("cancelWaiting"); return }
             if let store = session.skiffSong { Task { await store.performOp(.cancel) } }
         // the readout's controls, through the iPad's calls: TempoPanel's setBPM (clamped to the FM-1's range; not
         // while following another clock), the REC button's toggleRec (Skiff's arm-the-others case included), and
         // SongTools' launch quantise (PERFORM's launch, adopted once the FM-1 takes it). Each republishes `top`
         // once the FM-1's answer is read back.
         case .setTempo(let bpm):
-            guard canWrite() else { log("read-only: setTempo not sent (allow writes to send it)"); return }
-            if session.externalClock != nil { log("the FM-1 follows another clock: its tempo comes from there"); return }
+            guard canWrite() else { refuseReadOnly("setTempo"); return }
+            if session.externalClock != nil { refuse("The FM-1 follows another clock, so its tempo comes from there."); return }
             let s = session
             s.setBPM(Int(bpm.rounded()))
             Task {
@@ -319,12 +323,12 @@ public final class PhoneCore {
                 self.poke(["top"])
             }
         case .rec:
-            guard canWrite() else { log("read-only: rec not sent (allow writes to send it)"); return }
+            guard canWrite() else { refuseReadOnly("rec"); return }
             session.toggleRec()                                      // reads TRANSPORT back itself
             Task { try? await Task.sleep(for: .milliseconds(300)); self.poke(["top"]) }
         case .setLaunch(let q):
-            guard canWrite() else { log("read-only: setLaunch not sent (allow writes to send it)"); return }
-            guard let store = session.skiffSong else { log("no song read yet"); return }
+            guard canWrite() else { refuseReadOnly("setLaunch"); return }
+            guard let store = session.skiffSong else { refuse("The FM-1's song hasn't been read yet. Try again in a moment."); return }
             let l: SongPlayback.Launch = switch q { case .loop: .loop; case .bar: .bar; case .beat: .beat; case .now: .now }
             let s = session
             Task {

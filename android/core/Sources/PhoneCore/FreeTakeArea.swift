@@ -124,9 +124,9 @@ extension PhoneCore {
             break
         default: return false
         }
-        guard session.isConnected, session.dialect == .skiff else { log("\(w.intent): no Skiff FM-1 connected"); return true }
-        guard canWrite() else { log("read-only: \(w.intent) not sent (allow writes to send it)"); return true }
-        guard session.takeLinked else { log("\(w.intent): the FM-1's firmware has no FREE TAKE link (screen link v7)"); return true }
+        guard session.isConnected, session.dialect == .skiff else { refuse("No FM-1 is connected."); return true }
+        guard canWrite() else { refuseReadOnly("\(w.intent)"); return true }
+        guard session.takeLinked else { refuse("This FM-1's firmware has no FREE TAKE link, so the take can't be picked from the phone. Use the FM-1's own keys."); return true }
         func need(_ v: Int?) -> Int? { if v == nil { log("\(w.intent): missing index") }; return v }
         switch w.intent {
         case "takeGuess": if let i = need(w.index) { session.takeOp(.guess(i)) }
