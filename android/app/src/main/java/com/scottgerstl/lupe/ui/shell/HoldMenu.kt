@@ -165,7 +165,7 @@ class WheelSpot(val rowX: Float, val rowY: Float, val nodeX: Float, val nodeY: F
  * height is the finger's, moved only as far as keeps the whole column between the header (56) and 16 above the foot. With more than five
  * it is a wheel: it opens on the first choice, a drag rolls the choices along the curve, one fades (and stops taking taps under half) as
  * it passes an end, and a small triangle past each end of the rim says there is more that way, blending out as that end is reached.
- * Side: right-handed, to the left of the finger where the whole reach fits there, or where the right doesn't; left-handed, the mirror.
+ * Side: away from the playing hand (left for right-handed) wherever the press is, flipping only when there isn't room.
  */
 class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val screenH: Float, leftHanded: Boolean = false) {
     val shown: Int = minOf(n, 5)
@@ -175,13 +175,23 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
     private val half = reachY + if (n > 5) TRI_GAP + TRI_H else 0f
     /** The curve's middle height: the finger's, kept so the column stays on the screen. */
     val mid: Float = if (HEADER + half <= screenH - 16f - half) y.coerceIn(HEADER + half, screenH - 16f - half) else y
+    /** The room beside the finger on each side for a 200 wide row and an 8 margin, in the menu layer's own coordinates. */
+    private val roomLeft = x - 8f - ROW_W
+    private val roomRight = screenW - 8f - ROW_W - x
+    /**
+     * The side it opens on (iPhone b565310, replacing the reach rule): the side away from the playing hand (left for right-handed) wherever
+     * the press is, if there is room for the stalk and the hub there ([MIN_NEAR] 54); else the other side if it has; else the roomier one.
+     */
     val left: Boolean = run {
-        val reach = NEAR + ROW_W + 8f; val fitsLeft = x - reach >= 0f; val fitsRight = x + reach <= screenW
-        if (leftHanded) !(fitsRight || !fitsLeft) else (fitsLeft || !fitsRight)
+        val away = if (leftHanded) roomRight else roomLeft; val other = if (leftHanded) roomLeft else roomRight
+        val awayIsLeft = !leftHanded
+        when { away >= MIN_NEAR -> awayIsLeft; other >= MIN_NEAR -> !awayIsLeft; else -> roomLeft > roomRight }
     }
     private val side = if (left) -1f else 1f
+    /** How far the middle choice's near edge is from the finger: 76, coming in to as little as 54 near an edge rather than flipping. */
+    val near: Float = (if (left) roomLeft else roomRight).coerceIn(MIN_NEAR, NEAR)
     /** The curve's centre: far behind the finger, on the side the choices are not. */
-    val centreX: Float = x + side * (NEAR - CURVE)
+    val centreX: Float = x + side * (near - CURVE)
     /** How far the wheel can turn, in choices; 0 for five or fewer. */
     val maxTurn: Float = (n - 5).coerceAtLeast(0).toFloat()
 
@@ -198,6 +208,12 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
         return WheelSpot(if (left) nodeX - ROW_W else nodeX, cy - ROW_H / 2, nodeX, cy, nodeX - STALK * ux / len, cy - STALK * uy / len, alpha)
     }
     fun spot(k: Int, turn: Float): WheelSpot = spot(position(k, turn))
+
+    /** The black field's half height: the reach to the outer edge of the top and bottom choices (and the triangles' room on a wheel), plus 14. */
+    val fieldHalf: Float = half + FIELD_PAD
+    /** The field's inner and outer arcs reach this far either side of level, in degrees. */
+    val fieldInnerSweep: Float = Math.toDegrees(kotlin.math.asin((fieldHalf / FIELD_INNER).coerceIn(-1f, 1f)).toDouble()).toFloat()
+    val fieldOuterSweep: Float = Math.toDegrees(kotlin.math.asin((fieldHalf / FIELD_OUTER).coerceIn(-1f, 1f)).toDouble()).toFloat()
 
     /** The rim reaches this far either side of level, in degrees: to the outer edge of the top and bottom choices. */
     val rimHalfSweep: Float = Math.toDegrees(kotlin.math.asin((reachY / RIM).coerceIn(-1f, 1f)).toDouble()).toFloat()
@@ -220,11 +236,19 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
         const val ROW_W = 200f
         const val ROW_H = 48f
         const val PITCH = 56f
-        /** The middle choice's near edge is this far from the finger… */
+        /** The middle choice's near edge is this far from the finger (less near an edge, to [MIN_NEAR])… */
         const val NEAR = 76f
+        /** …at the least the hub (32) and a stalk (22). */
+        const val MIN_NEAR = 54f
         /** …on a curve of this radius (shallow: nearly a straight column), with the rim a stalk inside it. */
         const val CURVE = 400f
         const val RIM = CURVE - STALK
+        /** The black field behind the arc (iPhone b565310): 16 inside the rim and 16 past the rows, 14 past the top and bottom choices, 70 %, feathered 18. */
+        const val FIELD_INNER = RIM - 16f
+        const val FIELD_OUTER = CURVE + ROW_W + 16f
+        const val FIELD_PAD = 14f
+        const val FIELD_ALPHA = 0.7f
+        const val FIELD_FEATHER = 18f
         /** Under the header's line. */
         const val HEADER = 56f
         /** The more-to-come triangles: 10 wide, 7 tall, 8 past the rim's end. */
@@ -335,6 +359,24 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         val spots = List(m.items.size) { wheel.spot(it, turn) }
         val itemW = HoldWheel.ROW_W; val itemH = HoldWheel.ROW_H
         val fadeAll = 1f - (leave.value / 0.86f).coerceAtMost(1f)   // choices and lines: gone in 120 of the 140 ms
+        // A translucent black field behind the arc (Scott, 2026-11-14: the pads underneath competed): an annular sector round the curve's
+        // centre, soft at its edges, drawn first, over the page's own dim and under the circle, rim, stalks and choices.
+        Canvas(Modifier.fillMaxSize().graphicsLayer {
+            renderEffect = androidx.compose.ui.graphics.BlurEffect(HoldWheel.FIELD_FEATHER.dp.toPx(), HoldWheel.FIELD_FEATHER.dp.toPx(), androidx.compose.ui.graphics.TileMode.Decal)
+        }) {
+            val a = HoldWheel.FIELD_ALPHA * (elapsed.value / 150f).coerceAtMost(1f) * fadeAll
+            if (a > 0f) {
+                val cc = Offset(wheel.centreX.dp.toPx(), wheel.mid.dp.toPx())
+                val r0 = HoldWheel.FIELD_INNER.dp.toPx(); val r1 = HoldWheel.FIELD_OUTER.dp.toPx()
+                val base = if (wheel.left) 180f else 0f; val s0 = wheel.fieldInnerSweep; val s1 = wheel.fieldOuterSweep
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    arcTo(androidx.compose.ui.geometry.Rect(cc.x - r1, cc.y - r1, cc.x + r1, cc.y + r1), base - s1, s1 * 2, true)
+                    arcTo(androidx.compose.ui.geometry.Rect(cc.x - r0, cc.y - r0, cc.x + r0, cc.y + r0), base + s0, -s0 * 2, false)
+                    close()
+                }
+                drawPath(path, Color.Black.copy(alpha = a))
+            }
+        }
         Canvas(Modifier.fillMaxSize()) {
             val c = Offset(fx.dp.toPx(), fy.dp.toPx())
             // the circle: the track's colour at about 45 % over the page, a thin edge in the full colour; exactly under the finger

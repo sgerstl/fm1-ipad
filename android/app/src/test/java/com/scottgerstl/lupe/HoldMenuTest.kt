@@ -94,17 +94,47 @@ class HoldMenuTest {
         assertTrue(top.triangle(up = true).second - 7f >= 56f - 0.01f)      // the upper triangle's tip is under the header too
     }
 
-    @Test fun theSideFollowsTheHandAndTheRoom() {
-        // reach = 76 + 200 + 8 = 284
-        assertTrue(HoldWheel(500f, 200f, 5, 915f, 412f).left)                         // right-handed, the left fits: left
-        assertFalse(HoldWheel(200f, 200f, 5, 915f, 412f).left)                        // the left doesn't fit, the right does: right
-        assertTrue(HoldWheel(300f, 200f, 5, 500f, 412f).left)                         // only the left fits
-        assertFalse(HoldWheel(500f, 200f, 5, 915f, 412f, leftHanded = true).left)     // left-handed, the right fits: right
-        assertTrue(HoldWheel(700f, 200f, 5, 915f, 412f, leftHanded = true).left)      // …unless only the left does
-        val l = HoldWheel(500f, 200f, 5, 915f, 412f).spot(2, 0f)
-        assertEquals(500f - 76f, l.nodeX, 0.01f); assertEquals(l.nodeX - 200f, l.rowX, 0.01f)
-        // kept on the screen: the node never closer than 8 + 200 to the edge it opens toward
-        assertTrue(HoldWheel(700f, 200f, 5, 915f, 412f, leftHanded = false).spot(2, 0f).nodeX >= 208f)
+    /** The iPhone's side rule (b565310): away from the playing hand wherever the press is; flip only when there is no room there. */
+    @Test fun theSideIsAwayFromTheHandUnlessThereIsNoRoom() {
+        // room(left) = x − 208, room(right) = W − 208 − x; minimum 54
+        assertTrue(HoldWheel(300f, 200f, 5, 915f, 412f).left)                         // right-handed: left, even with the right roomier
+        assertTrue(HoldWheel(700f, 200f, 5, 915f, 412f).left)                         // …and near the right edge too
+        assertFalse(HoldWheel(200f, 200f, 5, 915f, 412f).left)                        // room(left) = −8 < 54: the other side
+        assertFalse(HoldWheel(500f, 200f, 5, 915f, 412f, leftHanded = true).left)     // left-handed: right
+        assertFalse(HoldWheel(100f, 200f, 5, 915f, 412f, leftHanded = true).left)
+        assertTrue(HoldWheel(700f, 200f, 5, 915f, 412f, leftHanded = true).left)      // room(right) = 915 − 208 − 700 = 7 < 54: the other side
+        // neither side has 54: the roomier one
+        assertTrue(HoldWheel(250f, 200f, 5, 460f, 412f).left)                         // left −? room(left)=42, room(right)=2: left
+        assertFalse(HoldWheel(220f, 200f, 5, 460f, 412f).left)                        // room(left)=12, room(right)=32: right
+    }
+
+    @Test fun theMiddleChoiceComesInNearAnEdgeInsteadOfFlipping() {
+        // plenty of room: 76 out
+        val a = HoldWheel(500f, 200f, 5, 915f, 412f)
+        assertTrue(a.left); assertEquals(76f, a.near, 0f); assertEquals(500f - 76f, a.spot(2, 0f).nodeX, 0.01f)
+        // room(left) = 270 − 208 = 62: 62 out, not 76 and not flipped
+        val b = HoldWheel(270f, 200f, 5, 915f, 412f)
+        assertTrue(b.left); assertEquals(62f, b.near, 0.01f); assertEquals(270f - 62f, b.spot(2, 0f).nodeX, 0.01f)
+        // never less than 54
+        assertEquals(54f, HoldWheel(262f, 200f, 5, 915f, 412f).near, 0.01f)
+        assertEquals(54f, HoldWheel(250f, 200f, 5, 460f, 412f).near, 0.01f)             // neither side has 54: the roomier one, at 54
+        // the curve's centre follows: C = (x ± (near − 400))
+        assertEquals(270f - (62f - 400f), b.centreX, 0.01f)
+    }
+
+    /** The black field (b565310): an annular sector from 362 to 616 round the curve's centre, ±(reach + 14) tall. */
+    @Test fun theBlackFieldIsAnAnnularSectorBehindTheArc() {
+        assertEquals(362f, HoldWheel.FIELD_INNER, 0f); assertEquals(616f, HoldWheel.FIELD_OUTER, 0f)
+        assertEquals(0.7f, HoldWheel.FIELD_ALPHA, 0f); assertEquals(18f, HoldWheel.FIELD_FEATHER, 0f)
+        val five = HoldWheel(500f, 200f, 5, 915f, 412f)
+        assertEquals(136f + 14f, five.fieldHalf, 0.01f)                                // reach 136, no triangles
+        assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 362.0)), five.fieldInnerSweep.toDouble(), 0.01)
+        assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 616.0)), five.fieldOuterSweep.toDouble(), 0.01)
+        val nine = HoldWheel(500f, 220f, 9, 915f, 412f)
+        assertEquals(136f + 15f + 14f, nine.fieldHalf, 0.01f)                          // a wheel adds the triangles' 15
+        assertTrue(nine.fieldInnerSweep > five.fieldInnerSweep)
+        // it covers the rows: the outer arc reaches past the rows' far edge (the middle row ends at near + 200 from the finger)
+        assertTrue(HoldWheel.FIELD_OUTER > HoldWheel.CURVE + HoldWheel.ROW_W)
     }
 
     @Test fun theCircleGoesPastItsSizeUndershootsOnceAndSettles() {
