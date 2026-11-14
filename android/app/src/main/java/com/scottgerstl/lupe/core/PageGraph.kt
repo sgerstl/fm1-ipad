@@ -33,6 +33,16 @@ enum class GraphKind {
     @SerialName("reverb") Reverb,
     @SerialName("chorus") Chorus,
     @SerialName("global") Global,
+    /** A track's FX pages (decision 30's sweep, as the iPad draws them): the track's echoes, [PageGraph.values] TIME, FEEDBACK, COLOR and the bus's MIX, [PageGraph.send] the track's send. */
+    @SerialName("fxdelay") FxDelay,
+    /** The track's reverb: values TYPE, SIZE, DAMP, and [PageGraph.send]. */
+    @SerialName("fxreverb") FxReverb,
+    /** INSERT: values TYPE, A, B, C, MIX; the drives' transfer curve and wave, the swept ones' sweep, FILTR's filter response ([PageGraph.caption] its cutoff as shown). */
+    @SerialName("insert") Insert,
+    /** SLICER: values SLICER (OFF GATE STUT), PATTERN, RATE, DEPTH. */
+    @SerialName("slicer") Slicer,
+    /** DUCK: values DEPTH, then RELEASE as thousandths of a bar; [PageGraph.notes] where in the bar the source hits, in thousandths (empty: no source). */
+    @SerialName("duck") Duck,
 }
 
 /** An FM6 patch as OPERATOR and ALL OPS draw it. [ops] are operators 1…6. */
@@ -94,5 +104,7 @@ data class PageGraph(
     val title: String? = null,
     val fm6: Fm6Patch? = null,
     val sheet: SoundSheet? = null,
+    /** The track's send into a shared effect (FX › DELAY and REVERB): it scales the picture. 127 when not given. */
+    val send: Int = 127,
 )
 

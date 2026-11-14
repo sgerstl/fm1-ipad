@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -106,16 +107,6 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val soundPage = if (moved) snap else live
     val notice = if (moved) "The FM-1 is on ${live.family} · held here" else null
 
-    // Show graphics (decision 30): a knob turned on the FM-1, or a dial touched on the phone, slides the dials up to show the page's picture under
-    // them; it settles back after the pop-up's hold time (Labs). A new page starts with the dials down.
-    val reveal = remember { HoldTimer() }
-    reveal.holdMs = labs.panelHoldSeconds * 1000L
-    LaunchedEffect(live.turnSeq, live.turned) { reveal.turn(live.turnSeq * 8 + live.turned, System.currentTimeMillis()) }
-    LaunchedEffect(soundPage.family, soundPage.page, soundUp) { reveal.drop() }
-    LaunchedEffect(reveal.up, reveal.deadline) { if (reveal.up) { delay((reveal.deadline - System.currentTimeMillis()).coerceAtLeast(0) + 20); reveal.tick(System.currentTimeMillis()) } }
-    val revealT = animatedFloat(if (reveal.up && labs.showGraphics && soundUp) 1f else 0f, Dur.PANEL)
-    val onDialTouch = { reveal.poke(System.currentTimeMillis()) }
-
     CompositionLocalProvider(LocalBackGoesHome provides (shell.bottom.kind == BottomKind.Page)) {
         Box(modifier.fillMaxSize()) {
             LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
@@ -124,7 +115,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                     when (tab) {
                         Tab.Pads -> PadsPage(pads, core)
                         Tab.Edit -> Box(Modifier.fillMaxSize()) {
-                            EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), sound = if (soundUp) soundPage else null, soundCore = soundCore, notice = notice, reveal = revealT.value, onDialTouch = onDialTouch)
+                            EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), sound = if (soundUp) soundPage else null, soundCore = soundCore, notice = notice, graphics = labs.showGraphics)
                             // the FREE TAKE offer and the landing sit on top of the editor
                             com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
                         }
@@ -147,7 +138,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
             LaunchedEffect(shell.tab, panel.up, shell.bottom.kind) { magnifier?.hideAll() }
             LaunchedEffect(panel.up, panel.deadline) { if (panel.up) { delay((panel.deadline - System.currentTimeMillis()).coerceAtLeast(0) + 20); panel.tick(System.currentTimeMillis()) } }
             SoundPanel(panel.up && pageKey != null && shell.tab != Tab.Edit && shell.bottom.kind != BottomKind.FreeTake, soundPage, soundCore, notice, { panel.dismiss() },
-                Modifier.align(Alignment.BottomEnd).countTouches { panel.touch(System.currentTimeMillis()); onDialTouch(); onSoundTouch() }, reveal = revealT.value)
+                Modifier.align(Alignment.BottomEnd).countTouches { panel.touch(System.currentTimeMillis()); onSoundTouch() }, graphics = labs.showGraphics)
         }
     }
 }
@@ -229,7 +220,7 @@ private fun TimelineSlot(core: LupeCore) {
  * picture under the dials (decision 30).
  */
 @Composable
-private fun SoundPanel(visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, reveal: Float = 0f) {
+private fun SoundPanel(visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true) {
     val reduce = LocalReduceMotion.current
     val t = animatedFloat(if (visible) 1f else 0f, if (visible) Dur.PANEL else Dur.FINGER, if (visible) EaseOut else EaseIn)
     var last by remember { mutableStateOf(page) }
@@ -237,12 +228,19 @@ private fun SoundPanel(visible: Boolean, page: PageState, core: LupeCore, notice
     if (!visible && t.value <= 0.001f) return
     val colour = trackColour(last.track)
     val tiles = last.tiles
-    // Show graphics: on a knob turn the panel grows and the dials go up with it, the page's picture showing under them; then it settles back
-    val picture = if (com.scottgerstl.lupe.ui.page.hasPicture(last.graph)) reveal else 0f
+    // Show graphics: the page's picture is there from the start, under the dials; the panel is as tall as both
+    val picture = com.scottgerstl.lupe.ui.page.pictureOf(last)
+    val pictured = graphics && com.scottgerstl.lupe.ui.page.hasPicture(picture)
+    val tall = animatedFloat(if (pictured) 1f else 0f, Dur.STATE)
+    // It stands out from the page: the track's colour muted, 35 % over the page. Computed for all six track colours (2026-11-14): white text is
+    // 6.7:1 or better on it, the raised grey of the labels 4.5:1 or better (lime is the least, 4.52), the track's own colour (the dials' arcs)
+    // 3.6:1 or better. At 40 % the labels fall under 4.5:1 on yellow and lime, so 35 it is. A line in the track's colour marks its top edge.
+    val surface = androidx.compose.ui.graphics.lerp(Tok.page, colour, PANEL_TINT)
     androidx.compose.foundation.layout.Column(
-        modifier.then(if (tiles != null) Modifier.fillMaxWidth() else Modifier.width(444.dp)).height(134.dp + 118.dp * picture)
+        modifier.then(if (tiles != null) Modifier.fillMaxWidth() else Modifier.width(444.dp)).height(134.dp + 118.dp * tall.value)
             .graphicsLayer { alpha = if (reduce) t.value else 1f; if (!reduce) translationY = (1f - t.value) * size.height; shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(topStart = 12.dp.toPx(), topEnd = 12.dp.toPx()); clip = true }
-            .background(Tok.panel)
+            .background(surface)
+            .drawBehind { drawRect(colour, size = androidx.compose.ui.geometry.Size(size.width, 1.5.dp.toPx())) }
             // a swipe down that no dial took sends it away; taps on the panel don't reach the pads under it
             .pointerInput(Unit) {
                 var total = 0f
@@ -262,13 +260,16 @@ private fun SoundPanel(visible: Boolean, page: PageState, core: LupeCore, notice
                 PageTilesContent(tiles, colour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)))
             }
         }
-        if (picture > 0.001f) {
+        if (tall.value > 0.001f) {
             Spacer(Modifier.height(8.dp))
-            com.scottgerstl.lupe.ui.page.GraphContent(last.graph, colour, if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1,
-                Modifier.then(if (tiles != null) Modifier.width(420.dp) else Modifier.fillMaxWidth()).height(110.dp).graphicsLayer { alpha = picture }.background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+            com.scottgerstl.lupe.ui.page.GraphContent(picture, colour, if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1,
+                Modifier.then(if (tiles != null) Modifier.width(420.dp) else Modifier.fillMaxWidth()).height(110.dp).graphicsLayer { alpha = tall.value }.background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
         }
     }
 }
+
+/** How much of the track's colour the pop-up's surface carries over the page (see the contrast note in [SoundPanel]). */
+internal const val PANEL_TINT = 0.35f
 
 /**
  * The phone follows the FM-1's own GLO, SAVE and SEQ (fm1Screen): the Mix sheet, the Sounds sheet or Projects, the Edit tab with its lane

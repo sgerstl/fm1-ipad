@@ -35,7 +35,7 @@ internal object FakePageMap {
             PageTilesState("routes", routes = routes(), picked = 1)
         "FX" -> listOf(num("DIST", 72), num("CHORUS", 20), num("DELAY", 30), num("REVERB", 40)) to none
         "DELAY" -> listOf(num("SEND", 30), lst("TIME", divs, 1), num("FEEDBACK", 40), num("COLOR", 64)) to none
-        "REVERB" -> listOf(num("SEND", 40), lst("TYPE", listOf("ROOM", "HALL", "PLATE"), 1), num("SIZE", 70), num("DAMP", 30)) to none
+        "REVERB" -> listOf(num("SEND", 40), lst("TYPE", listOf("ROOM", "SPRING", "HALL"), 2), num("SIZE", 70), num("DAMP", 30)) to none
         "DRIVE" -> listOf(num("DIST", 72), lst("TYPE", listOf("TUBE", "HARD", "FOLD", "CRUSH", "FUZZ")), num("TONE", 40), null) to none
         "INSERT" -> listOf(lst("TYPE", listOf("OFF", "FILTR", "COMB", "RING")), num("A", 64), num("B", 40), num("C", 0)) to none
         "INSERT 2" -> listOf(num("MIX", 64), null, null, null) to none

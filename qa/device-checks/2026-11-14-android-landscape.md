@@ -146,3 +146,41 @@ Chosen or left open:
 - **More than six choices** go behind "More…" (six fit the screen's height at 56 dp apart).
 - **TalkBack** opens the same choices from the item's long-click action, at its centre; each choice is a button.
 - The Step ⋯, project, Loop and readout menus open on a tap, so they keep the plain menu.
+
+## Sound pages: the picture from the start, the pop-up's colour, the FX pictures (Scott on ba45c85, 2026-11-14)
+
+Built; tests pass and the APK builds. **Seen on my emulator with the fake core:** the pop-up on FX, DELAY, REVERB, INSERT (OFF), SLICER and DUCK (BY OFF) on track 1's colour, and Edit with DELAY's picture under the dials. **Not seen:** the other five track colours (contrast is computed, in a test), INSERT's other types, a kit's panel, the real FM-1. This replaces rows 48 to 50 above (the dials no longer slide up on a knob turn).
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 64 | Show graphics on: press a sound key while on Pads or the Timeline | The pop-up opens with the header, the four dials and the page's picture under them, at once. A knob turn only lights its dial and keeps the pop-up up | – | ☐ pass ☐ fail: |
+| 65 | Look at the pop-up on each track (yellow and lime especially) | Its surface is the track's colour, muted (35 % over the page), with a line in the full colour along its top. White text, the grey labels and the dials' coloured arcs all read clearly | – | ☐ pass ☐ fail: |
+| 66 | Edit, a sound page with a picture | The picture sits under the dials from the start; the step row is about 88 dp tall instead of about 160 (number, note and a short velocity bar still show). It glides to that height and back on HOME | – | ☐ pass ☐ fail: |
+| 67 | Step FX with the FM-1's FX key: FX, DELAY, REVERB, DRIVE, INSERT, SLICER, DUCK | Sends as four sliders; echoes on a beat grid; reflections and a tail (ROOM, SPRING with its coil, HALL twice as long); the drive curve; INSERT's curve and wave by TYPE, or the filter response for FILTR; the sixteen-step slicer pattern; DUCK's box | – | ☐ pass ☐ fail: |
+| 68 | Show graphics off | Dials (and tiles) only, in both places; the step row keeps its full height | – | ☐ pass ☐ fail: |
+
+Sizes (Pixel 10 Pro and Pixel 7 are both about 411 dp tall in landscape, so the same): the pop-up is 252 dp tall with a picture (134 without); Edit's step row is about 88 dp with a picture, about 160 without. A kit keeps its one-row panel: its picture sits beside the dials where the hint text was, and gives way to tiles on a tile page.
+
+### Which page gets which picture (Skiff 2.5.1)
+
+FX family, checked page by page (the core's `graph` first; where it sends none, the phone now makes the picture from the page's own four knobs):
+
+| Page | Before | Now |
+|---|---|---|
+| FX | sends, right | unchanged |
+| DELAY | **none** | echoes on the beat grid. The bus's MIX and DELAY MODE aren't in the page area: MIX is taken as full, MODE not shown (asked P1) |
+| REVERB | **none** | reflections and tail by TYPE, SIZE, DAMP, as loud as the send |
+| DRIVE | the curve, right (the wave beside it is still not drawn) | unchanged |
+| INSERT | **none** | by TYPE: the transfer curve and the wave for SOFT HARD FOLD FUZZ CRUSH, the sweep for PHASR FLANG CHOR, the filter response for FILTR. Its MIX (the PRESETS encoder) isn't in the page area: taken as full (asked P1) |
+| SLICER | **none** | the sixteen-step pattern, GATE's depth or STUT's hatching |
+| DUCK | **none** | the box only: the source track's hits aren't in the page area, so no dips can be drawn yet (asked P1) |
+
+The other families, reported, not fixed:
+
+| Family | Right | Missing or wrong |
+|---|---|---|
+| ENV | ENV, ENV 2 | – |
+| LFO | LFO, LFO 2 (a two-second sweep, not the FM-1's live clock; FADE not drawn); MOD is tiles | – |
+| SEL | SCALE | CHORD (the chord on the keys, or strummed), FOLLOW: no picture |
+| EDIT | ANALOG's EDIT 1 and EDIT 2; FM6's OPERATOR and ALL OPS (ALL OPS is cramped at this height); DRUM-X's SOUND rows | every other engine's EDIT 1 and 2 (the iPad draws a scope); VOICE and VOICE 2; SAMPLES; SLICES (it was a card of words, not restored); LANES and LANE MIX are tiles only |
+| ARP | ARP, ARP 2 | – |

@@ -128,8 +128,8 @@ private val DIALS_W = 420.dp      // the dials area, at the right; the keyboard,
 fun EditTab(
     ed: EditorState, core: LupeCore, auto: com.scottgerstl.lupe.core.AutomationState, pick: StepPick, ui: EditUi, modifier: Modifier = Modifier,
     sound: com.scottgerstl.lupe.core.PageState? = null, soundCore: LupeCore = core, notice: String? = null,
-    /** 0…1: how far the dials have slid up to show the page's picture under them (decision 30); [onDialTouch] is a touch on the dials. */
-    reveal: Float = 0f, onDialTouch: () -> Unit = {},
+    /** Settings › Show graphics: the page's picture shows with its dials from the start (Scott, 2026-11-14: no waiting for a knob turn). */
+    graphics: Boolean = true,
 ) {
     var tab by rememberSaveable { mutableStateOf(PanelTab.Notes) }
     val track = Tok.track[(ed.track - 1).coerceAtLeast(0) % Tok.track.size]
@@ -154,32 +154,34 @@ fun EditTab(
         val mode = when { sound != null -> PanelMode.Sound; (if (drum) hit != null else pick.step != null) -> PanelMode.Step; else -> PanelMode.Home }
         var lastSound by remember { mutableStateOf(sound) }
         if (sound != null) lastSound = sound
-        // the picture sits where the dials rest; a knob turn slides the dials up over the foot of the steps to show it, and they settle back
+        // Show graphics: a sound page's picture shows with its dials, under them. The panel grows by the picture's height and the step row gives
+        // the room (it glides; nothing pops). A kit keeps its one-row panel: its picture sits beside the dials, where no tiles are.
         val shown = lastSound
-        val pictured = shown != null && com.scottgerstl.lupe.ui.page.hasPicture(shown.graph)
-        val up = if (mode == PanelMode.Sound && pictured) reveal else 0f
+        val picture = shown?.let { com.scottgerstl.lupe.ui.page.pictureOf(it) }
+        val pictured = graphics && mode == PanelMode.Sound && picture != null && com.scottgerstl.lupe.ui.page.hasPicture(picture)
+        val grow = animatedFloat(if (pictured && !drum) 1f else 0f, Dur.PANEL)
         if (drum) Row(Modifier.fillMaxWidth().height(KIT_PANEL_H)) {
-            Box(Modifier.fillMaxSize()) {
-                if (up > 0.001f && shown != null) com.scottgerstl.lupe.ui.page.GraphContent(shown.graph, track, -1, Modifier.fillMaxSize().graphicsLayer { alpha = up }.background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
-                LupeCrossfade(mode, Modifier.fillMaxSize().graphicsLayer { translationY = -(size.height + 6.dp.toPx()) * up }.drawBehind { drawRoundRect(lerp(Tok.page, Tok.panel, up), Offset(-8.dp.toPx() * up, -6.dp.toPx() * up), Size(size.width + 16.dp.toPx() * up, size.height + 10.dp.toPx() * up), CornerRadius(10.dp.toPx() * up)) }, Dur.PANEL) { m ->
-                    when (m) {
-                        PanelMode.Sound -> Row(Modifier.fillMaxSize()) {
-                            lastSound?.let { p ->
-                                p.tiles?.let { t -> com.scottgerstl.lupe.ui.page.PageTilesContent(t, track, { soundCore.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { soundCore.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.weight(1f).fillMaxHeight()) } ?: Spacer(Modifier.weight(1f))
-                                Spacer(Modifier.width(16.dp))
-                                com.scottgerstl.lupe.ui.page.SoundDials(p, soundCore, Modifier.width(DIALS_W + 140.dp).fillMaxHeight().dialTouches(onDialTouch), notice, inline = true)
-                            }
-                        }
-                        PanelMode.Step -> HitPanel(ed, track, core, hit) { hit = null }
-                        PanelMode.Home -> Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                            BasicText("Tap a cell to put a hit on or take it off. Hold a cell to pick it: its values show here.", Modifier.weight(1f), style = LupeType.small.copy(color = Tok.text2Raised))
+            LupeCrossfade(mode, Modifier.fillMaxSize(), Dur.PANEL) { m ->
+                when (m) {
+                    PanelMode.Sound -> Row(Modifier.fillMaxSize()) {
+                        lastSound?.let { p ->
+                            val tiles = p.tiles
+                            if (tiles != null) com.scottgerstl.lupe.ui.page.PageTilesContent(tiles, track, { soundCore.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { soundCore.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.weight(1f).fillMaxHeight())
+                            else if (pictured && picture != null) com.scottgerstl.lupe.ui.page.GraphContent(picture, track, if (p.turned >= 0 && p.turnSeq > 0) p.turned else -1, Modifier.weight(1f).fillMaxHeight().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                            else Spacer(Modifier.weight(1f))
                             Spacer(Modifier.width(16.dp))
-                            HomeKnobsStrip(ed, core, Modifier.width(DIALS_W), header = false)
+                            com.scottgerstl.lupe.ui.page.SoundDials(p, soundCore, Modifier.width(DIALS_W + 140.dp).fillMaxHeight(), notice, inline = true)
                         }
+                    }
+                    PanelMode.Step -> HitPanel(ed, track, core, hit) { hit = null }
+                    PanelMode.Home -> Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                        BasicText("Tap a cell to put a hit on or take it off. Hold a cell to pick it: its values show here.", Modifier.weight(1f), style = LupeType.small.copy(color = Tok.text2Raised))
+                        Spacer(Modifier.width(16.dp))
+                        HomeKnobsStrip(ed, core, Modifier.width(DIALS_W), header = false)
                     }
                 }
             }
-        } else Row(Modifier.fillMaxWidth().height(PANEL_H)) {
+        } else Row(Modifier.fillMaxWidth().height(PANEL_H + (PICTURE_H + 6.dp) * grow.value)) {
             // the left: the keyboard (decision 30: keys left, dials right); a sound page's tiles need its room; the one-lane view when Lane is on
             val left = when { sound?.tiles != null -> RightMode.Tiles; ui.lane -> RightMode.Lane; else -> RightMode.Keys }
             Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -194,13 +196,19 @@ fun EditTab(
                 }
             }
             Spacer(Modifier.width(16.dp))
-            Box(Modifier.width(DIALS_W).fillMaxHeight()) {
-                if (up > 0.001f && shown != null) com.scottgerstl.lupe.ui.page.GraphContent(shown.graph, track, if (shown.turned >= 0 && shown.turnSeq > 0) shown.turned else -1, Modifier.fillMaxSize().graphicsLayer { alpha = up }.background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
-                LupeCrossfade(mode, Modifier.fillMaxSize().graphicsLayer { translationY = -(size.height + 6.dp.toPx()) * up }.drawBehind { drawRoundRect(lerp(Tok.page, Tok.panel, up), Offset(-8.dp.toPx() * up, -6.dp.toPx() * up), Size(size.width + 16.dp.toPx() * up, size.height + 10.dp.toPx() * up), CornerRadius(10.dp.toPx() * up)) }, Dur.PANEL) { m ->
+            Column(Modifier.width(DIALS_W).fillMaxHeight()) {
+                LupeCrossfade(mode, Modifier.fillMaxWidth().height(PANEL_H), Dur.PANEL) { m ->
                     when (m) {
-                        PanelMode.Sound -> lastSound?.let { com.scottgerstl.lupe.ui.page.SoundDials(it, soundCore, Modifier.fillMaxSize().dialTouches(onDialTouch), notice) }
+                        PanelMode.Sound -> lastSound?.let { com.scottgerstl.lupe.ui.page.SoundDials(it, soundCore, Modifier.fillMaxSize(), notice) }
                         PanelMode.Step -> StepControls(ed, track, core, tab, { tab = it }, pick)
                         PanelMode.Home -> HomeKnobsStrip(ed, core, Modifier.fillMaxSize())
+                    }
+                }
+                // the picture, under the dials
+                if (grow.value > 0.001f && picture != null && shown != null) {
+                    Spacer(Modifier.height(6.dp * grow.value))
+                    LupeCrossfade(picture.kind to shown.page, Modifier.fillMaxWidth().weight(1f).graphicsLayer { alpha = grow.value }, Dur.STATE) { _ ->
+                        com.scottgerstl.lupe.ui.page.GraphContent(picture, track, if (shown.turned >= 0 && shown.turnSeq > 0) shown.turned else -1, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
                     }
                 }
             }
@@ -208,10 +216,7 @@ fun EditTab(
     }
 }
 
-/** Each new touch down on the dials tells [onTouch] (the picture's reveal); the touch passes on unconsumed. */
-private fun Modifier.dialTouches(onTouch: () -> Unit) = pointerInput(Unit) {
-    awaitPointerEventScope { while (true) { val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); if (e.changes.any { it.pressed && !it.previousPressed }) onTouch() } }
-}
+private val PICTURE_H = 64.dp     // a sound page's picture under its dials on Edit: the step row gives this much (and 6 dp) while it shows
 
 private enum class PanelMode { Home, Step, Sound }
 private enum class RightMode { Keys, Lane, Tiles }
@@ -396,7 +401,7 @@ private fun StepCell(i: Int, s: Step, ed: EditorState, track: Color, w: Dp, h: D
                 val r = CornerRadius(8.dp.toPx())
                 drawRoundRect(lerp(Tok.stepEmpty, fillOn, onF.value), cornerRadius = r)
                 // the velocity again as a bar: its height says how hard, inside the cell above the tie's line
-                if (s.on) { val bh = 28.dp.toPx() * vel.value; drawRoundRect(track.copy(alpha = 0.35f * onF.value), Offset(7.dp.toPx(), size.height - 16.dp.toPx() - bh), Size(size.width - 14.dp.toPx(), bh), CornerRadius(2.dp.toPx())) }
+                if (s.on) { val bh = (if (size.height < 110.dp.toPx()) 16.dp.toPx() else 28.dp.toPx()) * vel.value; drawRoundRect(track.copy(alpha = 0.35f * onF.value), Offset(7.dp.toPx(), size.height - 16.dp.toPx() - bh), Size(size.width - 14.dp.toPx(), bh), CornerRadius(2.dp.toPx())) }
                 if (nowF.value > 0f) drawRoundRect(track.copy(alpha = nowF.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
                 if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
                 if (s.locked) diamond(Tok.text, size.width - 11.dp.toPx(), 12.dp.toPx(), 4.dp.toPx())

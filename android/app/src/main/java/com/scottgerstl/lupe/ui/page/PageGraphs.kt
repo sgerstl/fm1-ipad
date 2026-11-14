@@ -104,7 +104,8 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
 
 /** True when the page has a picture to draw. */
 fun hasPicture(g: PageGraph): Boolean = when (g.kind) {
-    GraphKind.Env, GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog -> true
+    GraphKind.Env, GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog,
+    GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb -> true
     GraphKind.Fm6Op, GraphKind.Fm6All -> g.fm6 != null
     GraphKind.Sound -> g.sheet != null
     else -> false
@@ -118,7 +119,8 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
         GraphKind.Fm6All -> Fm6AllOpsPicture(g, colour, modifier)
         GraphKind.Sound -> SoundSheetPicture(g, modifier)
         GraphKind.Env -> EnvGraph(g, colour, hot, modifier)
-        GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog -> CanvasGraph(g, colour, hot, modifier)
+        GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog,
+        GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb -> CanvasGraph(g, colour, hot, modifier)
         else -> Unit
     }
 }
@@ -134,6 +136,11 @@ private fun describe(g: PageGraph): String = when (g.kind) {
     GraphKind.Fm6All -> "FM algorithm chart"
     GraphKind.Sound -> "DRUM-X sound sheet"
     GraphKind.Analog -> "Oscillator and filter. ${g.caption ?: ""}, ${g.side ?: ""}"
+    GraphKind.FxDelay, GraphKind.Delay -> "Echoes: feedback ${g.values.getOrElse(1) { 0 }}" + if (g.kind == GraphKind.FxDelay) ", send ${g.send}" else ""
+    GraphKind.FxReverb, GraphKind.Reverb -> "Reverb tail: size ${g.values.getOrElse(1) { 0 }}" + if (g.kind == GraphKind.FxReverb) ", send ${g.send}" else ""
+    GraphKind.Insert -> if (g.values.getOrElse(0) { 0 } == 9) "Filter response, cutoff ${g.caption ?: ""}" else "Insert: " + (INSERT_NAMES.getOrNull(g.values.getOrElse(0) { 0 }) ?: "OFF")
+    GraphKind.Slicer -> "Slicer pattern ${g.values.getOrElse(1) { 1 }}"
+    GraphKind.Duck -> if (g.notes.isEmpty()) "Ducking: no source" else "Ducking over a bar, depth ${g.values.getOrElse(0) { 0 }}"
     else -> ""
 }
 
@@ -207,6 +214,11 @@ private fun CanvasGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifie
             GraphKind.Scale -> drawScale(s, g, colour)
             GraphKind.Arp -> drawArp(s, g, colour)
             GraphKind.Analog -> drawAnalog(s, g, colour)
+            GraphKind.FxDelay, GraphKind.Delay -> drawDelay(s, g, colour)
+            GraphKind.FxReverb, GraphKind.Reverb -> drawReverb(s, g, colour)
+            GraphKind.Insert -> drawInsert(s, g, colour)
+            GraphKind.Slicer -> drawSlicer(s, g, colour)
+            GraphKind.Duck -> drawDuck(s, g, colour)
             else -> Unit
         }
     }
@@ -392,4 +404,190 @@ private fun drawAnalog(s: Sp, g: PageGraph, c: Color) {
     s.rect(c, xc - 3f, 120f - (peak * 104).toFloat() - 5f, 6f, 10f, 2f)
     g.side?.let { s.text(it, 228f, 16f, mid, right = true) }
     s.text("LOW", f0, 135f, dim); s.text("HIGH", 228f, 135f, dim, right = true)
+}
+
+
+// ---- the FX family's other pages, ported from ios/FM1/PageGraphs.swift (Skiff's ui_pgraph.c): DELAY, REVERB, INSERT, SLICER, DUCK
+
+/** DELAY (graph_delay): the echoes on a beat grid; the first as loud as MIX times the track's send, each after it down by FEEDBACK. */
+private fun drawDelay(s: Sp, g: PageGraph, c: Color) {
+    val v = List(4) { g.values.getOrElse(it) { 0 } }
+    val sixths = intArrayOf(24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36)
+    val tap = sixths[((v[0] % 13) + 13) % 13]; val win = max(tap * 4, 96); val unit = if (win > 96) 96 else 24
+    val n = win / unit
+    val w = min(max(tap * 208 / win - 3, 2), 13).toFloat()
+    for (i in 0 until n) {
+        val x = 14f + i * unit * 208 / win
+        s.rect(dim, x, 123f, 2f, 3f)
+        if (n <= 8 || i % 4 == 0) s.text("${i + 1}", x + 4f, 138f, mid, 10f)
+    }
+    var lvl = 1000
+    for (i in 0 until 9) {
+        if (lvl < 40) break
+        val x = 14f + i * tap * 208 / win; val h = lvl / 10f
+        if (x + w > 228f) break
+        s.rect(if (i == 0) Tok.text else c.copy(alpha = 1f - (15 + 50 * (i - 1) / 6) / 100f), x, 120f - h, w, h, 2f)
+        lvl = if (i > 0) lvl * v[1] * 230 / 32768 else v[3] * 1000 / 127 * g.send.coerceIn(0, 127) / 127
+    }
+    s.text("DRY", 14f, 18f, mid)
+    g.caption?.let { s.text(it, 228f, 18f, mid, right = true) }
+}
+
+/** REVERB (graph_reverb): the early reflections in white, then the tail falling away (longer with SIZE, twice for HALL), its top dimmed by DAMP; all as loud as the send. */
+private fun drawReverb(s: Sp, g: PageGraph, c: Color) {
+    val v = List(3) { g.values.getOrElse(it) { 0 } }
+    val amp = g.send.coerceIn(0, 127)
+    // the type by its name when the page gives it (the FM-1's own word), else by its number (0 ROOM, 1 SPRING, 2 HALL)
+    val type = g.caption?.uppercase() ?: listOf("ROOM", "SPRING", "HALL").getOrElse(v[0]) { "ROOM" }
+    val hall = type == "HALL"
+    val len = ((40 + v[1] * 144 / 127) * (if (hall) 2 else 1)).toFloat(); val k = 1f - 3f / len
+    val dimTop = (20 + v[2] * 60 / 127) / 100f
+    listOf(84, 60, 72, 46, 52).forEachIndexed { i, e -> val h = (e * amp / 127).toFloat(); s.rect(Tok.text, 12f + i * 6, 126f - h, 3f, h) }
+    val tops = mutableListOf<Pair<Float, Float>>(); val mids = mutableListOf<Pair<Float, Float>>()
+    var e = 1f
+    for (x in 44..229) { val h = (84 * amp / 127) * e; tops += x.toFloat() to 126f - h; mids += x.toFloat() to 126f - h + h * dimTop; e *= k }
+    val band = s.path(tops + mids.reversed(), close = true)
+    val body = s.path(mids + listOf(229f to 126f, 44f to 126f), close = true)
+    val x0 = s.x(44f); val x1 = s.x(228f)
+    s.d.drawPath(band, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c.copy(alpha = 0.45f), c.copy(alpha = 0.15f)), x0, x1))
+    s.d.drawPath(body, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c, c.copy(alpha = 0.4f)), x0, x1))
+    if (type == "SPRING") {
+        s.text("SPRING", 12f, 19f, mid)
+        s.stroke(mid, (64..228).map { x -> x.toFloat() to 13f + (sin((x - 64) * 13 / 256.0 * 2 * Math.PI) * 3).toFloat() }, 1f)   // the coil
+    } else s.text(type, 12f, 19f, mid)
+}
+
+/** SLICER (graph_slicer): the sixteen steps of its pattern in fours: open steps full, closed ones down by DEPTH (GATE) or hatched (STUT); OFF is grey. */
+private val SLICER_PATTERNS = intArrayOf(0x5555, 0xB6DB, 0x5249, 0xB777, 0x6D6D, 0x0F0F, 0x1111, 0x54A5, 0x5333, 0xA929, 0xAAFF, 0xD501, 0xAAAA, 0xAB6B, 0xBB5D, 0x7597)
+private fun drawSlicer(s: Sp, g: PageGraph, c: Color) {
+    val v = List(4) { g.values.getOrElse(it) { 0 } }
+    val pat = SLICER_PATTERNS[((v[1] - 1) % 16 + 16) % 16]; val mode = v[0]
+    val k = GH / 96f                                   // Skiff draws this one in a 96-high space
+    val open = (70 - v[3] * 70 / 127).toFloat()
+    val col = if (mode == 0) dim else c
+    for (i in 0 until 16) {
+        val x = (12 + i * 13 + (i / 4) * 4).toFloat()
+        if ((pat shr i) and 1 == 1) s.rect(if (mode == 0) Tok.lifted else col, x, 8f * k, 9f, 72f * k, 2f)
+        else if (mode == 2) { var y = 8f; while (y < 80f) { s.rect(col, x, y * k, 9f, 1f * k); y += 4f } }
+        else { s.rect(Tok.lifted, x, 77f * k, 9f, 3f * k, 1f); if (open > 3) s.rect(Tok.lifted, x, (80f - open) * k, 9f, open * k, 2f) }
+    }
+}
+
+/** DUCK (graph_duck): the track's level over a bar: full, down by DEPTH at each of its source's hits, back in a line over RELEASE. No source: the empty box. */
+private fun drawDuck(s: Sp, g: PageGraph, c: Color) {
+    val k = GH / 96f
+    s.rect(Tok.lifted, 8f, 10f * k, 224f, 62f * k)
+    val hits = g.notes.map { it / 1000f }.sorted()
+    if (hits.isEmpty()) return
+    val depth = g.values.getOrElse(0) { 0 }; val release = g.values.getOrElse(1) { 0 } / 1000f
+    for (h in hits) s.rect(mid, 8f + h * 224f, 78f * k, 3f, 8f * k)
+    val pts = (0..224).map { x ->
+        val tau = x / 224f
+        val last = hits.lastOrNull { it <= tau } ?: hits.last()
+        val dt = if (last <= tau) tau - last else tau + 1 - last
+        val dip = if (release > 0 && dt < release) 62f * depth / 127f * (release - dt) / release else 0f
+        (8f + x) to (10f + dip) * k
+    }
+    s.d.drawPath(s.path(pts + listOf(232f to 72f * k, 8f to 72f * k), close = true), c)
+}
+
+/** INSERT (graph_insert, fx.c ins_*): TYPE's names, 0…9. */
+private val INSERT_NAMES = listOf("OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR", "FILTR")
+private val INSERT_SHAPE = mapOf(1 to 0, 2 to 1, 3 to 2, 4 to 4, 5 to 3)       // IT_* to the drive's shapes (SOFT HARD FOLD CRUSH FUZZ)
+private fun insSine(ph: Long) = (32767 * sin((ph and 0xFFFFFFFFL) / 4294967296.0 * 2 * Math.PI)).toInt()
+private fun insTri(q: Long): Int { val t = ((q and 0xFFFFFFFFL) shr 16).toInt(); return if (t < 32768) t shl 1 else (65535 - t) shl 1 }
+private fun insLevel(v: Int) = if (v <= 0) 0 else (4096 * 10.0.pow((v - 112) / 40.0)).roundToInt()
+private fun insLpk(cut: Int): Int {
+    val f = 30 * (16000.0 / 30).pow(cut.coerceIn(0, 127) / 127.0)
+    val gq = (4096 * kotlin.math.tan(Math.PI * min(f, 0.45 * 44100) / 44100)).toInt()
+    return (gq shl 16) / (4096 + gq)
+}
+private fun insMix(m: Int) = if (m >= 127) 32768 else if (m <= 0) 0 else m * 258
+/** pg_ins_curve: the drives' transfer blended by MIX; the swept ones' sweep over a cycle. */
+private fun insAt(v: List<Int>, x: Int): Int {
+    val ty = v[0]; val a = v[1]; val b = v[2]; val cc = v[3]; val mix = insMix(v[4])
+    if (ty <= 0 || ty >= 9 || mix <= 0) return x
+    if (ty >= 6) {
+        val ph = (x + 32768).toLong() shl 16
+        var w = if (ty == 8) insSine(ph) else insTri(ph) - 32768
+        if (ty == 7) w = (((w + 32768).toLong() * (w + 32768).toLong()) shr 16).toInt() - 32768
+        return w * b / 127
+    }
+    val y = if (ty == 5) driveShape(3, x, 15 - (a.coerceIn(0, 127) shr 3))
+        else ((driveShape(INSERT_SHAPE[ty] ?: 0, ((x shr 3) * (4096 + a * a * 3)) shr 9, 0).toLong() * insLevel(cc)) shr 12).toInt()
+    return x + (((y.coerceIn(-40000, 40000) - x).toLong() * mix) shr 15).toInt()
+}
+private fun insWave(v: List<Int>): IntArray {
+    val ty = v[0]; val b = v[2]; val cc = v[3]
+    val hold = intArrayOf(64, 48, 40, 32, 24, 20, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1)[b.coerceIn(0, 127) shr 3]
+    val kq = insLpk(if (ty == 5) cc else b)
+    var lp1 = 0; var lp2 = 0; var h = 0; val out = IntArray(88)
+    for (i in 0 until 176) {
+        val x = insSine(i.toLong() * 48806447L) * 3 / 4
+        val y = if (ty >= 6) insAt(v, (i % 44) * 65536 / 44 - 32768) else {
+            if (ty != 5 || i % hold == 0) h = insAt(v, x)
+            lp1 += (((h - lp1).toLong() * kq) shr 16).toInt() * 2
+            lp2 += (((lp1 - lp2).toLong() * kq) shr 16).toInt() * 2
+            if (ty != 0) lp2 else x
+        }
+        if (i >= 88) out[i - 88] = y
+    }
+    return out
+}
+/** The filter's level (ui_pgraph.c flt_level): LP flat with a peak at the cutoff as high as RES, HP its mirror, BP a peak falling both ways; SHAPE blends them. */
+private fun fltOff(w: Int): Int { val t = intArrayOf(-1000, -482, -321, -227, -161, -109, -67, -31, 0); val i = w shr 3; return if (i >= 8) 0 else t[i] + (t[i + 1] - t[i]) * (w and 7) / 8 }
+private fun fltLevel(d: Int, res: Int, shape: Int): Int {
+    val ad = abs(d); val bump = if (ad < 60) (380 * res / 127) * (3600 - ad * ad) / 3600 else 0
+    val peak = 620 + 380 * res / 127; val lp = if (d >= 0) 620 + bump else peak + d * 32 / 10
+    val hp = if (d <= 0) 620 + bump else peak - d * 32 / 10; val bp = 620 - ad * (16 + res / 8) / 10
+    val (a, b) = if (shape <= 64) (lp + fltOff(64 - shape)) to (bp + fltOff(shape)) else (bp + fltOff((127 - shape) * 64 / 63)) to (hp + fltOff((shape - 64) * 64 / 63))
+    return max(0, max(a, b))
+}
+private fun drawInsert(s: Sp, g: PageGraph, c: Color) {
+    val v = List(5) { g.values.getOrElse(it) { if (it == 4) 127 else 0 } }
+    if (v[0] == 9) {
+        // FILTR: the filter across the panel, low pass into band pass into high pass by SHAPE (knob 4), LP BP HP with its place marked
+        val cut = v[1].coerceIn(0, 127); val res = v[2].coerceIn(0, 127); val sh = v[3].coerceIn(0, 127)
+        val fc = cut * 1000 / 127; val xc = 12f + fc * 216 / 1000
+        s.rect(dim, xc, 8f, 1f, 114f)
+        val pts = (0..216).map { x -> (12f + x) to (120f - fltLevel(fc - x * 1000 / 216, res, sh) * 104 / 1000f) }
+        s.d.drawPath(s.path(pts + listOf(228f to 120f, 12f to 120f), close = true), c.copy(alpha = 0.25f))
+        s.stroke(c, pts, 3f)
+        s.text("LP", 12f, 20f, if (sh <= 32) Tok.text else dim); s.text("BP", 46f, 20f, if (sh in 33..95) Tok.text else dim); s.text("HP", 80f, 20f, if (sh >= 96) Tok.text else dim)
+        s.rect(line, 12f, 24f, 81f, 1f)
+        s.d.drawCircle(Tok.text, s.run { 4f.px() }, s.o(12f + sh * 80 / 127 + 2.5f, 24.5f))
+        g.caption?.let { s.text(it, if (xc + 5 < 180f) xc + 5f else xc - 4f, 116f, Tok.text, right = xc + 5 >= 180f) }
+        return
+    }
+    // the transfer curve at the left (the dashed line is "unchanged"), a cycle of the wave it makes at the right
+    val ys = (0..116).map { i -> 66f - insAt(v, (i - 58) * 32768 / 58) * 58f / 32768f }
+    val pts = ys.mapIndexed { i, y -> (12f + i) to y }
+    s.d.drawPath(s.path(pts + listOf(128f to 124f, 12f to 124f), close = true), c.copy(alpha = 0.14f))
+    s.rect(line, 12f, 66f, 116f, 1f); s.rect(line, 70f, 8f, 1f, 117f); s.rect(line, 140f, 88f, 87f, 1f)
+    s.d.drawPath(s.path(listOf(12f to 124f, 128f to 8f)), dim, style = Stroke(s.run { 1f.px() }, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))))
+    s.stroke(c, pts)
+    val wp = insWave(v).mapIndexed { i, y -> (140f + i) to (88f - y * 32f / 32768f) }
+    s.d.drawPath(s.path(wp + listOf(227f to 88f, 140f to 88f), close = true), c.copy(alpha = 0.14f))
+    s.stroke(c, wp, 2f)
+    s.text(INSERT_NAMES.getOrNull(v[0]) ?: "OFF", 140f, 28f, if (v[0] != 0 && v[4] != 0) c else dim, 13f)
+}
+
+/**
+ * The picture for a page: the core's ([PageState.graph]) when it sends one; else, for the FX family's pages it doesn't cover yet (DELAY,
+ * REVERB, INSERT, SLICER, DUCK), one made from the page's own four knobs. What the page area doesn't carry is assumed and said in the
+ * comments: the delay bus's MIX (full), INSERT's MIX on the PRESETS encoder (full), and DUCK's source hits (none known: its box only).
+ */
+fun pictureOf(page: com.scottgerstl.lupe.core.PageState): PageGraph {
+    if (page.graph.kind != GraphKind.None) return page.graph
+    if (page.family != "FX") return page.graph
+    val title = page.pages.firstOrNull { it.index == page.page }?.title ?: page.title
+    val v = page.controls.map { it?.raw ?: 0 }
+    return when (title) {
+        "DELAY" -> PageGraph(GraphKind.FxDelay, values = listOf(v[1], v[2], v[3], 127), send = v[0], caption = page.controls.getOrNull(1)?.value)   // SEND (or DELAY), TIME, FEEDBACK, COLOR
+        "REVERB" -> PageGraph(GraphKind.FxReverb, values = listOf(v[1], v[2], v[3]), send = v[0], caption = page.controls.getOrNull(1)?.value)                                                // SEND (or REVERB), TYPE, SIZE, DAMP
+        "INSERT" -> PageGraph(GraphKind.Insert, values = listOf(v[0], v[1], v[2], v[3], 127), caption = page.controls.getOrNull(1)?.value)       // TYPE, A, B, C
+        "SLICER" -> PageGraph(GraphKind.Slicer, values = v)
+        "DUCK" -> PageGraph(GraphKind.Duck, values = listOf(v[1], 250))                                                                          // BY, DEPTH, RELEASE: no hits known
+        else -> page.graph
+    }
 }
