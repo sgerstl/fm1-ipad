@@ -34,14 +34,6 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         private set
 
     /**
-     * Labs, a feel value (CLAUDE.md rule 3; added 2026-11-14, review 2026-11-28): how long the sound panel over Pads and the Timeline stays after
-     * the last knob turn or touch, in seconds. Default 8 (Scott, 2026-11-14: generous, so it doesn't vanish while playing; it was 4), range 2 to 20.
-     */
-    var panelHoldSeconds by mutableStateOf(prefs?.getInt(PANEL_HOLD, 8) ?: 8)
-        private set
-    fun choosePanelHold(seconds: Int) { panelHoldSeconds = seconds.coerceIn(2, 20); prefs?.edit()?.putInt(PANEL_HOLD, panelHoldSeconds)?.apply() }
-
-    /**
      * Show graphics (decision 30, on by default): each sound page's picture appears under its four dials when a knob turns, and the Mix sheet's
      * shared pages get their pictures. Off: dials and tiles only.
      */
@@ -99,7 +91,6 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"
         const val ACROSS = "labs_timeline_across"
-        const val PANEL_HOLD = "labs_sound_panel_hold_s2"   // "…_s" held the first default (4)
     }
 }
 
