@@ -10,6 +10,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -395,7 +399,9 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
             if (grow > 0f && rimA > 0f) {
                 val cc = Offset(wheel.centreX.dp.toPx(), wheel.mid.dp.toPx())
                 val rr = HoldWheel.RIM.dp.toPx(); val sweep = wheel.rimHalfSweep * grow
-                drawArc(m.colour.copy(alpha = rimA), (if (wheel.left) 180f else 0f) - sweep, sweep * 2, false, Offset(cc.x - rr, cc.y - rr), Size(rr * 2, rr * 2), style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
+                // a dashed knob scale (board 78 tile 11, the iPhone's 67707f3): 3 dp dashes, 1.5 thick, 5 dp gaps, butt caps, the track's colour at 80 %
+                drawArc(m.colour.copy(alpha = 0.8f * rimA / 0.55f), (if (wheel.left) 180f else 0f) - sweep, sweep * 2, false, Offset(cc.x - rr, cc.y - rr), Size(rr * 2, rr * 2),
+                    style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Butt, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 5.dp.toPx()))))
                 // more choices that way: a small triangle past each end of the rim, in the track's colour, blending out as that end is reached
                 for (up in listOf(true, false)) {
                     val a = (if (up) wheel.moreAbove(turn) else wheel.moreBelow(turn)) * grow * fadeAll
@@ -413,9 +419,10 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                 // it draws out from the rim (with Reduce Motion it only fades in)
                 val drawn = if (reduce) 1f else ((elapsed.value - d0) / 180f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
                 val a = (if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else 1f) * fadeAll * vis * (if (state.confirming >= 0 && state.confirming != k) 0.3f else 1f)
-                if (drawn > 0f) drawLine(m.colour.copy(alpha = a), start, Offset(start.x + (end.x - start.x) * drawn, start.y + (end.y - start.y) * drawn), 1.5.dp.toPx(), StrokeCap.Round)
+                // thin grey stalks ending in a small square node at the choice's near edge (1 dp in #71717A, a 6 dp square in #A1A1AA)
+                if (drawn > 0f) drawLine(Tok.text3.copy(alpha = a), start, Offset(start.x + (end.x - start.x) * drawn, start.y + (end.y - start.y) * drawn), 1.dp.toPx(), StrokeCap.Butt)
                 val nodeA = (if (reduce) 1f else ((elapsed.value - d0 - 140f) / 120f).coerceIn(0f, 1f)) * a
-                if (nodeA > 0f) drawCircle(m.colour.copy(alpha = nodeA), 3.dp.toPx(), end)
+                if (nodeA > 0f) drawRect(Tok.text2.copy(alpha = nodeA), Offset(end.x - 3.dp.toPx(), end.y - 3.dp.toPx()), Size(6.dp.toPx(), 6.dp.toPx()))
             }
         }
         m.items.forEachIndexed { k, item ->
@@ -435,11 +442,9 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                         if (!reduce) { translationX = (if (wheel.left) 10.dp.toPx() else -10.dp.toPx()) * (1f - inP); val sc = (0.96f + 0.04f * inP) * (0.9f + 0.1f * vis); scaleX = sc; scaleY = sc }
                     }
                     .drawBehind {
-                        val r = CornerRadius(12.dp.toPx())
-                        drawRoundRect(Tok.panel, cornerRadius = r)
-                        if (confirming) drawRoundRect(Tok.rec, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(11.dp.toPx()), style = Stroke(2.dp.toPx()))
-                        // the edge the line arrives at carries the track's colour
-                        else drawRoundRect(m.colour, Offset(if (wheel.left) size.width - 3.dp.toPx() else 0f, 8.dp.toPx()), Size(3.dp.toPx(), size.height - 16.dp.toPx()), CornerRadius(1.5.dp.toPx()))
+                        // a fully round pill on the dark panel grey, no edge bar (board 78 tile 11); a confirm is a 2 dp red outline on it
+                        drawRoundRect(Tok.panel, cornerRadius = CornerRadius(size.height / 2))
+                        if (confirming) drawRoundRect(Tok.rec, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = Stroke(2.dp.toPx()))
                     }
                     .then(if (vis < 0.5f || !takes) Modifier.clearAndSetSemantics { } else if (item.slide != null) Modifier.pointerInput(k, m) { detectTapGestures { } } else Modifier.semantics(mergeDescendants = true) {
                         role = Role.Button
@@ -449,26 +454,34 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                         onClick { state.pick(k); true }
                     }
                     .pointerInput(k, m) { detectTapGestures { state.pick(k) } })
-                    .padding(start = if (wheel.left) 14.dp else 16.dp, end = if (wheel.left) 16.dp else 14.dp),
+                    .padding(start = 9.dp, end = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                // the iPad's row: the title at 17, a small second line, a tick for the current choice; a choice that can't be made is dimmer
+                // the pill's contents (the iPhone's 67707f3): a 30 dp disc in the track's colour at the left (40 % when the choice can't be made) with
+                // its icon, 14 dp, in the dark on-colour inside; a 10 gap; the label in Barlow regular 16 (14 over 20 characters). A tick for the
+                // current choice, a chevron for one that opens more.
                 val ink = if (!item.enabled) Tok.text3 else Tok.text
-                if (item.slide != null) HoldSlideRow(item.title, item.slide, takes)
-                // what a confirm says goes must be readable whole: up to three lines, the type stepping down before anything is cut
-                else if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 1.15.em), maxLines = 3, overflow = TextOverflow.Ellipsis,
-                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 1.sp))
-                else Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        // a long title wraps to a second line when it has the row to itself ("Clear 12 unused patterns…" was cut on the Pixel
-                        // 10); with a second line under it, it stays on one and steps its size down instead. Nothing is cut until 13 sp fails
-                        BasicText(item.title, style = LupeType.body.copy(fontSize = 17.sp, lineHeight = 1.15.em, color = ink), maxLines = if (item.sub == null) 2 else 1, overflow = TextOverflow.Ellipsis,
-                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 13.sp, maxFontSize = 17.sp, stepSize = 1.sp))
-                        if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 1.15.em), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 12.sp, stepSize = 1.sp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(30.dp).background(m.colour.copy(alpha = if (item.enabled) 1f else 0.4f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                        holdIcon(item.title)?.let { Image(androidx.compose.ui.res.painterResource(it), null, Modifier.size(14.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tok.onColour)) }
                     }
-                    if (item.checked) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
-                    if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(color = Tok.text2)) }
+                    Spacer(Modifier.width(10.dp))
+                    if (item.slide != null) Box(Modifier.weight(1f).fillMaxHeight()) { HoldSlideRow(item.title, item.slide, takes) }
+                    // what a confirm says goes must be readable whole: up to three lines, the type stepping down before anything is cut
+                    else if (confirming) BasicText(item.confirm.orEmpty(), Modifier.weight(1f), style = LupeType.key.copy(fontSize = 13.sp, lineHeight = 1.1.em), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 13.sp, stepSize = 1.sp))
+                    else {
+                        Column(Modifier.weight(1f)) {
+                            // a long title wraps to a second line when it has the pill to itself, or steps down; with a second line under it, it stays on one
+                            val size = if (item.title.length > 20) 14.sp else 16.sp
+                            BasicText(item.title, style = LupeType.body.copy(fontSize = size, lineHeight = 1.1.em, color = ink), maxLines = if (item.sub == null) 2 else 1, overflow = TextOverflow.Ellipsis,
+                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = size, stepSize = 1.sp))
+                            if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 1.1.em), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 11.sp, stepSize = 1.sp))
+                        }
+                        if (item.checked) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
+                        if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(color = Tok.text2)) }
+                    }
                 }
             }
         }
