@@ -92,6 +92,7 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         Spacer(Modifier.height(8.dp))
         SwitchRow("Magnifier", "A bigger copy of the value floats above your finger as you slide", slide.magnifier) { slide.chooseMagnifier(it) }
         SwitchRow("Haptics", "On pads and value steps", phone.haptics) { phone.chooseHaptics(it) }
+        SwitchRow("Show graphics", "Turning a knob slides the dials up to show the page's picture; the Mix pages show theirs. Off: dials only", phone.showGraphics) { phone.chooseShowGraphics(it) }
 
         Column(Modifier.onGloballyPositioned { labsY = it.positionInParent().y.toInt() }) {
             Spacer(Modifier.height(12.dp))

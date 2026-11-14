@@ -99,3 +99,25 @@ Built (tests pass), not run on a screen.
 | 42 | Dismiss the Mix sheet, press GLO again | It comes back on the page the FM-1 is now on | – | ☐ pass ☐ fail: |
 | 43 | Press SAVE on the FM-1 four times | Sounds on the presets, then its USER list, then nothing (PATTERNS), then the Projects sheet | – | ☐ pass ☐ fail: |
 | 44 | Press GLO fast (as fast as you can) and watch the FM-1 | The FM-1 never jumps back a page: the phone sends nothing when the FM-1 changes GLO page (the core's mix area follows by itself; needs P1's commit) | – | ☐ pass ☐ fail: |
+
+## Decision 30: the outline timer, Show graphics, keys left and dials right (2026-11-14)
+
+Built; tests pass and the APK builds. **Seen on my emulator with the fake core** (Pixel-7-sized, 1080 × 2400): Pads, the Edit tab with keys left and dials right, a kit, the waiting outline on a MUTE key, and the dials sliding up over an ARP and an FM6 picture. **Not seen:** the pop-up's reveal on Pads and the Timeline, the Mix pages' pictures, anything on the real FM-1. The picture data (`page.graph`) is the shape from before decision 25, provisional until P1 sends the restored one; the fake draws pictures from the page's own values meanwhile.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 45 | While playing, tap an idle pad | The waiting outline is drawn round it as the launch point comes. (It was there before but hidden: tapping a pad selects it, and the selection ring sat exactly over the outline. The ring now steps aside while the pad waits) | – | ☐ pass ☐ fail: |
+| 46 | Settings › Show graphics | A switch, on by default | – | ☐ pass ☐ fail: |
+| 47 | Edit tab | The keyboard is on the left, the dials on the right | – | ☐ pass ☐ fail: |
+| 48 | On a sound page in Edit, turn a knob on the FM-1, or touch a dial | The dials slide up as a raised card (about 0.3 s) over the foot of the right-hand steps, and the page's picture shows where they were. They settle back about 8 s after the last turn or touch (the Labs hold time). The dials still turn while up | – | ☐ pass ☐ fail: |
+| 49 | Change page on the FM-1, or press HOME, while the picture shows | The dials come down at once | – | ☐ pass ☐ fail: |
+| 50 | On Pads or the Timeline, with the pop-up up, turn a knob | The pop-up grows and the dials go up with it, the picture under them; then it settles back | – | ☐ pass ☐ fail: |
+| 51 | Press GLO; step to Delay, Reverb, Chorus, Global | Each shared page shows its picture over its dials (taps, a tail, a wave, bars) | – | ☐ pass ☐ fail: |
+| 52 | Show graphics off; repeat 48, 50, 51 | Nothing slides; dials and tiles only; no Mix pictures | – | ☐ pass ☐ fail: |
+
+Chosen or left open:
+- **In Edit the dials slide up over the steps** (the right half's lower part is covered while the picture shows), rather than shrinking the step row.
+- **The pictures are read-only.** The handles that turned controls (decision 22) are not restored: the dials are the controls.
+- **The picture is 110 dp tall** (76 on a kit). FM6's ALL OPS chart is cramped at that height: operator boxes on two rows overlap.
+- **Tile pages** (MOD, LANES) have tiles, not pictures, so nothing slides there. OPERATOR and SOUND show their picture as well as their tiles.
+- The SLICES card is not restored (it was words, not a picture).

@@ -252,7 +252,12 @@ private fun BusPage(ui: MixUi, p: Int, actions: MixActions) {
     // the four dials and the card's settings; the page scrolls if they don't fit the sheet
     BoxWithConstraints(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        BasicText("Shared by every track", Modifier.padding(horizontal = 4.dp), style = LupeType.small.copy(fontSize = 12.sp))
+        // Show graphics (decision 30): the bus's picture beside its dials (Delay's taps, Reverb's tail, Chorus's wave, Global's bars); decoration
+        val graphics = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.showGraphics
+        if (graphics) Box(Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(10.dp)).background(Tok.well)) {
+            BusGraph(ui.pages[p], ui.bus)
+            BasicText("Shared by every track", Modifier.align(Alignment.TopEnd).padding(10.dp), style = LupeType.small.copy(fontSize = 12.sp))
+        } else BasicText("Shared by every track", Modifier.padding(horizontal = 4.dp), style = LupeType.small.copy(fontSize = 12.sp))
         PageControlsRow(ui.bus, Tok.text, litSlot = -1, litSeq = 0, opened = { _, c -> c.raw }, onSet = { slot, v -> actions.setBus(slot, v) })
         // the card's settings (DELAY MODE on 2.5.1): a choice, not a knob
         ui.settings.forEachIndexed { i, c ->
@@ -269,3 +274,22 @@ private fun BusPage(ui: MixUi, p: Int, actions: MixActions) {
     }
 }
 
+/** A small picture of the bus: taps that fall away (Delay), a tail (Reverb), a wave (Chorus), bars (Global). Decoration: TalkBack reads the controls. */
+@Composable
+private fun BusGraph(name: String, controls: List<com.scottgerstl.lupe.core.PageControl?>) {
+    val amount = (controls.getOrNull(1)?.raw ?: 60) / 127f
+    Canvas(Modifier.fillMaxSize().padding(16.dp).clearAndSetSemantics { }) {
+        val w = size.width; val h = size.height
+        val line = Stroke(2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        when (name) {
+            "Delay" -> for (i in 0 until 8) {
+                val x = 8.dp.toPx() + i * (w - 16.dp.toPx()) / 7f
+                val a = (1f - i / 8f) * (if (i == 0) 1f else (0.35f + amount * 0.65f))
+                drawLine(Tok.text, Offset(x, h), Offset(x, h - h * a), 5.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round, alpha = 0.9f)
+            }
+            "Reverb" -> drawPath(Path().apply { moveTo(0f, h); for (i in 0..40) { val x = w * i / 40f; lineTo(x, h - h * 0.9f * kotlin.math.exp(-3f * (0.4f + (1f - amount)) * i / 40f)) } }, Tok.text, style = line)
+            "Chorus" -> drawPath(Path().apply { for (i in 0..60) { val x = w * i / 60f; val y = h / 2 - kotlin.math.sin(i / 60f * 6.28f * 2f) * h * 0.35f * (0.3f + amount); if (i == 0) moveTo(x, y) else lineTo(x, y) } }, Tok.text, style = line)
+            else -> for (i in 0 until 16) { val x = 6.dp.toPx() + i * (w - 12.dp.toPx()) / 15f; drawLine(Tok.text2, Offset(x, h), Offset(x, h * (0.25f + 0.6f * ((i * 7 % 11) / 10f))), 6.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round) }
+        }
+    }
+}

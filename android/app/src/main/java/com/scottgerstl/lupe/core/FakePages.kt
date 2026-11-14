@@ -32,17 +32,19 @@ class FakePages {
         val v = clamp(c, value)
         val shown = if (c.list && c.names.isNotEmpty()) c.names.getOrElse(v) { v.toString() } else v.toString()
         val controls = p.controls.mapIndexed { i, x -> if (i == slot) c.copy(raw = v, value = shown) else x }
-        return p.copy(controls = controls)
+        // the picture follows the values it is drawn from
+        val title = p.pages.firstOrNull { it.index == p.page }?.title.orEmpty()
+        return p.copy(controls = controls, graph = if (p.graph.kind == GraphKind.None) p.graph else FakePageMap.graph(title, controls).takeIf { it.kind != GraphKind.None } ?: p.graph)
     }
 
     fun pick(p: PageState, family: String, page: Int?, track: Int = p.track, trackName: String = p.trackName): PageState {
         val row = rows[family] ?: defaults[family] ?: emptyList()
         val ref = (if (page == null) row.firstOrNull() else row.firstOrNull { it.index == page }) ?: return p.copy(family = family)
-        library[ref.title]?.let { return it.copy(track = track, trackName = trackName, lock = p.lock, turned = -1) }
+        library[ref.title]?.let { return it.copy(track = track, trackName = trackName, lock = p.lock, turned = -1, graph = if (it.graph.kind == GraphKind.None) FakePageMap.graph(ref.title, it.controls) else it.graph) }
         // a page the fixtures don't carry: built from the map (FakePageMap), else four empty wells
         val (controls, tiles) = FakePageMap.build(ref.title) ?: (List<PageControl?>(4) { null } to null)
         val window = if (ref.title == "OPERATOR") PageWindow(1, 5, "ENV 1") else null
-        return p.copy(family = family, pages = row, page = ref.index, track = track, trackName = trackName, controls = controls, tiles = tiles, title = if (ref.title == "OPERATOR") "OPERATOR 4" else "", window = window, turned = -1)
+        return p.copy(family = family, pages = row, page = ref.index, track = track, trackName = trackName, controls = controls, tiles = tiles, graph = FakePageMap.graph(ref.title, controls), title = if (ref.title == "OPERATOR") "OPERATOR 4" else "", window = window, turned = -1)
     }
 
     fun pickRoute(p: PageState, route: Int): PageState =

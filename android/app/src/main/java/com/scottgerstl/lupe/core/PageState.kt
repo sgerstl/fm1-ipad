@@ -88,6 +88,8 @@ data class PageState(
     /** The header: usually the page's title; on a sheet the FM-1's own ("OPERATOR 3", "ALL OPS", "SOUND SD"). Empty from an older core. */
     val title: String = "",
     val tiles: PageTilesState? = null,
+    /** The page's picture, drawn under the dials when Show graphics is on (PageGraph.kt). */
+    val graph: PageGraph = PageGraph(),
     val window: PageWindow? = null,
     /** The control (0…3) the FM-1's knob last turned, and a counter that grows with every turn: Compose lights it and fades it 600 ms after the last. */
     val turned: Int = -1,

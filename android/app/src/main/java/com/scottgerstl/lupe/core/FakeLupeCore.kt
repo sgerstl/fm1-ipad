@@ -152,7 +152,12 @@ class FakeLupeCore(
             "shell" -> _shell.value = lupeJson.decodeFromJsonElement(ShellState.serializer(), state)
             "homeKnobs" -> _home.value = lupeJson.decodeFromJsonElement(HomeKnobsState.serializer(), state)
             "clock" -> _clock.value = lupeJson.decodeFromJsonElement(ClockState.serializer(), state)
-            "page" -> { val p = lupeJson.decodeFromJsonElement(PageState.serializer(), state); pageFake.learn(p); _page.value = p }
+            "page" -> {
+                val p0 = lupeJson.decodeFromJsonElement(PageState.serializer(), state)
+                // a recording without the picture's data (P1 is restoring it): the fake draws one from the page's own values, so Show graphics can be tried
+                val p = if (p0.graph.kind != GraphKind.None) p0 else p0.copy(graph = FakePageMap.graph(p0.pages.firstOrNull { it.index == p0.page }?.title.orEmpty(), p0.controls))
+                pageFake.learn(p); _page.value = p
+            }
             "freetake" -> _freeTake.value = lupeJson.decodeFromJsonElement(FreeTakeState.serializer(), state)
             "mix" -> _mix.value = lupeJson.decodeFromJsonElement(MixState.serializer(), state)
             "sounds" -> _sounds.value = lupeJson.decodeFromJsonElement(SoundsState.serializer(), state)

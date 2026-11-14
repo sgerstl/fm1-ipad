@@ -41,6 +41,14 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         private set
     fun choosePanelHold(seconds: Int) { panelHoldSeconds = seconds.coerceIn(2, 20); prefs?.edit()?.putInt(PANEL_HOLD, panelHoldSeconds)?.apply() }
 
+    /**
+     * Show graphics (decision 30, on by default): each sound page's picture appears under its four dials when a knob turns, and the Mix sheet's
+     * shared pages get their pictures. Off: dials and tiles only.
+     */
+    var showGraphics by mutableStateOf(prefs?.getBoolean(GRAPHICS, true) ?: true)
+        private set
+    fun chooseShowGraphics(on: Boolean) { showGraphics = on; put(GRAPHICS, on) }
+
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
     fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
     fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN, on) }
@@ -51,6 +59,7 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     companion object {
         fun from(context: android.content.Context) = PhoneSettings(context.getSharedPreferences("lupe_settings", android.content.Context.MODE_PRIVATE))
         const val HAPTICS = "haptics"
+        const val GRAPHICS = "show_graphics"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"
