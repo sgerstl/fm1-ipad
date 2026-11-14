@@ -131,7 +131,16 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val rail = labs.soundKeys && shell.bottom.kind != BottomKind.FreeTake
 
     CompositionLocalProvider(LocalBackGoesHome provides (shell.bottom.kind == BottomKind.Page)) {
+        // right-handed: the sound keys and the panel on the right; left-handed: the keys on the left (Settings › Handedness). The panel stays on
+        // the right, where board 75 has it.
+        val railNode: @Composable () -> Unit = {
+            SoundKeysRail(open = if (docked) soundPage.family else null, onKey = { family ->
+                // the open family's key again steps its pages, as on the FM-1; another opens that family (the FM-1 goes there and the panel follows)
+                askCore.send(com.scottgerstl.lupe.core.PickPage(family, railTarget(family, if (docked) soundPage.family else null, soundPage.pages.map { it.index }, soundPage.page)))
+            })
+        }
         Row(modifier.fillMaxSize()) {
+            if (rail && labs.leftHanded) { railNode(); Spacer(Modifier.width(4.dp)) }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
                     if (take) com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
@@ -150,13 +159,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                 }
                 SoundPanel(dockT.value, docked, soundPage, soundCore, notice, { panel.dismiss() }, Modifier.align(Alignment.TopEnd).countTouches(onSoundTouch), graphics = labs.showGraphics)
             }
-            if (rail) {
-                Spacer(Modifier.width(4.dp))
-                SoundKeysRail(open = if (docked) soundPage.family else null, onKey = { family ->
-                    // the open family's key again steps its pages, as on the FM-1; another opens that family (the FM-1 goes there and the panel follows)
-                    askCore.send(com.scottgerstl.lupe.core.PickPage(family, railTarget(family, if (docked) soundPage.family else null, soundPage.pages.map { it.index }, soundPage.page)))
-                })
-            }
+            if (rail && !labs.leftHanded) { Spacer(Modifier.width(4.dp)); railNode() }
         }
     }
 }
