@@ -267,17 +267,25 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
     val link by core.link.collectAsStateWithLifecycle()
     val linked = link.phase == LinkPhase.Ready
     LaunchedEffect(linked) { if (!linked) place.reset() }
-    LaunchedEffect(screen.key, screen.page, linked) {
+    val mix by core.mix.collectAsStateWithLifecycle()
+    var settledKey by remember { mutableStateOf("") }
+    LaunchedEffect(screen.key, screen.page, screen.title, linked) {
         if (!linked) return@LaunchedEffect
-        delay(300)
+        // a new key must stay 300 ms (the link passes through screens as it connects); a page step within the key follows at once, after a
+        // short settle so a fast run of presses on the FM-1 isn't answered page by page
+        delay(if (screen.key != settledKey) 300 else 120)
+        settledKey = screen.key
         place.follow(screen, PlaceNow(shell.tab, editUi.lane, sheets.open == SheetKind.Mix, sounds.request != null, sheets.open == SheetKind.Projects)).forEach { a ->
             when (a) {
                 is PlaceAction.Tab -> core.send(Intent.SetTab(a.tab))
                 is PlaceAction.Lane -> editUi.lane = a.on
                 PlaceAction.OpenMix -> sheets.show(SheetKind.Mix)
                 PlaceAction.CloseMix -> if (sheets.open == SheetKind.Mix) sheets.close()
+                // the mix area's section is the core's: asking for the one the FM-1 is already on changes what the sheet shows and where nothing else
+                is PlaceAction.MixSection -> if (mix.section != a.section) core.send(com.scottgerstl.lupe.core.MixSectionPick(a.section))
                 PlaceAction.OpenSounds -> sounds.open(pads.selected.track.coerceAtLeast(1))
                 PlaceAction.CloseSounds -> sounds.close()
+                is PlaceAction.SoundsView -> sounds.show(a.user)
                 PlaceAction.ShowProjects -> sheets.show(SheetKind.Projects)
                 PlaceAction.CloseProjects -> if (sheets.open == SheetKind.Projects) sheets.close()
             }
