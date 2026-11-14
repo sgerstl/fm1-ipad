@@ -6,8 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SoundPanelModelTest {
+    @Test fun theDefaultHoldIsEightSeconds() { val m = SoundPanelModel(); m.page(null, 0); m.page("FX/5", 0); m.tick(7999); assertTrue(m.up); m.tick(8000); assertFalse(m.up) }
+
     @Test fun restingOnASoundPageAtLaunchDoesNotRaiseIt() {
-        val m = SoundPanelModel()
+        val m = SoundPanelModel().also { it.holdMs = 4000 }
         m.page("FX/5", 0); m.turn(3, 0)
         assertFalse(m.up)
         m.page("FX/5", 5000)             // the same page again (a tab switch re-reads it): still down
@@ -15,7 +17,7 @@ class SoundPanelModelTest {
     }
 
     @Test fun aPageChangeRaisesItAndItLeavesAfterTheHold() {
-        val m = SoundPanelModel()
+        val m = SoundPanelModel().also { it.holdMs = 4000 }
         m.page(null, 0); m.turn(0, 0)
         m.page("FX/5", 1000)
         assertTrue(m.up)
@@ -26,7 +28,7 @@ class SoundPanelModelTest {
     }
 
     @Test fun knobTurnsAndTouchesKeepItUpAndATurnBringsItBack() {
-        val m = SoundPanelModel()
+        val m = SoundPanelModel().also { it.holdMs = 4000 }
         m.page(null, 0); m.turn(0, 0)
         m.page("ENV/0", 1000)
         m.turn(1, 4000); m.tick(5000); assertTrue(m.up)      // the turn restarted the timer
@@ -36,7 +38,7 @@ class SoundPanelModelTest {
     }
 
     @Test fun homeASwipeAndAReconnectLowerIt() {
-        val m = SoundPanelModel()
+        val m = SoundPanelModel().also { it.holdMs = 4000 }
         m.page(null, 0); m.turn(0, 0)
         m.page("LFO/2", 100); m.page(null, 200); assertFalse(m.up)   // HOME
         m.page("LFO/2", 300); m.dismiss(); assertFalse(m.up)          // a swipe down
@@ -46,7 +48,7 @@ class SoundPanelModelTest {
     }
 
     @Test fun aKnobTurnedWithNoSoundPageDoesNothing() {
-        val m = SoundPanelModel()
+        val m = SoundPanelModel().also { it.holdMs = 4000 }
         m.page(null, 0); m.turn(0, 0); m.turn(1, 100)
         assertFalse(m.up)
     }

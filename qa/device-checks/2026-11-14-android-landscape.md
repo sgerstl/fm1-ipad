@@ -29,10 +29,10 @@ Written by the session that built it (`CLAUDE.md`, rule 2). Scott runs it with t
 | 19 | Hold a cell | It is picked without toggling (white ring); under the grid "SD · step 5 ✕" and boxes VELOCITY CHANCE RATCHET NUDGE that slide; PITCH and DECAY show "—" (not wired yet) | Yes | ☐ pass ☐ fail: |
 | 20 | Press FX on the FM-1 while on Edit | The dials area becomes "FX 1/7 FX" and the page's four dials; the keyboard stays. On MOD or LANES the tiles take the keyboard's place | – | ☐ pass ☐ fail: |
 | 21 | Press FX on the FM-1 while on Pads or Timeline; press FX again | A panel the dials' width rises at the bottom right with the header and four dials (full width on a page with tiles); a page step raises it again. It rises and falls, never pops | – | ☐ pass ☐ fail: |
-| 21a | Leave it alone; then turn an FM-1 knob; then touch a dial | It falls about 4 s after the last knob turn or touch; a knob turn while it's down brings it back; turning or touching keeps it up | – | ☐ pass ☐ fail: |
+| 21a | Leave it alone; then turn an FM-1 knob; then touch a dial | It falls about 8 s after the last knob turn or touch; a knob turn while it's down brings it back; turning or touching keeps it up | – | ☐ pass ☐ fail: |
 | 21b | Swipe down on its header; press HOME on the FM-1; swipe back | Each lowers it | – | ☐ pass ☐ fail: |
 | 21c | With the FM-1 resting on a sound page: launch Lupe, unplug and replug, switch tabs | The panel does not rise by itself | – | ☐ pass ☐ fail: |
-| 21d | Settings › Labs › SOUND PANEL STAYS: slide it to 8 s | The panel now stays 8 s (2 to 12; double tap puts 4 back). Added 2026-11-14, review 2026-11-28 | – | ☐ pass ☐ fail: |
+| 21d | Settings › Labs › SOUND PANEL STAYS: slide it to 12 s | The panel now stays 12 s (2 to 20; double tap puts 8 back). Added 2026-11-14, review 2026-11-28 | – | ☐ pass ☐ fail: |
 | 22 | Press GLO, SAVE, SEQ, HOME on the FM-1 | GLO: the Mix sheet rises (two columns of three rows, the bus cards on its other pages). SAVE: Sounds (PRESETS, USER) or Projects (PROJECT). SEQ: the Edit tab (AUTOMATION: its lane; SONG: the Timeline). HOME: sheets close, the tab you had returns | – | ☐ pass ☐ fail: |
 | 23 | project ⌄ › Mix…, Projects…, Settings | Each sheet rises and fits the short screen; drag down, ✕ or back closes it | – | ☐ pass ☐ fail: |
 | 24 | Unplug the FM-1; plug it back | The lost card and page still read correctly in landscape; reconnecting opens no sheet by itself | – | ☐ pass ☐ fail: |

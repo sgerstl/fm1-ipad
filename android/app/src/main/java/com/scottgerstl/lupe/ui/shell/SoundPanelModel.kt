@@ -5,7 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * When the sound panel is up over Pads and the Timeline (Scott, 2026-11-14: "only on a page change"). It rises when the FM-1 *changes* to a
+ * When the sound panel is up over Pads and the Timeline (Scott, 2026-11-14: on a page change or any knob turned on the FM-1; it shows what the
+ * FM-1 shows, the page's header, four dials and tiles, and nothing else). It rises when the FM-1 *changes* to a
  * sound page (a sound key, or a page step within the family), never because the FM-1 is resting on one: the first page seen after launch or
  * a reconnect is only the baseline. A knob turned on the FM-1 brings it back for that page. It leaves on HOME (no sound page), on a swipe
  * down, or [holdMs] after the last knob turn or touch on it. Clock-driven by `now` so tests can run it.
@@ -14,7 +15,7 @@ class SoundPanelModel {
     var up by mutableStateOf(false); private set
     /** When it leaves if nothing else happens; a state so the screen can wait for it. */
     var deadline by mutableStateOf(0L); private set
-    var holdMs = 4000L
+    var holdMs = 8000L
     private var primed = false
     private var last: String? = null
     private var lastTurn: Int? = null

@@ -35,11 +35,11 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
 
     /**
      * Labs, a feel value (CLAUDE.md rule 3; added 2026-11-14, review 2026-11-28): how long the sound panel over Pads and the Timeline stays after
-     * the last knob turn or touch, in seconds. Default 4, range 2 to 12.
+     * the last knob turn or touch, in seconds. Default 8 (Scott, 2026-11-14: generous, so it doesn't vanish while playing; it was 4), range 2 to 20.
      */
-    var panelHoldSeconds by mutableStateOf(prefs?.getInt(PANEL_HOLD, 4) ?: 4)
+    var panelHoldSeconds by mutableStateOf(prefs?.getInt(PANEL_HOLD, 8) ?: 8)
         private set
-    fun choosePanelHold(seconds: Int) { panelHoldSeconds = seconds.coerceIn(2, 12); prefs?.edit()?.putInt(PANEL_HOLD, panelHoldSeconds)?.apply() }
+    fun choosePanelHold(seconds: Int) { panelHoldSeconds = seconds.coerceIn(2, 20); prefs?.edit()?.putInt(PANEL_HOLD, panelHoldSeconds)?.apply() }
 
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
     fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
@@ -55,7 +55,7 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"
         const val ACROSS = "labs_timeline_across"
-        const val PANEL_HOLD = "labs_sound_panel_hold_s"
+        const val PANEL_HOLD = "labs_sound_panel_hold_s2"   // "…_s" held the first default (4)
     }
 }
 
