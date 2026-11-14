@@ -66,11 +66,11 @@ struct PadsPage: View {
     private var row: Bool { layout == .row }
     private var phone: Bool { layout == .phone }
     /// The phone's sizes (board 40): heads 72, pads 78 × 40, scenes 34, Store 52.
-    static let phoneHead: CGFloat = 72, phonePad: CGFloat = 78, phoneRow: CGFloat = 40, phoneScenes: CGFloat = 34
+    static let phoneHead: CGFloat = 72, phonePad: CGFloat = 86, phoneRow: CGFloat = 40, phoneScenes: CGFloat = 34
     /// The scene row's height at this layout.
     private var sceneH: CGFloat { phone ? Self.phoneScenes : compact ? Self.compactScenes : Self.sceneHeight }
     /// The heads' width: the lane's tag runs behind them.
-    private var headWidth: CGFloat { phone ? Self.phoneHead : Self.compactStrip }
+    private var headWidth: CGFloat { phone ? PhoneHeads.width : Self.compactStrip }
 
     /// A pad's place: its track and entry.
     struct PadKey: Hashable { var track: Int, entry: Int }
@@ -182,7 +182,9 @@ struct PadsPage: View {
                             .accessibilitySortPriority(Self.rowOrder(k))
                     }
                 }
-                .frame(width: Self.phoneHead)
+                .frame(width: PhoneHeads.head)
+                PhoneMuteColumn(session: session, store: store, tracks: tracks, rowHeight: r.rowHeight, rowGap: r.rowGap)
+                    .padding(.leading, PhoneHeads.gap - 6)
                 // the columns past the screen's edge: a pan sideways (one finger or two, as the grids since 2026-11-07)
                 ScrollView(.horizontal) {
                     grid(t, tracks, r).frame(width: gridW, height: r.height)
@@ -402,7 +404,7 @@ struct PadsPage: View {
                                 .id("tint\(t).\(i).\(bare)")
                                 .transition(reduceMotion ? .opacity : Emerge.transition(s, row: bare, slide: !bare))
                             // shut: the tab that opens them, on the row's edge they'd open from (Scott, 2026-11-10)
-                            if bare, !row {
+                            if bare, !row, !phone {      // (the phone has no track controls box: decision 31)
                                 OpenControlsTab(track: t, up: s.up, width: Self.openTabWidth, height: Self.openTabHeight) { showControls(true) }
                                     .offset(x: s.frame.maxX - Self.openTabWidth,
                                             y: s.up ? s.frame.minY - laneBleed - Self.openTabHeight : s.frame.maxY + laneBleed)
@@ -610,14 +612,22 @@ struct PadsPage: View {
             if short {
                 // a row as tall as a lane head (Half): one line, the letter, the number, the countdown when waiting,
                 // the pass bar along the foot (board 37)
-                HStack(spacing: 6) {
+                HStack(spacing: phone ? 4 : 6) {
                     Text(letter).font(.lupe(12, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
                     if !title.isEmpty {
                         Text(title).font(.lupeNumber(e.isRest ? 12 : 17, .bold)).monospacedDigit()
                             .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
+                            .fixedSize()           // (the number never gives way: the small word beside it does)
                     }
                     PadMarks(marks: padMarks(e), ink: ink, boxed: false)
                     Spacer(minLength: 0)
+                    // the phone (decision 33, Android's pads): the next cue, the passes ×N, n/N while it plays
+                    if phone, let side = phoneSide(e, m, playing: playing, next: next) {
+                        Text(side).font(.lupe(11, .medium)).monospacedDigit()
+                            .foregroundStyle(playing && !e.isRest ? ink : Theme.textSecondaryRaised).lineLimit(1)
+                            .fixedSize()
+                            .accessibilityHidden(true)
+                    }
                 }
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -728,6 +738,14 @@ struct PadsPage: View {
         }
         // read row by row, each after its track's head (see `rowOrder`)
         .accessibilitySortPriority(Self.rowOrder(t, pad: i))
+    }
+
+    /// The phone's small word at a pad's right: "next", the passes of a chained run ("×4"), or while it plays "2/4".
+    private func phoneSide(_ e: SongEntry, _ m: SongPlayback.Marks, playing: Bool, next: Bool) -> String? {
+        if e.isEmpty { return nil }
+        if next { return "next" }
+        if playing { return m.loops ? nil : m.pass.map { "\($0)/\(m.reps)" } }
+        return e.reps > 1 ? "×\(e.reps)" : nil
     }
 
     /// VoiceOver's order on the grid (2026-11-10): the tool row, then each track's head and its pads, row by row, then

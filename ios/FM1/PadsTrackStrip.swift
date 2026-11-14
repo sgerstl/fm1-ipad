@@ -250,58 +250,6 @@ struct TrackStripRow: View {
     }
 }
 
-/// The phone's row head (board 40, 46): the track's number (tap: select it; held: its menu) and Mute, the row's stop.
-/// The name and what it plays are VoiceOver's (no room); the pads beside it show what plays.
-struct PhonePadHead: View {
-    let session: DeviceSession
-    let store: SkiffSongStore
-    let ui: EditorUI
-    let track: Int
-    let preview: SkiffSongStore.SceneTrack?
-
-    var body: some View {
-        let t = track
-        let selected = session.selectedTrack == t
-        let list = store.song?.tracks[safe: t]
-        let perf = store.perform
-        let muted = perf?.muted[safe: t] ?? session.tracks[t].mute
-        let staged = perf?.staged[safe: t] ?? PerformState.Staged.none
-        let m = store.marks(t, launchIn: nil)
-        let lines = TrackStripCard.lines(list, m, playing: session.playing, launch: session.launchMode)
-        HStack(spacing: 4) {
-            Button { session.select(track: t) } label: {
-                BigTrackChip(track: t, muted: muted, side: 30)
-                    .overlay {
-                        if selected { RoundedRectangle(cornerRadius: 9.5).strokeBorder(Theme.text, lineWidth: 2).padding(-2) }
-                    }
-                    .frame(width: 34, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .trackMenuPress(session: session, ui: ui, track: t)
-            .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
-            .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
-            .accessibilityHint("Selects the track")
-            .accessibilityAddTraits(selected ? [.isSelected] : [])
-            Button { Task { await store.performOp(.mute(track: t)) } } label: {
-                Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(muted ? Theme.onColour : Theme.text)
-                    .frame(width: 34, height: 34)
-                    .background { HeadKeySurface(on: muted && staged == .none, onColour: Theme.text, staged: staged != .none) }
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressSink())
-            .disabled(store.offline)
-            .accessibilityLabel("Mute track \(t + 1)")
-            .accessibilityValue(staged == .none ? (muted ? "muted" : "playing") : staged == .mute ? "mutes at the launch point" : "unmutes at the launch point")
-            .accessibilityAddTraits(.isToggle)
-        }
-        .frame(maxHeight: .infinity)
-        .overlay { if preview != nil { RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
-        .accessibilityElement(children: .contain)
-    }
-}
-
 /// A pass bar redrawn every frame (30 a second) from the counted clock, alone in its own view: the card's and the pads'
 /// slower refreshes (2 and 4 a second) made it step (Scott, 2026-11-07: "low frame rate"). Only this redraws.
 struct SmoothBar: View {
