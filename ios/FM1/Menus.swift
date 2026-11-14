@@ -390,6 +390,14 @@ struct FanMenu: View {
     }
 
     var body: some View {
+        // the iPhone: the radial hold menu, Android's styling with these same options (decision 31). A caption or a
+        // "Don't ask again" box keeps the fan, which has room for them.
+        if UIDevice.current.userInterfaceIdiom == .phone, caption == nil, optOut == nil, !asking {
+            RadialMenu(title: title, items: items, at: at, layer: layer, tint: tint, close: close)
+        } else { fanBody }
+    }
+
+    @ViewBuilder private var fanBody: some View {
         // (merge 2026-11-11: the phone's columns, where the buttons don't fit the height, with the caption over them and
         // the "Don't ask again" box under them; the confirm in place as before)
         let capH: CGFloat = caption.map { 20 + CGFloat(Int((Double($0.count) / 28).rounded(.up))) * 18 } ?? 0

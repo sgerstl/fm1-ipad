@@ -139,7 +139,7 @@ struct PhoneMuteColumn: View {
 }
 
 extension View {
-    /// The phone's hold menu on a track head (step 3 replaces the beside-the-finger menu with the radial one).
+    /// The phone's hold menu on a track head: the track menu, drawn radial on the phone (RadialMenu via FanMenu).
     func phoneHoldMenu(session: DeviceSession, ui: EditorUI, track: Int) -> some View {
         trackMenuPress(session: session, ui: ui, track: track)
     }
