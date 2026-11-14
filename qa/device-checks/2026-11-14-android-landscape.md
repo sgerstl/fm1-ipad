@@ -33,7 +33,7 @@ Written by the session that built it (`CLAUDE.md`, rule 2). Scott runs it with t
 | 23 | project ⌄ › Mix…, Projects…, Settings | Each sheet rises and fits the short screen; drag down, ✕ or back closes it | – | ☐ pass ☐ fail: |
 | 24 | Unplug the FM-1; plug it back | The lost card and page still read correctly in landscape; reconnecting opens no sheet by itself | – | ☐ pass ☐ fail: |
 
-**Not covered here:** TalkBack, largest text and Remove animations (the release accessibility pass); the Timeline tab's own landscape layout (P4's; today's page stands in until `TimelineTab` lands); the FREE TAKE picker in landscape (it takes the whole body; not laid out afresh).
+**Not covered here:** TalkBack, largest text and Remove animations (the release accessibility pass); the Timeline tab's own landscape layout (P4's, behind the same `TimelinePage` call; until P4's branch is merged the tab shows today's page); the FREE TAKE picker in landscape (it takes the whole body; not laid out afresh).
 
 ## What I decided, and what didn't fit
 

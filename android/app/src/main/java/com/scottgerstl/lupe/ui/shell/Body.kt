@@ -128,8 +128,8 @@ private fun Modifier.countTouches(onTouch: () -> Unit) = pointerInput(Unit) {
 }
 
 /**
- * The Timeline tab's slot. P4 owns ui/timeline and is building the landscape Timeline behind `TimelineTab(core, modifier)`; until that is on
- * this branch, today's page stands in through this adapter (delete it then and call TimelineTab here).
+ * The Timeline tab's slot. P4 owns ui/timeline and keeps `TimelinePage`'s signature for the landscape Timeline (agreed 2026-11-14), fed by
+ * `rememberTimeline(core)`; it fills the box it is given.
  */
 @Composable
 private fun TimelineSlot(core: LupeCore) {
