@@ -27,7 +27,9 @@ val LocalTabPage = compositionLocalOf<TabPage?> { null }
 val LocalTabTravelling = compositionLocalOf { false }
 
 /** Marks this as where the page shows the selected track. Public so the Timeline (ui/timeline) can mark its row too. */
-fun Modifier.selectedTrackAnchor(): Modifier = composed {
+fun Modifier.selectedTrackAnchor(outset: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f)): Modifier = composed {
     val page = LocalTabPage.current ?: return@composed this
-    onGloballyPositioned { c -> page.box?.takeIf { it.isAttached }?.let { page.anchors.rects[page.tab] = it.localBoundingBoxOf(c, clipBounds = false) } }
+    val grow = with(androidx.compose.ui.platform.LocalDensity.current) { outset.toPx() }
+    // [outset]: how far outside this box the page draws its outline, so the travelling one lands exactly on it
+    onGloballyPositioned { c -> page.box?.takeIf { it.isAttached }?.let { page.anchors.rects[page.tab] = it.localBoundingBoxOf(c, clipBounds = false).inflate(grow) } }
 }

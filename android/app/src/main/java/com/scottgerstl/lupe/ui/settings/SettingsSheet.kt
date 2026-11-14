@@ -105,6 +105,9 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
         // a feel value to tune by hand (added 2026-11-14, review 2026-11-28): slide it
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("SOUND PANEL STAYS · SECONDS", "${phone.panelHoldSeconds} s", phone.panelHoldSeconds, 2, 20, "How long the sound panel stays after the last knob turn or touch", stepDp = 14f, revertTo = 8) { phone.choosePanelHold(it) }
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("TAB CHANGE · MS", "${phone.tabSlideMs} ms", phone.tabSlideMs / 10, 15, 70, "How long a tab change takes", stepDp = 8f, revertTo = 38) { phone.chooseTabSlide(it * 10) }
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPRING", "${phone.menuSpring}", phone.menuSpring / 5, 0, 20, "How far the hold menu's circle springs past its size", stepDp = 12f, revertTo = 12) { phone.chooseMenuSpring(it * 5) }
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPEED", "${phone.menuSpeed}%", phone.menuSpeed / 10, 5, 20, "How fast the hold menu opens", stepDp = 12f, revertTo = 10) { phone.chooseMenuSpeed(it * 10) }
         SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
         SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
     }

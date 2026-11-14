@@ -49,6 +49,19 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         private set
     fun chooseShowGraphics(on: Boolean) { showGraphics = on; put(GRAPHICS, on) }
 
+    /** Labs feel values (CLAUDE.md rule 3; added 2026-11-14, review 2026-11-28). The tab change's length in ms (the track thread mockup): default 380, 150 to 700. */
+    var tabSlideMs by mutableStateOf(prefs?.getInt(TAB_MS, 380) ?: 380)
+        private set
+    fun chooseTabSlide(ms: Int) { tabSlideMs = ms.coerceIn(150, 700); prefs?.edit()?.putInt(TAB_MS, tabSlideMs)?.apply() }
+    /** The hold menu's circle: how far it springs past its size, 0 (a plain ease-out) to 100; default 60 (the mockup's Spring). */
+    var menuSpring by mutableStateOf(prefs?.getInt(MENU_SPRING, 60) ?: 60)
+        private set
+    fun chooseMenuSpring(v: Int) { menuSpring = v.coerceIn(0, 100); prefs?.edit()?.putInt(MENU_SPRING, menuSpring)?.apply() }
+    /** The hold menu's speed in percent: 100 is the mockup's timing, 200 twice as fast; default 100, 50 to 200 (the mockup's Speed). */
+    var menuSpeed by mutableStateOf(prefs?.getInt(MENU_SPEED, 100) ?: 100)
+        private set
+    fun chooseMenuSpeed(v: Int) { menuSpeed = v.coerceIn(50, 200); prefs?.edit()?.putInt(MENU_SPEED, menuSpeed)?.apply() }
+
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
     fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
     fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN, on) }
@@ -59,6 +72,9 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     companion object {
         fun from(context: android.content.Context) = PhoneSettings(context.getSharedPreferences("lupe_settings", android.content.Context.MODE_PRIVATE))
         const val HAPTICS = "haptics"
+        const val TAB_MS = "labs_tab_slide_ms"
+        const val MENU_SPRING = "labs_menu_spring"
+        const val MENU_SPEED = "labs_menu_speed"
         const val GRAPHICS = "show_graphics"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"

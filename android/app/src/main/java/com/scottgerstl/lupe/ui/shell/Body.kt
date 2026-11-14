@@ -120,7 +120,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         Box(modifier.fillMaxSize()) {
             LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
                 if (take) com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
-                else TabPager(shell.tab, Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size]) { tab ->
+                else TabPager(shell.tab, Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size], labs.tabSlideMs) { tab ->
                     when (tab) {
                         Tab.Pads -> PadsPage(pads, core)
                         Tab.Edit -> Box(Modifier.fillMaxSize()) {
@@ -153,14 +153,15 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 }
 
 /**
- * The tabs' pages slide in the tab's direction (decision 29): going right (Pads → Edit → Timeline) the old page leaves to the left and the new
- * one comes in from the right, and back the other way; 280 ms ease-out, the outgoing page a little ahead. While they slide, the selected
- * track's outline travels from where the old page drew the track (Pads: its row) to where the new one does (Edit: the step row), in the track's
- * colour, so the eye follows the track across; it fades as it lands. No scale, no overshoot. With Reduce Motion the pages only cross-fade
- * (150 ms) and nothing travels.
+ * The tabs' pages slide in the tab's direction, and the track thread travels with them (the tab-thread mockup, Scott 2026-11-14): going right
+ * (Pads → Edit → Timeline) the old page leaves to the left and the new one comes in from the right, and back the other way; ease-out over
+ * [ms] (Labs, default 380), the outgoing page done at 85 % of the time. The selected track's 2 dp outline in its colour never leaves the
+ * screen: it eases from its rectangle on the old tab (Pads: the track's row; Edit: the step row; Timeline: the lane) to the one on the new tab,
+ * on the same curve, landing with the incoming page. No scale, no overshoot. With Reduce Motion the pages cross-fade (150 ms) and the outline
+ * cross-fades between its two places.
  */
 @Composable
-private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, content: @Composable (Tab) -> Unit) {
+private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: Int, content: @Composable (Tab) -> Unit) {
     val reduce = LocalReduceMotion.current
     val anchors = remember { TrackAnchors() }
     var shown by remember { mutableStateOf(tab) }
@@ -171,7 +172,7 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, conte
         if (tab == shown) return@LaunchedEffect
         from = shown; fromRect = anchors.rects[shown]; shown = tab
         t.snapTo(0f)
-        com.scottgerstl.lupe.ui.theme.unscaled { t.animateTo(1f, androidx.compose.animation.core.tween(if (reduce) Dur.STATE else 280, easing = EaseOut)) }
+        com.scottgerstl.lupe.ui.theme.unscaled { t.animateTo(1f, androidx.compose.animation.core.tween(if (reduce) Dur.STATE else ms, easing = EaseOut)) }
         from = null
     }
     val dir = if ((from?.ordinal ?: shown.ordinal) <= shown.ordinal) 1f else -1f
@@ -179,7 +180,7 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, conte
         from?.let { old ->
             androidx.compose.runtime.key(old) {
                 val page = remember { TabPage(old, anchors) }
-                Box(Modifier.fillMaxSize().graphicsLayer { val out = (t.value * 1.25f).coerceAtMost(1f); if (reduce) alpha = 1f - t.value else { translationX = -dir * size.width * out; alpha = 1f - 0.4f * out } }
+                Box(Modifier.fillMaxSize().graphicsLayer { val out = (t.value / 0.85f).coerceAtMost(1f); if (reduce) alpha = 1f - t.value else { translationX = -dir * size.width * out; alpha = 1f - 0.4f * out } }
                     .onGloballyPositioned { page.box = it }.clearAndSetSemantics { }) {
                     CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides true) { content(old) }
                 }
@@ -188,17 +189,19 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, conte
         androidx.compose.runtime.key(shown) {
             val page = remember { TabPage(shown, anchors) }
             Box(Modifier.fillMaxSize().graphicsLayer { if (from != null) { if (reduce) alpha = t.value else translationX = dir * size.width * (1f - t.value) } }.onGloballyPositioned { page.box = it }) {
-                CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides (from != null && !reduce)) { content(shown) }
+                CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides (from != null)) { content(shown) }
             }
         }
-        // the travelling outline: from the old page's track to the new page's, fading out over the last third as it lands
+        // the thread while the pages move: one outline easing from the old place to the new; with Reduce Motion, the two places cross-fading
         val a = fromRect; val b = anchors.rects[shown]
-        if (from != null && !reduce && a != null && b != null) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+        if (from != null && (a != null || b != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
             val p = t.value
-            fun mix(x: Float, y: Float) = x + (y - x) * p
-            val alpha = if (p < 0.66f) 1f else ((1f - p) / 0.34f).coerceIn(0f, 1f)
-            drawRoundRect(colour.copy(alpha = alpha), Offset(mix(a.left, b.left) + 1.dp.toPx(), mix(a.top, b.top) + 1.dp.toPx()),
-                androidx.compose.ui.geometry.Size(mix(a.width, b.width) - 2.dp.toPx(), mix(a.height, b.height) - 2.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(9.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+            fun outline(r: androidx.compose.ui.geometry.Rect, alpha: Float) = drawRoundRect(colour.copy(alpha = alpha), Offset(r.left + 1.dp.toPx(), r.top + 1.dp.toPx()),
+                androidx.compose.ui.geometry.Size(r.width - 2.dp.toPx(), r.height - 2.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(9.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+            when {
+                reduce || a == null || b == null -> { a?.let { outline(it, 1f - p) }; b?.let { outline(it, p) } }   // nothing travels: each fades where it stands
+                else -> outline(androidx.compose.ui.geometry.Rect(a.left + (b.left - a.left) * p, a.top + (b.top - a.top) * p, a.right + (b.right - a.right) * p, a.bottom + (b.bottom - a.bottom) * p), 1f)
+            }
         }
     }
 }

@@ -140,7 +140,12 @@ fun EditTab(
     Column(modifier.fillMaxSize()) {
         Ruler(ed, track, core, if (drum) hit != null else pick.step != null)
         Spacer(Modifier.height(4.dp))
-        Box(Modifier.weight(1f).fillMaxWidth().selectedTrackAnchor()) {
+        // the track thread rests round the pattern (the tab-thread mockup): the selected track's outline in its colour; while the tabs slide the
+        // travelling one stands in for it
+        val travelling = LocalTabTravelling.current
+        Box(Modifier.weight(1f).fillMaxWidth().selectedTrackAnchor(outset = 4.dp).drawBehind {
+            if (!travelling) drawRoundRect(track, Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(11.dp.toPx()), style = Stroke(2.dp.toPx()))
+        }) {
             if (drum) DrumGrid(ed, track, core, hit) { hit = it } else StepRow(ed, track, core, pick.step) { pick.step = it }
         }
         Spacer(Modifier.height(6.dp))
