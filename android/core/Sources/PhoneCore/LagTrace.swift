@@ -8,7 +8,17 @@ import SloopKit
 
 public enum LagClock {
     /// Milliseconds on the monotonic clock (fractional).
-    public static func now() -> Double { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000 }
+    /// CLOCK_MONOTONIC read directly where it exists (Android, Linux): the very clock SystemClock.uptimeMillis reads,
+    /// so the clock area's `atMs` can't be on another clock than the screen's, whatever Dispatch's own time is built on.
+    public static func now() -> Double {
+        #if os(Android) || os(Linux)
+        var ts = timespec()
+        clock_gettime(CLOCK_MONOTONIC, &ts)
+        return Double(ts.tv_sec) * 1000 + Double(ts.tv_nsec) / 1_000_000
+        #else
+        return Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000
+        #endif
+    }
     public static func ms() -> Int { Int(now()) }
 }
 

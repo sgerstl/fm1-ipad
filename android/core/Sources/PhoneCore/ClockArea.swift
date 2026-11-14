@@ -39,13 +39,36 @@ extension PhoneCore {
                 seen = k
                 if k < 0 {
                     if clockRef != nil { clockRef = nil; pokeAreas(["clock", "pads", "top"]) }
-                } else if clockRef == nil || k % 24 == 0 || k < was || k - was > 12 {
+                } else if clockRef == nil || k / 24 != (clockRef?.ticks ?? 0) / 24 || k < was || k - was > 12 {
+                    // a new reference on Start, when a beat is crossed (not only on its exact pulse: a busy main
+                    // thread can miss that one), and when the count jumps
                     clockRef = (k, LagClock.now())
                     pokeAreas(["clock"])
                 }
             }
             try? await Task.sleep(for: .milliseconds(k < 0 ? 50 : 4))
         }
+    }
+
+    /// One line in the log each time something starts or stops waiting for the launch point, with the pulse it lands
+    /// on and the clock as published: what the Pixel's logcat needs to show whether the outline timers have their data
+    /// (Scott's device session, 2026-11-14: they didn't show). Called with the pads area as it is built.
+    func logWaits(_ a: PadsArea) {
+        var now: Set<String> = []
+        for r in a.rows {
+            for (e, p) in r.entries.enumerated() where p.play == .waiting { now.insert("T\(r.track) pad \(e + 1) lands at \(p.launchTick.map { String(Int($0)) } ?? "no tick")") }
+            if r.mutePending != "none" { now.insert("T\(r.track) \(r.mutePending) lands at \(r.launchTick.map { String(Int($0)) } ?? "no tick")") }
+            if r.soloPending { now.insert("T\(r.track) solo lands at \(r.launchTick.map { String(Int($0)) } ?? "no tick")") }
+        }
+        for (i, sc) in a.scenes.enumerated() where sc.waiting { now.insert("scene \(i + 1) lands at \(sc.launchTick.map { String(Int($0)) } ?? "no tick")") }
+        // (the tick is part of the line: a wait whose tick moves on, a launch point passed before the FM-1's list was
+        // read, is logged again)
+        guard now != loggedWaits else { return }
+        let c = clockArea()
+        let clock = c.running ? "clock running, tick \(session.clockTicks), \(Int(c.ticksPerSecond)) a second" : "no clock"
+        for w in now.subtracting(loggedWaits).sorted() { log("wait: \(w) (\(clock), launch \(session.launchMode))") }
+        for w in loggedWaits.subtracting(now).sorted() { log("wait over: \(w)") }
+        loggedWaits = now
     }
 
     /// The absolute pulse a launch on track t lands on (the count now plus Session.ticksToLaunch), nil with no clock.

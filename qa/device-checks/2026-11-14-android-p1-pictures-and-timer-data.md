@@ -1,0 +1,37 @@
+# Device check: claude/android-p1-core-link-faf639, 2026-11-14 (picture data back; the outline timer's data)
+
+Written by the session that built it (see `CLAUDE.md`, rule 2). The main session installs the build and runs it with
+the **Pixel 10 Pro** and the FM-1. The branch merges to `main` only after it passes.
+
+Two things from Scott's device session on d0d929a:
+
+- **Pictures as a setting (decision 30).** The core publishes each page's picture data again (`graph`), and the same
+  for Mix's bus cards. P2 draws them, so checks 1–3 need P2's pictures.
+- **The outline timer didn't show.** On the fake FM-1 the core publishes the right data. On the device the areas
+  can't be seen from logcat, so this build logs each wait. Checks 4–6 read that log.
+
+**Setup:** FM-1 on Skiff 2.5.1 on the Pixel's USB port · this branch merged into the combined one · real core, writes
+allowed (`--ez allowWrites true`) · for checks 4–6, a terminal running:
+
+```bash
+adb logcat -s LupeLog | grep "wait"
+```
+
+**Back up first: no.** These checks open pages, launch pads and mute a track.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 1 | Turn pictures on in Settings. Open ENV, then turn ATTACK on the FM-1. | The envelope picture under the dials changes shape with the knob. | No | ☐ pass ☐ fail: |
+| 2 | FM6 track, EDIT › OPERATOR. Press SELECT on the FM-1. | The operator picture stays, and the four dials change to the next row. | – | ☐ pass ☐ fail: |
+| 3 | Mix › Delay. Turn FEEDBACK on the phone. | The delay card's picture follows the value. | – | ☐ pass ☐ fail: |
+| 4 | Press PLAY on the phone (not on the FM-1). LAUNCH on LOOP. Tap another pad on track 1. | The log shows `wait: T1 pad N lands at <tick> (clock running, …)`, then `wait over: …` when the FM-1 switches. Note whether the outline drew. | – | ☐ pass ☐ fail: |
+| 5 | While playing, press a Mute key. | The log shows `wait: T… mute lands at <tick> (clock running, …)`, then `wait over`. Note whether the outline drew. | – | ☐ pass ☐ fail: |
+| 6 | Read the lines from 4 and 5. | Each has a tick and "clock running". If one says "no tick" or "no clock", it's a core fault: send the lines. If they're right and no outline drew, it's the drawing. | – | ☐ pass ☐ fail: |
+
+**Not covered here:**
+
+- LAUNCH on NOW or BEAT: the launch lands at once or within a beat, so there is little or nothing to draw.
+- Connecting while the FM-1 already plays: no clock until the next Stop and Play, so the outlines are dashed.
+
+**After the run:** failures go on the batch list with the check number. Passes move their batch items to "On the
+device".

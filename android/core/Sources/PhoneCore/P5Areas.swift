@@ -82,7 +82,12 @@ extension PhoneCore {
                 // a send page's knob 1 is the track's own send (scope 0): the Mix cards are GLO's, all globals
                 return p.scope(of: k) == 1 ? globalControl(id, label: p.knobLabels[safe: k] ?? nil) : nil
             }
-            card = MixArea.Card(title: p.title, controls: controls, settings: p.settings.map { globalControl($0) })
+            var g = PageArea.Graph()
+            g.kind = switch mixSection { case "delay": .delay; case "reverb": .reverb; case "chorus": .chorus; default: .global }
+            g.values = controls.map { $0?.raw ?? 0 }
+            let named = mixSection == "chorus" ? 2 : mixSection == "global" ? -1 : 0       // TIME, TYPE; CHORUS's MODE
+            g.caption = (controls[safe: named] ?? nil)?.value
+            card = MixArea.Card(title: p.title, controls: controls, settings: p.settings.map { globalControl($0) }, graph: g)
         }
         return MixArea(sections: sections, section: mixSection, rows: rows, card: card)
     }

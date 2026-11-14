@@ -105,4 +105,42 @@ import Testing
         #expect(top.bar == 1 && top.beat == 1 && top.bars == nil)
         #expect(core.padsArea().rows.allSatisfy { $0.passTicks == nil && $0.launchTick == nil })
     }
+
+    /// What is published, not what a builder returns when asked (Scott's device session: the outlines didn't show): a
+    /// pad tapped while playing goes out as waiting with its tick, the clock goes out at least every beat, and the log
+    /// says when the wait began and ended.
+    @Test func theWaitIsPublishedWithItsTickAndTheClockKeepsComing() async throws {
+        final class Frames { var pads: [String] = []; var clock: [String] = []; var log: [String] = [] }
+        let f = Frames()
+        let fake = try #require(FakeSkiff(demo: true))
+        var once = false
+        let core = PhoneCore(session: DeviceSession(transport: { if once { return nil }; once = true; return fake }),
+                             publish: { a, j in if a == "pads" { f.pads.append(j) } else if a == "clock" { f.clock.append(j) } },
+                             log: { f.log.append($0) }, canWrite: { true })
+        core.start()
+        defer { core.stop() }
+        try await settle(10, "playing with a clock") {
+            core.session.playing && core.session.clockTicks >= 24 && core.session.skiffSong?.perform != nil
+                && core.clockArea().running && f.clock.contains { $0.contains("\"running\":true") }
+        }
+        let clocks = f.clock.count
+        let list = try #require(core.session.skiffSong?.song?.tracks.first)
+        let next = core.padsArea().rows[0].entries.firstIndex { $0.play == .next }
+        let other = try #require((0..<16).last { $0 != list.entryOn && $0 != next && !list.entries[$0].isEmpty })
+        let n = f.pads.count
+        core.handle(json: #"{"intent":"padTap","track":1,"entry":\#(other)}"#)
+        func waiting(_ json: String) -> PadsArea.Entry? {
+            (try? JSONDecoder().decode(PadsArea.self, from: Data(json.utf8)))?.rows[0].entries[other]
+        }
+        try await settle(3, "the wait published") { f.pads.dropFirst(n).contains { waiting($0)?.play == .waiting } }
+        let first = try #require(f.pads.dropFirst(n).first { waiting($0)?.play == .waiting })
+        #expect(waiting(first)?.launchTick != nil, "published waiting without a tick: \(first.prefix(300))")
+        #expect(f.log.contains { $0.hasPrefix("wait: T1 pad \(other + 1) lands at") && $0.contains("clock running") }, "\(f.log)")
+        try await settle(5, "landed") { f.log.contains { $0.hasPrefix("wait over: T1 pad \(other + 1)") } }
+        // two seconds at 120 BPM: four beats, a reference each
+        try await Task.sleep(for: .milliseconds(2000))
+        #expect(f.clock.count - clocks >= 3, "\(f.clock.count - clocks) clock frames")
+        let last = try #require(f.clock.last.flatMap { try? JSONDecoder().decode(ClockArea.self, from: Data($0.utf8)) })
+        #expect(last.running && abs(Double(last.atMs) - LagClock.now()) < 1500)
+    }
 }
