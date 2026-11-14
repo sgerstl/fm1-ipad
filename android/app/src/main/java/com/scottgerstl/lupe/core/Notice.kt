@@ -5,7 +5,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 
 /**
- * Something the FM-1 (or the core) refused: what happened and what to do, shown on the screen where the action was taken (Scott,
+ * Something the FM-1 (or the core) has to say about an action: usually a refusal (what happened and what to do), sometimes an answer
+ * ("Cleared 5 unused patterns. 5 pattern numbers are free."), so the strip that shows it is neutral, not an error's red. It is shown on the screen where the action was taken (Scott,
  * 2026-11-14: New pattern "did nothing" on the Pixel; the FM-1 had refused it and only the log said so). [seq] grows with each one, so the
  * same words twice still show twice; 0 is "none yet". [track] (1…6) and [entry] (0-based) say where, when the core knows.
  *
@@ -37,7 +38,7 @@ fun refusalFromLog(line: String): String? {
 fun refusalWords(reason: String): String {
     val r = reason.trim().trimEnd('.')
     return when {
-        r.startsWith("All 64 patterns are taken") -> "All 64 patterns are taken. Pick a pattern, or clear unused ones on the FM-1."
+        r.startsWith("All 64 patterns are taken") -> "All 64 patterns are taken. Pick a pattern, or clear the unused ones (hold an empty slot, or the song's menu)."
         r.startsWith("Stop to ") || r.startsWith("Stop first") -> "$r. Press Stop, then try again."
         r.startsWith("Skiff refused it: the entry is empty") -> "The FM-1 refused it: the entry is empty, there's nothing to copy, or there's no room after it."
         r.startsWith("Skiff couldn't do it") -> "The FM-1 couldn't do it. Try again; if it keeps refusing, unplug it and plug it in again."

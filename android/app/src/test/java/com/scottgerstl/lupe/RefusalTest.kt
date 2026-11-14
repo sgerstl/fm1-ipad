@@ -15,7 +15,7 @@ import org.junit.Test
 class RefusalTest {
     @Test fun theFullPoolSaysWhatToDo() {
         // the line the Pixel 10 logged
-        assertEquals("All 64 patterns are taken. Pick a pattern, or clear unused ones on the FM-1.",
+        assertEquals("All 64 patterns are taken. Pick a pattern, or clear the unused ones (hold an empty slot, or the song's menu).",
             refusalFromLog("FM-1 refused: All 64 patterns are taken. Clear unused ones to free a number"))
     }
 
@@ -25,6 +25,16 @@ class RefusalTest {
         assertEquals("The FM-1 refused the stroke while the song plays.", refusalFromLog("the FM-1 refused the stroke while the song plays"))
         assertTrue(refusalFromLog("read-only: padNew(track: 1, entry: 3) not sent (allow writes to send it)")!!.startsWith("Lupe is read-only on this phone"))
         assertEquals("Something still uses that pattern: an entry, a track or a saved project. Clear those first.", refusalWords("Something still uses that pattern: an entry, a track or a saved project"))
+    }
+
+    /** P1's notices (0851007) pass through as written: the read-only one, Clear unused's answers. */
+    @Test fun theCoresOwnNoticesKeepTheirWords() {
+        for (t in listOf(
+            "Lupe is read-only, so nothing was sent to the FM-1. Turn on Allow writes to change it.",
+            "Cleared 5 unused patterns. 5 pattern numbers are free.",
+            "No pattern is unused, so there is nothing to clear.",
+            "Stop playback to clear unused patterns. The FM-1 only clears them while stopped.",
+        )) assertEquals(t, refusalWords(t))
     }
 
     @Test fun ordinaryLogLinesAreNotRefusals() {
