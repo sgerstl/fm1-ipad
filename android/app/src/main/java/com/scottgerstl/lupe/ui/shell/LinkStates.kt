@@ -27,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -61,32 +63,49 @@ fun linkMode(link: LinkState, everReady: Boolean): LinkMode = when {
     else -> LinkMode.Card
 }
 
-private data class PageCopy(val title: String, val line: String, val busy: Boolean, val retry: Boolean)
+/** The demo FM-1 (the fake core), started from the no-FM-1 card and left from the song-name menu. The app provides it; previews get one that does nothing. */
+class DemoControl(val canStart: Boolean = false, val inDemo: Boolean = false, val start: () -> Unit = {}, val leave: () -> Unit = {})
+val LocalDemo = androidx.compose.runtime.staticCompositionLocalOf { DemoControl() }
 
-private fun pageCopy(l: LinkState) = when (l.phase) {
+/** The firmware the phone works with, as the card says it. */
+const val FIRMWARE_NEEDED = "Skiff 2.5.1"
+
+internal data class PageCopy(val title: String, val line: String, val busy: Boolean, val retry: Boolean, val demo: Boolean)
+
+internal fun pageCopy(l: LinkState) = when (l.phase) {
     LinkPhase.WrongFirmware -> PageCopy(
-        "This FM-1 isn't running Skiff",
-        "Lupe on the phone works with Skiff firmware. This FM-1 reports ${l.firmware ?: "a firmware it doesn't know"}.",
-        busy = false, retry = true,
+        "This FM-1 runs other firmware",
+        "It reports ${l.firmware ?: "a firmware Lupe doesn't know"}. Lupe on the phone works with $FIRMWARE_NEEDED. Install it, then plug the FM-1 in again.",
+        busy = false, retry = true, demo = true,
     )
-    LinkPhase.Connecting -> PageCopy("Found your FM-1", "Connecting to it.", busy = true, retry = false)
-    LinkPhase.Reading -> PageCopy("Reading your FM-1", "Loading the project and the patterns.", busy = true, retry = false)
-    LinkPhase.Lost -> PageCopy("Lost your FM-1", "Check the USB cable and that the FM-1 is on, then try again.", busy = false, retry = true)
-    else -> PageCopy("Looking for your FM-1", "Plug it into the phone with a USB cable. Lupe finds it by itself.", busy = true, retry = false)
+    LinkPhase.Connecting -> PageCopy("Found your FM-1", "Connecting to it.", busy = true, retry = false, demo = false)
+    LinkPhase.Reading -> PageCopy("Reading the FM-1", "Loading the project and the patterns.", busy = true, retry = false, demo = false)
+    LinkPhase.Lost -> PageCopy("FM-1 disconnected", "Check the USB-C cable and that the FM-1 is switched on, then try again.", busy = false, retry = true, demo = true)
+    else -> PageCopy("Plug in the FM-1", "Connect it with a USB-C cable and switch it on. It has to be running $FIRMWARE_NEEDED. Lupe looks for it by itself.", busy = true, retry = false, demo = true)
 }
 
-/** Searching (never connected this launch) and wrong firmware: a full page, below the status bar. */
+/**
+ * No FM-1 yet, or one on other firmware (decision 33: the iPhone's card): the header stays above, greyed; under it a card says what to do,
+ * names the firmware, shows that Lupe is looking, and offers the demo FM-1 (the fake core) to try the app without one.
+ */
 @Composable
 fun LinkPage(link: LinkState, core: LupeCore, modifier: Modifier = Modifier) {
-    LupeCrossfade(pageCopy(link), modifier.fillMaxSize().background(Tok.page), Dur.STATE) { c ->
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 32.dp),
-            verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            BasicText(c.title, Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite }, style = LupeType.title.copy(textAlign = TextAlign.Center))
-            BasicText(c.line, Modifier.padding(top = 8.dp), style = LupeType.body.copy(textAlign = TextAlign.Center))
-            if (c.busy) BusyBar(Modifier.padding(top = 24.dp))
-            if (c.retry) Key({ core.send(Intent.Retry) }, "Try again", Modifier.padding(top = 20.dp), width = 160.dp, on = true) { fg -> KeyLabel("Try again", fg) }
+    val demo = LocalDemo.current
+    Box(modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 60.dp, bottom = 12.dp).background(Tok.panel, RoundedCornerShape(14.dp))) {
+        LupeCrossfade(pageCopy(link), Modifier.fillMaxSize(), Dur.STATE) { c ->
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                BasicText(c.title, Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite }, style = LupeType.title.copy(textAlign = TextAlign.Center))
+                BasicText(c.line, Modifier.padding(top = 8.dp).widthIn(max = 520.dp), style = LupeType.body.copy(textAlign = TextAlign.Center))
+                if (c.busy) BusyBar(Modifier.padding(top = 20.dp))
+                if (c.retry || (c.demo && demo.canStart)) Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // one primary a view: Try again when there is something to retry, else the demo
+                    if (c.retry) Key({ core.send(Intent.Retry) }, "Try again", width = 160.dp, on = true) { fg -> KeyLabel("Try again", fg) }
+                    if (c.demo && demo.canStart) Key(demo.start, "Use the demo FM-1: try Lupe without an FM-1", width = 200.dp, on = !c.retry) { fg -> KeyLabel("Use the demo FM-1", fg) }
+                }
+            }
         }
     }
 }

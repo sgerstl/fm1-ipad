@@ -70,6 +70,22 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         private set
     fun chooseMenuSpeed(v: Int) { menuSpeed = v.coerceIn(50, 200); prefs?.edit()?.putInt(MENU_SPEED, menuSpeed)?.apply() }
 
+    /**
+     * Handedness (the iPhone's setting, decision 33): right-handed, a hold menu opens to the left of the finger so the hand doesn't cover it,
+     * and the sound keys sit down the right edge; left-handed, the other way round.
+     */
+    var leftHanded by mutableStateOf(prefs?.getBoolean(LEFT_HANDED, false) ?: false)
+        private set
+    fun chooseLeftHanded(on: Boolean) { leftHanded = on; put(LEFT_HANDED, on) }
+
+    /**
+     * Sound keys (decision 32, off by default): a rail of FX SEL ENV LFO EDIT ARP down the edge, so the phone can open the sound panel too.
+     * Off, the FM-1's own keys drive. This is the switch; the rail itself is the docked panel's work.
+     */
+    var soundKeys by mutableStateOf(prefs?.getBoolean(SOUND_KEYS, false) ?: false)
+        private set
+    fun chooseSoundKeys(on: Boolean) { soundKeys = on; put(SOUND_KEYS, on) }
+
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
     fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
     fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN, on) }
@@ -80,6 +96,8 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     companion object {
         fun from(context: android.content.Context) = PhoneSettings(context.getSharedPreferences("lupe_settings", android.content.Context.MODE_PRIVATE))
         const val HAPTICS = "haptics"
+        const val LEFT_HANDED = "left_handed"
+        const val SOUND_KEYS = "sound_keys"
         const val TAB_MS = "labs_tab_slide_ms"
         const val MENU_SPRING = "labs_menu_spring"
         const val MENU_SPEED = "labs_menu_speed"

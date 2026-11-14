@@ -182,7 +182,7 @@ private fun SoundKeysRail(open: String?, onKey: (String) -> Unit) {
 /**
  * The tabs' pages slide in the tab's direction, and the track thread travels with them (the tab-thread mockup, Scott 2026-11-14): going right
  * (Pads → Edit → Timeline) the old page leaves to the left and the new one comes in from the right, and back the other way; ease-out over
- * [ms] (Labs, default 380), the outgoing page done at 85 % of the time. The selected track's 2 dp outline in its colour never leaves the
+ * [ms] (Labs, default 380), the outgoing page done at 85 % of the time. The selected track's band (its colour muted, decision 31) never leaves the
  * screen: it eases from its rectangle on the old tab (Pads: the track's row; Edit: the step row; Timeline: the lane) to the one on the new tab,
  * on the same curve, landing with the incoming page. No scale, no overshoot. With Reduce Motion the pages cross-fade (150 ms) and the outline
  * cross-fades between its two places.
@@ -204,6 +204,18 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: I
     }
     val dir = if ((from?.ordinal ?: shown.ordinal) <= shown.ordinal) 1f else -1f
     Box(Modifier.fillMaxSize().clipToBounds()) {
+        // the thread while the pages move: the selected track's band easing from the old place to the new, behind both pages (their own
+        // bands are hidden while they slide); with Reduce Motion, the two places cross-fading
+        val a = fromRect; val b = anchors.rects[shown]
+        if (from != null && (a != null || b != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+            val p = t.value; val band = trackBand(colour)
+            fun fill(r: androidx.compose.ui.geometry.Rect, alpha: Float) = drawRoundRect(band.copy(alpha = alpha), Offset(r.left, r.top),
+                androidx.compose.ui.geometry.Size(r.width, r.height), androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()))
+            when {
+                reduce || a == null || b == null -> { a?.let { fill(it, 1f - p) }; b?.let { fill(it, p) } }   // nothing travels: each fades where it stands
+                else -> fill(androidx.compose.ui.geometry.Rect(a.left + (b.left - a.left) * p, a.top + (b.top - a.top) * p, a.right + (b.right - a.right) * p, a.bottom + (b.bottom - a.bottom) * p), 1f)
+            }
+        }
         from?.let { old ->
             androidx.compose.runtime.key(old) {
                 val page = remember { TabPage(old, anchors) }
@@ -217,17 +229,6 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: I
             val page = remember { TabPage(shown, anchors) }
             Box(Modifier.fillMaxSize().graphicsLayer { if (from != null) { if (reduce) alpha = t.value else translationX = dir * size.width * (1f - t.value) } }.onGloballyPositioned { page.box = it }) {
                 CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides (from != null)) { content(shown) }
-            }
-        }
-        // the thread while the pages move: one outline easing from the old place to the new; with Reduce Motion, the two places cross-fading
-        val a = fromRect; val b = anchors.rects[shown]
-        if (from != null && (a != null || b != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
-            val p = t.value
-            fun outline(r: androidx.compose.ui.geometry.Rect, alpha: Float) = drawRoundRect(colour.copy(alpha = alpha), Offset(r.left + 1.dp.toPx(), r.top + 1.dp.toPx()),
-                androidx.compose.ui.geometry.Size(r.width - 2.dp.toPx(), r.height - 2.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(9.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-            when {
-                reduce || a == null || b == null -> { a?.let { outline(it, 1f - p) }; b?.let { outline(it, p) } }   // nothing travels: each fades where it stands
-                else -> outline(androidx.compose.ui.geometry.Rect(a.left + (b.left - a.left) * p, a.top + (b.top - a.top) * p, a.right + (b.right - a.right) * p, a.bottom + (b.bottom - a.bottom) * p), 1f)
             }
         }
     }

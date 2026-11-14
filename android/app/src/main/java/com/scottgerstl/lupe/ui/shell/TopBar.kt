@@ -70,6 +70,8 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 MenuRow("Mix…", { menu = null; sheets.show(SheetKind.Mix) }, sub = "Levels, pan, the shared delay and reverb")
                 MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
                 MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
+                val demo = LocalDemo.current
+                if (demo.inDemo) { MenuDivider(); MenuRow("Leave the demo", { menu = null; demo.leave() }, sub = "Back to looking for your FM-1") }
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }
             }
         }
@@ -87,10 +89,10 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 LaunchQuantize.entries.forEach { q ->
                     MenuRow(q.word, { core.send(Intent.SetLaunch(q)); menu = null }, checked = top.launch == q)
                 }
-                if (top.waiting > 0) {
-                    MenuDivider()
-                    MenuRow("Cancel waiting", { core.send(Intent.CancelWaiting); menu = null }, sub = "${top.waiting} launch${if (top.waiting == 1) "" else "es"} waiting")
-                }
+                // the iPhone's footer (decision 33): always there, so Cancel waiting is where you saw it last
+                MenuDivider()
+                if (top.waiting > 0) MenuRow("Cancel waiting", { core.send(Intent.CancelWaiting); menu = null }, sub = "${top.waiting} launch${if (top.waiting == 1) "" else "es"} waiting")
+                else MenuRow("Nothing waiting", {}, enabled = false)
             }
         }
         Spacer(Modifier.width(4.dp))

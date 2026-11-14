@@ -207,6 +207,22 @@ Nothing changes on the iPad's Mix.
 | **A sound page on the FM-1** | Edit: its header and four dials take the dials area. Pads and Timeline: a short panel rises over the foot. HOME on the FM-1, or the back gesture, lowers it |
 | **The FM-1's keys** | FX SEL ENV LFO EDIT ARP: the sound page as above. GLO: the Mix sheet. SAVE: Sounds or Projects. SEQ: the Edit tab (AUTOMATION its lane view, SONG the Timeline). HOME: back to where the phone was |
 
+### The combined phone design on Android (decisions 31–35, 2026-11-14; boards 76 and 77)
+
+What moves or changes place against the landscape table above. Edit and the docked sound panel (decisions 32, 35) are P4's and are not listed here.
+
+| What | Where it is now |
+|---|---|
+| **The selected track** | Its colour at 28 % over the page, under its whole row on Pads (head, MUTE, every slot) and the Timeline (head and lane). The 2 dp outline is the launch timer's only (pads, MUTE, solo, scenes). The band travels between tabs as the outline did |
+| **Pads** | Slots A to H always drawn: an empty one is an outline with its letter. Pass counts ×N and the next cue stay. A waiting pad no longer writes "bar N": the outline timer says it |
+| **Scenes** | A short Store key with a dot, then the sixteen: empty outlined, stored filled, the current white |
+| **LEVEL and PAN** | In the track head's hold menu (slid along their rows) and in Mix. The track controls box is gone for good |
+| **Hold menus** | The radial menu with the iPad's set where the core can do it. Pad: Edit steps, Select sound, Set pattern, Play once more / less, Duplicate after, Move earlier / later, Clear. Empty slot: New pattern, Rest, Pick a pattern. Track head: Sounds, LEVEL, PAN, Mute, Solo. Timeline block: adds Edit steps and Move earlier / later |
+| **Mix** | A pop-up with no title: MIXER DELAY REVERB CHORUS GLOBAL as words in line with the close key. A bus page is its four dials two by two at the left (DELAY MODE under them) and the FM-1's own picture at the right, 1.7 : 1, in greys and white |
+| **Settings** | The grouped sheet: FM-1 · Touch (Slide to turn, Magnifier, Handedness, Haptics) · Sound pages (Show graphics, Sound keys) · Labs |
+| **Launch menu** | Loop Bar Beat Now, then a footer: Cancel waiting, or "Nothing waiting" |
+| **No FM-1** | The header stays, greyed; under it a card: what to do, the firmware (Skiff 2.5.1), that Lupe is looking, and "Use the demo FM-1". The demo is left from the song-name menu |
+
 ## The FM-1 disconnected (2026-11-09, board 42: pick before building)
 
 *Scott, 2026-11-09: "a dedicated pattern and state" for a lost FM-1; today the Song tab falls back to the old Arrange page, dimmed, and other tabs show a page whose title and first line both say "FM-1 disconnected". Both cut in. The motion rule (`design/DESIGN.md`) applies.*

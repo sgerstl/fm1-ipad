@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,18 +73,46 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlin.math.roundToInt
 
 /**
- * The Mix tab (boards 64 and 65): GLO's five pages one at a time. Mixer is the six tracks as rows: LEVEL on a fader in the
- * track's colour (it turns by sliding, as every value does since decision 10, with the Magnifier), Mute, and the row's
- * hold menu for PAN and the reverb send (decision 14: nothing small to miss on the row). At top only the rows grow and
- * gain their meter and send line. Delay, Reverb, Chorus and Global are the shared buses: four white controls, since
- * turning them changes every track.
+ * The Mix pop-up (decision 31, board 77): GLO's five pages one at a time. No title: MIXER DELAY REVERB CHORUS GLOBAL sit as words in one
+ * line with the close key, and the room goes to the page. Mixer is the six tracks as rows: LEVEL on a fader in the track's colour, Mute,
+ * and the row's hold menu for PAN and the reverb send. Delay, Reverb, Chorus and Global are the shared buses: four white dials at the
+ * left (white because turning them changes every track) and the FM-1's own picture at the right, at its 1.7 : 1.
  */
 @Composable
-fun MixPage(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Segmented(ui.pages, ui.page, "Mix page") { actions.page(it) }
+fun MixPage(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+            WordTabs(ui.pages.map { it.uppercase() }, ui.page) { actions.page(it) }
+            BasicText("${ui.page + 1}/${ui.pages.size}", Modifier.padding(start = 16.dp).clearAndSetSemantics { }, style = LupeType.number.copy(fontSize = 15.sp, color = Tok.text2))
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            Key(onClose, "Close Mix", width = 40.dp, height = 36.dp, minTarget = 44.dp) { fg ->
+                Canvas(Modifier.width(12.dp).height(12.dp)) {
+                    val w = 2.dp.toPx()
+                    drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round)
+                    drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round)
+                }
+            }
+        }
         LupeCrossfade(ui.page, Modifier.weight(1f).fillMaxWidth(), Dur.STATE) { p ->
             if (p == 0) Mixer(ui, actions, meters) else BusPage(ui, p, actions)
+        }
+    }
+}
+
+/** The pages as words in a line, the chosen one white with a line under it (the header's tabs, smaller); the line and the ink blend from one to the next. */
+@Composable
+private fun WordTabs(labels: List<String>, selected: Int, onPick: (Int) -> Unit) {
+    Row(Modifier.semantics { isTraversalGroup = true }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        labels.forEachIndexed { i, label ->
+            val on = animatedFloat(if (i == selected) 1f else 0f, Dur.STATE)
+            Box(
+                Modifier.height(44.dp)
+                    .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = i == selected; contentDescription = "Mix page: " + label.lowercase().replaceFirstChar { it.uppercase() } }
+                    .pointerInput(i) { detectTapGestures { onPick(i) } }
+                    .padding(horizontal = 8.dp)
+                    .drawBehind { if (on.value > 0f) drawRect(Tok.text.copy(alpha = on.value), Offset(0f, size.height - 8.dp.toPx()), Size(size.width, 2.dp.toPx())) },
+                contentAlignment = Alignment.Center,
+            ) { BasicText(label, style = LupeType.key.copy(fontSize = 15.sp, color = lerp(Tok.text2, Tok.text, on.value))) }
         }
     }
 }
@@ -246,50 +277,30 @@ private fun MenuSlide(label: String, text: String, raw: Int, name: String, bipol
     }
 }
 
-/** Delay, Reverb, Chorus, Global (board 65, decision 25): the four dials and the card's settings, white because they are shared. No graph. */
+/**
+ * Delay, Reverb, Chorus, Global (board 77, decision 34): the page's four dials two by two at the left, white because they are shared, with
+ * the card's settings (DELAY MODE) under them; at the right the FM-1's own picture of the page at its 1.7 : 1, in the global greys and
+ * white. With Show graphics off the dials take the width.
+ */
 @Composable
 private fun BusPage(ui: MixUi, p: Int, actions: MixActions) {
-    // the four dials and the card's settings; the page scrolls if they don't fit the sheet
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Show graphics (decision 30): the bus's picture beside its dials (Delay's taps, Reverb's tail, Chorus's wave, Global's bars); decoration
-        val graphics = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.showGraphics
-        if (graphics) Box(Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(10.dp)).background(Tok.well)) {
-            BusGraph(ui.pages[p], ui.bus)
-            BasicText("Shared by every track", Modifier.align(Alignment.TopEnd).padding(10.dp), style = LupeType.small.copy(fontSize = 12.sp))
-        } else BasicText("Shared by every track", Modifier.padding(horizontal = 4.dp), style = LupeType.small.copy(fontSize = 12.sp))
-        PageControlsRow(ui.bus, Tok.text, litSlot = -1, litSeq = 0, opened = { _, c -> c.raw }, onSet = { slot, v -> actions.setBus(slot, v) })
-        // the card's settings (DELAY MODE on 2.5.1): a choice, not a knob
-        ui.settings.forEachIndexed { i, c ->
-            // the core may publish the label as "DLY MODE" and no names: the screen says DELAY MODE and knows its three
-            val label = if (c.label.equals("DLY MODE", true)) "DELAY MODE" else c.label
-            val names = c.names.ifEmpty { if (label == "DELAY MODE") com.scottgerstl.lupe.core.FakeP5.DELAY_MODES else emptyList() }
-            Column(Modifier.fillMaxWidth()) {
-                BasicText(label, Modifier.padding(bottom = 4.dp), style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2, letterSpacing = 0.5.sp))
+    val graphics = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.showGraphics
+    val picture = ui.graph?.takeIf { graphics && com.scottgerstl.lupe.ui.page.hasPicture(it) }
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.scottgerstl.lupe.ui.page.PageControlsGrid(ui.bus, Tok.text, opened = { _, c -> c.raw }, onSet = { slot, v -> actions.setBus(slot, v) }, modifier = Modifier.weight(1f).fillMaxWidth())
+            // the card's settings (DELAY MODE on 2.5.1): a choice, not a knob
+            ui.settings.forEachIndexed { i, c ->
+                // the core may publish the label as "DLY MODE" and no names: the screen says DELAY MODE and knows its three
+                val label = if (c.label.equals("DLY MODE", true)) "DELAY MODE" else c.label
+                val names = c.names.ifEmpty { if (label == "DELAY MODE") com.scottgerstl.lupe.core.FakeP5.DELAY_MODES else emptyList() }
                 if (names.size in 2..4) Segmented(names, c.raw.coerceIn(0, names.lastIndex), label) { actions.setSetting(i, it) }
-                else BasicText(c.value, style = LupeType.key)
+                else BasicText("$label  ${c.value}", style = LupeType.key)
             }
         }
-    }
-    }
-}
-
-/** A small picture of the bus: taps that fall away (Delay), a tail (Reverb), a wave (Chorus), bars (Global). Decoration: TalkBack reads the controls. */
-@Composable
-private fun BusGraph(name: String, controls: List<com.scottgerstl.lupe.core.PageControl?>) {
-    val amount = (controls.getOrNull(1)?.raw ?: 60) / 127f
-    Canvas(Modifier.fillMaxSize().padding(16.dp).clearAndSetSemantics { }) {
-        val w = size.width; val h = size.height
-        val line = Stroke(2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        when (name) {
-            "Delay" -> for (i in 0 until 8) {
-                val x = 8.dp.toPx() + i * (w - 16.dp.toPx()) / 7f
-                val a = (1f - i / 8f) * (if (i == 0) 1f else (0.35f + amount * 0.65f))
-                drawLine(Tok.text, Offset(x, h), Offset(x, h - h * a), 5.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round, alpha = 0.9f)
-            }
-            "Reverb" -> drawPath(Path().apply { moveTo(0f, h); for (i in 0..40) { val x = w * i / 40f; lineTo(x, h - h * 0.9f * kotlin.math.exp(-3f * (0.4f + (1f - amount)) * i / 40f)) } }, Tok.text, style = line)
-            "Chorus" -> drawPath(Path().apply { for (i in 0..60) { val x = w * i / 60f; val y = h / 2 - kotlin.math.sin(i / 60f * 6.28f * 2f) * h * 0.35f * (0.3f + amount); if (i == 0) moveTo(x, y) else lineTo(x, y) } }, Tok.text, style = line)
-            else -> for (i in 0 until 16) { val x = 6.dp.toPx() + i * (w - 12.dp.toPx()) / 15f; drawLine(Tok.text2, Offset(x, h), Offset(x, h * (0.25f + 0.6f * ((i * 7 % 11) / 10f))), 6.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round) }
+        // 936 : 552 is the FM-1's graph panel
+        if (picture != null) Box(Modifier.fillMaxHeight().aspectRatio(936f / 552f).clip(RoundedCornerShape(8.dp)).background(Tok.well)) {
+            com.scottgerstl.lupe.ui.page.GraphContent(picture, Tok.text2Raised, -1, Modifier.fillMaxSize())
         }
     }
 }
