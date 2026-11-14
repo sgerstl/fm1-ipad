@@ -175,7 +175,7 @@ struct RadialMenu: View {
                         field.closeSubpath()
                         ctx.drawLayer { l in
                             l.addFilter(.blur(radius: 8))
-                            l.fill(field, with: .color(.black.opacity(0.88 * fade)))
+                            l.fill(field, with: .color(.black.opacity(0.53 * fade)))      // (Scott, 2026-11-15: 88 % → 53 %)
                         }
                     }
                     let s = reduceMotion ? 1 : Self.hubScale(min(1, e / 460), spring: Labs.menuSpring.value / 100)
