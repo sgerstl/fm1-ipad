@@ -224,6 +224,11 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
   The FX family's DELAY, REVERB, INSERT, SLICER and DUCK send graphs too (kinds fxdelay, fxreverb, insert, slicer,
   duck), with what their own knobs don't hold: the delay bus's MIX, INSERT's MIX, and DUCK's source hits and release
   as parts of a bar.
+  SEL › CHORD and SEL › FOLLOW send graphs as the iPad draws them. `chord`: `notes` (the MIDI notes a key plays on the
+  track's ROOT from C4, resolved by `SkiffChord` from CHORD, SCALE, VOICE and ARP), `root` (pitch class), `title` (its
+  name), `caption`, and `values` [ms, dir] when strummed; with no chord, `notes` is empty and `title` and `caption` are
+  the two lines that say why. `follow`: the same two lines, and `follow` {track, trackName, mode, by, kit}, absent
+  when off. The followed track's live chord isn't sent to an editor, so there are no notes for FOLLOW.
 
 ### Read-only by default (P1, 2026-11-13)
 

@@ -20,6 +20,25 @@ extension PageArea {
         /// - duck: `values` DEPTH, RELEASE in thousandths of a bar; `notes` where in the bar the source hits, in
         ///   thousandths (empty: no source).
         case fxdelay, fxreverb, insert, slicer, duck
+        /// SEL › CHORD and SEL › FOLLOW, as the iPad draws them (ios/FM1/PageGraphs.swift chordDrawing, followDrawing).
+        /// - chord: the chord a key plays on the track's ROOT from C4. `notes` its MIDI notes, low to high; `root`
+        ///   the pitch class drawn as the root; `title` its name ("Cm7"); `caption` "ON ROOT" or "ROOT ONLY". Strummed
+        ///   (Skiff 2.5, a POLY track with STRUM on): `values` [ms 1…100, dir 0 DOWN 1 UP 2 ALT] and `caption` the
+        ///   strum's ("DOWN 30 ms"); otherwise `values` is empty. Nothing to draw (CHORD off, a kit): `notes` empty,
+        ///   `title` and `caption` the two lines that say why.
+        /// - follow: `title` and `caption` the two lines the iPad writes; `follow` the track and how (nil when off).
+        case chord, follow
+    }
+    /// FOLLOW's track and how it follows. The live chord isn't sent to an editor, so there are no notes here.
+    public struct Follow: Codable, Equatable, Sendable {
+        /// The followed track, from 0 (its colour is the phone's own for that track).
+        public var track: Int
+        public var trackName: String
+        /// "KEY", "SCALE" or "FIT", and the note it goes by: "ROOT", "LOW", "HIGH", "LAST" (FIT is always by ROOT).
+        public var mode: String
+        public var by: String
+        /// The followed track plays a kit: no chords to follow.
+        public var kit: Bool
     }
     public struct Tile: Codable, Equatable, Sendable { public var label: String }
 
@@ -71,6 +90,7 @@ extension PageArea {
         public var sheet: Sheet?
         /// fxdelay and fxreverb: the track's send to the bus (0…127).
         public var send = 127
+        public var follow: Follow?
     }
 
 }
@@ -143,6 +163,9 @@ extension PageArea {
         guard let id = page.ids[safe: k] ?? nil else { return nil }
         return control(scope: page.scope(of: k), id: id).value
     }
+
+    /// DRUM, SLICE, DRUM-X: their keys aren't chords (the iPad's PageGraphs.kitEngines).
+    static let kitEngines: Set<Int> = [10, 13, 14]
 
     func graph() -> PageArea.Graph {
         var g = PageArea.Graph()
@@ -232,6 +255,35 @@ extension PageArea {
                 release = Int((SkiffLFO.fadeSeconds(max(1, raw4(2))) / bar * 1000).rounded())
             }
             g.values = [raw4(1), release]
+        case "CHORD":
+            g.kind = .chord
+            let mode = raw4(0), voicing = raw4(1)
+            if mode == 0 { g.title = "CHORD KEYS OFF"; g.caption = "K1 DIA3: IN-KEY CHORDS"; break }
+            if Self.kitEngines.contains(session.tracks[track].engine) { g.title = "NO CHORDS ON KITS"; break }
+            let root = raw("SCALE", 0) ?? 0, scale = raw("SCALE", 1) ?? 0
+            let voice = raw("VOICE", 0) ?? 0
+            let oneVoice = voice != 0 && (raw("ARP", 0) ?? 0) == 0
+            guard let c = SkiffChord.make(note: 60 + root, mode: mode, voicing: voicing, root: root, scale: scale, oneVoice: oneVoice) else {
+                g.title = "CHORD KEYS OFF"; break
+            }
+            g.title = SkiffChord.name(root: c.root, mask: c.mask); g.caption = oneVoice ? "ROOT ONLY" : "ON ROOT"
+            g.notes = c.notes; g.root = ((c.root % 12) + 12) % 12
+            // (Skiff 2.5, ui_graph.c graph_strum) STRUM on, on a POLY track: the notes in time. Knobs 3 and 4: STRUM, DIR
+            if session.skiffFirmware?.hasDelayMode == true, voice == 0, page.ids.count > 2, raw4(2) > 0 {
+                let ms = min(raw4(2), 100), dir = min(max(raw4(3), 0), 2)
+                g.values = [ms, dir]
+                g.caption = dir == 2 ? "ALT: DOWN, THEN UP" : "\(dir == 1 ? "UP" : "DOWN") \(ms) ms"
+            }
+        case "FOLLOW":
+            g.kind = .follow
+            let l = raw4(0) - 1
+            guard l >= 0, l < session.trackCount, l != track else { g.title = "FOLLOW OFF"; g.caption = "K1 A TRACK TO FOLLOW"; break }
+            let modes = ["KEY", "SCALE", "FIT"], bys = ["ROOT", "LOW", "HIGH", "LAST"]
+            let mode = modes[safe: raw4(1)] ?? "KEY", by = raw4(1) == 2 ? "ROOT" : bys[safe: raw4(2)] ?? "ROOT"
+            let kit = Self.kitEngines.contains(session.tracks[l].engine)
+            g.follow = PageArea.Follow(track: l, trackName: "T\(l + 1)", mode: mode, by: by, kit: kit)
+            if kit { g.title = "T\(l + 1) PLAYS A KIT"; g.caption = "NO CHORDS TO FOLLOW" }
+            else { g.title = "FOLLOWS T\(l + 1) · \(mode) BY ITS \(by)"; g.caption = "ITS LIVE CHORD SHOWS ON THE FM-1" }
         case "SLICES":
             g.kind = .card      // the markers can't be read or moved from here (no command reaches them): the card says so
             g.title = "SLICES"
