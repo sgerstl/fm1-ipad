@@ -43,7 +43,13 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 34 | Hold, keep the finger down, slide to the foot of the menu and rest there | The column scrolls on under the finger; lifting on a lit choice picks it | – | ☐ pass ☐ fail: |
 | 35 | Track head › LEVEL in a menu that scrolls | A slide along the row sets the value; a drag up or down scrolls the menu | Yes | ☐ pass ☐ fail: |
 
-**What the building session saw on a screen:** only row 3's Pads page (the band under track 1, outlined slots A to H, the Store key and scenes), on its own emulator against the fake core. Everything else here (the Timeline's band, the hold menus and their slide rows, the Mix pop-up and its four pictures, Settings, the launch footer, the no-FM-1 card and the demo switch) was built and unit-tested but **not seen on any screen**: the emulator kept restarting under the Mac's load. Nothing was run on a Pixel or a real FM-1.
+**What the building session saw on a screen** (its own emulator, the demo FM-1; nothing on a Pixel or a real FM-1):
+- Row 3's Pads page: the band under track 1, outlined slots A to H, the Store key and scenes.
+- Row 24's no-FM-1 card (the greyed header, the words with Skiff 2.5.1, the moving bar, the button) and row 25's "Use the demo FM-1" filling the app.
+- Rows 32 and 33: a pad's hold menu with every choice in one column close to the circle, opening to the left of the finger, and the column scrolled to its end by a drag. With eight choices the lines to the far ones run long beside the column's edge: look at that on the Pixel.
+- Rows 7 and 8's track-head menu drawn (Sounds, LEVEL with its gauge, PAN from the middle, Mute, Solo); the rows were not slid.
+
+**Not seen on any screen:** the Timeline's band, the Mix pop-up and its four pictures, Settings, the launch footer, the refusal strip, the disabled New pattern, the edge fade while scrolling, a held finger scrolling at the edge, Leave the demo.
 
 **Not covered here:** refusals the core logs without the word "refused" (a move with no place, a pattern that holds nothing, nothing to chain into, a full track) still show nothing until the core publishes its `notice` area (asked of P1); TalkBack (release pass); the largest text size; the Sound keys switch does nothing until P4's rail reads it; Make unique, Copy to another track, Move to a named pad and the Patterns pool are not in the pad menu (the core has no way to ask for them yet).
 
