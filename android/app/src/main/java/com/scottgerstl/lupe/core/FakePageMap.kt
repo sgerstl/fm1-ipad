@@ -30,13 +30,13 @@ internal object FakePageMap {
         "ENV" -> env(12, 48, 64, 90)
         "ENV 2" -> env(30, 60, 40, 70)
         "LFO" -> listOf(num("RATE", 80), lst("WAVE", listOf("SIN", "TRI", "SAW", "SQR", "S&H")), num("PHASE", 0), num("FADE", 0)) to none
-        "LFO 2" -> listOf(lst("SYNC", listOf("OFF") + divs), lst("TRIG", listOf("FREE", "NOTE")), lst("POLARITY", listOf("BI", "UNI")), lst("ENV SYNC", onOff)) to none
+        "LFO 2" -> listOf(lst("SYNC", listOf("OFF", "4BAR", "2BAR", "1/1", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32")), lst("TRIG", listOf("NOTE", "FREE")), lst("POLARITY", listOf("BI", "UNI")), lst("ENV SYNC", onOff)) to none
         "MOD" -> listOf(PageControl("ROUTE", "LFO→CUT", 1, 0, 10, ringless = true), PageControl("SRC", "LFO", fixed = true), PageControl("DEST", "CUTOFF", fixed = true), num("AMT", 62)) to
             PageTilesState("routes", routes = routes(), picked = 1)
         "FX" -> listOf(num("DIST", 72), num("CHORUS", 20), num("DELAY", 30), num("REVERB", 40)) to none
         "DELAY" -> listOf(num("SEND", 30), lst("TIME", divs, 1), num("FEEDBACK", 40), num("COLOR", 64)) to none
         "REVERB" -> listOf(num("SEND", 40), lst("TYPE", listOf("ROOM", "SPRING", "HALL"), 2), num("SIZE", 70), num("DAMP", 30)) to none
-        "DRIVE" -> listOf(num("DIST", 72), lst("TYPE", listOf("TUBE", "HARD", "FOLD", "CRUSH", "FUZZ")), num("TONE", 40), null) to none
+        "DRIVE" -> listOf(num("DIST", 72), lst("TYPE", listOf("SOFT", "HARD", "FOLD", "CRUSH", "FUZZ")), num("TONE", 40), null) to none
         "INSERT" -> listOf(lst("TYPE", listOf("OFF", "FILTR", "COMB", "RING")), num("A", 64), num("B", 40), num("C", 0)) to none
         "INSERT 2" -> listOf(num("MIX", 64), null, null, null) to none
         "SLICER" -> listOf(lst("SLICER", onOff), num("PATTERN", 3), lst("RATE", divs, 3), num("DEPTH", 80)) to none
@@ -46,7 +46,7 @@ internal object FakePageMap {
         "FOLLOW" -> listOf(lst("FOLLOW", listOf("OFF", "1", "2", "3")), lst("MODE", listOf("NOTE", "CHORD")), num("NOTE", 0), null) to none
         "EDIT 1" -> listOf(lst("WAVE", listOf("SAW", "SQR", "TRI", "SIN", "PWM")), num("DETUNE", 22), num("MIX", 64), num("NOISE", 6)) to none
         "EDIT 2" -> listOf(num("CUTOFF", 70), num("RESO", 30), null, null) to none
-        "VOICE" -> listOf(lst("VOICE", listOf("MONO", "POLY"), 1), num("GLIDE", 0), lst("GL MODE", listOf("ALWAYS", "LEGATO")), lst("PRIORITY", listOf("LAST", "LOW", "HIGH"))) to none
+        "VOICE" -> listOf(lst("VOICE", listOf("POLY", "MONO", "LEG", "UNI")), num("GLIDE", 0), lst("GL MODE", listOf("ALWAYS", "LEGATO")), lst("PRIORITY", listOf("LAST", "LOW", "HIGH"))) to none
         "VOICE 2" -> listOf(lst("ALLOC", listOf("ROBIN", "FIRST")), num("DETUNE", 8), num("SPREAD", 20), null) to none
         "LANES" -> listOf(PageControl("LANE", "SNARE", 1, 0, 7, list = true, ringless = true, names = lanes), num("LEVEL", 100), PageControl("TUNE", "-3", 61), num("DECAY", 44)) to
             PageTilesState("pick", labels = lanes, picked = 1)
@@ -54,7 +54,7 @@ internal object FakePageMap {
             PageTilesState("pick", labels = lanes, picked = 1)
         // the dense pages carry the four controls the FM-1's knobs turn (decision 25), with the operator or sound picked as tiles
         "OPERATOR" -> listOf(num("RATE 1", 99), num("LEVEL 1", 99), num("RATE 2", 60), num("LEVEL 2", 80)) to PageTilesState("pick", labels = (1..6).map { "OP$it" }, picked = 3)
-        "ALL OPS" -> listOf(num("ALGO", 4), num("FEEDBACK", 3), null, null) to none
+        "ALL OPS" -> listOf(num("ALGO", 1, 1, 32), num("FEEDBACK", 3), null, null) to none
         "SOUND" -> listOf(num("PITCH A", 56), num("PITCH B", 52), num("P MOD A", 0), num("P MOD B", 0)) to PageTilesState("pick", labels = listOf("BD", "SD", "CP", "CH", "OH", "TM", "RS", "CB"), picked = 1)
         "SLICES" -> List<PageControl?>(4) { null } to none
         "ARP" -> listOf(lst("MODE", listOf("OFF", "UP", "DOWN", "UP/DN", "RAND"), 1), lst("RATE", divs, 3), PageControl("OCTAVE", "2", 2, 1, 4), PageControl("GATE", "60%", 76)) to none
@@ -101,7 +101,7 @@ internal object FakePageMap {
             "ARP" -> PageGraph(GraphKind.Arp, values = listOf(v[0], v[1], v[2], v[3], 0, 127, 0, 0), side = "UP · 2 oct · 1/16 · gate 60%")
             "ARP 2" -> PageGraph(GraphKind.Arp, values = listOf(1, 3, 2, 76, v[0], v[1], v[2], v[3]), side = "UP · 2 oct · 1/16 · gate 60%")
             "OPERATOR" -> PageGraph(GraphKind.Fm6Op, fm6 = fm6(), title = "OPERATOR · 2")
-            "ALL OPS" -> PageGraph(GraphKind.Fm6All, fm6 = fm6(), title = "ALL OPS")
+            "ALL OPS" -> PageGraph(GraphKind.Fm6All, fm6 = fm6().copy(algorithm = (v[0] - 1).coerceIn(0, 31), feedback = v[1].coerceIn(0, 7)), title = "ALL OPS")
             "SOUND" -> PageGraph(GraphKind.Sound, sheet = sheet())
             else -> PageGraph()
         }

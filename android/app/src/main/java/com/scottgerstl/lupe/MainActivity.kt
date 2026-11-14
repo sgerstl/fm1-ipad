@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
         val phone = PhoneSettings.from(this)
         setContent {
             LupeTheme(reduceMotion) {
-                CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone) {
+                CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone, com.scottgerstl.lupe.ui.page.LocalPictureCore provides core) {
                     GatedHaptics(phone) { LupeShell(core) }
                 }
             }

@@ -28,3 +28,7 @@ Read from the code at 19b74c9 (the core's `PagePictures.swift` and the phone's `
 | ARP | ARP 2 | the same picture, with SWING and CHANCE applied | Yes | – |
 
 For reference, the FX family (done in e546ff3 and P1's 19b74c9): FX, DELAY, REVERB, DRIVE, INSERT, SLICER and DUCK all have their pictures; DRIVE's output wave beside its curve is the one part still not drawn (code).
+
+## Update, the same day: the four code-only gaps
+
+Fixed on the phone (rows 69–74 of `2026-11-14-android-landscape.md`): VOICE has its picture; ALL OPS' chart shrinks to fit its height; DRIVE draws its output wave; LFO and LFO 2 run live on the clock area with SYNC, FADE and POLARITY. Still open for the LFO (data, P1): the page area sends LFO's four values only, so SYNC, TRIG and POLARITY come from LFO 2's own knobs once that page has been shown; and the LFO's restart (a fresh phrase on the track) isn't sent, so TRIG can't change the drawing. CHORD and FOLLOW wait for P1's data.

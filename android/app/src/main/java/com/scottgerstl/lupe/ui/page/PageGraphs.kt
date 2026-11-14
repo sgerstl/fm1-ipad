@@ -1,11 +1,14 @@
 package com.scottgerstl.lupe.ui.page
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import android.os.SystemClock
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameMillis
+import com.scottgerstl.lupe.core.ClockDefaults
+import com.scottgerstl.lupe.core.ClockState
+import com.scottgerstl.lupe.core.LupeCore
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -70,7 +73,10 @@ import kotlin.math.tanh
 
 // The page pictures, ported from ios/FM1/PageGraphs.swift (which mirrors Skiff's ui_graph.c / ui_pgraph.c): Skiff's own 240 × 140 drawing
 // space stretched to the panel, in the track's colour. Taken out by decision 25, back by decision 30 behind Settings › Show graphics, drawn
-// under the page's four dials. Ported: ENV, LFO (a sweep, not the live clock), DRIVE, FX sends, SCALE, ARP, EDIT 1's ANALOG picture.
+// under the page's four dials. Ported: ENV, LFO (live, on the clock area), DRIVE, FX sends, SCALE, ARP, EDIT 1's ANALOG picture, VOICE.
+
+/** The core the pictures read the clock and the tempo from (the live LFO); null in previews and tests: the LFO then runs from when it opened. */
+val LocalPictureCore = staticCompositionLocalOf<LupeCore?> { null }
 
 private const val GW = 240f
 private const val GH = 140f
@@ -95,9 +101,9 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
         d.drawRoundRect(c, o(x, y), Size(x(w), y(h)), CornerRadius(r.px()))
     fun stroke(c: Color, pts: List<Pair<Float, Float>>, width: Float = 2.5f) =
         d.drawPath(path(pts), c, style = Stroke(width.px(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    fun text(s: String, x: Float, base: Float, c: Color, size: Float = 11f, right: Boolean = false) {
+    fun text(s: String, x: Float, base: Float, c: Color, size: Float = 11f, right: Boolean = false, centre: Boolean = false) {
         val r = tm.measure(s, LupeType.small.copy(fontSize = size.sp, color = c))
-        val ox = x(x) - if (right) r.size.width else 0
+        val ox = x(x) - if (right) r.size.width.toFloat() else if (centre) r.size.width / 2f else 0f
         d.drawText(r, topLeft = Offset(ox, y(base) - r.size.height))
     }
 }
@@ -105,7 +111,7 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
 /** True when the page has a picture to draw. */
 fun hasPicture(g: PageGraph): Boolean = when (g.kind) {
     GraphKind.Env, GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog,
-    GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb -> true
+    GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Voice -> true
     GraphKind.Fm6Op, GraphKind.Fm6All -> g.fm6 != null
     GraphKind.Sound -> g.sheet != null
     else -> false
@@ -119,7 +125,8 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
         GraphKind.Fm6All -> Fm6AllOpsPicture(g, colour, modifier)
         GraphKind.Sound -> SoundSheetPicture(g, modifier)
         GraphKind.Env -> EnvGraph(g, colour, hot, modifier)
-        GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog,
+        GraphKind.Lfo -> LfoGraph(g, colour, modifier)
+        GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog, GraphKind.Voice,
         GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb -> CanvasGraph(g, colour, hot, modifier)
         else -> Unit
     }
@@ -127,7 +134,8 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
 
 private fun describe(g: PageGraph): String = when (g.kind) {
     GraphKind.Env -> "Envelope shape. " + listOf("attack", "decay", "sustain", "release").mapIndexed { i, n -> "$n ${g.values.getOrElse(i) { 0 }}" }.joinToString(", ")
-    GraphKind.Lfo -> "LFO wave. ${g.caption ?: ""}"
+    GraphKind.Lfo -> "LFO wave"
+    GraphKind.Voice -> VOICE_SAYS.getOrElse(g.values.getOrElse(0) { 0 } and 3) { "" }.lowercase().replaceFirstChar { it.uppercase() } + ". Glide ${if (g.values.getOrElse(1) { 0 } == 0) "off" else g.caption ?: "on"}"
     GraphKind.Drive -> "Drive curve. ${g.caption ?: ""} ${g.side ?: ""}"
     GraphKind.Fx -> "FX sends: " + listOf("drive", "chorus", "delay", "reverb").mapIndexed { i, n -> "$n ${g.values.getOrElse(i) { 0 }}" }.joinToString(", ")
     GraphKind.Scale -> "Scale keys. ${g.side ?: ""}"
@@ -201,14 +209,10 @@ private fun EnvGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifier) 
 @Composable
 private fun CanvasGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifier) {
     val tm = rememberTextMeasurer()
-    val reduce = LocalReduceMotion.current
-    // the LFO's "now" dot sweeps its two seconds; with Reduce Motion it stays at the start
-    val sweep by rememberInfiniteTransition(label = "lfo").animateFloat(0f, 1f, infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart), label = "now")
-    val now = if (reduce) 0f else sweep
     Canvas(modifier.clearAndSetSemantics { contentDescription = describe(g) }) {
         val s = Sp(this, tm)
         when (g.kind) {
-            GraphKind.Lfo -> drawLfo(s, g, colour, now)
+            GraphKind.Voice -> drawVoice(s, g, colour)
             GraphKind.Drive -> drawDrive(s, g, colour)
             GraphKind.Fx -> drawFx(s, g, colour)
             GraphKind.Scale -> drawScale(s, g, colour)
@@ -224,29 +228,60 @@ private fun CanvasGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifie
     }
 }
 
-private fun lfoWave(w: Int, cycles: Double): Double {
-    val ph = cycles - kotlin.math.floor(cycles)
-    return when (w) {
-        1 -> if (ph < 0.5) ph * 4 - 1 else 3 - ph * 4
-        2 -> ph * 2 - 1
-        3 -> if (ph < 0.5) 1.0 else -1.0
-        4 -> { val n = (kotlin.math.floor(cycles).toLong() and 0xFFFFFFFFL); (((n * 2654435761L) and 0xFFFFFFFFL) shr 16).toInt().let { (it - 32768) / 32768.0 } }
-        else -> sin(ph * 2 * Math.PI)
+/** One shared "when an LFO picture first showed": the stand-in restart while there is no clock, so every LFO picture shows the same moment. */
+private val lfoOpened: Long by lazy { SystemClock.uptimeMillis() }
+
+/**
+ * LFO, LFO 2: the wave as it runs (the iPad's LiveLFOGraph, Skiff's graph_lfo): its two seconds from the restart, then the last two
+ * seconds scrolling, at its real rate (SYNC's at the clock's tempo), FADE ramping in, UNI above the line, a dot where it is now.
+ * With Reduce Motion it is the still two seconds from the restart.
+ */
+@Composable
+private fun LfoGraph(g: PageGraph, colour: Color, modifier: Modifier) {
+    val tm = rememberTextMeasurer()
+    val reduce = LocalReduceMotion.current
+    val core = LocalPictureCore.current
+    val clock by (core?.clock ?: ClockDefaults.clock).collectAsState()
+    val tempo = core?.top?.collectAsState()?.value?.tempo ?: 120.0
+    val lfo = SkiffLfo.of(g.values)
+    val opened = lfoOpened
+    var frame by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    if (!reduce) LaunchedEffect(Unit) { while (true) withFrameMillis { frame = SystemClock.uptimeMillis() } }
+    val bpmNow = if (clock.running && clock.ticksPerSecond > 0) clock.ticksPerSecond * 60 / 24 else tempo
+    val caption = if (lfo.sync > 0 || g.caption == null) lfo.caption(bpmNow) else g.caption
+    val spoken = "LFO wave${if (reduce) "" else ", running"}. ${SkiffLfo.WAVE_NAMES.getOrElse(lfo.wave) { "wave" }}, $caption" +
+        (if (lfo.polarity != 0) ", above zero only" else "") + (if (lfo.fade > 0) ", fades in" else "")
+    Canvas(modifier.clearAndSetSemantics { contentDescription = spoken }) {
+        val s = Sp(this, tm)
+        val n = if (reduce) LfoNow(lfo.startPhase, 0.0, bpmNow) else lfoNow(lfo, clock, tempo, opened, frame)
+        val (values, now) = lfo.view(n.cycles, n.since, n.bpm, 217)
+        val cy = GH / 2; val a = 38f * GH / 100f
+        s.rect(Tok.lifted, 12f, cy, 216f, 1f)
+        val pts = values.mapIndexed { x, v -> (12f + x) to (cy - v.toFloat() * a) }
+        s.stroke(colour, pts)
+        val k = (now * 216).roundToInt().coerceIn(0, 216)
+        val dot = s.o(pts[k].first, pts[k].second); val half = s.run { 5f.px() }
+        drawRoundRect(Tok.text, Offset(dot.x - half, dot.y - half), Size(half * 2, half * 2), CornerRadius(s.run { 2f.px() }))
+        s.text(caption, 228f, 16f, mid, right = true)
     }
 }
 
-private fun drawLfo(s: Sp, g: PageGraph, c: Color, now: Float) {
-    val rate = g.values.getOrElse(0) { 60 }; val wave = g.values.getOrElse(1) { 0 }; val phase = g.values.getOrElse(2) { 0 }
-    val hz = 0.05 * 800.0.pow(rate / 127.0)
-    val cycles = (hz * 2).coerceIn(0.5, 12.0)   // TODO: Skiff's view scrolls at the real rate from the restart, and FADE ramps in; this is the plain two seconds
-    val cy = GH / 2; val a = 38f * GH / 100f
-    s.rect(Tok.lifted, 12f, cy, 216f, 1f)
-    val pts = (0..216).map { x -> (12f + x) to (cy - (lfoWave(wave, cycles * x / 216.0 + phase / 127.0)).toFloat() * a) }
-    s.stroke(c, pts)
-    val k = (now * 216).toInt().coerceIn(0, 216)
-    val (dx, dy) = pts[k]
-    s.rect(Tok.text, dx - 5f, dy - 5f * GH / GW * 1.7f, 10f, 10f * GH / GW * 1.7f, 2f)
-    g.caption?.let { s.text(it, 228f, 16f, mid, right = true) }
+// ---- VOICE (ui_pgraph.c graph_voice, the iPad's VoiceDrawing): what the mode does in words, and the glide as a ramp from the old note to the new
+
+// UNI stacks all the voices on Skiff 2.2 and 8 of 16 on 2.5; the phone isn't told which, so it doesn't count them
+private val VOICE_SAYS = listOf("POLY: A VOICE A NOTE", "MONO: ONE VOICE, NEW ATTACK", "LEG: ONE VOICE, NO NEW ATTACK", "UNI: STACKED VOICES, ONE NOTE")
+
+private fun drawVoice(s: Sp, g: PageGraph, c: Color) {
+    val mode = g.values.getOrElse(0) { 0 } and 3; val gl = g.values.getOrElse(1) { 0 }.coerceIn(0, 127)
+    val w = if (gl != 0) 6f + gl * 90 / 127 else 0f
+    s.text(VOICE_SAYS[mode], 12f, 16f, mid)
+    s.rect(mid, 12f, 92f, 88f, 11f, 2f)                                            // the note before
+    s.stroke(c, listOf(100f to 97f, (100f + w) to 39f), 4f)                        // the glide between
+    s.rect(c, 100f + w, 34f, 128f - w, 11f, 2f)                                    // the note after
+    if (gl != 0) {
+        s.rect(dim, 100f, 116f, 1f, 9f); s.rect(dim, 100f + w, 116f, 1f, 9f); s.rect(dim, 100f, 120f, w, 1f)
+        g.caption?.let { s.text(it, 100f + w / 2, 135f, mid, centre = true) }
+    }
 }
 
 private fun softclip(x: Int): Int { val a = min(abs(x), 65536); val y = (32767 * tanh(a / 32768.0)).toInt(); return if (x < 0) -y else y }
@@ -285,10 +320,15 @@ private fun drawDrive(s: Sp, g: PageGraph, c: Color) {
     val ys = (0..116).map { i -> 66f - driveAt(type, d, (i - 58) * 32768 / 58) * 58f / 32768f }
     val curve = ys.mapIndexed { i, y -> (12f + i) to y }
     s.d.drawPath(s.path(curve).apply { lineTo(s.x(128f), s.y(124f)); lineTo(s.x(12f), s.y(124f)); close() }, c.copy(alpha = 0.14f))
-    s.rect(line, 12f, 66f, 116f, 1f); s.rect(line, 70f, 8f, 1f, 117f)
+    s.rect(line, 12f, 66f, 116f, 1f); s.rect(line, 70f, 8f, 1f, 117f); s.rect(line, 140f, 88f, 87f, 1f)
     s.d.drawPath(s.path(listOf(12f to 124f, 128f to 8f)), dim, style = Stroke(s.run { 1f.px() }, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))))
     s.stroke(c, curve)
-    // TODO: the drive's output wave (iPad: driveWave, ported above) is not drawn: board 59 shows the curve and the type's name
+    // a cycle of the wave it makes, at the right, under the type's name (CRUSH says its bits and hold)
+    val wp = driveWave(type, d, tone).mapIndexed { i, y -> (140f + i) to (88f - y * 32f / 32768f) }
+    s.d.drawPath(s.path(wp + listOf(227f to 88f, 140f to 88f), close = true), c.copy(alpha = 0.14f))
+    s.stroke(c, wp, 2f)
+    s.text(listOf("SOFT", "HARD", "FOLD", "CRUSH", "FUZZ")[type], 140f, 28f, if (d != 0) c else dim, 13f)
+    if (type == 3 && d != 0) s.text("${16 - d / 11} BITS, HOLD ${1 shl (d shr 5)}", 140f, 44f, mid)
 }
 
 private fun drawFx(s: Sp, g: PageGraph, c: Color) {
@@ -578,10 +618,17 @@ private fun drawInsert(s: Sp, g: PageGraph, c: Color) {
  * comments: the delay bus's MIX (full), INSERT's MIX on the PRESETS encoder (full), and DUCK's source hits (none known: its box only).
  */
 fun pictureOf(page: com.scottgerstl.lupe.core.PageState): PageGraph {
-    if (page.graph.kind != GraphKind.None) return page.graph
-    if (page.family != "FX") return page.graph
     val title = page.pages.firstOrNull { it.index == page.page }?.title ?: page.title
     val v = page.controls.map { it?.raw ?: 0 }
+    if (page.graph.kind == GraphKind.Lfo) {
+        // the core sends LFO's four values on both pages; SYNC, TRIG and POLARITY are LFO 2's own knobs, kept a track for when LFO shows
+        if (title == "LFO 2" && v.size >= 3) lfo2Seen[page.track] = v.take(3)
+        val more = lfo2Seen[page.track]
+        return if (page.graph.values.size >= 7 || more == null) page.graph else page.graph.copy(values = List(4) { page.graph.values.getOrElse(it) { 0 } } + more)
+    }
+    if (page.graph.kind != GraphKind.None) return page.graph
+    if (page.family == "EDIT" && title == "VOICE" && v.size >= 4) return PageGraph(GraphKind.Voice, values = v, caption = page.controls.getOrNull(1)?.value)
+    if (page.family != "FX") return page.graph
     return when (title) {
         "DELAY" -> PageGraph(GraphKind.FxDelay, values = listOf(v[1], v[2], v[3], 127), send = v[0], caption = page.controls.getOrNull(1)?.value)   // SEND (or DELAY), TIME, FEEDBACK, COLOR
         "REVERB" -> PageGraph(GraphKind.FxReverb, values = listOf(v[1], v[2], v[3]), send = v[0], caption = page.controls.getOrNull(1)?.value)                                                // SEND (or REVERB), TYPE, SIZE, DAMP
@@ -591,3 +638,6 @@ fun pictureOf(page: com.scottgerstl.lupe.core.PageState): PageGraph {
         else -> page.graph
     }
 }
+
+/** LFO 2's SYNC, TRIG, POLARITY as last seen on that page, by track: the LFO page's picture needs them and the page area doesn't send them. */
+private val lfo2Seen = java.util.concurrent.ConcurrentHashMap<Int, List<Int>>()

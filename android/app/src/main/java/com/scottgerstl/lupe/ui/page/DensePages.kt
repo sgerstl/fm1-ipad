@@ -168,39 +168,53 @@ private fun AlgorithmChart(p: Fm6Patch, alg: Algorithm, picked: Int, colour: Col
     val tm = rememberTextMeasurer()
     Canvas(Modifier.fillMaxSize().semantics { contentDescription = "Algorithm ${p.algorithm + 1}. " + algorithmCaption(p, alg, picked) }) {
         val maxCol = alg.cells.values.maxOf { it.first }; val maxRow = alg.cells.values.maxOf { it.second }
-        val bw = 40.dp.toPx(); val bh = 30.dp.toPx(); val dx = 54.dp.toPx()
-        val bus = size.height - 14.dp.toPx()
-        val dy = min(52.dp.toPx(), (bus - 10.dp.toPx() - bh - 28.dp.toPx()) / max(1, maxRow))
+        // The chart at its full size (40 × 30 boxes, 54 across, 44 up) where it fits; in a short picture (110 dp in the pop-up, 64 on Edit)
+        // or a narrow one, the boxes and the gaps between them shrink together so no row meets the next.
+        val algLabel = tm.measure("ALG %02d".format(p.algorithm + 1), LupeType.small.copy(fontSize = 11.sp))
+        val capLabel = tm.measure(algorithmCaption(p, alg, picked), LupeType.small.copy(fontSize = 11.sp))
+        val kx = min(1f, (size.width - 60.dp.toPx()) / ((maxCol * 54 + 40).dp.toPx())).coerceAtLeast(0.4f)
+        val bw = 40.dp.toPx() * kx; val dx = 54.dp.toPx() * kx
+        // the two captions sit in the top corners; they take a line of their own only when the chart is wide enough to run under them
+        val chartHalf = maxCol * dx / 2 + bw / 2 + 12.dp.toPx()
+        val clear = size.width / 2 - chartHalf >= max(algLabel.size.width, capLabel.size.width) + 12.dp.toPx()
+        val top = if (clear) 0f else algLabel.size.height + 8.dp.toPx()
+        val rows = maxRow + 1
+        val ky = min(1f, (size.height - top) / ((rows * 30 + maxRow * 14 + 30).dp.toPx())).coerceAtLeast(0.2f)
+        val bh = 30.dp.toPx() * ky; val gap = 14.dp.toPx() * ky; val stub = 10.dp.toPx() * ky
+        val bus = size.height - 12.dp.toPx() * ky
+        val dy = min(52.dp.toPx(), bh + max(gap, (bus - stub - top - 8.dp.toPx() * ky - rows * bh) / max(1, maxRow)))
         fun centre(op: Int): Offset {
             val c = alg.cells[op] ?: (0 to 0)
-            return Offset(size.width / 2 + c.first * dx - maxCol * dx / 2, bus - 10.dp.toPx() - bh / 2 - c.second * dy)
+            return Offset(size.width / 2 + c.first * dx - maxCol * dx / 2, bus - stub - bh / 2 - c.second * dy)
         }
         val line = Tok.text2; val lw = 1.5.dp.toPx()
         val cs = alg.carriers.map { centre(it).x }
-        drawLine(line, Offset(cs.min() - 10.dp.toPx(), bus), Offset(cs.max() + 40.dp.toPx(), bus), lw)
-        val ax = cs.max() + 40.dp.toPx()
+        val ax = cs.max() + bw / 2 + 20.dp.toPx() * kx
+        drawLine(line, Offset(cs.min() - 10.dp.toPx() * kx, bus), Offset(ax, bus), lw)
         drawPath(Path().apply { moveTo(ax - 6.dp.toPx(), bus - 4.dp.toPx()); lineTo(ax, bus); lineTo(ax - 6.dp.toPx(), bus + 4.dp.toPx()) }, line, style = Stroke(lw))
         for (c in alg.carriers) { val o = centre(c); drawLine(line, Offset(o.x, o.y + bh / 2), Offset(o.x, bus), lw) }
         for ((a, t) in alg.routes) {
-            val s = centre(a); val d = centre(t); val y = d.y - bh / 2 - 5.dp.toPx()
+            val s = centre(a); val d = centre(t); val y = d.y - bh / 2 - gap * 0.36f
             drawPath(Path().apply { moveTo(s.x, s.y + bh / 2); lineTo(s.x, y); lineTo(d.x, y); lineTo(d.x, d.y - bh / 2) }, line, style = Stroke(lw))
         }
         val f = centre(alg.feedback)
         drawPath(Path().apply {
-            moveTo(f.x + bw / 2, f.y); lineTo(f.x + bw / 2 + 8.dp.toPx(), f.y); lineTo(f.x + bw / 2 + 8.dp.toPx(), f.y - bh / 2 - 7.dp.toPx())
-            lineTo(f.x, f.y - bh / 2 - 7.dp.toPx()); lineTo(f.x, f.y - bh / 2)
+            val out = 8.dp.toPx() * kx; val up = gap * 0.5f
+            moveTo(f.x + bw / 2, f.y); lineTo(f.x + bw / 2 + out, f.y); lineTo(f.x + bw / 2 + out, f.y - bh / 2 - up)
+            lineTo(f.x, f.y - bh / 2 - up); lineTo(f.x, f.y - bh / 2)
         }, if (p.feedback > 0) Tok.text else Tok.text3, style = Stroke(lw))
         for (op in 1..6) {
             val o = centre(op)
             // a silent operator is a dim tile whatever its role (grey words on the track colour wouldn't read)
             val fill = if (op == picked) Tok.text else if (silent(p, op)) Tok.control else if (op in alg.carriers) colour else Tok.control
-            drawRoundRect(fill, Offset(o.x - bw / 2, o.y - bh / 2), Size(bw, bh), CornerRadius(5.dp.toPx()))
+            drawRoundRect(fill, Offset(o.x - bw / 2, o.y - bh / 2), Size(bw, bh), CornerRadius(min(5.dp.toPx(), bh / 3)))
             val ink = if (op == picked) Tok.onColour else if (silent(p, op)) Tok.text2 else if (op in alg.carriers) Tok.onColour else Tok.text
-            val r = tm.measure("$op", LupeType.label.copy(color = ink))
+            // the number keeps the label size while the box holds it, then shrinks with the box (never under 9 sp)
+            val r = tm.measure("$op", LupeType.label.copy(color = ink, fontSize = min(LupeType.label.fontSize.value, max(9f, bh.toDp().value * 0.62f)).sp, lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified))
             drawText(r, topLeft = Offset(o.x - r.size.width / 2f, o.y - r.size.height / 2f))
         }
-        label(tm, "ALG %02d".format(p.algorithm + 1), 12.dp.toPx(), 8.dp.toPx(), Tok.text2Raised, 11f)
-        label(tm, algorithmCaption(p, alg, picked), size.width - 12.dp.toPx(), 8.dp.toPx(), Tok.text2Raised, 11f, right = true)
+        label(tm, "ALG %02d".format(p.algorithm + 1), 8.dp.toPx(), 4.dp.toPx(), Tok.text2Raised, 11f)
+        label(tm, algorithmCaption(p, alg, picked), size.width - 8.dp.toPx(), 4.dp.toPx(), Tok.text2Raised, 11f, right = true)
     }
 }
 

@@ -43,6 +43,8 @@ enum class GraphKind {
     @SerialName("slicer") Slicer,
     /** DUCK: values DEPTH, then RELEASE as thousandths of a bar; [PageGraph.notes] where in the bar the source hits, in thousandths (empty: no source). */
     @SerialName("duck") Duck,
+    /** EDIT › VOICE: values VOICE (POLY MONO LEG UNI), GLIDE, GL MODE, PRIORITY; [PageGraph.caption] the glide as shown. Made on the phone from the page's own knobs. */
+    @SerialName("voice") Voice,
 }
 
 /** An FM6 patch as OPERATOR and ALL OPS draw it. [ops] are operators 1…6. */
@@ -80,7 +82,7 @@ data class SoundSheet(
 /**
  * What a graph is drawn from. Which fields a kind reads (the rest stay empty):
  *  - Env: [values] = ATTACK, DECAY, SUSTAIN, RELEASE (0…127)
- *  - Lfo: [values] = RATE, WAVE, PHASE, FADE; [caption] the rate as shown ("2.40 Hz")
+ *  - Lfo: [values] = RATE, WAVE, PHASE, FADE, then SYNC, TRIG, POLARITY when known (the phone adds LFO 2's own knobs); [caption] the rate as shown ("2.40 Hz")
  *  - Drive: [values] = DIST, TYPE, TONE; [caption] the type's name; [side] "drive 72 · tone 40"
  *  - Fx: [values] = DIST, CHORUS, DELAY, REVERB sends
  *  - Scale: [root] 0…11, [notes] the scale's semitone offsets from the root; [side] "C minor · ● root"
