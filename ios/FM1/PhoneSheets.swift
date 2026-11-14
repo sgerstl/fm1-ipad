@@ -97,21 +97,49 @@ struct PhoneMixPopup: View {
                 if tab == .mixer || shared.isEmpty {
                     PhoneMixerRows(session: session, ui: ui, touched: { show(.mixer) })
                 } else if let p = shared.first(where: { $0.title == tab.pageTitle }) {
-                    // the shared pages draw in the global greys (decision 34; PageGraph's scope-1 colours)
-                    ScrollView {
-                        SoundCard(session: session, ui: ui, rows: [p], pages: shared, marks: marks)
-                            .environment(\.soundCardBare, true)
-                            .environment(\.pageGraphHidden, !UserDefaults.standard.bool(forKey: ShowGraphics.key, default: ShowGraphics.standard))
-                            .id(p.id)
-                            .transition(.opacity)
+                    // board 77: the four dials two by two at the left, the picture at the right in the FM-1's 1.7 : 1, in the
+                    // global greys (decision 34: a shared page sets every track; PageGraph draws scope 1 in grey)
+                    HStack(alignment: .top, spacing: 14) {
+                        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
+                            GridRow { cell(p, 0); cell(p, 1) }
+                            GridRow { cell(p, 2); cell(p, 3) }
+                        }
+                        .frame(maxWidth: .infinity)
+                        if showGraphics, FM1Picture.titles.contains(p.title) {
+                            FM1Picture(session: session, page: p)
+                                .padding(6)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        } else if showGraphics, PageGraph.has(p, session) {
+                            PageGraph(session: session, page: p, rows: [p], hot: nil, modRoute: .constant(0))
+                                .padding(6)
+                                .aspectRatio(936.0 / 552.0, contentMode: .fit)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
                     }
-                    .scrollIndicators(.hidden)
+                    .id(p.id)
+                    .transition(.opacity)
                 }
             }
             .animation(.easeOut(duration: 0.15), value: tab)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .onChange(of: tab) { _, t in if let p = shared.first(where: { $0.title == t.pageTitle }) { ui.focus(p) } }
+    }
+
+    @AppStorage(ShowGraphics.key) private var showGraphics = ShowGraphics.standard
+
+    /// A dial on its control-grey tile (board 77); an empty knob only an outline.
+    private func cell(_ p: SoundPage, _ k: Int) -> some View {
+        let empty = (p.ids[safe: k] ?? nil) == nil
+        return PageDial(session: session, ui: ui, page: p, slot: k, marks: marks)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+            .background {
+                if empty { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.stepEmpty, lineWidth: 1.5) }
+                else { RoundedRectangle(cornerRadius: 10).fill(Theme.control) }
+            }
     }
 
     private func show(_ t: SkiffButtonMap.MixerTab) {

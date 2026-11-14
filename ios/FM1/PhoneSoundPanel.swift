@@ -68,30 +68,6 @@ struct PhoneSoundPanel: View {
             ?? marks.key.flatMap { m in p.ids.indices.first { p.key($0) == m } }
     }
 
-    /// Knob k of the page as a round dial: the FM-1's slide (Settings › Slide to turn), the Magnifier, double tap back.
-    @ViewBuilder private func dial(_ p: SoundPage, _ k: Int) -> some View {
-        if let id = p.ids[safe: k] ?? nil {
-            let sc = p.scope(of: k)
-            let tint = sc == 1 ? Theme.text : Theme.track[session.selectedTrack]
-            let isHot = marks.key == p.key(k)
-            KnobControl(ui: ui, activate: { activate(p) }, column: (k + 1, tint, isHot),
-                        face: { spec, dragging in AnyView(RoundDialFace(spec: spec, tint: tint, hot: isHot || dragging)) }) {
-                var s = KnobSpec.param(session, scope: sc, id: id, slot: k, label: p.knobLabels[safe: k] ?? nil)
-                if SoundCard.deadWhileStrumOff(session, p, k) { s.dead = true; s.spoken += ", does nothing while STRUM is off" }
-                return s
-            }
-        } else {
-            Color.clear.frame(height: RoundDialFace.height).accessibilityHidden(true)
-        }
-    }
-
-    /// Touching a dial makes its page the FM-1's (linked), as a card's column does.
-    private func activate(_ p: SoundPage) -> Bool {
-        let on = SoundCard.onDevice(session, p)
-        if !on { ui.focus(p); if session.screenLinked, ui.followDevice { session.showOnDevice(page: p.fw) } }
-        return !on
-    }
-
     var body: some View {
         let t = session.selectedTrack
         let pages = SoundPage.shown(session, family)
@@ -121,7 +97,7 @@ struct PhoneSoundPanel: View {
                         // Android's panel (board 75, decisions 25 and 30): four round dials, then the page's picture
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 0) {
-                                ForEach(0..<4, id: \.self) { k in dial(c, k).frame(maxWidth: .infinity) }
+                                ForEach(0..<4, id: \.self) { k in PageDial(session: session, ui: ui, page: c, slot: k, marks: marks).frame(maxWidth: .infinity) }
                             }
                             if graphics, PageGraph.has(c, session) {
                                 PageGraph(session: session, page: c, rows: [c], hot: hot(c), modRoute: .constant(0))
@@ -208,5 +184,38 @@ struct RoundDialFace: View {
         }
         .opacity(spec.dead ? 0.5 : 1)
         .frame(maxWidth: .infinity).frame(height: Self.height)
+    }
+}
+
+/// Knob `slot` of a page as a round dial: the FM-1's slide (Settings › Slide to turn), the Magnifier, double tap back.
+/// Touching it makes its page the FM-1's (linked), as a card's column does. White on a shared page.
+struct PageDial: View {
+    let session: DeviceSession
+    let ui: EditorUI
+    let page: SoundPage
+    let slot: Int
+    let marks: ShapeMarks
+
+    var body: some View {
+        let p = page, k = slot
+        if let id = p.ids[safe: k] ?? nil {
+            let sc = p.scope(of: k)
+            let tint = sc == 1 ? Theme.text : Theme.track[session.selectedTrack]
+            let isHot = marks.key == p.key(k)
+            KnobControl(ui: ui, activate: { activate() }, column: (k + 1, tint, isHot),
+                        face: { spec, dragging in AnyView(RoundDialFace(spec: spec, tint: tint, hot: isHot || dragging)) }) {
+                var s = KnobSpec.param(session, scope: sc, id: id, slot: k, label: p.knobLabels[safe: k] ?? nil)
+                if SoundCard.deadWhileStrumOff(session, p, k) { s.dead = true; s.spoken += ", does nothing while STRUM is off" }
+                return s
+            }
+        } else {
+            Color.clear.frame(height: RoundDialFace.height).accessibilityHidden(true)
+        }
+    }
+
+    private func activate() -> Bool {
+        let on = SoundCard.onDevice(session, page)
+        if !on { ui.focus(page); if session.screenLinked, ui.followDevice { session.showOnDevice(page: page.fw) } }
+        return !on
     }
 }
