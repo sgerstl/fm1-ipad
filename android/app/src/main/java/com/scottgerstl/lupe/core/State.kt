@@ -178,6 +178,8 @@ data class PadsState(
     val kept: List<Int> = emptyList(),
     /** How many of the 64 pattern numbers are free (unused and empty), when the core says; 0 means New pattern will be refused. Null: not told. */
     val patternsFree: Int? = null,
+    /** The kept patterns nothing uses (1…64), as the FM-1's CLEAR UNUSED counts them: what "Clear N unused patterns" would erase. */
+    val unused: List<Int> = emptyList(),
 )
 
 // ---- editor (P3)

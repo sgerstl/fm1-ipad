@@ -42,6 +42,9 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 33 | Hold a pad that holds a pattern (eight choices), then Set pattern… with many patterns | No "More…": every choice is in the one menu. It scrolls with a drag anywhere on the menu and flings; the circle stays put, the lines follow the choices that show, and a choice fades as it leaves the top or bottom edge | – | ☐ pass ☐ fail: |
 | 34 | Hold, keep the finger down, slide to the foot of the menu and rest there | The column scrolls on under the finger; lifting on a lit choice picks it | – | ☐ pass ☐ fail: |
 | 35 | Track head › LEVEL in a menu that scrolls | A slide along the row sets the value; a drag up or down scrolls the menu | Yes | ☐ pass ☐ fail: |
+| 36 | With all 64 patterns taken and some unused: hold an empty slot | New pattern dimmed, "All 64 patterns are taken"; under it "Clear N unused patterns…" (dimmed with "Stop first" while playing). With none unused: "No unused patterns · Other saved projects hold them" | – | ☐ pass ☐ fail: |
+| 37 | Tap Clear N unused patterns…, read the confirm, tap it | The row turns into a red-outlined confirm naming the numbers ("Clears 03, 17, 22 · can't be undone"); a tap in the first 0.4 s does nothing. Confirmed: the FM-1's answer shows in the strip at the foot, and New pattern works again | Yes | ☐ pass ☐ fail: |
+| 38 | Song name › Clear N unused patterns… | The same, in the menu: the row becomes the red-outlined confirm with Cancel under it; closing the menu drops it | Yes | ☐ pass ☐ fail: |
 
 **What the building session saw on a screen** (its own emulator, the demo FM-1; nothing on a Pixel or a real FM-1):
 - Row 3's Pads page: the band under track 1, outlined slots A to H, the Store key and scenes.

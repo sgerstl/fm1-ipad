@@ -395,6 +395,12 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap
             val full = pads.patternsFree == 0 || kept0.size >= 64
             add(HoldItem("New pattern", sub = if (full) com.scottgerstl.lupe.core.NO_PATTERN_FREE else goes, enabled = !full) { core.send(Intent.PadNew(row.track, at)) })
+            // …and offers the way out (Scott, 2026-11-14): erase the kept patterns nothing uses, asked once more in place with their numbers
+            if (pads.patternsFree == 0) {
+                if (pads.unused.isNotEmpty()) add(HoldItem(com.scottgerstl.lupe.core.clearUnusedTitle(pads.unused), sub = stopFirst, enabled = idle,
+                    confirm = com.scottgerstl.lupe.core.clearUnusedWords(pads.unused)) { core.send(com.scottgerstl.lupe.core.ClearUnusedPatterns(confirmed = true)) })
+                else add(HoldItem("No unused patterns", sub = "Other saved projects hold them", enabled = false))
+            }
             // (a REST added at the list's end is one LIST SET, which Skiff takes while playing; if it can't, its refusal shows on screen)
             add(HoldItem("Rest", sub = goes) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
         }

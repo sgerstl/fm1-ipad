@@ -71,7 +71,7 @@ class FakeLupeCore(
     /** The FM-1 refusing something, as the real one does (its reason, for the screen). */
     fun refuse(reason: String) { _notice.value = CoreNotice(_notice.value.seq + 1, refusalWords(reason)) }
     /** For looking at the full-pool case: the fake says no pattern number is free, and refuses New pattern as Skiff does. */
-    fun fillPool(full: Boolean) { _pads.value = _pads.value.copy(patternsFree = if (full) 0 else null) }
+    fun fillPool(full: Boolean) { _pads.value = _pads.value.copy(patternsFree = if (full) 0 else null, unused = if (full) listOf(3, 17, 22, 40, 41, 58, 60) else emptyList()) }
     private val _fm1Screen = MutableStateFlow(Fm1ScreenState(key = "HOME"))
     override val fm1Screen: StateFlow<Fm1ScreenState> = _fm1Screen
     private val _home = MutableStateFlow(FakeHome.seed())
@@ -210,6 +210,8 @@ class FakeLupeCore(
             is Intent.PadSelectSound -> selectPad(intent.track, intent.entry)   // the Sounds browser is the screen for it (Done returns to whatever the bottom half was on)
             is Intent.PadNew -> if (_pads.value.patternsFree == 0) refuse("All 64 patterns are taken. Clear unused ones to free a number") else padNew(intent.track, intent.entry)
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
+            is ClearUnusedPatterns -> { val p = _pads.value; if (intent.confirmed && p.unused.isNotEmpty()) { val n = p.unused.size
+                _pads.value = p.copy(unused = emptyList(), kept = p.kept - p.unused.toSet(), patternsFree = (p.patternsFree ?: 0) + n); refuse("Cleared $n unused pattern${if (n == 1) "" else "s"}: their numbers are free") } }
             is Intent.PadClear -> editEntry(intent.track, intent.entry) { PadEntry() }
             is Intent.TrackSelect -> {
                 _mix.update { FakeP5.mix(it, intent) }

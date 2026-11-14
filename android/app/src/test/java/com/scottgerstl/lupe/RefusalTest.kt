@@ -47,3 +47,22 @@ class RefusalTest {
         assertTrue(m.shows(2, "No"))      // refused again: it comes back
     }
 }
+
+class ClearUnusedTest {
+    @org.junit.Test fun theConfirmNamesTheNumbers() {
+        org.junit.Assert.assertEquals("Clears 03, 17, 22 · can't be undone", com.scottgerstl.lupe.core.clearUnusedWords(listOf(17, 3, 22)))
+        org.junit.Assert.assertEquals("Clears 01, 02, 03, 04, 05, 06 and 2 more · can't be undone", com.scottgerstl.lupe.core.clearUnusedWords((1..8).toList()))
+        org.junit.Assert.assertEquals("Clear 1 unused pattern…", com.scottgerstl.lupe.core.clearUnusedTitle(listOf(9)))
+        org.junit.Assert.assertEquals("Clear 7 unused patterns…", com.scottgerstl.lupe.core.clearUnusedTitle((1..7).toList()))
+    }
+
+    @org.junit.Test fun theIntentIsTheCoresJson() {
+        org.junit.Assert.assertEquals("""{"intent":"clearUnusedPatterns","confirmed":true}""",
+            com.scottgerstl.lupe.core.lupeJson.encodeToString(com.scottgerstl.lupe.core.Intent.serializer(), com.scottgerstl.lupe.core.ClearUnusedPatterns(confirmed = true)))
+    }
+
+    @org.junit.Test fun thePadsAreaCarriesTheFreeCountAndTheUnusedOnes() {
+        val p = com.scottgerstl.lupe.core.lupeJson.decodeFromString<com.scottgerstl.lupe.core.PadsState>("""{"rows":[],"scenes":[],"selected":{"track":1,"entry":0},"patternsFree":0,"unused":[3,17]}""")
+        org.junit.Assert.assertEquals(0, p.patternsFree); org.junit.Assert.assertEquals(listOf(3, 17), p.unused)
+    }
+}

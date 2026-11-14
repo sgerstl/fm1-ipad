@@ -47,4 +47,20 @@ fun refusalWords(reason: String): String {
 }
 
 /** No pattern number is free: what New pattern's sub line says before the tap. */
-const val NO_PATTERN_FREE = "All 64 are taken: pick one, or clear unused ones"
+const val NO_PATTERN_FREE = "All 64 patterns are taken"
+
+/**
+ * Erase every kept pattern nothing uses ([PadsState.unused]), to free their numbers. It loses data, so the screen confirms in place first
+ * and sends [confirmed]; the core refuses an unconfirmed one. JSON `{"intent":"clearUnusedPatterns","confirmed":true}`.
+ */
+@Serializable @kotlinx.serialization.SerialName("clearUnusedPatterns") data class ClearUnusedPatterns(val confirmed: Boolean = false) : Intent
+
+/** "Clear 5 unused patterns…": the menu's row. */
+fun clearUnusedTitle(unused: List<Int>): String = "Clear ${unused.size} unused pattern${if (unused.size == 1) "" else "s"}…"
+
+/** What the confirm says goes, by number: "Clears 03, 17, 22 · can't be undone"; past six, the first six and how many more. */
+fun clearUnusedWords(unused: List<Int>): String {
+    val shown = unused.sorted().take(6).joinToString(", ") { "%02d".format(it) }
+    val more = unused.size - 6
+    return "Clears $shown" + (if (more > 0) " and $more more" else "") + " · can't be undone"
+}
