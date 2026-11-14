@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone consolidation</title>
+<style>
+  :root {
+    --bg: #0e0f11;
+    --surface: #17191c;
+    --line: #2a2d32;
+    --text: #ececee;
+    --text-2: #a9adb4;
+    --text-3: #80858d;
+    --open: #f2b84b;
+    --decided: #6fd3a8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  main { max-width: 1432px; margin: 0 auto; padding: 32px 16px 64px; }
+  header.page { margin-bottom: 40px; }
+  h1 { font-size: 28px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 8px; font-weight: 600; }
+  .lede { color: var(--text-2); max-width: 75ch; margin: 0 0 4px; }
+  .lede strong { color: var(--text); font-weight: 600; }
+  section.row { border-top: 1px solid var(--line); padding: 32px 0 8px; }
+  .row-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  h2 { font-size: 20px; line-height: 1.3; margin: 0; font-weight: 600; }
+  .badge {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 4px; border: 1px solid currentColor;
+  }
+  .badge.open { color: var(--open); }
+  .badge.decided { color: var(--decided); }
+  .keeper { color: var(--text-2); font-size: 14px; }
+  .diff { margin: 0 0 16px; max-width: 90ch; color: var(--text); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  figure { margin: 0; background: var(--surface); border-radius: 8px; padding: 12px; }
+  figcaption { font-size: 13px; color: var(--text-3); margin-bottom: 8px; }
+  figcaption b { color: var(--text-2); font-weight: 600; }
+  img { display: block; width: 100%; height: auto; border-radius: 4px; }
+  .stack { display: grid; gap: 8px; }
+  .none {
+    border: 1px dashed var(--line); border-radius: 4px; padding: 24px 16px; color: var(--text-2);
+    min-height: 120px; display: flex; align-items: center;
+  }
+  .note { font-size: 13px; color: var(--text-3); margin-top: 8px; }
+  .sub { font-size: 16px; font-weight: 600; margin: 8px 0 8px; color: var(--text-2); }
+  @media (max-width: 760px) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header class="page">
+  <h1>Lupe phone consolidation: iPhone vs Android</h1>
+  <p class="lede">One row per component, <strong>iPhone left, Android right</strong>. Pick a keeper for every row marked open. Rows marked decided carry Scott's earlier call and stay for reference.</p>
+  <p class="lede">iPhone: simulator iPhone 17 Pro, Skiff demo, firmware 2.5.1, demo link. Android: the latest p2-shell debug build (app-debug.apk, 14 Nov 17:08) on the fake core, scenario "ready". The Pixel 7 was locked behind its fingerprint/PIN, so the Android screens come from the same APK on a Pixel-sized emulator (1080x2400, 420 dpi). Same pixels and density as the Pixel 7, but not the physical phone. Captured 14 Nov 2026.</p>
+</header>
+
+<section class="row" id="pads">
+  <div class="row-head"><h2>1 · Pads page, full screen</h2><span class="badge open">open</span></div>
+  <p class="diff">iPhone always draws eight lettered columns A to H and puts a ⌄⌄ tab under the selected pad. Android draws only filled slots and shows ×N pass counts and a "next" cue on the pads.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · Pads tab</figcaption><img src="phone-consolidation/ios-pads.png" alt="iPhone Pads page with six tracks, columns A to H and scenes 1 to 16"></figure>
+    <figure><figcaption><b>Android</b> · Pads tab</figcaption><img src="phone-consolidation/and-pads.png" alt="Android Pads page with named track heads, MUTE buttons and scenes 1 to 16"></figure>
+  </div>
+</section>
+
+<section class="row" id="heads">
+  <div class="row-head"><h2>2 · Track heads</h2><span class="badge decided">decided</span><span class="keeper">Keeper: Android</span></div>
+  <p class="diff">iPhone shows a number key and a speaker icon for mute. Android shows a colour block with the number, the track name and engine, and a MUTE word button.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b></figcaption><img src="phone-consolidation/ios-heads.png" style="width:22.5%" alt="iPhone track heads: numbered keys with speaker icons"></figure>
+    <figure><figcaption><b>Android</b></figcaption><img src="phone-consolidation/and-heads.png" style="width:55%" alt="Android track heads: colour blocks with name, engine and MUTE button"></figure>
+  </div>
+</section>
+
+<section class="row" id="selected">
+  <div class="row-head"><h2>3 · Selected track</h2><span class="badge decided">decided</span><span class="keeper">Keeper: iPhone</span></div>
+  <p class="diff">iPhone tints the whole row in the track's muted colour and rings the number key. Android draws a track-coloured outline round the row.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · track 1 selected</figcaption><img src="phone-consolidation/ios-selected.png" alt="iPhone track 1 row tinted dark orange under the pads"></figure>
+    <figure><figcaption><b>Android</b> · track 1 selected</figcaption><img src="phone-consolidation/and-selected.png" alt="Android track 1 row outlined in orange"></figure>
+  </div>
+</section>
+
+<section class="row" id="header">
+  <div class="row-head"><h2>4 · Header: tabs, transport, tempo, launch timing</h2><span class="badge decided">decided</span><span class="keeper">Keeper: Android, with tabs Pads · Edit · Timeline</span></div>
+  <p class="diff">iPhone: track chip, four boxed tabs (Pads, Edit, Mix, Sounds), a Bar key, rec, stop, position over BPM, and ⋯. Android: a song-name menu, three underlined tabs, Bar ⌄, position over tempo, and round rec and play buttons.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b></figcaption><img src="phone-consolidation/ios-header.png" alt="iPhone header bar with four tabs and transport"></figure>
+    <figure><figcaption><b>Android</b></figcaption><img src="phone-consolidation/and-header.png" alt="Android header bar with song menu, three tabs and transport"></figure>
+  </div>
+</section>
+
+<section class="row" id="scenes">
+  <div class="row-head"><h2>5 · Scenes</h2><span class="badge open">open</span></div>
+  <p class="diff">On both, scenes run as a row of 16 under the pads, not a column. iPhone has a short "Store" key with a dot and outlined empty scenes. Android has a wider "Store scene" button and draws empty scenes as plain numbers.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b></figcaption><img src="phone-consolidation/ios-scenes.png" alt="iPhone scene row: Store key and scenes 1 to 16"></figure>
+    <figure><figcaption><b>Android</b></figcaption><img src="phone-consolidation/and-scenes.png" alt="Android scene row: Store scene button and scenes 1 to 16"></figure>
+  </div>
+</section>
+
+<section class="row" id="edit">
+  <div class="row-head"><h2>6 · Edit page</h2><span class="badge decided">decided</span><span class="keeper">Keeper: iPhone step grid plus a small piano down its left edge</span></div>
+  <p class="diff">iPhone shows a piano-roll grid with note names down the left. Android shows one strip of 16 step cells, then a playable keyboard, Chord and Lane, and four sound knobs.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · Edit tab</figcaption><img src="phone-consolidation/ios-edit.png" alt="iPhone Edit page: piano-roll step grid"></figure>
+    <figure><figcaption><b>Android</b> · Edit tab</figcaption><img src="phone-consolidation/and-edit.png" alt="Android Edit page: step strip, keyboard and four knobs"></figure>
+  </div>
+</section>
+
+<section class="row" id="sound">
+  <div class="row-head"><h2>7 · Sound page pop-up on Pads</h2><span class="badge open">open</span></div>
+  <p class="diff">iPhone's panel covers the right two-thirds, with a title, page tabs, the track's sound card and four value tiles. Android's tinted card sits bottom-right, shows "FX 1/7" with four dials over four sliders, and has no page tabs.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · ENV, opened from the side rail</figcaption><img src="phone-consolidation/ios-soundpanel.png" alt="iPhone sound panel ENV over the pads with the FX to SEQ rail on the right"></figure>
+    <figure><figcaption><b>Android</b> · FX, opened by the fake FM-1's FX key</figcaption><img src="phone-consolidation/and-soundpage.png" alt="Android FX sound card bottom right over the pads"></figure>
+  </div>
+  <p class="note">The iPhone rail is off by default (Settings › Sound buttons). It was switched on only for this capture, then switched off again. With it off, the panel opens from the FM-1's own keys.</p>
+</section>
+
+<section class="row" id="hold">
+  <div class="row-head"><h2>8 · Hold menus</h2><span class="badge decided">decided</span><span class="keeper">Keeper: Android styling with the iPhone/iPad's full option set</span></div>
+  <p class="diff">iPhone opens a two-column grid of large tinted buttons (10 on a pad, 4 on a track). Android opens a callout list with leader lines from a touch disc (4 on a pad, 3 on a track).</p>
+  <p class="sub">Pad</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · held A 01</figcaption><img src="phone-consolidation/ios-hold-pad.png" alt="iPhone pad hold menu with ten options in two columns"></figure>
+    <figure><figcaption><b>Android</b> · held A 01</figcaption><img src="phone-consolidation/and-hold-pad.png" alt="Android pad hold menu: Edit steps, Select sound, Set pattern, Clear"></figure>
+  </div>
+  <p class="sub">Track head</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · held track 2</figcaption><img src="phone-consolidation/ios-hold-track.png" alt="iPhone track hold menu: Select sound, Record sample, Clear all pads, Clear all steps"></figure>
+    <figure><figcaption><b>Android</b> · held track 2</figcaption><img src="phone-consolidation/and-hold-track.png" alt="Android track hold menu: Sounds, Mute, Solo"></figure>
+  </div>
+</section>
+
+<section class="row" id="mix">
+  <div class="row-head"><h2>9 · Mix / GLO</h2><span class="badge decided">decided</span><span class="keeper">Keeper: a pop-up with no title, tabs inline with the close button</span></div>
+  <p class="diff">On iPhone, Mix is a tab, with sections down the left and level, pan and reverb on every row. On Android it's a titled sheet with sections across the top and a two-column mixer (level and send only). Global differs too: BPM and swing tiles on iPhone; tempo, swing, master and transpose dials on Android.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · Mix tab, Mixer</figcaption><img src="phone-consolidation/ios-mix.png" alt="iPhone Mix tab with section list and six mixer rows"></figure>
+    <figure><figcaption><b>Android</b> · Mix sheet, Mixer</figcaption><img src="phone-consolidation/and-mix.png" alt="Android Mix sheet with title, close button and two-column mixer"></figure>
+  </div>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · Global</figcaption><img src="phone-consolidation/ios-mix-global.png" alt="iPhone Global card with BPM and swing tiles and swing bars"></figure>
+    <figure><figcaption><b>Android</b> · Global</figcaption><img src="phone-consolidation/and-mix-global.png" alt="Android Global with swing bars and four dials"></figure>
+  </div>
+</section>
+
+<section class="row" id="sounds">
+  <div class="row-head"><h2>10 · Sounds and Projects</h2><span class="badge open">open</span></div>
+  <p class="diff">On iPhone, Sounds is a tab (engine list, presets in mixed case) and there is no Projects screen. On Android, Sounds is a sheet opened from a track's hold menu (uppercase presets, Save and Done), and Projects is a sheet with the FM-1's four slots.</p>
+  <p class="sub">Sounds</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · Sounds tab</figcaption><img src="phone-consolidation/ios-sounds.png" alt="iPhone Sounds tab: engines list and Analog presets grid"></figure>
+    <figure><figcaption><b>Android</b> · Sounds sheet for track 2</figcaption><img src="phone-consolidation/and-sounds.png" alt="Android Sounds sheet: engines down the left, presets in two columns"></figure>
+  </div>
+  <p class="note">Android's sheet says "track 2" but ticks ACID, which is track 1's sound (track 2 is Fm6). This could be a fake-core quirk or a real bug; not checked.</p>
+  <p class="sub">Projects</p>
+  <div class="pair">
+    <figure><div class="none">No Projects screen on iPhone. It isn't in the tabs or the ⋯ menu (ProjectsSheet exists only in the iPad's TopBar).</div></figure>
+    <figure><figcaption><b>Android</b> · Projects sheet (song menu › Projects…)</figcaption><img src="phone-consolidation/and-projects.png" alt="Android Projects sheet with four project slots"></figure>
+  </div>
+</section>
+
+<section class="row" id="timeline">
+  <div class="row-head"><h2>11 · Timeline</h2><span class="badge open">open</span></div>
+  <p class="diff">iPhone has no timeline. Android's Timeline tab shows one lane per track, bars across the top, zoom buttons, and a "Stop to change the song" lock while playing.</p>
+  <div class="pair">
+    <figure><div class="none">No equivalent on iPhone. The phone's Skiff tabs are Pads, Edit, Mix, Sounds (EditorUI.phoneSkiffTabs). The arrange timeline is iPad-only.</div></figure>
+    <figure><figcaption><b>Android</b> · Timeline tab, playing</figcaption><img src="phone-consolidation/and-timeline.png" alt="Android Timeline with six coloured lanes and a playhead"></figure>
+  </div>
+</section>
+
+<section class="row" id="settings">
+  <div class="row-head"><h2>12 · Settings</h2><span class="badge open">open</span></div>
+  <p class="diff">iPhone opens a full-screen sheet with a checkmark list and a Done button, plus handedness. Android opens a bottom sheet with a close button and grouped sections (FM-1, theme, slide to turn as a segmented control, Magnifier). The two apps also hold different option sets.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · ⋯ › Settings…</figcaption><img src="phone-consolidation/ios-settings.png" alt="iPhone Settings sheet: Slide to turn list and handedness"></figure>
+    <figure><figcaption><b>Android</b> · song menu › Settings</figcaption><img src="phone-consolidation/and-settings.png" alt="Android Settings sheet: FM-1, Theme, Slide to turn, Magnifier"></figure>
+  </div>
+</section>
+
+<section class="row" id="extra">
+  <div class="row-head"><h2>13 · Other differences</h2><span class="badge open">open</span></div>
+
+  <p class="sub">13a · The app menu (⋯ vs the song name)</p>
+  <p class="diff">iPhone's ⋯ menu lists play through the iPhone, the source (USB, Skiff demo, SLOOP demo), Settings and Developer. Android's song-name menu lists Projects, Mix, Settings and Labs, plus the fake core's FM-1 keys.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · ⋯ menu (scrolled to show Developer)</figcaption><div class="stack"><img src="phone-consolidation/ios-more.png" alt="iPhone more menu, top"><img src="phone-consolidation/ios-more2.png" alt="iPhone more menu scrolled to Developer"></div></figure>
+    <figure><figcaption><b>Android</b> · SONG ONE ⌄ menu</figcaption><img src="phone-consolidation/and-menu.png" alt="Android song menu: Projects, Mix, Settings, Labs, fake core keys"></figure>
+  </div>
+
+  <p class="sub">13b · Launch timing menu</p>
+  <p class="diff">Both offer the same four choices (Loop, Bar, Beat, Now). iPhone adds a "Nothing waiting / Cancel waiting" footer and opens from the top edge; Android hangs a smaller menu under Bar ⌄.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · Bar key</figcaption><img src="phone-consolidation/ios-launch.png" alt="iPhone Launch at menu with Cancel waiting"></figure>
+    <figure><figcaption><b>Android</b> · Bar ⌄</figcaption><img src="phone-consolidation/and-launch.png" alt="Android Launch at menu"></figure>
+  </div>
+
+  <p class="sub">13c · No-FM-1 state</p>
+  <p class="diff">iPhone keeps the header and shows a card ("Plug in the FM-1"), the firmware versions and a "Use the demo FM-1" button. Android shows only centred text and a progress bar, with no header and no demo button.</p>
+  <div class="pair">
+    <figure><figcaption><b>iPhone</b> · launched without the demo</figcaption><img src="phone-consolidation/ios-empty.png" alt="iPhone Plug in the FM-1 card with demo button"></figure>
+    <figure><figcaption><b>Android</b> · scenario "searching"</figcaption><img src="phone-consolidation/and-empty.png" alt="Android Looking for your FM-1 screen"></figure>
+  </div>
+  <p class="note">The iPhone card names Skiff 2.2, not 2.5.1. The Android status bar shows only because the emulator's System UI had restarted; on the Pixel it stays hidden.</p>
+
+  <p class="sub">13d · Track controls box (TrackKnobBox)</p>
+  <p class="diff">iPhone doesn't show the box on phones (PadsPage turns it off for the phone layout; it hangs from the selected pad on iPad). Android's nearest match is the four sound knobs on the Edit page.</p>
+  <div class="pair">
+    <figure><div class="none">Not reachable on iPhone. In PadsPage.swift, controlsShown is false when layout == .phone, so the ⌄⌄ tab under the selected pad never opens the box.</div></figure>
+    <figure><figcaption><b>Android</b> · Edit page sound knobs</figcaption><img src="phone-consolidation/and-knobs.png" alt="Android four sound knobs: cutoff, resonance, attack, release"></figure>
+  </div>
+</section>
+</main>
+</body>
+</html>
