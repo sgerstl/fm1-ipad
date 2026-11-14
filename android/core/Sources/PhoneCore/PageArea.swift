@@ -286,9 +286,9 @@ extension PhoneCore {
     func handlePageJSON(_ json: String) -> Bool {
         guard let w = try? JSONDecoder().decode(PageWire.self, from: Data(json.utf8)),
               ["setParam", "pickPage", "pickRoute", "pickTile", "goHome"].contains(w.intent) else { return false }
-        guard session.isConnected, session.dialect == .skiff else { log("\(w.intent): no Skiff FM-1 connected"); return true }
+        guard session.isConnected, session.dialect == .skiff else { refuse("No FM-1 is connected."); return true }
         // All four are writes: refused up front while read-only, so Session's optimistic copy never shows what the guard then drops
-        guard canWrite() else { log("read-only: \(w.intent) not sent (allow writes to send it)"); return true }
+        guard canWrite() else { refuseReadOnly("\(w.intent)"); return true }
         // goHome (decision 19: Android's back gesture): SCREEN_GOTO 127, a HOME tap, as the iPad's HOME key sends it. The
         // screen is set to HOME at once and then to the FM-1's reply; the shell and page areas follow `deviceScreen`, so
         // the bottom half is the editor again without waiting for the reply.

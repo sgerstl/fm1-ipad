@@ -42,9 +42,9 @@ extension PhoneCore {
     /// `{"intent":"setHomeKnob","slot":0…3,"value":raw}`: true when `json` was it. A write: refused while read-only.
     func handleHomeJSON(_ json: String) -> Bool {
         guard let w = try? JSONDecoder().decode(HomeWire.self, from: Data(json.utf8)), w.intent == "setHomeKnob" else { return false }
-        guard canWrite() else { log("read-only: setHomeKnob not sent (allow writes to send it)"); return true }
+        guard canWrite() else { refuseReadOnly("setHomeKnob"); return true }
         guard let slot = w.slot, let value = w.value, (0..<4).contains(slot) else { log("setHomeKnob: missing slot or value"); return true }
-        if !session.setHomeKnob(slot, to: value) { log("setHomeKnob: no Skiff FM-1 read yet") }
+        if !session.setHomeKnob(slot, to: value) { refuse("The FM-1 hasn't been read yet. Try again in a moment.") }
         return true
     }
 }

@@ -22,9 +22,9 @@ extension PhoneCore {
         guard json.contains("\"setStepNotes\"") || json.contains("\"toggleStepNote\"") || json.contains("\"toggleHit\"") || json.contains("\"playNote\""),
               let w = try? JSONDecoder().decode(NoteWire.self, from: Data(json.utf8)),
               ["setStepNotes", "toggleStepNote", "toggleHit", "playNote"].contains(w.intent) else { return false }
-        guard canWrite() else { log("read-only: \(w.intent) not sent (allow writes to send it)"); return true }
+        guard canWrite() else { refuseReadOnly("\(w.intent)"); return true }
         let s = session, t = editorTrack()
-        guard s.isConnected, s.tracks.indices.contains(t) else { log("\(w.intent): no FM-1 read yet"); return true }
+        guard s.isConnected, s.tracks.indices.contains(t) else { refuse("The FM-1 hasn't been read yet. Try again in a moment."); return true }
         let kit = s.isKit(t)
 
         if w.intent == "playNote" {
@@ -63,7 +63,7 @@ extension PhoneCore {
             var notes: [Int] = []
             for n in raw where (0...127).contains(n) && !notes.contains(n) { notes.append(n) }
             guard notes.count <= Self.maxStepNotes else {
-                log("setStepNotes: \(notes.count) notes, a step holds \(Self.maxStepNotes)"); return true
+                refuse("A step holds \(Self.maxStepNotes) notes. Take one off to add another.", track: t + 1); return true
             }
             if notes.isEmpty {
                 // cleared: the note gone (its locks stay; stepAction clear takes them too)
@@ -84,7 +84,7 @@ extension PhoneCore {
             guard !kit else { log("toggleStepNote: T\(t + 1) is a kit track (toggleHit writes its hits)"); return true }
             guard let note = w.note, (0...127).contains(note) else { log("toggleStepNote: missing note"); return true }
             if !s.toggle(track: t, index: i, note: note) {
-                log("toggleStepNote: step \(i + 1) holds \(Self.maxStepNotes) notes already")
+                refuse("Step \(i + 1) holds \(Self.maxStepNotes) notes already. Take one off to add another.", track: t + 1)
             }
         }
         pokeAreas(["editor"])

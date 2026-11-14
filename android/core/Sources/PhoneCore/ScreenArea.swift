@@ -53,8 +53,8 @@ extension PhoneCore {
     /// (SCREEN_GOTO): refused while read-only. True when `json` was it.
     func handleScreenJSON(_ json: String) -> Bool {
         guard let w = try? JSONDecoder().decode(ScreenWire.self, from: Data(json.utf8)), w.intent == "screenGoto" else { return false }
-        guard canWrite() else { log("read-only: screenGoto not sent (allow writes to send it)"); return true }
-        guard session.isConnected, session.dialect == .skiff else { log("screenGoto: no Skiff FM-1 connected"); return true }
+        guard canWrite() else { refuseReadOnly("screenGoto"); return true }
+        guard session.isConnected, session.dialect == .skiff else { refuse("No FM-1 is connected."); return true }
         guard let key = w.screen, let pages = Self.screenPages[key] else { log("screenGoto: no screen \(w.screen ?? "") (GLO, SAVE or SEQ)"); return true }
         let target = w.page.flatMap { p in pages.first { $0.page == p }?.page } ?? pages[0].page
         if let p = w.page, p != target { log("screenGoto: page \(p) isn't one of \(key)'s, its first instead") }

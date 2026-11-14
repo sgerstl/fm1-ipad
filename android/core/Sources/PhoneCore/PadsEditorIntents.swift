@@ -66,10 +66,10 @@ public enum PadEditIntent: Equatable, Sendable {
 }
 
 extension PhoneCore {
-    /// The store's word on an op it turned down (one op at a time, stopped only, patterns full…), into the log;
-    /// the screens show it once there's an area for it.
+    /// The store's word on an op it turned down (one op at a time, stopped only, patterns full…): into the log
+    /// and the `notice` area (Notice.swift).
     func reportRefusal(_ store: SkiffSongStore) {
-        if let r = store.refusal { log("FM-1 refused: \(r.text)") }
+        if let r = store.refusal { refuse(r) }
     }
 
     /// The panel's step for one StepAdjust unit, as the − / + keys step (P3's fake: VELOCITY 4, CHANCE 5, the rest 1).
@@ -77,7 +77,7 @@ extension PhoneCore {
 
     func handle(_ i: PadEditIntent) {
         if i.writes && !canWrite() {
-            log("read-only: \(i) not sent (allow writes to send it)")
+            refuseReadOnly("\(i)")
             return
         }
         let s = session
@@ -104,7 +104,7 @@ extension PhoneCore {
             guard let store else { return }
             // LIST SET names a kept pattern (or 65, a REST): an empty number is refused by the FM-1 (rc 1)
             if p != SongEntry.rest, (store.pool?.patterns[safe: p - 1]?.length ?? 0) == 0 {
-                log("pattern \(p) holds nothing on the FM-1: Set pattern takes a kept one (New pattern makes a new one)")
+                refuse("Pattern \(p) holds nothing on the FM-1. Set pattern takes a kept one; New pattern makes a new one.", track: t1, entry: e)
                 return
             }
             Task { if !(await store.send(.set(track: t1 - 1, entry: e, pattern: p))) { reportRefusal(store) } }
@@ -211,7 +211,7 @@ extension PhoneCore {
             while i + len < s.tracks[t].steps.count, s.tracks[t].steps[i + len].time == .tie { len += 1 }
             var cap = 1
             while i + cap < s.tracks[t].steps.count, s.tracks[t].steps[i + cap].time != .note { cap += 1 }
-            if len + n > cap { log("LENGTH can't grow past \(cap): step \(i + cap + 1) holds a note") }
+            if len + n > cap { refuse("LENGTH can't grow past \(cap): step \(i + cap + 1) holds a note.") }
             s.setLength(track: t, start: i, steps: max(1, min(16, s.tracks[t].steps.count - i, len + n)))
         case "velocity":
             st.velocity = max(1, min(127, (st.velocity == 0 ? 96 : st.velocity) + n))
@@ -223,7 +223,7 @@ extension PhoneCore {
         case "chance", "cond", "nudge":
             // Skiff's bytes after the velocity: hits ×3, chance, ratchet, FLAM, COND, NUDGE + 32, ties
             let (k, lo, hi, base) = field == "chance" ? (3, 0, 100, 0) : field == "cond" ? (6, 0, 11, 0) : (7, -32, 31, 32)
-            guard st.extra.count > k else { log("this step has no \(field) on this firmware"); return }
+            guard st.extra.count > k else { refuse("This FM-1's firmware has no \(field) on a step."); return }
             let now = Int(st.extra[k]) - base
             st.extra[k] = UInt8(max(lo, min(hi, now + n)) + base)
             s.write(track: t, index: i, st)

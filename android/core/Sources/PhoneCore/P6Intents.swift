@@ -10,7 +10,7 @@ import SloopKit
 extension PhoneCore {
     func handle(_ i: P6Intent) {
         if i.writes && !canWrite() {
-            log("read-only: \(i) not sent (allow writes to send it)")
+            refuseReadOnly("\(i)")
             return
         }
         let s = session
@@ -51,13 +51,13 @@ extension PhoneCore {
         let plan = MotionPaint.plan(events: m.events, id: id, base: base, painted: painted, lock: lock, steps: steps, restore: values.count > 1)
         guard !plan.writes.isEmpty || !plan.deletes.isEmpty else { return }
         if s.motionUsed + plan.cost > DeviceSession.motionMax {
-            log("MOTION holds \(DeviceSession.motionMax) records across all tracks: this stroke needs \(plan.cost), \(DeviceSession.motionMax - s.motionUsed) are free")
+            refuse("The FM-1 holds \(DeviceSession.motionMax) automation records across all tracks. This stroke needs \(plan.cost) and \(DeviceSession.motionMax - s.motionUsed) are free, so only part of it goes in. Clear a lane to make room.", track: t + 1)
         }
         Task {
             if let rc = await s.paintMotion(track: t, id: id, plan: plan) {
-                self.log(rc == .full ? "the FM-1's 64 motion records are full: part of the stroke went in"
-                         : rc == .songPlaying ? "the FM-1 refused the stroke while the song plays"
-                         : "the FM-1 refused that change: \(param) can't be recorded as motion, or the value is out of range")
+                self.refuse(rc == .full ? "The FM-1's automation records are full, so only part of the stroke went in. Clear a lane to make room."
+                         : rc == .songPlaying ? "The FM-1 refused the stroke while the song plays. Stop, or switch SONG off, and draw it again."
+                         : "The FM-1 refused that change: \(param) can't be automated, or the value is out of range.", track: t + 1)
             }
             self.pokeAreas(["automation", "editor"])
         }
@@ -75,7 +75,7 @@ extension PhoneCore {
         guard let store = session.skiffSong, let l = store.song?.tracks[safe: t] else { return true }
         let span = l.span.map { $0.upperBound + 1 } ?? 0
         if span + n > 16 {
-            log("T\(t + 1) has all 16 entries. Play one entry more times, or chain two, to free a slot"); return true
+            refuse("T\(t + 1) has all 16 entries. Play one entry more times, or chain two, to free a slot.", track: t + 1); return true
         }
         return false
     }
@@ -84,7 +84,7 @@ extension PhoneCore {
     /// would erase a pattern nothing else uses waits for the screen's confirm.
     func arrangeRewrite(_ t: Int, _ es: [SongEntry], focus: Int, confirmed: Bool, what: String) {
         guard let store = session.skiffSong else { return }
-        if let why = store.blocked(track: t, to: es) { log("\(what): \(why)"); return }
+        if let why = store.blocked(track: t, to: es) { refuse("\(what): \(why)", track: t + 1, entry: focus); return }
         let gone = store.erased([t: es])
         if !gone.isEmpty, !confirmed {
             log("\(what) erases pattern \(gone.map { String($0 + 1) }.joined(separator: ", ")) (used nowhere else): the screen must confirm"); return
@@ -94,17 +94,17 @@ extension PhoneCore {
 
     func blockEdit(_ i: P6Intent) {
         let s = session
-        guard let store = s.skiffSong else { log("no song read yet"); return }
+        guard let store = s.skiffSong else { refuse("The FM-1's song hasn't been read yet. Try again in a moment."); return }
         func block(_ t: Int, _ id: Int) -> SongBlock? {
             let b = store.blocks(t).first { $0.id == id }
-            if b == nil { log("no block at T\(t + 1) entry \(id + 1)") }
+            if b == nil { refuse("That block on T\(t + 1) is gone: the FM-1's list changed. Try again on the list as it is now.", track: t + 1, entry: id) }
             return b
         }
         switch i {
         case .blockInsert(let t1, let at, let p):
             guard let t = track(t1), var es = arrangeEntries(t), !arrangeFull(t) else { return }
             guard p == SongEntry.rest || (store.pool?.patterns[safe: p - 1]?.length ?? 0) > 0 else {
-                log("pattern \(p) holds nothing on the FM-1: insert a kept one, or New pattern"); return
+                refuse("Pattern \(p) holds nothing on the FM-1. Insert a kept pattern, or use New pattern.", track: t + 1); return
             }
             let k = max(0, min(at, es.count))
             es.insert(SongEntry(pattern: p), at: k)
@@ -116,7 +116,7 @@ extension PhoneCore {
         case .blockMove(let t1, let id, let by):
             guard let t = track(t1), let l = store.song?.tracks[safe: t], let b = block(t, id) else { return }
             let blocks = store.blocks(t)
-            guard let k = blocks.firstIndex(where: { $0.id == b.id }), blocks.indices.contains(k + by) else { log("Move: no place there"); return }
+            guard let k = blocks.firstIndex(where: { $0.id == b.id }), blocks.indices.contains(k + by) else { refuse("There is no place to move it to: it is at the end of the track.", track: t + 1, entry: id); return }
             let mv = SongSections.move(list: l, blocks: blocks, block: k, to: k + by)
             guard !mv.unchanged, let es = mv.result else { return }
             arrangeRewrite(t, es, focus: mv.index, confirmed: true, what: "Move")
@@ -134,7 +134,7 @@ extension PhoneCore {
         case .blockSetPattern(let t1, let id, let p, let confirmed):
             guard let t = track(t1), var es = arrangeEntries(t), let b = block(t, id) else { return }
             guard p == SongEntry.rest || (store.pool?.patterns[safe: p - 1]?.length ?? 0) > 0 else {
-                log("pattern \(p) holds nothing on the FM-1: Set pattern takes a kept one"); return
+                refuse("Pattern \(p) holds nothing on the FM-1. Set pattern takes a kept one.", track: t + 1, entry: id); return
             }
             es[b.entries.lowerBound].pattern = p
             arrangeRewrite(t, es, focus: b.entries.lowerBound, confirmed: confirmed, what: "Set pattern")
@@ -144,7 +144,7 @@ extension PhoneCore {
             arrangeRewrite(t, Array(es.prefix(16)), focus: b.entries.upperBound + 1, confirmed: true, what: "Duplicate")
         case .blockChain(let t1, let id):
             guard let t = track(t1), var es = arrangeEntries(t), let b = block(t, id) else { return }
-            guard b.kind != .gap, b.entries.upperBound < 15, !es[b.entries.upperBound + 1].isEmpty else { log("Nothing after it to chain into"); return }
+            guard b.kind != .gap, b.entries.upperBound < 15, !es[b.entries.upperBound + 1].isEmpty else { refuse("Nothing comes after it to chain into. Add a pattern after it first.", track: t + 1, entry: id); return }
             es[b.entries.upperBound].chained = true
             arrangeRewrite(t, es, focus: b.entries.lowerBound, confirmed: true, what: "Chain")
         case .blockSplit(let t1, let id):
