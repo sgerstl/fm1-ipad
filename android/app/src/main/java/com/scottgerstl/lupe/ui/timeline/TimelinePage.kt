@@ -72,9 +72,11 @@ import com.scottgerstl.lupe.core.TopState
 import com.scottgerstl.lupe.ui.shell.ConfirmBox
 import com.scottgerstl.lupe.ui.shell.Key
 import com.scottgerstl.lupe.ui.shell.KeyLabel
+import com.scottgerstl.lupe.ui.shell.LocalTabTravelling
 import com.scottgerstl.lupe.ui.shell.LupeMenu
 import com.scottgerstl.lupe.ui.shell.MenuHeading
 import com.scottgerstl.lupe.ui.shell.MenuRow
+import com.scottgerstl.lupe.ui.shell.selectedTrackAnchor
 import com.scottgerstl.lupe.ui.slide.MenuSlideRow
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.EaseOut
@@ -191,7 +193,7 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                 }
             }
             // ---- six rows: a head and a lane each
-            Box(
+            BoxWithConstraints(
                 Modifier.weight(1f).fillMaxWidth()
                     .semantics {
                         customActions = listOf(
@@ -232,18 +234,31 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                     val p = head.value
                     if (p != null) { val x = p.toFloat() * barPx - scrollNow(); if (x >= 0f && x <= size.width) drawLine(Tok.text, Offset(x, 0f), Offset(x, size.height), 2.dp.toPx()) }
                 }
+                // The selected track: a 2 dp outline in its own colour across its whole row (head and lane), never white (DESIGN.md "White is
+                // global, the track's colour is the track's"; decision 29), as Pads draws it. It glides to the newly selected row and draws
+                // nothing a finger can hit. While the tab pages slide the shell's travelling outline stands in for it (selectedTrackAnchor).
+                if (ui.selectedTrack in 1..6) {
+                    val rh = (maxHeight - GAP * 5) / 6
+                    val at = animatedFloat((ui.selectedTrack - 1).toFloat(), Dur.STATE)
+                    val travelling = LocalTabTravelling.current
+                    val colour = Tok.track[(ui.selectedTrack - 1) % Tok.track.size]
+                    Box(
+                        Modifier.fillMaxWidth().height(rh + 4.dp).offset { IntOffset(0, ((rh + GAP).toPx() * at.value - 2.dp.toPx()).toInt()) }
+                            .selectedTrackAnchor()
+                            .drawBehind { if (!travelling) drawRoundRect(colour, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx())) }
+                            .clearAndSetSemantics { },
+                    )
+                }
             }
         }
     }
 }
 
-/** A track's head: its number on the track's colour and a short name. Tap selects the track (a white ring says which is). */
+/** A track's head: its number on the track's colour and a short name. Tap selects the track (the row's outline, in the track's colour, says which is). */
 @Composable
 private fun TrackHead(track: Int, name: String, colour: Color, selected: Boolean, onTap: () -> Unit) {
-    val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
     Row(
         Modifier.width(HEAD).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Tok.control)
-            .drawBehind { drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx())) }
             .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Track $track, $name"; stateDescription = if (selected) "Selected" else "" }
             .pointerInput(track) { detectTapGestures { onTap() } }
             .padding(horizontal = 4.dp),
