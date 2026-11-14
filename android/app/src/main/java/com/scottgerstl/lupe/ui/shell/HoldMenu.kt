@@ -324,8 +324,8 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
     }
     BoxWithConstraints(
         modifier.fillMaxSize().onGloballyPositioned { origin = it }
-            // the page behind is dimmed and can't be touched; a tap outside the choices closes the menu
-            .drawBehind { drawRect(Color.Black.copy(alpha = 0.45f * (1f - leave.value) * (elapsed.value / 150f).coerceAtMost(1f))) }
+            // the page behind is not dimmed (Scott, 2026-11-14: only the black backing behind the choices darkens anything) but it can't be
+            // touched; a tap outside the choices closes the menu
             .then(if (takes) Modifier.pointerInput(Unit) { detectTapGestures { state.close() } } else Modifier)
             // more than five choices: a drag anywhere on the menu rolls them along the arc (56 dp of finger a choice, giving past the ends);
             // let go and it settles on a whole choice, carried on by the finger's speed. A drag never picks: only a tap does.
@@ -364,7 +364,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         val itemW = HoldWheel.ROW_W; val itemH = HoldWheel.ROW_H
         val fadeAll = 1f - (leave.value / 0.86f).coerceAtMost(1f)   // choices and lines: gone in 120 of the 140 ms
         // A black backing behind the arc (Scott, 2026-11-14: the pads underneath competed): an annular sector round the curve's centre,
-        // 88 % black with a narrow soft edge, drawn first, over the page's own dim and under the circle, rim, stalks and choices.
+        // 88 % black with a narrow soft edge, drawn first, the only darkening there is, under the circle, rim, stalks and choices.
         Canvas(Modifier.fillMaxSize().graphicsLayer {
             renderEffect = androidx.compose.ui.graphics.BlurEffect(HoldWheel.FIELD_FEATHER.dp.toPx(), HoldWheel.FIELD_FEATHER.dp.toPx(), androidx.compose.ui.graphics.TileMode.Decal)
         }) {
