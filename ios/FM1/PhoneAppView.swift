@@ -78,22 +78,21 @@ struct PhoneAppView: View {
         // a held knob's full-size ring, over everything and kept on the screen, as on the iPad
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .environment(\.canvasSize, size)
-        // the presets popover (a track's menu › Presets…), over the page with a dimmed tap-to-close beside it
+        // the sheets that rise from the foot (decision 33): Sounds (a head's hold menu, SAVE), Mix (GLO), Projects (Skiff's four)
         .overlay {
-            ZStack(alignment: .trailing) {
-                if ui.presetsPanel {
-                    Color.black.opacity(0.35).ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture { ui.presetsPanel = false }
-                        .accessibilityLabel("Close the presets")
-                        .accessibilityAddTraits(.isButton)
-                        .transition(.opacity)
-                    PhonePresetsPopover(session: session, ui: ui)
-                        .padding(.top, 52)
-                        .transition(reduceMotion ? .opacity : .move(edge: .trailing))
-                }
+            PhoneSheetFrame(open: ui.presetsPanel, height: 330, label: "Sounds", close: { ui.presetsPanel = false }) {
+                PhoneSoundsSheet(session: session, ui: ui)
             }
-            .animation(reduceMotion ? nil : ui.presetsPanel ? .spring(response: 0.42, dampingFraction: 0.9) : .easeInOut(duration: 0.32), value: ui.presetsPanel)
+        }
+        .overlay {
+            PhoneSheetFrame(open: ui.mixPopup, height: 320, label: "Mix", close: { ui.mixPopup = false }) {
+                PhoneMixPopup(session: session, ui: ui)
+            }
+        }
+        .overlay {
+            PhoneSheetFrame(open: ui.projectsOpen && session.dialect == .skiff, height: 330, label: "Projects", close: { ui.projectsOpen = false }) {
+                PhoneProjectsSheet(session: session, ui: ui)
+            }
         }
         // the sampler (a track's menu › Record sample…, or an empty sample slot), full screen
         .overlay {
@@ -108,11 +107,8 @@ struct PhoneAppView: View {
         .sheet(isPresented: Binding(get: { ui.phoneSettingsOpen }, set: { ui.phoneSettingsOpen = $0 })) {
             SettingsSheet(session: session).environment(through)
         }
-        .sheet(isPresented: Binding(get: { ui.projectsOpen }, set: { ui.projectsOpen = $0 })) {
+        .sheet(isPresented: Binding(get: { ui.projectsOpen && session.dialect != .skiff }, set: { ui.projectsOpen = $0 })) {
             ProjectsSheet(store: projects, session: session)
-        }
-        .sheet(isPresented: Binding(get: { ui.mixPopup }, set: { ui.mixPopup = $0 })) {
-            PhoneMix(session: session, ui: ui).padding(16).presentationBackground(Theme.page)
         }
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { TrackPickerLayer(session: session, ui: ui) }

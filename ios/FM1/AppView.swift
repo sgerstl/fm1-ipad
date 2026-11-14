@@ -513,7 +513,7 @@ struct ConnectionState: View {
     private var detail: String {
         switch status {
         case .searching:
-            "Connect it with a USB-C cable and switch it on. It has to be running SLOOP 2.8.4 or Skiff 2.2."
+            "Connect it with a USB-C cable and switch it on. It has to be running SLOOP 2.8.4 or Skiff 2.5.1."
         case .connecting:
             "Reading every track. This takes about a second."
         case .connected: ""

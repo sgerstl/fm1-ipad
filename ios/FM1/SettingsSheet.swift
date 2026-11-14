@@ -19,6 +19,8 @@ struct SettingsSheet: View {
     @AppStorage(ThemeColours.key) private var themeColours = true
     @AppStorage(SoundButtons.key) private var soundButtons = SoundButtons.standard
     @AppStorage(Handedness.key) private var handedness = Handedness.right
+    @AppStorage(ShowGraphics.key) private var showGraphics = ShowGraphics.standard
+    private var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
     var body: some View {
         NavigationStack {
@@ -81,6 +83,16 @@ struct SettingsSheet: View {
                     Text("Clearing a pad whose pattern nothing else uses erases that pattern, and it can't be undone. With the confirm on, Lupe asks first; \u{201C}Don't ask again\u{201D} turns it off.")
                 }
 
+                // the phone (decision 33): Show graphics joins Sound buttons, the union of both phones' options
+                if phone {
+                    Section {
+                        Toggle("Show graphics", isOn: $showGraphics)
+                    } header: {
+                        Text("Sound pages")
+                    } footer: {
+                        Text("Each sound page shows its picture under its four dials, and the Mix pages show theirs. Off: dials only.")
+                    }
+                }
                 Section {
                     Toggle("Sound buttons", isOn: $soundButtons)
                 } footer: {
@@ -117,14 +129,14 @@ struct SettingsSheet: View {
                 }
 
                 Section {
-                    Toggle("Play through the iPad", isOn: Binding(get: { through.enabled }, set: { through.enabled = $0 }))
+                    Toggle(phone ? "Play through the iPhone" : "Play through the iPad", isOn: Binding(get: { through.enabled }, set: { through.enabled = $0 }))
                     if let line = Self.audioAction(session: session, through: through) {
                         Label(line, systemImage: "exclamationmark.circle")
                             .foregroundStyle(Theme.text)
                             .accessibilityLabel(line)
                     }
                 } footer: {
-                    Text("Plays the FM-1's sound on the iPad's speakers or headphones.")
+                    Text("Plays the FM-1's sound on the \(phone ? "iPhone" : "iPad")'s speakers or headphones.")
                 }
                 LabsSection()
             }

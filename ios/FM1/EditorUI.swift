@@ -209,7 +209,7 @@ final class EditorUI {
     }()
     var projectsOpen = false
     /// The phone's Mix pop-up (GLO's pages, board 77), and its Settings sheet (from the song-name menu).
-    var mixPopup = false
+    var mixPopup = LaunchArgs.all.contains("-mix-popup")      // (-mix-popup: open on it, for captures)
     var phoneSettingsOpen = LaunchArgs.all.contains("-settings")
     /// When a swipe up from the foot of the Song tab last moved the divider: the pad or scene key the swipe began on
     /// drops the tap its lift makes (Scott, 2026-11-07: the zone is the scene row's own keys).
