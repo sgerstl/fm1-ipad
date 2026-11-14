@@ -52,11 +52,11 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 **What the building session saw on a screen** (its own emulator, the demo FM-1; nothing on a Pixel or a real FM-1):
 - Row 3's Pads page: the band under track 1, outlined slots A to H, the Store key and scenes.
 - Row 24's no-FM-1 card (the greyed header, the words with Skiff 2.5.1, the moving bar, the button) and row 25's "Use the demo FM-1" filling the app.
-- Rows 32, 33 and 35a, the wheel in Scott's option A: an empty slot's three choices on the wide arc with the rim, the spoke and the stalks; a pad's nine choices held just under the header (five in view, the arc sitting lower than the finger, the spoke slanting to it, the first choice at the top); a drag rolled it on by one choice and it settled.
+- Rows 32 and 33, the wheel in its final shape: an empty slot's three choices in the nearly straight column with the rim and the stalks and no spoke; a pad's nine choices opened on the first, with the lower triangle only; after a drag it had rolled on by two and showed both triangles.
 - Row 35c: on the build before the fix a hold begun right after closing a menu opened nothing; on the build with it, the same sequence (a hold 60 ms after the tap away) opened the second menu.
 - Rows 7 and 8's track-head menu, drawn in the first column shape only (Sounds, LEVEL with its gauge, PAN from the middle, Mute, Solo); not looked at again as the wheel, and the rows were not slid.
 
-**Not seen on any screen:** the Timeline's band, the Mix pop-up and its four pictures, Settings, the launch footer, the refusal strip, the disabled New pattern, a choice fading at the arc's end mid-turn, the give past the wheel's ends, the wheel at the foot or opening to the right, that a held finger or a drag picks nothing, Clear unused patterns and its confirm, Leave the demo.
+**Not seen on any screen:** the Timeline's band, the Mix pop-up and its four pictures, Settings, the launch footer, the refusal strip, the disabled New pattern, a choice fading at the curve's end mid-turn, the give past the wheel's ends, the wheel under the header, at the foot or opening to the right, that a held finger or a drag picks nothing, Clear unused patterns and its confirm, Leave the demo.
 
 **Not covered here:** refusals the core logs without the word "refused" (a move with no place, a pattern that holds nothing, nothing to chain into, a full track) still show nothing until the core publishes its `notice` area (asked of P1); TalkBack (release pass); the largest text size; the Sound keys switch does nothing until P4's rail reads it; Make unique, Copy to another track, Move to a named pad and the Patterns pool are not in the pad menu (the core has no way to ask for them yet).
 
