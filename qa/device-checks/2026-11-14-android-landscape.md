@@ -73,3 +73,18 @@ Chosen or left open:
 - **The corner inset** takes the radius Android reports and never goes under 24 dp (at 8 dp Play was cut off). If it is still clipped, say by how much.
 - **The hole punch is ignored on whichever side it is** (the phone can lie either way up); with it on the right it would sit near Record and Play.
 - **A hold on the head no longer opens Sounds directly**: Sounds… is the menu's first row.
+
+## The waiting outline and the pass display (the iPad's LaunchTrace and TraceOutline), 2026-11-14
+
+Built against the fake (tests pass, APK builds), **not run on a screen**. The data is P1's shapes: the `clock` area (a pulse count with its time, renewed every beat), `launchTick` on waiting entries, rows and scenes, `passTicks` and `passStartTick` on a row, `mutePending` ("none", "mute", "unmute"), `soloPending`, a scene's `waiting`. On the real FM-1 it needs P1's commit merged into this branch.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 35 | While playing (Launch at Bar), tap an idle pad | A faint outline in the track's colour round it, and a line drawn from the top left corner, down the left side first, all the way round as the bar comes; it closes as the pad lands, and never starts again | – | ☐ pass ☐ fail: |
+| 36 | Watch the playing pad | Its pass count ("2/4") when it has passes, and the bar along its foot moving smoothly, not in steps | – | ☐ pass ☐ fail: |
+| 37 | While playing, tap MUTE on a track | The key's outline is drawn the same way (stronger faint edge) until the mute lands at the launch point; a second tap takes the wait back | – | ☐ pass ☐ fail: |
+| 38 | While playing, recall a scene | The scene key's outline is drawn the same way, in white (a scene is global), until it lands | – | ☐ pass ☐ fail: |
+| 39 | Join mid-play (start Lupe while the FM-1 plays), then launch a pad | A dashed outline: there is no clock to draw from | – | ☐ pass ☐ fail: |
+| 40 | Remove animations on, repeat 35 | Drawn the same: the line grows in place | – | ☐ pass ☐ fail: |
+
+Chosen: on a MUTE key that is already white (muted), the waiting line is dark, since no track colour reads on white; otherwise it is the track's colour. A waiting solo draws its line round the track head (Pads has no solo key). The old dashed border on every waiting pad is replaced by this; dashes now mean "no clock" only.

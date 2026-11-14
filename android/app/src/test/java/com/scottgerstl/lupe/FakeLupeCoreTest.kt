@@ -103,6 +103,21 @@ class FakeLupeCoreTest {
         assertEquals("""{"intent":"playNote","lane":2,"on":false}""", j(com.scottgerstl.lupe.core.PlayNote(lane = 2, on = false)))
     }
 
+    @Test fun aMuteWhilePlayingWaitsForTheBarAndCarriesTicksToIt() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        core.send(Intent.Play); advanceTimeBy(200)
+        core.send(Intent.TrackMute(2)); advanceTimeBy(10)
+        val row = core.pads.value.rows.first { it.track == 2 }
+        assertEquals("mute", row.mutePending); assertEquals(false, row.muted)
+        advanceTimeBy(200)
+        assertTrue(core.clock.value.running); assertEquals(96.0, core.pads.value.rows.first { it.track == 2 }.launchTick!!, 0.0)
+        advanceTimeBy(2200)   // past the bar at 120 BPM
+        val after = core.pads.value.rows.first { it.track == 2 }
+        assertEquals(true, after.muted); assertEquals("none", after.mutePending)
+        core.send(Intent.Stop); advanceTimeBy(10)   // the fake's clock stops with it
+        assertEquals(false, core.clock.value.running)
+    }
+
     @Test fun launchWaitsWhilePlayingAndCountsInTheTopBar() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.Play); advanceTimeBy(10)
