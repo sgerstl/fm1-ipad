@@ -31,6 +31,13 @@ struct RadialMenu: View {
     @State private var turnTo: Double = 0
     @State private var turnAt = Date.distantPast
     @State private var dragFrom: Double?
+    /// Takes touches once the opening finger is up (HoldFinger), or after 3 s whatever happens.
+    @State private var timedOut = false
+    private var armed: Bool { (!HoldFinger.shared.down || timedOut) && !closing }
+    /// Set as it's told to close: while it fades out it takes no touches, so a hold that starts at once reaches the pad
+    /// under it rather than the menu that's leaving (2026-11-14: that hold was lost with the menu).
+    @State private var closing = false
+    private func dismiss() { closing = true; close() }
 
     /// Under the header line (48 pt and its hairline), so no choice sits over the tabs.
     static let headerClear: CGFloat = 56
@@ -125,7 +132,7 @@ struct RadialMenu: View {
                 // the page behind, dimmed; a tap outside the choices closes
                 Color.black.opacity(0.45 * fade)
                     .contentShape(Rectangle())
-                    .onTapGesture { close() }
+                    .onTapGesture { dismiss() }
                     .accessibilityHidden(true)
                 Canvas { ctx, _ in
                     let c = at
@@ -189,6 +196,9 @@ struct RadialMenu: View {
             }
         }
         .frame(width: layer.width, height: layer.height, alignment: .topLeading)
+        // not until the finger that opened it lifts: taking touches under a finger still down cancelled the held pad's
+        // gesture mid-press, and the next hold anywhere opened nothing (2026-11-14)
+        .allowsHitTesting(armed)
         // a drag anywhere on the menu turns the wheel (a tap still picks: the choices take taps only)
         .simultaneousGesture(DragGesture(minimumDistance: 6).onChanged { v in
             guard wheel else { return }
@@ -203,19 +213,21 @@ struct RadialMenu: View {
             dragFrom = nil
             let target = (from - Double(v.predictedEndTranslation.height / Self.step)).rounded()
             settle(to: min(max(target, 0), most), from: turn(Date()))
-        })
+        }, including: wheel ? .all : .subviews)       // (no layer-wide drag on a short menu: only a wheel turns)
         .onAppear { start = Date(); turnFrom = 0; turnTo = 0 }
+        .task { try? await Task.sleep(for: .seconds(3)); timedOut = true }
+        .onDisappear { HoldFinger.shared.down = false }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { close() }
+        .accessibilityAction(.escape) { dismiss() }
         .accessibilityScrollAction { edge in
             // VoiceOver's three-finger swipe turns the wheel a page (WCAG 2.5.7: the drag has another way in)
             guard wheel else { return }
             let now = turn(Date())
             settle(to: min(max(now + (edge == .bottom ? -Double(Self.inView) : Double(Self.inView)), 0), most), from: now)
         }
-        .onKeyPress(.escape) { close(); return .handled }
+        .onKeyPress(.escape) { dismiss(); return .handled }
         .onKeyPress(.downArrow) { guard wheel else { return .ignored }; let now = turn(Date()); settle(to: min(now + 1, most).rounded(), from: now); return .handled }
         .onKeyPress(.upArrow) { guard wheel else { return .ignored }; let now = turn(Date()); settle(to: max(now - 1, 0).rounded(), from: now); return .handled }
     }
@@ -276,7 +288,15 @@ struct RadialMenu: View {
         } else if item.confirm != nil, Date().timeIntervalSince(confirmAt) < 0.4 {
             return            // the second tap of a quick double tap can't confirm
         } else {
-            close(); item.action?()
+            dismiss(); item.action?()
         }
     }
+}
+
+/// Whether the finger that opened a hold menu is still down: the openers (a pad, a track head, a Timeline block) set it
+/// as their hold fires and clear it as that finger lifts; the radial menu takes no touches until then.
+@MainActor @Observable
+final class HoldFinger {
+    static let shared = HoldFinger()
+    var down = false
 }

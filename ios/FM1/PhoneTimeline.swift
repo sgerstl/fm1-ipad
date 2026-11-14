@@ -150,8 +150,9 @@ struct PhoneTimeline: View {
                 .animation(.easeOut(duration: 0.15), value: selected)
                 // held after the last block: add to the track's song
                 .contentShape(Rectangle())
-                .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { pressAt = $0.location })
+                .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { pressAt = $0.location }.onEnded { _ in HoldFinger.shared.down = false })
                 .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
+                    HoldFinger.shared.down = true
                     session.select(track: t)
                     ui.menu = AppMenu(title: "T\(t + 1) · after the last entry", groups: { menus.add(t) }, at: pressAt, fan: true, tint: t)
                 })
@@ -200,8 +201,8 @@ struct PhoneTimeline: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
-        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { pressAt = $0.location })
-        .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in openBlockMenu(t, b, at: pressAt) })
+        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { pressAt = $0.location }.onEnded { _ in HoldFinger.shared.down = false })
+        .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in HoldFinger.shared.down = true; openBlockMenu(t, b, at: pressAt) })
         .accessibilityLabel("Track \(t + 1), entr\(b.entries.count > 1 ? "ies" : "y") \(Entries.letters(b.entries)), "
                             + (rest ? "rest" : "pattern \(e.label)") + (b.reps > 1 ? ", \(b.reps) times" : ""))
         .accessibilityAddTraits(picked ? .isSelected : [])

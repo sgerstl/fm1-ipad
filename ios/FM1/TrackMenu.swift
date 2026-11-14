@@ -104,8 +104,10 @@ struct TrackMenuPress: ViewModifier {
     func body(content: Content) -> some View {
         content
             .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(AppView.space))
-                .onChanged { pressAt = $0.location })
+                .onChanged { pressAt = $0.location }
+                .onEnded { _ in if ui?.phone == true { HoldFinger.shared.down = false } })
             .simultaneousGesture(LongPressGesture(minimumDuration: holdToMenu).onEnded { _ in
+                if ui?.phone == true { HoldFinger.shared.down = true }      // (the phone's radial menu waits for the lift)
                 session.select(track: track)
                 ui?.trackMenu = TrackMenu(track: track, at: pressAt)
             })

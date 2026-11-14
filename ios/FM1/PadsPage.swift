@@ -726,6 +726,7 @@ struct PadsPage: View {
             .onEnded { v in
                 let k = "p\(t).\(i)"
                 fingers[k] = nil; multi.remove(k); pressStart[k] = nil
+                if phone { HoldFinger.shared.down = false }
                 if drag != nil { endDrag(at: v.location) }
                 releaseHold(k)
             })
@@ -735,6 +736,7 @@ struct PadsPage: View {
             heldKey = "p\(t).\(i)"
             holdAt = pressAt
             launched += 1
+            if phone { HoldFinger.shared.down = true }       // (the radial menu waits for this finger to lift)
             openMenu(t, i, at: pressAt)
         })
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if !copy { padFrames[key] = $0 } }   // (the dragged copy isn't the pad's place)
