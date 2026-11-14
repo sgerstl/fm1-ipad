@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Board 76 · Pads and Timeline, combined</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--page:#0D0D0F;--well:#111114;--panel:#1A1A1E;--control:#26262B;--lifted:#34343B;--held:#3E3E46;--t1:#EDEDF0;--t2:#A1A1AA;--t3:#71717A;--on:#101012;--rec:#FF4D4D;--hair:#2A2A30;--out:#4A4A52}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;color:var(--t1);font:15px/1.4 Barlow,system-ui,sans-serif;padding:32px 24px 64px}
+h1{font-size:22px;font-weight:600;margin-bottom:6px}
+.lede{color:var(--t2);max-width:72ch;margin-bottom:28px}
+.row{display:flex;flex-wrap:wrap;gap:28px 32px;margin-bottom:40px}
+figure{width:874px;max-width:100%}
+figcaption{color:var(--t2);margin-top:10px}
+figcaption b{color:var(--t1);font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--t2);border:1px solid var(--held);border-radius:4px;padding:1px 6px;margin-right:6px}
+.phone{position:relative;width:874px;height:402px;background:var(--page);border-radius:54px;overflow:hidden;outline:6px solid #222226}
+.island{position:absolute;left:10px;top:50%;width:34px;height:120px;margin-top:-60px;border-radius:17px;background:#000;z-index:9}
+.hd{position:absolute;left:24px;right:28px;top:8px;height:44px;display:flex;align-items:center;gap:20px}
+.song{font-weight:600;font-size:17px}
+.tabs{display:flex;gap:22px;margin-left:8px}
+.tab{font-size:17px;font-weight:600;color:var(--t3);position:relative;padding:8px 0}
+.tab.on{color:var(--t1)}.tab.on:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--t1)}
+.sp{flex:1}.bar{color:var(--t2)}
+.ro{text-align:right;line-height:1.05}.ro b{font:700 22px 'Barlow Condensed';display:block}.ro span{font-size:11px;color:var(--t3)}
+.rb{width:40px;height:40px;border-radius:50%;border:2px solid var(--lifted);display:grid;place-items:center}.rb i{width:14px;height:14px;border-radius:50%;background:var(--rec)}
+.pb{width:40px;height:40px;border-radius:50%;background:var(--t1);display:grid;place-items:center}.pb i{width:14px;height:14px;border-radius:2px;background:var(--on)}
+.hair{position:absolute;left:0;right:0;top:56px;height:1px;background:var(--hair)}
+.body{position:absolute;left:24px;right:16px;top:64px;bottom:12px}
+.trow{position:absolute;left:0;right:0;display:flex;gap:4px;align-items:stretch;border-radius:10px}
+.head{width:118px;border-radius:8px;display:flex;overflow:hidden;background:var(--control)}
+.head .n{width:26px;display:grid;place-items:center;font:700 15px 'Barlow Condensed';color:var(--on)}
+.head .nm{padding:4px 8px;line-height:1.1;display:flex;flex-direction:column;justify-content:center}
+.head .nm b{font-size:14px;font-weight:600}.head .nm span{font-size:11px;color:var(--t2)}
+.mute{width:48px;border-radius:8px;background:var(--control);display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--t2)}
+.slot{flex:1;border-radius:8px;position:relative;display:flex;align-items:center;padding:0 8px;gap:6px;min-width:0}
+.slot.empty{border:1.5px solid #2E2E34}
+.slot.full{background:var(--control)}
+.slot .l{font-size:11px;color:var(--t2);font-weight:600}
+.slot .p{font:700 19px 'Barlow Condensed'}
+.slot .x{margin-left:auto;font-size:10px;color:inherit;opacity:.8}
+.slot.play{color:var(--on)}.slot.play .l{color:var(--on)}
+.slot .prog{position:absolute;left:8px;right:8px;bottom:4px;height:3px;border-radius:2px;background:rgba(0,0,0,.3)}
+.slot .prog i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:rgba(0,0,0,.55)}
+.slot.next{outline:1.5px solid #A1A1AA;outline-offset:-1.5px}
+.scenes{position:absolute;left:0;right:0;bottom:0;height:32px;display:flex;gap:4px}
+.store{width:96px;border-radius:8px;background:var(--control);display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px}
+.store i{width:6px;height:6px;border-radius:50%;background:var(--t3)}
+.sc{flex:1;border-radius:8px;display:grid;place-items:center;font:600 14px 'Barlow Condensed'}
+.sc.st{background:var(--control)}.sc.cur{background:var(--t1);color:var(--on)}.sc.em{border:1.5px solid #2E2E34;color:var(--t3)}
+.ruler{position:absolute;left:122px;right:0;top:0;height:22px;font:600 11px Barlow;color:var(--t3)}
+.ruler span{position:absolute;top:2px}
+.lane{position:absolute;left:122px;right:0;border-radius:8px}
+.blk{position:absolute;top:0;bottom:0;border-radius:6px;padding:0 8px;display:flex;align-items:center;font:700 17px 'Barlow Condensed'}
+.blk.rest{border:1.5px dashed #4A4A52;font:400 11px Barlow;color:var(--t2)}
+.ph{position:absolute;top:22px;bottom:0;width:2px;background:var(--t1)}
+.zoom{position:absolute;left:0;top:0;display:flex;gap:4px}.zoom span{width:56px;height:20px;border-radius:5px;background:var(--control);display:grid;place-items:center;font-size:13px}
+.pan{position:absolute;top:64px;bottom:12px;border-radius:14px;padding:10px 12px;box-shadow:0 12px 28px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:8px}
+.pan .t{display:flex;gap:8px;align-items:center}.pan .t b{font-weight:600}.pan .t .pg{color:var(--t2);font:600 15px 'Barlow Condensed'}
+.pan .x{margin-left:auto;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.35);display:grid;place-items:center}
+.pan .d{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center;font-size:10px;font-weight:600;color:var(--t2)}
+.pan .d div:before{content:"";display:block;width:46px;height:46px;margin:0 auto 4px;border-radius:50%;border:4px solid rgba(0,0,0,.35);border-top-color:#FF5A36;border-right-color:#FF5A36}
+.pan .pic{flex:1;border-radius:8px;background:rgba(0,0,0,.28)}
+.notes{color:var(--t2);max-width:80ch}.notes li{margin:6px 0}
+</style></head><body>
+<h1>Board 76 · Pads and the Timeline, combined, at iPhone size</h1>
+<p class="lede">iPhone 17 Pro in landscape, 874 × 402 pt, at 1:1; the Pixel is 914 × 411 dp, so the same layout fits both with a few points to spare. Keepers from decisions 31–33: Android’s header, tabs and track heads; the selected track shown by its muted colour under the whole row (the iPhone’s), with the outline kept only for the launch timer; Android’s pads with pass counts and the next cue, plus outlined empty slots; the iPhone’s scenes row; Android’s Timeline.</p>
+<div class="row" id="r1"></div><div class="row" id="r2"></div>
+<ul class="notes">
+<li>The Dynamic Island sits in the left edge in landscape; content runs under it, as decision 29 has it for the Pixel’s hole punch. On the iPhone it covers part of the track numbers on rows 3–4: check on a device whether that bothers; if so, a 16 pt inset on the left, iPhone only.</li>
+<li>The muted band is the track colour at 28 % over the page, the same mix as the docked panel’s tint, so the two read as one family.</li>
+<li>Not shown: the hold menu, mutes painting, the outline timer moving, the Timeline’s edit state (stopped).</li>
+</ul>
+<script>
+const C=['#FF5A36','#22C3B4','#FFBF00','#9580FF','#FF6FAE','#A3E635'];
+const mix=(hex,a,base=[13,13,15])=>{const n=parseInt(hex.slice(1),16),c=[n>>16,n>>8&255,n&255];return `rgb(${base.map((b,i)=>Math.round(b+(c[i]-b)*a)).join(',')})`};
+const T=[['Acid','Analog'],['Pad','Fm6'],['Pulse Ld','Lofi'],['Drum Kit','Drum'],['Piano','Sample'],['Drum Kit','Drum']];
+function header(tab){return `<div class="island"></div><div class="hd"><span class="song">SONG ONE ⌄</span><div class="tabs">${['Pads','Edit','Timeline'].map(t=>`<span class="tab ${t==tab?'on':''}">${t}</span>`).join('')}</div><span class="sp"></span><span class="bar">Bar ⌄</span><div class="ro"><b>27·3</b><span>120 BPM</span></div><div class="rb"><i></i></div><div class="pb"><i></i></div></div><div class="hair"></div>`}
+function head(i){return `<div class="head"><div class="n" style="background:${C[i]}">${i+1}</div><div class="nm"><b>${T[i][0]}</b><span>${T[i][1]}</span></div></div>`}
+const PADS=[[['A','01','×4',.55],['B','02','next'],['C','03'],['D','02'],['E','03'],['F','04'],[],[]],[['','REST','×4',.8],['B','05','next'],['C','06'],['D','07'],['E','05'],[],[],[]],[['A','08','×2',.3],['B','09','next'],['C','08'],['','REST'],[],[],[],[]],[['','REST','×4',.6],['B','10','next'],['C','11'],[],[],[],[],[]],[['','REST','×8',.2],['B','12','next'],['C','13'],['D','12'],['E','12'],[],[],[]],[['A','14','×16',.1],['B','14','next'],[],[],[],[],[],[]]];
+const LET='ABCDEFGH';
+function pads(sel){let h=header('Pads')+'<div class="body">';const rh=44,gap=4;
+  PADS.forEach((row,i)=>{const top=i*(rh+gap);
+    h+=`<div class="trow" style="top:${top}px;height:${rh}px;${i==sel?`background:${mix(C[i],.28)};box-shadow:0 0 0 4px ${mix(C[i],.28)}`:''}">${head(i)}<div class="mute">MUTE</div>`;
+    row.forEach((s,k)=>{if(!s.length){h+=`<div class="slot empty"><span class="l" style="color:#4A4A52">${LET[k]}</span></div>`;return}
+      const play=k==0;h+=`<div class="slot ${play?'play':'full'} ${s[2]=='next'?'next':''}" style="${play?`background:${C[i]}`:''}"><span class="l">${s[0]}</span><span class="p" style="${s[1]=='REST'?'font:600 13px Barlow':''}">${s[1]}</span>${s[2]?`<span class="x">${s[2]}</span>`:''}${play?`<span class="prog"><i style="width:${s[3]*100}%"></i></span>`:''}</div>`});
+    h+='</div>'});
+  h+='<div class="scenes"><div class="store"><i></i>Store</div>'+Array.from({length:16},(_,i)=>`<div class="sc ${i==0?'cur':i<3?'st':'em'}">${i+1}</div>`).join('')+'</div></div>';return h}
+const TL=[[[0,3,'02'],[3,1,'03'],[4,4,'04']],[[0,7,'05']],[[0,3,'08'],[3,4,'REST']],[[0,6,'11']],[[0,3,'12'],[3,4,'12']],[[0,7,'14']]];
+function timeline(sel,panel){let h=header('Timeline')+'<div class="body">';const bw=panel?64:84,rh=48,gap=4,top0=26;
+  h+='<div class="zoom"><span>−</span><span>+</span></div><div class="ruler">'+Array.from({length:9},(_,i)=>`<span style="left:${i*bw}px">${18+i}</span>`).join('')+'</div>';
+  TL.forEach((row,i)=>{const top=top0+i*(rh+gap);
+    h+=`<div class="trow" style="top:${top}px;height:${rh}px;${i==sel?`background:${mix(C[i],.28)};box-shadow:0 0 0 4px ${mix(C[i],.28)}`:''}">${head(i)}</div><div class="lane" style="top:${top}px;height:${rh}px">`;
+    row.forEach(([s,l,p])=>{h+=p=='REST'?`<div class="blk rest" style="left:${s*bw+2}px;width:${l*bw-4}px">REST</div>`:`<div class="blk" style="left:${s*bw+2}px;width:${l*bw-4}px;background:${mix(C[i],.42)}">${p}</div>`});h+='</div>'});
+  h+=`<div class="ph" style="left:${122+(panel?4.6:7.4)*bw}px"></div></div>`;
+  if(panel)h+=`<div class="pan" style="right:16px;width:283px;background:${mix(C[sel],.28,[26,26,30])}"><div class="t"><b>ENV</b><span class="pg">1/2</span><span>ENV</span><span class="x">✕</span></div><div class="d"><div>ATTACK</div><div>DECAY</div><div>SUSTAIN</div><div>RELEASE</div></div><div class="pic"></div></div>`;
+  return h}
+const fig=(id,cap,html)=>`<figure><div class="phone" role="img" aria-label="${cap.replace(/<[^>]+>/g,'')}">${html}</div><figcaption><span class="tag">${id}</span>${cap}</figcaption></figure>`;
+document.getElementById('r1').innerHTML=fig('76.1','<b>Pads.</b> Track 1 selected: its muted colour runs under the head, MUTE and every slot. Empty slots outlined with their letter; the iPhone’s scenes row (Store, stored, outlined empty).',pads(0))+fig('76.2','<b>Timeline.</b> Android’s, unchanged but for the selected track’s band (track 3 here) in place of the outline.',timeline(2,false));
+document.getElementById('r2').innerHTML=fig('76.3','<b>Timeline with the docked panel.</b> ENV pressed on the FM-1: the panel docks on the right in track 3’s tint; the Timeline zooms to keep the playhead’s bar in view.',timeline(2,true));
+</script></body></html>
