@@ -99,6 +99,12 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
     }
     fun rect(c: Color, x: Float, y: Float, w: Float, h: Float, r: Float = 0f) =
         d.drawRoundRect(c, o(x, y), Size(x(w), y(h)), CornerRadius(r.px()))
+    /** A square-cornered bar on whole device pixels, so neighbours meet with no seam (the FM-1's finish: no rounded ends, no soft edges). */
+    fun bar(c: Color, x: Float, y: Float, w: Float, h: Float) {
+        if (w <= 0f || h <= 0f) return
+        val l = kotlin.math.floor(x(x)); val t = kotlin.math.floor(y(y)); val r = kotlin.math.ceil(x(x + w)); val b = kotlin.math.ceil(y(y + h))
+        d.drawRect(c, Offset(l, t), Size(r - l, b - t))
+    }
     fun stroke(c: Color, pts: List<Pair<Float, Float>>, width: Float = 2.5f) =
         d.drawPath(path(pts), c, style = Stroke(width.px(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     fun text(s: String, x: Float, base: Float, c: Color, size: Float = 11f, right: Boolean = false, centre: Boolean = false, strong: Boolean = false) {
@@ -111,7 +117,7 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
 /** True when the page has a picture to draw. */
 fun hasPicture(g: PageGraph): Boolean = when (g.kind) {
     GraphKind.Env, GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog,
-    GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Voice, GraphKind.Chord, GraphKind.Follow -> true
+    GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Chorus, GraphKind.Global, GraphKind.Voice, GraphKind.Chord, GraphKind.Follow -> true
     GraphKind.Fm6Op, GraphKind.Fm6All -> g.fm6 != null
     GraphKind.Sound -> g.sheet != null
     else -> false
@@ -127,7 +133,7 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
         GraphKind.Env -> EnvGraph(g, colour, hot, modifier)
         GraphKind.Lfo -> LfoGraph(g, colour, modifier)
         GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog, GraphKind.Voice, GraphKind.Chord, GraphKind.Follow,
-        GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb -> CanvasGraph(g, colour, hot, modifier)
+        GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Chorus, GraphKind.Global -> CanvasGraph(g, colour, hot, modifier)
         else -> Unit
     }
 }
@@ -146,6 +152,8 @@ private fun describe(g: PageGraph): String = when (g.kind) {
     GraphKind.Fm6All -> "FM algorithm chart"
     GraphKind.Sound -> "DRUM-X sound sheet"
     GraphKind.Analog -> "Oscillator and filter. ${g.caption ?: ""}, ${g.side ?: ""}"
+    GraphKind.Chorus -> when (g.values.getOrElse(2) { 0 }) { 1 -> "Flanger: the dry and its copy, a comb, swept"; 2 -> "Phaser: four stages, two notches, swept"; else -> "Chorus: the dry and its drifting copy" }
+    GraphKind.Global -> swingText(g.values.getOrElse(1) { 0 }).lowercase().replaceFirstChar { it.uppercase() } + " over a bar of sixteenths"
     GraphKind.FxDelay, GraphKind.Delay -> "Echoes: feedback ${g.values.getOrElse(1) { 0 }}" + if (g.kind == GraphKind.FxDelay) ", send ${g.send}" else ""
     GraphKind.FxReverb, GraphKind.Reverb -> "Reverb tail: size ${g.values.getOrElse(1) { 0 }}" + if (g.kind == GraphKind.FxReverb) ", send ${g.send}" else ""
     GraphKind.Insert -> if (g.values.getOrElse(0) { 0 } == 9) "Filter response, cutoff ${g.caption ?: ""}" else "Insert: " + (INSERT_NAMES.getOrNull(g.values.getOrElse(0) { 0 }) ?: "OFF")
@@ -222,8 +230,13 @@ private fun CanvasGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifie
             GraphKind.Scale -> drawScale(s, g, colour)
             GraphKind.Arp -> drawArp(s, g, colour)
             GraphKind.Analog -> drawAnalog(s, g, colour)
-            GraphKind.FxDelay, GraphKind.Delay -> drawDelay(s, g, colour)
-            GraphKind.FxReverb, GraphKind.Reverb -> drawReverb(s, g, colour)
+            // the track's own send pages keep its colour; GLO's shared pages are the global greys and white (decision 34)
+            GraphKind.FxDelay -> drawDelay(s, g, colour)
+            GraphKind.FxReverb -> drawReverb(s, g, colour)
+            GraphKind.Delay -> drawDelay(s, g, GLOBAL_INK)
+            GraphKind.Reverb -> drawReverb(s, g, GLOBAL_INK)
+            GraphKind.Chorus -> drawChorus(s, g, GLOBAL_INK)
+            GraphKind.Global -> drawGlobal(s, g, GLOBAL_INK)
             GraphKind.Insert -> drawInsert(s, g, colour)
             GraphKind.Slicer -> drawSlicer(s, g, colour)
             GraphKind.Duck -> drawDuck(s, g, colour)
@@ -510,52 +523,134 @@ private fun drawAnalog(s: Sp, g: PageGraph, c: Color) {
 
 // ---- the FX family's other pages, ported from ios/FM1/PageGraphs.swift (Skiff's ui_pgraph.c): DELAY, REVERB, INSERT, SLICER, DUCK
 
-/** DELAY (graph_delay): the echoes on a beat grid; the first as loud as MIX times the track's send, each after it down by FEEDBACK. */
-private fun drawDelay(s: Sp, g: PageGraph, c: Color) {
-    val v = List(4) { g.values.getOrElse(it) { 0 } }
-    val sixths = intArrayOf(24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36)
-    val tap = sixths[((v[0] % 13) + 13) % 13]; val win = max(tap * 4, 96); val unit = if (win > 96) 96 else 24
-    val n = win / unit
-    val w = min(max(tap * 208 / win - 3, 2), 13).toFloat()
-    for (i in 0 until n) {
-        val x = 14f + i * unit * 208 / win
-        s.rect(dim, x, 123f, 2f, 3f)
-        if (n <= 8 || i % 4 == 0) s.text("${i + 1}", x + 4f, 138f, mid, 10f)
-    }
+// ---- The FM-1's own DELAY, REVERB, CHORUS and GLOBAL (decision 34, board 77): Skiff 2.5.1's ui_pgraph.c graph_delay (:21–78), graph_reverb
+// (:82–147), graph_chorus (:172–243, pg_cho_resp :152–170) and graph_global (:431–468), as design/boards/fm1-screens/NOTES.md sets them out.
+// Its shapes and its finish: square bar corners, whole-pixel steps (the tail's staircase), fades made by blending toward the picture's
+// surface (ux_mix), never by gradient or opacity. FX › DELAY and FX › REVERB are the same drawings in the track's colour, scaled by its send.
+
+/** GLO's pages are shared by every track, so they are drawn in the global greys and white, never a track's colour. */
+private val GLOBAL_INK = Tok.text2Raised
+
+/** ux_mix(c, T_SURF, p): [p] percent of the way from the colour to the picture's surface. */
+internal fun uxMix(c: Color, p: Int): Color = androidx.compose.ui.graphics.lerp(c, Tok.well, p.coerceIn(0, 100) / 100f)
+
+/** TIME as sixths of a 1/16 (Skiff's DLY_6TH): 1/4 24, 1/8 12, 1/16 6… */
+private val DLY_6TH = intArrayOf(24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36)
+
+/** The delay's bars: each echo's left edge (x), width and height in the FM-1's pixels, the dry hit first. [send] 127 on GLO › DELAY. */
+internal fun delayBars(time: Int, feedback: Int, mix: Int, send: Int = 127): List<Triple<Int, Int, Int>> {
+    val tap = DLY_6TH[time.mod(13)]; val win = max(tap * 4, 96)
+    val w = (tap * 208 / win - 3).coerceIn(2, 13)
+    val out = mutableListOf<Triple<Int, Int, Int>>()
     var lvl = 1000
     for (i in 0 until 9) {
         if (lvl < 40) break
-        val x = 14f + i * tap * 208 / win; val h = lvl / 10f
-        if (x + w > 228f) break
-        s.rect(if (i == 0) Tok.text else c.copy(alpha = 1f - (15 + 50 * (i - 1) / 6) / 100f), x, 120f - h, w, h, 2f)
-        lvl = if (i > 0) lvl * v[1] * 230 / 32768 else v[3] * 1000 / 127 * g.send.coerceIn(0, 127) / 127
+        val x = 14 + i * tap * 208 / win
+        if (x + w > 228) break
+        out += Triple(x, w, lvl / 10)
+        lvl = if (i > 0) lvl * feedback * 230 / 32768 else mix * 1000 / 127 * send.coerceIn(0, 127) / 127
     }
-    s.text("DRY", 14f, 18f, mid)
-    g.caption?.let { s.text(it, 228f, 18f, mid, right = true) }
+    return out
 }
 
-/** REVERB (graph_reverb): the early reflections in white, then the tail falling away (longer with SIZE, twice for HALL), its top dimmed by DAMP; all as loud as the send. */
+/** DELAY: the dry hit in white, then the echoes on a beat (or bar) ruler; echo 1 as tall as MIX (times the track's send), each next one down by FEEDBACK. values: TIME, FEEDBACK, COLOR, MIX. */
+private fun drawDelay(s: Sp, g: PageGraph, c: Color) {
+    val v = List(4) { g.values.getOrElse(it) { if (it == 3) 127 else 0 } }
+    val tap = DLY_6TH[v[0].mod(13)]; val win = max(tap * 4, 96); val unit = if (win > 96) 96 else 24
+    val n = win / unit
+    for (i in 0 until n) {
+        val x = 14f + i * unit * 208 / win
+        s.bar(dim, x, 123f, 2f, 3f)
+        if (n <= 8 || i % 4 == 0) s.text("${i + 1}", x, 138f, mid, 10f)
+    }
+    delayBars(v[0], v[1], v[3], g.send).forEachIndexed { i, (x, w, h) ->
+        s.bar(if (i == 0) Tok.text else uxMix(c, 15 + 50 * (i - 1) / 6), x.toFloat(), 120f - h, w.toFloat(), h.toFloat())
+    }
+    s.text("DRY", 14f, 17f, mid)
+    // the FM-1 has MODE on its PRESETS card here; the phone names the mode (GLO › DELAY) beside the picture's top right
+    if (g.kind == GraphKind.Delay) g.caption?.let { s.text(it.uppercase(), 228f, 17f, Tok.text, right = true) }
+}
+
+/** The reverb's tail: for each pixel column from x 44, its whole height and how much of its top is the dark DAMP band, in the FM-1's pixels. */
+internal fun reverbTail(size: Int, damp: Int, hall: Boolean, send: Int = 127): List<Pair<Int, Int>> {
+    val len = (40 + size.coerceIn(0, 127) * 144 / 127) * (if (hall) 2 else 1)
+    val dimPct = 20 + damp.coerceIn(0, 127) * 60 / 127
+    val amp = 84 * send.coerceIn(0, 127) / 127
+    var e = 32768
+    return (44..228).map { val h = amp * e / 32768; e = e - e * 3 / len; h to h * dimPct / 100 }
+}
+
+/** REVERB: five white reflections, then the tail a column a pixel, falling in whole-pixel steps to the floor; each column's top is the dark DAMP band over a lighter body. values: TYPE, SIZE, DAMP. */
 private fun drawReverb(s: Sp, g: PageGraph, c: Color) {
     val v = List(3) { g.values.getOrElse(it) { 0 } }
     val amp = g.send.coerceIn(0, 127)
     // the type by its name when the page gives it (the FM-1's own word), else by its number (0 ROOM, 1 SPRING, 2 HALL)
-    val type = g.caption?.uppercase() ?: listOf("ROOM", "SPRING", "HALL").getOrElse(v[0]) { "ROOM" }
-    val hall = type == "HALL"
-    val len = ((40 + v[1] * 144 / 127) * (if (hall) 2 else 1)).toFloat(); val k = 1f - 3f / len
-    val dimTop = (20 + v[2] * 60 / 127) / 100f
-    listOf(84, 60, 72, 46, 52).forEachIndexed { i, e -> val h = (e * amp / 127).toFloat(); s.rect(Tok.text, 12f + i * 6, 126f - h, 3f, h) }
-    val tops = mutableListOf<Pair<Float, Float>>(); val mids = mutableListOf<Pair<Float, Float>>()
-    var e = 1f
-    for (x in 44..229) { val h = (84 * amp / 127) * e; tops += x.toFloat() to 126f - h; mids += x.toFloat() to 126f - h + h * dimTop; e *= k }
-    val band = s.path(tops + mids.reversed(), close = true)
-    val body = s.path(mids + listOf(229f to 126f, 44f to 126f), close = true)
-    val x0 = s.x(44f); val x1 = s.x(228f)
-    s.d.drawPath(band, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c.copy(alpha = 0.45f), c.copy(alpha = 0.15f)), x0, x1))
-    s.d.drawPath(body, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c, c.copy(alpha = 0.4f)), x0, x1))
-    if (type == "SPRING") {
-        s.text("SPRING", 12f, 19f, mid)
-        s.stroke(mid, (64..228).map { x -> x.toFloat() to 13f + (sin((x - 64) * 13 / 256.0 * 2 * Math.PI) * 3).toFloat() }, 1f)   // the coil
-    } else s.text(type, 12f, 19f, mid)
+    val type = g.caption?.uppercase()?.takeIf { it in setOf("ROOM", "SPRING", "HALL") } ?: listOf("ROOM", "SPRING", "HALL").getOrElse(v[0]) { "ROOM" }
+    listOf(84, 60, 72, 46, 52).forEachIndexed { i, e -> val h = (e * amp / 127).toFloat(); s.bar(Tok.text, 12f + i * 6, 126f - h, 3f, h) }
+    reverbTail(v[1], v[2], type == "HALL", amp).forEachIndexed { i, (h, band) ->
+        if (h <= 0) return@forEachIndexed
+        val x = 44f + i
+        s.bar(uxMix(c, 55 + 30 * i / 184), x, 126f - h, 1f, band.toFloat())             // the damped top: dark
+        s.bar(uxMix(c, 60 * i / 184), x, 126f - h + band, 1f, (h - band).toFloat())      // the body: the full colour, darker to the right
+    }
+    s.text(type, 12f, 18f, mid)
+    if (type == "SPRING") s.stroke(mid, (64..228).map { x -> x.toFloat() to 13f + (sin((x - 64) * 13 / 256.0 * 2 * Math.PI) * 3).toFloat() }, 1f)   // the coil
+}
+
+private fun sineI(ph: Long): Double = sin((ph and 0xFFFFFFFFL) / 4294967296.0 * 2 * Math.PI)
+
+/** pg_cho_resp: FLANGER's comb (mode 1) or PHASER's two notches (mode 2) at [x] 0…216, as 0…1 (and a little over with FEEDBACK). */
+internal fun chorusResp(mode: Int, x: Int, depth: Int, fb: Int): Double {
+    if (mode == 1) {
+        val n = (4 + depth * 6 / 127).toLong()
+        val sn = kotlin.math.abs(sineI(x.toLong() * n * 9942053L + 0x40000000L) * 32768)
+        val kk = (sn * sn / 32768) * (sn * sn / 32768) / 32768
+        return (sn * (127 - fb) + kk * fb) / 127 * (127 + fb) / 127 / 32768
+    }
+    var h = 32768.0
+    for (k in 0 until 2) {
+        val d = (x - if (k == 1) 150 else 66).toDouble(); val w = (10 + depth / 8).toDouble(); val r = d - (if (d < 0) -2 else 2) * w
+        h -= 30000 * w * w / (w * w + d * d)
+        h += fb * 128 * w * w / (w * w + r * r)
+    }
+    return max(0.0, h) / 32768
+}
+
+/** CHORUS: the dry line and its drifting copy (a sine, more waves with RATE, taller with DEPTH, a fainter ghost with FEEDBACK); as FLANGER or PHASER, the response curve filled to the floor. values: RATE, DEPTH, MODE, FEEDBACK. */
+private fun drawChorus(s: Sp, g: PageGraph, c: Color) {
+    val v = List(4) { g.values.getOrElse(it) { 0 } }
+    val mode = v[2]
+    if (mode == 1 || mode == 2) {
+        val ys = (0..216).map { 124f - (chorusResp(mode, it, v[1], v[3]) * 40).toFloat() }
+        ys.forEachIndexed { i, y -> s.bar(uxMix(c, 75), 12f + i, y, 1f, 124f - y) }
+        s.bar(line, 12f, 84f, 216f, 1f)
+        s.d.drawPath(s.path(ys.mapIndexed { i, y -> (12f + i) to y }), c, style = Stroke(s.run { 3f.px() }, join = StrokeJoin.Miter))
+        s.text(if (mode == 1) "THE DRY AND ITS COPY: A COMB, SWEPT" else "FOUR STAGES: TWO NOTCHES, SWEPT", 12f, 17f, mid)
+        return
+    }
+    val a = (v[1] * 44 / 127).toFloat(); val b = a * v[3] / 127
+    val inc = (0xFFFFFFFFL / 216) * (1 + v[0] * 5 / 127)
+    s.bar(mid, 12f, 74f, 216f, 1f)
+    if (v[3] != 0) s.d.drawPath(s.path((0..216 step 2).map { (12f + it) to (74f + (sineI(it * inc - 0x30000000L) * b).toFloat()) }), mid, style = Stroke(s.run { 1f.px() }))
+    s.d.drawPath(s.path((0..216 step 2).map { (12f + it) to (74f + (sineI(it * inc) * a).toFloat()) }), c, style = Stroke(s.run { 3f.px() }, join = StrokeJoin.Miter))
+    s.text("DRY AND ITS DRIFTING COPY", 12f, 17f, mid)
+}
+
+/** "SWING 60:40": the long and short steps' share. */
+internal fun swingText(swing: Int): String = "SWING ${50 + swing * 50 / 250}:${50 - swing * 50 / 250}"
+
+/** GLOBAL: a bar's sixteen steps, downbeats tallest and white, the off sixteenths late by SWING+ over a dash where they'd be straight; the beats numbered. values: BPM, SWING+. */
+private fun drawGlobal(s: Sp, g: PageGraph, c: Color) {
+    val swing = g.values.getOrElse(1) { 0 }.coerceIn(0, 100)
+    val push = swing * 13 / 250
+    for (i in 0 until 16) {
+        var x = 14 + i * 13
+        val h = if (i % 4 == 0) 74 else if (i % 2 == 0) 52 else 40
+        if (i % 2 == 1) { s.bar(dim, x.toFloat(), 125f, 7f, 3f); x += push }
+        s.bar(if (i % 4 == 0) Tok.text else if (i % 2 == 0) c else uxMix(c, 35), x.toFloat(), 120f - h, 7f, h.toFloat())
+    }
+    for (i in 0 until 4) s.text("${i + 1}", 14f + i * 52, 38f, mid, 13f, strong = true)
+    s.text(swingText(swing), 228f, 17f, mid, right = true)
 }
 
 /** SLICER (graph_slicer): the sixteen steps of its pattern in fours: open steps full, closed ones down by DEPTH (GATE) or hatched (STUT); OFF is grey. */

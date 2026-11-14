@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -93,6 +96,28 @@ fun PageControlsRow(
                 val c = controls.getOrNull(slot)
                 if (c == null) Box(Modifier.size(DIAL_W, DIAL_H))   // an FM-1 knob with no parameter on this page (0xFF): the well stays so knob 3 is always knob 3
                 else RoundDial(slot, c, colour, if (slot == litSlot) litSeq else -1, kc)
+            }
+        }
+    }
+}
+
+/** The four dials two by two (the Mix pop-up, board 77): knob 1 and 2 above 3 and 4. A knob the page doesn't use is an outlined well, so knob 3 is always knob 3. */
+@Composable
+fun PageControlsGrid(
+    controls: List<PageControl?>, colour: Color, opened: (Int, PageControl) -> Int, onSet: (slot: Int, value: Int) -> Unit, modifier: Modifier = Modifier,
+) {
+    val kc = KnobControls(controls, colour, opened, onSet)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (row in 0 until 2) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (slot in row * 2 until row * 2 + 2) {
+                val c = controls.getOrNull(slot)
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().then(
+                        if (c == null) Modifier.drawBehind { drawRoundRect(Tok.outline, Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(9.25.dp.toPx()), style = Stroke(1.5.dp.toPx())) }.clearAndSetSemantics { }
+                        else Modifier.background(Tok.control, RoundedCornerShape(10.dp)),
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) { if (c != null) RoundDial(slot, c, colour, -1, kc) }
             }
         }
     }

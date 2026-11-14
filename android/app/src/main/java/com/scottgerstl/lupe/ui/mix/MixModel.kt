@@ -42,7 +42,24 @@ data class MixUi(
     val bus: List<PageControl?> = emptyList(),
     /** The bus card's settings (DELAY MODE on 2.5.1): a choice from a list, shown under the four controls. */
     val settings: List<PageControl> = emptyList(),
+    /** The bus page's picture (decision 34): the FM-1's own drawing, from the card's four knobs. Null on Mixer. */
+    val graph: com.scottgerstl.lupe.core.PageGraph? = null,
 )
+
+/**
+ * The picture for a bus page: the core's (its kind and the four knobs' values) or, from a core that sends none, the same made from the
+ * card's knobs. DELAY's caption becomes its MODE (the FM-1 shows MODE on the picture; the card's first setting), REVERB's stays its TYPE.
+ */
+internal fun busGraph(key: String, card: com.scottgerstl.lupe.core.MixCard?): com.scottgerstl.lupe.core.PageGraph? {
+    val kind = when (key) { "delay" -> com.scottgerstl.lupe.core.GraphKind.Delay; "reverb" -> com.scottgerstl.lupe.core.GraphKind.Reverb; "chorus" -> com.scottgerstl.lupe.core.GraphKind.Chorus; "global" -> com.scottgerstl.lupe.core.GraphKind.Global; else -> return null }
+    card ?: return null
+    val base = card.graph?.takeIf { it.kind == kind } ?: com.scottgerstl.lupe.core.PageGraph(kind, values = card.controls.map { it?.raw ?: 0 })
+    return when (key) {
+        "delay" -> base.copy(caption = card.settings.firstOrNull()?.let { c -> c.value.ifEmpty { c.names.getOrNull(c.raw).orEmpty() } }?.takeIf { it.isNotEmpty() })
+        "reverb" -> base.copy(caption = card.controls.getOrNull(0)?.value)
+        else -> base
+    }
+}
 
 class MixActions(
     val page: (Int) -> Unit,
@@ -63,7 +80,7 @@ fun MixState.toUi(): MixUi {
         pages = titles, page = keys.indexOf(section).coerceAtLeast(0),
         // the core names a track "Engine · Sound" ("Analog · Acid"); the row has room for the sound's name
         tracks = rows.map { MixTrackUi(it.track, it.name.substringAfter(" · "), it.level, it.levelText, it.pan + 64, it.panText, it.reverb ?: 0, it.reverbText ?: "…", it.mute, it.solo, null, it.selected) },
-        bus = card?.controls.orEmpty(), settings = card?.settings.orEmpty(),
+        bus = card?.controls.orEmpty(), settings = card?.settings.orEmpty(), graph = busGraph(section, card),
     )
 }
 

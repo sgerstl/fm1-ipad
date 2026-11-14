@@ -65,7 +65,8 @@ fun LupeShell(core: LupeCore) {
     LaunchedEffect(link.phase) { if (link.phase == LinkPhase.Ready) everReady = true }
     val mode = linkMode(link, everReady)
 
-    val grey = animatedFloat(if (mode == LinkMode.Card) 1f else 0f, Dur.PANEL)
+    // the page behind a link card or the no-FM-1 card (the header stays above it, decision 33) is greyed and read-only
+    val grey = animatedFloat(if (mode != LinkMode.Normal) 1f else 0f, Dur.PANEL)
     val page = animatedFloat(if (mode == LinkMode.Page) 1f else 0f, Dur.PANEL)
     val card = animatedFloat(if (mode == LinkMode.Card) 1f else 0f, if (mode == LinkMode.Card) 250 else Dur.EXIT, if (mode == LinkMode.Card) EaseOut else EaseIn)
     // keep what the card/page said while they leave
@@ -105,7 +106,7 @@ fun LupeShell(core: LupeCore) {
         }
 
         if (page.value > 0.001f) {
-            LinkPage(lastLink, core, Modifier.windowInsetsPadding(WindowInsets.safeDrawing).graphicsLayer { alpha = page.value })
+            LinkPage(lastLink, core, Modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)).graphicsLayer { alpha = page.value })
         }
         if (card.value > 0.001f) {
             LinkCard(
@@ -124,8 +125,8 @@ fun LupeShell(core: LupeCore) {
             // Mix is a sheet now (decision 28): the FM-1 going to GLO opens it, and the project menu
             val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core)
             val meters = core.meters.collectAsStateWithLifecycle()
-            com.scottgerstl.lupe.ui.sheet.LupeSheet(sheets.open == com.scottgerstl.lupe.ui.sheet.SheetKind.Mix, "Mix", { sheets.close() }, fixed = 300.dp) {
-                com.scottgerstl.lupe.ui.mix.MixPage(mix.first, mix.second, meters)
+            com.scottgerstl.lupe.ui.sheet.LupeSheet(sheets.open == com.scottgerstl.lupe.ui.sheet.SheetKind.Mix, "Mix", { sheets.close() }, fixed = 330.dp, showTitle = false) {
+                com.scottgerstl.lupe.ui.mix.MixPage(mix.first, mix.second, meters, onClose = { sheets.close() })
             }
             // Sounds: for a track (its head on Pads, or SAVE on the FM-1) or one pad's own sound. The browser has its own heading and Done.
             var lastRequest by remember { mutableStateOf(soundsHost.request) }
