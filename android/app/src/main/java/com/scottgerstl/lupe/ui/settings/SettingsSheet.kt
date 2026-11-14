@@ -100,8 +100,8 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
             BasicText("Labs", Modifier.semantics { heading() }, style = LupeType.title.copy(fontSize = 17.sp))
             BasicText("Settings to try on the phone. Each starts off; keep what works.", Modifier.padding(top = 2.dp, bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
         }
-        SwitchRow("Pause following after a touch", "The bottom half holds your page for 3 s after you touch it", phone.pauseFollowing, trial = true) { phone.choosePauseFollowing(it) }
-        SwitchRow("Pin the bottom half's page", "The bottom half stops following the FM-1's page while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
+        SwitchRow("Pause following after a touch", "The sound page you touched holds for 3 s before it follows the FM-1 again", phone.pauseFollowing, trial = true) { phone.choosePauseFollowing(it) }
+        SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
         SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
         SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
     }

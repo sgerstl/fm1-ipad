@@ -30,12 +30,17 @@ class FStep(
     var on: Boolean = false, var midi: Int = 60, var extra: Int = 0, var length: Int = 1, var velocity: Int = 100,
     var chance: Int = 100, var ratchet: Int = 1, var nudge: Int = 0, var cond: String = "ALWAYS",
     var lanes: MutableSet<Int> = mutableSetOf(), val values: MutableList<StepValue> = mutableListOf(),
+    /** The chord's notes beyond [midi], once the phone's keys have written them (else [extra] made-up ones). */
+    var more: MutableList<Int> = mutableListOf(),
 ) {
-    fun copyOf() = FStep(on, midi, extra, length, velocity, chance, ratchet, nudge, cond, lanes.toMutableSet(), values.toMutableList())
+    fun copyOf() = FStep(on, midi, extra, length, velocity, chance, ratchet, nudge, cond, lanes.toMutableSet(), values.toMutableList(), more.toMutableList())
+
+    /** Every note on the step, root first. */
+    fun notes(): List<Int> = if (!on) emptyList() else if (more.isNotEmpty()) listOf(midi) + more else (0..extra).map { midi + it * 2 + if (it > 0) 1 else 0 }
 
     fun toStep(drum: Boolean): Step {
         val note = if (!on) "" else if (drum) lanes.sorted().joinToString(" ") { FakeData.drumLanes[it] } else FakeData.noteName(midi)
-        val pitch = if (!on) "" else if (drum) note else (0..extra).joinToString(" ") { FakeData.noteName(midi + it * 2 + if (it > 0) 1 else 0) }
+        val pitch = if (!on) "" else if (drum) note else notes().joinToString(" ") { FakeData.noteName(it) }
         return Step(on, note, if (drum) 0 else extra, length, velocity, chance, ratchet, cond, nudge, pitch, values.toList())
     }
 

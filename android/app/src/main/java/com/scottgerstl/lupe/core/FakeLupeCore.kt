@@ -188,7 +188,6 @@ class FakeLupeCore(
                 if (intent.screen == "SEQ") _shell.update { it.copy(bottom = BottomPage()) }
             }
             is com.scottgerstl.lupe.core.GoHome -> { _shell.update { it.copy(bottom = BottomPage()) }; _fm1Screen.value = Fm1ScreenState(key = "HOME") }
-            is Intent.SetDivider -> _shell.update { it.copy(divider = intent.position) }
             is Intent.SetPlaybackMode -> _top.update { it.copy(mode = intent.mode) }
             is Intent.PadTap -> launch(intent.track, intent.entry)
             is Intent.PadSelect -> selectPad(intent.track, intent.entry)
@@ -214,6 +213,22 @@ class FakeLupeCore(
                 }
             }
             is Intent.StepAdjust -> adjust(intent.field, intent.delta)
+            is KeyPlay -> {}   // it would sound; the fake has no voice
+            is StepNote -> { val st = model[intent.step.coerceIn(0, 15)]; st.on = true; st.midi = intent.note.coerceIn(0, 127); st.extra = 0; st.more.clear(); emitEditor { it.copy(selected = intent.step.coerceIn(0, 15)) } }
+            is StepChordNote -> {
+                val st = model[intent.step.coerceIn(0, 15)]
+                val notes = st.notes().toMutableList()
+                if (intent.note in notes) notes.remove(intent.note) else if (notes.size < 4) notes.add(intent.note)   // the FM-1's four; a fifth is refused
+                notes.sort()
+                st.on = notes.isNotEmpty()
+                if (notes.isNotEmpty()) { st.midi = notes[0]; st.more = notes.drop(1).toMutableList(); st.extra = st.more.size } else { st.more.clear(); st.extra = 0 }
+                emitEditor()
+            }
+            is DrumHit -> {
+                val st = model[intent.step.coerceIn(0, 15)]
+                val lane = FakeData.drumLanes.indexOf(intent.lane)
+                if (lane >= 0) { if (!st.lanes.remove(lane)) st.lanes.add(lane); st.on = st.lanes.isNotEmpty(); emitEditor() }
+            }
             Intent.ChordToggle -> emitEditor { it.copy(chord = !it.chord) }
             Intent.LockToggle -> emitEditor { it.copy(lock = if (it.lock == LockMode.Latched) LockMode.Off else LockMode.Latched) }
             is Intent.LockClear -> { model[intent.step].values.removeAll { it.param == intent.param && it.locked }; emitEditor() }
@@ -278,7 +293,7 @@ class FakeLupeCore(
             val owner = (i - 1 downTo 0).firstOrNull { model[it].on && it + model[it].length > i && (it + 1..i).none { k -> k != i && model[k].on } }
             st.toStep(drum).copy(maxLength = next - i, heldFrom = if (!st.on && owner != null) owner else -1)
         }
-        _editor.value = e.copy(steps = steps, laneValues = lv)
+        _editor.value = e.copy(steps = steps, laneValues = lv, drumLanes = if (drum) FakeData.drumLanes else emptyList())
         // the automation area follows the pattern (unless a recording supplied its own, which the next frame replaces)
         if (e.lanes.isNotEmpty()) _automation.value = FakeP6.automation(_editor.value, autoLane.ifEmpty { e.lane })
     }

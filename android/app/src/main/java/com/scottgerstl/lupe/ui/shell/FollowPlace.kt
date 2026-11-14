@@ -1,27 +1,33 @@
 package com.scottgerstl.lupe.ui.shell
 
-import com.scottgerstl.lupe.core.Divider
 import com.scottgerstl.lupe.core.Fm1ScreenState
 import com.scottgerstl.lupe.core.Tab
 
 sealed interface PlaceAction {
     data class Tab(val tab: com.scottgerstl.lupe.core.Tab) : PlaceAction
-    data class Divider(val position: com.scottgerstl.lupe.core.Divider) : PlaceAction
+    /** The Edit tab's one-lane view, in the keyboard's place. */
+    data class Lane(val on: Boolean) : PlaceAction
+    data object OpenMix : PlaceAction
+    data object CloseMix : PlaceAction
     data object OpenSounds : PlaceAction
     data object CloseSounds : PlaceAction
     data object ShowProjects : PlaceAction
     data object CloseProjects : PlaceAction
 }
 
+/** What is open on the phone now, as the follower needs it. */
+data class PlaceNow(val tab: Tab, val lane: Boolean = false, val mixOpen: Boolean = false, val soundsOpen: Boolean = false, val projectsOpen: Boolean = false)
+
 /**
- * The phone follows the FM-1's own GLO, SAVE and SEQ (decision 24, followed): the Mix tab for GLO (its section follows the core's own `mix` area),
- * the Sounds sheet for SAVE's PRESETS and USER or Projects for PROJECT, the editor for SEQ, with AUTOMATION to the lane (bottom full) and
- * SONG to the Timeline. HOME, or a sound family, puts it back as it was: it closes what it opened and restores the top tab and the
- * divider it changed. It closes only what it opened itself; the tab and divider it saved are put back even if the person moved them since (they asked for the screen the FM-1 left).
+ * The phone follows the FM-1's own GLO, SAVE and SEQ (decisions 24, 27, 28): the Mix sheet for GLO (its section follows the core's own `mix`
+ * area), the Sounds sheet for SAVE's PRESETS and USER or Projects for PROJECT, the Edit tab for SEQ, with AUTOMATION to its lane view and
+ * SONG to the Timeline tab. HOME, or a sound family, puts it back as it was: it closes what it opened and restores the tab and the lane
+ * view it changed. It closes only what it opened itself. The first screen it sees after start or a reconnect is only the baseline.
  */
 class PlaceFollower {
     private var savedTab: Tab? = null
-    private var savedDivider: Divider? = null
+    private var savedLane: Boolean? = null
+    private var ownMix = false
     private var ownSounds = false
     private var ownProjects = false
     private var last: Fm1ScreenState? = null
@@ -30,40 +36,44 @@ class PlaceFollower {
     /** The link dropped: the next screen it sees is a new baseline. */
     fun reset() { last = null; primed = false }
 
-    fun follow(screen: Fm1ScreenState, tab: Tab, divider: Divider, soundsOpen: Boolean, projectsOpen: Boolean): List<PlaceAction> {
+    fun follow(screen: Fm1ScreenState, now: PlaceNow): List<PlaceAction> {
         if (screen == last) return emptyList()
         last = screen
         // the first screen seen after start or reconnect only sets the baseline: nothing opens for where the FM-1 already was
         if (!primed) { primed = true; return emptyList() }
         val out = mutableListOf<PlaceAction>()
-        fun goTab(t: Tab) { if (savedTab == null) savedTab = tab; if (tab != t) out += PlaceAction.Tab(t) }
+        var tab = now.tab
+        fun goTab(t: Tab) { if (savedTab == null) savedTab = now.tab; if (tab != t) { out += PlaceAction.Tab(t); tab = t } }
+        fun mix(open: Boolean) {
+            if (open && !now.mixOpen) { out += PlaceAction.OpenMix; ownMix = true }
+            if (!open && ownMix) { if (now.mixOpen) out += PlaceAction.CloseMix; ownMix = false }
+        }
         fun sounds(open: Boolean) {
-            if (open && !soundsOpen) { out += PlaceAction.OpenSounds; ownSounds = true }
-            if (!open && ownSounds) { if (soundsOpen) out += PlaceAction.CloseSounds; ownSounds = false }
+            if (open && !now.soundsOpen) { out += PlaceAction.OpenSounds; ownSounds = true }
+            if (!open && ownSounds) { if (now.soundsOpen) out += PlaceAction.CloseSounds; ownSounds = false }
         }
         fun projects(open: Boolean) {
-            if (open && !projectsOpen) { out += PlaceAction.ShowProjects; ownProjects = true }
-            if (!open && ownProjects) { if (projectsOpen) out += PlaceAction.CloseProjects; ownProjects = false }
+            if (open && !now.projectsOpen) { out += PlaceAction.ShowProjects; ownProjects = true }
+            if (!open && ownProjects) { if (now.projectsOpen) out += PlaceAction.CloseProjects; ownProjects = false }
         }
-        fun restore(keepTab: Boolean = false, keepDivider: Boolean = false, keepSounds: Boolean = false, keepProjects: Boolean = false) {
-            if (!keepSounds) sounds(false)
-            if (!keepProjects) projects(false)
-            if (!keepTab) { savedTab?.let { if (it != tab) out += PlaceAction.Tab(it) }; savedTab = null }
-            if (!keepDivider) { savedDivider?.let { if (it != divider) out += PlaceAction.Divider(it) }; savedDivider = null }
+        fun lane(on: Boolean) {
+            if (on) { if (savedLane == null) savedLane = now.lane; if (!now.lane) out += PlaceAction.Lane(true) }
+            else { savedLane?.let { if (it != now.lane) out += PlaceAction.Lane(it) }; savedLane = null }
         }
+        fun restoreTab() { savedTab?.let { if (it != tab) { out += PlaceAction.Tab(it); tab = it } }; savedTab = null }
         when (screen.key) {
-            "GLO" -> { restore(keepTab = true); goTab(Tab.Mix) }
-            "SAVE" -> when (screen.title) {
-                "PRESETS", "USER" -> { projects(false); restore(keepTab = true, keepSounds = true); sounds(true) }
-                "PROJECT" -> { sounds(false); restore(keepTab = true, keepProjects = true); projects(true) }
-                else -> restore(keepTab = true)
-            }
-            "SEQ" -> when (screen.title) {
-                "AUTOMATION" -> { restore(keepTab = false, keepDivider = true); if (savedDivider == null) savedDivider = divider; if (divider != Divider.Bottom) out += PlaceAction.Divider(Divider.Bottom) }
-                "SONG" -> { restore(keepTab = true); goTab(Tab.Timeline) }
-                else -> restore()
-            }
-            else -> restore()   // HOME, a sound family: back to where the phone was
+            "GLO" -> { sounds(false); projects(false); lane(false); mix(true) }
+            "SAVE" -> { mix(false); lane(false); when (screen.title) {
+                "PRESETS", "USER" -> { projects(false); sounds(true) }
+                "PROJECT" -> { sounds(false); projects(true) }
+                else -> { sounds(false); projects(false) }
+            } }
+            "SEQ" -> { mix(false); sounds(false); projects(false); when (screen.title) {
+                "SONG" -> { lane(false); goTab(Tab.Timeline) }
+                "AUTOMATION" -> { goTab(Tab.Edit); lane(true) }
+                else -> { lane(false); goTab(Tab.Edit) }
+            } }
+            else -> { mix(false); sounds(false); projects(false); lane(false); restoreTab() }   // HOME, a sound family: back to where the phone was
         }
         return out
     }

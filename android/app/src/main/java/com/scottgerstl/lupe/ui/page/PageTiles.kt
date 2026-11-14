@@ -76,7 +76,7 @@ import kotlin.math.tanh
 @Composable
 internal fun ModRoutes(routes: List<PageRoute>, picked: Int, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
     val groups = listOf("LFO" to "LFO →", "ENV" to "ENV →", "SLOTS" to "SLOTS")
-    // at split the room is small: the rows keep 36 dp and the list scrolls, rather than three slivers
+    // in the dials area the room is small: the rows keep 36 dp and the list scrolls, rather than three slivers
     BoxWithConstraints(modifier.fillMaxSize()) {
     val squeezed = maxHeight < 140.dp
     Column(Modifier.fillMaxSize().then(if (squeezed) Modifier.verticalScroll(rememberScrollState()) else Modifier), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -118,7 +118,7 @@ private fun Modifier.drawWithOutline(): Modifier = this.then(Modifier.drawWithCo
 @Composable
 internal fun PickTiles(labels: List<String>, picked: Int, colour: Color, onPick: (Int) -> Unit, modifier: Modifier) {
     BoxWithConstraints(modifier.fillMaxSize()) {
-    val rowH = if (maxHeight < 100.dp) 36.dp else 48.dp   // squeezed at split: shorter tiles, the list scrolls
+    val rowH = if (maxHeight < 100.dp) 36.dp else 48.dp   // squeezed beside the dials: shorter tiles, the list scrolls
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(if (rowH < 48.dp) 4.dp else 8.dp)) {
         labels.withIndex().chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

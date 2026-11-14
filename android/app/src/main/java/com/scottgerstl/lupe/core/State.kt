@@ -65,15 +65,9 @@ data class TopState(
 @Serializable
 enum class Tab {
     @SerialName("pads") Pads,
+    /** The step editor (decision 28: landscape, Pads · Edit · Timeline; Mix is a sheet). */
+    @SerialName("edit") Edit,
     @SerialName("timeline") Timeline,
-    @SerialName("mix") Mix,
-}
-
-@Serializable
-enum class Divider {
-    @SerialName("top") Top,
-    @SerialName("split") Split,
-    @SerialName("bottom") Bottom,
 }
 
 @Serializable
@@ -101,7 +95,6 @@ data class ShellBottom(val bottom: BottomPage)
 @Serializable
 data class ShellState(
     val tab: Tab = Tab.Pads,
-    val divider: Divider = Divider.Split,
     val bottom: BottomPage = BottomPage(),
 )
 
@@ -241,4 +234,6 @@ data class EditorState(
     val lanes: List<String> = emptyList(),
     val lane: String = "",
     val laneValues: List<Int> = emptyList(),
+    /** A kit's lanes in its own order ("BD", "SD"…), for the drum grid. PROVISIONAL until P1 publishes them: empty means "the lanes the steps name". */
+    val drumLanes: List<String> = emptyList(),
 )

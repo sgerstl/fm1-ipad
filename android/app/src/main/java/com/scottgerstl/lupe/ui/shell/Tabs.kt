@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
@@ -38,11 +37,9 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 
 /**
- * Pads · Timeline · Mix (DESIGN.md "The header is chrome, not content"): a left-aligned row of words, Barlow 17 semibold,
- * 24 dp apart. The tab showing is in text with a 3 dp white underline the width of its word that glides to the new tab
- * (200 ms, ease-out; with Reduce Motion the two underlines cross-fade instead). The others are in text2. A 1 dp hairline
- * (control) ends the header. The row is 36 dp tall and each word's whole height is its touch target; 24 dp of space
- * follows each word inside its target too.
+ * Pads · Edit · Timeline, in the header line (DESIGN.md "The header is chrome, not content"; decision 28): words, Barlow 17 semibold, 24 dp apart.
+ * The tab showing is in text with a 3 dp white underline the width of its word that glides to the new tab (200 ms, ease-out; with Reduce Motion the
+ * two underlines cross-fade instead). The others are in text2. Each word's target is the header's full 48 dp height.
  */
 @Composable
 fun Tabs(current: Tab, onPick: (Tab) -> Unit, modifier: Modifier = Modifier) {
@@ -56,22 +53,21 @@ fun Tabs(current: Tab, onPick: (Tab) -> Unit, modifier: Modifier = Modifier) {
     val uw by animatedFloat(ws[i], Dur.FINGER)
     val lits = Tab.entries.map { animatedFloat(if (it == current) 1f else 0f, Dur.STATE) }
     Row(
-        modifier.fillMaxWidth().height(36.dp).selectableGroup()
+        modifier.height(48.dp).selectableGroup()
             .onGloballyPositioned { rowX = it.positionInWindow().x }
             .drawBehind {
                 val h = 3.dp.toPx()
-                drawRect(Tok.control, Offset(0f, size.height - 1.dp.toPx()), Size(size.width, 1.dp.toPx()))
                 if (ws[i] <= 0f) return@drawBehind
                 if (reduce) {
                     // nothing travels: each word's underline fades in or out where it stands
-                    Tab.entries.forEach { t -> drawRect(Tok.text.copy(alpha = lits[t.ordinal].value), Offset(xs[t.ordinal], size.height - h), Size(ws[t.ordinal], h)) }
-                } else drawRect(Tok.text, Offset(ux, size.height - h), Size(uw, h))
+                    Tab.entries.forEach { t -> drawRect(Tok.text.copy(alpha = lits[t.ordinal].value), Offset(xs[t.ordinal], size.height - h - 2.dp.toPx()), Size(ws[t.ordinal], h)) }
+                } else drawRect(Tok.text, Offset(ux, size.height - h - 2.dp.toPx()), Size(uw, h))
             },
     ) {
         Tab.entries.forEach { tab ->
             Box(
                 Modifier
-                    .height(36.dp)
+                    .height(48.dp)
                     .semantics(mergeDescendants = true) { role = Role.Tab; selected = tab == current; contentDescription = tab.name }
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPick(tab) }
                     .padding(end = if (tab == Tab.entries.last()) 0.dp else 24.dp),

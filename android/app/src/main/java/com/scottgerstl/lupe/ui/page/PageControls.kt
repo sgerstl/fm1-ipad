@@ -91,7 +91,7 @@ fun PageControlsRow(
         for (slot in 0 until 4) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                 val c = controls.getOrNull(slot)
-                if (c == null) Box(Modifier.size(DIAL_RING))   // an FM-1 knob with no parameter on this page (0xFF): the well stays so knob 3 is always knob 3
+                if (c == null) Box(Modifier.size(DIAL_W, DIAL_H))   // an FM-1 knob with no parameter on this page (0xFF): the well stays so knob 3 is always knob 3
                 else RoundDial(slot, c, colour, if (slot == litSlot) litSeq else -1, kc)
             }
         }

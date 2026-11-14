@@ -49,14 +49,14 @@ private val LaunchQuantize.word get() = name
 private val PlaybackMode.word get() = name
 
 /**
- * Board 53's top bar: the FM-1 key ⌄, Launch ⌄, REC, Play, the readout ⌄. Keys draw at 44 dp as on the board
- * and answer to 48 dp. The row is 6 dp in from each edge so the drawn keys sit 8 dp from them.
+ * The one header line (decision 28, board 73; decision 23's chrome): the project ⌄ and Loop ⌄ as words, the tabs Pads · Edit · Timeline as
+ * underlined words, then the readout, Record and Play at the right edge. 48 dp tall; the shell draws the hairline under it.
  */
 @Composable
-fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
+fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, onTab: (com.scottgerstl.lupe.core.Tab) -> Unit, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf<Menu?>(null) }
     Row(
-        modifier.fillMaxWidth().padding(end = 4.dp).height(48.dp),
+        modifier.fillMaxWidth().height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // FM-1 key: Projects…, Settings, Labs. Later phases fill them in (P5, Labs); none exist yet, so they say so.
@@ -67,6 +67,7 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
                 val sheets = LocalSheetHost.current
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
+                MenuRow("Mix…", { menu = null; sheets.show(SheetKind.Mix) }, sub = "Levels, pan, the shared delay and reverb")
                 MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
                 MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }
@@ -88,6 +89,9 @@ fun TopBar(top: TopState, core: LupeCore, modifier: Modifier = Modifier) {
                 }
             }
         }
+        Spacer(Modifier.width(16.dp))
+        // the tabs, in the header line (decision 28): Pads · Edit · Timeline
+        Tabs(tab, onTab)
         Spacer(Modifier.weight(1f))
         // Readout: bar · beat, tempo; opens tempo and Loop · Song · Once
         Box {

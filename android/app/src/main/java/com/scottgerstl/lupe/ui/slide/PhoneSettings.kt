@@ -20,10 +20,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 class PhoneSettings(private val prefs: SharedPreferences? = null) {
     var haptics by mutableStateOf(prefs?.getBoolean(HAPTICS, true) ?: true)
         private set
-    /** Labs: the bottom half holds your page for 3 s after you touch it (decision 3's "pause after a phone touch"). */
+    /** Labs: the sound page holds for 3 s after you touch it (decision 3's "pause after a phone touch"). */
     var pauseFollowing by mutableStateOf(prefs?.getBoolean(PAUSE, false) ?: false)
         private set
-    /** Labs: the bottom half stops following the FM-1's page (decision 3's "pin the bottom half's page"). */
+    /** Labs: the sound page and the sheets stop following the FM-1 (decision 3's pin). */
     var pinBottom by mutableStateOf(prefs?.getBoolean(PIN, false) ?: false)
         private set
     /** Labs: a one-octave piano under the grid (decision 5). Stored; the piano itself isn't built yet. */

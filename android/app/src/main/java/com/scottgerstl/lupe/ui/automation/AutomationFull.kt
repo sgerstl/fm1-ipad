@@ -1,6 +1,5 @@
 package com.scottgerstl.lupe.ui.automation
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -63,12 +62,10 @@ import com.scottgerstl.lupe.core.EditorState
 import com.scottgerstl.lupe.core.Intent
 import com.scottgerstl.lupe.core.LupeCore
 import com.scottgerstl.lupe.ui.shell.Chevron
-import com.scottgerstl.lupe.ui.shell.Grid
 import com.scottgerstl.lupe.ui.shell.Key
 import com.scottgerstl.lupe.ui.shell.KeyLabel
 import com.scottgerstl.lupe.ui.shell.LupeMenu
 import com.scottgerstl.lupe.ui.shell.MenuHeading
-import com.scottgerstl.lupe.ui.shell.WideKey
 import com.scottgerstl.lupe.ui.shell.diamond
 import com.scottgerstl.lupe.ui.slide.LocalMagnifier
 import com.scottgerstl.lupe.ui.slide.MagnifierFace
@@ -96,15 +93,14 @@ private fun AutomationState.pct(v: Int) = if (max > min) ((v - min) * 100f / (ma
 private fun AutomationState.raw(pct: Int) = min + (pct * (max - min) / 100f).roundToInt()
 
 /**
- * One automation lane over the whole bottom half (board 69, decision 7): the picker for the lane, the grid kept short
- * above it, and the lane to draw on. Drag along it and each step you pass becomes a lock at the height you drew (what the FM-1
+ * One automation lane (decision 7), in the keyboard's place on the Edit tab when Lane is on (decision 28): the picker for the lane and
+ * the lane to draw on. Drag along it and each step you pass becomes a lock at the height you drew (what the FM-1
  * stores); tap a ◆ to select its step. **Decision 16:** the first touch on a lane that holds recorded motion asks in place,
  * "Draw over the recorded CUTOFF?"; after yes, drawing flows until you lift (and until the lane or the view changes).
- * The Magnifier follows the finger with the step and value. Done, or Back, returns to the editor.
+ * The Magnifier follows the finger with the step and value.
  */
 @Composable
-fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track: Color, onDone: () -> Unit, modifier: Modifier = Modifier) {
-    BackHandler { onDone() }
+fun LaneView(ed: EditorState, auto: AutomationState, core: LupeCore, track: Color, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
     val haptic = LocalHapticFeedback.current
     val magnifier = LocalMagnifier.current
     var pickerOpen by remember { mutableStateOf(false) }
@@ -123,16 +119,13 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
     val vals = auto.points.map { auto.pct(it.value).roundToInt() }
     val steps = auto.points.size.coerceAtLeast(2)
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(10.dp).background(track, RoundedCornerShape(5.dp)))
-            BasicText("${ed.track} ${ed.trackName}", style = LupeType.key, maxLines = 1)
-            BasicText("· AUTOMATION", Modifier.weight(1f), style = LupeType.body.copy(fontSize = 14.sp), maxLines = 1)
+        Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box {
-                Key({ pickerOpen = true }, "Lane $lane, ${auto.lanes.indexOfFirst { it.param == lane } + 1} of ${auto.lanes.size}. Change lane", width = 104.dp, height = 32.dp, minTarget = 40.dp) { fg ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel(lane, fg, style = LupeType.key.copy(fontSize = 13.sp)); Chevron(fg) }
+                Key({ pickerOpen = true }, if (lane.isEmpty()) "Pick a parameter to automate" else "Lane $lane, ${auto.lanes.indexOfFirst { it.param == lane } + 1} of ${auto.lanes.size}. Change lane", width = 132.dp, height = 28.dp, minTarget = 32.dp) { fg ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel(lane.ifEmpty { "Pick a parameter" }, fg, style = LupeType.key.copy(fontSize = 13.sp)); Chevron(fg) }
                 }
                 // each lane says how many locks it has, or that it's recorded
-                LupeMenu(pickerOpen, { pickerOpen = false }, alignEnd = true, width = 232.dp) {
+                LupeMenu(pickerOpen, { pickerOpen = false }, width = 232.dp) {
                     MenuHeading("Lane")
                     automationParams(auto, page).forEach { l ->
                         val i = laneInfo(auto, l)
@@ -152,11 +145,14 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                     com.scottgerstl.lupe.ui.shell.MenuRow("Clear this lane…", { pickerOpen = false; clearing = System.currentTimeMillis() }, enabled = info.locks + (if (info.recorded) 1 else 0) > 0, sub = "Takes off its locks and recorded changes")
                 }
             }
-            Key(onDone, "Done: back to the editor", width = 56.dp, height = 32.dp, minTarget = 40.dp) { fg -> KeyLabel("Done", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+            val d = drawnSteps
+            BasicText(
+                if (lane.isEmpty()) "Pick a parameter, then draw" else if (d != null && trail.size > 1) "Drawing steps ${minOf(d.first, d.second) + 1}–${maxOf(d.first, d.second) + 1}" else "Drag to draw · each step becomes a lock ◆",
+                Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp), maxLines = 1,
+            )
+            trailing()
         }
-        // the grid stays short above the lane; tapping a step selects it (and the step panel follows when the editor returns)
-        Box(Modifier.fillMaxWidth().height(184.dp).padding(top = 4.dp)) { Grid(ed.copy(selected = ed.selected), track, core, Modifier.fillMaxSize()) }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Tok.well).onGloballyPositioned { coords = it }) {
             Canvas(
                 Modifier.fillMaxSize()
@@ -172,6 +168,7 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                     .pointerInput(lane, info.recorded, armedLane) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            if (lane.isEmpty()) { waitForUpOrCancellation(); return@awaitEachGesture }
                             val pad = 12.dp.toPx()
                             fun stepAt(x: Float) = (((x - pad) / (size.width - 2 * pad)) * (steps - 1)).roundToInt().coerceIn(0, steps - 1)
                             fun valueAt(y: Float) = (100f * (1f - (y - 10.dp.toPx()) / (size.height - 20.dp.toPx()))).roundToInt().coerceIn(0, 100)
@@ -236,39 +233,31 @@ fun AutomationFull(ed: EditorState, auto: AutomationState, core: LupeCore, track
                     },
             ) {}
             // decision 16, in place: asked over the lane on the first touch of recorded motion; taps ignored for 0.4 s
-            LupeCrossfade(asking, Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) { at ->
-                if (at != null) Column(Modifier.background(Tok.panel, RoundedCornerShape(8.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LupeCrossfade(asking, Modifier.align(Alignment.Center).fillMaxWidth().padding(4.dp)) { at ->
+                if (at != null) Row(Modifier.background(Tok.panel, RoundedCornerShape(8.dp)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     val words = "Draw over the recorded $lane?"
                     Box(
-                        Modifier.fillMaxWidth().drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
+                        Modifier.weight(1f).drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
                             .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Confirm: $words"; onClick { if (System.currentTimeMillis() - at > 400) { armedLane = lane; asking = null; true } else false } }
                             .pointerInput(at) { detectTapGestures { if (System.currentTimeMillis() - at > 400) { armedLane = lane; asking = null } } }
-                            .padding(12.dp),
-                    ) { BasicText(words, style = LupeType.key) }
-                    WideKey("Cancel", { asking = null })
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) { BasicText(words, style = LupeType.key.copy(fontSize = 13.sp), maxLines = 2) }
+                    Key({ asking = null }, "Cancel", width = 72.dp, height = 36.dp, minTarget = 40.dp) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
                 }
             }
             // ClearLane, asked in place: the lane's recorded changes and locks both go
-            LupeCrossfade(clearing, Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) { at ->
-                if (at != null) Column(Modifier.background(Tok.panel, RoundedCornerShape(8.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LupeCrossfade(clearing, Modifier.align(Alignment.Center).fillMaxWidth().padding(4.dp)) { at ->
+                if (at != null) Row(Modifier.background(Tok.panel, RoundedCornerShape(8.dp)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     val words = "Clear all of $lane's locks and recorded changes? It can't be undone."
                     Box(
-                        Modifier.fillMaxWidth().drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
+                        Modifier.weight(1f).drawBehind { drawRoundRect(Tok.rec, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
                             .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Confirm: $words"; onClick { if (System.currentTimeMillis() - at > 400) { core.send(ClearLane(lane, confirmed = true)); clearing = null; true } else false } }
                             .pointerInput(at) { detectTapGestures { if (System.currentTimeMillis() - at > 400) { core.send(ClearLane(lane, confirmed = true)); clearing = null } } }
-                            .padding(12.dp),
-                    ) { BasicText(words, style = LupeType.key) }
-                    WideKey("Cancel", { clearing = null })
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) { BasicText(words, style = LupeType.key.copy(fontSize = 13.sp), maxLines = 2) }
+                    Key({ clearing = null }, "Cancel", width = 72.dp, height = 36.dp, minTarget = 40.dp) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
                 }
             }
-        }
-        Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
-            val d = drawnSteps
-            BasicText(
-                if (d != null && trail.size > 1) "Drawing steps ${minOf(d.first, d.second) + 1}–${maxOf(d.first, d.second) + 1}: each step you pass becomes a lock" else "Drag along the lane to draw · tap a ◆ to select its step",
-                Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp), maxLines = 1,
-            )
-            BasicText("◆ = a lock", style = LupeType.small.copy(fontSize = 12.sp))
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -68,17 +70,15 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlinx.coroutines.delay
 
-private val PAD_W = 78.dp
+private val PAD_W = 80.dp
 private val GAP = 4.dp
 
 /**
- * The Pads tab (board 53): six track rows (number, Mute, then the entries panning together), the scenes row
- * under them (Store, sixteen scenes, Select). With Select on a pad tap picks the pad for the editor and
- * launches nothing. Row height grows with the space: 40 dp at split, about 110 at top only.
+ * The Pads tab in landscape (decision 28, board 74): six track rows (a wide head to select the track and reach its sounds, MUTE with the
+ * word on it, then the entries panning together, about eight in view), and Store with all sixteen scenes across the foot.
  */
 @Composable
 fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
-    var select by rememberSaveable { mutableStateOf(false) }
     var store by rememberSaveable { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     // Store over a kept scene asks once more, in place (Scott, 2026-11-14): the scene, and when it was asked
@@ -86,59 +86,59 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     var confirmAt by remember { mutableStateOf(0L) }
     val scroll = rememberScrollState()
     val haptic = LocalHapticFeedback.current
+    val mix by core.mix.collectAsStateWithLifecycle()
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val scenesH = 34.dp
+        val scenesH = 40.dp
         val rows = pads.rows.ifEmpty { return@BoxWithConstraints }
         val rh = ((maxHeight - scenesH - 8.dp - GAP * (rows.size - 1)) / rows.size).coerceAtLeast(24.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GAP)) {
-                // row heads: the number (tap: select the track) and Mute
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
-                    rows.forEach { r -> RowHead(r, rh, r.track == pads.selected.track, core) }
+                    rows.forEach { r ->
+                        // the core names a mix row "Engine · Sound"; the head shows the engine under the sound's name
+                        val engine = mix.rows.getOrNull(r.track - 1)?.name?.takeIf { " · " in it }?.substringBefore(" · ").orEmpty()
+                        RowHead(r, rh, r.track == pads.selected.track, engine, core)
+                    }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight().horizontalScroll(scroll)) {
                     Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
                         rows.forEach { r ->
                             Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
                                 r.entries.forEachIndexed { i, e ->
-                                    Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = select, pads = pads)
+                                    Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads)
                                 }
                             }
                         }
                     }
                 }
             }
-            // scenes: Store, sixteen in a pan, Select
+            // scenes: Store, then all sixteen
             Box(Modifier.fillMaxWidth().height(scenesH)) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically) {
-                    Key({ store = !store; if (store) select = false }, "Store scene", width = 56.dp, height = scenesH, minTarget = scenesH, on = store,
-                        role = Role.Switch, state = if (store) "On: tap a scene to store what plays now" else "Off") { fg -> KeyLabel("Store", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
-                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(GAP)) {
-                        pads.scenes.forEachIndexed { i, s ->
-                            val label = "Scene ${i + 1}" + if (!s.stored) ", empty" else if (s.current) ", current" else ""
-                            Box(
-                                Modifier.width(34.dp).height(scenesH)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (s.current) Tok.lifted else if (s.stored) Tok.control else Tok.well)
-                                    .drawBehind { if (s.current) drawRoundRect(Tok.text2Raised, size = size, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(1.5.dp.toPx())) }
-                                    .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = label }
-                                    .pointerInput(i, store, s.stored) {
-                                        detectTapGestures {
-                                            when {
-                                                store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis(); notice = null }   // a kept scene: ask first
-                                                store -> { core.send(Intent.SceneStore(i)); store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) }
-                                                s.stored -> core.send(Intent.SceneRecall(i))
-                                                else -> notice = "Scene ${i + 1} is empty. Tap Store, then a scene, to keep what plays now."
-                                            }
+                    Key({ store = !store }, "Store scene", width = HEAD_W, height = scenesH, minTarget = scenesH, on = store,
+                        role = Role.Switch, state = if (store) "On: tap a scene to store what plays now" else "Off") { fg -> KeyLabel("Store scene", fg) }
+                    Spacer(Modifier.width(2.dp))
+                    pads.scenes.forEachIndexed { i, s ->
+                        val label = "Scene ${i + 1}" + if (!s.stored) ", empty" else if (s.current) ", current" else ""
+                        Box(
+                            Modifier.weight(1f).height(scenesH)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (s.current) Tok.primaryTop else if (s.stored) Tok.control else Tok.well)
+                                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = label }
+                                .pointerInput(i, store, s.stored) {
+                                    detectTapGestures {
+                                        when {
+                                            store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis(); notice = null }   // a kept scene: ask first
+                                            store -> { core.send(Intent.SceneStore(i)); store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) }
+                                            s.stored -> core.send(Intent.SceneRecall(i))
+                                            else -> notice = "Scene ${i + 1} is empty. Tap Store scene, then a scene, to keep what plays now."
                                         }
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) { BasicText("${i + 1}", style = LupeType.key.copy(fontSize = 13.sp, color = if (s.stored) Tok.text else Tok.text2)) }
-                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) { BasicText("${i + 1}", style = LupeType.key.copy(color = if (s.current) Tok.onColour else if (s.stored) Tok.text else Tok.text2)) }
                     }
-                    Key({ select = !select; if (select) store = false }, "Select pad for the editor", width = 64.dp, height = scenesH, minTarget = scenesH, on = select,
-                        role = Role.Switch, state = if (select) "On: a pad tap picks it and launches nothing" else "Off") { fg -> KeyLabel("Select", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
                 }
                 // Store over a kept scene: a red-outlined row naming it, Cancel beside it; a tap ignores the first 0.4 s
                 LupeCrossfade(confirmScene, Modifier.fillMaxSize()) { c ->
@@ -154,8 +154,8 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                 .pointerInput(c, confirmAt) { detectTapGestures { if (System.currentTimeMillis() - confirmAt > 400) { core.send(Intent.SceneStore(c, confirmed = true)); confirmScene = null; store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) } } }
                                 .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.CenterStart,
-                        ) { BasicText(words, style = LupeType.key.copy(fontSize = 13.sp), maxLines = 1) }
-                        Key({ confirmScene = null }, "Cancel", width = 72.dp, height = scenesH, minTarget = scenesH) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                        ) { BasicText(words, style = LupeType.key, maxLines = 1) }
+                        Key({ confirmScene = null }, "Cancel", width = 88.dp, height = scenesH, minTarget = scenesH) { fg -> KeyLabel("Cancel", fg) }
                     }
                 }
                 // a refusal shows over the scenes until dismissed
@@ -173,28 +173,56 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     }
 }
 
+private val HEAD_W = 132.dp   // the track head: the "pick a sound without tiny buttons" target (board 74)
+private val MUTE_W = 54.dp
+
+/**
+ * A track's head, 132 dp wide: its number in the track's colour, the sound's name, the engine with ⌄ under it. Tap: select the track (the
+ * editor and the sound knobs follow). Hold, or tap the engine line: that track's Sounds. Then MUTE, 54 dp wide, the word on it, white when muted.
+ */
 @Composable
-private fun RowHead(r: PadRow, h: Dp, selected: Boolean, core: LupeCore) {
+private fun RowHead(r: PadRow, h: Dp, selected: Boolean, engine: String, core: LupeCore) {
     val color = Tok.track[(r.track - 1) % Tok.track.size]
-    val ring = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
+    val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
     val soundsHost = LocalSoundsHost.current
-    Row(Modifier.height(h), horizontalArrangement = Arrangement.spacedBy(GAP)) {
-        Box(
-            Modifier.width(28.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(color)
-                .drawBehind { drawRoundRect(Tok.text.copy(alpha = ring.value), cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(2.dp.toPx() * 2)) }
-                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Track ${r.track}, ${r.name}"; stateDescription = if (selected) "Selected" else "" }
-                // tap: select the track. Held: its Sounds browser (board 66)
-                .pointerInput(r.track) { detectTapGestures(onLongPress = { soundsHost.open(r.track) }, onTap = { core.send(Intent.TrackSelect(r.track)) }) },
-            contentAlignment = Alignment.Center,
-        ) { BasicText("${r.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
+    val haptic = LocalHapticFeedback.current
+    Row(Modifier.height(h), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.width(HEAD_W).fillMaxHeight().clip(RoundedCornerShape(8.dp))
+                .drawBehind {
+                    drawRect(lerp(Tok.control, lerp(Tok.page, color, 0.30f), sel.value))
+                    if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
+                }
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button; contentDescription = "Track ${r.track}, ${r.name}" + if (engine.isNotEmpty()) ", $engine" else ""; stateDescription = if (selected) "Selected" else ""
+                    onClick("Select track") { core.send(Intent.TrackSelect(r.track)); true }
+                    customActions = listOf(CustomAccessibilityAction("Choose a sound for this track") { soundsHost.open(r.track); true })
+                }
+                .pointerInput(r.track) { detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); soundsHost.open(r.track) }, onTap = { core.send(Intent.TrackSelect(r.track)) }) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.width(30.dp).fillMaxHeight().background(color), contentAlignment = Alignment.Center) { BasicText("${r.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
+            Column(Modifier.padding(start = 8.dp, end = 4.dp), verticalArrangement = Arrangement.Center) {
+                BasicText(r.name, style = LupeType.key.copy(fontSize = 15.sp, lineHeight = 17.sp), maxLines = 1, softWrap = false,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 15.sp, stepSize = 1.sp))
+                // the engine line is the way to the track's sounds without a hold (WCAG 2.5.7)
+                Row(
+                    Modifier.pointerInput(r.track) { detectTapGestures { soundsHost.open(r.track) } },
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    BasicText(engine.ifEmpty { "Sounds" }, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 1)
+                    Chevron(Tok.text2Raised)
+                }
+            }
+        }
         val on = r.muted
         val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
         Box(
-            Modifier.width(28.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
+            Modifier.width(MUTE_W).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
                 .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Mute ${r.name}"; stateDescription = if (on) "Muted" else "Not muted" }
                 .pointerInput(r.track) { detectTapGestures { core.send(Intent.TrackMute(r.track)) } },
             contentAlignment = Alignment.Center,
-        ) { BasicText("M", style = LupeType.label.copy(color = lerp(Tok.text2, Tok.onColour, lit.value))) }
+        ) { BasicText("MUTE", style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit.value))) }
     }
 }
 
@@ -249,7 +277,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     onLongClick("Pad menu") { menuAt = Offset(40f, 20f); true }
                     // every long-press has a non-hold way in (WCAG 2.5.7)
                     customActions = buildList {
-                        if (e.kind == PadKind.Pattern) { add(CustomAccessibilityAction("Edit steps") { core.send(Intent.PadSelect(row.track, idx)); true }); add(CustomAccessibilityAction("Select sound") { core.send(Intent.PadSelectSound(row.track, idx)); true }) }
+                        if (e.kind == PadKind.Pattern) { add(CustomAccessibilityAction("Edit steps") { core.send(Intent.PadSelect(row.track, idx)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); true }); add(CustomAccessibilityAction("Select sound") { core.send(Intent.PadSelectSound(row.track, idx)); true }) }
                         if (empty) add(CustomAccessibilityAction("New pattern") { core.send(Intent.PadNew(row.track, idx)); true })
                         if (!empty) add(CustomAccessibilityAction("Clear pad") { core.send(Intent.PadClear(row.track, idx)); true })
                     }
@@ -323,8 +351,8 @@ private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, pads: PadsState, at: Off
                 when (m) {
                     PadMenuMode.Root -> {
                         if (e.kind == PadKind.Pattern) {
-                            MenuRow("Edit steps", { core.send(Intent.PadSelect(row.track, idx)); close() })
-                            // opens the Sounds browser in the bottom half, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
+                            MenuRow("Edit steps", { core.send(Intent.PadSelect(row.track, idx)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); close() })
+                            // opens the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
                             MenuRow("Select sound", { core.send(Intent.PadSelectSound(row.track, idx)); close(); soundsHost.open(row.track, ('A' + idx).toString()) })
                         }
                         if (e.kind == PadKind.Empty) MenuRow("New pattern", { core.send(Intent.PadNew(row.track, idx)); close() })
@@ -356,24 +384,6 @@ private fun PadMenu(row: PadRow, idx: Int, e: PadEntry, pads: PadsState, at: Off
                     }
                 }
             }
-        }
-    }
-}
-
-/** Bottom full: only the selected track's pads stay up, as a 40 dp strip (board 54). */
-@Composable
-fun PadsStrip(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
-    val row = pads.rows.firstOrNull { it.track == pads.selected.track } ?: return
-    val color = Tok.track[(row.track - 1) % Tok.track.size]
-    Row(modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(GAP)) {
-        Box(
-            Modifier.width(28.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(color)
-                .drawBehind { drawRoundRect(Tok.text, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
-                .semantics(mergeDescendants = true) { contentDescription = "Track ${row.track}, ${row.name}, selected" },
-            contentAlignment = Alignment.Center,
-        ) { BasicText("${row.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
-        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(GAP)) {
-            row.entries.forEachIndexed { i, e -> Pad(row, i, e, 40.dp, selected = pads.selected.entry == i, core = core, selectMode = false, pads = pads) }
         }
     }
 }

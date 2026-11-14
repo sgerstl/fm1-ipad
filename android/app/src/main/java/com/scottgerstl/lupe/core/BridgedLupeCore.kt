@@ -110,7 +110,6 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
         }
         when (intent) {
             is Intent.SetTab -> _shell.value = _shell.value.copy(tab = intent.tab)
-            is Intent.SetDivider -> _shell.value = _shell.value.copy(divider = intent.position)
             else -> scope.launch { LupeNative.intent(lupeJson.encodeToString(Intent.serializer(), intent)) }
         }
     }

@@ -90,10 +90,16 @@ fun MixPage(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.Sta
 private fun Mixer(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val gap = 4.dp
-        val rows = ui.tracks.size.coerceAtLeast(1)
+        // landscape: the six tracks in two columns of three, so each row keeps a long fader and room for its meter and send line
+        val cols = if (maxWidth >= 600.dp) 2 else 1
+        val rows = ((ui.tracks.size + cols - 1) / cols).coerceAtLeast(1)
         val rh = ((maxHeight - gap * (rows - 1)) / rows).coerceAtLeast(36.dp)
-        val roomy = rh >= 72.dp      // top only: the meter and the send line show
-        Column(verticalArrangement = Arrangement.spacedBy(gap)) { ui.tracks.forEach { t -> TrackRow(t, rh, roomy, actions, meters) } }
+        val roomy = rh >= 64.dp      // the meter and the send line show
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ui.tracks.chunked(rows).forEach { col ->
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) { col.forEach { t -> TrackRow(t, rh, roomy, actions, meters) } }
+            }
+        }
     }
 }
 
@@ -243,7 +249,7 @@ private fun MenuSlide(label: String, text: String, raw: Int, name: String, bipol
 /** Delay, Reverb, Chorus, Global (board 65, decision 25): the four dials and the card's settings, white because they are shared. No graph. */
 @Composable
 private fun BusPage(ui: MixUi, p: Int, actions: MixActions) {
-    // the graph takes what the four controls and the settings under them leave (none at split if nothing is), so they stay in reach; the page scrolls if they still don't fit
+    // the four dials and the card's settings; the page scrolls if they don't fit the sheet
     BoxWithConstraints(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         BasicText("Shared by every track", Modifier.padding(horizontal = 4.dp), style = LupeType.small.copy(fontSize = 12.sp))

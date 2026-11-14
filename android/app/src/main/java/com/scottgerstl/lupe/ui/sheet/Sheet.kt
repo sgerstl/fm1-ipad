@@ -62,8 +62,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 
-enum class SheetKind { Projects, Settings }
+enum class SheetKind { Projects, Settings, Mix }
 
 /** Which sheet is up. The FM-1 key's menu sets it; [LupeSheetLayer] draws it. */
 @Stable
@@ -83,7 +86,14 @@ val LocalSheetHost = staticCompositionLocalOf { SheetHost() }
  * title, ✕, and scrolling content, and is a pane of its own for TalkBack.
  */
 @Composable
-fun LupeSheet(visible: Boolean, title: String, onDismiss: () -> Unit, modifier: Modifier = Modifier, scroll: androidx.compose.foundation.ScrollState = rememberScrollState(), content: @Composable ColumnScope.() -> Unit) {
+fun LupeSheet(
+    visible: Boolean, title: String, onDismiss: () -> Unit, modifier: Modifier = Modifier, scroll: androidx.compose.foundation.ScrollState = rememberScrollState(),
+    /** A sheet whose content lays itself out in a fixed height (Mix, Sounds) instead of scrolling as a list; it gets this much, up to the sheet's limit. */
+    fixed: androidx.compose.ui.unit.Dp? = null,
+    /** Off for content that carries its own heading and Done (the Sounds browser): only the grab handle shows. */
+    showTitle: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val reduce = LocalReduceMotion.current
     val t = animatedFloat(if (visible) 1f else 0f, if (visible) Dur.PANEL else Dur.EXIT, if (visible) EaseOut else EaseIn)
     if (!visible && t.value <= 0.001f) return
@@ -93,7 +103,7 @@ fun LupeSheet(visible: Boolean, title: String, onDismiss: () -> Unit, modifier: 
     LaunchedEffect(visible) { if (visible) drag.snapTo(0f) }
     val density = LocalDensity.current
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val maxSheet = maxHeight * 0.86f
+        val maxSheet = maxHeight * 0.92f   // landscape: the screen is short, so the sheet takes nearly all of it
         // the scrim: what's behind is dimmed and can't be touched
         Box(
             Modifier.fillMaxSize().graphicsLayer { alpha = t.value }.background(Color.Black.copy(alpha = 0.55f))
@@ -112,7 +122,7 @@ fun LupeSheet(visible: Boolean, title: String, onDismiss: () -> Unit, modifier: 
                 .background(Tok.panel)
                 .pointerInput(Unit) { detectTapGestures { } }   // taps on the sheet don't reach the scrim
                 .semantics { paneTitle = title; isTraversalGroup = true }
-                .navigationBarsPadding()
+                .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal + androidx.compose.foundation.layout.WindowInsetsSides.Bottom))   // the camera cutout and the gesture bar
                 .imePadding(),   // the keyboard (Rename) lifts the sheet instead of covering its field
         ) {
             // the header: the grab handle, the title and ✕. Dragging it down closes the sheet
@@ -132,7 +142,7 @@ fun LupeSheet(visible: Boolean, title: String, onDismiss: () -> Unit, modifier: 
                 Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
                     Box(Modifier.width(44.dp).height(5.dp).background(Tok.lifted, RoundedCornerShape(3.dp)))
                 }
-                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (showTitle) Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText(title, Modifier.weight(1f).semantics { heading() }, style = LupeType.title)
                     Key(onDismiss, "Close $title", width = 48.dp, height = 40.dp) { fg ->
                         Canvas(Modifier.size(12.dp)) {
@@ -143,7 +153,8 @@ fun LupeSheet(visible: Boolean, title: String, onDismiss: () -> Unit, modifier: 
                     }
                 }
             }
-            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 48.dp), content = content)
+            if (fixed != null) Column(Modifier.fillMaxWidth().height(fixed.coerceAtMost(maxSheet - if (showTitle) 64.dp else 24.dp)).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 8.dp), content = content)
+            else Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 24.dp), content = content)
         }
     }
 }

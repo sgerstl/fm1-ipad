@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import com.scottgerstl.lupe.ui.projects.ProjectsSheet
@@ -38,7 +43,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scottgerstl.lupe.core.LinkPhase
 import com.scottgerstl.lupe.core.LinkState
 import com.scottgerstl.lupe.core.LupeCore
-import com.scottgerstl.lupe.ui.page.FollowFm1Divider
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.EaseIn
 import com.scottgerstl.lupe.ui.theme.EaseOut
@@ -47,7 +51,7 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 
 /**
- * The whole screen (boards 53 and 54): top bar, then the divided body. It only reads the core's areas and
+ * The whole screen in landscape (decision 28, boards 73 and 74): one header line with the tabs in it, a hairline, then the tab's body. It only reads the core's areas and
  * sends intents. The page behind a lost card is read-only and hidden from TalkBack.
  */
 @Composable
@@ -68,9 +72,6 @@ fun LupeShell(core: LupeCore) {
     var lastLink by remember { mutableStateOf(link) }
     if (mode != LinkMode.Normal) lastLink = link
 
-    FollowFm1Divider(shell, core)
-
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val magnifier = remember { MagnifierState() }
     val sheets = remember { SheetHost() }
@@ -79,14 +80,18 @@ fun LupeShell(core: LupeCore) {
     Box(Modifier.fillMaxSize().background(Tok.page)) {
       CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost) {
         Column(
-            Modifier.fillMaxSize().statusBarsPadding()
+            Modifier.fillMaxSize()
                 .greyedBy { grey.value }
                 .then(if (mode != LinkMode.Normal || sheetOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
-            TopBar(top, core, Modifier.padding(top = 0.dp))
-            androidx.compose.foundation.layout.Spacer(Modifier.height(6.dp))
-            // the bottom ~24 dp stays clear for the home gesture; board 53 ends the body 32 dp up
-            ShellBody(shell, core, Modifier.padding(bottom = maxOf(navBottom, 24.dp) + 8.dp))
+            // Landscape (decision 28): the camera cutout and the gesture bar are kept clear by the window's own insets, never fixed numbers.
+            // The status bar is hidden while Lupe runs, so the top inset is the cutout's alone (none, with the camera at the side).
+            val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+            TopBar(top, core, shell.tab, { core.send(com.scottgerstl.lupe.core.Intent.SetTab(it)) },
+                Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Top)).windowInsetsPadding(sides).padding(start = 4.dp, end = 8.dp, top = 4.dp))
+            // the hairline that ends the header runs the full width
+            Box(Modifier.fillMaxWidth().padding(top = 3.dp).height(1.dp).background(Tok.control))
+            ShellBody(shell, core, Modifier.windowInsetsPadding(sides).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp))
         }
       }
 
@@ -98,22 +103,34 @@ fun LupeShell(core: LupeCore) {
         }
 
         if (page.value > 0.001f) {
-            LinkPage(lastLink, core, Modifier.statusBarsPadding().graphicsLayer { alpha = page.value })
+            LinkPage(lastLink, core, Modifier.windowInsetsPadding(WindowInsets.safeDrawing).graphicsLayer { alpha = page.value })
         }
         if (card.value > 0.001f) {
             LinkCard(
                 lastLink,
-                Modifier.statusBarsPadding().padding(top = 52.dp).graphicsLayer {
+                Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 60.dp).graphicsLayer {
                     alpha = card.value
                     if (!reduce) translationY = -(1f - card.value) * 96.dp.toPx()
                 },
             )
         }
         // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
-        CompositionLocalProvider(LocalSheetHost provides sheets) {
+        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost) {
             SettingsSheet(link, fake = core is com.scottgerstl.lupe.core.FakeLupeCore)
             val projects = rememberProjects(core)
             ProjectsSheet(projects.first, projects.second)
+            // Mix is a sheet now (decision 28): the FM-1 going to GLO opens it, and the project menu
+            val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core)
+            val meters = core.meters.collectAsStateWithLifecycle()
+            com.scottgerstl.lupe.ui.sheet.LupeSheet(sheets.open == com.scottgerstl.lupe.ui.sheet.SheetKind.Mix, "Mix", { sheets.close() }, fixed = 300.dp) {
+                com.scottgerstl.lupe.ui.mix.MixPage(mix.first, mix.second, meters)
+            }
+            // Sounds: for a track (its head on Pads, or SAVE on the FM-1) or one pad's own sound. The browser has its own heading and Done.
+            var lastRequest by remember { mutableStateOf(soundsHost.request) }
+            soundsHost.request?.let { lastRequest = it }
+            com.scottgerstl.lupe.ui.sheet.LupeSheet(soundsHost.request != null, "Sounds", { soundsHost.close() }, fixed = 320.dp, showTitle = false) {
+                lastRequest?.let { com.scottgerstl.lupe.ui.sounds.SoundsBrowser(core, it, { soundsHost.close() }) }
+            }
         }
         // the Magnifier floats over everything, above the finger
         MagnifierHost(magnifier)
