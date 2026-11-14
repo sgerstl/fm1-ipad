@@ -61,16 +61,25 @@ struct RadialMenu: View {
 
     struct Spot { var edgeX: CGFloat, cy: CGFloat, left: Bool, node: CGPoint, foot: CGPoint }
 
-    /// Which side the arc opens on: away from the playing hand where there's room, else the other side.
+    /// How far out the middle choice's near edge can sit on that side: `near`, or less where the screen's edge is closer,
+    /// down to `minNear` (the rim then still clears the hub).
+    static let minNear: CGFloat = hub + stalk
+    static func room(_ x: CGFloat, _ w: CGFloat, left: Bool) -> CGFloat {
+        left ? x - 8 - itemW : w - 8 - itemW - x
+    }
+    /// Which side the arc opens on (Scott, 2026-11-14): always away from the playing hand (Settings › Handedness), left
+    /// of the finger for the right hand, wherever the press is; the other side only when the choices can't fit there.
     static func opensLeft(_ x: CGFloat, _ w: CGFloat, hand: Handedness) -> Bool {
-        let reach = near + itemW + 8
-        let fitsLeft = x - reach >= 0, fitsRight = x + reach <= w
-        return hand == .right ? (fitsLeft || !fitsRight) : !(fitsRight || !fitsLeft)
+        let away = hand == .right
+        if room(x, w, left: away) >= minNear { return away }
+        if room(x, w, left: !away) >= minNear { return !away }
+        return room(x, w, left: true) >= room(x, w, left: false)
     }
 
     /// The curve's centre: level with the arc's middle, `bow − near` behind the finger (on the side away from the choices).
-    static func centre(finger: CGPoint, mid: CGFloat, left: Bool) -> CGPoint {
-        CGPoint(x: left ? finger.x - near + bow : finger.x + near - bow, y: mid)
+    static func centre(finger: CGPoint, mid: CGFloat, left: Bool, w: CGFloat) -> CGPoint {
+        let n = max(minNear, min(near, room(finger.x, w, left: left)))      // closer in where the edge is near
+        return CGPoint(x: left ? finger.x - n + bow : finger.x + n - bow, y: mid)
     }
 
     /// The choice at position `p` on the arc (0 the middle, ±2 its ends; between whole choices while the wheel turns):
@@ -132,7 +141,7 @@ struct RadialMenu: View {
             // each choice's place on the arc, and how much of it shows: whole within the arc, fading past its ends
             let pos: [Double] = (0..<n).map { Double($0) - tn - Double(visible - 1) / 2 }
             // the shallow curve's centre, far behind the finger, level with the arc's middle
-            let centre = Self.centre(finger: at, mid: mid, left: left)
+            let centre = Self.centre(finger: at, mid: mid, left: left, w: layer.width)
             let spots = pos.map { Self.spot(p: $0, centre: centre, left: left, w: layer.width) }
             let seen: [Double] = pos.map { p in
                 guard wheel else { return 1 }
@@ -146,6 +155,22 @@ struct RadialMenu: View {
                     .accessibilityHidden(true)
                 Canvas { ctx, _ in
                     let c = at
+                    // a soft black field behind the choices and stalks, following the arc, so the pads under the menu stop
+                    // competing (Scott, 2026-11-14): 70 %, feathered by a blur, faded in with the menu
+                    do {
+                        let reachY = CGFloat(visible - 1) / 2 * Self.step + Self.itemH / 2 + (wheel ? Self.arrowGap + Self.arrowH : 0) + 14
+                        let r0 = Self.rim - 16, r1 = Self.bow + Self.itemW + 16
+                        let a0 = asin(min(1, reachY / r0)) * 180 / .pi, a1 = asin(min(1, reachY / r1)) * 180 / .pi
+                        let base = left ? 180.0 : 0.0
+                        var field = Path()
+                        field.addArc(center: centre, radius: r1, startAngle: .degrees(base - a1), endAngle: .degrees(base + a1), clockwise: false)
+                        field.addArc(center: centre, radius: r0, startAngle: .degrees(base + a0), endAngle: .degrees(base - a0), clockwise: true)
+                        field.closeSubpath()
+                        ctx.drawLayer { l in
+                            l.addFilter(.blur(radius: 18))
+                            l.fill(field, with: .color(.black.opacity(0.7 * fade)))
+                        }
+                    }
                     let s = reduceMotion ? 1 : Self.hubScale(min(1, e / 460), spring: Labs.menuSpring.value / 100)
                     let hubA = reduceMotion ? fade : 1
                     let r = Self.hub * s
