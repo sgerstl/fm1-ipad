@@ -2,10 +2,10 @@ import SwiftUI
 
 // The phone's hold menu (design/boards/radial-menu.html; Android's HoldMenuHost, Scott 2026-11-14, decisions 31 and 36):
 // the iPad's and iPhone's options, drawn as a wheel. A filled circle in the track's colour at about 45 % over the page
-// grows under the finger (64 pt, an elastic grow-in: Labs › Hold menu spring); round it a thin rim, the wheel, linked
-// back to the hub by one spoke level with the finger (Scott's option A, 2026-11-14), and on a
-// short arc beyond the rim up to five choices, each on its own 22 pt stalk from the rim, so every stalk is the same short
-// length. More than five: a drag turns the wheel and the others roll into the arc along the curve, fading as they near
+// grows under the finger (64 pt, an elastic grow-in: Labs › Hold menu spring); beside it a thin rim on a shallow curve
+// (nearly vertical, a gentle bow: Scott, 2026-11-14), and on that curve
+// up to five choices, each on its own 22 pt stalk from the rim, so every stalk is the same short length. More than five,
+// a small triangle past either end says there are more that way, and a drag turns the wheel and the others roll into the arc along the curve, fading as they near
 // its ends; it opens with the first choice at the arc's top and settles on a choice when the finger lifts. Five or fewer
 // are just the arc. The arc stays on screen under the header and flips side near an edge (Settings › Handedness). The
 // page dims and a tap outside closes. A choice that loses work asks once more in place (red outline, its words naming
@@ -44,9 +44,14 @@ struct RadialMenu: View {
     static let itemW: CGFloat = 200, itemH: CGFloat = 48, step: CGFloat = 56, hub: CGFloat = 32
     /// The stalks (decision 36): every one 22 pt, from the rim to the choice's near edge.
     static let stalk: CGFloat = 22
-    /// The arc the choices' near edges sit on: five choices 56 apart fit it within about ±48° of level.
-    static let arc: CGFloat = 150
-    static var rim: CGFloat { arc - stalk }
+    /// The choices' curve (Scott, 2026-11-14, after cbdc2ad: shallower, nearly vertical with a gentle bow): their near
+    /// edges on a circle of radius `bow` centred far behind the finger, the middle choice's `near` out from the finger.
+    /// Across five choices (±112 pt) the ends come in 16 pt.
+    static let bow: CGFloat = 400, near: CGFloat = 76
+    /// The rim the stalks start from: the same curve 22 pt in, so it clears the hub (32) by 22 at the middle.
+    static var rim: CGFloat { bow - stalk }
+    /// The end triangles (more choices beyond): 10 wide, 7 tall, this far past the end choice's edge.
+    static let arrowW: CGFloat = 10, arrowH: CGFloat = 7, arrowGap: CGFloat = 8
     /// Choices in the arc at once.
     static let inView = 5
     /// How long a turn takes to settle (the board's ease-out).
@@ -58,29 +63,34 @@ struct RadialMenu: View {
 
     /// Which side the arc opens on: away from the playing hand where there's room, else the other side.
     static func opensLeft(_ x: CGFloat, _ w: CGFloat, hand: Handedness) -> Bool {
-        let reach = arc + itemW + 8
+        let reach = near + itemW + 8
         let fitsLeft = x - reach >= 0, fitsRight = x + reach <= w
         return hand == .right ? (fitsLeft || !fitsRight) : !(fitsRight || !fitsLeft)
     }
 
+    /// The curve's centre: level with the arc's middle, `bow − near` behind the finger (on the side away from the choices).
+    static func centre(finger: CGPoint, mid: CGFloat, left: Bool) -> CGPoint {
+        CGPoint(x: left ? finger.x - near + bow : finger.x + near - bow, y: mid)
+    }
+
     /// The choice at position `p` on the arc (0 the middle, ±2 its ends; between whole choices while the wheel turns):
-    /// its centre height, its near edge where that height meets the arc, the node there, and the stalk's foot 22 pt in
-    /// toward the finger, on the rim.
-    static func spot(p: Double, finger: CGPoint, mid: CGFloat, left: Bool, w: CGFloat) -> Spot {
-        let cy = mid + CGFloat(p) * step
-        let dy = cy - finger.y
-        let dx = sqrt(max(0, arc * arc - dy * dy))
-        var node = CGPoint(x: left ? finger.x - dx : finger.x + dx, y: cy)
+    /// its centre height, its near edge where that height meets the curve, the node there, and the stalk's foot 22 pt
+    /// in toward the curve's centre, on the rim.
+    static func spot(p: Double, centre c: CGPoint, left: Bool, w: CGFloat) -> Spot {
+        let cy = c.y + CGFloat(p) * step
+        let dy = cy - c.y
+        let dx = sqrt(max(0, bow * bow - dy * dy))
+        var node = CGPoint(x: left ? c.x - dx : c.x + dx, y: cy)
         node.x = left ? max(8 + itemW, node.x) : min(w - 8 - itemW, node.x)        // kept on screen sideways
-        let vx = node.x - finger.x, vy = node.y - finger.y, len = max(1, sqrt(vx * vx + vy * vy))
+        let vx = node.x - c.x, vy = node.y - c.y, len = max(1, sqrt(vx * vx + vy * vy))
         let foot = CGPoint(x: node.x - vx / len * stalk, y: node.y - vy / len * stalk)
         return Spot(edgeX: node.x, cy: cy, left: left, node: node, foot: foot)
     }
 
     /// The arc's middle height: level with the finger, moved only as far as keeps the whole arc under the header and
     /// above the foot.
-    static func mid(_ y: CGFloat, shown n: Int, _ h: CGFloat) -> CGFloat {
-        let half = CGFloat(n - 1) / 2 * step + itemH / 2
+    static func mid(_ y: CGFloat, shown n: Int, _ h: CGFloat, arrows: Bool) -> CGFloat {
+        let half = CGFloat(n - 1) / 2 * step + itemH / 2 + (arrows ? arrowGap + arrowH : 0)
         return min(max(y, headerClear + half), h - 16 - half)
     }
 
@@ -113,7 +123,7 @@ struct RadialMenu: View {
         let visible = min(n, Self.inView)
         let most = Double(max(0, n - Self.inView))
         let left = Self.opensLeft(at.x, layer.width, hand: hand)
-        let mid = Self.mid(at.y, shown: visible, layer.height)
+        let mid = Self.mid(at.y, shown: visible, layer.height, arrows: wheel)
         TimelineView(.animation) { tl in
             // ms since it opened, at the Labs speed
             let e = tl.date.timeIntervalSince(start) * 1000 * Labs.menuSpeed.value / 100
@@ -121,9 +131,9 @@ struct RadialMenu: View {
             let tn = wheel ? turn(tl.date) : 0
             // each choice's place on the arc, and how much of it shows: whole within the arc, fading past its ends
             let pos: [Double] = (0..<n).map { Double($0) - tn - Double(visible - 1) / 2 }
-            // the arc and its rim centre on the finger's x and the arc's middle (level with the finger unless the screen's edge moved it)
-            let centre = CGPoint(x: at.x, y: mid)
-            let spots = pos.map { Self.spot(p: $0, finger: centre, mid: mid, left: left, w: layer.width) }
+            // the shallow curve's centre, far behind the finger, level with the arc's middle
+            let centre = Self.centre(finger: at, mid: mid, left: left)
+            let spots = pos.map { Self.spot(p: $0, centre: centre, left: left, w: layer.width) }
             let seen: [Double] = pos.map { p in
                 guard wheel else { return 1 }
                 return min(1, max(0, 1 - (abs(p) - 2) / 0.8))
@@ -143,24 +153,35 @@ struct RadialMenu: View {
                     ctx.fill(circle, with: .color(SelectionTint.fill(tint ?? 0, percent: 45).opacity(tint == nil ? 0 : hubA)))
                     if tint == nil { ctx.fill(circle, with: .color(Theme.control.opacity(hubA))) }
                     ctx.stroke(circle, with: .color(colour.opacity(hubA)), lineWidth: 1.5)
-                    // the wheel: a thin rim round the arc's centre, drawing round as the menu opens, and one spoke from the hub
-                    // to the rim's middle (Scott's option A: the rim links the stalks back to the hub)
+                    // the wheel's rim: the choices' shallow curve 22 pt in, drawing out from its middle as the menu opens; on a
+                    // wheel a small triangle past each end in the track colour while there are choices beyond that end
                     let rimP = reduceMotion ? 1 : min(1, max(0, (e - 100) / 260))
                     if rimP > 0 {
-                        let rr = Self.rim * (reduceMotion ? 1 : 0.9 + 0.1 * rimP)
-                        let base = left ? 180.0 : 0.0
                         let ink = colour.opacity(0.55 * (reduceMotion ? fade : 1))
+                        let reachY = CGFloat(visible - 1) / 2 * Self.step + Self.itemH / 2
+                        let half = asin(min(1, reachY / Self.rim)) * 180 / .pi
+                        let base = left ? 180.0 : 0.0
                         var rimPath = Path()
-                        rimPath.addArc(center: centre, radius: rr, startAngle: .degrees(base - 70 * rimP), endAngle: .degrees(base + 70 * rimP), clockwise: false)
+                        rimPath.addArc(center: centre, radius: Self.rim, startAngle: .degrees(base - half * rimP), endAngle: .degrees(base + half * rimP), clockwise: false)
                         ctx.stroke(rimPath, with: .color(ink), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                        let dir: CGFloat = left ? -1 : 1
-                        let rimMid = CGPoint(x: centre.x + dir * rr, y: centre.y)
-                        let vx = rimMid.x - c.x, vy = rimMid.y - c.y, len = max(1, sqrt(vx * vx + vy * vy))
-                        let from = CGPoint(x: c.x + vx / len * Self.hub, y: c.y + vy / len * Self.hub)
-                        var spoke = Path()
-                        spoke.move(to: from)
-                        spoke.addLine(to: CGPoint(x: from.x + (rimMid.x - from.x) * rimP, y: from.y + (rimMid.y - from.y) * rimP))
-                        ctx.stroke(spoke, with: .color(ink), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        if wheel {
+                            // more above (the wheel turned on from the first) and more below (not yet at the last), each blending out
+                            // as that end is reached
+                            let up = min(1, max(0, tn / 0.5)), down = min(1, max(0, (most - tn) / 0.5))
+                            let ay = reachY + Self.arrowGap
+                            for (sign, a) in [(-1.0, up), (1.0, down)] where a > 0 {
+                                let y = centre.y + CGFloat(sign) * ay
+                                let dx = sqrt(max(0, Self.rim * Self.rim - (y - centre.y) * (y - centre.y)))
+                                let x = left ? centre.x - dx : centre.x + dx
+                                var tri = Path()
+                                let tip = CGPoint(x: x, y: y + CGFloat(sign) * Self.arrowH)
+                                tri.move(to: tip)
+                                tri.addLine(to: CGPoint(x: x - Self.arrowW / 2, y: y))
+                                tri.addLine(to: CGPoint(x: x + Self.arrowW / 2, y: y))
+                                tri.closeSubpath()
+                                ctx.fill(tri, with: .color(colour.opacity(a * rimP * (reduceMotion ? fade : 1))))
+                            }
+                        }
                     }
                     for (k, sp) in spots.enumerated() where seen[k] > 0 {
                         let d0 = 160 + Double(min(max(0, k - Int(tn)), 7)) * 30
