@@ -164,6 +164,10 @@ Built; tests pass and the APK builds. **Seen on my emulator with the fake core:*
 | 72 | LFO with Play running; turn RATE, WAVE, FADE | The wave scrolls at its real rate with a dot at now; right after Play, FADE ramps the wave in from flat | – | ☐ pass ☐ fail: |
 | 73 | LFO 2: SYNC to 1/4, POLARITY to UNI; then back to LFO | Synced, the wave keeps the song's pace and the caption reads "1/4 at 120 BPM"; UNI sits above the line. The LFO page keeps what LFO 2 last showed. TRIG and ENV SYNC change nothing in the picture (see the note) | – | ☐ pass ☐ fail: |
 | 74 | Reduce Motion on (Android: Remove animations), LFO page | The still two seconds from the restart, no scrolling | – | ☐ pass ☐ fail: |
+| 75 | SEL until CHORD, CHORD on (DIA3 or another), on a melodic track | The chord's name top left, "ON ROOT" top right, two octaves of keys from the C below: the chord's notes in the track's colour, its root white. A wide voicing shows three octaves | – | ☐ pass ☐ fail: |
+| 76 | CHORD: turn STRUM up, then DIR through DOWN, UP, ALT (Skiff 2.5, a POLY track) | One bar a note, low at the bottom with its name, each starting later across 0–120 ms; a white line through the starts. UP starts from the top note; ALT draws the downstroke and says "ALT: DOWN, THEN UP" | – | ☐ pass ☐ fail: |
+| 77 | CHORD off; then CHORD on a kit track | Two centred lines: "CHORD KEYS OFF" and how to turn it on; on a kit, "NO CHORDS ON KITS" | – | ☐ pass ☐ fail: |
+| 78 | SEL until FOLLOW: pick a track, change MODE and NOTE; then OFF; then a kit track | "FOLLOWS T3 · SCALE BY ITS HIGH" in track 3's colour over "ITS LIVE CHORD SHOWS ON THE FM-1"; OFF and a kit write their two lines in white | – | ☐ pass ☐ fail: |
 
 Rows 69–74 (2026-11-14): seen on the emulator against the fake core only (VOICE, ALL OPS at algorithm 1 in the 110 dp pop-up, DRIVE, the LFO scrolling); not on a Pixel or a real FM-1. What the live LFO can't know yet: the FM-1 restarts a NOTE-triggered LFO on a fresh phrase and the phone isn't told, so the restart is Play (pulse 0), or when the picture first showed while stopped; TRIG therefore changes nothing here. ENV SYNC is the envelopes' setting (ATTACK, DECAY, RELEASE as note values), not the LFO's, so it doesn't change this picture either. The LFO page only knows SYNC and POLARITY after LFO 2 has been shown once for that track.
 
@@ -192,3 +196,5 @@ The other families, reported, not fixed:
 | SEL | SCALE | CHORD (the chord on the keys, or strummed), FOLLOW: no picture |
 | EDIT | ANALOG's EDIT 1 and EDIT 2; FM6's OPERATOR and ALL OPS (ALL OPS is cramped at this height); DRUM-X's SOUND rows | every other engine's EDIT 1 and 2 (the iPad draws a scope); VOICE and VOICE 2; SAMPLES; SLICES (it was a card of words, not restored); LANES and LANE MIX are tiles only |
 | ARP | ARP, ARP 2 | – |
+
+Rows 75–78 (2026-11-14): the data is P1's 10793da. Seen on the emulator against the fake core: the keys (Cm7) and FOLLOW's line in the followed track's colour. Not seen on a screen: the strum, the three-octave chord, the off and kit lines (covered by unit tests of the arithmetic only). Not on a Pixel or a real FM-1.

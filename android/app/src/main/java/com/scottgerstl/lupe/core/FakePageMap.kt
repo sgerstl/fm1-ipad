@@ -42,8 +42,8 @@ internal object FakePageMap {
         "SLICER" -> listOf(lst("SLICER", onOff), num("PATTERN", 3), lst("RATE", divs, 3), num("DEPTH", 80)) to none
         "DUCK" -> listOf(lst("BY", listOf("OFF", "T1", "T2", "T3")), num("DEPTH", 60), num("RELEASE", 40), null) to none
         "SCALE" -> listOf(lst("ROOT", notes), lst("SCALE", scaleNames, 2), lst("QUANTIZE", onOff, 1), PageControl("TRANSP", "0", 0, -24, 24)) to none
-        "CHORD" -> listOf(lst("CHORD", listOf("OFF", "MAJ", "MIN", "7TH")), lst("VOICING", listOf("CLOSE", "OPEN")), PageControl("STRUM", "0 ms", 0, 0, 127), lst("DIR", listOf("UP", "DOWN"))) to none
-        "FOLLOW" -> listOf(lst("FOLLOW", listOf("OFF", "1", "2", "3")), lst("MODE", listOf("NOTE", "CHORD")), num("NOTE", 0), null) to none
+        "CHORD" -> listOf(lst("CHORD", listOf("OFF", "DIA3", "DIA4", "MIN7"), 3), lst("VOICING", listOf("CLOSE", "OPEN")), num("STRUM", 0, 0, 100), lst("DIR", listOf("DOWN", "UP", "ALT"))) to none
+        "FOLLOW" -> listOf(lst("FOLLOW", listOf("OFF", "T1", "T2", "T3", "T4"), 3), lst("MODE", listOf("KEY", "SCALE", "FIT"), 1), lst("NOTE", listOf("ROOT", "LOW", "HIGH", "LAST"), 2), null) to none
         "EDIT 1" -> listOf(lst("WAVE", listOf("SAW", "SQR", "TRI", "SIN", "PWM")), num("DETUNE", 22), num("MIX", 64), num("NOISE", 6)) to none
         "EDIT 2" -> listOf(num("CUTOFF", 70), num("RESO", 30), null, null) to none
         "VOICE" -> listOf(lst("VOICE", listOf("POLY", "MONO", "LEG", "UNI")), num("GLIDE", 0), lst("GL MODE", listOf("ALWAYS", "LEGATO")), lst("PRIORITY", listOf("LAST", "LOW", "HIGH"))) to none
@@ -95,6 +95,18 @@ internal object FakePageMap {
             "LFO", "LFO 2" -> PageGraph(GraphKind.Lfo, values = if (title == "LFO") v else listOf(80, 0, 0, 0), caption = "3.4 Hz")
             "FX" -> PageGraph(GraphKind.Fx, values = v)
             "DRIVE" -> PageGraph(GraphKind.Drive, values = v.take(3), caption = controls.getOrNull(1)?.value ?: "TUBE", side = "drive ${v[0]} · tone ${v[2]}")
+            "CHORD" -> when {
+                v[0] == 0 -> PageGraph(GraphKind.Chord, title = "CHORD KEYS OFF", caption = "K1 DIA3: IN-KEY CHORDS")
+                else -> PageGraph(GraphKind.Chord, title = "Cm7", notes = if (v[1] == 0) listOf(60, 63, 67, 70) else listOf(48, 67, 70, 75), root = 0,
+                    values = if (v[2] > 0) listOf(v[2].coerceAtMost(100), v[3]) else emptyList(),
+                    caption = if (v[2] <= 0) "ON ROOT" else if (v[3] == 2) "ALT: DOWN, THEN UP" else "${if (v[3] == 1) "UP" else "DOWN"} ${v[2].coerceAtMost(100)} ms")
+            }
+            "FOLLOW" -> when {
+                v[0] == 0 -> PageGraph(GraphKind.Follow, title = "FOLLOW OFF", caption = "K1 A TRACK TO FOLLOW")
+                v[0] == 4 -> PageGraph(GraphKind.Follow, title = "T4 PLAYS A KIT", caption = "NO CHORDS TO FOLLOW", follow = com.scottgerstl.lupe.core.FollowInfo(3, "T4", "KEY", "ROOT", true))
+                else -> { val mode = listOf("KEY", "SCALE", "FIT")[v[1].coerceIn(0, 2)]; val by = if (v[1] == 2) "ROOT" else listOf("ROOT", "LOW", "HIGH", "LAST")[v[2].coerceIn(0, 3)]
+                    PageGraph(GraphKind.Follow, title = "FOLLOWS T${v[0]} · $mode BY ITS $by", caption = "ITS LIVE CHORD SHOWS ON THE FM-1", follow = com.scottgerstl.lupe.core.FollowInfo(v[0] - 1, "T${v[0]}", mode, by, false)) }
+            }
             "SCALE" -> PageGraph(GraphKind.Scale, root = v[0], notes = listOf(0, 2, 3, 5, 7, 8, 10), side = "C minor · ● root")
             "EDIT 1" -> PageGraph(GraphKind.Analog, values = listOf(v[0], v[1], v[2], v[3], 70, 30), caption = "OSC · SAW · 2 voices", side = "FILTER · 710 Hz")
             "EDIT 2" -> PageGraph(GraphKind.Analog, values = listOf(0, 22, 64, 6, v[0], v[1]), caption = "OSC · SAW · 2 voices", side = "FILTER · 710 Hz")

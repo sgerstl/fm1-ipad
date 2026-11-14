@@ -45,6 +45,10 @@ enum class GraphKind {
     @SerialName("duck") Duck,
     /** EDIT › VOICE: values VOICE (POLY MONO LEG UNI), GLIDE, GL MODE, PRIORITY; [PageGraph.caption] the glide as shown. Made on the phone from the page's own knobs. */
     @SerialName("voice") Voice,
+    /** SEL › CHORD: [PageGraph.notes] the MIDI notes a key plays (low to high, at most 4), [PageGraph.root] the pitch class drawn as the root, [PageGraph.title] its name, [PageGraph.caption] "ON ROOT"; strummed, [PageGraph.values] = ms (1…100), dir (0 DOWN, 1 UP, 2 ALT). No notes: title and caption are two lines that say why. */
+    @SerialName("chord") Chord,
+    /** SEL › FOLLOW: [PageGraph.title] and [PageGraph.caption] the two lines, [PageGraph.follow] the track and how (absent when off). */
+    @SerialName("follow") Follow,
 }
 
 /** An FM6 patch as OPERATOR and ALL OPS draw it. [ops] are operators 1…6. */
@@ -79,6 +83,10 @@ data class SoundSheet(
     val note: String? = null,
 )
 
+/** FOLLOW's track (from 0: its colour is the phone's own for that track) and how it follows. [kit]: the followed track plays a kit, no chords to follow. */
+@Serializable
+data class FollowInfo(val track: Int = 0, val trackName: String = "", val mode: String = "", val by: String = "", val kit: Boolean = false)
+
 /**
  * What a graph is drawn from. Which fields a kind reads (the rest stay empty):
  *  - Env: [values] = ATTACK, DECAY, SUSTAIN, RELEASE (0…127)
@@ -108,5 +116,6 @@ data class PageGraph(
     val sheet: SoundSheet? = null,
     /** The track's send into a shared effect (FX › DELAY and REVERB): it scales the picture. 127 when not given. */
     val send: Int = 127,
+    val follow: FollowInfo? = null,
 )
 

@@ -101,8 +101,8 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
         d.drawRoundRect(c, o(x, y), Size(x(w), y(h)), CornerRadius(r.px()))
     fun stroke(c: Color, pts: List<Pair<Float, Float>>, width: Float = 2.5f) =
         d.drawPath(path(pts), c, style = Stroke(width.px(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    fun text(s: String, x: Float, base: Float, c: Color, size: Float = 11f, right: Boolean = false, centre: Boolean = false) {
-        val r = tm.measure(s, LupeType.small.copy(fontSize = size.sp, color = c))
+    fun text(s: String, x: Float, base: Float, c: Color, size: Float = 11f, right: Boolean = false, centre: Boolean = false, strong: Boolean = false) {
+        val r = tm.measure(s, LupeType.small.copy(fontSize = size.sp, color = c, fontWeight = if (strong) androidx.compose.ui.text.font.FontWeight.SemiBold else LupeType.small.fontWeight))
         val ox = x(x) - if (right) r.size.width.toFloat() else if (centre) r.size.width / 2f else 0f
         d.drawText(r, topLeft = Offset(ox, y(base) - r.size.height))
     }
@@ -111,7 +111,7 @@ private class Sp(val d: DrawScope, val tm: TextMeasurer) {
 /** True when the page has a picture to draw. */
 fun hasPicture(g: PageGraph): Boolean = when (g.kind) {
     GraphKind.Env, GraphKind.Lfo, GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog,
-    GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Voice -> true
+    GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Voice, GraphKind.Chord, GraphKind.Follow -> true
     GraphKind.Fm6Op, GraphKind.Fm6All -> g.fm6 != null
     GraphKind.Sound -> g.sheet != null
     else -> false
@@ -126,7 +126,7 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
         GraphKind.Sound -> SoundSheetPicture(g, modifier)
         GraphKind.Env -> EnvGraph(g, colour, hot, modifier)
         GraphKind.Lfo -> LfoGraph(g, colour, modifier)
-        GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog, GraphKind.Voice,
+        GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog, GraphKind.Voice, GraphKind.Chord, GraphKind.Follow,
         GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb -> CanvasGraph(g, colour, hot, modifier)
         else -> Unit
     }
@@ -135,6 +135,8 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
 private fun describe(g: PageGraph): String = when (g.kind) {
     GraphKind.Env -> "Envelope shape. " + listOf("attack", "decay", "sustain", "release").mapIndexed { i, n -> "$n ${g.values.getOrElse(i) { 0 }}" }.joinToString(", ")
     GraphKind.Lfo -> "LFO wave"
+    GraphKind.Chord -> chordSpoken(g)
+    GraphKind.Follow -> listOfNotNull(g.title, g.caption).joinToString(", ").lowercase().replaceFirstChar { it.uppercase() }
     GraphKind.Voice -> VOICE_SAYS.getOrElse(g.values.getOrElse(0) { 0 } and 3) { "" }.lowercase().replaceFirstChar { it.uppercase() } + ". Glide ${if (g.values.getOrElse(1) { 0 } == 0) "off" else g.caption ?: "on"}"
     GraphKind.Drive -> "Drive curve. ${g.caption ?: ""} ${g.side ?: ""}"
     GraphKind.Fx -> "FX sends: " + listOf("drive", "chorus", "delay", "reverb").mapIndexed { i, n -> "$n ${g.values.getOrElse(i) { 0 }}" }.joinToString(", ")
@@ -213,6 +215,8 @@ private fun CanvasGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifie
         val s = Sp(this, tm)
         when (g.kind) {
             GraphKind.Voice -> drawVoice(s, g, colour)
+            GraphKind.Chord -> drawChord(s, g, colour)
+            GraphKind.Follow -> drawTwoLines(s, g.title, g.caption, g.follow?.takeIf { !it.kit }?.let { trackColour(it.track + 1) } ?: Tok.text)
             GraphKind.Drive -> drawDrive(s, g, colour)
             GraphKind.Fx -> drawFx(s, g, colour)
             GraphKind.Scale -> drawScale(s, g, colour)
@@ -362,6 +366,63 @@ private fun drawScale(s: Sp, g: PageGraph, c: Color) {
         s.rect(Tok.page, x - 1.5f, top, kw * 0.6f + 3f, hh * 0.58f + 3f, 4f)
         s.rect(if (on) c else Tok.well, x, top, kw * 0.6f, hh * 0.58f, 3f)
         if (n == g.root) s.text("●", x + kw * 0.3f - 3f, top + hh * 0.58f - 6f, Tok.onColour, 10f)
+    }
+}
+
+// ---- SEL › CHORD and FOLLOW (ui_graph.c graph_chord, graph_strum, graph_follow; the iPad's ChordDrawing)
+
+private val BLACK_KEY = booleanArrayOf(false, true, false, true, false, false, true, false, true, false, true, false)
+private fun noteName(n: Int) = NAMES[((n % 12) + 12) % 12] + (n / 12 - 1)
+
+/** What the picture says aloud: the chord and its notes, how it is strummed, or the two lines that say why there is none. */
+internal fun chordSpoken(g: PageGraph): String {
+    if (g.notes.isEmpty()) return listOfNotNull(g.title, g.caption).joinToString(", ").lowercase().replaceFirstChar { it.uppercase() }
+    val notes = g.notes.joinToString(", ") { noteName(it).replace("#", " sharp ") }
+    val ms = g.values.getOrNull(0) ?: return "${g.title ?: "Chord"}, $notes"
+    val how = when (g.values.getOrElse(1) { 0 }) { 2 -> "down, then up, alternating"; 1 -> "up"; else -> "down" }
+    return "${g.title ?: "Chord"}, strummed $how over $ms milliseconds, $notes"
+}
+
+/** When each note of a strummed chord starts, in ms, by its place in [n] notes (low first): DOWN and ALT play low to high, UP high to low. */
+internal fun strumStart(i: Int, n: Int, ms: Int, dir: Int): Int { val o = if (dir == 1) n - 1 - i else i; return if (n > 1) ms * o / (n - 1) else 0 }
+
+/** How many keys the chord's picture shows, from the C below its lowest note: two octaves, three for a wide chord. */
+internal fun chordKeys(notes: List<Int>): Pair<Int, Int> { val lo = notes.first() - notes.first().mod(12); return lo to if (notes.last() - lo < 24) 24 else 36 }
+
+/** Where there's nothing to draw: two centred lines that say why (Skiff's panel_note). */
+private fun drawTwoLines(s: Sp, a: String?, b: String?, first: Color) {
+    a?.let { s.text(it, 120f, 62f, first, 13f, centre = true, strong = true) }
+    b?.let { s.text(it, 120f, 86f, mid, centre = true) }
+}
+
+private fun drawChord(s: Sp, g: PageGraph, c: Color) {
+    val notes = g.notes.take(4)
+    if (notes.isEmpty()) { drawTwoLines(s, g.title, g.caption, Tok.text); return }
+    s.text(g.title ?: "", 14f, 30f, Tok.text, 17f, strong = true)
+    g.caption?.let { s.text(it, 226f, 28f, mid, right = true) }
+    val ms = g.values.getOrNull(0)
+    if (ms != null) {
+        // strummed: a row a note (low at the bottom, named), its bar from when the strum plays it (0…120 ms across), the root white;
+        // the stroke is a line through the starts in the order played. ALT draws the downstroke.
+        val dir = g.values.getOrElse(1) { 0 }; val n = notes.size
+        val pitch = min(if (n > 1) 64 / (n - 1) else 0, 20); val th = if (pitch >= 14) 10 else max(4, pitch - 4)
+        s.rect(line, 43f, 34f, 1f, 78f)
+        val starts = arrayOfNulls<Pair<Float, Float>>(n)
+        for (i in 0 until n) {
+            val o = if (dir == 1) n - 1 - i else i
+            val y = (104 - i * pitch - th / 2).toFloat(); val xs = 44f + strumStart(i, n, ms, dir) * 182 / 120
+            if (th >= 8 || i % 2 == 0) s.text(noteName(notes[i]), 12f, y + th + 3f, mid, 10f)
+            s.rect(if (notes[i].mod(12) == g.root) Tok.text else c, xs, y, 226f - xs, th.toFloat(), 3f)
+            starts[o] = xs to (y + th / 2f)
+        }
+        if (n > 1) s.stroke(Tok.text, starts.filterNotNull(), 1.5f)
+        return
+    }
+    val (lo, cnt) = chordKeys(notes); val w = 216 / cnt
+    for (i in 0 until cnt) {
+        val n = lo + i
+        val col = if (n !in notes) Tok.lifted else if (n.mod(12) == g.root) Tok.text else c
+        s.rect(col, (13 + i * w).toFloat(), if (BLACK_KEY[n.mod(12)]) 40f else 66f, (w - 2).toFloat(), 48f, if (w > 6) 3f else 2f)
     }
 }
 

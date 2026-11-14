@@ -146,7 +146,7 @@ private fun FakeMenu(core: FakeLupeCore, close: () -> Unit) {
     MenuDivider()
     MenuHeading("Fake core (no FM-1)")
     // step through a family's pages as the FM-1's key would (the phone has no page row any more): for looking at each page's picture
-    for (fam in listOf("FX", "LFO", "EDIT")) MenuRow("$fam: next page", { val p = core.page.value; val same = p.family == fam; val at = p.pages.indexOfFirst { it.index == p.page }
+    for (fam in listOf("FX", "LFO", "EDIT", "SEL")) MenuRow("$fam: next page", { val p = core.page.value; val same = p.family == fam; val at = p.pages.indexOfFirst { it.index == p.page }
         core.send(com.scottgerstl.lupe.core.PickPage(fam, if (same && p.pages.isNotEmpty()) p.pages[(at + 1).mod(p.pages.size)].index else null)); close() })
     core.scenarioNames.forEach { MenuRow("Play “$it”", { core.play(it); close() }) }
     MenuRow("FM-1 knob 1 up (locks CUTOFF)", { core.fm1Knob(1, 1); close() })
