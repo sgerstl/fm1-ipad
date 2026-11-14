@@ -54,6 +54,44 @@ struct PhoneSoundPanel: View {
     /// About a third of the iPhone's landscape width.
     static let width: CGFloat = 320
 
+    /// Pages SoundCard draws with controls of their own rather than four columns.
+    static func dialPage(_ p: SoundPage, _ session: DeviceSession) -> Bool {
+        if p.title == "MOD", !p.routes.isEmpty { return false }
+        if ["LANES", "LANE MIX"].contains(p.title), !p.picks.isEmpty { return false }
+        if session.dialect == .skiff, ["SOUND", "SAMPLES", "OPERATOR", "ALL OPS"].contains(p.title) { return false }
+        return true
+    }
+
+    /// The knob being turned (here or on the FM-1): its point lights in the picture.
+    private func hot(_ p: SoundPage) -> Int? {
+        ui.knobGrab.flatMap { g in p.ids.indices.first { p.key($0) == g.id } }
+            ?? marks.key.flatMap { m in p.ids.indices.first { p.key($0) == m } }
+    }
+
+    /// Knob k of the page as a round dial: the FM-1's slide (Settings › Slide to turn), the Magnifier, double tap back.
+    @ViewBuilder private func dial(_ p: SoundPage, _ k: Int) -> some View {
+        if let id = p.ids[safe: k] ?? nil {
+            let sc = p.scope(of: k)
+            let tint = sc == 1 ? Theme.text : Theme.track[session.selectedTrack]
+            let isHot = marks.key == p.key(k)
+            KnobControl(ui: ui, activate: { activate(p) }, column: (k + 1, tint, isHot),
+                        face: { spec, dragging in AnyView(RoundDialFace(spec: spec, tint: tint, hot: isHot || dragging)) }) {
+                var s = KnobSpec.param(session, scope: sc, id: id, slot: k, label: p.knobLabels[safe: k] ?? nil)
+                if SoundCard.deadWhileStrumOff(session, p, k) { s.dead = true; s.spoken += ", does nothing while STRUM is off" }
+                return s
+            }
+        } else {
+            Color.clear.frame(height: RoundDialFace.height).accessibilityHidden(true)
+        }
+    }
+
+    /// Touching a dial makes its page the FM-1's (linked), as a card's column does.
+    private func activate(_ p: SoundPage) -> Bool {
+        let on = SoundCard.onDevice(session, p)
+        if !on { ui.focus(p); if session.screenLinked, ui.followDevice { session.showOnDevice(page: p.fw) } }
+        return !on
+    }
+
     var body: some View {
         let t = session.selectedTrack
         let pages = SoundPage.shown(session, family)
@@ -77,21 +115,40 @@ struct PhoneSoundPanel: View {
                 .accessibilityLabel("Close the \(family.rawValue) pages")
             }
             .padding(.trailing, -8)
-            ScrollView {
+            Group {
                 if let c = current {
-                    SoundCard(session: session, ui: ui, rows: [c], pages: pages, marks: marks)
-                        .environment(\.compactColumns, true)
-                        .environment(\.pageGraphHidden, !graphics)
-                        .environment(\.soundCardBare, true)
-                        .id(c.id)
-                        .transition(.opacity)
+                    if Self.dialPage(c, session) {
+                        // Android's panel (board 75, decisions 25 and 30): four round dials, then the page's picture
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 0) {
+                                ForEach(0..<4, id: \.self) { k in dial(c, k).frame(maxWidth: .infinity) }
+                            }
+                            if graphics, PageGraph.has(c, session) {
+                                PageGraph(session: session, page: c, rows: [c], hot: hot(c), modRoute: .constant(0))
+                                    .padding(6)
+                                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
+                            }
+                        }
+                    } else {
+                        // a page whose four pick from lists (MOD's routes, LANES, SOUND, OPERATOR): its own controls
+                        ScrollView {
+                            SoundCard(session: session, ui: ui, rows: [c], pages: pages, marks: marks)
+                                .environment(\.compactColumns, true)
+                                .environment(\.pageGraphHidden, !graphics)
+                                .environment(\.soundCardBare, true)
+                                .environment(\.soundCardHeaderHidden, true)
+                        }
+                        .scrollIndicators(.hidden)
+                    }
                 } else {
                     Text("T\(t + 1)'s engine has no \(family.rawValue) pages.").font(.lupe(13))
                         .foregroundStyle(Theme.textSecondaryRaised).frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .scrollIndicators(.hidden)
+            .id(current?.id)
+            .transition(.opacity)
             .animation(.easeOut(duration: 0.15), value: current?.id)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 10).padding(.top, 4).padding(.bottom, 8)
         .frame(width: Self.width)
@@ -112,5 +169,44 @@ struct PhoneSoundPanel: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sound panel, \(family.rawValue)")
         .accessibilityAction(.escape) { SoundPanelControl.dismiss(ui, session: session) }
+    }
+}
+
+/// One round dial (Android's RoundDial, board 75): the value inside a 52 pt ring, the label under it. The ring is the
+/// track's colour (white on a shared page) from the start, or the centre on a bipolar value; it goes white while a finger
+/// slides it and while the FM-1 turns it. A dead value dims.
+struct RoundDialFace: View {
+    let spec: KnobSpec
+    let tint: Color
+    let hot: Bool
+    static let ring: CGFloat = 52, height: CGFloat = 74
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Canvas { ctx, sz in
+                    let w: CGFloat = 5, r = sz.width / 2 - w / 2 - 2
+                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                    func arc(_ a: Double, _ b: Double) -> Path {
+                        Path { p in p.addArc(center: c, radius: r, startAngle: .degrees(a), endAngle: .degrees(b), clockwise: false) }
+                    }
+                    let style = StrokeStyle(lineWidth: w, lineCap: .round)
+                    ctx.stroke(arc(135, 405), with: .color(Theme.stepEmpty), style: style)
+                    let f = min(max(spec.fraction, 0), 1), a = 135 + 270 * f
+                    let from = spec.bipolar ? 270.0 : 135.0
+                    if abs(a - from) > 0.5 { ctx.stroke(arc(min(from, a), max(from, a)), with: .color(hot ? Theme.text : tint), style: style) }
+                }
+                Text(spec.shown).font(.lupeNumber(17, .semibold)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .frame(width: Self.ring - 14)
+                    .foregroundStyle(Theme.text)
+            }
+            .frame(width: Self.ring, height: Self.ring)
+            .animation(.easeOut(duration: 0.15), value: hot)
+            Text(spec.label).font(.lupe(11, .medium)).foregroundStyle(Theme.textSecondaryRaised)
+                .lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .opacity(spec.dead ? 0.5 : 1)
+        .frame(maxWidth: .infinity).frame(height: Self.height)
     }
 }

@@ -8,8 +8,8 @@ import SwiftUI
 // waits for the launch point draws its outline as that comes (LaunchTrace), as the pads do. iPhone only.
 
 enum PhoneHeads {
-    /// Android's board 74: a head 132 wide, MUTE 54, 6 between them.
-    static let head: CGFloat = 132, mute: CGFloat = 54, gap: CGFloat = 6
+    /// Board 76 at the iPhone's 874 pt: a head 118 wide, MUTE 48, 4 between them, so eight slots fit beside them.
+    static let head: CGFloat = 118, mute: CGFloat = 48, gap: CGFloat = 4
     static var width: CGFloat { head + gap + mute }
 }
 

@@ -81,6 +81,8 @@ extension EnvironmentValues {
     @Entry var pageGraphHidden = false
     /// A sound card with no surface of its own (the phone's panel is its surface).
     @Entry var soundCardBare = false
+    /// A sound card without its own header line (the phone's panel says the page above it).
+    @Entry var soundCardHeaderHidden = false
 }
 
 enum SoundButtons {

@@ -473,6 +473,7 @@ struct SoundCard: View, Equatable {
     /// The phone's Settings › Show graphics off: dials only (decision 30).
     @Environment(\.pageGraphHidden) private var graphHidden
     @Environment(\.soundCardBare) private var cardBare
+    @Environment(\.soundCardHeaderHidden) private var headerHidden
 
     /// The same pages with the same state objects: nothing to redraw from the parent (what the card shows it
     /// observes itself), so a rebuilt scroll doesn't rebuild every card.
@@ -487,7 +488,7 @@ struct SoundCard: View, Equatable {
         // (what follows the FM-1's screen and the focused page, the LED, the badge, the row keys, the lit edge and
         // the lift, are views of their own: a page change redraws them, not the card's columns and graph, 2026-11-06)
         return VStack(alignment: .leading, spacing: 10) {
-            CardHeader(session: session, ui: ui, rows: rows, pages: pages, marks: marks)
+            if !headerHidden { CardHeader(session: session, ui: ui, rows: rows, pages: pages, marks: marks) }
             if first.title == "MOD", !first.routes.isEmpty {
                 ModColumns(session: session, ui: ui, page: first, route: modRoute(first), marked: marks.key,
                            activate: { touch(first) })

@@ -66,7 +66,7 @@ struct PadsPage: View {
     private var row: Bool { layout == .row }
     private var phone: Bool { layout == .phone }
     /// The phone's sizes (board 40): heads 72, pads 78 × 40, scenes 34, Store 52.
-    static let phoneHead: CGFloat = 72, phonePad: CGFloat = 86, phoneRow: CGFloat = 40, phoneScenes: CGFloat = 34
+    static let phoneGap: CGFloat = 4, phoneHead: CGFloat = 72, phonePad: CGFloat = 86, phoneRow: CGFloat = 40, phoneScenes: CGFloat = 34
     /// The scene row's height at this layout.
     private var sceneH: CGFloat { phone ? Self.phoneScenes : compact ? Self.compactScenes : Self.sceneHeight }
     /// The heads' width: the lane's tag runs behind them.
@@ -171,9 +171,12 @@ struct PadsPage: View {
         let tracks = Array(session.trackIndices)
         let r = rows(size, tracks: tracks.count)
         let cols = columns
-        let gridW = CGFloat(cols) * Self.phonePad + CGFloat(cols - 1) * Self.compactGap
+        // eight slots fill the width beside the heads and MUTE (board 76, 4 pt gaps); more columns pan at that size
+        let avail = size.width - PhoneHeads.width - PhoneHeads.gap
+        let pad = max(56, (avail - 7 * Self.phoneGap) / 8)
+        let gridW = CGFloat(cols) * pad + CGFloat(cols - 1) * Self.phoneGap
         return VStack(alignment: .leading, spacing: r.sceneGap) {
-            HStack(alignment: .top, spacing: 6) {
+            HStack(alignment: .top, spacing: PhoneHeads.gap) {
                 VStack(spacing: r.rowGap) {
                     ForEach(tracks, id: \.self) { k in
                         PhonePadHead(session: session, store: store, ui: ui, track: k,
@@ -184,7 +187,6 @@ struct PadsPage: View {
                 }
                 .frame(width: PhoneHeads.head)
                 PhoneMuteColumn(session: session, store: store, tracks: tracks, rowHeight: r.rowHeight, rowGap: r.rowGap)
-                    .padding(.leading, PhoneHeads.gap - 6)
                 // the columns past the screen's edge: a pan sideways (one finger or two, as the grids since 2026-11-07)
                 ScrollView(.horizontal) {
                     grid(t, tracks, r).frame(width: gridW, height: r.height)
@@ -330,7 +332,7 @@ struct PadsPage: View {
     /// The pads: a row for each of `shown` (every track, or at Max the selected one), the columns sharing the width.
     private func grid(_ t: Int, _ shown: [Int], _ r: Rows) -> some View {
         GeometryReader { g in
-            let cols = columns, gap = compact ? Self.compactGap : Self.gap * 0.5
+            let cols = columns, gap = phone ? Self.phoneGap : compact ? Self.compactGap : Self.gap * 0.5
             let w = (g.size.width - CGFloat(cols - 1) * gap) / CGFloat(cols)
             let cell = CGSize(width: max(40, w), height: r.rowHeight)
             let framed = framedPad(t)
@@ -612,8 +614,9 @@ struct PadsPage: View {
             if short {
                 // a row as tall as a lane head (Half): one line, the letter, the number, the countdown when waiting,
                 // the pass bar along the foot (board 37)
-                HStack(spacing: phone ? 4 : 6) {
+                HStack(spacing: phone ? 3 : 6) {
                     Text(letter).font(.lupe(12, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
+                        .fixedSize()
                     if !title.isEmpty {
                         Text(title).font(.lupeNumber(e.isRest ? 12 : 17, .bold)).monospacedDigit()
                             .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
@@ -622,14 +625,14 @@ struct PadsPage: View {
                     PadMarks(marks: padMarks(e), ink: ink, boxed: false)
                     Spacer(minLength: 0)
                     // the phone (decision 33, Android's pads): the next cue, the passes ×N, n/N while it plays
-                    if phone, let side = phoneSide(e, m, playing: playing, next: next) {
+                    if phone, let side = phoneSide(e, m, playing: playing, next: next) {      // (the slots are about 66 pt)
                         Text(side).font(.lupe(11, .medium)).monospacedDigit()
                             .foregroundStyle(playing && !e.isRest ? ink : Theme.textSecondaryRaised).lineLimit(1)
-                            .fixedSize()
+                            .minimumScaleFactor(0.75).layoutPriority(-1)     // (the letter and the number never give way)
                             .accessibilityHidden(true)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, phone ? 6 : 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { if playing { passBar(t, m, ink: ink).frame(height: 3).padding(.horizontal, 6).padding(.bottom, 4) } }
                 .background { padSurface(playing: playing, on: on, empty: e.isEmpty, rest: e.isRest, colour: colour, radius: rad, raised: !selected, laned: laned && !selected).padding(inset) }

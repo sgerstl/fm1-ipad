@@ -22,6 +22,8 @@ struct RadialMenu: View {
     @State private var confirmAt = Date.distantPast
     @AccessibilityFocusState private var confirmFocused: Bool
 
+    /// Under the header line (48 pt and its hairline), so no choice sits over the tabs.
+    static let headerClear: CGFloat = 56
     static let itemW: CGFloat = 236, itemH: CGFloat = 48, radius: CGFloat = 120, step: CGFloat = 56, hub: CGFloat = 32
 
     private var colour: Color { tint.map { Theme.track[$0] } ?? Theme.text }
@@ -40,7 +42,7 @@ struct RadialMenu: View {
     static func spots(_ x: CGFloat, _ y: CGFloat, _ n: Int, _ w: CGFloat, _ h: CGFloat) -> [Spot] {
         let left = x > w - (radius + itemW + 24)
         let lowest = h - 16 - itemH / 2 - CGFloat(n - 1) * step
-        let top = max(8 + itemH / 2, min(lowest, y - CGFloat(n - 1) * step / 2))
+        let top = max(Self.headerClear + itemH / 2, min(lowest, y - CGFloat(n - 1) * step / 2))
         return (0..<n).map { k in
             let cy = top + CGFloat(k) * step, dy = cy - y
             var dx = sqrt(max(0, radius * radius - dy * dy)); if dx <= 0 { dx = 24 }
@@ -132,7 +134,8 @@ struct RadialMenu: View {
                         .multilineTextAlignment(.leading)
                 } else {
                     if let i = item.icon { Image(systemName: i).font(.system(size: 15, weight: .semibold)).frame(width: 20) }
-                    Text(item.title).font(.lupe(17)).lineLimit(1).minimumScaleFactor(0.75)
+                    Text(item.title).font(.lupe(item.title.count > 20 ? 14 : 17)).lineLimit(2).minimumScaleFactor(0.85)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(item.enabled ? Theme.text : Theme.textTertiary)
                 }
                 Spacer(minLength: 0)

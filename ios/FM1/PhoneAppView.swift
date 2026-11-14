@@ -318,7 +318,7 @@ struct PhonePianoRoll: View {
     var body: some View {
         let t = session.tracks[track]
         let rows = PianoRoll.rows(t, keeping: ui.keptRows[track] ?? [])
-        let lane = velocity ? PianoRoll.velocityHeight + 6 : 0
+        let lane = (velocity ? PianoRoll.velocityHeight + 6 : 0) + (panelRoom > 0 ? 10 : 0)
         let h = height - lane
         let inner = { var m = grid; m.gridHeight = h; return m }()
         VStack(spacing: 6) {
@@ -350,6 +350,22 @@ struct PhonePianoRoll: View {
                     .background { Color.clear.recessed() }
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("Track \(track + 1) steps")
+                }
+                // the sound panel over the grid (decision 35): a scroll indicator under it says how far the steps run on
+                if panelRoom > 0 {
+                    let content = CGFloat(session.stepCount) * grid.stepWidth + panelRoom
+                    GeometryReader { g in
+                        let w = g.size.width, thumb = max(24, w * grid.barWidth / content)
+                        Capsule().fill(Theme.stepEmpty)
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(Theme.textSecondary).frame(width: thumb)
+                                    .offset(x: (w - thumb) * min(1, max(0, offset.x / max(1, content - grid.barWidth))))
+                            }
+                    }
+                    .frame(width: grid.barWidth - panelRoom - 8, height: 4)
+                    .padding(.leading, grid.labelWidth + 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityHidden(true)
                 }
                 if velocity {
                     HStack(spacing: 2) {
