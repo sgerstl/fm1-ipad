@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lupe hold menu</title>
+<!-- Scott, 2026-11-14: a long press grows a filled circle in the muted track colour under the finger (an elastic
+     expansion, overshoot, settle a little larger than the touch), lines radiate from it to the menu items, which sit
+     in rounded rectangles stacked vertically but following the circle's radius. "Futuristic sci-fi, but very usable."
+     A mockup to tune before any app code. Press and hold a pad (or a track head); drag to an item and let go, or let
+     go and tap. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600&display=swap">
+<style>
+:root { --page:#0D0D0F; --well:#111114; --panel:#1A1A1E; --control:#26262B; --lifted:#34343B; --text:#EDEDF0; --text2:#A1A1AA; --text2r:#C4C4CC; --rec:#FF4D4D; --outline:#4A4A52; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #2A2A2E; color: var(--text); font-family: Barlow, sans-serif; padding: 24px; -webkit-user-select: none; user-select: none; }
+h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+.lede { color: var(--text2r); font-size: 14px; max-width: 75ch; line-height: 1.5; margin: 0 0 20px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 16px; font-size: 14px; color: var(--text2r); }
+.controls label { display: flex; align-items: center; gap: 6px; }
+.controls button { font: 600 14px Barlow; color: var(--text); background: var(--control); border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.controls button:focus-visible, .pad:focus-visible, .head:focus-visible, .item:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.phone { position: relative; width: 915px; height: 412px; background: var(--page); border-radius: 28px; outline: 6px solid #3A3A40; overflow: hidden; touch-action: none; max-width: 100%; }
+.row { position: absolute; left: 16px; right: 16px; height: 46px; display: flex; gap: 6px; }
+.head { width: 150px; border-radius: 8px; background: var(--control); display: flex; align-items: center; gap: 10px; overflow: hidden; }
+.head .n { width: 30px; align-self: stretch; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #101012; }
+.head .nm { font-weight: 600; font-size: 15px; line-height: 1.1; }
+.head .en { font-size: 12px; color: var(--text2r); }
+.mute { width: 60px; border-radius: 8px; background: var(--control); display: flex; align-items: center; justify-content: center; font: 600 13px Barlow; color: var(--text2r); }
+.pad { width: 104px; border-radius: 8px; background: var(--control); display: flex; align-items: center; gap: 6px; padding: 0 10px; font: 600 12px Barlow; color: var(--text2r); }
+.pad b { font: 600 20px 'Barlow Condensed'; color: var(--text); }
+.pad.empty { background: var(--well); }
+.topbar { position: absolute; left: 16px; right: 16px; top: 8px; height: 44px; display: flex; align-items: center; gap: 24px; font-weight: 600; font-size: 17px; }
+.topbar .t2 { color: var(--text2); }
+.hair { position: absolute; left: 0; right: 0; top: 56px; height: 1px; background: var(--control); }
+/* the menu layer */
+#layer { position: absolute; inset: 0; pointer-events: none; }
+#layer.open { pointer-events: auto; }
+#scrim { position: absolute; inset: 0; background: rgba(5,5,7,.55); opacity: 0; transition: opacity 180ms ease-out; }
+#layer.open #scrim { opacity: 1; }
+#hub { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; transform: scale(0); }
+#hub::after { content: ''; position: absolute; inset: 22px; border-radius: 50%; background: rgba(237,237,240,.9); opacity: 0; transition: opacity 120ms 260ms; }
+#layer.open #hub::after { opacity: 1; }
+#lines { position: absolute; inset: 0; overflow: visible; }
+#lines line { stroke-width: 1.5; stroke-linecap: round; }
+#lines circle { }
+.item { position: absolute; height: 48px; min-width: 176px; padding: 0 16px 0 18px; border-radius: 12px; background: var(--panel); color: var(--text);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; font: 600 16px Barlow; opacity: 0; transform: translateX(-10px) scale(.96); cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: background 120ms, box-shadow 120ms; }
+.item small { font: 400 12px Barlow; color: var(--text2r); }
+.item.left { transform: translateX(10px) scale(.96); }
+.item.hot { background: var(--lifted); }
+.item.danger { color: #FFB4B4; }
+.item.confirm { box-shadow: inset 0 0 0 2px var(--rec); color: var(--text); background: var(--panel); }
+.note { margin-top: 20px; max-width: 900px; background: #EDEDF0; color: #101012; border-radius: 12px; padding: 18px 22px; font-size: 14px; line-height: 1.5; }
+.note ol { margin: 0; padding-left: 20px; }
+.note li { margin-bottom: 6px; }
+@media (prefers-reduced-motion: reduce) { .item, #hub { transition: opacity 150ms !important; } }
+</style>
+</head>
+<body>
+<h1>The hold menu: a circle under the finger, lines out to roomy items</h1>
+<p class="lede">Press and hold a pad or a track head (about 0.35 s). The circle grows under your finger, the lines run out, the items settle. Drag onto an item and let go to pick it, or let go first and tap. Tap outside, or press Escape, to close. Clear asks again in place.</p>
+<div class="controls">
+  <label>Spring <input id="spring" type="range" min="0" max="100" value="60"></label>
+  <label>Speed <input id="speed" type="range" min="50" max="150" value="100"></label>
+  <label><input id="reduce" type="checkbox"> Reduce motion</label>
+  <button id="replay">Replay at a pad</button>
+</div>
+<div class="phone" id="phone" role="application" aria-label="Lupe Pads, landscape, with the hold menu">
+  <div class="topbar"><span>LUPE TEST ⌄</span><span style="border-bottom:3px solid #EDEDF0;padding-bottom:2px">Pads</span><span class="t2">Edit</span><span class="t2">Timeline</span></div>
+  <div class="hair"></div>
+  <div id="rows"></div>
+  <div id="layer"><div id="scrim"></div><svg id="lines"></svg><div id="hub"></div><div id="items"></div></div>
+</div>
+<div class="note"><ol>
+  <li><b>The circle</b> is the track's colour at about 45 % over the page (the "muted" colour), 64 dp at rest, so it shows round the finger. It grows from nothing past its size (×1.3) and springs back with one small undershoot. The Spring slider sets how much it overshoots; 0 is a plain ease-out. A white dot appears in its centre once it settles: the anchor the lines leave from.</li>
+  <li><b>The lines</b> run from the circle's edge to each item, 1.5 dp in the track's colour, drawing out in turn (30 ms apart), each ending in a small node at the item's edge. The lit item's line goes white.</li>
+  <li><b>The items</b> are stacked one above another, 56 dp apart, but each sits where that height meets a circle of 120 dp around the finger, so the stack bows outwards with the circle. Each is a 48 dp tall rounded rectangle, at least 176 dp wide, with Barlow 16. Near the right edge the menu opens to the left. Items are clamped inside the screen.</li>
+  <li><b>Picking:</b> drag from the hold onto an item and let go (one gesture), or let go and tap. The item under the finger lights (lifted surface) with a tick of haptics on the phone. A destructive item asks again in place (DESIGN.md): it turns into a red-outlined button naming what goes, and ignores taps for 0.4 s.</li>
+  <li><b>Leaving:</b> items and lines fade (120 ms), the circle shrinks to nothing (exits faster than entrances). Reduce motion: everything fades in and out, nothing grows or travels.</li>
+  <li><b>Usable first:</b> every item is at least 48 dp tall with a clear label; the scrim dims the page so the menu reads. TalkBack gets the same items as a plain list (role menu); the drawing is decoration.</li>
+</ol></div>
+
+<script>
+const COL = ['#FF5A36', '#22C3B4', '#FFBF00', '#9580FF', '#FF6FAE', '#A3E635'];
+const NAMES = [['Pd Organ', 'Phase'], ['Pad', 'Fm6'], ['Rave', 'Analog'], ['War Drums', 'Drum'], ['Flute', 'Sample'], ['Soft Kit', 'Drum-X']];
+const PADS = [[], ['57', '58'], ['59', '60', '61', '62'], [], ['53'], ['32', '33', '48', '52']];
+const rows = document.getElementById('rows');
+NAMES.forEach((n, t) => {
+  const r = document.createElement('div'); r.className = 'row'; r.style.top = (66 + t * 52) + 'px';
+  r.innerHTML = `<div class="head" tabindex="0" data-t="${t}" data-kind="head"><span class="n" style="background:${COL[t]}">${t + 1}</span><span><div class="nm">${n[0]}</div><div class="en">${n[1]}</div></span></div><div class="mute">MUTE</div>` +
+    Array.from({ length: 6 }, (_, i) => PADS[t][i] ? `<div class="pad" tabindex="0" data-t="${t}" data-i="${i}" data-kind="pad">${'ABCDEF'[i]} <b>${PADS[t][i]}</b></div>` : `<div class="pad empty" data-t="${t}" data-i="${i}" data-kind="empty"></div>`).join('');
+  rows.appendChild(r);
+});
+
+const MENUS = {
+  pad: (t, i) => [['Edit steps', ''], ['Select sound', NAMES[t][0]], ['Set pattern…', ''], ['Duplicate', 'to the next slot'], ['Clear', '', 'danger']],
+  empty: () => [['New pattern', ''], ['Set pattern…', ''], ['Paste', '']],
+  head: (t) => [['Sounds…', NAMES[t][1]], ['Solo', ''], ['Mute', ''], ['Copy track', ''], ['Clear track…', '', 'danger']],
+};
+
+const phone = document.getElementById('phone'), layer = document.getElementById('layer'), hub = document.getElementById('hub');
+const svg = document.getElementById('lines'), itemsEl = document.getElementById('items');
+let holdTimer = null, open = false, dragging = false, hot = -1, items = [], confirmAt = 0, colour = COL[0];
+const speed = () => document.getElementById('speed').value / 100;
+const reduce = () => document.getElementById('reduce').checked || matchMedia('(prefers-reduced-motion: reduce)').matches;
+const mix = (hex, a) => `color-mix(in srgb, ${hex} ${a}%, #0D0D0F)`;
+
+function spring(el, from, to, ms) {
+  // an elastic scale: past the target, one undershoot, settle (the Spring slider sets the overshoot)
+  const k = document.getElementById('spring').value / 100, over = 1 + 0.35 * k, under = 1 - 0.1 * k;
+  const frames = k > 0 ? [{ transform: `scale(${from})` }, { transform: `scale(${to * over})`, offset: .45 }, { transform: `scale(${to * under})`, offset: .75 }, { transform: `scale(${to})` }]
+    : [{ transform: `scale(${from})` }, { transform: `scale(${to})` }];
+  return el.animate(frames, { duration: ms, easing: k > 0 ? 'cubic-bezier(.2,.8,.3,1)' : 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+}
+
+function openMenu(x, y, kind, t, i) {
+  closeMenu(true);
+  open = true; hot = -1; colour = COL[t];
+  const list = MENUS[kind](t, i);
+  const R = 120, step = 56, n = list.length, w = 200, h = 48;
+  const toLeft = x > 915 - (R + w + 24);
+  layer.classList.add('open');
+  hub.style.left = x + 'px'; hub.style.top = y + 'px'; hub.style.background = mix(colour, 45);
+  hub.style.boxShadow = `0 0 0 1.5px ${colour}`;
+  const s = speed(), rm = reduce();
+  if (rm) { hub.style.transform = 'scale(1)'; hub.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, fill: 'forwards' }); }
+  else spring(hub, 0, 1, 460 / s);
+  svg.innerHTML = ''; itemsEl.innerHTML = ''; items = [];
+  // stacked vertically around the finger's height, each pushed out to where its height meets the circle
+  let top = y - (n - 1) * step / 2;
+  top = Math.min(Math.max(top, 64 + h / 2), 412 - 16 - h / 2 - (n - 1) * step);
+  list.forEach((it, k) => {
+    const cy = top + k * step, dy = cy - y;
+    const dx = Math.sqrt(Math.max(0, R * R - dy * dy)) || 24;
+    const edgeX = toLeft ? x - dx : x + dx;
+    const el = document.createElement('div');
+    el.className = 'item' + (toLeft ? ' left' : '') + (it[2] ? ' danger' : '');
+    el.setAttribute('role', 'menuitem'); el.tabIndex = 0;
+    el.innerHTML = `<span>${it[0]}</span>${it[1] ? `<small>${it[1]}</small>` : ''}`;
+    el.style.top = (cy - h / 2) + 'px';
+    if (toLeft) el.style.right = (915 - edgeX) + 'px'; else el.style.left = edgeX + 'px';
+    el.style.boxShadow = `inset 3px 0 0 ${colour}, inset 0 0 0 1px rgba(255,255,255,.06)`;
+    if (toLeft) el.style.boxShadow = `inset -3px 0 0 ${colour}, inset 0 0 0 1px rgba(255,255,255,.06)`;
+    itemsEl.appendChild(el);
+    // the line: from the circle's edge (32) toward the item's near edge
+    const ang = Math.atan2(cy - y, edgeX - x), sx = x + Math.cos(ang) * 32, sy = y + Math.sin(ang) * 32;
+    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', sx); ln.setAttribute('y1', sy); ln.setAttribute('x2', edgeX); ln.setAttribute('y2', cy); ln.setAttribute('stroke', colour);
+    const len = Math.hypot(edgeX - sx, cy - sy);
+    ln.style.strokeDasharray = len; ln.style.strokeDashoffset = len;
+    const node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    node.setAttribute('cx', edgeX); node.setAttribute('cy', cy); node.setAttribute('r', 3); node.setAttribute('fill', colour); node.style.opacity = 0;
+    svg.appendChild(ln); svg.appendChild(node);
+    const d0 = rm ? 0 : (160 + k * 30) / s;
+    if (rm) { ln.style.strokeDashoffset = 0; ln.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, fill: 'forwards' }); }
+    else ln.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: 180 / s, delay: d0, easing: 'cubic-bezier(.3,.7,.2,1)', fill: 'forwards' });
+    node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, delay: rm ? 0 : d0 + 140 / s, fill: 'forwards' });
+    el.animate([{ opacity: 0, transform: el.style.transform || (toLeft ? 'translateX(10px) scale(.96)' : 'translateX(-10px) scale(.96)') }, { opacity: 1, transform: 'translateX(0) scale(1)' }],
+      { duration: rm ? 150 : 220 / s, delay: rm ? 0 : d0 + 100 / s, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+    el.addEventListener('pointerup', e => { e.stopPropagation(); pick(k); });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') pick(k); });
+    items.push({ el, ln, label: it[0], danger: !!it[2], cy });
+  });
+}
+function setHot(k) {
+  if (k === hot) return;
+  if (hot >= 0 && items[hot]) { items[hot].el.classList.remove('hot'); items[hot].ln.setAttribute('stroke', colour); }
+  hot = k;
+  if (k >= 0) { items[k].el.classList.add('hot'); items[k].ln.setAttribute('stroke', '#EDEDF0'); }
+}
+function pick(k) {
+  const it = items[k]; if (!it) return;
+  if (it.danger && !it.el.classList.contains('confirm')) {
+    it.el.classList.add('confirm'); it.el.innerHTML = `<span>${it.label.replace('…', '')}: erases pattern 62</span>`; confirmAt = performance.now();
+    it.el.style.boxShadow = 'inset 0 0 0 2px var(--rec)';
+    items.forEach((o, j) => { if (j !== k) { o.el.getAnimations().forEach(a => a.commitStyles?.() || 0); o.el.getAnimations().forEach(a => a.cancel()); o.el.animate([{ opacity: 1 }, { opacity: .3 }], { duration: 150, fill: 'forwards' }); o.ln.animate([{ opacity: 1 }, { opacity: .3 }], { duration: 150, fill: 'forwards' }); } });
+    return;
+  }
+  if (it.danger && performance.now() - confirmAt < 400) return;
+  it.el.animate([{ background: '#EDEDF0' }, { background: 'var(--panel)' }], { duration: 160 });
+  setTimeout(() => closeMenu(), 120);
+}
+function closeMenu(instant) {
+  if (!open) return;
+  open = false; dragging = false;
+  const d = instant ? 0 : 120;
+  itemsEl.querySelectorAll('.item').forEach(e => e.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, fill: 'forwards' }));
+  svg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, fill: 'forwards' });
+  hub.animate([{ transform: 'scale(1)' }, { transform: 'scale(0)' }], { duration: instant ? 0 : 140, easing: 'ease-in', fill: 'forwards' });
+  setTimeout(() => { layer.classList.remove('open'); svg.innerHTML = ''; svg.getAnimations().forEach(a => a.cancel()); itemsEl.innerHTML = ''; }, d + 20);
+}
+function local(e) { const r = phone.getBoundingClientRect(), k = 915 / r.width; return [(e.clientX - r.left) * k, (e.clientY - r.top) * k]; }
+
+phone.addEventListener('pointerdown', e => {
+  if (open) { if (!e.target.closest('.item')) closeMenu(); return; }
+  const target = e.target.closest('[data-kind]'); if (!target) return;
+  const [x, y] = local(e);
+  holdTimer = setTimeout(() => { openMenu(x, y, target.dataset.kind, +target.dataset.t, +target.dataset.i); dragging = true; navigator.vibrate?.(10); }, 350);
+});
+phone.addEventListener('pointermove', e => {
+  if (!open || !dragging) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.item');
+  setHot(el ? items.findIndex(i => i.el === el) : -1);
+});
+phone.addEventListener('pointerup', () => { clearTimeout(holdTimer); if (open && dragging) { dragging = false; if (hot >= 0) pick(hot); } });
+phone.addEventListener('pointercancel', () => { clearTimeout(holdTimer); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+document.getElementById('replay').addEventListener('click', () => openMenu(16 + 150 + 6 + 60 + 6 + 3 * 110 + 52, 66 + 2 * 52 + 23, 'pad', 2, 3));
+// keyboard: Enter on a pad or head opens its menu at its centre
+rows.addEventListener('keydown', e => {
+  const t = e.target.closest('[data-kind]'); if (!t || e.key !== 'Enter') return;
+  const r = t.getBoundingClientRect(), p = phone.getBoundingClientRect(), k = 915 / p.width;
+  openMenu((r.left + r.width / 2 - p.left) * k, (r.top + r.height / 2 - p.top) * k, t.dataset.kind, +t.dataset.t, +t.dataset.i);
+  items[0]?.el.focus();
+});
+</script>
+</body>
+</html>
