@@ -175,7 +175,11 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
     private val half = reachY + if (n > 5) TRI_GAP + TRI_H else 0f
     /** The curve's middle height: the finger's, kept so the column stays on the screen. */
     val mid: Float = if (HEADER + half <= screenH - 16f - half) y.coerceIn(HEADER + half, screenH - 16f - half) else y
-    /** The room beside the finger on each side for a 200 wide row and an 8 margin, in the menu layer's own coordinates. */
+    /**
+     * The room beside the finger on each side for a 200 wide row and an 8 margin, in the menu layer's own coordinates. The layer is the
+     * whole screen, edge to edge (under the camera cutout and the system bars), so these are the physical edges: a menu may run into the
+     * safe-area margins (iPhone d0797f9), and the page dim covers them too.
+     */
     private val roomLeft = x - 8f - ROW_W
     private val roomRight = screenW - 8f - ROW_W - x
     /**
@@ -243,12 +247,12 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
         /** …on a curve of this radius (shallow: nearly a straight column), with the rim a stalk inside it. */
         const val CURVE = 400f
         const val RIM = CURVE - STALK
-        /** The black field behind the arc (iPhone b565310): 16 inside the rim and 16 past the rows, 14 past the top and bottom choices, 70 %, feathered 18. */
-        const val FIELD_INNER = RIM - 16f
-        const val FIELD_OUTER = CURVE + ROW_W + 16f
+        /** The black field behind the arc, a backing (iPhone d0797f9): 12 inside the rim and 12 past the rows, 14 past the top and bottom choices, 88 %, feathered 8. */
+        const val FIELD_INNER = RIM - 12f
+        const val FIELD_OUTER = CURVE + ROW_W + 12f
         const val FIELD_PAD = 14f
-        const val FIELD_ALPHA = 0.7f
-        const val FIELD_FEATHER = 18f
+        const val FIELD_ALPHA = 0.88f
+        const val FIELD_FEATHER = 8f
         /** Under the header's line. */
         const val HEADER = 56f
         /** The more-to-come triangles: 10 wide, 7 tall, 8 past the rim's end. */
@@ -359,8 +363,8 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         val spots = List(m.items.size) { wheel.spot(it, turn) }
         val itemW = HoldWheel.ROW_W; val itemH = HoldWheel.ROW_H
         val fadeAll = 1f - (leave.value / 0.86f).coerceAtMost(1f)   // choices and lines: gone in 120 of the 140 ms
-        // A translucent black field behind the arc (Scott, 2026-11-14: the pads underneath competed): an annular sector round the curve's
-        // centre, soft at its edges, drawn first, over the page's own dim and under the circle, rim, stalks and choices.
+        // A black backing behind the arc (Scott, 2026-11-14: the pads underneath competed): an annular sector round the curve's centre,
+        // 88 % black with a narrow soft edge, drawn first, over the page's own dim and under the circle, rim, stalks and choices.
         Canvas(Modifier.fillMaxSize().graphicsLayer {
             renderEffect = androidx.compose.ui.graphics.BlurEffect(HoldWheel.FIELD_FEATHER.dp.toPx(), HoldWheel.FIELD_FEATHER.dp.toPx(), androidx.compose.ui.graphics.TileMode.Decal)
         }) {

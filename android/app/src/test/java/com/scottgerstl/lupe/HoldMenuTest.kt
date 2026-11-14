@@ -122,14 +122,14 @@ class HoldMenuTest {
         assertEquals(270f - (62f - 400f), b.centreX, 0.01f)
     }
 
-    /** The black field (b565310): an annular sector from 362 to 616 round the curve's centre, ±(reach + 14) tall. */
+    /** The black backing (iPhone d0797f9): an annular sector from 366 to 612 round the curve's centre, ±(reach + 14) tall, 88 % black, feathered 8. */
     @Test fun theBlackFieldIsAnAnnularSectorBehindTheArc() {
-        assertEquals(362f, HoldWheel.FIELD_INNER, 0f); assertEquals(616f, HoldWheel.FIELD_OUTER, 0f)
-        assertEquals(0.7f, HoldWheel.FIELD_ALPHA, 0f); assertEquals(18f, HoldWheel.FIELD_FEATHER, 0f)
+        assertEquals(366f, HoldWheel.FIELD_INNER, 0f); assertEquals(612f, HoldWheel.FIELD_OUTER, 0f)
+        assertEquals(0.88f, HoldWheel.FIELD_ALPHA, 0f); assertEquals(8f, HoldWheel.FIELD_FEATHER, 0f)
         val five = HoldWheel(500f, 200f, 5, 915f, 412f)
         assertEquals(136f + 14f, five.fieldHalf, 0.01f)                                // reach 136, no triangles
-        assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 362.0)), five.fieldInnerSweep.toDouble(), 0.01)
-        assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 616.0)), five.fieldOuterSweep.toDouble(), 0.01)
+        assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 366.0)), five.fieldInnerSweep.toDouble(), 0.01)
+        assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 612.0)), five.fieldOuterSweep.toDouble(), 0.01)
         val nine = HoldWheel(500f, 220f, 9, 915f, 412f)
         assertEquals(136f + 15f + 14f, nine.fieldHalf, 0.01f)                          // a wheel adds the triangles' 15
         assertTrue(nine.fieldInnerSweep > five.fieldInnerSweep)
