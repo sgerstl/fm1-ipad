@@ -218,6 +218,7 @@ What moves or changes place against the landscape table above. Edit and the dock
 | **Scenes** | A short Store key with a dot, then the sixteen: empty outlined, stored filled, the current white |
 | **LEVEL and PAN** | In the track head's hold menu (slid along their rows) and in Mix. The track controls box is gone for good |
 | **Hold menus** | The radial menu with the iPad's set where the core can do it. Pad: Edit steps, Select sound, Set pattern, Play once more / less, Duplicate after, Move earlier / later, Clear. Empty slot: New pattern, Rest, Pick a pattern. Track head: Sounds, LEVEL, PAN, Mute, Solo. Timeline block: adds Edit steps and Move earlier / later |
+| **Hold menu, its shape** (decision 36) | The choices hug the circle on short stalks (22 dp past its edge). One column for every choice, no "More…" page: a column taller than the screen scrolls (drag, fling, or a held finger at its top or bottom edge) while the circle stays put |
 | **Mix** | A pop-up with no title: MIXER DELAY REVERB CHORUS GLOBAL as words in line with the close key. A bus page is its four dials two by two at the left (DELAY MODE under them) and the FM-1's own picture at the right, 1.7 : 1, in greys and white |
 | **Settings** | The grouped sheet: FM-1 · Touch (Slide to turn, Magnifier, Handedness, Haptics) · Sound pages (Show graphics, Sound keys) · Labs |
 | **Launch menu** | Loop Bar Beat Now, then a footer: Cancel waiting, or "Nothing waiting" |

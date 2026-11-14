@@ -26,6 +26,8 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -117,40 +119,39 @@ class HoldMenuState {
     var confirmAt = 0L
     /** Where the choices are on screen, for the held finger's hit test. Set by the host as it lays them out. */
     internal var rects: List<Rect> = emptyList()
+    /** The host's own hit test (the choices move when the column scrolls), and where the held finger is for its edge scrolling. Null: [rects]. */
+    internal var hit: ((Offset) -> Int)? = null
+    internal var held: Offset? = null
     internal var tick: () -> Unit = {}
 
     fun open(at: Offset, colour: Color, items: List<HoldItem>, title: String? = null) {
         if (items.isEmpty()) return
-        menu = HoldMenuOpen(at, colour, paged(items)); hot = -1; confirming = -1; opened++
+        menu = HoldMenuOpen(at, colour, items); hot = -1; confirming = -1; opened++
     }
     private fun HoldMenuOpen(at: Offset, colour: Color, items: List<HoldItem>) = HoldMenuOpen(at, colour, items, null)
-    fun close() { menu = null; hot = -1; confirming = -1 }
+    fun close() { menu = null; hot = -1; confirming = -1; held = null }
 
     /** The held finger moved to [pos] (window pixels): the choice under it lights. */
     fun drag(pos: Offset) {
-        val k = rects.indexOfFirst { it.contains(pos) }.let { if (it >= 0 && menu?.items?.getOrNull(it)?.enabled == true) it else -1 }
+        held = pos
+        val k = (hit?.invoke(pos) ?: rects.indexOfFirst { it.contains(pos) }).let { if (it >= 0 && menu?.items?.getOrNull(it)?.enabled == true) it else -1 }
         if (k != hot) { hot = k; if (k >= 0) tick() }
     }
     /** The held finger lifted: the lit choice is picked; with none lit the menu stays, for a tap. */
-    fun release() { if (hot >= 0) pick(hot) }
+    fun release() { held = null; if (hot >= 0) pick(hot) }
 
     fun pick(k: Int) {
         val m = menu ?: return
         val item = m.items.getOrNull(k) ?: return
         if (!item.enabled || item.slide != null) return   // a slide row is slid, not picked
         when {
-            item.children != null -> { menu = HoldMenuOpen(m.at, m.colour, paged(item.children.invoke())); hot = -1; confirming = -1; opened++ }
+            item.children != null -> { menu = HoldMenuOpen(m.at, m.colour, item.children.invoke()); hot = -1; confirming = -1; opened++ }
             item.confirm != null && confirming != k -> { confirming = k; confirmAt = System.currentTimeMillis(); hot = -1 }
             item.confirm != null && System.currentTimeMillis() - confirmAt < 400 -> Unit   // the second tap of a quick double tap can't confirm
             else -> { close(); item.action() }
         }
     }
 
-    companion object {
-        /** No more than six in one place (they are 56 dp apart in a 412 dp screen): the rest go behind "More…". */
-        fun paged(items: List<HoldItem>, per: Int = 6): List<HoldItem> =
-            if (items.size <= per) items else items.take(per - 1) + HoldItem("More…", sub = "${items.size - (per - 1)} more", children = { items.drop(per - 1) })
-    }
 }
 
 val LocalHoldMenu = compositionLocalOf<HoldMenuState?> { null }
@@ -158,24 +159,67 @@ val LocalHoldMenu = compositionLocalOf<HoldMenuState?> { null }
 /** Where one choice sits: its near edge ([edgeX], [cy]) and which way it opens. In dp. */
 class HoldSpot(val edgeX: Float, val cy: Float, val left: Boolean)
 
+/** The circle under the finger is 64 dp across; a choice's stalk runs from its edge. */
+const val HUB_R = 32f
 /**
- * The choices' places (the mockup's geometry): stacked one above another, [step] apart, around the finger's height and kept on the screen;
- * each pushed out to where its height meets a circle of [radius] round the finger, so the stack bows with the circle. They open to the left when
- * the finger is too near the right edge. All in dp.
+ * How far past the circle's edge the nearest choice sits: the stalk's length (decision 36, Scott 2026-11-14: "shorter stalks", about a
+ * quarter of the first 88 dp). The choices hug the circle.
  */
-fun holdSpots(x: Float, y: Float, n: Int, screenW: Float, screenH: Float, itemW: Float = 200f, itemH: Float = 48f, radius: Float = 120f, step: Float = 56f, preferLeft: Boolean = false): List<HoldSpot> {
-    // [preferLeft] (Settings › Handedness, right-handed): to the left of the finger whenever there is room there, so the hand doesn't cover them
-    val left = if (preferLeft) x >= radius + itemW + 24f else x > screenW - (radius + itemW + 24f)
-    val lowest = screenH - 16f - itemH / 2 - (n - 1) * step
-    val top = (y - (n - 1) * step / 2).coerceAtMost(lowest).coerceAtLeast(8f + itemH / 2)
-    return List(n) { k ->
-        val cy = top + k * step; val dy = cy - y
-        val dx = sqrt((radius * radius - dy * dy).coerceAtLeast(0f)).let { if (it <= 0f) 24f else it }
+const val STALK = 22f
+
+/**
+ * Where the choices sit (decision 36). One column, [step] apart: each choice's near edge is where its height meets a circle of
+ * [HUB_R] + [STALK] round the finger, so the column bows round the circle and its stalks are short; a choice above or below that circle
+ * sits [MIN_DX] out. They open to the left when the finger is too near the right edge, or (right-handed, [preferLeft]) whenever there is
+ * room on the left. A column taller than the screen is not cut into pages: it scrolls ([maxScroll]) inside [viewTop]…[viewBottom], and the
+ * choices slide along the arc as it does. All in dp.
+ */
+class HoldLayout(val x: Float, val y: Float, val n: Int, val screenW: Float, val screenH: Float, val left: Boolean, val itemW: Float = 200f, val itemH: Float = 48f, val step: Float = 56f) {
+    val viewTop = 8f
+    val viewBottom = screenH - 16f
+    private val content = (n - 1) * step + itemH
+    /** How far the column can scroll; 0 when it fits. */
+    val maxScroll = (content - (viewBottom - viewTop)).coerceAtLeast(0f)
+    /** The first choice's centre with nothing scrolled: the column centred on the finger's height where it fits, kept on the screen. */
+    private val top = if (maxScroll > 0f) viewTop + itemH / 2 else (y - (n - 1) * step / 2).coerceAtMost(viewBottom - itemH / 2 - (n - 1) * step).coerceAtLeast(viewTop + itemH / 2)
+
+    fun spot(k: Int, scroll: Float = 0f): HoldSpot {
+        val cy = top + k * step - scroll; val dy = cy - y; val r = HUB_R + STALK
+        val dx = kotlin.math.max(sqrt((r * r - dy * dy).coerceAtLeast(0f)), MIN_DX)
         // kept on the screen sideways too
         val edge = if (left) (x - dx).coerceAtLeast(8f + itemW) else (x + dx).coerceAtMost(screenW - 8f - itemW)
-        HoldSpot(edge, cy, left)
+        return HoldSpot(edge, cy, left)
+    }
+
+    /** How much of a choice shows at [cy]: 1 inside the view, falling to 0 as it leaves an edge that has more beyond it (the fade at the clipped edge). */
+    fun shown(cy: Float, scroll: Float): Float {
+        val fromTop = if (scroll > 0.5f) ((cy + itemH / 2 - viewTop) / itemH).coerceIn(0f, 1f) else 1f
+        val fromBottom = if (scroll < maxScroll - 0.5f) ((viewBottom - (cy - itemH / 2)) / itemH).coerceIn(0f, 1f) else 1f
+        return kotlin.math.min(fromTop, fromBottom)
+    }
+
+    /** A held finger near an edge that has more beyond it pulls the column that way: −1 (up) … 1 (down), 0 elsewhere. */
+    fun pull(fingerY: Float, scroll: Float): Float = when {
+        maxScroll <= 0f -> 0f
+        fingerY < viewTop + EDGE && scroll > 0f -> -((viewTop + EDGE - fingerY) / EDGE).coerceIn(0f, 1f)
+        fingerY > viewBottom - EDGE && scroll < maxScroll -> ((fingerY - (viewBottom - EDGE)) / EDGE).coerceIn(0f, 1f)
+        else -> 0f
+    }
+
+    companion object {
+        const val MIN_DX = 12f
+        /** The band at the view's top and bottom where a held finger scrolls the column. */
+        const val EDGE = 40f
+        fun of(x: Float, y: Float, n: Int, screenW: Float, screenH: Float, preferLeft: Boolean = false, itemW: Float = 200f): HoldLayout {
+            val room = HUB_R + STALK + itemW + 24f
+            return HoldLayout(x, y, n, screenW, screenH, left = if (preferLeft) x >= room else x > screenW - room, itemW = itemW)
+        }
     }
 }
+
+/** The choices' places with nothing scrolled. */
+fun holdSpots(x: Float, y: Float, n: Int, screenW: Float, screenH: Float, preferLeft: Boolean = false): List<HoldSpot> =
+    HoldLayout.of(x, y, n, screenW, screenH, preferLeft).let { l -> List(n) { l.spot(it) } }
 
 /** The circle's size as it grows in: past its size ([spring] 0…1 sets how far), one undershoot, settle. [p] is 0…1 through the entrance. */
 fun hubScale(p: Float, spring: Float): Float {
@@ -191,6 +235,10 @@ fun hubScale(p: Float, spring: Float): Float {
 }
 
 /**
+ * Decision 36 (Scott, 2026-11-14): the choices hug the circle on short stalks ([STALK]); every choice is in one column, and a column
+ * taller than the screen scrolls (a drag or a fling anywhere on the menu; a held finger resting at the top or bottom edge) while the circle
+ * stays put and the stalks follow the choices that show, each fading as it leaves the edge. There is no "More…" page.
+ *
  * Draws the hold menu over everything. A filled circle in the track's colour at about 45 % over the page grows exactly under the finger
  * (64 dp at rest, an elastic grow-in); lines 1.5 dp in the track's colour run out from its edge one by one to each choice, each ending in a
  * small node, the lit choice's line white; the choices are the iPad's rows in 48 dp rounded rectangles. Leaving: choices and lines fade in
@@ -216,30 +264,52 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         unscaled { elapsed.animateTo(1200f, tween((1200 / speed).roundToInt(), easing = LinearEasing)) }
     }
     LaunchedEffect(live == null) {
-        if (live == null && shown != null) { unscaled { leave.animateTo(1f, tween(140, easing = LinearEasing)) }; shown = null; state.rects = emptyList() }
+        if (live == null && shown != null) { unscaled { leave.animateTo(1f, tween(140, easing = LinearEasing)) }; shown = null; state.rects = emptyList(); state.hit = null }
     }
     val m = shown ?: return
     BackHandler(enabled = live != null) { state.close() }
     var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    // how far the column is scrolled and how far it can go (dp): kept out here so the whole layer can take the drag
+    var scroll by remember(m) { mutableFloatStateOf(0f) }
+    var maxScroll by remember(m) { mutableFloatStateOf(0f) }
+    val scrollable = androidx.compose.foundation.gestures.rememberScrollableState { d ->
+        val old = scroll; scroll = (scroll - with(density) { d.toDp().value }).coerceIn(0f, maxScroll); with(density) { (old - scroll).dp.toPx() }
+    }
     BoxWithConstraints(
         modifier.fillMaxSize().onGloballyPositioned { origin = it }
             // the page behind is dimmed and can't be touched; a tap outside the choices closes the menu
             .drawBehind { drawRect(Color.Black.copy(alpha = 0.45f * (1f - leave.value) * (elapsed.value / 150f).coerceAtMost(1f))) }
             .pointerInput(Unit) { detectTapGestures { state.close() } }
+            // a column taller than the screen scrolls with a drag anywhere on the menu (and flings); the circle stays put
+            .scrollable(scrollable, androidx.compose.foundation.gestures.Orientation.Vertical, enabled = maxScroll > 0f)
             .semantics { paneTitle = "Menu"; isTraversalGroup = true },
     ) {
         val w = maxWidth.value; val h = maxHeight.value
         // the finger, in this layer's dp
         val fingerPx = origin?.takeIf { it.isAttached }?.windowToLocal(m.at) ?: m.at
         val fx = with(density) { fingerPx.x.toDp().value }; val fy = with(density) { fingerPx.y.toDp().value }
-        val spots = remember(m, w, h, labs.leftHanded) { holdSpots(fx, fy, m.items.size, w, h, preferLeft = !labs.leftHanded) }
-        val itemW = 200f; val itemH = 48f
-        // where the choices are, in window pixels, for the held finger
-        state.rects = spots.map { s ->
-            val l = if (s.left) s.edgeX - itemW else s.edgeX
-            val tl = with(density) { Offset(l.dp.toPx(), (s.cy - itemH / 2).dp.toPx()) }
-            val win = origin?.takeIf { it.isAttached }?.localToWindow(tl) ?: tl
-            with(density) { Rect(win, Size(itemW.dp.toPx(), itemH.dp.toPx())) }
+        val layout = remember(m, w, h, fx, fy, labs.leftHanded) { HoldLayout.of(fx, fy, m.items.size, w, h, preferLeft = !labs.leftHanded) }
+        // how far the column is scrolled (dp): a drag on the menu, a fling, or the held finger at an edge
+        maxScroll = layout.maxScroll
+        val spots = List(m.items.size) { layout.spot(it, scroll) }
+        val itemW = layout.itemW; val itemH = layout.itemH
+        // slide-to-pick past the end scrolls: while the held finger rests in the top or bottom band, the column moves under it
+        LaunchedEffect(m, layout) {
+            var last = 0L
+            while (true) androidx.compose.runtime.withFrameMillis { now ->
+                val dt = if (last == 0L) 0L else now - last; last = now
+                val p = state.held
+                if (p != null && layout.maxScroll > 0f) {
+                    val local = origin?.takeIf { it.isAttached }?.windowToLocal(p) ?: p
+                    val pull = layout.pull(with(density) { local.y.toDp().value }, scroll)
+                    if (pull != 0f) { scroll = (scroll + pull * 420f * dt / 1000f).coerceIn(0f, layout.maxScroll); state.drag(p) }
+                }
+            }
+        }
+        state.hit = { pos ->
+            val local = origin?.takeIf { it.isAttached }?.windowToLocal(pos) ?: pos
+            val px = with(density) { local.x.toDp().value }; val py = with(density) { local.y.toDp().value }
+            spots.indexOfFirst { s -> val l = if (s.left) s.edgeX - itemW else s.edgeX; px in l..(l + itemW) && py in (s.cy - itemH / 2)..(s.cy + itemH / 2) && layout.shown(s.cy, scroll) > 0.5f }
         }
         val fadeAll = 1f - (leave.value / 0.86f).coerceAtMost(1f)   // choices and lines: gone in 120 of the 140 ms
         Canvas(Modifier.fillMaxSize()) {
@@ -250,13 +320,15 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
             drawCircle(lerp(Tok.page, m.colour, 0.45f).copy(alpha = hubA), 32.dp.toPx() * scale, c)
             drawCircle(m.colour.copy(alpha = hubA), 32.dp.toPx() * scale, c, style = Stroke(1.5.dp.toPx()))
             spots.forEachIndexed { k, s ->
+                val vis = layout.shown(s.cy, scroll)
+                if (vis <= 0f) return@forEachIndexed
                 val end = Offset(s.edgeX.dp.toPx(), s.cy.dp.toPx())
                 val ang = atan2(end.y - c.y, end.x - c.x)
                 val start = Offset(c.x + cos(ang) * 32.dp.toPx(), c.y + sin(ang) * 32.dp.toPx())
-                val d0 = 160f + k * 30f
+                val d0 = 160f + minOf(k, 7) * 30f
                 // the line draws out from the circle's edge (with Reduce Motion it only fades in)
                 val drawn = if (reduce) 1f else ((elapsed.value - d0) / 180f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
-                val a = (if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else 1f) * fadeAll * (if (state.confirming >= 0 && state.confirming != k) 0.3f else 1f)
+                val a = (if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else 1f) * fadeAll * vis * (if (state.confirming >= 0 && state.confirming != k) 0.3f else 1f)
                 val col = if (state.hot == k) Tok.text else m.colour
                 if (drawn > 0f) drawLine(col.copy(alpha = a), start, Offset(start.x + (end.x - start.x) * drawn, start.y + (end.y - start.y) * drawn), 1.5.dp.toPx(), StrokeCap.Round)
                 val nodeA = (if (reduce) 1f else ((elapsed.value - d0 - 140f) / 120f).coerceIn(0f, 1f)) * a
@@ -265,6 +337,9 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         }
         m.items.forEachIndexed { k, item ->
             val s = spots[k]
+            // a choice scrolled out of the view isn't there (to a finger or to TalkBack's focus); one at the edge fades
+            val vis = layout.shown(s.cy, scroll)
+            if (vis <= 0f) return@forEachIndexed
             val d0 = 160f + k * 30f
             val inP = if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else ((elapsed.value - d0 - 100f) / 220f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
             val confirming = state.confirming == k
@@ -273,7 +348,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                 Modifier.offset { IntOffset(((if (s.left) s.edgeX - itemW else s.edgeX).dp.toPx()).roundToInt(), ((s.cy - itemH / 2).dp.toPx()).roundToInt()) }
                     .width(itemW.dp).height(itemH.dp)
                     .graphicsLayer {
-                        alpha = inP * fadeAll * (if (dimmed) 0.3f else 1f)
+                        alpha = inP * fadeAll * vis * (if (dimmed) 0.3f else 1f)
                         if (!reduce) { translationX = (if (s.left) 10.dp.toPx() else -10.dp.toPx()) * (1f - inP); val sc = 0.96f + 0.04f * inP; scaleX = sc; scaleY = sc }
                     }
                     .drawBehind {
@@ -329,7 +404,7 @@ private fun HoldSlideRow(title: String, sl: HoldSlide) {
                     androidx.compose.ui.semantics.CustomAccessibilityAction("Decrease $title") { set(latest - 1); true },
                 )
             }
-            .slideToTurn(enabled = true, stepDp = sl.stepDp, face = null, forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Both,
+            .slideToTurn(enabled = true, stepDp = sl.stepDp, face = null, forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways,   // along the row only: up and down is the column's scroll
                 onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (sl.min - latest)..(sl.max - latest) }),
     ) {
         Row(Modifier.align(Alignment.CenterStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

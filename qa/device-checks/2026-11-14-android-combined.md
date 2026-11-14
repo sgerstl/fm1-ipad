@@ -15,7 +15,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 6 | Timeline: tap track heads | The band under the head and the lane; the lane's well fades out where the band is | – | ☐ pass ☐ fail: |
 | 7 | Hold a track's head | Sounds…, LEVEL, PAN, Mute, Solo. With a right-handed setting the choices open to the left of the finger where there's room (at the left edge they open right) | – | ☐ pass ☐ fail: |
 | 8 | In that menu, slide a finger along LEVEL, then along PAN | The value and the gauge follow; the FM-1's MIXER moves with it; the menu stays open. PAN's gauge grows from the middle | Yes | ☐ pass ☐ fail: |
-| 9 | Hold a pad that holds a pattern (stopped) | Edit steps, Select sound, Set pattern…, Play once more, Play once less, More… (Duplicate after, Move earlier, Move later, Clear) | – | ☐ pass ☐ fail: |
+| 9 | Hold a pad that holds a pattern (stopped) | Edit steps, Select sound, Set pattern…, Play once more, Play once less, Duplicate after, Move earlier, Move later, Clear, in one menu that scrolls | – | ☐ pass ☐ fail: |
 | 10 | Play once more, then Play once less | The pad's ×N goes up, then down; the Timeline's block gets longer, then shorter | Yes | ☐ pass ☐ fail: |
 | 11 | Duplicate after; Move later; Move earlier | A linked copy appears in the next slot; the pad swaps with its neighbour and back | Yes | ☐ pass ☐ fail: |
 | 12 | The same menu while playing | Those choices are dimmed and say "Stop first" | – | ☐ pass ☐ fail: |
@@ -38,6 +38,10 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 29 | With all 64 patterns taken on the FM-1: hold an empty slot | New pattern is dimmed and says "All 64 are taken: pick one, or clear unused ones" (only once the core sends the free count, or when the phone already knows of 64 kept patterns) | – | ☐ pass ☐ fail: |
 | 30 | Do something the FM-1 refuses (New pattern with the pool full; Clear a pad while playing) | A strip rises at the foot of the page: what happened and what to do ("All 64 patterns are taken. Pick a pattern, or clear unused ones on the FM-1."). It stays until ✕; a second refusal replaces the words | – | ☐ pass ☐ fail: |
 | 31 | While playing, hold an empty slot: Rest | Rest is no longer dimmed with "Stop first": it goes in, or the FM-1's own reason shows in the strip | Yes | ☐ pass ☐ fail: |
+| 32 | Hold a pad, a track head, a Timeline block | The choices sit close to the circle on short lines (about a quarter of before), the column bowing round it; no choice touches the circle | – | ☐ pass ☐ fail: |
+| 33 | Hold a pad that holds a pattern (eight choices), then Set pattern… with many patterns | No "More…": every choice is in the one menu. It scrolls with a drag anywhere on the menu and flings; the circle stays put, the lines follow the choices that show, and a choice fades as it leaves the top or bottom edge | – | ☐ pass ☐ fail: |
+| 34 | Hold, keep the finger down, slide to the foot of the menu and rest there | The column scrolls on under the finger; lifting on a lit choice picks it | – | ☐ pass ☐ fail: |
+| 35 | Track head › LEVEL in a menu that scrolls | A slide along the row sets the value; a drag up or down scrolls the menu | Yes | ☐ pass ☐ fail: |
 
 **What the building session saw on a screen:** only row 3's Pads page (the band under track 1, outlined slots A to H, the Store key and scenes), on its own emulator against the fake core. Everything else here (the Timeline's band, the hold menus and their slide rows, the Mix pop-up and its four pictures, Settings, the launch footer, the no-FM-1 card and the demo switch) was built and unit-tested but **not seen on any screen**: the emulator kept restarting under the Mac's load. Nothing was run on a Pixel or a real FM-1.
 
