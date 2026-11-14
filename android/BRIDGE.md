@@ -208,6 +208,14 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
   They go through `Session.write`, `Session.toggle` and `noteDown` / `noteUp`, the iPad's calls. All are refused while
   read-only. Skiff takes step writes while it plays, so none is refused for playing. The editor area's steps gain
   `notes`, `hits` and `locked`; the area gains `maxNotes`, `kitLanes` and `kitNotes`. P2 owns the Kotlin classes.
+- **The clock and the launch countdowns** (Scott's play test, 2026-11-14), in `ClockArea.swift`:
+  - A `clock` area gives a reference the screens run forward each frame: `ticks` (MIDI clock pulses since Start) at
+    `atMs` (uptime milliseconds), and `ticksPerSecond`. A new reference comes every beat.
+  - Each pads row gives its pass as ticks (`passTicks`, `passStartTick`), a pending mute or solo, and `launchTick`,
+    the pulse its launch point comes on. Waiting entries and waiting scenes carry `launchTick` too. With no clock
+    they are null, and the outline is drawn dashed.
+  - `top.bar` now wraps within `top.bars`: the selected track's block in Loop, the song in Song (Once doesn't wrap).
+    Skiff's own screen shows no bar or beat while it plays, so this rule is Lupe's.
 
 ### Read-only by default (P1, 2026-11-13)
 
