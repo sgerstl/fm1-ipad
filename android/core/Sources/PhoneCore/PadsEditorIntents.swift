@@ -114,7 +114,10 @@ extension PhoneCore {
         case .padSelectSound:
             log("padSelectSound not wired: the entry's sound picker is a later phase")
         case .trackSelect(let t1):
+            // the track head: the selection moves and any pad pick goes with it (the editor shows the track's own entry)
+            pickedPad = nil
             s.select(track: t1 - 1)
+            pokeAreas(["pads", "editor"])
         case .trackMute(let t1):
             guard let store else { return }
             Task { if !(await store.performOp(.mute(track: t1 - 1))) { reportRefusal(store) } }

@@ -15,7 +15,11 @@ public final class PhoneCore {
     private var clockTask: Task<Void, Never>?
     private var projectTask: Task<Void, Never>?
     /// Screen-local choices (nothing sent to the FM-1): the pad the editor shows, the step selected.
-    var pickedPad: PadsArea.Ref?
+    var pickedPad: PadsArea.Ref? { didSet { pickedOnTrack = pickedPad == nil ? nil : session.selectedTrack } }
+    /// The track selected when the pad was picked. The pick holds only while that is still the selected track: a track
+    /// head tapped on the phone or a track pressed on the FM-1 moves the selection, and the pads and the editor follow
+    /// it (Scott's Pixel, 2026-11-14: they stayed on the picked pad's track while the FM-1 had moved on).
+    var pickedOnTrack: Int?
     var selectedStep = 0
     /// The editor's own state (PadsEditorIntents.swift): a step held, Lock latched, the lane shown, the
     /// step copied. None of it is sent to the FM-1 except through Session.lockStep.
@@ -277,6 +281,7 @@ public final class PhoneCore {
                     Task { await store.send(.play(track: t, entry: entry)) }
                 }
             }
+            pickedOnTrack = session.selectedTrack      // (after the select: the pick belongs to the track now selected)
             poke(["pads", "editor"])
         case .stepSelect(let i):
             selectedStep = max(0, min(15, i))

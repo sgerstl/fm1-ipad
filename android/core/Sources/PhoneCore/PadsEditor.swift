@@ -67,7 +67,7 @@ extension PhoneCore {
 
     /// The pad the editor shows: the one the screen picked (padSelect), else the selected track's current entry.
     func selectedPad() -> PadsArea.Ref {
-        if let p = pickedPad { return p }
+        if let p = pickedPad, pickedOnTrack == session.selectedTrack { return p }
         let t = session.selectedTrack
         return PadsArea.Ref(track: t + 1, entry: session.skiffSong?.song?.tracks[safe: t]?.entryOn ?? 0)
     }
