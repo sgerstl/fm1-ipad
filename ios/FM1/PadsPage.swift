@@ -614,22 +614,40 @@ struct PadsPage: View {
             if short {
                 // a row as tall as a lane head (Half): one line, the letter, the number, the countdown when waiting,
                 // the pass bar along the foot (board 37)
-                HStack(spacing: phone ? 3 : 6) {
-                    Text(letter).font(.lupe(12, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
-                        .fixedSize()
-                    if !title.isEmpty {
-                        Text(title).font(.lupeNumber(e.isRest ? 12 : 17, .bold)).monospacedDigit()
-                            .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
-                            .fixedSize()           // (the number never gives way: the small word beside it does)
-                    }
-                    PadMarks(marks: padMarks(e), ink: ink, boxed: false)
-                    Spacer(minLength: 0)
-                    // the phone (decision 33, Android's pads): the next cue, the passes ×N, n/N while it plays
-                    if phone, let side = phoneSide(e, m, playing: playing, next: next) {      // (the slots are about 66 pt)
-                        Text(side).font(.lupe(11, .medium)).monospacedDigit()
-                            .foregroundStyle(playing && !e.isRest ? ink : Theme.textSecondaryRaised).lineLimit(1)
-                            .minimumScaleFactor(0.75).layoutPriority(-1)     // (the letter and the number never give way)
-                            .accessibilityHidden(true)
+                Group {
+                    if phone {
+                        // the phone (decision 33, Android's pads): the letter and the small word on a line over the number,
+                        // so the cue (next, ×N, n/N while it plays) keeps its room at every slot width, the rail on or off
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(spacing: 3) {
+                                Text(letter).font(.lupe(11, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
+                                Spacer(minLength: 2)
+                                if let side = phoneSide(e, m, playing: playing, next: next) {
+                                    Text(side).font(.lupe(11, .medium)).monospacedDigit()
+                                        .foregroundStyle(playing && !e.isRest ? ink : Theme.textSecondaryRaised)
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .lineLimit(1)
+                            HStack(spacing: 3) {
+                                if !title.isEmpty {
+                                    Text(title).font(.lupeNumber(e.isRest ? 12 : 17, .bold)).monospacedDigit()
+                                        .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
+                                }
+                                PadMarks(marks: padMarks(e), ink: ink, boxed: false)
+                            }
+                        }
+                        .padding(.bottom, playing ? 6 : 0)        // (clear of the pass bar along the foot)
+                    } else {
+                        HStack(spacing: 6) {
+                            Text(letter).font(.lupe(12, .semibold)).foregroundStyle(playing ? ink : Theme.textSecondary)
+                            if !title.isEmpty {
+                                Text(title).font(.lupeNumber(e.isRest ? 12 : 17, .bold)).monospacedDigit()
+                                    .foregroundStyle(e.isRest ? Theme.textSecondary : ink).lineLimit(1)
+                            }
+                            PadMarks(marks: padMarks(e), ink: ink, boxed: false)
+                            Spacer(minLength: 0)
+                        }
                     }
                 }
                 .padding(.horizontal, phone ? 6 : 8)
