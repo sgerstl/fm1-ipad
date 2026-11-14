@@ -50,3 +50,26 @@ Written by the session that built it (`CLAUDE.md`, rule 2). Scott runs it with t
 - **Dials are 52 dp rings in an 84 × 74 dp target** everywhere now (HOME knobs, step dials, sound pages, the Mix buses), down from 60, to fit the panel.
 - **The picked step survives a visit to another tab**; a sound page opening or closing still clears it.
 - **Core cleanup:** `Tab` is now Pads, Edit, Timeline; `Divider` and `setDivider` are deleted (two lines in P1's BridgedLupeCore and the fake went with them).
+
+## Decision 29: Scott's first hands-on (2026-11-14)
+
+Built (tests pass, APK builds), **not run on a screen**.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 25 | Tap a track head anywhere, also with a rolling or sliding finger | The track is selected every time, and nothing else happens (no Sounds) | – | ☐ pass ☐ fail: |
+| 26 | Hold a track head | A menu beside the finger: Sounds…, Mute, Solo. Solo shows a SOLO pill on the head | – | ☐ pass ☐ fail: |
+| 27 | Tap a pad | It launches as before **and** becomes the selected pad, its track the selected track (Edit follows) | – | ☐ pass ☐ fail: |
+| 28 | Press a MUTE key and drag down the column; tap one | Every key crossed takes the state the first one changed to, a tick for each; a tap toggles one | – | ☐ pass ☐ fail: |
+| 29 | Look at the selected track on Pads | A 2 dp outline in the track's own colour runs round the whole row (head, MUTE, pads); it glides to the next row you select. The selected pad's ring is the track's colour with a dark gap inside. Nothing about a track is white | – | ☐ pass ☐ fail: |
+| 30 | Start sliding a dial, then: switch tabs with the other hand; let the sound panel fall; unplug the FM-1 | The Magnifier (the value above the finger) goes away each time and the dial stops being white. Nothing stays stuck | – | ☐ pass ☐ fail: |
+| 31 | Look at the header | project ⌄ and the tabs at the left; at the right Loop ⌄, the readout, Record, Play. Play sits fully inside the screen's rounded corner | – | ☐ pass ☐ fail: |
+| 32 | Look at the left edge | Content starts about 16 dp from the screen's edge and runs under the camera's hole punch; nothing is held back for it. The gesture bar at the bottom is still clear | – | ☐ pass ☐ fail: |
+| 33 | Go Pads → Edit → Timeline and back | Going right the old page slides out left and the new one in from the right; back, the reverse (about 0.28 s). The selected track's coloured outline travels from its Pads row to Edit's step row and fades as it lands. Calm: no bounce | – | ☐ pass ☐ fail: |
+| 34 | Remove animations on, switch tabs | A short cross-fade only; nothing travels | – | ☐ pass ☐ fail: |
+
+Chosen or left open:
+- **The Timeline's rows** are P4's (`ui/timeline`): the track-colour row outline there, and the travelling outline landing on its row, need P4 to mark the row (`Modifier.selectedTrackAnchor()` is public for that). Until then, going to or from the Timeline slides without the travelling outline.
+- **The corner inset** takes the radius Android reports and never goes under 24 dp (at 8 dp Play was cut off). If it is still clipped, say by how much.
+- **The hole punch is ignored on whichever side it is** (the phone can lie either way up); with it on the right it would sit near Record and Play.
+- **A hold on the head no longer opens Sounds directly**: Sounds… is the menu's first row.

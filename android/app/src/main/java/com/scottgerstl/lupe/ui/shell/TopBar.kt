@@ -49,8 +49,8 @@ private val LaunchQuantize.word get() = name
 private val PlaybackMode.word get() = name
 
 /**
- * The one header line (decision 28, board 73; decision 23's chrome): the project ⌄ and Loop ⌄ as words, the tabs Pads · Edit · Timeline as
- * underlined words, then the readout, Record and Play at the right edge. 48 dp tall; the shell draws the hairline under it.
+ * The one header line (decision 28, board 73; decision 23's chrome): the project ⌄ as a word and the tabs Pads · Edit · Timeline as
+ * underlined words at the left; at the right Loop ⌄, the readout, Record and Play. 48 dp tall; the shell draws the hairline under it.
  */
 @Composable
 fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, onTab: (com.scottgerstl.lupe.core.Tab) -> Unit, modifier: Modifier = Modifier) {
@@ -73,7 +73,11 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }
             }
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(16.dp))
+        // the tabs, in the header line (decision 28): Pads · Edit · Timeline
+        Tabs(tab, onTab)
+        Spacer(Modifier.weight(1f))
+        // the right cluster: Loop ⌄ beside the tempo it belongs with, then the readout, Record, Play (decision 29)
         // Launch: how a launch waits (Loop Bar Beat Now), and what is waiting
         Box {
             HeaderWord({ menu = Menu.Launch }, "Launch quantize, ${top.launch.word}" + if (top.waiting > 0) ", ${top.waiting} waiting" else "", top.launch.word, 14, primary = false,
@@ -89,10 +93,7 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 }
             }
         }
-        Spacer(Modifier.width(16.dp))
-        // the tabs, in the header line (decision 28): Pads · Edit · Timeline
-        Tabs(tab, onTab)
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(4.dp))
         // Readout: bar · beat, tempo; opens tempo and Loop · Song · Once
         Box {
             Column(

@@ -39,6 +39,8 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        // Draw under the camera's hole punch: the content runs to the screen's left margin and ignores it (decision 29)
+        window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS }
         // Landscape only (decision 28), and immersive: the status bar hides while Lupe runs and shows on a swipe from the edge
         androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

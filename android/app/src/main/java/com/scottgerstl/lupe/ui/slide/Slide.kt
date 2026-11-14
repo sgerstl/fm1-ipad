@@ -81,6 +81,14 @@ class MagnifierState {
     var finger by mutableStateOf(Offset.Zero)
     /** True when the finger is reported in screen coordinates (a control inside a pop-up window, whose own root isn't the activity's). */
     var screenSpace = false
+    /** Whose gesture has it up. A gesture that ends any way at all (finger up, pointer cancel, its control leaving the screen) takes its own down. */
+    private var owner: Any? = null
+
+    fun show(by: Any, face: MagnifierFace?, finger: Offset) { owner = by; this.face = face; this.finger = finger; shown = face != null }
+    /** Down, if [by] is the one that put it up (a later gesture's Magnifier is not taken down by an earlier one ending late). */
+    fun hide(by: Any) { if (owner === by) { shown = false; owner = null } }
+    /** Down, whoever put it up: the tab changed, a panel or sheet left. */
+    fun hideAll() { shown = false; owner = null }
 }
 
 /**
@@ -117,6 +125,9 @@ fun Modifier.slideToTurn(
     val loupeOn by rememberUpdatedState(settings.magnifier)
     val density = LocalDensity.current
     val stepPx = with(density) { stepDp.dp.toPx() }
+    // this control's own token: if it leaves the composition mid-slide (a tab change, a panel falling), its Magnifier goes with it
+    val token = remember { Any() }
+    androidx.compose.runtime.DisposableEffect(magnifier) { onDispose { magnifier?.hide(token) } }
     // a sideways slide at the screen's edge must not become the system's back gesture (P1's run, 2026-11-13)
     return this.onGloballyPositioned { coords = it }.then(
         if (!enabled) Modifier else (if (LocalBackGoesHome.current) Modifier else Modifier.systemGestureExclusion()).pointerInput(dir, stepPx) {
@@ -139,17 +150,21 @@ fun Modifier.slideToTurn(
                 }
                 clampAcc()
                 fun finger(c: PointerInputChange) = coords?.takeIf { it.isAttached }?.let { if (magnifier?.screenSpace == true) it.localToScreen(c.position) else it.localToRoot(c.position) } ?: c.position
-                if (loupeOn) { magnifier?.face = currentFace; magnifier?.finger = finger(claimed); magnifier?.shown = currentFace != null }
-                drag(claimed.id) { change ->
-                    val d = change.positionChange()
-                    acc += if (vertical) -d.y else d.x
-                    clampAcc()
-                    change.consume()
-                    slide((acc / stepPx).toInt())
-                    if (magnifier?.shown == true) magnifier.finger = finger(change)
+                // whatever ends the slide (finger up, a pointer cancel, this control leaving the screen), the Magnifier comes down and the control hears onEnd
+                try {
+                    if (loupeOn) magnifier?.show(token, currentFace, finger(claimed))
+                    drag(claimed.id) { change ->
+                        val d = change.positionChange()
+                        acc += if (vertical) -d.y else d.x
+                        clampAcc()
+                        change.consume()
+                        slide((acc / stepPx).toInt())
+                        if (magnifier?.shown == true) magnifier.finger = finger(change)
+                    }
+                } finally {
+                    magnifier?.hide(token)
+                    end()
                 }
-                magnifier?.shown = false
-                end()
             }
         },
     )

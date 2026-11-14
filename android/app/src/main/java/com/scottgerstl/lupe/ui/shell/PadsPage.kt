@@ -1,5 +1,13 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
@@ -94,31 +102,48 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
         val rows = pads.rows.ifEmpty { return@BoxWithConstraints }
         val rh = ((maxHeight - scenesH - 8.dp - GAP * (rows.size - 1)) / rows.size).coerceAtLeast(24.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
-                    rows.forEach { r ->
-                        // the core names a track "Engine · Sound" ("Phase · Pd Organ"): the head shows the sound's name, and the engine under it
-                        val full = r.name.takeIf { " · " in it } ?: mix.rows.getOrNull(r.track - 1)?.name.orEmpty()
-                        val engine = full.takeIf { " · " in it }?.substringBefore(" · ").orEmpty()
-                        RowHead(r, rh, r.track == pads.selected.track, r.name.substringAfter(" · "), engine, core)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
+                        rows.forEach { r ->
+                            // the core names a track "Engine · Sound" ("Phase · Pd Organ"): the head shows the sound's name, and the engine under it
+                            val full = r.name.takeIf { " · " in it } ?: mix.rows.getOrNull(r.track - 1)?.name.orEmpty()
+                            val engine = full.takeIf { " · " in it }?.substringBefore(" · ").orEmpty()
+                            RowHead(r, rh, r.track == pads.selected.track, r.name.substringAfter(" · "), engine, mix.rows.getOrNull(r.track - 1)?.solo == true, core)
+                        }
                     }
-                }
-                BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
-                    // slots to the row's end: as many as fit the width (drawn as empty wells past the entries the core lists), the rest by the pan
-                    val fit = ((maxWidth + GAP) / (PAD_W + GAP)).toInt() + 1
-                    Box(Modifier.fillMaxSize().horizontalScroll(scroll)) {
-                        Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
-                            rows.forEach { r ->
-                                Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
-                                    r.entries.forEachIndexed { i, e ->
-                                        Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads)
+                    MuteColumn(rows, rh, core)
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+                        // slots to the row's end: as many as fit the width (drawn as empty wells past the entries the core lists), the rest by the pan
+                        val fit = ((maxWidth + GAP) / (PAD_W + GAP)).toInt() + 1
+                        Box(Modifier.fillMaxSize().horizontalScroll(scroll)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
+                                rows.forEach { r ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
+                                        r.entries.forEachIndexed { i, e ->
+                                            Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads)
+                                        }
+                                        // past the core's last (empty) entry: wells that only show the room; the next entry appears when this row's last one is filled
+                                        repeat((fit - r.entries.size).coerceAtLeast(0)) { Box(Modifier.width(PAD_W).height(rh).clip(RoundedCornerShape(8.dp)).background(Tok.well).clearAndSetSemantics { }) }
                                     }
-                                    // past the core's last (empty) entry: wells that only show the room; the next entry appears when this row's last one is filled
-                                    repeat((fit - r.entries.size).coerceAtLeast(0)) { Box(Modifier.width(PAD_W).height(rh).clip(RoundedCornerShape(8.dp)).background(Tok.well).clearAndSetSemantics { }) }
                                 }
                             }
                         }
                     }
+                }
+                // The selected track: a 2 dp outline in its own colour across its whole row (head, MUTE, pads), never white (DESIGN.md "White is
+                // global, the track's colour is the track's"). It glides to the newly selected row; it draws nothing a finger can hit.
+                val at = rows.indexOfFirst { it.track == pads.selected.track }
+                if (at >= 0) {
+                    val y = animatedFloat(at.toFloat(), Dur.STATE)
+                    val travelling = LocalTabTravelling.current
+                    val colour = Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size]
+                    Box(
+                        Modifier.fillMaxWidth().height(rh + 4.dp).offset { IntOffset(0, ((rh + GAP).toPx() * y.value - 2.dp.toPx()).roundToInt()) }
+                            .selectedTrackAnchor()
+                            .drawBehind { if (!travelling) drawRoundRect(colour, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx())) }
+                            .clearAndSetSemantics { },
+                    )
                 }
             }
             // scenes: Store, then all sixteen
@@ -185,52 +210,107 @@ private val HEAD_W = 132.dp   // the track head: the "pick a sound without tiny 
 private val MUTE_W = 54.dp
 
 /**
- * A track's head, 132 dp wide: its number in the track's colour, the sound's name, the engine with ⌄ under it. Tap: select the track (the
- * editor and the sound knobs follow). Hold, or tap the engine line: that track's Sounds. Then MUTE, 54 dp wide, the word on it, white when muted.
+ * A track's head, 132 dp wide: its number in the track's colour, the sound's name, the engine under it. A tap selects the track and does
+ * nothing else (decision 29: taps select, holds open menus); a hold opens its menu beside the finger: Sounds…, Mute, Solo. The tap is taken on
+ * the finger lifting anywhere on the head, with no movement limit, so a rolling finger still selects.
  */
 @Composable
-private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: String, core: LupeCore) {
+private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: String, solo: Boolean, core: LupeCore) {
     val color = Tok.track[(r.track - 1) % Tok.track.size]
     val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
     val soundsHost = LocalSoundsHost.current
     val haptic = LocalHapticFeedback.current
-    Row(Modifier.height(h), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val longPress = androidx.compose.ui.platform.LocalViewConfiguration.current.longPressTimeoutMillis
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    var pressed by remember { mutableStateOf(false) }
+    val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100)
+    Box(Modifier.width(HEAD_W).height(h)) {
         Row(
-            Modifier.width(HEAD_W).fillMaxHeight().clip(RoundedCornerShape(8.dp))
+            Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
                 .drawBehind {
                     drawRect(lerp(Tok.control, lerp(Tok.page, color, 0.30f), sel.value))
-                    if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
+                    if (press.value > 0f) drawRect(Color.Black.copy(alpha = 0.25f * press.value))
                 }
                 .semantics(mergeDescendants = true) {
-                    role = Role.Button; contentDescription = "Track ${r.track}, $sound" + if (engine.isNotEmpty()) ", $engine" else ""; stateDescription = if (selected) "Selected" else ""
+                    role = Role.Button; contentDescription = "Track ${r.track}, $sound" + (if (engine.isNotEmpty()) ", $engine" else "") + (if (solo) ", solo" else ""); stateDescription = if (selected) "Selected" else ""
                     onClick("Select track") { core.send(Intent.TrackSelect(r.track)); true }
-                    customActions = listOf(CustomAccessibilityAction("Choose a sound for this track") { soundsHost.open(r.track); true })
+                    onLongClick("Track menu") { menuAt = Offset(40f, 20f); true }
+                    // every hold has a non-hold way in (WCAG 2.5.7)
+                    customActions = listOf(
+                        CustomAccessibilityAction("Choose a sound for this track") { soundsHost.open(r.track); true },
+                        CustomAccessibilityAction(if (solo) "Solo off" else "Solo") { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)); true },
+                    )
                 }
-                .pointerInput(r.track) { detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); soundsHost.open(r.track) }, onTap = { core.send(Intent.TrackSelect(r.track)) }) },
+                .pointerInput(r.track) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        pressed = true
+                        var cancelled = false
+                        val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
+                        pressed = false
+                        if (cancelled) return@awaitEachGesture
+                        if (up != null) core.send(Intent.TrackSelect(r.track))
+                        else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = down.position; waitForUpOrCancellation() }
+                    }
+                },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(30.dp).fillMaxHeight().background(color), contentAlignment = Alignment.Center) { BasicText("${r.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
             Column(Modifier.padding(start = 8.dp, end = 4.dp), verticalArrangement = Arrangement.Center) {
                 BasicText(sound, style = LupeType.key.copy(fontSize = 15.sp, lineHeight = 17.sp), maxLines = 1, softWrap = false,
                     autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 15.sp, stepSize = 1.sp))
-                // the engine line is the way to the track's sounds without a hold (WCAG 2.5.7)
-                Row(
-                    Modifier.pointerInput(r.track) { detectTapGestures { soundsHost.open(r.track) } },
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    BasicText(engine.ifEmpty { "Sounds" }, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 1)
-                    Chevron(Tok.text2Raised)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (engine.isNotEmpty()) BasicText(engine, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 1)
+                    // solo: a lit pill with the word (never the colour alone)
+                    if (solo) BasicText("SOLO", Modifier.background(Tok.primaryTop, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp), style = LupeType.label.copy(fontSize = 10.sp, lineHeight = 11.sp, color = Tok.onColour))
                 }
             }
         }
-        val on = r.muted
-        val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
-        Box(
-            Modifier.width(MUTE_W).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
-                .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Mute $sound"; stateDescription = if (on) "Muted" else "Not muted" }
-                .pointerInput(r.track) { detectTapGestures { core.send(Intent.TrackMute(r.track)) } },
-            contentAlignment = Alignment.Center,
-        ) { BasicText("MUTE", style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit.value))) }
+        LupeMenu(menuAt != null, { menuAt = null }, width = 224.dp, at = menuAt) {
+            MenuHeading("${r.track} $sound")
+            MenuRow("Sounds…", { menuAt = null; soundsHost.open(r.track) }, sub = engine.ifEmpty { null })
+            MenuRow("Mute", { core.send(Intent.TrackMute(r.track)); menuAt = null }, checked = r.muted)
+            MenuRow("Solo", { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)); menuAt = null }, checked = solo, sub = "Plays this track alone")
+        }
+    }
+}
+
+/**
+ * The MUTE keys, one a row, 54 dp wide with the word on them, white when muted. A tap toggles one. Press one and drag up or down the column
+ * and every key the finger crosses takes the state the first one changed to (paint mutes, decision 29), each sent as it is crossed with a tick.
+ */
+@Composable
+private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore) {
+    val haptic = LocalHapticFeedback.current
+    val now by rememberUpdatedState(rows)
+    Column(
+        Modifier.width(MUTE_W).pointerInput(rows.size) {
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val pitch = (rh + GAP).toPx()
+                fun rowAt(y: Float) = (y / pitch).toInt().coerceIn(0, now.size - 1)
+                val first = now.getOrNull(rowAt(down.position.y)) ?: return@awaitEachGesture
+                val target = !first.muted
+                val painted = mutableSetOf(first.track)
+                core.send(Intent.TrackMute(first.track)); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                drag(down.id) { c ->
+                    c.consume()
+                    val r = now.getOrNull(rowAt(c.position.y)) ?: return@drag
+                    if (painted.add(r.track) && r.muted != target) { core.send(Intent.TrackMute(r.track)); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                }
+            }
+        },
+        verticalArrangement = Arrangement.spacedBy(GAP),
+    ) {
+        rows.forEach { r ->
+            val lit = animatedFloat(if (r.muted) 1f else 0f, Dur.STATE)
+            val sound = r.name.substringAfter(" · ")
+            Box(
+                Modifier.fillMaxWidth().height(rh).clip(RoundedCornerShape(8.dp)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
+                    .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Mute $sound"; stateDescription = if (r.muted) "Muted" else "Not muted"; onClick { core.send(Intent.TrackMute(r.track)); true } },
+                contentAlignment = Alignment.Center,
+            ) { BasicText("MUTE", style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit.value))) }
+        }
     }
 }
 
@@ -260,7 +340,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     }
     val desc = "${row.name}, entry $letter, $what$stateWord" + if (selected) ", selected" else ""
 
-    fun tap() { if (selectMode) core.send(Intent.PadSelect(row.track, idx)) else core.send(Intent.PadTap(row.track, idx)) }
+    // a tap selects the pad and its track (the editor follows) and still launches it (decision 29)
+    fun tap() { core.send(Intent.PadSelect(row.track, idx)); if (!selectMode) core.send(Intent.PadTap(row.track, idx)) }
 
     Box(modifier.width(PAD_W).height(h)) {
         Box(
@@ -276,7 +357,11 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     if (next.value > 0f) drawRoundRect(Tok.text2.copy(alpha = next.value), topLeft = Offset(0.75.dp.toPx(), 0.75.dp.toPx()), size = Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(1.5.dp.toPx()))
                     if (e.hasSound && !empty) drawPath(Path().apply { moveTo(size.width - 10.dp.toPx(), 0f); lineTo(size.width, 0f); lineTo(size.width, 10.dp.toPx()); close() }, Tok.page)
                     if (press.value > 0f) drawRoundRect(Color.Black.copy(alpha = 0.25f * press.value), cornerRadius = r)
-                    if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
+                    // the selected pad: a ring in the track's colour (never white), with a dark gap inside it so it reads on a filled, playing pad
+                    if (sel.value > 0f) {
+                        drawRoundRect(color.copy(alpha = sel.value), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
+                        drawRoundRect(Tok.page.copy(alpha = sel.value), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius(5.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                    }
                 }
                 .semantics(mergeDescendants = true) {
                     role = Role.Button

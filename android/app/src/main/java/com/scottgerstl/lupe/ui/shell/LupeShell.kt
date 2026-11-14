@@ -84,14 +84,15 @@ fun LupeShell(core: LupeCore) {
                 .greyedBy { grey.value }
                 .then(if (mode != LinkMode.Normal || sheetOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
-            // Landscape (decision 28): the camera cutout and the gesture bar are kept clear by the window's own insets, never fixed numbers.
-            // The status bar is hidden while Lupe runs, so the top inset is the cutout's alone (none, with the camera at the side).
-            val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+            // Landscape (decisions 28 and 29). The content runs to a 16 dp margin on both sides and ignores the camera's hole punch; only a navigation
+            // bar at the side (three-button navigation) and the gesture bar at the bottom are kept clear, by the window's own insets. The status bar
+            // is hidden while Lupe runs. At the right the round keys sit inside the display's rounded corner.
+            val sides = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
             TopBar(top, core, shell.tab, { core.send(com.scottgerstl.lupe.core.Intent.SetTab(it)) },
-                Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Top)).windowInsetsPadding(sides).padding(start = 4.dp, end = 8.dp, top = 4.dp))
+                Modifier.windowInsetsPadding(sides).padding(start = 8.dp, end = cornerInset(), top = 4.dp))
             // the hairline that ends the header runs the full width
             Box(Modifier.fillMaxWidth().padding(top = 3.dp).height(1.dp).background(Tok.control))
-            ShellBody(shell, core, Modifier.windowInsetsPadding(sides).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp))
+            ShellBody(shell, core, Modifier.windowInsetsPadding(sides).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp))
         }
       }
 
@@ -135,4 +136,30 @@ fun LupeShell(core: LupeCore) {
         // the Magnifier floats over everything, above the finger
         MagnifierHost(magnifier)
     }
+}
+
+/**
+ * How far in from the right edge the header's last round key (Play: a 40 dp circle in a 48 dp box, its centre 28 dp below the top) must sit to
+ * be wholly inside the display's rounded corner. From the corner's own radius (Android's RoundedCorner); 32 dp where the system gives none.
+ */
+@Composable
+private fun cornerInset(): androidx.compose.ui.unit.Dp {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val corner = view.rootWindowInsets?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_RIGHT)?.radius ?: return 32.dp
+    val r = with(density) { corner.toDp() }.value
+    return headerCornerInset(r).dp
+}
+
+/**
+ * The geometry, in dp: the circle's upper right (45°) must lie inside the corner's curve with 2 dp to spare. [radius] is the corner's; the result
+ * is the inset of the key's 48 dp box from the screen edge. Never under 24: at 8 dp Play was cut off on the Pixel 10 (Scott, 2026-11-14), whose
+ * real corner is tighter than the circle the system reports, so the result also carries 6 dp over the geometry.
+ */
+internal fun headerCornerInset(radius: Float): Float {
+    val keyR = 20f; val centreY = 28f; val boxPad = 4f; val spare = 2f
+    val py = centreY - keyR * 0.7071f                     // the 45° point's distance below the top
+    if (radius <= py) return 24f                           // the corner's curve ends above it
+    val reach = kotlin.math.sqrt(((radius - spare) * (radius - spare) - (radius - py) * (radius - py)).coerceAtLeast(0f))
+    return (radius - reach - boxPad - keyR + keyR * 0.7071f + 6f).coerceAtLeast(24f)
 }

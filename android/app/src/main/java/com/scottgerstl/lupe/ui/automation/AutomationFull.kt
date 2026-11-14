@@ -103,6 +103,8 @@ private fun AutomationState.raw(pct: Int) = min + (pct * (max - min) / 100f).rou
 fun LaneView(ed: EditorState, auto: AutomationState, core: LupeCore, track: Color, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
     val haptic = LocalHapticFeedback.current
     val magnifier = LocalMagnifier.current
+    val laneToken = remember { Any() }
+    androidx.compose.runtime.DisposableEffect(magnifier) { onDispose { magnifier?.hide(laneToken) } }
     var pickerOpen by remember { mutableStateOf(false) }
     val lane = auto.lane
     val info = laneInfo(auto, lane)
@@ -203,9 +205,7 @@ fun LaneView(ed: EditorState, auto: AutomationState, core: LupeCore, track: Colo
                                 trail.add(c.position)
                                 drawnSteps = (drawnSteps?.first ?: st) to st
                                 if (magnifier != null) {
-                                    magnifier.face = MagnifierFace("$lane · step ${st + 1}", { "$v%" }, { v / 100f }, tint = track)
-                                    magnifier.finger = coords?.takeIf { it.isAttached }?.localToRoot(c.position) ?: c.position
-                                    magnifier.shown = true
+                                    magnifier.show(laneToken, MagnifierFace("$lane · step ${st + 1}", { "$v%" }, { v / 100f }, tint = track), coords?.takeIf { it.isAttached }?.localToRoot(c.position) ?: c.position)
                                 }
                             }
                             trail.clear(); drawnSteps = null
@@ -213,10 +213,13 @@ fun LaneView(ed: EditorState, auto: AutomationState, core: LupeCore, track: Colo
                                 val up = waitForUpOrCancellation()
                                 if (up != null) { core.send(Intent.StepSelect(near)); return@awaitEachGesture }
                             }
-                            apply(down)
-                            drag(down.id) { c -> moved = true; apply(c); c.consume() }
-                            magnifier?.shown = false
-                            trail.clear()
+                            try {
+                                apply(down)
+                                drag(down.id) { c -> moved = true; apply(c); c.consume() }
+                            } finally {
+                                magnifier?.hide(laneToken)   // also on a pointer cancel, or the lane leaving mid-stroke
+                                trail.clear()
+                            }
                         }
                     }
                     .drawBehind {
