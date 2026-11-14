@@ -33,6 +33,8 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 24 | Start Lupe with the FM-1 unplugged | The header stays, greyed; a card: "Plug in the FM-1", Skiff 2.5.1, a moving bar, "Use the demo FM-1" | – | ☐ pass ☐ fail: |
 | 25 | Tap Use the demo FM-1; then song name › Leave the demo | The app fills with the demo song and works; Leave the demo brings the card back | – | ☐ pass ☐ fail: |
 | 26 | In the demo, plug the FM-1 in; Leave the demo | Lupe shows the real FM-1 (it kept looking while the demo ran) | – | ☐ pass ☐ fail: |
+| 27 | Stopped. On a track whose first free slot is D, hold the outlined G: New pattern | The menu's New pattern, Rest and Pick a pattern each say "Goes in D"; the new pattern appears in D, not G (the FM-1's list has no gaps) | Yes | ☐ pass ☐ fail: |
+| 28 | Tap an outlined empty slot (any letter) | The track is selected and its first free slot takes the selection ring; nothing plays | – | ☐ pass ☐ fail: |
 
 **What the building session saw on a screen:** only row 3's Pads page (the band under track 1, outlined slots A to H, the Store key and scenes), on its own emulator against the fake core. Everything else here (the Timeline's band, the hold menus and their slide rows, the Mix pop-up and its four pictures, Settings, the launch footer, the no-FM-1 card and the demo switch) was built and unit-tested but **not seen on any screen**: the emulator kept restarting under the Mac's load. Nothing was run on a Pixel or a real FM-1.
 

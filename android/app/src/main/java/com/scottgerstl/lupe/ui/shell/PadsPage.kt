@@ -143,11 +143,16 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                         r.entries.forEachIndexed { i, e ->
                                             Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads, clock = clock)
                                         }
-                                        // past the core's last (empty) entry, to H (and to the row's end): outlined slots with their letter that only show
-                                        // the room (decision 33); the next entry takes touches when this row's last one is filled
+                                        // past the core's last (empty) entry, to H (and to the row's end): outlined slots with their letter (decision 33).
                                         val onRow = animatedFloat(if (r.track == pads.selected.track) 1f else 0f, Dur.STATE)
                                         val trackCol = Tok.track[(r.track - 1).coerceAtLeast(0) % Tok.track.size]
-                                        for (k in r.entries.size until maxOf(fit, 8)) EmptySlot(k, rh, { emptyOutline(trackCol, onRow.value) })
+                                        // Each of them stands for the row's next free entry (Scott, 2026-11-14: a hold on an outlined G or H did nothing, though
+                                        // the outline invites it): a tap selects that entry, a hold opens its menu, and what is made lands in the first free place.
+                                        val free = r.entries.indexOfFirst { it.kind == PadKind.Empty }
+                                        for (k in r.entries.size until maxOf(fit, 8)) {
+                                            if (free >= 0 && k < 16) Pad(r, k, r.entries[free], rh, selected = false, core = core, selectMode = false, pads = pads, target = free, clock = clock)
+                                            else EmptySlot(k, rh, { emptyOutline(trackCol, onRow.value) })
+                                        }
                                     }
                                 }
                             }
@@ -343,7 +348,7 @@ private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore, clock: androi
 
 /** One entry of one track: its faces are the board's (playing, muted, waiting, next, selected, empty, REST). */
 @Composable
-fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: LupeCore, selectMode: Boolean, pads: PadsState, modifier: Modifier = Modifier, clock: androidx.compose.runtime.State<com.scottgerstl.lupe.core.ClockState> = remember { mutableStateOf(com.scottgerstl.lupe.core.ClockState()) }) {
+fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: LupeCore, selectMode: Boolean, pads: PadsState, modifier: Modifier = Modifier, target: Int = idx, clock: androidx.compose.runtime.State<com.scottgerstl.lupe.core.ClockState> = remember { mutableStateOf(com.scottgerstl.lupe.core.ClockState()) }) {
     val color = Tok.track[(row.track - 1) % Tok.track.size]
     val reduce = LocalReduceMotion.current
     val haptic = LocalHapticFeedback.current
@@ -357,6 +362,10 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100)
     val onRow = animatedFloat(if (pads.selected.track == row.track) 1f else 0f, Dur.STATE)
     val letter = ('A' + idx).toString()
+    // The entry its touches act on. An outlined slot past the row's one free entry stands for that entry (Skiff's list has no gaps, so
+    // whatever is made there lands in the first free place): [target] is that entry, and the menu says where it goes.
+    val at = target
+    val goes = if (at != idx) "Goes in ${'A' + at}" else null
     val empty = e.kind == PadKind.Empty
     val holdMenu = LocalHoldMenu.current
     val soundsHost = LocalSoundsHost.current
@@ -369,7 +378,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
      * if another entry names it, the pattern stays and the entry clears at once, as on the iPad.
      */
     fun padItems(): List<HoldItem> = buildList {
-        val others = if (e.kind == PadKind.Pattern && e.pattern != null) otherUsers(pads, row.track, idx, e.pattern) else emptyList()
+        val others = if (e.kind == PadKind.Pattern && e.pattern != null) otherUsers(pads, row.track, at, e.pattern) else emptyList()
         // the song's blocks (the Timeline's): this pad's block, for the choices that change the track's list. They need the song stopped.
         val tl = core.timeline.value
         val blocks = tl.tracks.firstOrNull { it.track == row.track }?.blocks.orEmpty().filter { it.kind != "gap" }
@@ -377,17 +386,17 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         val idle = !tl.playing && !playing
         val stopFirst = if (idle) null else "Stop first"
         if (e.kind == PadKind.Pattern) {
-            add(HoldItem("Edit steps") { core.send(Intent.PadSelect(row.track, idx)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
+            add(HoldItem("Edit steps") { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
             // the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
-            add(HoldItem("Select sound", sub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, idx)); soundsHost.open(row.track, letter) })
+            add(HoldItem("Select sound", sub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
         }
         if (empty) {
-            add(HoldItem("New pattern") { core.send(Intent.PadNew(row.track, idx)) })
-            add(HoldItem("Rest", sub = stopFirst, enabled = idle) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, idx, 65)) })
+            add(HoldItem("New pattern", sub = goes) { core.send(Intent.PadNew(row.track, at)) })
+            add(HoldItem("Rest", sub = stopFirst ?: goes, enabled = idle) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
         }
         val kept = keptPatterns(pads)
-        add(HoldItem(if (empty) "Pick a pattern…" else "Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else null, enabled = kept.isNotEmpty(),
-            children = { kept.map { p -> HoldItem("Pattern %02d".format(p), checked = e.pattern == p) { core.send(Intent.PadSet(row.track, idx, p)) } } }))
+        add(HoldItem(if (empty) "Pick a pattern…" else "Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else if (empty) goes else null, enabled = kept.isNotEmpty(),
+            children = { kept.map { p -> HoldItem("Pattern %02d".format(p), checked = e.pattern == p) { core.send(Intent.PadSet(row.track, at, p)) } } }))
         if (!empty && block != null) {
             // how many passes it plays (the iPad's Play once more / less); a chain repeats whole, on its last entry's count
             val chained = block.last > block.first
@@ -402,7 +411,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         if (!empty) {
             val erases = e.kind == PadKind.Pattern && others.isEmpty()
             add(HoldItem("Clear", sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null,
-                confirm = if (erases) "Clear $letter: erases pattern %02d".format(e.pattern ?: 0) else null) { core.send(Intent.PadClear(row.track, idx)) })
+                confirm = if (erases) "Clear $letter: erases pattern %02d".format(e.pattern ?: 0) else null) { core.send(Intent.PadClear(row.track, at)) })
         }
     }
     val what = when (e.kind) { PadKind.Empty -> "empty"; PadKind.Rest -> "rest"; PadKind.Pattern -> "pattern ${e.pattern}" }
@@ -412,10 +421,11 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         PadPlay.Next -> ", next"
         PadPlay.Idle -> ""
     }
-    val desc = "${row.name}, entry $letter, $what$stateWord" + if (selected) ", selected" else ""
+    val desc = "${row.name}, entry $letter, $what$stateWord" + (if (goes != null) ". ${goes.replaceFirst("Goes in", "What you add here goes in")}, the next free entry" else "") + if (selected) ", selected" else ""
 
     // a tap selects the pad and its track (the editor follows) and still launches it (decision 29)
-    fun tap() { core.send(Intent.PadSelect(row.track, idx)); if (!selectMode) core.send(Intent.PadTap(row.track, idx)) }
+    // …an empty slot is only selected: the FM-1 refuses to play one, and selecting it is the way in that isn't a hold
+    fun tap() { core.send(Intent.PadSelect(row.track, at)); if (!selectMode && !empty) core.send(Intent.PadTap(row.track, at)) }
 
     Box(modifier.width(PAD_W).height(h).onGloballyPositioned { padCoords = it }) {
         Box(
@@ -448,12 +458,12 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     onLongClick("Pad menu") { padCoords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), color, padItems()) }; true }
                     // every long-press has a non-hold way in (WCAG 2.5.7)
                     customActions = buildList {
-                        if (e.kind == PadKind.Pattern) { add(CustomAccessibilityAction("Edit steps") { core.send(Intent.PadSelect(row.track, idx)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); true }); add(CustomAccessibilityAction("Select sound") { core.send(Intent.PadSelectSound(row.track, idx)); true }) }
-                        if (empty) add(CustomAccessibilityAction("New pattern") { core.send(Intent.PadNew(row.track, idx)); true })
-                        if (!empty) add(CustomAccessibilityAction("Clear pad") { core.send(Intent.PadClear(row.track, idx)); true })
+                        if (e.kind == PadKind.Pattern) { add(CustomAccessibilityAction("Edit steps") { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); true }); add(CustomAccessibilityAction("Select sound") { core.send(Intent.PadSelectSound(row.track, at)); true }) }
+                        if (empty) add(CustomAccessibilityAction("New pattern") { core.send(Intent.PadNew(row.track, at)); true })
+                        if (!empty) add(CustomAccessibilityAction("Clear pad") { core.send(Intent.PadClear(row.track, at)); true })
                     }
                 }
-                .tapOrHoldMenu(Triple(row.track, idx, e.kind), color, { padItems() }, onTap = { tap() }, pressed = { pressed = it }),
+                .tapOrHoldMenu(Triple(row.track, at, e.kind), color, { padItems() }, onTap = { tap() }, pressed = { pressed = it }),
         ) {
             val fg = Color.lerp(Tok.text, Tok.onColour, fill.value)
             if (empty) {
@@ -498,7 +508,7 @@ private fun keptPatterns(pads: PadsState): List<Int> =
  */
 internal fun emptyOutline(track: Color, onBand: Float): Color = androidx.compose.ui.graphics.lerp(Tok.outline, track, onBand)
 
-/** A slot past the core's entries: the outline and its letter, nothing to touch. */
+/** A slot with no free entry behind it (the row's 16 are full, or past P): the outline and its letter, nothing to touch. */
 @Composable
 private fun EmptySlot(idx: Int, h: Dp, outline: () -> Color) {
     Box(Modifier.width(PAD_W).height(h).drawBehind {
