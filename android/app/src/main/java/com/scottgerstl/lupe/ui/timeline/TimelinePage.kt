@@ -5,7 +5,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +52,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -69,23 +74,22 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.scottgerstl.lupe.core.TopState
-import com.scottgerstl.lupe.ui.shell.ConfirmBox
 import com.scottgerstl.lupe.ui.shell.Key
 import com.scottgerstl.lupe.ui.shell.KeyLabel
 import com.scottgerstl.lupe.ui.shell.LocalTabTravelling
-import com.scottgerstl.lupe.ui.shell.LupeMenu
-import com.scottgerstl.lupe.ui.shell.MenuHeading
-import com.scottgerstl.lupe.ui.shell.MenuRow
+import com.scottgerstl.lupe.ui.shell.HOLD_MS
+import com.scottgerstl.lupe.ui.shell.HoldItem
+import com.scottgerstl.lupe.ui.shell.LocalHoldMenu
+import com.scottgerstl.lupe.ui.shell.tapOrHoldMenu
 import com.scottgerstl.lupe.ui.shell.selectedTrackAnchor
-import com.scottgerstl.lupe.ui.slide.MenuSlideRow
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.EaseOut
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
-import com.scottgerstl.lupe.ui.theme.LupeCrossfade
 import com.scottgerstl.lupe.ui.theme.LupeType
 import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The ruler along the top; the track heads' column (decision 28: compact heads, about 72 dp); the gap between rows, as Pads'. */
 private val RULER = 32.dp
@@ -102,8 +106,8 @@ private val GAP = 4.dp
  * Blocks are the track's colour at 45 % over the page with the pattern's number; a REST is a dashed outline. Tap
  * selects (white ring, a grip at its right end) and tap again lets go. A selected block drags along its own row to
  * REORDER it (a track's song is a list played back to back, so a block has no free place; its neighbours open a gap) and
- * drags by its grip to set its REPS in whole passes (the blocks after it move as it goes). Hold opens its menu beside
- * the finger. Holding the empty lane after a track's last block adds to its song. While the song plays the FM-1 refuses
+ * drags by its grip to set its REPS in whole passes (the blocks after it move as it goes). Hold opens the hold menu
+ * under the finger (the shell's HoldMenu). Holding the empty lane after a track's last block adds to its song. While the song plays the FM-1 refuses
  * changes to the order: a strip on the ruler says so, with Stop; a playhead runs across and the view pages to keep it in.
  *
  * Every drag reads what the finger did when it ENDS and sends that (the fault portrait had before fb7a661: the end
@@ -271,8 +275,6 @@ private fun TrackHead(track: Int, name: String, colour: Color, selected: Boolean
     }
 }
 
-private enum class BlockMenu { Root, Pattern, PatternConfirm, Delete, Insert }
-
 /**
  * One block, a bar of its track's colour lying along the row. Dragging its body REORDERS it among its track's blocks (it
  * follows the finger and lands in the slot it is closest to); dragging its right end sets its REPS (whole passes). Only a
@@ -287,10 +289,8 @@ private fun BlockView(
     val haptic = LocalHapticFeedback.current
     val reduce = LocalReduceMotion.current
     val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
-    var menuMode by remember { mutableStateOf(BlockMenu.Root) }
-    var pendingPattern by remember { mutableStateOf(0) }
-    var armedAt by remember { mutableStateOf(0L) }
+    val holdMenu = LocalHoldMenu.current
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var tickKey by remember { mutableIntStateOf(0) }
     val mine = ui.blocks.filter { it.track == b.track && !it.gap }.sortedBy { it.start }
     // the drag's handlers read these when they run, not when the gesture began
@@ -314,12 +314,42 @@ private fun BlockView(
     val what = if (b.rest) "rest" else "pattern ${"%02d".format(b.pattern ?: 0)}"
     val words = "Track ${b.track} $name, ${barRange(b)}, $what" + if (b.playing) ", playing" else ""
 
-    fun openMenu(at: Offset) { if (editable) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuMode = BlockMenu.Root; menuAt = at } }
+    /**
+     * The block's hold menu (design/boards/radial-menu.html: the circle under the finger, the choices on lines out of it): Set pattern,
+     * Passes, Duplicate, Insert before, Select sound, Delete (asked in place), and Chain or Split where they apply. Its choices are
+     * pick-and-go, so PASSES is a short list here; the grip at the block's right end is the way to slide it.
+     */
+    fun blockItems(): List<HoldItem> = buildList {
+        val erases = !b.rest && b.pattern != null && (ui.uses[b.pattern] ?: 0) <= 1
+        val old = "%02d".format(b.pattern ?: 0)
+        add(HoldItem("Set pattern…", sub = if (b.rest) "REST" else "Pattern $old", children = {
+            ui.kept.map { p ->
+                val n = "%02d".format(p)
+                HoldItem("Pattern $n", checked = !b.rest && b.pattern == p,
+                    confirm = if (erases && p != b.pattern) "Set $n: pattern $old is used nowhere else, so it's erased" else null) { actions.setPattern(b, p) }
+            }
+        }))
+        add(HoldItem("Passes…", sub = "${b.reps} · ${barsText(b.length)}", children = {
+            (listOf(1, 2, 3, 4, 6, 8, 12, 16) + b.reps).distinct().sorted().map { n -> HoldItem(if (n == 1) "1 pass" else "$n passes", sub = barsText(n * b.passBars), checked = n == b.reps) { actions.stretch(b, n) } }
+        }))
+        add(HoldItem("Duplicate") { actions.duplicate(b) })
+        add(HoldItem("Insert before…", enabled = (ui.entries[b.track] ?: 0) < 16, sub = if ((ui.entries[b.track] ?: 0) < 16) null else "The track's 16 entries are full", children = {
+            listOf(HoldItem("REST") { actions.insert(b.track, b.id, 65) }) + ui.kept.map { p -> HoldItem("Pattern ${"%02d".format(p)}") { actions.insert(b.track, b.id, p) } }
+        }))
+        add(HoldItem("Select sound") { actions.openSounds(b.track) })
+        val gone = if (b.rest) "the REST" else "pattern $old"
+        add(HoldItem("Delete…", confirm = "Delete block: $gone (${barsText(b.length)}) from track ${b.track}" + if (erases) ". It is used nowhere else, so it's erased" else "") { actions.delete(b) })
+        // a chain plays its patterns as one block; Chain joins this block to the next, Split takes a chain apart
+        if (ui.blocks.any { it.track == b.track && !it.gap && it.id == b.id + b.entries }) add(HoldItem("Chain with the next") { actions.chain(b) })
+        if (b.entries > 1) add(HoldItem("Split the chain") { actions.split(b) })
+    }
+    fun openMenuAtCentre() { if (editable) coords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), colour, blockItems()) } }
 
     Box(
         Modifier
             .offset { IntOffset((shownStart * barPx - scrollNow()).toInt(), 0) }
             .width(widthDp.coerceAtLeast(4.dp)).fillMaxHeight()
+            .onGloballyPositioned { coords = it }
             .graphicsLayer { if (dragging && !resizing) { shadowElevation = 8.dp.toPx(); shape = RoundedCornerShape(6.dp) } }
             .clip(RoundedCornerShape(6.dp)).background(fill)
             .drawBehind {
@@ -337,17 +367,16 @@ private fun BlockView(
             .semantics(mergeDescendants = true) {
                 role = Role.Button; contentDescription = words; stateDescription = if (selected) "Selected" else ""
                 onClick { actions.select(if (selected) null else b.key); true }
-                onLongClick("Block menu") { openMenu(Offset(60f, 30f)); true }
+                onLongClick("Block menu") { openMenuAtCentre(); true }
                 if (editable) customActions = listOf(
                     CustomAccessibilityAction("Move one place later") { actions.moveBy(b, 1); true },
                     CustomAccessibilityAction("Move one place earlier") { actions.moveBy(b, -1); true },
                     CustomAccessibilityAction("One pass longer") { actions.stretch(b, b.reps + 1); true },
                     CustomAccessibilityAction("One pass shorter") { actions.stretch(b, b.reps - 1); true },
                     CustomAccessibilityAction("Duplicate") { actions.duplicate(b); true },
-                    CustomAccessibilityAction("Delete…") { menuMode = BlockMenu.Delete; armedAt = System.currentTimeMillis(); menuAt = Offset(60f, 30f); true },
+                    CustomAccessibilityAction("Delete…") { openMenuAtCentre(); true },
                 )
             }
-            .pointerInput(b.key, editable, selected) { detectTapGestures(onTap = { actions.select(if (selected) null else b.key) }, onLongPress = { openMenu(it) }) }
             // only a selected block drags (an unselected one's drag is the song's pan)
             .then(if (selected && editable) Modifier.pointerInput(b.key) {
                 val edgePx = 28.dp.toPx()
@@ -371,69 +400,15 @@ private fun BlockView(
                     val k = if (drag.resizing) repsFor(src, drag.offsetBars) else placesFor(nowMine, src.id, drag.offsetBars)
                     if (k != tickKey) { tickKey = k; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
                 }
-            } else Modifier),
+            } else Modifier)
+            // a tap selects (or lets go); a hold opens the menu under the finger, and the same finger slides to a choice. Put after the drag, so
+            // it hears the finger first: once its menu is open it keeps the finger and the block doesn't start to move under it.
+            .tapOrHoldMenu(b.key, colour, items = { if (editable) blockItems() else emptyList() }, onTap = { actions.select(if (selected) null else b.key) }),
     ) {
         // the number stays in view while any of the block is: it rides the lanes' left edge when the block starts before it
         val pin = Modifier.align(Alignment.CenterStart).offset { IntOffset((scrollNow() - shownStart * barPx).coerceIn(0f, (size0 - 34.dp.toPx()).coerceAtLeast(0f)).toInt(), 0) }.padding(start = 6.dp)
         if (!b.rest) BasicText("%02d".format(b.pattern ?: 0), pin, style = LupeType.number.copy(fontSize = 16.sp, color = Tok.text), maxLines = 1, softWrap = false)
         else BasicText("REST", pin, style = LupeType.small.copy(fontSize = 11.sp), maxLines = 1, softWrap = false)
-        // anchored to the block, so the menu opens beside the finger
-        BlockMenuPopup(b, menuAt, menuMode, armedAt, pendingPattern, ui, actions, { menuMode = it; if (it == BlockMenu.Delete || it == BlockMenu.PatternConfirm) armedAt = System.currentTimeMillis() }, { pendingPattern = it }, { menuAt = null })
-    }
-}
-
-/** The block's hold menu, beside the finger: Pattern, PASSES (slid), Duplicate, Select sound, Delete… (asked in place). */
-@Composable
-private fun BlockMenuPopup(
-    b: BlockUi, at: Offset?, mode: BlockMenu, armedAt: Long, pendingPattern: Int, ui: TimelineUi, actions: TimelineActions,
-    setMode: (BlockMenu) -> Unit, setPending: (Int) -> Unit, close: () -> Unit,
-) {
-    val erases = !b.rest && b.pattern != null && (ui.uses[b.pattern] ?: 0) <= 1
-    LupeMenu(at != null, close, width = 240.dp, at = at) {
-        LupeCrossfade(mode) { m ->
-            Column {
-                when (m) {
-                    BlockMenu.Root -> {
-                        MenuHeading("Track ${b.track} · ${barRange(b)}")
-                        MenuRow(if (b.rest) "Pattern: REST ⌄" else "Pattern ${"%02d".format(b.pattern ?: 0)} ⌄", { setMode(BlockMenu.Pattern) })
-                        // how long it plays: its passes, set by sliding (no − / +); the bars follow
-                        MenuSlideRow("PASSES · ${barsText(b.length)}".uppercase(), "${b.reps}", b.reps, 1, 16, "Passes, block on track ${b.track}", stepDp = 22f) { actions.stretch(b, it) }
-                        MenuRow("Duplicate", { actions.duplicate(b); close() })
-                        MenuRow("Insert before…", { setMode(BlockMenu.Insert) }, enabled = (ui.entries[b.track] ?: 0) < 16)
-                        // a chain plays its patterns as one block; Chain joins this block to the next, Split takes a chain apart
-                        if (ui.blocks.any { it.track == b.track && !it.gap && it.id == b.id + b.entries }) MenuRow("Chain with the next", { actions.chain(b); close() })
-                        if (b.entries > 1) MenuRow("Split the chain", { actions.split(b); close() })
-                        MenuRow("Select sound", { actions.openSounds(b.track); close() })
-                        MenuRow("Delete…", { setMode(BlockMenu.Delete) })
-                    }
-                    BlockMenu.Pattern -> {
-                        MenuHeading("Pattern for this block")
-                        ui.kept.forEach { p ->
-                            MenuRow("Pattern ${"%02d".format(p)}", { if (erases && p != b.pattern) { setPending(p); setMode(BlockMenu.PatternConfirm) } else { actions.setPattern(b, p); close() } }, checked = !b.rest && b.pattern == p)
-                        }
-                        MenuRow("Back", { setMode(BlockMenu.Root) })
-                    }
-                    BlockMenu.Insert -> {
-                        MenuHeading("Insert before this block")
-                        MenuRow("REST", { actions.insert(b.track, b.id, 65); close() })
-                        ui.kept.forEach { p -> MenuRow("Pattern ${"%02d".format(p)}", { actions.insert(b.track, b.id, p); close() }) }
-                        MenuRow("Back", { setMode(BlockMenu.Root) })
-                    }
-                    BlockMenu.PatternConfirm -> {
-                        // the old pattern is used nowhere else, so setting another erases it
-                        val words = "Pattern ${"%02d".format(b.pattern ?: 0)} is used nowhere else, so setting ${"%02d".format(pendingPattern)} erases it. Set it?"
-                        ConfirmBox(words, "Confirm: $words", armedAt) { actions.setPattern(b, pendingPattern); close() }
-                        MenuRow("Cancel", { setMode(BlockMenu.Pattern) })
-                    }
-                    BlockMenu.Delete -> {
-                        val gone = if (b.rest) "the REST" else "pattern ${"%02d".format(b.pattern ?: 0)}"
-                        val words = "Delete $gone (${barsText(b.length)}) from track ${b.track}?" + if (erases) " It is used nowhere else, so it's erased." else ""
-                        ConfirmBox(words, "Confirm: $words", armedAt) { actions.delete(b); close() }
-                        MenuRow("Cancel", { setMode(BlockMenu.Root) })
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -454,39 +429,48 @@ internal fun barRange(b: BlockUi): String {
     return if (first == last) "bar $first" else "bars $first–$last"
 }
 
-/** Holding the empty part of a track's lane, after its last block: a menu beside the finger to add to the song (New pattern, or a kept pattern or a REST at the end). */
+/** Holding the empty part of a track's lane, after its last block: the hold menu under the finger, to add to the song (New pattern, a kept pattern or a REST at the end). */
 @Composable
 private fun TrackEnd(track: Int, ui: TimelineUi, actions: TimelineActions, barPx: Float, scrollNow: () -> Float, editable: Boolean) {
     val haptic = LocalHapticFeedback.current
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
-    var listing by remember { mutableStateOf(false) }
+    val holdMenu = LocalHoldMenu.current
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val colour = Tok.track[(track - 1) % Tok.track.size]
     val end = ui.blocks.filter { it.track == track && !it.gap }.maxOfOrNull { it.end } ?: 0f
-    val full = (ui.entries[track] ?: 0) >= 16
     val endPx by rememberUpdatedState(end * barPx)
+    val items by rememberUpdatedState({
+        val full = (ui.entries[track] ?: 0) >= 16
+        val at = ui.entries[track] ?: 0
+        val why = if (full) "The track's 16 entries are full" else null
+        listOf(
+            HoldItem("New pattern", sub = why, enabled = !full) { actions.newBlock(track) },
+            HoldItem("Add a pattern…", sub = why, enabled = !full, children = { ui.kept.map { p -> HoldItem("Pattern ${"%02d".format(p)}") { actions.insert(track, at, p) } } }),
+            HoldItem("Add a REST", sub = why, enabled = !full) { actions.insert(track, at, 65) },
+        )
+    })
     Box(
-        Modifier.fillMaxSize()
-            .semantics { onLongClick("Add to track $track's song") { if (editable) { listing = false; menuAt = Offset((endPx - scrollNow()).coerceAtLeast(0f) + 40f, 20f); true } else false } }
+        Modifier.fillMaxSize().onGloballyPositioned { coords = it }
+            .semantics { onLongClick("Add to track $track's song") { val c = coords?.takeIf { it.isAttached }; if (editable && c != null) { holdMenu?.open(c.localToWindow(Offset(((endPx - scrollNow()).coerceAtLeast(0f) + 40f).coerceAtMost(c.size.width - 1f), c.size.height / 2f)), colour, items()); true } else false } }
+            // a hold on the empty lane (never a tap): as Modifier.tapOrHoldMenu, but only past the track's last block
             .pointerInput(track, editable) {
-                detectTapGestures(onLongPress = { at -> if (editable && at.x + scrollNow() > endPx) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); listing = false; menuAt = at } })
-            },
-    ) {
-        // the menu opens beside the finger (the lane is its anchor)
-        LupeMenu(menuAt != null, { menuAt = null }, width = 232.dp, at = menuAt) {
-            LupeCrossfade(listing) { l ->
-                Column {
-                    if (!l) {
-                        MenuHeading("Track $track · end of the song")
-                        MenuRow("New pattern", { actions.newBlock(track); menuAt = null }, enabled = !full)
-                        MenuRow("Add a pattern ⌄", { listing = true }, enabled = !full)
-                        MenuRow("Add a REST", { actions.insert(track, ui.entries[track] ?: 0, 65); menuAt = null }, enabled = !full)
-                        if (full) BasicText("The track's 16 entries are full.", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = LupeType.small)
-                    } else {
-                        MenuHeading("Add at the end")
-                        ui.kept.forEach { p -> MenuRow("Pattern ${"%02d".format(p)}", { actions.insert(track, ui.entries[track] ?: 0, p); menuAt = null }) }
-                        MenuRow("Back", { listing = false })
+                if (!editable) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    if (down.position.x + scrollNow() <= endPx) return@awaitEachGesture
+                    var cancelled = false
+                    val up = withTimeoutOrNull(HOLD_MS) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
+                    val c = coords?.takeIf { it.isAttached }
+                    if (cancelled || up != null || holdMenu == null || c == null) return@awaitEachGesture
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    holdMenu.open(c.localToWindow(currentEvent.changes.firstOrNull { it.id == down.id }?.position ?: down.position), colour, items())
+                    while (true) {
+                        val e = awaitPointerEvent()
+                        val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                        ch.consume()
+                        if (!ch.pressed) { holdMenu.release(); break }
+                        holdMenu.drag(c.localToWindow(ch.position))
                     }
                 }
-            }
-        }
-    }
+            },
+    )
 }
