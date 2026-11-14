@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // The picture a sound page can show under its dials (decision 30: Settings › Show graphics). Restored from before decision 25 took the
-// pictures out; the tiles (MOD's routes, the pickers) stay in PageState.tiles. PROVISIONAL until P1 sends the restored shape.
+// pictures out; the tiles (MOD's routes, the pickers) stay in PageState.tiles. P1's restored shape (as before b672052); the old `routes` and `tiles` inside it are ignored.
 
 @Serializable
 enum class GraphKind {
@@ -28,6 +28,11 @@ enum class GraphKind {
     @SerialName("fm6all") Fm6All,
     /** DRUM-X's SOUND: lane tiles and the kit sound's windows ([PageGraph.sheet]). */
     @SerialName("sound") Sound,
+    /** The Mix sheet's shared pages (mix.card.graph): [PageGraph.values] are the card's four knobs, [PageGraph.caption] its named choice. */
+    @SerialName("delay") Delay,
+    @SerialName("reverb") Reverb,
+    @SerialName("chorus") Chorus,
+    @SerialName("global") Global,
 }
 
 /** An FM6 patch as OPERATOR and ALL OPS draw it. [ops] are operators 1…6. */

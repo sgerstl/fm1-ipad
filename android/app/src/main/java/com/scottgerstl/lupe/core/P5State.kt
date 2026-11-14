@@ -46,6 +46,8 @@ data class MixCard(
     val title: String,
     val controls: List<PageControl?> = List(4) { null },
     val settings: List<PageControl> = emptyList(),
+    /** The card's picture (Show graphics): kind delay, reverb, chorus or global; its values are the four knobs' raws, its caption the named choice. */
+    val graph: PageGraph? = null,
 )
 
 @Serializable

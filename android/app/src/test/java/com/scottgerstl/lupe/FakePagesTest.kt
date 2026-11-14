@@ -80,6 +80,15 @@ class FakePagesTest {
         assertEquals("OPERATOR 4", s.title); assertEquals(3, s.tiles!!.picked); assertEquals("ENV 1", s.window!!.title)
     }
 
+    @Test fun theRestoredPictureShapeDecodesBesideTitleAndTiles() {
+        val s = lupeJson.decodeFromString(com.scottgerstl.lupe.core.PageState.serializer(),
+            """{"family":"ENV","title":"ENV","controls":[null,null,null,null],"graph":{"kind":"env","values":[30,60,40,70],"routes":[],"tiles":[],"picked":0}}""")
+        assertEquals(com.scottgerstl.lupe.core.GraphKind.Env, s.graph.kind); assertEquals(listOf(30, 60, 40, 70), s.graph.values)
+        assertTrue(com.scottgerstl.lupe.ui.page.hasPicture(s.graph))
+        val card = lupeJson.decodeFromString(com.scottgerstl.lupe.core.MixCard.serializer(), """{"title":"DELAY","graph":{"kind":"delay","values":[40,62,70,30],"caption":"1/8"}}""")
+        assertEquals(com.scottgerstl.lupe.core.GraphKind.Delay, card.graph!!.kind); assertEquals("1/8", card.graph!!.caption)
+    }
+
     @Test fun emptyWellsSurviveTheRoundTrip() {
         val s = lupeJson.decodeFromString(com.scottgerstl.lupe.core.PageState.serializer(), """{"family":"FX","controls":[{"label":"DIST","value":"72"},null,null,null]}""")
         assertNull(s.controls[1]); assertEquals(4, s.controls.size)
