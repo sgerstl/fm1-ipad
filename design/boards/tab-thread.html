@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lupe tab thread</title>
+<!-- Scott, 2026-11-14: tab transitions. Picked "track thread": the selected track's coloured outline stays on screen
+     while the pages slide, and becomes the row on Pads, the step row on Edit and the lane on the Timeline. Shown
+     beside a plain slide at a slower speed. Tap the tabs, or use the arrow keys. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600&display=swap">
+<style>
+:root { --page:#0D0D0F; --well:#111114; --panel:#1A1A1E; --control:#26262B; --text:#EDEDF0; --text2:#A1A1AA; --text2r:#C4C4CC; --empty:#2A2A30; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #2A2A2E; color: var(--text); font-family: Barlow, sans-serif; padding: 24px; }
+h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+.lede { color: var(--text2r); font-size: 14px; max-width: 75ch; line-height: 1.5; margin: 0 0 16px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; margin: 0 0 16px; font-size: 14px; color: var(--text2r); }
+.controls label { display: flex; align-items: center; gap: 6px; }
+.seg { display: inline-flex; background: var(--well); border-radius: 10px; padding: 3px; }
+.seg button { font: 600 14px Barlow; color: var(--text2); background: none; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--control); color: var(--text); }
+button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.phone { position: relative; width: 915px; height: 412px; background: var(--page); border-radius: 28px; outline: 6px solid #3A3A40; overflow: hidden; max-width: 100%; }
+.top { position: absolute; left: 16px; right: 16px; top: 8px; height: 44px; display: flex; align-items: center; gap: 26px; font-weight: 600; font-size: 17px; z-index: 3; }
+.top .tab { position: relative; background: none; border: 0; color: var(--text2); font: 600 17px Barlow; padding: 0; height: 44px; cursor: pointer; }
+.top .tab[aria-selected="true"] { color: var(--text); }
+#ul { position: absolute; top: 46px; height: 3px; border-radius: 2px; background: #EDEDF0; z-index: 3; }
+.hair { position: absolute; left: 0; right: 0; top: 56px; height: 1px; background: var(--control); z-index: 3; }
+.viewport { position: absolute; left: 0; right: 0; top: 57px; bottom: 0; overflow: hidden; }
+.page { position: absolute; inset: 0; will-change: transform; }
+.abs { position: absolute; }
+#thread { position: absolute; border: 2px solid; border-radius: 10px; pointer-events: none; z-index: 2; box-shadow: 0 0 0 3px rgba(13,13,15,.6); }
+.note { margin-top: 20px; max-width: 900px; background: #EDEDF0; color: #101012; border-radius: 12px; padding: 18px 22px; font-size: 14px; line-height: 1.5; }
+.note ol { margin: 0; padding-left: 20px; } .note li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<h1>Tab transitions: the track thread, beside a slower plain slide</h1>
+<p class="lede">Tap Pads, Edit and Timeline (or use ← →). Track 3 (Rave) is selected. The thread version keeps its yellow outline on screen while the pages slide, and the outline reshapes into whatever that tab shows of track 3.</p>
+<div class="controls">
+  <span class="seg" role="group" aria-label="Transition"><button id="mThread" aria-pressed="true">Track thread</button><button id="mSlide" aria-pressed="false">Plain slide</button></span>
+  <label>Duration <input id="dur" type="range" min="200" max="600" value="380"> <span id="durV">380 ms</span></label>
+  <label><input id="reduce" type="checkbox"> Reduce motion</label>
+</div>
+<div class="phone" id="phone">
+  <div class="top" role="tablist"><span style="margin-right:4px">LUPE TEST ⌄</span>
+    <button class="tab" role="tab" data-i="0" aria-selected="true">Pads</button><button class="tab" role="tab" data-i="1" aria-selected="false">Edit</button><button class="tab" role="tab" data-i="2" aria-selected="false">Timeline</button></div>
+  <div id="ul"></div><div class="hair"></div>
+  <div class="viewport" id="vp"></div>
+  <div id="thread"></div>
+</div>
+<div class="note"><ol>
+  <li><b>The thread:</b> the selected track's 2 dp outline in its colour (DESIGN.md: the track's colour is the track's). It never leaves the screen during a tab change: it eases from its rectangle on the old tab to its rectangle on the new one while both pages slide underneath. Pads: the track's row (head to the last pad). Edit: the step row, the track's pattern. Timeline: the track's lane. Your eye stays on the track and the pages move round it.</li>
+  <li><b>The pages</b> slide in the tab's direction (Pads → Edit → Timeline goes left), the outgoing page slightly faster than the incoming. The outline moves on the same curve and lands with the incoming page, so nothing arrives late.</li>
+  <li><b>Plain slide</b> is the same page motion with no thread, at the duration you set: this is the "just slow it down" option.</li>
+  <li><b>Reduce motion:</b> no sliding; the pages cross-fade (150 ms) and the outline cross-fades between its two places.</li>
+  <li>Default proposed: 380 ms (today's build is 280), ease-out, outgoing page ends at 85 % of the time.</li>
+</ol></div>
+
+<script>
+const COL = ['#FF5A36', '#22C3B4', '#FFBF00', '#9580FF', '#FF6FAE', '#A3E635'];
+const NM = ['Pd Organ', 'Pad', 'Rave', 'War Drums', 'Flute', 'Soft Kit'];
+const SEL = 2, W = 915, H = 355;
+const mix = (hex, a) => `color-mix(in srgb, ${hex} ${a}%, #0D0D0F)`;
+const el = (x, y, w, h, st, html = '') => `<div class="abs" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;${st}">${html}</div>`;
+// the thread's rectangle on each tab, in viewport coordinates
+const RECT = [
+  { x: 12, y: 9 + SEL * 49, w: 891, h: 48 },     // Pads: row 3
+  { x: 12, y: 36, w: 891, h: 160 },               // Edit: the step row
+  { x: 12, y: 36 + SEL * 46, w: 891, h: 44 },     // Timeline: lane 3
+];
+function pads() {
+  let h = '';
+  for (let t = 0; t < 6; t++) {
+    const y = 12 + t * 49;
+    h += el(16, y, 150, 42, 'border-radius:8px;background:var(--control);display:flex;align-items:center;gap:10px;overflow:hidden',
+      `<span style="width:30px;align-self:stretch;background:${COL[t]};display:flex;align-items:center;justify-content:center;color:#101012;font-weight:600">${t + 1}</span><span style="font-weight:600">${NM[t]}</span>`);
+    h += el(172, y, 60, 42, 'border-radius:8px;background:var(--control);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text2r)', 'MUTE');
+    for (let i = 0; i < 6; i++) {
+      const on = (t * 3 + i) % 5 < 2;
+      h += el(238 + i * 110, y, 104, 42, `border-radius:8px;background:${on ? (i === 1 ? COL[t] : 'var(--control)') : 'var(--well)'};display:flex;align-items:center;gap:6px;padding:0 10px;font:600 12px Barlow;color:${i === 1 && on ? '#101012' : 'var(--text2r)'}`,
+        on ? `${'ABCDEF'[i]} <b style="font:600 20px 'Barlow Condensed';color:${i === 1 ? '#101012' : 'var(--text)'}">${50 + t * 2 + i}</b>` : '');
+    }
+  }
+  return h;
+}
+function edit() {
+  let h = el(16, 8, 500, 24, 'display:flex;align-items:center;gap:6px;font-size:14px', `<span style="width:10px;height:10px;border-radius:5px;background:${COL[SEL]}"></span><b>3 Rave</b><span style="color:var(--text2r)">· B · pattern 60 · C min</span>`);
+  const notes = ['G4', 'A#4', 'D5', '', 'D5', 'A#4', 'G4', 'B4', 'D5', '', 'A5', 'F#5', 'D5', '', '', ''];
+  for (let i = 0; i < 16; i++) {
+    const cw = (883 - 12 * 4 - 3 * 12) / 16, x = 16 + i * cw + (i - Math.floor(i / 4)) * 4 + Math.floor(i / 4) * 12;
+    h += el(x, 40, cw, 152, `border-radius:8px;background:${notes[i] ? mix(COL[SEL], 34) : 'var(--empty)'}`,
+      `<span class="abs" style="left:7px;top:6px;font-size:12px;color:var(--text2)">${i + 1}</span>${notes[i] ? `<span class="abs" style="left:7px;top:62px;font:600 22px 'Barlow Condensed'">${notes[i]}</span>` : ''}`);
+  }
+  h += el(16, 206, 420, 136, 'border-radius:8px;background:#050506', '<span style="position:absolute;left:12px;top:56px;color:var(--text2)">keyboard</span>');
+  ['CUTOFF', 'RES', 'ATTACK', 'RELEASE'].forEach((k, i) => { h += el(470 + i * 108, 216, 96, 96, 'border-radius:48px;box-shadow:inset 0 0 0 5px var(--control)', `<span class="abs" style="left:0;right:0;top:106px;text-align:center;font:600 12px 'Barlow Condensed';color:var(--text2r)">${k}</span>`); });
+  return h;
+}
+function timeline() {
+  let h = '';
+  for (let b = 0; b < 12; b++) h += el(100 + b * 66, 8, 66, 20, 'font-size:12px;color:var(--text2)', String(b + 1));
+  for (let t = 0; t < 6; t++) {
+    const y = 38 + t * 46;
+    h += el(16, y, 76, 40, 'border-radius:8px;background:var(--control);display:flex;align-items:center;gap:6px;padding-left:6px',
+      `<span style="width:22px;height:22px;border-radius:6px;background:${COL[t]};display:flex;align-items:center;justify-content:center;color:#101012;font-size:13px;font-weight:600">${t + 1}</span><span style="font-size:12px">${NM[t].split(' ')[0]}</span>`);
+    let x = 100;
+    [2, 1, 3, 2].forEach((len, k) => { if ((t + k) % 3 === 0) { x += len * 66; return; }
+      h += el(x + 1, y, len * 66 - 3, 40, `border-radius:6px;background:${mix(COL[t], 45)};display:flex;align-items:center;padding-left:8px;font:600 18px 'Barlow Condensed'`, String(50 + t * 3 + k)); x += len * 66; });
+  }
+  return h;
+}
+const BUILD = [pads, edit, timeline];
+const vp = document.getElementById('vp'), thread = document.getElementById('thread'), ul = document.getElementById('ul');
+let cur = 0, mode = 'thread', busy = false;
+const pages = BUILD.map((f, i) => { const d = document.createElement('div'); d.className = 'page'; d.innerHTML = f(); d.style.visibility = i ? 'hidden' : 'visible'; vp.appendChild(d); return d; });
+thread.style.borderColor = COL[SEL];
+function place(r) { thread.style.left = r.x + 'px'; thread.style.top = (57 + r.y) + 'px'; thread.style.width = r.w + 'px'; thread.style.height = r.h + 'px'; }
+place(RECT[0]);
+function placeUl(i, animate) {
+  const t = document.querySelectorAll('.tab')[i], p = document.getElementById('phone').getBoundingClientRect(), r = t.getBoundingClientRect(), k = 915 / p.width;
+  const to = { left: (r.left - p.left) * k + 'px', width: r.width * k + 'px' };
+  if (animate) ul.animate([{ left: ul.style.left, width: ul.style.width }, to], { duration: dur() * .9, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }).finished.then(() => Object.assign(ul.style, to));
+  else Object.assign(ul.style, to);
+}
+const dur = () => +document.getElementById('dur').value;
+const reduce = () => document.getElementById('reduce').checked || matchMedia('(prefers-reduced-motion: reduce)').matches;
+function go(i) {
+  if (i === cur || busy || i < 0 || i > 2) return;
+  busy = true;
+  const from = pages[cur], to = pages[i], dir = i > cur ? 1 : -1, d = dur(), ease = 'cubic-bezier(.2,.8,.2,1)';
+  document.querySelectorAll('.tab').forEach((t, k) => t.setAttribute('aria-selected', k === i));
+  placeUl(i, true);
+  to.style.visibility = 'visible';
+  const done = [];
+  if (reduce()) {
+    done.push(from.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, fill: 'forwards' }).finished);
+    done.push(to.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, fill: 'forwards' }).finished);
+    if (mode === 'thread') { thread.animate([{ opacity: 1 }, { opacity: 0 }, { opacity: 1 }], { duration: 300 }); setTimeout(() => place(RECT[i]), 150); }
+  } else {
+    done.push(from.animate([{ transform: 'translateX(0)', opacity: 1 }, { transform: `translateX(${-dir * W * .35}px)`, opacity: 0 }], { duration: d * .85, easing: ease, fill: 'forwards' }).finished);
+    done.push(to.animate([{ transform: `translateX(${dir * W}px)` }, { transform: 'translateX(0)' }], { duration: d, easing: ease, fill: 'forwards' }).finished);
+    if (mode === 'thread') {
+      const a = RECT[cur], b = RECT[i];
+      thread.style.opacity = 1;
+      thread.animate([{ left: a.x + 'px', top: 57 + a.y + 'px', width: a.w + 'px', height: a.h + 'px' }, { left: b.x + 'px', top: 57 + b.y + 'px', width: b.w + 'px', height: b.h + 'px' }],
+        { duration: d, easing: ease, fill: 'forwards' }).finished.then(() => place(b));
+    }
+  }
+  Promise.all(done).then(() => { from.style.visibility = 'hidden'; from.getAnimations().forEach(a => a.cancel()); to.getAnimations().forEach(a => a.cancel()); cur = i; busy = false; });
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => go(+t.dataset.i)));
+document.addEventListener('keydown', e => { if (e.key === 'ArrowRight') go(cur + 1); if (e.key === 'ArrowLeft') go(cur - 1); });
+document.getElementById('dur').addEventListener('input', e => document.getElementById('durV').textContent = e.target.value + ' ms');
+function setMode(m) { mode = m; document.getElementById('mThread').setAttribute('aria-pressed', m === 'thread'); document.getElementById('mSlide').setAttribute('aria-pressed', m === 'slide'); thread.style.display = m === 'thread' ? 'block' : 'none'; place(RECT[cur]); }
+document.getElementById('mThread').onclick = () => setMode('thread');
+document.getElementById('mSlide').onclick = () => setMode('slide');
+requestAnimationFrame(() => placeUl(0, false));
+</script>
+</body>
+</html>
