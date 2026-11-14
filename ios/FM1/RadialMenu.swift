@@ -153,8 +153,9 @@ struct RadialMenu: View {
                 return min(1, max(0, 1 - (abs(p) - 2) / 0.8))
             }
             ZStack(alignment: .topLeading) {
-                // the page behind, dimmed; a tap outside the choices closes
-                Color.black.opacity(0.45 * fade)
+                // the page behind stays as it is (Scott, 2026-11-15: no page-wide dim; the soft backing behind the choices is
+                // the only darkening); a tap outside the choices still closes
+                Color.clear
                     .padding(.leading, -margins.leading).padding(.trailing, -margins.trailing)   // (over the margins too)
                     .contentShape(Rectangle())
                     .onTapGesture { dismiss() }
