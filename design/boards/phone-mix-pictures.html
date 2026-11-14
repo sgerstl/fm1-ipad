@@ -27,20 +27,21 @@ figcaption{color:var(--t2);margin-top:10px}figcaption b{color:var(--t1);font-wei
 .dial .l{font-size:11px;font-weight:600;color:var(--t2);letter-spacing:.05em}
 .dial.empty{background:none;border:1.5px solid #2E2E34}
 .pic{height:100%;aspect-ratio:936/552;border-radius:8px;overflow:hidden;background:#181818}
-.pic img{width:100%;height:100%;display:block;image-rendering:pixelated}
+.pic img{width:100%;height:100%;display:block;image-rendering:pixelated;filter:grayscale(1) brightness(1.25)}
+.pair img{filter:grayscale(1) brightness(1.25)}
 .pair{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .pair img{width:280px;image-rendering:pixelated;border-radius:6px}
 .notes{color:var(--t2);max-width:84ch}.notes li{margin:6px 0}.notes b{color:var(--t1);font-weight:600}
 h2{font-size:17px;font-weight:600;margin:8px 0 10px}
 </style></head><body>
 <h1>Board 77 · The Mix pop-up: no title, tabs beside the close key, the FM-1’s own pictures</h1>
-<p class="lede">iPhone 17 Pro in landscape, 874 × 402 pt, at 1:1. GLO on the FM-1 (or the song-name menu) opens the pop-up. Decision 31: no “Mix” title; the five tabs sit in line with the close key, and the room goes to the picture. The pictures here are <b>the FM-1’s own drawings</b>, rendered by Skiff 2.5.1’s drawing code (its render harness, 240 × 240 screen, the graph panel cropped), shown at the FM-1’s proportions and in the selected track’s colour. The build redraws them as vectors from the same formulas; these are the target.</p>
+<p class="lede">iPhone 17 Pro in landscape, 874 × 402 pt, at 1:1. GLO on the FM-1 (or the song-name menu) opens the pop-up. Decision 31: no “Mix” title; the five tabs sit in line with the close key, and the room goes to the picture. The pictures here are <b>the FM-1’s own drawings</b>, rendered by Skiff 2.5.1’s drawing code (its render harness, 240 × 240 screen, the graph panel cropped), shown at the FM-1’s proportions. <b>Drawn in the global greys and white</b> (Scott, 2026-11-14: GLO pages are shared, so no track colour); FX › DELAY and FX › REVERB, the per-track send pages, keep the track’s colour. The build redraws them as vectors from the same formulas: the FM-1’s shapes, proportions and stepped finish, in grey.</p>
 <div class="row" id="r1"></div><div class="row" id="r2"></div>
 <h2>What moves (each pair is the same page at two settings, from the FM-1)</h2>
 <div class="pair" id="pairs"></div>
 <h2 style="margin-top:28px">What the build has to change, and one decision</h2>
 <ul class="notes">
-<li><b>Decision needed: colour.</b> On 2026-11-06 the iPad drew every GLO picture grey (“white is global”). The FM-1 draws DELAY, REVERB, CHORUS and GLOBAL in the <b>selected track’s colour</b>. The grey is the main reason the reverb doesn’t look like the FM-1’s: its bright body under a dark DAMP band, beside white reflections, loses its contrast. Proposal: pictures follow the FM-1 (track colour); the tabs, dials and the sheet itself stay neutral, so the global rule still holds for the controls.</li>
+<li><b>Colour, decided:</b> greys and white for the GLO pages; the track colour only on the per-track FX pages. The redraw keeps the reverb’s three tones apart in grey (white reflections, a light body, a dark DAMP band). Background: On 2026-11-06 the iPad drew every GLO picture grey (“white is global”). The FM-1 draws DELAY, REVERB, CHORUS and GLOBAL in the <b>selected track’s colour</b>. The grey is the main reason the reverb doesn’t look like the FM-1’s: its bright body under a dark DAMP band, beside white reflections, loses its contrast. Proposal: pictures follow the FM-1 (track colour); the tabs, dials and the sheet itself stay neutral, so the global rule still holds for the controls.</li>
 <li><b>Proportions:</b> the FM-1’s graph panel is 1.7 : 1. The iPad stretched it into a 128 pt card two to a row; here it keeps 1.7 : 1 at about 476 × 280 pt.</li>
 <li><b>Finish:</b> square bar corners, 1 px stepped tails, no gradients or opacity fades the FM-1 doesn’t draw.</li>
 <li><b>Android:</b> today it draws no GLO pictures at all (MixPage “no graph”); CHORUS and GLOBAL have no drawing. FX › DELAY also assumes the bus MIX is 127 where the FM-1 uses GLO › DELAY’s MIX (default 90), so its first echo is ~40 % too tall.</li>
