@@ -32,6 +32,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _homeKnobs = MutableStateFlow(HomeKnobsState())
     private val _fm1Screen = MutableStateFlow(Fm1ScreenState())
     private val _clock = MutableStateFlow(ClockState())
+    private var clockChecked = false
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
     override val shell: StateFlow<ShellState> = _shell
@@ -98,7 +99,15 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "automation" -> _automation.value = lupeJson.decodeFromString(AutomationState.serializer(), json)
                 "homeKnobs" -> _homeKnobs.value = lupeJson.decodeFromString(HomeKnobsState.serializer(), json)
                 "fm1Screen" -> _fm1Screen.value = lupeJson.decodeFromString(Fm1ScreenState.serializer(), json)
-                "clock" -> _clock.value = lupeJson.decodeFromString(ClockState.serializer(), json)
+                "clock" -> {
+                    // atMs must be on SystemClock.uptimeMillis()'s clock: the screen moves the outlines and pass bars on from it every frame. If it isn't
+                    // (a boot-time clock that counts sleep would put it hours off), take the time the frame arrived instead, and say so once.
+                    val c = lupeJson.decodeFromString(ClockState.serializer(), json)
+                    val now = SystemClock.uptimeMillis()
+                    val skew = c.atMs - now
+                    if (c.running && !clockChecked) { clockChecked = true; LinkLog.add("clock: atMs ${c.atMs}, uptimeMillis $now, apart $skew ms" + if (kotlin.math.abs(skew) > 1000) " (too far: using the arrival time)" else "") }
+                    _clock.value = if (c.running && kotlin.math.abs(skew) > 1000) c.copy(atMs = now) else c
+                }
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {
