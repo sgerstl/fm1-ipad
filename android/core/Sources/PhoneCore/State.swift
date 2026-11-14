@@ -100,6 +100,12 @@ public struct PadsArea: Codable, Equatable, Sendable {
     /// The pattern numbers (1…64) the FM-1 holds: the only ones Set pattern can name (LIST SET takes "a kept
     /// pattern"; an empty number is refused, rc 1). The iPad's picker lists these (Scott's run, 2026-11-14).
     public var kept: [Int] = []
+    /// How many pattern numbers are free (0…64): New pattern and Duplicate need one (LIST NEW and COPY answer
+    /// PATTERNS FULL at 0). nil until the FM-1's pool has been read. Free is POOL's LEN 0 with nothing using it.
+    public var patternsFree: Int? = nil
+    /// The kept patterns nothing uses (1…64): what the FM-1's CLEAR UNUSED would clear. "Uses" is the FM-1's own
+    /// count (POOL): entries in any track's list, entries in the saved projects, and a track on it.
+    public var unused: [Int] = []
 }
 
 // MARK: editor (P3's EditorState)

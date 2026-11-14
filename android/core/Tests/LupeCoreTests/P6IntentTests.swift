@@ -173,4 +173,26 @@ import Testing
         #expect(box.log.filter { $0.hasPrefix("read-only:") }.count == 6, "\(box.log)")
         #expect(core.automationArea().lane == "CHORUS")
     }
+
+    /// The pool's free numbers and the unused patterns in the pads and Timeline areas: what New pattern needs, and
+    /// what the FM-1's CLEAR UNUSED would take (POOL's own LEN and uses).
+    @Test func thePadsSayHowManyPatternNumbersAreFree() async throws {
+        let box = Box()
+        let (core, fake) = try await connected(box)
+        defer { core.stop() }
+        let pool = try #require(core.session.skiffSong?.pool)
+        var a = core.padsArea()
+        #expect(a.patternsFree == pool.free && a.patternsFree == pool.patterns.filter { $0.length == 0 && $0.uses == 0 }.count)
+        #expect(a.unused == (0..<64).filter { pool.patterns[$0].length > 0 && pool.patterns[$0].uses == 0 }.map { $0 + 1 })
+        #expect(core.timelineArea().patternsFree == a.patternsFree)
+        // every number taken on the FM-1: none free, and the ones no entry names are the unused
+        let named = Set(a.rows.flatMap { $0.entries.compactMap(\.pattern) })
+        for i in 0..<64 where fake.poolLen[i] == 0 { fake.poolLen[i] = 16 }
+        let end = Date().addingTimeInterval(8)
+        while Date() < end, core.padsArea().patternsFree != 0 { try await Task.sleep(for: .milliseconds(50)) }
+        a = core.padsArea()
+        #expect(a.patternsFree == 0 && core.timelineArea().patternsFree == 0)
+        #expect(Set(a.unused).isDisjoint(with: named) && a.unused.count == 64 - core.session.skiffSong!.pool!.patterns.filter { $0.uses > 0 }.count)
+        #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
+    }
 }

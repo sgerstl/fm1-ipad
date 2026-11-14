@@ -147,6 +147,7 @@ One `stepAdjust` unit is the panel's − / + step (VELOCITY 4, CHANCE 5, the res
 - **Lock from the phone catches only Lupe's own knob turns**, as on the iPad: fine for now (Scott, 2026-11-14). It waits on P4's `setParam` reaching `Session.set`.
 - **The song lists are kept current:** PhoneCore runs `SkiffSongStore.follow()` while connected, as the iPad's Pads page does. A take-back (staging the entry playing) isn't counted as waiting. FakeSkiff now stages LIST PLAY while playing (lands 2 s on; PERFORM CANCEL drops it), from Skiff's protocol text.
 - **`pads.kept`** lists the pattern numbers Set pattern may name (LIST SET takes a kept pattern). **`step.maxLength`** is LENGTH's cap (the next note). Both were added to the shared schema on 2026-11-14.
+- **`pads.patternsFree`** (and `timeline.patternsFree`) is how many pattern numbers are free, 0…64, absent until the pool is read: New pattern and Duplicate need one (LIST NEW and COPY answer PATTERNS FULL at 0). **`pads.unused`** lists the kept patterns nothing uses (1…64), as the FM-1's CLEAR UNUSED counts them (POOL's uses: entries in any track's list and in the saved projects, and a track on it). Both come from the pool the core already reads; no clearing intent exists yet.
 - **Not built:** Select sound.
 
 Device check: `qa/device-checks/2026-11-14-android-p1-writes.md`.
