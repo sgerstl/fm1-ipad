@@ -253,6 +253,9 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
     }
     val m = shown ?: return
     BackHandler(enabled = live != null) { state.close() }
+    // From the moment it is told to close it takes no touches, though it is still on screen fading out for 140 ms (the iPhone's cbdc2ad:
+    // a hold begun at once after closing went to the leaving menu, so nothing opened). The page underneath gets them.
+    val takes = live != null
     var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
     // how far the wheel is turned, in choices. The geometry is made inside the layout box; the drag on the whole layer reads it from here
     var turn by remember(m) { mutableFloatStateOf(0f) }
@@ -268,10 +271,10 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         modifier.fillMaxSize().onGloballyPositioned { origin = it }
             // the page behind is dimmed and can't be touched; a tap outside the choices closes the menu
             .drawBehind { drawRect(Color.Black.copy(alpha = 0.45f * (1f - leave.value) * (elapsed.value / 150f).coerceAtMost(1f))) }
-            .pointerInput(Unit) { detectTapGestures { state.close() } }
+            .then(if (takes) Modifier.pointerInput(Unit) { detectTapGestures { state.close() } } else Modifier)
             // more than five choices: a drag anywhere on the menu rolls them along the arc (56 dp of finger a choice, giving past the ends);
             // let go and it settles on a whole choice, carried on by the finger's speed. A drag never picks: only a tap does.
-            .pointerInput(m) {
+            .then(if (!takes) Modifier else Modifier.pointerInput(m) {
                 val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
                 var start = 0f; var total = 0f
                 detectVerticalDragGestures(
@@ -285,7 +288,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                     val w = wheelNow
                     if (w != null && w.maxTurn > 0f) { change.consume(); tracker.addPosition(change.uptimeMillis, change.position); total += dy; turn = w.give(start - total.toDp().value / HoldWheel.PITCH) }
                 }
-            }
+            })
             .semantics {
                 paneTitle = "Menu"; isTraversalGroup = true
                 // the way to the rest of the wheel that isn't a drag (WCAG 2.5.7)
@@ -362,7 +365,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                         // the edge the line arrives at carries the track's colour
                         else drawRoundRect(m.colour, Offset(if (wheel.left) size.width - 3.dp.toPx() else 0f, 8.dp.toPx()), Size(3.dp.toPx(), size.height - 16.dp.toPx()), CornerRadius(1.5.dp.toPx()))
                     }
-                    .then(if (vis < 0.5f) Modifier.clearAndSetSemantics { } else if (item.slide != null) Modifier.pointerInput(k, m) { detectTapGestures { } } else Modifier.semantics(mergeDescendants = true) {
+                    .then(if (vis < 0.5f || !takes) Modifier.clearAndSetSemantics { } else if (item.slide != null) Modifier.pointerInput(k, m) { detectTapGestures { } } else Modifier.semantics(mergeDescendants = true) {
                         role = Role.Button
                         contentDescription = if (confirming) "Confirm: ${item.confirm}" else item.title + (item.sub?.let { ", $it" } ?: "")
                         if (item.checked) selected = true
@@ -375,7 +378,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
             ) {
                 // the iPad's row: the title at 17, a small second line, a tick for the current choice; a choice that can't be made is dimmer
                 val ink = if (!item.enabled) Tok.text3 else Tok.text
-                if (item.slide != null) HoldSlideRow(item.title, item.slide)
+                if (item.slide != null) HoldSlideRow(item.title, item.slide, takes)
                 else if (confirming) BasicText(item.confirm.orEmpty(), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -392,7 +395,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
 
 /** A slide row's inside: the name, the value large at the right, a gauge along the foot; a finger slid along it (either way) sets the value. */
 @Composable
-private fun HoldSlideRow(title: String, sl: HoldSlide) {
+private fun HoldSlideRow(title: String, sl: HoldSlide, enabled: Boolean = true) {
     val raw = sl.raw(); val text = sl.text()
     val latest by rememberUpdatedState(raw)
     var base by remember { mutableIntStateOf(0) }
@@ -408,7 +411,7 @@ private fun HoldSlideRow(title: String, sl: HoldSlide) {
                     androidx.compose.ui.semantics.CustomAccessibilityAction("Decrease $title") { set(latest - 1); true },
                 )
             }
-            .slideToTurn(enabled = true, stepDp = sl.stepDp, face = null, forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways,   // along the row only: up and down is the column's scroll
+            .slideToTurn(enabled = enabled, stepDp = sl.stepDp, face = null, forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways,   // along the row only: up and down is the column's scroll
                 onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (sl.min - latest)..(sl.max - latest) }),
     ) {
         Row(Modifier.align(Alignment.CenterStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

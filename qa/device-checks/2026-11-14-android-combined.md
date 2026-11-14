@@ -44,6 +44,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 | 35 | Start a drag on Clear and let go somewhere else; drag to turn the wheel | Nothing is picked either time | – | ☐ pass ☐ fail: |
 | 35a | Hold something just under the header, and at the foot of the screen | All five choices still show: the arc sits lower (or higher) than the finger so the column stays between the header and the foot, and the line from the circle slants to it | – | ☐ pass ☐ fail: |
 | 35b | Track head › slide along LEVEL, then PAN | The value follows a slide along the row | Yes | ☐ pass ☐ fail: |
+| 35c | Hold a pad, tap away to close its menu, and at once hold another pad | The second menu opens. (Before: nothing opened, because the closing menu still took touches while it faded) | – | ☐ pass ☐ fail: |
 | 36 | With all 64 patterns taken and some unused: hold an empty slot | New pattern dimmed, "All 64 patterns are taken"; under it "Clear N unused patterns…" (dimmed with "Stop first" while playing). With none unused: "No unused patterns · Other saved projects hold them" | – | ☐ pass ☐ fail: |
 | 37 | Tap Clear N unused patterns…, read the confirm, tap it | The row turns into a red-outlined confirm naming the numbers ("Clears 03, 17, 22 · can't be undone"); a tap in the first 0.4 s does nothing. Confirmed: the FM-1's answer shows in the strip at the foot, and New pattern works again | Yes | ☐ pass ☐ fail: |
 | 38 | Song name › Clear N unused patterns… | The same, in the menu: the row becomes the red-outlined confirm with Cancel under it; closing the menu drops it | Yes | ☐ pass ☐ fail: |
@@ -52,6 +53,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 - Row 3's Pads page: the band under track 1, outlined slots A to H, the Store key and scenes.
 - Row 24's no-FM-1 card (the greyed header, the words with Skiff 2.5.1, the moving bar, the button) and row 25's "Use the demo FM-1" filling the app.
 - Rows 32, 33 and 35a, the wheel in Scott's option A: an empty slot's three choices on the wide arc with the rim, the spoke and the stalks; a pad's nine choices held just under the header (five in view, the arc sitting lower than the finger, the spoke slanting to it, the first choice at the top); a drag rolled it on by one choice and it settled.
+- Row 35c: on the build before the fix a hold begun right after closing a menu opened nothing; on the build with it, the same sequence (a hold 60 ms after the tap away) opened the second menu.
 - Rows 7 and 8's track-head menu, drawn in the first column shape only (Sounds, LEVEL with its gauge, PAN from the middle, Mute, Solo); not looked at again as the wheel, and the rows were not slid.
 
 **Not seen on any screen:** the Timeline's band, the Mix pop-up and its four pictures, Settings, the launch footer, the refusal strip, the disabled New pattern, a choice fading at the arc's end mid-turn, the give past the wheel's ends, the wheel at the foot or opening to the right, that a held finger or a drag picks nothing, Clear unused patterns and its confirm, Leave the demo.
