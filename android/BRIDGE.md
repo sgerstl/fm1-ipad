@@ -188,6 +188,9 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
   parameters (`SkiffHomeKnobs`, from each engine's `.knob` line) in PageControl's shape, built by the same
   `PageArea.control` as a page's columns. `hot` and `hotSeq` mark the knob last turned on the FM-1. The link's
   CHANGED names the parameter, not the screen, so it's hot from any page. `fm1Home` says whether the FM-1 is on HOME.
+  The reading and the write live in SloopKit (`SkiffHomeKnobs.swift`: `DeviceSession.homeKnobs`, `shownParam`,
+  `setHomeKnob`), shared with the iPhone; `HomeKnobs.swift` only puts them in the wire's shape. The read-only gate
+  stays with each app.
 - **The FM-1 button block** (decision 24, board 72): the `screenGoto` intent (`screen` GLO, SAVE or SEQ, an optional
   `page` of that key's; SCREEN_GOTO, a write) and the `fm1Screen` area (`ScreenArea.swift`, `ScreenState.kt`). The
   area names the key whose screen is up, its page and title (SAVE's PRESETS, USER, PATTERNS, PROJECT), and the MENU and

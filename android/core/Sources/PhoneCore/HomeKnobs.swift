@@ -1,5 +1,6 @@
 // HOME's four knobs (decision 21, board 70): on the FM-1's HOME screen KNOB 1…4 turn the selected track's engine's four
-// main parameters (Skiff ui.c home_param; SloopKit's SkiffHomeKnobs). The `homeKnobs` area publishes them as the
+// main parameters (Skiff ui.c home_param). The reading and the write are SloopKit's (SkiffHomeKnobs.swift:
+// DeviceSession.homeKnobs and setHomeKnob), shared with the iPhone; this file is the Android wire shape. The `homeKnobs` area publishes them as the
 // FM-1 draws them (the same label and value text as a sound page's columns: PageArea.control), kept current as the
 // track, its engine or sound, or any of the four change, from the phone or from the FM-1's own knobs. The intent
 // `setHomeKnob` turns one, as a page's setParam does. Mirrored by android/app/.../core/HomeKnobsState.kt.
@@ -26,21 +27,14 @@ public struct HomeKnobsArea: Codable, Equatable, Sendable {
 }
 
 extension PhoneCore {
-    /// nil off Skiff, before the FM-1 is read, or for an engine the table doesn't know.
+    /// nil off Skiff, before the FM-1 is read, or for an engine the table doesn't know. Built from SloopKit's
+    /// `DeviceSession.homeKnobs` (SkiffHomeKnobs.swift), which the iPhone reads too.
     public func homeKnobsArea() -> HomeKnobsArea? {
-        let s = session
-        guard s.isConnected, s.dialect == .skiff, let ids = s.homeKnobIDs else { return nil }
-        let t = s.selectedTrack
-        let controls = ids.map { PageArea.control(s, track: t, scope: 0, id: $0) }
-        var hot = -1, seq = 0
-        if let touched = s.lastTouched, touched.scope == 0, let k = ids.firstIndex(of: touched.id) {
-            hot = k
-            seq = Int(touched.at.timeIntervalSinceReferenceDate * 1000) % 1_000_000_000
-        }
-        let tr = s.tracks[t]
-        let home = s.screenLinked && (s.deviceScreen?.home ?? false)
-        return HomeKnobsArea(track: t + 1, trackName: tr.displayName, engine: tr.engineName.uppercased(), preset: tr.presetName,
-                             controls: controls, hot: hot, hotSeq: seq, fm1Home: home)
+        guard let h = session.homeKnobs else { return nil }
+        return HomeKnobsArea(track: h.track + 1, trackName: h.trackName, engine: h.engine, preset: h.preset,
+                             controls: h.knobs.map { PageArea.Control($0) }, hot: h.hot ?? -1,
+                             hotSeq: h.hotAt.map { Int($0.timeIntervalSinceReferenceDate * 1000) % 1_000_000_000 } ?? 0,
+                             fm1Home: h.fm1Home)
     }
 
     private struct HomeWire: Decodable { let intent: String; let slot: Int?; let value: Int? }
@@ -50,9 +44,7 @@ extension PhoneCore {
         guard let w = try? JSONDecoder().decode(HomeWire.self, from: Data(json.utf8)), w.intent == "setHomeKnob" else { return false }
         guard canWrite() else { log("read-only: setHomeKnob not sent (allow writes to send it)"); return true }
         guard let slot = w.slot, let value = w.value, (0..<4).contains(slot) else { log("setHomeKnob: missing slot or value"); return true }
-        guard let ids = session.homeKnobIDs else { log("setHomeKnob: no Skiff FM-1 read yet"); return true }
-        // as a page's setParam: the selected track's parameter, through Session (clamped by the FM-1)
-        session.set(track: session.selectedTrack, param: ids[slot], to: value)
+        if !session.setHomeKnob(slot, to: value) { log("setHomeKnob: no Skiff FM-1 read yet") }
         return true
     }
 }

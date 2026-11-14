@@ -113,7 +113,14 @@ import Testing
             try await waitFor(4, "\(eng.name) loaded") { core.session.tracks[0].engine == eng.engine && fake.engines[0].engine == eng.engine }
             let e0 = core.session.info?.firstEngineParam ?? 0
             try await waitFor(4, "\(eng.name)'s descriptors") { core.session.trackDescs[e0]?.label == eng.pages.first { $0.title == "EDIT 1" }?.slots.first?.label || eng.engine == 0 }
-            try await Task.sleep(for: .milliseconds(150))
+            // the engine's eight come one read at a time: go on once they have stood still for 300 ms (a fixed pause
+            // was too short on a loaded Mac, and the test then read the last engine's names)
+            var seen: [String?] = [], still = 0
+            for _ in 0..<200 where still < 6 {
+                let now = (0..<8).map { core.session.trackDescs[e0 + $0]?.label }
+                still = now == seen ? still + 1 : 0; seen = now
+                try await Task.sleep(for: .milliseconds(50))
+            }
             let s = core.session
             // HOME's four (decision 21): which parameters (SkiffHomeKnobs against the engine's .knob), their labels and text
             if let area = core.homeKnobsArea() {
