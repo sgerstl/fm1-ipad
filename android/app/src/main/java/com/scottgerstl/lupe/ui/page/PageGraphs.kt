@@ -529,7 +529,8 @@ private fun drawAnalog(s: Sp, g: PageGraph, c: Color) {
 // surface (ux_mix), never by gradient or opacity. FX › DELAY and FX › REVERB are the same drawings in the track's colour, scaled by its send.
 
 /** GLO's pages are shared by every track, so they are drawn in the global greys and white, never a track's colour. */
-private val GLOBAL_INK = Tok.text2Raised
+// text2, a mid grey: the reverb keeps three tones apart (white reflections, this for the body, a dark band where it is damped)
+private val GLOBAL_INK = Tok.text2
 
 /** ux_mix(c, T_SURF, p): [p] percent of the way from the colour to the picture's surface. */
 internal fun uxMix(c: Color, p: Int): Color = androidx.compose.ui.graphics.lerp(c, Tok.well, p.coerceIn(0, 100) / 100f)
