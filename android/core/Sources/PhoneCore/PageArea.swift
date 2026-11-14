@@ -333,16 +333,15 @@ extension PageArea {
     /// One control as the FM-1 shows it: the label (track_desc's), the value text (param_format's), the range, a held
     /// step's lock. The sound pages' columns and HOME's four (HomeKnobs.swift) both come from here.
     @MainActor static func control(_ session: DeviceSession, track: Int, scope: Int, id: Int, label: String? = nil, fixed: Bool = false) -> PageArea.Control {
-        let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
-        let locked = scope == 0 && session.lockStep.map { step in
-            session.motion[track]?.events.contains { $0.lock && $0.step == step && $0.id == id } ?? false } ?? false
-        let lockedValue = scope == 0 ? session.lockStep.flatMap { step in
-            session.motion[track]?.events.first { $0.lock && $0.step == step && $0.id == id }?.value } : nil
-        let v = lockedValue ?? (scope == 0 ? session.cell(id).value : session.globalCell(id).value)
-        let lo = d?.min ?? 0, hi = max(d?.max ?? 127, lo)
-        return PageArea.Control(label: label ?? d?.label ?? "", value: formatValue(d, v, skiff: true).shown, raw: v, min: lo, max: hi,
-                                list: d.map { $0.format == 8 || !$0.names.isEmpty } ?? false, ringless: false, fixed: fixed, locked: locked,
-                                names: d.flatMap { $0.names.isEmpty ? nil : Array(repeating: "", count: max(0, $0.min)) + $0.names })
+        PageArea.Control(session.shownParam(track: track, scope: scope, id: id), label: label, fixed: fixed)
+    }
+}
+
+extension PageArea.Control {
+    /// SloopKit's reading of a parameter (the iPhone's too) in the wire's shape.
+    init(_ p: ShownParam, label: String? = nil, fixed: Bool = false) {
+        self.init(label: label ?? p.label, value: p.text, raw: p.value, min: p.min, max: p.max, list: p.isList, ringless: false,
+                  fixed: fixed, locked: p.locked, names: p.names)
     }
 }
 
