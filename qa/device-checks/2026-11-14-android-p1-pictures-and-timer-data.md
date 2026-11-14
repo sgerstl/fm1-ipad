@@ -38,7 +38,20 @@ The core now sends DELAY, REVERB, INSERT, SLICER and DUCK as pictures, with the 
 | 8 | FX › INSERT, TYPE SOFT. Turn INSERT's MIX down on the FM-1 (its PRESETS encoder). | The picture's curve moves toward the straight dry line. | – | ☐ pass ☐ fail: |
 | 9 | FX › DUCK: set BY to a track that has a few steps on. | The picture shows a dip at each of that track's hits across the bar. With BY off, the box is empty. | – | ☐ pass ☐ fail: |
 
+## CHORD and FOLLOW's pictures (need P2's drawing)
+
+The core sends the chord a key plays as its notes, and FOLLOW's track and how it follows.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 10 | Pictures on, a synth track. SEL › CHORD: set CHORD to MAJ, then turn VOICING. | The chord's name and its keys lit, the root marked, the same notes the FM-1's CHORD picture shows before a key is played. With CHORD off: "CHORD KEYS OFF". | – | ☐ pass ☐ fail: |
+| 11 | Same page: turn STRUM up to about 30, then DIR to UP. | The picture changes to the notes in time, captioned "UP 30 ms", as on the FM-1. | – | ☐ pass ☐ fail: |
+| 12 | SEL › FOLLOW: set FOLLOW to another synth track, then to a drum track, then OFF. | "FOLLOWS T3 · KEY BY ITS ROOT" in that track's colour; then "T… PLAYS A KIT"; then "FOLLOW OFF". | – | ☐ pass ☐ fail: |
+
 **Not covered here:**
+
+- FOLLOW's live chord: the FM-1 doesn't send it to an editor, so the phone names the track and leaves the chord to
+  the FM-1's screen, as the iPad does.
 
 - LAUNCH on NOW or BEAT: the launch lands at once or within a beat, so there is little or nothing to draw.
 - Connecting while the FM-1 already plays: no clock until the next Stop and Play, so the outlines are dashed.
