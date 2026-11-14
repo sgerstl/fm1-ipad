@@ -8,6 +8,10 @@ sealed interface PlaceAction {
     /** The Edit tab's one-lane view, in the keyboard's place. */
     data class Lane(val on: Boolean) : PlaceAction
     data object OpenMix : PlaceAction
+    /** The Mix sheet's section, as the FM-1's GLO page: "mixer", "delay", "reverb", "chorus", "global". Sent on every GLO page, open or not. */
+    data class MixSection(val section: String) : PlaceAction
+    /** The Sounds sheet's list, as the FM-1's SAVE page: USER's slots, or the presets. */
+    data class SoundsView(val user: Boolean) : PlaceAction
     data object CloseMix : PlaceAction
     data object OpenSounds : PlaceAction
     data object CloseSounds : PlaceAction
@@ -62,9 +66,10 @@ class PlaceFollower {
         }
         fun restoreTab() { savedTab?.let { if (it != tab) { out += PlaceAction.Tab(it); tab = it } }; savedTab = null }
         when (screen.key) {
-            "GLO" -> { sounds(false); projects(false); lane(false); mix(true) }
+            // every GLO page: the sheet (re-opened if it was dismissed) and its section, so a second press of GLO on the FM-1 steps the sheet too
+            "GLO" -> { sounds(false); projects(false); lane(false); mix(true); mixSection(screen.page)?.let { out += PlaceAction.MixSection(it) } }
             "SAVE" -> { mix(false); lane(false); when (screen.title) {
-                "PRESETS", "USER" -> { projects(false); sounds(true) }
+                "PRESETS", "USER" -> { projects(false); sounds(true); out += PlaceAction.SoundsView(user = screen.title == "USER") }
                 "PROJECT" -> { sounds(false); projects(true) }
                 else -> { sounds(false); projects(false) }
             } }
@@ -76,5 +81,10 @@ class PlaceFollower {
             else -> { mix(false); sounds(false); projects(false); lane(false); restoreTab() }   // HOME, a sound family: back to where the phone was
         }
         return out
+    }
+
+    companion object {
+        /** The Mix section for a GLO page in Lupe's numbers (30 MIXER … 34 GLOBAL). */
+        fun mixSection(page: Int): String? = listOf("mixer", "delay", "reverb", "chorus", "global").getOrNull(page - 30)
     }
 }

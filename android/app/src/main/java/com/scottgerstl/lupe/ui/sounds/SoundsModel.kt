@@ -15,6 +15,11 @@ class SoundsHost {
     var request by mutableStateOf<SoundsRequest?>(null)
     fun open(track: Int, pad: String? = null) { request = SoundsRequest(track, pad) }
     fun close() { request = null }
+    /** Which list the FM-1's SAVE page asks for (USER's slots, or the presets); null until it has. The browser follows each change. */
+    var userView by mutableStateOf<Boolean?>(null)
+    /** Counts each ask, so asking for the same list twice still moves the browser back to it. */
+    var viewAsk by mutableStateOf(0)
+    fun show(user: Boolean) { userView = user; viewAsk++ }
 }
 
 val LocalSoundsHost = staticCompositionLocalOf { SoundsHost() }

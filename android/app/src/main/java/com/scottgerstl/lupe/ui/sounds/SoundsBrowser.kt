@@ -103,6 +103,9 @@ fun SoundsBrowser(core: LupeCore, request: SoundsRequest, onDone: () -> Unit, mo
     var confirmSlot by remember { mutableStateOf<SlotConfirm?>(null) }
     // the name for a Save, asked in place once a slot is chosen (it defaults to the sound's own name)
     var naming by remember { mutableStateOf<Int?>(null) }
+    // the FM-1 stepping SAVE between PRESETS and USER moves this list with it (not while a Save is choosing a slot)
+    val host = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
+    androidx.compose.runtime.LaunchedEffect(host.viewAsk) { host.userView?.let { if (!saving) userView = it } }
     val viewing = if (userView) USER else s.viewing
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

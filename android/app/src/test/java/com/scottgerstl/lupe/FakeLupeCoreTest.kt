@@ -118,6 +118,28 @@ class FakeLupeCoreTest {
         assertEquals(false, core.clock.value.running)
     }
 
+    @Test fun gloSteppedOnTheFm1TakesTheMixSheetThroughAllFiveSections() = runTest(StandardTestDispatcher()) {
+        val core = fake(this)
+        val follower = com.scottgerstl.lupe.ui.shell.PlaceFollower()
+        follower.follow(core.fm1Screen.value, com.scottgerstl.lupe.ui.shell.PlaceNow(com.scottgerstl.lupe.core.Tab.Pads))   // the baseline (HOME)
+        var open = false
+        val seen = mutableListOf<String>()
+        for ((n, _) in com.scottgerstl.lupe.core.ScreenPages.GLO) {
+            core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", n)); advanceTimeBy(10)    // the FM-1's GLO pressed again
+            follower.follow(core.fm1Screen.value, com.scottgerstl.lupe.ui.shell.PlaceNow(com.scottgerstl.lupe.core.Tab.Pads, mixOpen = open)).forEach { a ->
+                when (a) {
+                    com.scottgerstl.lupe.ui.shell.PlaceAction.OpenMix -> open = true
+                    is com.scottgerstl.lupe.ui.shell.PlaceAction.MixSection -> core.send(com.scottgerstl.lupe.core.MixSectionPick(a.section))
+                    else -> {}
+                }
+            }
+            advanceTimeBy(10)
+            seen += core.mix.value.section
+        }
+        assertTrue(open)
+        assertEquals(listOf("mixer", "delay", "reverb", "chorus", "global"), seen)
+    }
+
     @Test fun launchWaitsWhilePlayingAndCountsInTheTopBar() = runTest(StandardTestDispatcher()) {
         val core = fake(this)
         core.send(Intent.Play); advanceTimeBy(10)
