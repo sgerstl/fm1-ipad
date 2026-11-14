@@ -17,21 +17,39 @@ import kotlin.math.hypot
 class HoldMenuTest {
     private fun wheel(n: Int, x: Float = 500f, y: Float = 200f, leftHanded: Boolean = true) = HoldWheel(x, y, n, 915f, 412f, leftHanded)
 
-    /** The iPhone's numbers (ios/FM1/RadialMenu.swift at 3ab5e14): near edges 150 from the arc's centre, a 22 stalk in to a rim at 128. */
-    @Test fun theChoicesNearEdgesAreOnTheArcAndEveryStalkIs22() {
+    /** The iPhone's final numbers (ios/FM1/RadialMenu.swift at 4386982): a 400 curve whose middle is 76 from the finger, a 22 stalk in to a rim at 378. */
+    @Test fun theChoicesNearEdgesAreOnTheShallowCurveAndEveryStalkIs22() {
         val w = wheel(5)                                                    // left-handed here: it opens to the right
         assertFalse(w.left); assertEquals(200f, w.mid, 0.01f)
+        assertEquals(500f + 76f - 400f, w.centreX, 0.01f)
         val spots = (0 until 5).map { w.spot(it, 0f) }
         spots.zipWithNext().forEach { (a, b) -> assertEquals(56f, b.rowY - a.rowY, 0.01f) }           // centres 56 apart
-        assertEquals(200f - 24f, spots[2].rowY, 0.01f)                                                // the middle one level with the centre
+        assertEquals(200f - 24f, spots[2].rowY, 0.01f)                                                // the middle one level with the curve's middle
         spots.forEach { s ->
-            assertEquals(150f, hypot(s.nodeX - 500f, s.nodeY - 200f), 0.01f)                          // its node on the 150 arc
+            assertEquals(400f, hypot(s.nodeX - w.centreX, s.nodeY - 200f), 0.01f)                     // its node on the 400 curve
             assertEquals(22f, hypot(s.nodeX - s.stalkX, s.nodeY - s.stalkY), 0.01f)                   // its stalk exactly 22
-            assertEquals(128f, hypot(s.stalkX - 500f, s.stalkY - 200f), 0.01f)                        // starting on the rim
+            assertEquals(378f, hypot(s.stalkX - w.centreX, s.stalkY - 200f), 0.01f)                   // starting on the rim
             assertEquals(s.nodeX, s.rowX, 0.01f); assertEquals(1f, s.alpha, 0f)
         }
-        assertEquals(150f, spots[2].nodeX - 500f, 0.01f)                                              // the middle one furthest out
-        assertEquals(48.3, Math.toDegrees(kotlin.math.atan2((spots[4].nodeY - 200f).toDouble(), (spots[4].nodeX - 500f).toDouble())), 0.2)   // about ±48° for five
+        assertEquals(76f, spots[2].nodeX - 500f, 0.01f)                                               // the middle one 76 from the finger
+        assertEquals(16f, spots[2].nodeX - spots[0].nodeX, 0.5f)                                      // the ends come in about 16: nearly a column
+    }
+
+    @Test fun theRimRunsFromTheTopChoiceToTheBottomOneAndTheTrianglesSayThereIsMore() {
+        val w = wheel(9, y = 220f)        // (a height where the column fits without moving)
+        assertEquals(220f, w.mid, 0.01f)
+        assertEquals(136f, w.reachY, 0.01f)                                 // 2 × 56 + 24
+        assertEquals(Math.toDegrees(kotlin.math.asin(136.0 / 378.0)), w.rimHalfSweep.toDouble(), 0.01)
+        // the triangles: on the rim's curve, 8 past its ends
+        val (ux, uy) = w.triangle(up = true); val (dx, dy) = w.triangle(up = false)
+        assertEquals(220f - 144f, uy, 0.01f); assertEquals(220f + 144f, dy, 0.01f); assertEquals(ux, dx, 0.01f)
+        assertEquals(378f, hypot(ux - w.centreX, uy - 220f), 0.01f)
+        // opened on the first choice: nothing above, more below; at the end the other way round; each blends over half a choice
+        assertEquals(0f, w.moreAbove(0f), 0f); assertEquals(1f, w.moreBelow(0f), 0f)
+        assertEquals(0.5f, w.moreAbove(0.25f), 0.001f)
+        assertEquals(1f, w.moreAbove(4f), 0f); assertEquals(0f, w.moreBelow(4f), 0f); assertEquals(0.5f, w.moreBelow(3.75f), 0.001f)
+        // five or fewer: none
+        assertEquals(0f, wheel(5).moreBelow(0f), 0f); assertEquals(0f, wheel(5).moreAbove(0f), 0f)
     }
 
     @Test fun moreThanFiveIsAWheelThatOpensWithTheFirstAtTheTop() {
@@ -62,28 +80,31 @@ class HoldMenuTest {
         assertEquals(0f, w.settle(-3f), 0f); assertEquals(4f, w.settle(9f), 0f)
     }
 
-    @Test fun theCentreMovesOnlyAsFarAsKeepsTheColumnOnTheScreen() {
-        // five in view: half = 2 × 56 + 24 = 136; the header's line is at 56, the foot's margin 16
-        assertEquals(56f + 136f, HoldWheel(500f, 70f, 9, 915f, 412f).mid, 0.01f)
-        assertEquals(412f - 16f - 136f, HoldWheel(500f, 400f, 9, 915f, 412f).mid, 0.01f)
-        assertEquals(200f, HoldWheel(500f, 200f, 9, 915f, 412f).mid, 0.01f)
+    @Test fun theMiddleMovesOnlyAsFarAsKeepsTheColumnOnTheScreen() {
+        // a wheel: half = 2 × 56 + 24 + 15 (the triangle and its gap) = 151; the header's line is at 56, the foot's margin 16
+        assertEquals(56f + 151f, HoldWheel(500f, 70f, 9, 915f, 412f).mid, 0.01f)
+        assertEquals(412f - 16f - 151f, HoldWheel(500f, 400f, 9, 915f, 412f).mid, 0.01f)
+        assertEquals(220f, HoldWheel(500f, 220f, 9, 915f, 412f).mid, 0.01f)
+        // five choices, no triangles: 136
+        assertEquals(56f + 136f, HoldWheel(500f, 70f, 5, 915f, 412f).mid, 0.01f)
         // one choice: only its own half height
         assertEquals(56f + 24f, HoldWheel(500f, 60f, 1, 915f, 412f).mid, 0.01f)
         val top = HoldWheel(500f, 70f, 9, 915f, 412f)
         assertTrue((0 until 5).all { top.spot(it, 0f).rowY >= 56f - 0.01f })
+        assertTrue(top.triangle(up = true).second - 7f >= 56f - 0.01f)      // the upper triangle's tip is under the header too
     }
 
     @Test fun theSideFollowsTheHandAndTheRoom() {
-        // reach = 150 + 200 + 8 = 358
+        // reach = 76 + 200 + 8 = 284
         assertTrue(HoldWheel(500f, 200f, 5, 915f, 412f).left)                         // right-handed, the left fits: left
-        assertFalse(HoldWheel(300f, 200f, 5, 915f, 412f).left)                        // the left doesn't fit, the right does: right
-        assertTrue(HoldWheel(450f, 200f, 5, 800f, 412f).left)                         // only the left fits
+        assertFalse(HoldWheel(200f, 200f, 5, 915f, 412f).left)                        // the left doesn't fit, the right does: right
+        assertTrue(HoldWheel(300f, 200f, 5, 500f, 412f).left)                         // only the left fits
         assertFalse(HoldWheel(500f, 200f, 5, 915f, 412f, leftHanded = true).left)     // left-handed, the right fits: right
         assertTrue(HoldWheel(700f, 200f, 5, 915f, 412f, leftHanded = true).left)      // …unless only the left does
         val l = HoldWheel(500f, 200f, 5, 915f, 412f).spot(2, 0f)
-        assertEquals(500f - 150f, l.nodeX, 0.01f); assertEquals(l.nodeX - 200f, l.rowX, 0.01f)
+        assertEquals(500f - 76f, l.nodeX, 0.01f); assertEquals(l.nodeX - 200f, l.rowX, 0.01f)
         // kept on the screen: the node never closer than 8 + 200 to the edge it opens toward
-        assertTrue(HoldWheel(300f, 200f, 5, 915f, 412f, leftHanded = false).spot(2, 0f).nodeX <= 915f - 208f)
+        assertTrue(HoldWheel(700f, 200f, 5, 915f, 412f, leftHanded = false).spot(2, 0f).nodeX >= 208f)
     }
 
     @Test fun theCircleGoesPastItsSizeUndershootsOnceAndSettles() {

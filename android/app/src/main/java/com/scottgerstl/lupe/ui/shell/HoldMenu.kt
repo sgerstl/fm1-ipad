@@ -155,40 +155,60 @@ const val STALK = 22f
 class WheelSpot(val rowX: Float, val rowY: Float, val nodeX: Float, val nodeY: Float, val stalkX: Float, val stalkY: Float, val alpha: Float)
 
 /**
- * The hold menu as a wheel (decision 36, Scott's option A; the iPhone's numbers, ios/FM1/RadialMenu.swift at 3ab5e14, pt = dp).
+ * The hold menu as a wheel (decision 36, Scott's option A with his tuning; the iPhone's final numbers, ios/FM1/RadialMenu.swift at
+ * 4386982, pt = dp).
  *
- * The choices (200 × 48, centres 56 apart) have their near edges on a circle of [ARC] 150 round a centre level with the finger: five in
- * view, the middle one furthest out. Each has a 22 dp stalk running in toward that centre, ending on a thin rim of radius 128 that a spoke
- * links back to the circle under the finger. The centre is the finger's height, moved only as far as keeps the whole column between the
- * header (56) and 16 above the foot. With more than five choices it is a wheel: it opens with the first at the arc's top, a drag rolls
- * the choices along the arc, and one fades (and stops taking taps under half) as it passes an end. Five or fewer: no turning, no fade.
+ * The choices (200 × 48, centres 56 apart, up to five in view) have their near edges on a shallow curve: a circle of radius [CURVE] 400
+ * whose middle point is [NEAR] 76 from the finger, so across the five the ends come in only about 16. Each has a 22 dp stalk running in
+ * toward the curve's centre, ending on a thin rim (radius 378). Nothing joins the rim to the circle under the finger. The curve's middle
+ * height is the finger's, moved only as far as keeps the whole column between the header (56) and 16 above the foot. With more than five
+ * it is a wheel: it opens on the first choice, a drag rolls the choices along the curve, one fades (and stops taking taps under half) as
+ * it passes an end, and a small triangle past each end of the rim says there is more that way, blending out as that end is reached.
  * Side: right-handed, to the left of the finger where the whole reach fits there, or where the right doesn't; left-handed, the mirror.
  */
 class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val screenH: Float, leftHanded: Boolean = false) {
     val shown: Int = minOf(n, 5)
-    private val half = (shown - 1) / 2f * PITCH + ROW_H / 2
-    /** The arc's centre height: the finger's, kept so the column stays on the screen. */
+    /** From the curve's middle height to the outer edge of its top or bottom choice. */
+    val reachY: Float = (shown - 1) / 2f * PITCH + ROW_H / 2
+    /** …and, on a wheel, the triangle past it (an 8 gap and its 7 height). */
+    private val half = reachY + if (n > 5) TRI_GAP + TRI_H else 0f
+    /** The curve's middle height: the finger's, kept so the column stays on the screen. */
     val mid: Float = if (HEADER + half <= screenH - 16f - half) y.coerceIn(HEADER + half, screenH - 16f - half) else y
     val left: Boolean = run {
-        val reach = ARC + ROW_W + 8f; val fitsLeft = x - reach >= 0f; val fitsRight = x + reach <= screenW
+        val reach = NEAR + ROW_W + 8f; val fitsLeft = x - reach >= 0f; val fitsRight = x + reach <= screenW
         if (leftHanded) !(fitsRight || !fitsLeft) else (fitsLeft || !fitsRight)
     }
+    private val side = if (left) -1f else 1f
+    /** The curve's centre: far behind the finger, on the side the choices are not. */
+    val centreX: Float = x + side * (NEAR - CURVE)
     /** How far the wheel can turn, in choices; 0 for five or fewer. */
     val maxTurn: Float = (n - 5).coerceAtLeast(0).toFloat()
 
-    /** Choice [k]'s position on the arc: 0 its middle, ±2 its ends, not whole while the wheel turns. */
+    /** Choice [k]'s position on the curve: 0 its middle, ±2 its ends, not whole while the wheel turns. */
     fun position(k: Int, turn: Float = 0f): Float = k - turn - (shown - 1) / 2f
 
     fun spot(p: Float): WheelSpot {
         val cy = mid + p * PITCH
-        val dx = sqrt((ARC * ARC - (cy - mid) * (cy - mid)).coerceAtLeast(0f))
-        val nodeX = if (left) (x - dx).coerceAtLeast(8f + ROW_W) else (x + dx).coerceAtMost(screenW - 8f - ROW_W)
-        // the stalk: 22 dp back from the node toward the arc's centre, so its inner end is on the rim
-        val ux = nodeX - x; val uy = cy - mid; val len = sqrt(ux * ux + uy * uy).coerceAtLeast(0.001f)
+        val dx = sqrt((CURVE * CURVE - (cy - mid) * (cy - mid)).coerceAtLeast(0f))
+        val nodeX = if (left) (centreX - dx).coerceAtLeast(8f + ROW_W) else (centreX + dx).coerceAtMost(screenW - 8f - ROW_W)
+        // the stalk: 22 dp back from the node toward the curve's centre, so its inner end is on the rim
+        val ux = nodeX - centreX; val uy = cy - mid; val len = sqrt(ux * ux + uy * uy).coerceAtLeast(0.001f)
         val alpha = if (n > 5) (1f - (kotlin.math.abs(p) - 2f) / 0.8f).coerceIn(0f, 1f) else 1f
         return WheelSpot(if (left) nodeX - ROW_W else nodeX, cy - ROW_H / 2, nodeX, cy, nodeX - STALK * ux / len, cy - STALK * uy / len, alpha)
     }
     fun spot(k: Int, turn: Float): WheelSpot = spot(position(k, turn))
+
+    /** The rim reaches this far either side of level, in degrees: to the outer edge of the top and bottom choices. */
+    val rimHalfSweep: Float = Math.toDegrees(kotlin.math.asin((reachY / RIM).coerceIn(-1f, 1f)).toDouble()).toFloat()
+
+    /** The middle of a triangle's base: on the rim's curve, 8 past its end, above ([up]) or below. Its tip is 7 further out. */
+    fun triangle(up: Boolean): Pair<Float, Float> {
+        val dy = reachY + TRI_GAP
+        return (centreX + side * sqrt((RIM * RIM - dy * dy).coerceAtLeast(0f))) to (mid + if (up) -dy else dy)
+    }
+    /** How much of each triangle shows: the upper one once there are choices before the first in view, the lower while there are more after; none at five or fewer. */
+    fun moreAbove(turn: Float): Float = if (n > 5) (turn / 0.5f).coerceIn(0f, 1f) else 0f
+    fun moreBelow(turn: Float): Float = if (n > 5) ((n - 5 - turn) / 0.5f).coerceIn(0f, 1f) else 0f
 
     /** Where a drag has the wheel: past either end it gives, at 0.35 of the finger's travel. */
     fun give(turn: Float): Float = when { turn < 0f -> turn * 0.35f; turn > maxTurn -> maxTurn + (turn - maxTurn) * 0.35f; else -> turn }
@@ -199,11 +219,17 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
         const val ROW_W = 200f
         const val ROW_H = 48f
         const val PITCH = 56f
-        /** The choices' near edges are this far from the arc's centre; the rim is a stalk inside that. */
-        const val ARC = 150f
-        const val RIM = ARC - STALK
+        /** The middle choice's near edge is this far from the finger… */
+        const val NEAR = 76f
+        /** …on a curve of this radius (shallow: nearly a straight column), with the rim a stalk inside it. */
+        const val CURVE = 400f
+        const val RIM = CURVE - STALK
         /** Under the header's line. */
         const val HEADER = 56f
+        /** The more-to-come triangles: 10 wide, 7 tall, 8 past the rim's end. */
+        const val TRI_W = 10f
+        const val TRI_H = 7f
+        const val TRI_GAP = 8f
     }
 }
 
@@ -221,9 +247,9 @@ fun hubScale(p: Float, spring: Float): Float {
 }
 
 /**
- * Decision 36 (Scott, 2026-11-14): the menu is a wheel ([HoldWheel]). Five choices in view on an arc 150 dp from its centre, each on a
- * 22 dp stalk from a thin rim that a spoke links back to the circle; a drag rolls the rest along the arc, fading at its ends, and it
- * settles on a whole choice. A tap picks; a drag never does. There is no "More…" page.
+ * Decision 36 (Scott, 2026-11-14): the menu is a wheel ([HoldWheel]). Five choices in view on a shallow curve beside the finger, each on
+ * a 22 dp stalk from a thin rim; a drag rolls the rest along the curve, fading at its ends, small triangles past the rim's ends say
+ * there is more, and it settles on a whole choice. A tap picks; a drag never does. There is no "More…" page.
  *
  * Draws the hold menu over everything. A filled circle in the track's colour at about 45 % over the page grows exactly under the finger
  * (64 dp at rest, an elastic grow-in); lines 1.5 dp in the track's colour run out from its edge one by one to each choice, each ending in a
@@ -315,18 +341,21 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
             val hubA = if (reduce) (elapsed.value / 150f).coerceAtMost(1f) * (1f - leave.value) else 1f
             drawCircle(lerp(Tok.page, m.colour, 0.45f).copy(alpha = hubA), 32.dp.toPx() * scale, c)
             drawCircle(m.colour.copy(alpha = hubA), 32.dp.toPx() * scale, c, style = Stroke(1.5.dp.toPx()))
-            // the wheel's rim: a thin arc in the track's colour, a stalk inside the choices, over ±70° of the open side; and one spoke from
-            // the circle's edge out to the rim's middle. Both grow in from 100 ms over 260 (the sweep opening, the radius from 0.9)
+            // the wheel's rim: a thin arc in the track's colour, a stalk inside the choices, from the top choice's outer edge to the bottom
+            // one's. It draws out from its middle from 100 ms over 260. Nothing joins it to the circle.
             val grow = if (reduce) 1f else ((elapsed.value - 100f) / 260f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
             val rimA = 0.55f * fadeAll * (if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else 1f)
             if (grow > 0f && rimA > 0f) {
-                val cc = Offset(fx.dp.toPx(), wheel.mid.dp.toPx())
-                val rr = HoldWheel.RIM.dp.toPx() * (0.9f + 0.1f * grow)
-                drawArc(m.colour.copy(alpha = rimA), (if (wheel.left) 180f else 0f) - 70f * grow, 140f * grow, false, Offset(cc.x - rr, cc.y - rr), Size(rr * 2, rr * 2), style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
-                val rimMid = Offset(cc.x + (if (wheel.left) -1f else 1f) * HoldWheel.RIM.dp.toPx(), cc.y)
-                val ang = atan2(rimMid.y - c.y, rimMid.x - c.x)
-                val from = Offset(c.x + cos(ang) * HUB_R.dp.toPx(), c.y + sin(ang) * HUB_R.dp.toPx())
-                drawLine(m.colour.copy(alpha = rimA), from, Offset(from.x + (rimMid.x - from.x) * grow, from.y + (rimMid.y - from.y) * grow), 1.5.dp.toPx(), StrokeCap.Round)
+                val cc = Offset(wheel.centreX.dp.toPx(), wheel.mid.dp.toPx())
+                val rr = HoldWheel.RIM.dp.toPx(); val sweep = wheel.rimHalfSweep * grow
+                drawArc(m.colour.copy(alpha = rimA), (if (wheel.left) 180f else 0f) - sweep, sweep * 2, false, Offset(cc.x - rr, cc.y - rr), Size(rr * 2, rr * 2), style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
+                // more choices that way: a small triangle past each end of the rim, in the track's colour, blending out as that end is reached
+                for (up in listOf(true, false)) {
+                    val a = (if (up) wheel.moreAbove(turn) else wheel.moreBelow(turn)) * grow * fadeAll
+                    if (a <= 0f) continue
+                    val (bx, by) = wheel.triangle(up); val hw = HoldWheel.TRI_W.dp.toPx() / 2; val th = HoldWheel.TRI_H.dp.toPx() * (if (up) -1f else 1f)
+                    drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(bx.dp.toPx() - hw, by.dp.toPx()); lineTo(bx.dp.toPx() + hw, by.dp.toPx()); lineTo(bx.dp.toPx(), by.dp.toPx() + th); close() }, m.colour.copy(alpha = a))
+                }
             }
             spots.forEachIndexed { k, s ->
                 val vis = s.alpha
