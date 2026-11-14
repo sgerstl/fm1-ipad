@@ -176,6 +176,8 @@ data class PadsState(
     /** The pattern numbers (1…64) the FM-1 holds: the only ones Set pattern can name (LIST SET refuses an empty one).
      *  P1, 2026-11-14 (Scott's run: Set to 60 refused). */
     val kept: List<Int> = emptyList(),
+    /** How many of the 64 pattern numbers are free (unused and empty), when the core says; 0 means New pattern will be refused. Null: not told. */
+    val patternsFree: Int? = null,
 )
 
 // ---- editor (P3)

@@ -390,9 +390,13 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             // the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
             add(HoldItem("Select sound", sub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
         }
+        val kept0 = keptPatterns(pads)
         if (empty) {
-            add(HoldItem("New pattern", sub = goes) { core.send(Intent.PadNew(row.track, at)) })
-            add(HoldItem("Rest", sub = stopFirst ?: goes, enabled = idle) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
+            // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap
+            val full = pads.patternsFree == 0 || kept0.size >= 64
+            add(HoldItem("New pattern", sub = if (full) com.scottgerstl.lupe.core.NO_PATTERN_FREE else goes, enabled = !full) { core.send(Intent.PadNew(row.track, at)) })
+            // (a REST added at the list's end is one LIST SET, which Skiff takes while playing; if it can't, its refusal shows on screen)
+            add(HoldItem("Rest", sub = goes) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
         }
         val kept = keptPatterns(pads)
         add(HoldItem(if (empty) "Pick a pattern…" else "Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else if (empty) goes else null, enabled = kept.isNotEmpty(),
@@ -459,7 +463,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     // every long-press has a non-hold way in (WCAG 2.5.7)
                     customActions = buildList {
                         if (e.kind == PadKind.Pattern) { add(CustomAccessibilityAction("Edit steps") { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); true }); add(CustomAccessibilityAction("Select sound") { core.send(Intent.PadSelectSound(row.track, at)); true }) }
-                        if (empty) add(CustomAccessibilityAction("New pattern") { core.send(Intent.PadNew(row.track, at)); true })
+                        if (empty && pads.patternsFree != 0) add(CustomAccessibilityAction("New pattern") { core.send(Intent.PadNew(row.track, at)); true })
                         if (!empty) add(CustomAccessibilityAction("Clear pad") { core.send(Intent.PadClear(row.track, at)); true })
                     }
                 }
