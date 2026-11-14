@@ -51,10 +51,10 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 **What the building session saw on a screen** (its own emulator, the demo FM-1; nothing on a Pixel or a real FM-1):
 - Row 3's Pads page: the band under track 1, outlined slots A to H, the Store key and scenes.
 - Row 24's no-FM-1 card (the greyed header, the words with Skiff 2.5.1, the moving bar, the button) and row 25's "Use the demo FM-1" filling the app.
-- Rows 32 and 33: a pad's hold menu with every choice in one column close to the circle, opening to the left of the finger, and the column scrolled to its end by a drag. With eight choices the lines to the far ones run long beside the column's edge: look at that on the Pixel.
-- Rows 7 and 8's track-head menu drawn (Sounds, LEVEL with its gauge, PAN from the middle, Mute, Solo); the rows were not slid.
+- Rows 32 and 33: a pad's hold menu as the wheel, five choices round the circle on equal short stalks, opening to the left of the finger with the first choice at the top; a drag turned it by two choices and it settled on whole ones.
+- Rows 7 and 8's track-head menu, drawn in the earlier column shape only (Sounds, LEVEL with its gauge, PAN from the middle, Mute, Solo); not looked at again as the wheel, and the rows were not slid.
 
-**Not seen on any screen:** the Timeline's band, the Mix pop-up and its four pictures, Settings, the launch footer, the refusal strip, the disabled New pattern, the edge fade while scrolling, a held finger scrolling at the edge, Leave the demo.
+**Not seen on any screen:** the Timeline's band, the Mix pop-up and its four pictures, Settings, the launch footer, the refusal strip, the disabled New pattern, a choice fading at the arc's end mid-turn, a held finger turning the wheel past the arc's end, the wheel under the header or at the foot, Clear unused patterns and its confirm, Leave the demo.
 
 **Not covered here:** refusals the core logs without the word "refused" (a move with no place, a pattern that holds nothing, nothing to chain into, a full track) still show nothing until the core publishes its `notice` area (asked of P1); TalkBack (release pass); the largest text size; the Sound keys switch does nothing until P4's rail reads it; Make unique, Copy to another track, Move to a named pad and the Patterns pool are not in the pad menu (the core has no way to ask for them yet).
 
