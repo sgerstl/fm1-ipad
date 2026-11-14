@@ -31,6 +31,8 @@ public final class PhoneCore {
     /// P5's screen-local state (P5Areas.swift): the Mix section on screen, Lupe's solos, the Sounds browser's target
     /// and the engine browsed, a project op going on.
     var mixSection = "mixer"
+    /// The FM-1's GLO page when it was last looked at (P5Areas.followGloPage).
+    var lastGloPage: Int?
     var soundsTrack: Int?          // nil: the selected track
     var soundsEntry: Int?
     var soundsViewing: Int?
@@ -97,6 +99,7 @@ public final class PhoneCore {
             // the FM-1 key whose screen is up (decision 24: the phone's button block lights it)
             AreaWatch(name: "fm1Screen", build: { [unowned self] in self.fm1ScreenArea().map(AreaJSON.encode) }, publish: publish),
             // P5: once the FM-1 has been read, as pads and editor
+            AreaWatch(name: "mixFollow", build: { [unowned self] in self.followGloPage() }, publish: { _, _ in }),   // the section follows GLO's page
             AreaWatch(name: "mix", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.mixArea()) : nil }, publish: publish),
             AreaWatch(name: "meters", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.metersArea()) : nil }, publish: publish),
             AreaWatch(name: "sounds", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.soundsArea()) : nil }, publish: publish),
