@@ -130,6 +130,8 @@ import Testing
         #expect(a.pages.map(\.title) == ["ENV", "ENV 2"])
         #expect(a.controls.compactMap { $0?.label } == ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"], "\(a.controls)")
         #expect(a.title == "ENV" && a.tiles == nil && a.window == nil)
+        // the picture's data (decision 30): the envelope's four values, the knobs' own
+        #expect(a.graph.kind == .env && a.graph.values == a.controls.compactMap { $0?.raw })
     }
 
     @Test func the25FXRowAndItsNumbers() async throws {
@@ -252,6 +254,8 @@ import Testing
         try await waitFor(5, "the patch read") { core.pageArea()?.controls[0] != nil }
         var a = try #require(core.pageArea())
         #expect(a.title == "OPERATOR 1" && a.window == PageArea.Window(index: 0, count: 5, title: "TONE"))
+        // its picture: the patch as OPERATOR draws it, beside the window's four
+        #expect(a.graph.kind == .fm6op && a.graph.fm6?.ops.count == 6 && a.graph.fm6?.picked == 1)
         #expect(a.controls.map { $0?.label } == ["OUTPUT", "RATIO", "FINE", "DETUNE"])
         #expect(a.tiles?.labels == ["OP1", "OP2", "OP3", "OP4", "OP5", "OP6"] && a.tiles?.picked == 0)
         // the FM-1's cursor on operator 4, then SELECT down: ENV 1 of operator 4
@@ -305,6 +309,7 @@ import Testing
         try await waitFor(5, "COLOR · LEVEL") { core.pageArea().map { $0.window?.index == 2 && $0.controls[0] != nil } ?? false }
         let a = try #require(core.pageArea())
         #expect(a.controls.map { $0?.label } == ["COLOR A", "COLOR B", "LEVEL", "DRIVE"])
+        #expect(a.graph.kind == .sound && a.graph.sheet?.rows.count == 4 && a.graph.sheet?.lane == 2 && a.graph.sheet?.lit == 2)
         #expect(a.controls[0]?.raw == fake.dxKit[2][9] && a.controls[3]?.names == ["OFF", "ON"])
         core.handle(json: #"{"intent":"setParam","slot":3,"value":1}"#)            // DRIVE on (KIT_PUT)
         try await waitFor(3, "DRIVE on") { fake.dxKit[2][4] == 1 }

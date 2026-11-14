@@ -35,6 +35,10 @@ public struct MixArea: Codable, Equatable, Sendable {
         public var title: String
         public var controls: [PageArea.Control?]
         public var settings: [PageArea.Control]
+        /// What the card's picture is drawn from (decision 30), in the pages' shape: `kind` delay, reverb, chorus or
+        /// global; `values` the four knobs' raw values in the FM-1's order (0 for an empty knob); `caption` the
+        /// card's named choice as the FM-1 shows it (DELAY's TIME, REVERB's TYPE, CHORUS's MODE).
+        public var graph: PageArea.Graph = PageArea.Graph()
     }
     public var sections: [Section]
     /// The section on screen. Picking one sends the FM-1 there when the screen link is on (a write); GLO pressed on

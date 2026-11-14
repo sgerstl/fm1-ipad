@@ -42,5 +42,8 @@ import Testing
         core.handle(json: #"{"intent":"mixSection","section":"chorus"}"#)
         try await waitFor(3, "chorus on the FM-1") { fake.screen.page == 33 && !fake.screen.home }
         #expect(core.mixArea().section == "chorus")
+        // the card's picture data (decision 30): its kind and the knobs' values
+        let card = try #require(core.mixArea().card)
+        #expect(card.graph.kind == .chorus && card.graph.values == card.controls.map { $0?.raw ?? 0 } && card.graph.caption == card.controls[2]?.value)
     }
 }

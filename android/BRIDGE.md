@@ -216,6 +216,11 @@ Device check: `qa/device-checks/2026-11-14-android-p6-core-writes.md`.
     they are null, and the outline is drawn dashed.
   - `top.bar` now wraps within `top.bars`: the selected track's block in Loop, the song in Song (Once doesn't wrap).
     Skiff's own screen shows no bar or beat while it plays, so this rule is Lupe's.
+  - `atMs` is read from CLOCK_MONOTONIC directly (the clock `SystemClock.uptimeMillis` reads). Each wait is logged
+    to LupeLog as it starts and ends ("wait: T1 pad 6 lands at 192 (clock running, …)").
+- **The pictures' data** (decision 30: pictures are a setting), in `PagePictures.swift`: the page area's `graph` is
+  back as it was before b672052 (the picture values, `fm6`, `sheet`), beside `title`, `tiles` and `window`. Mix's bus
+  cards carry a `graph` too: kind delay, reverb, chorus or global, with the four knobs' values.
 
 ### Read-only by default (P1, 2026-11-13)
 

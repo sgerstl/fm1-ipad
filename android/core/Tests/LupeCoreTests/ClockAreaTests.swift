@@ -120,7 +120,8 @@ import Testing
         core.start()
         defer { core.stop() }
         try await settle(10, "playing with a clock") {
-            core.session.playing && core.session.clockTicks >= 24 && core.session.skiffSong?.perform != nil && !f.clock.isEmpty
+            core.session.playing && core.session.clockTicks >= 24 && core.session.skiffSong?.perform != nil
+                && core.clockArea().running && f.clock.contains { $0.contains("\"running\":true") }
         }
         let clocks = f.clock.count
         let list = try #require(core.session.skiffSong?.song?.tracks.first)

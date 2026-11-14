@@ -61,6 +61,8 @@ public struct PageArea: Codable, Equatable, Sendable {
     public var controls: [Control?]
     public var tiles: Tiles?
     public var window: Window?
+    /// What the page's picture is drawn from (PagePictures.swift; decision 30: the pictures are a setting).
+    public var graph: Graph = Graph()
     public var turned: Int
     public var turnSeq: Int
     public var lock: Lock?
@@ -138,7 +140,7 @@ extension PhoneCore {
         var area = PageArea(family: page.family.rawValue, pages: row, page: page.fw, track: t + 1, trackName: s.tracks[t].displayName,
                             title: ctx.isSheet ? ctx.sheetTitle : page.title, controls: ctx.controls(), tiles: ctx.tiles(),
                             window: ctx.isSheet ? PageArea.Window(index: ctx.window, count: ctx.windowCount, title: ctx.windowTitle) : nil,
-                            turned: -1, turnSeq: 0, lock: nil)
+                            graph: ctx.graph(), turned: -1, turnSeq: 0, lock: nil)
         // the knob the FM-1 last turned, if it is one of this page's (Session.lastTouched, filtered for a sound loading)
         if let touched = s.lastTouched {
             for k in 0..<4 {
