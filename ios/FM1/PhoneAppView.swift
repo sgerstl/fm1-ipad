@@ -368,7 +368,7 @@ struct PhonePianoRoll: View {
                     .frame(width: grid.labelWidth, height: h, alignment: .top)
                     .clipped()
                     ZStack(alignment: .topLeading) {
-                        TwoFingerScrollView(contentSize: CGSize(width: CGFloat(session.stepCount) * grid.stepWidth + panelRoom, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
+                        TwoFingerScrollView(contentSize: CGSize(width: CGFloat(phoneGridSteps(session, track)) * grid.stepWidth + panelRoom, height: max(h, CGFloat(rows.count) * grid.rowHeight)),
                                             offset: $offset, request: request,
                                             rowKeys: rows, rowHeight: grid.rowHeight, snapX: grid.barWidth,
                                             holdRing: PianoRollContent.holdTime,
@@ -385,7 +385,7 @@ struct PhonePianoRoll: View {
                 }
                 // the sound panel over the grid (decision 35): a scroll indicator under it says how far the steps run on
                 if panelRoom > 0 {
-                    let content = CGFloat(session.stepCount) * grid.stepWidth + panelRoom
+                    let content = CGFloat(phoneGridSteps(session, track)) * grid.stepWidth + panelRoom
                     GeometryReader { g in
                         let w = g.size.width, thumb = max(24, w * grid.barWidth / content)
                         Capsule().fill(Theme.stepEmpty)
@@ -413,6 +413,7 @@ struct PhonePianoRoll: View {
                 }
         }
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
+        .followsPlayhead(session: session, track: track, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
         .onChange(of: rows) { _, r in ui.keptRows[track] = Set(r) }
         .onChange(of: track) { _, _ in ui.keptRows = [:] }
     }
@@ -443,7 +444,7 @@ struct PhoneDrumGrid: View {
                 .frame(width: grid.labelWidth, height: h, alignment: .top)
                 .clipped()
                 ZStack(alignment: .topLeading) {
-                    TwoFingerScrollView(contentSize: CGSize(width: grid.drumContentSize.width + panelRoom, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth,
+                    TwoFingerScrollView(contentSize: CGSize(width: CGFloat(phoneGridSteps(session, session.kitTrack ?? 0)) * grid.stepWidth + panelRoom, height: CGFloat(session.drumLanes.count) * grid.rowHeight), offset: $offset, request: request, snapX: grid.barWidth,
                                         holdRing: DrumGridContent.holdTime) {
                         DrumGridContent(grid: grid, session: session, ui: ui)
                     }
@@ -456,6 +457,7 @@ struct PhoneDrumGrid: View {
                 .accessibilityLabel("Drum steps")
         }
         .followsView(ui: ui, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
+        .followsPlayhead(session: session, track: session.kitTrack ?? 0, grid: grid, offset: offset) { request = .init(x: $0, id: $1) }
     }
 }
 
@@ -547,4 +549,43 @@ struct PianoEdgeKey: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { up() }
         }
     }
+}
+
+/// The phone's Edit grid follows the playhead's 16-step chunk while playing (batch item 9 follow-up, Scott 2026-11-15),
+/// unless the grid was scrolled by hand in the last 3 s; it pages with the grid's own snap (one chunk at a time).
+private struct FollowsPlayhead: ViewModifier {
+    let session: DeviceSession
+    let track: Int
+    let grid: GridMetrics
+    let offset: CGPoint
+    let scroll: (CGFloat, Int) -> Void
+    @State private var asked = Date.distantPast        // when this last scrolled the grid itself
+    @State private var byHand = Date.distantPast       // when a finger last did
+    @State private var n = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: offset.x) { _, _ in if Date().timeIntervalSince(asked) > 0.6 { byHand = Date() } }
+            .onChange(of: session.positions[safe: track]?.step) { _, step in
+                guard session.playing, let step, Date().timeIntervalSince(byHand) > 3 else { return }
+                let len = max(1, session.tracks[safe: track]?.length ?? 16)
+                let chunk = (step % len) / 16
+                let x = CGFloat(chunk) * grid.barWidth
+                guard abs(offset.x - x) > 1 else { return }
+                asked = Date(); n += 1
+                scroll(x, 10_000 + n)
+            }
+    }
+}
+
+extension View {
+    func followsPlayhead(session: DeviceSession, track: Int, grid: GridMetrics, offset: CGPoint, scroll: @escaping (CGFloat, Int) -> Void) -> some View {
+        modifier(FollowsPlayhead(session: session, track: track, grid: grid, offset: offset, scroll: scroll))
+    }
+}
+
+/// The phone's grid runs to the pattern's own length, in whole 16-step chunks (up to the FM-1's 64).
+@MainActor func phoneGridSteps(_ session: DeviceSession, _ track: Int) -> Int {
+    let len = max(1, min(session.stepCount, session.tracks[safe: track]?.length ?? 16))
+    return min(session.stepCount, ((len + 15) / 16) * 16)
 }
