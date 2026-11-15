@@ -91,8 +91,8 @@ import kotlinx.coroutines.delay
 
 private val PAD_W = 80.dp
 private val GAP = 4.dp
-/** A scene key's width in the scrolling row (the iPad's 52; the iPhone's numbers replace it if they differ). */
-val SCENE_KEY_W = 52.dp
+/** A scene key's width in the scrolling row (the iPhone's 40; the iPad's is 52). */
+val SCENE_KEY_W = 40.dp
 private val SCENE_PAD = 4.dp
 
 /**
@@ -118,7 +118,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     val clock = core.clock.collectAsStateWithLifecycle()
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val scenesH = 40.dp
+        val scenesH = 34.dp
         val rows = pads.rows.ifEmpty { return@BoxWithConstraints }
         val rh = ((maxHeight - scenesH - 8.dp - GAP * (rows.size - 1)) / rows.size).coerceAtLeast(24.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -194,7 +194,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
             }
             // scenes: Store, then all sixteen
             Box(Modifier.fillMaxWidth().height(scenesH)) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {   // (8 between Store, the scenes and the knobs)
                     // the iPhone's short Store key with a dot (decision 33): the same word either way, lit while armed, so the scenes beside it never move
                     Key({ store = !store }, "Store scene", width = 88.dp, height = scenesH, minTarget = scenesH, on = store,
                         role = Role.Switch, state = if (store) "On: tap a scene to store what plays now" else "Off") { fg ->
