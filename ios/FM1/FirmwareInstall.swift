@@ -522,6 +522,11 @@ struct ForkOfferCard: View {
     /// What the phone loses without Lupe's screen link (each one is a `session.screenLinked` gate in the phone's views).
     static let withoutLink = "Without Lupe’s screen link, Lupe and the FM-1 don’t follow each other: a button on the FM-1 doesn’t open its page or sound panel here, a tab here doesn’t move the FM-1, and the Mix meters, the scope in the page pictures and MOD’s route stay still."
 
+    /// Lupe is connected to this firmware, so it backs up through the session first.
+    private var backsUp: Bool {
+        switch from { case .sloop, .mvave: false; default: true }
+    }
+
     private var title: String {
         switch from {
         case .mvave: "Lupe needs Skiff-Lupe"
@@ -547,7 +552,9 @@ struct ForkOfferCard: View {
             case .mvave(let f):
                 Text("This FM-1 runs \(FirmwareOfferCard.name(f)). Lupe can’t connect to it at all. Skiff-Lupe 2.5.1 is Skiff, a firmware for the FM-1 with six tracks and songs, plus Lupe’s screen link.").bodyText(primary: true)
             }
-            Text("Your projects are backed up to Files first when the firmware allows it. Installing takes about a minute; you can put stock V15 back any time from FM-1 firmware… in the song-name menu.")
+            // (SLOOP and M-VAVE's own: Lupe can't connect, so there's nothing to back up through; the card says so above)
+            Text(backsUp ? "Lupe backs up your projects to Files first. Installing takes about a minute; you can put stock V15 back any time from FM-1 firmware… in the song-name menu."
+                         : "Installing takes about a minute; you can put stock V15 back any time from FM-1 firmware… in the song-name menu.")
                 .bodyText()
         } actions: {
             CardKey(title: "Not now") { centre.snooze(from) }
