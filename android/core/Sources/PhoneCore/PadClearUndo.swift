@@ -20,6 +20,9 @@ extension PadsArea {
         public var pattern: Int?
         /// A Timeline block deleted (`entry` is the block's id, its first entry), not one pad cleared.
         public var block = false
+        /// What was taken: "pad" (the pad cleared), "block" (a Timeline block deleted) or "steps" (the pattern's notes
+        /// wiped by clearSteps; the pad and its pattern stayed).
+        public var kind = "pad"
     }
 }
 
@@ -32,6 +35,9 @@ struct ClearedPad {
     var parked: [Int] = []
     /// A Timeline block's delete: undone whole, or not at all.
     var block = false
+    /// clearSteps: the track's steps as they were, and the pattern (0…63) they belong to.
+    var steps: [SynthStep]?
+    var stepsPattern: Int?
     var at: Date
     var undoable = true
 }
@@ -41,7 +47,8 @@ extension PhoneCore {
     static var undoClearWindow: TimeInterval = 10
 
     func clearUndos() -> [PadsArea.ClearUndo] {
-        clearedPads.filter(\.undoable).map { .init(track: $0.track + 1, entry: $0.entry, pattern: $0.before[safe: $0.entry]?.poolIndex.map { $0 + 1 }, block: $0.block) }
+        clearedPads.filter(\.undoable).map { .init(track: $0.track + 1, entry: $0.entry, pattern: $0.before[safe: $0.entry]?.poolIndex.map { $0 + 1 }, block: $0.block,
+                                                    kind: $0.steps != nil ? "steps" : $0.block ? "block" : "pad") }
     }
 
     /// padClear: no confirm. What the pad held is remembered for undoClear.
@@ -97,14 +104,100 @@ extension PhoneCore {
         }
     }
 
-    private struct UndoWire: Decodable { let intent: String; let track: Int?; let entry: Int?; let steps: Int? }
+    /// padMove{track, from, toTrack, to}: a pad dragged to another place, as the iPad's drag (SloopKit's PadMove and
+    /// the song store's rewrite; pattern-pad.md B15–B17). Its own track only: onto a filled pad the two swap; onto an
+    /// empty one it moves there (past the list's end: to the first empty place) and its old place stays empty (B18 is
+    /// open; this is what the iPad does today). Stopped only: Skiff rewrites a list only while stopped.
+    func movePad(track t: Int, from: Int, toTrack: Int, to: Int) {
+        guard let store = session.skiffSong, let list = store.song?.tracks[safe: t], list.entries.indices.contains(from),
+              list.entries.indices.contains(to), store.song?.tracks.indices.contains(toTrack) == true else {
+            refuse("The FM-1's song hasn't been read yet. Try again in a moment."); return
+        }
+        guard !list.entries[from].isEmpty else { log("padMove: T\(t + 1) entry \(from) is empty"); return }
+        guard toTrack == t else {
+            // the iPad: a filled pad of another row takes nothing; an empty one is offered a copy or the same pattern
+            refuse("A pad moves only within its own track. To use this pattern on T\(toTrack + 1), put it there (the same pattern, shared) or copy it.",
+                   track: t + 1, entry: from)
+            return
+        }
+        guard !session.playing else {
+            refuse("Stop to rearrange: the FM-1 moves pads only while stopped.", track: t + 1, entry: from); return
+        }
+        guard let r = PadMove.apply(list.entries, from: from, to: to) else { log("padMove: nothing to move"); return }
+        if let why = store.blocked(track: t, to: r.entries) { refuse(why, track: t + 1, entry: from); return }
+        clearedPads.removeAll { $0.track == t && $0.steps == nil }      // (the list moved: an undo of an older clear no longer fits)
+        Task {
+            guard await store.rewrite(track: t, to: r.entries, focus: r.landed, confirmed: true) else { self.reportRefusal(store); return }
+            // the editor's pad goes with it
+            if let p = self.pickedPad, p.track == t + 1 {
+                if p.entry == from { self.pickedPad = PadsArea.Ref(track: t + 1, entry: r.landed) }
+                else if p.entry == r.landed, !list.entries[to].isEmpty { self.pickedPad = PadsArea.Ref(track: t + 1, entry: from) }
+            }
+            self.pokeAreas(["pads", "timeline", "patterns", "editor"])
+        }
+    }
 
-    /// undoClear{track, entry} (or with neither: the last clear) and setPatternSteps{steps}. True when `json` was one of them.
+    /// A step with a note, a tie or a drum hit in it.
+    static func holdsSomething(_ st: SynthStep) -> Bool {
+        !st.notes.isEmpty || st.time == .tie || (0..<8).contains { st.kitLanes.has($0) }
+    }
+
+    /// clearSteps{track, entry}: the pattern's notes wiped, its pad and every entry naming it kept. Each step written
+    /// empty (TRACK_STEP, which Skiff takes while playing), not POOL's EMPTY, so it works playing and what was there
+    /// can be written back. TRACK_STEP writes the pattern the track is on: a pad the track isn't on is gone to first
+    /// while stopped (as a tap on it does), and refused while playing.
+    func clearSteps(track t: Int, entry e: Int) {
+        let s = session
+        guard let store = s.skiffSong, let list = store.song?.tracks[safe: t], list.entries.indices.contains(e), s.tracks.indices.contains(t) else {
+            refuse("The FM-1's song hasn't been read yet. Try again in a moment."); return
+        }
+        guard let p = list.entries[e].poolIndex else {
+            refuse("T\(t + 1) pad \(e + 1) holds no pattern, so there are no notes to clear.", track: t + 1, entry: e); return
+        }
+        let on = list.patternOn == p
+        if !on, s.playing {
+            refuse("T\(t + 1) isn't playing that pad. While playing, only the pattern a track is on can have its notes cleared: launch the pad first, or stop.",
+                   track: t + 1, entry: e)
+            return
+        }
+        Task {
+            if !on {
+                guard await store.send(.play(track: t, entry: e)) else { self.reportRefusal(store); return }
+                await s.rereadSteps(track: t)
+                guard store.song?.tracks[safe: t]?.patternOn == p else {
+                    self.refuse("T\(t + 1) didn't go to pad \(e + 1), so its notes weren't cleared.", track: t + 1, entry: e); return
+                }
+            }
+            // each step that holds something written empty. (Not SloopKit's clearAll and undo: on Skiff an emptied
+            // step reads back with its extra bytes, which isn't `SynthStep.empty`, so that undo puts nothing back and
+            // that clear writes all 64 steps.)
+            let taken = s.tracks[t].steps
+            for i in taken.indices where Self.holdsSomething(taken[i]) { s.write(track: t, index: i, .empty) }
+            self.clearedPads.removeAll { $0.track == t && $0.entry == e && $0.steps != nil }
+            self.clearedPads.append(ClearedPad(track: t, entry: e, before: list.entries, after: list.entries, steps: taken, stepsPattern: p, at: Date()))
+            self.pokeAreas(["pads", "editor", "patternPictures"])
+        }
+    }
+
+    private struct UndoWire: Decodable { let intent: String; let track: Int?; let entry: Int?; let steps: Int?; let from: Int?; let toTrack: Int?; let to: Int? }
+
+    /// undoClear{track, entry} (or with neither: the last clear), setPatternSteps{steps}, padMove, clearSteps. True when `json` was one of them.
     func handleUndoClearJSON(_ json: String) -> Bool {
-        guard json.contains("\"undoClear\"") || json.contains("\"setPatternSteps\""),
-              let w = try? JSONDecoder().decode(UndoWire.self, from: Data(json.utf8)), ["undoClear", "setPatternSteps"].contains(w.intent) else { return false }
+        let names = ["undoClear", "setPatternSteps", "padMove", "clearSteps"]
+        guard names.contains(where: { json.contains("\"\($0)\"") }),
+              let w = try? JSONDecoder().decode(UndoWire.self, from: Data(json.utf8)), names.contains(w.intent) else { return false }
         guard canWrite() else { refuseReadOnly(w.intent); return true }
         if w.intent == "setPatternSteps" { setPatternSteps(w.steps); return true }
+        if w.intent == "padMove" {
+            guard let t1 = w.track, let from = w.from, let to = w.to else { log("padMove: missing track, from or to"); return true }
+            movePad(track: t1 - 1, from: from, toTrack: (w.toTrack ?? t1) - 1, to: to)
+            return true
+        }
+        if w.intent == "clearSteps" {
+            guard let t1 = w.track, let e = w.entry else { log("clearSteps: missing track or entry"); return true }
+            clearSteps(track: t1 - 1, entry: e)
+            return true
+        }
         // no track and entry: the last pad cleared that can still come back
         let last = clearedPads.last(where: \.undoable)
         guard let t1 = w.track ?? last.map({ $0.track + 1 }), let e = w.entry ?? last?.entry else {
@@ -116,6 +209,19 @@ extension PhoneCore {
             refuse("That clear can't be undone any more.", track: t1, entry: e); return true
         }
         let c = clearedPads[k]
+        if let taken = c.steps {
+            // the notes back, where the steps are still empty (a step filled in since stays as it is now)
+            clearedPads.remove(at: k)
+            guard store.song?.tracks[safe: t]?.patternOn == c.stepsPattern else {
+                refuse("T\(t1) is on another pattern now, so its notes can't be put back.", track: t1, entry: e); return true
+            }
+            let cur = session.tracks[t].steps
+            for i in taken.indices where i < cur.count && Self.holdsSomething(taken[i]) && !Self.holdsSomething(cur[i]) {
+                session.write(track: t, index: i, taken[i])
+            }
+            pokeAreas(["pads", "editor", "patternPictures"])
+            return true
+        }
         let was = c.before[e]
         if let p = was.poolIndex, (store.pool?.patterns[safe: p]?.length ?? 0) == 0 {
             clearedPads.remove(at: k)
