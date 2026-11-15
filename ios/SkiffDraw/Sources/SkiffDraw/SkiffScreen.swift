@@ -70,6 +70,8 @@ public final class SkiffScreen {
     // MARK: colours, the LFO, the panel (decision 46)
     /// Track `t` drawn in 0xRRGGBB instead of the theme's colour; nil: the theme's own.
     public func setTrackColour(_ t: Int, _ rgb: UInt32?) { skd_set_track_colour(Int32(t), rgb.map { Int32(bitPattern: $0 & 0xFFFFFF) } ?? -1) }
+    /// The panel's surface drawn as 0xRRGGBB (the app's picture background); nil: the theme's.
+    public func setSurface(_ rgb: UInt32?) { skd_set_surface(rgb.map { Int32(bitPattern: $0 & 0xFFFFFF) } ?? -1) }
     /// The LFO's time since its retrigger, for LFO's moving picture.
     public func setLFO(track t: Int, seconds: Double) { skd_set_lfo_seconds(Int32(t), seconds) }
     /// A track's FM6 patch as FM6_GET sends it (128 bytes).

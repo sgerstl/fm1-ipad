@@ -21,9 +21,9 @@ public final class SkiffPictures {
     public static let pages: Set<String> = ["DELAY", "REVERB", "CHORUS", "GLOBAL", "ENV", "ENV 2", "LFO", "LFO 2",
                                             "EDIT 1", "EDIT 2", "OPERATOR", "ALL OPS", "OP1 ENV", "OP2 ENV", "OP3 ENV",
                                             "OP4 ENV", "OP LEVEL"]
-    /// Engines whose EDIT pages draw what the mirror doesn't hold (SAMPLE's and SLICE's waveforms, DRUM and DRUM-X's
-    /// lanes and kit): their EDIT pictures stay the app's.
-    public static let ownEditEngines: Set<Int> = [4, 10, 13, 14]
+    /// Engines whose EDIT pages draw what the mirror doesn't hold: SAMPLE's waveform, read from the FM-1's flash
+    /// (ui_graph.c graph_sample). DRUM, DRUM-X and SLICE draw the scope there (the sea), so they're SkiffDraw's.
+    public static let ownEditEngines: Set<Int> = [4]
 
     public let mirror: SkiffMirror
     public init(mirror: SkiffMirror? = nil) { self.mirror = mirror ?? SkiffMirror() }
@@ -47,7 +47,7 @@ public final class SkiffPictures {
 
     /// The FM-1's picture for `lupePage`; nil: draw the app's own. `gloInk`: GLO's shared pages (decision 34) draw the
     /// selected track's colour as this grey (0xRRGGBB), white staying white; track pages keep the FM-1's own colours.
-    public func picture(_ s: DeviceSession, lupePage: Int, gloInk: UInt32) -> Picture? {
+    public func picture(_ s: DeviceSession, lupePage: Int, gloInk: UInt32, surface: UInt32? = nil) -> Picture? {
         guard Self.canDraw(s), let d = devicePage(s, lupePage: lupePage) else { return nil }
         let sc = mirror.screen
         mirror.followDevice = false
@@ -55,6 +55,7 @@ public final class SkiffPictures {
         let sel = s.deviceScreen?.track ?? s.selectedTrack
         let theme = s.themeTrackColours                          // the FM-1's own (CUSTOM's too), else SKIFF's
         for t in 0..<sc.trackCount { sc.setTrackColour(t, theme.flatMap { t < $0.count ? $0[t] : nil }) }
+        sc.setSurface(surface)                                   // the app's picture background: no second frame
         let glo = sc.pageFamily(d) == 6                          // FAM_GLO
         if glo { sc.setTrackColour(sel, gloInk) }
         if let p = s.skiffEdit?.patches[sel] { sc.setFM6Patch(track: sel, p.bytes) }
@@ -67,10 +68,10 @@ public final class SkiffPictures {
         return Picture(width: w, height: h, rgba: sc.renderPanel(), animated: lfo || scope)
     }
 
-    /// EDIT pages with a chart of their own (ANALOG's OSC and FLT, FM6's, DIGITAL's): static. The rest draw the scope,
-    /// which on SKIFF is the sea of the tracks' levels, moving with them.
+    /// EDIT pages with a chart of their own (ANALOG's OSC and FLT, DIGITAL's, WHEEL's, FM6's): static. The rest draw
+    /// the scope, which on SKIFF is the sea of the tracks' levels, moving with them (flat when all are silent).
     static func hasOwnChart(engine: Int, title: String) -> Bool {
-        engine == 0 || engine == 12 || engine == 1 || title.hasPrefix("OP") || title == "ALL OPS"
+        [0, 1, 7, 12].contains(engine) || title.hasPrefix("OP") || title == "ALL OPS"
     }
 
     /// Seconds since the LFO last restarted: the track's last note while the clock runs (TRIG NOTE), else since PLAY,

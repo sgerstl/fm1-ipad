@@ -141,3 +141,12 @@ What Scott decided on this verdict, and how it was built on this branch:
 **Not checked.**
 - The Pixel with the real FM-1. Scott's run: `qa/device-checks/2026-11-15-skiffdraw-android.md`.
 - The emulator. Without an FM-1, the emulator's session isn't connected, so every page would show the hand-drawn fallback, and the emulator's system had crashed under this machine's load earlier today.
+
+### After the first Pixel check (2026-11-15)
+
+The Pixel 10 run with the real FM-1 found two faults. Both are fixed:
+- **The picture was small, inside a second dark frame.** At the Pixel's box (about 1008 × 379 px under DELAY's mode row) the whole-number fit was 2×. Now the picture fills the box at its own 1.7 : 1. When the fit is a whole number it is plain nearest neighbour. Otherwise the picture is enlarged to the next whole number with crisp blocks and brought down once (2.75× on the Pixel: 3×, then 0.92), so only the blocks' edges soften (`skiffFit`, `SkiffPictureImage`). The frame was the FM-1's own panel surface. It is now drawn in the picture box's background, `Tok.well` (`skd_set_surface`), so every blend toward the surface lands on that colour too. Mock-up at the Pixel's size: `qa/skiffdraw-android-2026-11-15/pixel10-box-fill-glo-delay.png`.
+- **EDIT on the drum track was empty.** DRUM, DRUM-X and SLICE had been left out of SkiffDraw's EDIT pages. The FM-1 draws the scope there, which on SKIFF is the sea, so they are SkiffDraw's now. Only SAMPLE keeps the hand-drawn picture, because its waveform is read from the FM-1's flash. WHEEL joins the engines whose EDIT chart is static. The sea needs METER, not SCOPE. METER is watched whenever the screen link is (WATCH bit 3), so nothing new is asked of the FM-1. Stopped, every level is 0, so the columns are flat and grey with the boat crossing.
+- **FX 1/7 (FX's send sliders)** isn't in decision 46's first set, so it stays hand-drawn.
+
+Checks: `swift test` (SkiffDraw) 13 of 13 pass. `pixdiff` still shows 0 differing pixels on the 24 board renders. Gradle `testDebugUnitTest` and `assembleDebug` pass, with `SkiffPictureTest` at 7 tests.

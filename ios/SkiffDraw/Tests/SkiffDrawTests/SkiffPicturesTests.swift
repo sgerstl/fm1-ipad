@@ -41,6 +41,12 @@ import Testing
         #expect(p.picture(s, lupePage: SkiffPageMap.fxDelay, gloInk: 0xC4C4CC) != nil) // FX › DELAY
         let lfo = try #require(p.picture(s, lupePage: 2, gloInk: 0))                   // LFO: it moves
         #expect(lfo.animated)
+        // EDIT on the drum track (track 4 in the fixture? whichever is DRUM): the sea, moving; SAMPLE's EDIT stays the app's
+        if let drum = s.trackIndices.first(where: { s.tracks[$0].engine == 10 }) {
+            #expect(SkiffPictures.hasOwnChart(engine: 10, title: "EDIT 1") == false)
+            #expect(!SkiffPictures.ownEditEngines.contains(s.tracks[drum].engine))
+        }
+        #expect(SkiffPictures.ownEditEngines == [4])
         #expect(p.picture(s, lupePage: 41, gloInk: 0) == nil)                          // NOTES: not SkiffDraw's
         #expect(p.picture(s, lupePage: 30, gloInk: 0) == nil)                          // MIXER: Lupe's own Mix tab
         #expect(fake.unanswered.isEmpty, "\(fake.unanswered)")
@@ -49,7 +55,7 @@ import Testing
             for (name, page, ink) in [("glo-delay", 31, 0xC4C4CC), ("glo-reverb", 32, 0xC4C4CC), ("glo-chorus", 33, 0xC4C4CC),
                                       ("glo-global", 34, 0xC4C4CC), ("fx-delay", SkiffPageMap.fxDelay, 0), ("fx-reverb", SkiffPageMap.fxReverb, 0),
                                       ("env", 0, 0), ("lfo", 2, 0), ("edit1-osc", 14, 0), ("edit2-flt", 15, 0)] {
-                guard let pic = p.picture(s, lupePage: page, gloInk: UInt32(ink)) else { continue }
+                guard let pic = p.picture(s, lupePage: page, gloInk: UInt32(ink), surface: 0x111114) else { continue }
                 var ppm = Array("P7\nWIDTH \(pic.width)\nHEIGHT \(pic.height)\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n".utf8)
                 ppm += pic.rgba
                 try Data(ppm).write(to: URL(fileURLWithPath: "\(out)/\(name)-track\(s.selectedTrack + 1)-engine\(s.tracks[s.selectedTrack].engine).pam"))

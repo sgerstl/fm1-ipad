@@ -13,6 +13,7 @@
 
 static uint32_t skd_cost;
 static int skd_ovr[NTRK];                           /* 0: the theme's; else 0x1000000 | RGB */
+static int skd_surf;                                /* the panel's surface: 0 the theme's; else 0x1000000 | RGB */
 static int skd_ready;
 
 static void skd_need(void) { if (!skd_ready) skd_reset(); }
@@ -21,6 +22,7 @@ void skd_reset(void)
 {
     ui_power_on();
     memset(skd_ovr, 0, sizeof skd_ovr);
+    skd_surf = 0;
     memset(scope_buf, 0, sizeof scope_buf);
     scope_w = 0;
     memset(&scd, 0, sizeof scd);
@@ -146,10 +148,13 @@ void skd_set_track_colour(int t, int rgb)
     if (t >= 0 && t < (int)NTRK) skd_ovr[t] = rgb < 0 ? 0 : 0x1000000 | (rgb & 0xFFFFFF);
     ui.force = 1;
 }
+static uint16_t skd_565(uint32_t c) { return (uint16_t)(((c >> 19) & 31u) << 11 | ((c >> 10) & 63u) << 5 | ((c >> 3) & 31u)); }
+void skd_set_surface(int rgb) { skd_need(); skd_surf = rgb < 0 ? 0 : 0x1000000 | (rgb & 0xFFFFFF); ui.force = 1; }
 static void skd_apply_colours(void)
 {
     uint32_t k;
-    palette_set(settings.palette);                  /* (the theme's own first: an override taken away goes) */
+    palette_set(settings.palette);
+    if (skd_surf) ux.surf = skd_565((uint32_t)skd_surf);                  /* (the theme's own first: an override taken away goes) */
     for (k = 0; k < NTRK && k < UI_NTRK; k++)
         if (skd_ovr[k]) {
             uint32_t c = (uint32_t)skd_ovr[k];

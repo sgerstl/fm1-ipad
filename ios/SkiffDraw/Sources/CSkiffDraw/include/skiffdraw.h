@@ -54,6 +54,9 @@ void skd_render_565(uint16_t *out);
 void skd_set_track_colour(int track, int rgb);
 /* the LFO as it runs (ui_graph.c graph_lfo reads trk[].lfo_t, lfo_ph): `seconds` since its retrigger (a note on TRIG
  * NOTE, else since PLAY) */
+/* the panel's surface (T_SURF) drawn as 0xRRGGBB (-1: the theme's): the app's picture background, so the FM-1's panel
+ * has no frame of its own there and every blend toward the surface lands on the app's colour */
+void skd_set_surface(int rgb);
 void skd_set_lfo_seconds(int track, double seconds);
 /* The picture panel alone (ui_graph.c draw_graph's cv_rrect(3, 0, 234, graph_h()) at screen y Y_GRAPH): 234 x 138 in
  * Skiff's BLOCKS look. skd_render_panel_rgba draws the frame and copies the panel out, RGBA, its four rounded corners'

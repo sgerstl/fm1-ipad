@@ -2,6 +2,8 @@ package com.scottgerstl.lupe
 
 import com.scottgerstl.lupe.ui.page.SKIFF_GLO_INK
 import com.scottgerstl.lupe.ui.page.decodeSkiffPicture
+import com.scottgerstl.lupe.ui.page.skiffFit
+import com.scottgerstl.lupe.ui.page.SKIFF_SURFACE
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -37,4 +39,24 @@ class SkiffPictureTest {
         assertEquals(0xFFC4C4CC.toInt(), (0xFF000000.toInt() or SKIFF_GLO_INK))
         assertEquals(com.scottgerstl.lupe.ui.theme.Tok.text2Raised.value, androidx.compose.ui.graphics.Color(0xFF000000.toInt() or SKIFF_GLO_INK).value)
     }
+
+    @Test fun itFillsThePixelsBoxAt1point7To1() {
+        // the Pixel 10's picture box under GLO DELAY's mode row (2026-11-15 screenshot): about 1008 × 379 px
+        val f = skiffFit(234, 138, 1008f, 379f)
+        assertEquals(379, f.height); assertEquals(642, f.width)              // 2.75×: the height filled, 1.7 : 1 kept
+        assertFalse(f.exact); assertEquals(3, f.whole)                       // 3× crisp blocks, then one step down
+        assertTrue(f.width > 234 * 2)                                        // larger than the whole-number 2× it was drawn at
+    }
+
+    @Test fun aWholeFitIsPlainNearestNeighbour() {
+        val f = skiffFit(234, 138, 702f, 600f)                               // exactly 3× across
+        assertTrue(f.exact); assertEquals(3, f.whole); assertEquals(702, f.width); assertEquals(414, f.height)
+        val g = skiffFit(234, 138, 470f, 1000f)                              // 2.008×: counts as 2×
+        assertTrue(g.exact); assertEquals(468, g.width)
+    }
+
+    @Test fun thePictureSitsOnTheBoxsOwnBackground() {
+        assertEquals(com.scottgerstl.lupe.ui.theme.Tok.well.value, androidx.compose.ui.graphics.Color(0xFF000000.toInt() or SKIFF_SURFACE).value)
+    }
 }
+

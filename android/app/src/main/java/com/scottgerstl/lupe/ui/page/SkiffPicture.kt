@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.IntSize
 import com.scottgerstl.lupe.core.LupeNative
 import com.scottgerstl.lupe.core.PageState
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
-import kotlin.math.floor
+import androidx.compose.foundation.layout.fillMaxSize
 import kotlin.math.min
 
 // Decision 46 (Scott, 2026-11-15): the sound panel's pictures drawn by Skiff's own code in the Swift core (ios/SkiffDraw), from the session's
@@ -30,6 +30,9 @@ import kotlin.math.min
 
 /** The panel's grey ink for GLO's shared pages (the SoundPanel's inkColour there: Tok.text2Raised). */
 const val SKIFF_GLO_INK = 0xC4C4CC
+
+/** The picture box's background (Tok.well): the FM-1's panel surface is drawn in it, so the picture has no frame of its own. */
+const val SKIFF_SURFACE = 0x111114
 
 /** One picture: [width] × [height] ARGB pixels, and whether it moves on its own (the LFO, the scope's sea). */
 class SkiffPixels(val width: Int, val height: Int, val argb: IntArray, val animated: Boolean, val drawMicros: Int)
@@ -46,10 +49,10 @@ fun decodeSkiffPicture(b: ByteArray?): SkiffPixels? {
 }
 
 /** Where pictures come from: the native core, or nothing (unit tests, previews, before the library loads). */
-fun interface SkiffSource { fun picture(page: Int, gloInk: Int): ByteArray? }
+fun interface SkiffSource { fun picture(page: Int, gloInk: Int, surface: Int): ByteArray? }
 
 val LocalSkiffSource = staticCompositionLocalOf<SkiffSource?> {
-    if (LupeNative.isLoaded) SkiffSource { p, ink -> LupeNative.skiffPicture(p, ink) } else null
+    if (LupeNative.isLoaded) SkiffSource { p, ink, surf -> LupeNative.skiffPicture(p, ink, surf) } else null
 }
 
 /** The FM-1's own picture of [page], or null (then draw the app's own). Asked again whenever the page's state changes (a knob, the track,
@@ -60,7 +63,7 @@ fun rememberSkiffPicture(page: PageState, glo: Boolean, enabled: Boolean): Skiff
     if (!enabled || src == null) return null
     val ink = if (glo) SKIFF_GLO_INK else 0
     // the page as it is now (a new PageState after every change), then, for a moving one, newer frames until the page changes again
-    val first = remember(page, glo) { decodeSkiffPicture(src.picture(page.page, ink)) }
+    val first = remember(page, glo) { decodeSkiffPicture(src.picture(page.page, ink, SKIFF_SURFACE)) }
     var live by remember(page, glo) { mutableStateOf<SkiffPixels?>(null) }
     val moving = first?.animated == true && !LocalReduceMotion.current
     LaunchedEffect(page, glo, moving) {
@@ -70,21 +73,41 @@ fun rememberSkiffPicture(page: PageState, glo: Boolean, enabled: Boolean): Skiff
             val now = withFrameMillis { it }
             if (now - last < 33) continue
             last = now
-            live = decodeSkiffPicture(src.picture(page.page, ink)) ?: break
+            live = decodeSkiffPicture(src.picture(page.page, ink, SKIFF_SURFACE)) ?: break
         }
     }
     return live ?: first
 }
 
-/** Draws [p] whole pixels at a time where the space allows (nearest neighbour, never smoothed), centred, at its own 234 : 138. */
+/** How [p] is scaled into a box of [boxW] × [boxH] pixels: as large as fits at its own 234 : 138 (1.7 : 1). [whole] is the whole-number
+ *  factor it is first enlarged by, nearest neighbour, so each FM-1 pixel is a crisp block; when the fit itself is whole (or nearly) that is all,
+ *  otherwise the enlarged copy is brought down to the fit with one smoothing step, which softens only the blocks' edges (Pixel 10's box: 2.75×,
+ *  drawn as 3× then 0.92). Pure, for the tests. */
+data class SkiffFit(val width: Int, val height: Int, val whole: Int, val exact: Boolean)
+
+fun skiffFit(pw: Int, ph: Int, boxW: Float, boxH: Float): SkiffFit {
+    val fit = min(boxW / pw, boxH / ph)
+    if (fit <= 0f) return SkiffFit(0, 0, 1, true)
+    val near = kotlin.math.round(fit)
+    val exact = near >= 1f && kotlin.math.abs(fit - near) < 0.03f
+    val f = if (exact) near else fit
+    return SkiffFit((pw * f).toInt(), (ph * f).toInt(), if (exact) near.toInt() else kotlin.math.ceil(fit).toInt().coerceIn(1, 8), exact)
+}
+
+/** Draws [p] filling the box at its own 1.7 : 1, centred, its pixels crisp (see [skiffFit]). */
 @Composable
 fun SkiffPictureImage(p: SkiffPixels, description: String, modifier: Modifier = Modifier) {
-    val img = remember(p) { Bitmap.createBitmap(p.argb, p.width, p.height, Bitmap.Config.ARGB_8888).asImageBitmap() }
-    Canvas(modifier.clearAndSetSemantics { contentDescription = description }) {
-        val fit = min(size.width / p.width, size.height / p.height)
-        val s = if (fit >= 1f) floor(fit) else fit                    // whole device pixels per FM-1 pixel where it fits
-        val w = (p.width * s).toInt(); val h = (p.height * s).toInt()
-        val x = ((size.width - w) / 2).toInt(); val y = ((size.height - h) / 2).toInt()
-        drawImage(img, dstOffset = IntOffset(x, y), dstSize = IntSize(w, h), filterQuality = FilterQuality.None)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.clearAndSetSemantics { contentDescription = description }) {
+        val d = androidx.compose.ui.platform.LocalDensity.current
+        val fit = skiffFit(p.width, p.height, with(d) { maxWidth.toPx() }, with(d) { maxHeight.toPx() })
+        val img = remember(p, fit.whole) {
+            val src = Bitmap.createBitmap(p.argb, p.width, p.height, Bitmap.Config.ARGB_8888)
+            (if (fit.whole > 1) Bitmap.createScaledBitmap(src, p.width * fit.whole, p.height * fit.whole, false) else src).asImageBitmap()
+        }
+        Canvas(androidx.compose.ui.Modifier.fillMaxSize()) {
+            val x = ((size.width - fit.width) / 2).toInt(); val y = ((size.height - fit.height) / 2).toInt()
+            drawImage(img, dstOffset = IntOffset(x, y), dstSize = IntSize(fit.width, fit.height),
+                      filterQuality = if (fit.exact) FilterQuality.None else FilterQuality.Low)
+        }
     }
 }

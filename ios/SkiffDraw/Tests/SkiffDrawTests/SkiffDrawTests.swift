@@ -130,5 +130,18 @@ private func differing(_ rgba: [UInt8], _ rgb: [UInt8]) -> Int {
         s.setLFO(track: 0, seconds: 0.9)
         #expect(s.renderPanel() != a)
     }
+
+    @Test func surfaceTakesThePanelsFrameAway() {
+        let s = SkiffScreen.shared
+        s.reset()
+        s.show(page: s.page(named: "DELAY", nth: 1)!)
+        s.setSurface(0x111114)                                // Tok.well
+        let p = s.renderPanel()
+        let (w, _) = s.panelSize
+        let mid = 4 * (60 * w + 200)                          // empty panel, right of the bars, under the MODE card
+        #expect(Array(p[mid..<mid + 3]) == [0x10, 0x10, 0x10] || Array(p[mid..<mid + 3]) == [0x10, 0x10, 0x18] ||
+                (abs(Int(p[mid]) - 0x11) <= 2 && abs(Int(p[mid + 2]) - 0x14) <= 3))   // #111114 through RGB565
+        s.setSurface(nil)
+    }
 }
 
