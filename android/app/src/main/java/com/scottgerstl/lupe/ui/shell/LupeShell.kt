@@ -135,12 +135,6 @@ fun LupeShell(core: LupeCore) {
             ProjectsSheet(projects.first, projects.second)
             // Patterns (decision 38, board 79): the song-name menu, the full-pool notice and an empty slot's menu open it
             com.scottgerstl.lupe.ui.patterns.PatternsSheet(core)
-            // Mix is a sheet now (decision 28): the FM-1 going to GLO opens it, and the project menu
-            val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core)
-            val meters = core.meters.collectAsStateWithLifecycle()
-            com.scottgerstl.lupe.ui.sheet.LupeSheet(sheets.open == com.scottgerstl.lupe.ui.sheet.SheetKind.Mix, "Mix", { sheets.close() }, fixed = 330.dp, showTitle = false) {
-                com.scottgerstl.lupe.ui.mix.MixPage(mix.first, mix.second, meters, onClose = { sheets.close() })
-            }
             // Sounds: for a track (its head on Pads, or SAVE on the FM-1) or one pad's own sound. The browser has its own heading and Done.
             var lastRequest by remember { mutableStateOf(soundsHost.request) }
             soundsHost.request?.let { lastRequest = it }

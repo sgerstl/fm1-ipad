@@ -69,7 +69,7 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 val sheets = LocalSheetHost.current
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
                 // the mixer is the Mix tab now; this is the pop-up: the shared delay, reverb, chorus and global (batch item 11)
-                MenuRow("Shared effects…", { menu = null; if (core.mix.value.section == "mixer") core.send(com.scottgerstl.lupe.core.MixSectionPick("delay")); sheets.show(SheetKind.Mix) }, sub = "Delay, reverb, chorus, global")
+                MenuRow("Shared effects…", { menu = null; core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", com.scottgerstl.lupe.core.ScreenPages.GLO[1].first)) }, sub = "Delay, reverb, chorus, global")
                 MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
                 MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
                 // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too

@@ -101,7 +101,11 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
 
     // Decision 19: while a sound page shows (and only then), the back gesture is HOME on the FM-1.
     val soundUp = shown.kind == BottomKind.Page && isSoundFamily(shown.family)
-    androidx.activity.compose.BackHandler(enabled = shell.bottom.kind == BottomKind.Page) { askCore.send(GoHome) }
+    // GLO's shared pages (DELAY, REVERB, CHORUS, GLOBAL) are sound pages too (decision 44): the panel's page is made from the core's `mix` area
+    val mixNow by core.mix.collectAsStateWithLifecycle()
+    val screenLive by core.fm1Screen.collectAsStateWithLifecycle()
+    val gloPage = gloPageState(mixNow, screenLive, pads.selected.track, pads.rows.firstOrNull { it.track == pads.selected.track }?.name?.substringAfter(" · ").orEmpty())
+    androidx.activity.compose.BackHandler(enabled = shell.bottom.kind == BottomKind.Page || gloPage != null) { askCore.send(GoHome) }
 
     FollowFm1Screen(shell, core, editUi, touches, phoneAsks)
 
@@ -110,16 +114,20 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     var snap by remember { mutableStateOf(live) }
     LaunchedEffect(live, frozen) { if (!frozen) snap = live }
     val moved = frozen && (snap.family != live.family || snap.page != live.page)
-    val soundCore: LupeCore = if (moved) remember(snap) { HeldPageCore(askCore, snap) } else askCore
-    val soundPage = if (moved) snap else live
-    val notice = if (moved) "The FM-1 is on ${live.family} · held here" else null
+    val soundCore0: LupeCore = if (moved) remember(snap) { HeldPageCore(askCore, snap) } else askCore
+    val soundPage0 = if (moved) snap else live
+    val notice = if (moved && gloPage == null) "The FM-1 is on ${live.family} · held here" else null
+    val glo = gloPage != null
+    val soundPage = gloPage ?: soundPage0
+    val gloCore = remember(askCore) { GloCore(askCore) }
+    val soundCore = if (glo) gloCore else soundCore0
 
     // The sound panel, docked at the right of all three tabs (decision 32, the iPad's rule): it comes in when the FM-1 changes to a sound page
     // (its own sound key, or the phone's rail) or a knob turns on one, and stays until HOME, its close key or another tab. No timeout.
     val panel = remember { SoundPanelModel() }
     val linkNow by core.link.collectAsStateWithLifecycle()
     val linked = linkNow.phase == LinkPhase.Ready
-    val pageKey = if (soundUp) "${soundPage.family}/${soundPage.page}" else null
+    val pageKey = if (glo) "GLO/${screenLive.page}" else if (soundUp) "${soundPage.family}/${soundPage.page}" else null
     LaunchedEffect(linked) { if (!linked) panel.reset() }
     LaunchedEffect(pageKey, linked) { if (linked) panel.page(pageKey) }
     LaunchedEffect(live.turnSeq, live.turned, linked) { if (linked) panel.turn(live.turnSeq * 8 + live.turned) }
@@ -140,6 +148,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         val railNode: @Composable () -> Unit = {
             SoundKeysRail(open = if (docked) soundPage.family else null, onKey = { family ->
                 // the open family's key again steps its pages, as on the FM-1; another opens that family (the FM-1 goes there and the panel follows)
+                if (family == "GLO") { askCore.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", gloKeyTarget(docked && soundPage.family == "GLO", soundPage.page))); return@SoundKeysRail }
                 askCore.send(com.scottgerstl.lupe.core.PickPage(family, railTarget(family, if (docked) soundPage.family else null, soundPage.pages.map { it.index }, soundPage.page)))
             })
         }
@@ -271,7 +280,10 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
     var last by remember { mutableStateOf(page) }
     if (visible) last = page
     if (t <= 0.001f) return
-    val colour = trackColour(last.track)
+    // GLO's pages are neutral grey (decision 44), the others the track's colour
+    val glo = last.family == "GLO"
+    val colour = if (glo) Tok.text3 else trackColour(last.track)
+    val inkColour = if (glo) Tok.text2Raised else colour
     val tiles = last.tiles
     val picture = com.scottgerstl.lupe.ui.page.pictureOf(last)
     val pictured = graphics && com.scottgerstl.lupe.ui.page.hasPicture(picture)
@@ -303,13 +315,13 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
         })
         if (tiles != null) {
             Spacer(Modifier.height(8.dp))
-            PageTilesContent(tiles, colour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(8.dp)))
+            PageTilesContent(tiles, inkColour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(8.dp)))
         }
         // Show graphics: the page's picture, under the dials, in what height is left
         if (pictured) {
             Spacer(Modifier.height(8.dp))
             LupeCrossfade(picture.kind to last.page, Modifier.fillMaxWidth().weight(1f), Dur.STATE) { _ ->
-                com.scottgerstl.lupe.ui.page.GraphContent(picture, colour, if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
             }
         }
     }

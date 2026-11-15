@@ -50,6 +50,8 @@ data class MixUi(
  * The picture for a bus page: the core's (its kind and the four knobs' values) or, from a core that sends none, the same made from the
  * card's knobs. DELAY's caption becomes its MODE (the FM-1 shows MODE on the picture; the card's first setting), REVERB's stays its TYPE.
  */
+fun busGraphOf(key: String, card: com.scottgerstl.lupe.core.MixCard?) = busGraph(key, card)
+
 internal fun busGraph(key: String, card: com.scottgerstl.lupe.core.MixCard?): com.scottgerstl.lupe.core.PageGraph? {
     val kind = when (key) { "delay" -> com.scottgerstl.lupe.core.GraphKind.Delay; "reverb" -> com.scottgerstl.lupe.core.GraphKind.Reverb; "chorus" -> com.scottgerstl.lupe.core.GraphKind.Chorus; "global" -> com.scottgerstl.lupe.core.GraphKind.Global; else -> return null }
     card ?: return null

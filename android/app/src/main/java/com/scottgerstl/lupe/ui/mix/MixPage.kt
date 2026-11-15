@@ -72,51 +72,6 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlin.math.roundToInt
 
-/**
- * The Mix pop-up (decision 31, board 77): GLO's shared pages one at a time. No title: DELAY REVERB CHORUS GLOBAL sit as words in one
- * line with the close key, and the room goes to the page. (The mixer, the six tracks as rows, is the Mix tab: [MixTab].) Delay, Reverb,
- * Chorus and Global are the shared buses: four white dials at the
- * left (white because turning them changes every track) and the FM-1's own picture at the right, at its 1.7 : 1.
- */
-@Composable
-fun MixPage(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, onClose: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // the pop-up is the four shared pages; MIXER is the Mix tab now (batch item 11)
-        val busPages = ui.pages.drop(1); val shownTab = (ui.page - 1).coerceAtLeast(0)
-        Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-            WordTabs(busPages.map { it.uppercase() }, shownTab) { actions.page(it + 1) }
-            BasicText("${shownTab + 1}/${busPages.size}", Modifier.padding(start = 16.dp).clearAndSetSemantics { }, style = LupeType.number.copy(fontSize = 15.sp, color = Tok.text2))
-            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-            Key(onClose, "Close Mix", width = 40.dp, height = 36.dp, minTarget = 44.dp) { fg ->
-                Canvas(Modifier.width(12.dp).height(12.dp)) {
-                    val w = 2.dp.toPx()
-                    drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round)
-                    drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round)
-                }
-            }
-        }
-        LupeCrossfade(ui.page.coerceAtLeast(1), Modifier.weight(1f).fillMaxWidth(), Dur.STATE) { p -> BusPage(ui, p, actions) }
-    }
-}
-
-/** The pages as words in a line, the chosen one white with a line under it (the header's tabs, smaller); the line and the ink blend from one to the next. */
-@Composable
-private fun WordTabs(labels: List<String>, selected: Int, onPick: (Int) -> Unit) {
-    Row(Modifier.semantics { isTraversalGroup = true }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        labels.forEachIndexed { i, label ->
-            val on = animatedFloat(if (i == selected) 1f else 0f, Dur.STATE)
-            Box(
-                Modifier.height(44.dp)
-                    .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = i == selected; contentDescription = "Mix page: " + label.lowercase().replaceFirstChar { it.uppercase() } }
-                    .pointerInput(i) { detectTapGestures { onPick(i) } }
-                    .padding(horizontal = 8.dp)
-                    .drawBehind { if (on.value > 0f) drawRect(Tok.text.copy(alpha = on.value), Offset(0f, size.height - 8.dp.toPx()), Size(size.width, 2.dp.toPx())) },
-                contentAlignment = Alignment.Center,
-            ) { BasicText(label, style = LupeType.key.copy(fontSize = 15.sp, color = lerp(Tok.text2, Tok.text, on.value))) }
-        }
-    }
-}
-
 /** The Mix tab (batch item 11): the six tracks, each with its level fader, mute and meter; the row's hold menu has PAN and the reverb send. */
 @Composable
 fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier) {
@@ -279,34 +234,6 @@ private fun MenuSlide(label: String, text: String, raw: Int, name: String, bipol
             drawRect(Tok.stepEmpty)
             val x = (raw / 127f) * size.width; val from = if (bipolar) (mid / 127f) * size.width else 0f
             drawRect(colour, Offset(minOf(from, x), 0f), Size(maxOf(kotlin.math.abs(x - from), if (bipolar) 2f else 0f), size.height))
-        }
-    }
-}
-
-/**
- * Delay, Reverb, Chorus, Global (board 77, decision 34): the page's four dials two by two at the left, white because they are shared, with
- * the card's settings (DELAY MODE) under them; at the right the FM-1's own picture of the page at its 1.7 : 1, in the global greys and
- * white. With Show graphics off the dials take the width.
- */
-@Composable
-private fun BusPage(ui: MixUi, p: Int, actions: MixActions) {
-    val graphics = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.showGraphics
-    val picture = ui.graph?.takeIf { graphics && com.scottgerstl.lupe.ui.page.hasPicture(it) }
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            com.scottgerstl.lupe.ui.page.PageControlsGrid(ui.bus, Tok.text, opened = { _, c -> c.raw }, onSet = { slot, v -> actions.setBus(slot, v) }, modifier = Modifier.weight(1f).fillMaxWidth())
-            // the card's settings (DELAY MODE on 2.5.1): a choice, not a knob
-            ui.settings.forEachIndexed { i, c ->
-                // the core may publish the label as "DLY MODE" and no names: the screen says DELAY MODE and knows its three
-                val label = if (c.label.equals("DLY MODE", true)) "DELAY MODE" else c.label
-                val names = c.names.ifEmpty { if (label == "DELAY MODE") com.scottgerstl.lupe.core.FakeP5.DELAY_MODES else emptyList() }
-                if (names.size in 2..4) Segmented(names, c.raw.coerceIn(0, names.lastIndex), label) { actions.setSetting(i, it) }
-                else BasicText("$label  ${c.value}", style = LupeType.key)
-            }
-        }
-        // 936 : 552 is the FM-1's graph panel
-        if (picture != null) Box(Modifier.fillMaxHeight().aspectRatio(936f / 552f).clip(RoundedCornerShape(8.dp)).background(Tok.well)) {
-            com.scottgerstl.lupe.ui.page.GraphContent(picture, Tok.text2Raised, -1, Modifier.fillMaxSize())
         }
     }
 }

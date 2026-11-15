@@ -148,6 +148,8 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
             val p = progress[a] ?: 0f
             if (p > 0.001f) Well(a, Rect(0f, 0f, w, h), d, p, hot == a, a in feel.off, state, 0f, Tok.text, reduce, feel, labels = true)
         }
+        // a duplicate the core never answered (refused): the sprout is forgotten after a while and the pad is shown
+        LaunchedEffect(state.sprout) { val sp = state.sprout; if (sp != null && sp.to == null) { kotlinx.coroutines.delay(3000); if (state.sprout == sp) { state.sprout = null; state.sproutHidden = false } } }
         // a duplicated pad sprouting into its slot
         state.sprout?.let { Sprout(state, it, reduce) }
     }
@@ -171,28 +173,39 @@ private fun Sprout(state: PadDragState, s: PadSprout, reduce: Boolean) {
     val ring = remember(s) { Animatable(0f) }
     var flying by remember(s) { mutableStateOf(true) }
     LaunchedEffect(s, reduce) {
+        // the real pad is hidden until the copy lands, then swaps in at once (no cross-fade)
+        state.sproutHidden = true
         unscaled {
-            if (reduce) move.animateTo(1f, tween(150))
-            else move.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.68f, stiffness = 280f))
+            // a spring of response 0.32 s, damping 0.68 (the iPhone's): a small overshoot; Reduce Motion: the new pad fades in place (0.2 s)
+            if (reduce) move.animateTo(1f, tween(200))
+            else move.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.68f, stiffness = 385f))
             flying = false
-            ring.animateTo(1f, tween(600))
+            state.sproutHidden = false
+            ring.animateTo(1f, tween(600, easing = androidx.compose.animation.core.FastOutSlowInEasing))
         }
         state.sprout = null
     }
     val o = state.origin
-    val t = if (reduce) 1f else move.value
-    val l = s.from.left + (to.left - s.from.left) * t - o.x; val tp = s.from.top + (to.top - s.from.top) * t - o.y
-    val wd = s.from.width + (to.width - s.from.width) * t; val ht = s.from.height + (to.height - s.from.height) * t
+    val t = move.value
     val dens = LocalDensity.current
-    if (flying) Box(
-        Modifier.offset { IntOffset(l.roundToInt(), tp.roundToInt()) }.size(with(dens) { wd.toDp() }, with(dens) { ht.toDp() })
-            .graphicsLayer { alpha = if (reduce) move.value.coerceIn(0f, 1f) else 1f }
-            .shadow(6.dp, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
-    ) { Canvas(Modifier.fillMaxSize()) { drawRoundRect(s.colour, cornerRadius = CornerRadius(8.dp.toPx())) } }
-    // the ring around the settled pad: grows and fades
+    if (flying) {
+        // it starts at 60 % size centred on the source pad and springs to the slot's frame at full size, its 10 dp shadow fading as it lands
+        val k = if (reduce) 1f else 0.6f + 0.4f * t
+        val cx = if (reduce) to.center.x else s.from.center.x + (to.center.x - s.from.center.x) * t
+        val cy = if (reduce) to.center.y else s.from.center.y + (to.center.y - s.from.center.y) * t
+        val wd = to.width * k; val ht = to.height * k
+        Box(
+            Modifier.offset { IntOffset((cx - wd / 2 - o.x).roundToInt(), (cy - ht / 2 - o.y).roundToInt()) }.size(with(dens) { wd.toDp() }, with(dens) { ht.toDp() })
+                .graphicsLayer { alpha = if (reduce) t.coerceIn(0f, 1f) else 1f }
+                .shadow(10.dp * (1f - t.coerceIn(0f, 1f)), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
+        ) { Canvas(Modifier.fillMaxSize()) { drawRoundRect(s.colour, cornerRadius = CornerRadius(8.dp.toPx())) } }
+    }
+    // the ring: a rounded rect 8 larger than the pad (corner = the pad's radius + 4), 2 dp in the track colour, scaling 1 → 1.18 while fading 1 → 0 over 0.6 s
     if (ring.value > 0f && ring.value < 1f) Canvas(Modifier.fillMaxSize()) {
-        val grow = 14.dp.toPx() * ring.value
-        drawRoundRect(s.colour.copy(alpha = 0.55f * (1f - ring.value)), Offset(to.left - o.x - grow, to.top - o.y - grow), Size(to.width + 2 * grow, to.height + 2 * grow), CornerRadius(8.dp.toPx() + grow), style = Stroke(2.dp.toPx()))
+        val e = ring.value
+        val sc = 1f + 0.18f * e
+        val w = (to.width + 8.dp.toPx()) * sc; val h = (to.height + 8.dp.toPx()) * sc
+        drawRoundRect(s.colour.copy(alpha = 1f - e), Offset(to.center.x - o.x - w / 2, to.center.y - o.y - h / 2), Size(w, h), CornerRadius(12.dp.toPx()), style = Stroke(2.dp.toPx()))
     }
 }
 

@@ -407,7 +407,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     fun sproutTo(track: Int, idx: Int) {
         val from = padCoords?.takeIf { it.isAttached }?.boundsInWindow() ?: return
         val used = pads.rows.firstOrNull { it.track == track }?.entries?.count { it.kind != PadKind.Empty } ?: 0
-        dragState?.sprout = PadSprout(track, idx, from, color, usedBefore = used)
+        dragState?.sprout = PadSprout(track, idx, from, color, usedBefore = used); dragState?.sproutHidden = true
     }
     // this slot, for a drop to find (window pixels; kept as it is placed, forgotten when it goes)
     // (kept by this pad's own token: the pad keeps its identity when it slides to another place, so its slot follows)
@@ -559,7 +559,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         }
     }
     val lifted = dragState?.drag?.let { it.track == row.track && it.from == at } == true
-    Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (lifted) 0.35f else 1f }.onGloballyPositioned {
+    val sproutHide = dragState?.sprout?.let { it.track == row.track && it.idx == idx && dragState.sproutHidden && e.kind != PadKind.Empty && usedNow > it.usedBefore } == true
+    Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (sproutHide) 0f else if (lifted) 0.35f else 1f }.onGloballyPositioned {
         padCoords = it
         dragState?.slots?.set(slotToken, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
     }) {

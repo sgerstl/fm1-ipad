@@ -117,6 +117,8 @@ data class PadSprout(val track: Int, val idx: Int, val from: Rect, val colour: C
 class PadDragState {
     var drag by mutableStateOf<PadDrag?>(null)
     var sprout by mutableStateOf<PadSprout?>(null)
+    /** The sprouting pad's real pad stays hidden while its copy flies (it swaps in at once as the copy lands). */
+    var sproutHidden by mutableStateOf(false)
     /** The wells' feel as drawn now (one place, so a drop decides on what was shown). */
     fun feel(glowPx: Float, hotPx: Float, sideGlowPx: Float, sideHotPx: Float, playing: Boolean) =
         WellFeel(glowPx, hotPx, if (playing) setOf(EdgeAction.Delete) else emptySet(), sideGlowPx, sideHotPx).also { lastFeel = it }

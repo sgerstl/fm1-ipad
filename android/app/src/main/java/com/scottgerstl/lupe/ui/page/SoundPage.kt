@@ -41,6 +41,9 @@ import com.scottgerstl.lupe.ui.theme.Tok
 /** The track's colour: the boards' six (Tok.track). */
 fun trackColour(track: Int): Color = Tok.track[((track - 1) % 6 + 6) % 6]
 
+/** A page's colour: the track's, but GLO's pages are white (turning them changes every track). */
+fun pageColour(page: PageState): Color = if (page.family == "GLO") Tok.text else trackColour(page.track)
+
 /** The six families the phone shows dials for; anything else on the FM-1's screen (GLO, SAVE, SEQ) has its own place. */
 fun isSoundFamily(family: String?) = family in PageFamilies
 
@@ -52,7 +55,7 @@ fun isSoundFamily(family: String?) = family in PageFamilies
  */
 @Composable
 fun SoundDials(page: PageState, core: LupeCore, modifier: Modifier = Modifier, notice: String? = null, inline: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
-    val colour = trackColour(page.track)
+    val colour = pageColour(page)
     // the value each control had when this page opened, for double-tap to put it back (not a factory default: the FM-1 has none per sound)
     val opened = remember(page.track, page.page, page.family) { mutableMapOf<Int, Int>() }
     // a kit's shorter panel: the header sits beside the dials instead of over them

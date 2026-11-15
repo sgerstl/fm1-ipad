@@ -40,7 +40,7 @@ class SoundPanelModel {
 }
 
 /** The phone's sound keys, in the iPad's order (decision 32). */
-val SOUND_KEYS = listOf("FX", "SEL", "ENV", "LFO", "EDIT", "ARP")
+val SOUND_KEYS = listOf("FX", "SEL", "ENV", "LFO", "EDIT", "ARP", "GLO")
 
 /**
  * What a sound key on the rail asks the FM-1 for: a family whose panel is shut opens on the page it is on (null: the FM-1's own choice); the

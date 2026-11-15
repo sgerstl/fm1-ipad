@@ -22,37 +22,22 @@ class PlaceFollowerTest {
         assertTrue(f.follow(s("SAVE", 35, "PRESETS"), PlaceNow(Tab.Pads)).isEmpty())
     }
 
-    @Test fun gloOpensTheMixSheetAndHomeClosesIt() {
+    /** Decision 44: GLO's DELAY, REVERB, CHORUS and GLOBAL are the docked sound panel's pages (it opens by itself); the follower opens nothing for them. */
+    @Test fun gloBusPagesOpenNothingHereTheSoundPanelTakesThem() {
         val f = primed()
-        assertEquals(listOf(PlaceAction.OpenMix), f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Timeline)))
-        assertTrue(f.follow(s("GLO", 33, "CHORUS"), PlaceNow(Tab.Timeline, mixOpen = true)).isEmpty())   // within GLO the section is the core's: nothing is sent
-        assertEquals(listOf(PlaceAction.CloseMix), f.follow(s("HOME"), PlaceNow(Tab.Timeline, mixOpen = true)))
+        assertTrue(f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Timeline)).isEmpty())
+        assertTrue(f.follow(s("GLO", 33, "CHORUS"), PlaceNow(Tab.Timeline)).isEmpty())
+        assertTrue(f.follow(s("HOME"), PlaceNow(Tab.Timeline)).isEmpty())
     }
 
-    /** Batch item 11: the MIXER page is the Mix tab; the other four GLO pages are the pop-up. */
+    /** GLO 1/5 MIXER is the Mix tab. */
     @Test fun gloOnItsMixerPageTakesThePhoneToTheMixTab() {
         val f = primed()
         assertEquals(listOf(PlaceAction.Tab(Tab.Mix)), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Pads)))
-        // on to DELAY: the pop-up opens over the Mix tab
-        assertEquals(listOf(PlaceAction.OpenMix), f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Mix)))
-        // back to MIXER: the pop-up it opened closes, the tab stays
-        assertEquals(listOf(PlaceAction.CloseMix), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Mix, mixOpen = true)))
+        // on to DELAY: the tab stays, the panel docks over its right side (not the follower's)
+        assertTrue(f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Mix)).isEmpty())
         // HOME puts the phone back on the tab it was on
         assertEquals(listOf(PlaceAction.Tab(Tab.Pads)), f.follow(s("HOME"), PlaceNow(Tab.Mix)))
-    }
-
-    @Test fun gloPressedAgainAfterTheSheetWasDismissedReopensIt() {
-        val f = primed()
-        assertEquals(listOf(PlaceAction.OpenMix), f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Pads)))
-        assertTrue(f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Pads, mixOpen = true)).isEmpty())
-        // dismissed by hand, then GLO again on the FM-1: the sheet comes back (on the page the core's mix area is now on)
-        assertEquals(listOf(PlaceAction.OpenMix), f.follow(s("GLO", 32, "REVERB"), PlaceNow(Tab.Pads, mixOpen = false)))
-    }
-
-    @Test fun aMixSheetThePersonOpenedIsLeftOpen() {
-        val f = primed()
-        assertTrue(f.follow(s("GLO", 32, "REVERB"), PlaceNow(Tab.Pads, mixOpen = true)).isEmpty())
-        assertTrue(f.follow(s("HOME"), PlaceNow(Tab.Pads, mixOpen = true)).isEmpty())
     }
 
     @Test fun saveSwitchesBetweenTheSoundsSheetAndProjects() {
