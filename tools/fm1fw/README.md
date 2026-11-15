@@ -5,7 +5,7 @@ Backs up an FM-1 and installs a firmware file from the Mac, using SloopKit's own
 - `BackupCapture` for the backup taken before an install, in Skiff's `felucca-backup` file;
 - `FirmwareInstaller` for both update steps and the resume.
 
-It exists to test a build Lupe doesn't pin (`firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc`). Nothing protocol-level is new.
+It was made to test B1 before Lupe pinned it (that file is now the pinned `firmware/releases/Skiff-Lupe-2.5.1.fwsc`). It installs pinned files as they are, and an unpinned one only with `--experimental`. Nothing protocol-level is new.
 
 ```bash
 cd tools/fm1fw && swift build -c release
@@ -20,7 +20,7 @@ cd tools/fm1fw && swift build -c release
 ```
 
 ```bash
-.build/release/fm1fw install ../../firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc --backup-dir ~/Documents/FM1-backups --experimental
+.build/release/fm1fw install ../../firmware/releases/Skiff-Lupe-2.5.1.fwsc --backup-dir ~/Documents/FM1-backups
 ```
 
 The last one is a dry run: it checks everything and exits 3. Add `--yes` to install.
@@ -37,6 +37,6 @@ The last one is a dry run: it checks everything and exits 3. Add `--yes` to inst
 
 **Tests** (`swift test`) run against SloopKit's FakeSkiff and FakeFM1 only:
 - the backup, the refusals and the dry run;
-- a full install of the B1 file;
+- a full install of the B1 build (pinned), over Skiff-Lupe 2.2;
 - a cut during the write, resumed;
 - the FM-1 left in update mode, then finished.

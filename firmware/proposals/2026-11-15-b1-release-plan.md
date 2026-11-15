@@ -1,6 +1,14 @@
 # B1: what a release would take, and upstreaming it
 
-*Prepared 2026-11-15, nothing done: no build pinned, no release made, nothing pushed, nothing sent.* B1 is in `2026-11-15-b1-steady-usb-audio.md`: every 48 kHz packet exactly 48 frames. It's on Scott's FM-1. Pixel 7 and Pixel 10 have 0 dejitter lines with FM6 playing, and the crunch is gone by Scott's ear. Before any of this: B1-1 (the Mac with sound), B1-2 (44.1 kHz) and B1-5 (the iPad) pass, and Scott says go.
+*Prepared 2026-11-15. **Done the same day** (Scott: "Yes, fold it in"): §1 and §2, on Lupe branch `claude/audio-through-398a74`. B1 is in both 2.5.1 builds, both pinned. §2 step 4 (the device check of the pinned files from Lupe) is still to run. Not done: no release made, nothing pushed, nothing sent, no INFO tag (skipped for now).*
+
+**The pins now:**
+- **Skiff-Lupe 2.5.1:** `2cb940c71557049ba3c46f11d35311b1e69e81d1f9348d9e0b906ec82847383b`, skiff-src `lupe-skiff-2.5.1-screen-link` fast-forwarded to 72d4170. The B1 commit sat directly on 737e3fb, so it's the very file tested on the FM-1.
+- **Skiff-Lupe 2.5.1 take:** `c44cad2d5242776358ced78ab062c33149ece3eedd7b2e77b41f40fa2f8a7d8f`, `lupe-skiff-2.5.1-freetake` at 6926117 (B1 cherry-picked onto 5e10a37 without conflicts, built 2026-11-15, 578,156 B).
+- Both are 610,429 B, FM-1_725, INFO `FELUCCA v2.5.1`.
+
+---
+ B1 is in `2026-11-15-b1-steady-usb-audio.md`: every 48 kHz packet exactly 48 frames. It's on Scott's FM-1. Pixel 7 and Pixel 10 have 0 dejitter lines with FM6 playing, and the crunch is gone by Scott's ear. Before any of this: B1-1 (the Mac with sound), B1-2 (44.1 kHz) and B1-5 (the iPad) pass, and Scott says go.
 
 ## 1. The identity: keep FM-1_725, fold B1 into the 2.5.1 builds before their first release
 
@@ -26,7 +34,7 @@
    - FIRMWARE.md's 2.5.1 paragraph;
    - SloopKit's `firmwareFilesMatchTheirPins` and the install tests run against the new files.
 4. **A device check** for the pinned files: install each from Lupe (iPad), back up first, B1-1..5 again in short. The B1 build on Scott's FM-1 now is the experimental file, not the pinned one, and Skiff's builds aren't reproducible byte for byte.
-5. **Delete** `firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc`, or keep it as the record of what was tested. Either way, nothing ever pins it.
+5. **Delete** `firmware/releases/Skiff-Lupe-2.5.1.fwsc` (the experimental file, pinned as Skiff-Lupe 2.5.1 since 2026-11-15), or keep it as the record of what was tested. Either way, nothing ever pins it.
 
 ## 3. The GitHub release (made as a draft, unpublished, as Scott wants)
 

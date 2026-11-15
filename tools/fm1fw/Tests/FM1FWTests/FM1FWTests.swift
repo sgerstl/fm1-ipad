@@ -8,9 +8,13 @@ import SloopKit
 @Suite(.serialized) struct FM1FWTests {
     static let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    static let b1 = repo.appendingPathComponent("firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc")
-    static let release = try! LupeFirmware.skiff251.load()
+    /// The B1 build: since 2026-11-15 the pinned Skiff-Lupe 2.5.1 (the experimental file it was, renamed).
+    static let b1 = repo.appendingPathComponent("firmware/releases/Skiff-Lupe-2.5.1.fwsc")
+    /// A package Lupe doesn't pin (SLOOP-Lupe 2.8.4, kept as a test fixture since decision 43): the unpinned path.
+    static let unpinned = repo.appendingPathComponent("firmware/releases/SLOOP-Lupe-2.8.4.fwsc")
+    static let running = try! LupeFirmware.skiff.load()           // the fake FM-1 starts on Skiff-Lupe 2.2
     static let b1pkg = try! FirmwarePackage(data: [UInt8](Data(contentsOf: b1)))
+    static let unpinnedPkg = try! FirmwarePackage(data: [UInt8](Data(contentsOf: unpinned)))
 
     final class Lines: @unchecked Sendable {
         private let lock = NSLock(); private var all: [String] = []
@@ -21,9 +25,9 @@ import SloopKit
     /// An FM-1 on Skiff-Lupe 2.5.1 (FakeFM1) with its editor link (FakeSkiff, the 2.5.1 fixture, a pattern bank
     /// record so the backup has something in it); short delays, as SloopKit's own installer tests.
     static func rig(cut: [FakeFM1.Fault] = []) throws -> (FM1FW, FakeFM1, Lines, URL) {
-        let dev = FakeFM1(running: release)
+        let dev = FakeFM1(running: running)
         dev.timeScale = 0.2
-        dev.knows(release, b1pkg)
+        dev.knows(running, b1pkg, unpinnedPkg)
         dev.faults = cut
         let fx = try SkiffFixture.load(.v2_5_1)
         let tool = FM1FW(transport: {
@@ -43,18 +47,19 @@ import SloopKit
         return (tool, dev, lines, dir)
     }
 
-    @Test func theExperimentalFileIsAPackageTheInstallerTakes() {
+    @Test func theB1FileIsThePinnedSkiffLupe251() {
         #expect(Self.b1pkg.product == "FM-1_725")
         #expect(Self.b1pkg.sha256 == "2cb940c71557049ba3c46f11d35311b1e69e81d1f9348d9e0b906ec82847383b")
-        #expect(!LupeFirmware.allCases.contains { $0.sha256 == Self.b1pkg.sha256 })     // not pinned
+        #expect(LupeFirmware.skiff251.sha256 == Self.b1pkg.sha256)
+        #expect(!LupeFirmware.allCases.contains { $0.sha256 == Self.unpinnedPkg.sha256 })     // the unpinned path's file
     }
 
     @Test func info() async throws {
         let (tool, _, lines, _) = try Self.rig()
         let i = await tool.info()
-        #expect(i.version == "FELUCCA v2.5.1" && i.identity == "FM-1_725")
+        #expect(i.version == "FELUCCA v2.5.1" && i.identity == "FM-1_722")    // (the editor link's fixture is 2.5.1's)
         try await tool.printInfo()
-        #expect(lines.text.contains("firmware (INFO): FELUCCA v2.5.1") && lines.text.contains("identity (update handshake): FM-1_725"))
+        #expect(lines.text.contains("firmware (INFO): FELUCCA v2.5.1") && lines.text.contains("identity (update handshake): FM-1_722"))
     }
 
     @Test func backupIsWrittenAndReadsBack() async throws {
@@ -68,7 +73,7 @@ import SloopKit
     }
 
     @Test func noFM1NoBackup() async throws {
-        let tool = FM1FW(transport: { nil }, ports: FakeFM1(running: Self.release))
+        let tool = FM1FW(transport: { nil }, ports: FakeFM1(running: Self.running))
         await #expect(throws: FM1FW.Failure.self) { try await tool.backup(into: FileManager.default.temporaryDirectory) }
     }
 
@@ -86,7 +91,7 @@ import SloopKit
     @Test func anUnpinnedFileNeedsExperimental() async throws {
         let (tool, dev, _, dir) = try Self.rig()
         try await tool.backup(into: dir)
-        do { try await tool.install(Self.b1, .init(backupDir: dir)); Issue.record("installed") } catch let f as FM1FW.Failure {
+        do { try await tool.install(Self.unpinned, .init(backupDir: dir)); Issue.record("installed") } catch let f as FM1FW.Failure {
             #expect(f.code == 2 && f.description.contains("--experimental"))
         }
         #expect(dev.stats.check == 0 && dev.stats.write == 0)
@@ -95,7 +100,7 @@ import SloopKit
     @Test func noBackupNoInstall() async throws {
         let (tool, dev, _, dir) = try Self.rig()
         var o = FM1FW.InstallOptions(backupDir: dir); o.experimental = true; o.yes = true
-        do { try await tool.install(Self.b1, o); Issue.record("installed") } catch let f as FM1FW.Failure {
+        do { try await tool.install(Self.unpinned, o); Issue.record("installed") } catch let f as FM1FW.Failure {
             #expect(f.code == 2 && f.description.contains("No backup"))
         }
         #expect(dev.stats.check == 0 && dev.opened.isEmpty)
@@ -106,7 +111,7 @@ import SloopKit
         try await tool.backup(into: dir)
         tool.now = { Date().addingTimeInterval(2 * 3600) }
         var o = FM1FW.InstallOptions(backupDir: dir); o.experimental = true; o.yes = true
-        do { try await tool.install(Self.b1, o); Issue.record("installed") } catch let f as FM1FW.Failure {
+        do { try await tool.install(Self.unpinned, o); Issue.record("installed") } catch let f as FM1FW.Failure {
             #expect(f.code == 2 && f.description.contains("minutes old"))
         }
         #expect(dev.stats.check == 0)
@@ -117,7 +122,7 @@ import SloopKit
         try await tool.backup(into: dir)
         tool.probeInfo = { .init(version: "FELUCCA v2.2", identity: "FM-1_722") }
         var o = FM1FW.InstallOptions(backupDir: dir); o.experimental = true; o.yes = true
-        do { try await tool.install(Self.b1, o); Issue.record("installed") } catch let f as FM1FW.Failure {
+        do { try await tool.install(Self.unpinned, o); Issue.record("installed") } catch let f as FM1FW.Failure {
             #expect(f.code == 2 && f.description.contains("take a backup of this unit"))
         }
         #expect(dev.stats.check == 0)
@@ -128,7 +133,7 @@ import SloopKit
         try await tool.backup(into: dir)
         tool.probeInfo = { .init(version: "FELUCCA v2.5.1", identity: "FM-1_725", screenLink: 7) }
         var o = FM1FW.InstallOptions(backupDir: dir); o.experimental = true; o.yes = true
-        do { try await tool.install(Self.b1, o); Issue.record("installed") } catch let f as FM1FW.Failure {
+        do { try await tool.install(Self.unpinned, o); Issue.record("installed") } catch let f as FM1FW.Failure {
             #expect(f.code == 2 && f.description.contains("--accept-older-link"))
         }
         #expect(dev.stats.check == 0)
@@ -137,18 +142,25 @@ import SloopKit
     @Test func withoutYesItIsADryRun() async throws {
         let (tool, dev, lines, dir) = try Self.rig()
         try await tool.backup(into: dir)
-        var o = FM1FW.InstallOptions(backupDir: dir); o.experimental = true
-        #expect(try await tool.install(Self.b1, o) == nil)
+        #expect(try await tool.install(Self.b1, .init(backupDir: dir)) == nil)     // pinned: no --experimental needed
         #expect(dev.stats.check == 0 && dev.stats.write == 0)
-        #expect(lines.text.contains("SHA-256 2cb940c7") && lines.text.contains("NOT pinned") && lines.text.contains("a dry run"))
+        #expect(lines.text.contains("SHA-256 2cb940c7") && lines.text.contains("pinned in Lupe as Skiff-Lupe 2.5.1") && lines.text.contains("a dry run"))
+    }
+
+    @Test func anUnpinnedFileWithExperimentalGetsAsFarAsTheDryRun() async throws {
+        let (tool, dev, lines, dir) = try Self.rig()
+        try await tool.backup(into: dir)
+        var o = FM1FW.InstallOptions(backupDir: dir); o.experimental = true
+        #expect(try await tool.install(Self.unpinned, o) == nil)
+        #expect(dev.stats.check == 0 && lines.text.contains("NOT pinned") && lines.text.contains("a dry run"))
     }
 
     // MARK: install, for real (on the fake)
 
-    @Test func installsTheExperimentalFile() async throws {
+    @Test func installsTheB1Build() async throws {
         let (tool, dev, lines, dir) = try Self.rig()
         try await tool.backup(into: dir)
-        var o = FM1FW.InstallOptions(backupDir: dir); o.experimental = true; o.yes = true
+        var o = FM1FW.InstallOptions(backupDir: dir); o.yes = true
         #expect(try await tool.install(Self.b1, o) == "FM-1_725")
         #expect(dev.stats.check > 0 && dev.stats.write > 0 && dev.record == nil && dev.badAnswers == 0)
         #expect(lines.text.contains("step 2: writing 100 %") && lines.text.contains("done: the FM-1 reports FM-1_725"))

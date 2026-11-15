@@ -38,7 +38,8 @@ import Testing
         #expect(p.product == "FM-1_725" && f.size == 610_429 && f.fileName == "Skiff-Lupe-2.5.1-take.fwsc")
         #expect(f.release != LupeFirmware.skiff251.release && f.release != LupeFirmware.releaseTag)
         #expect(LupeFirmware.matching(identity: "FM-1_725") == .skiff251)   // (identity: the family, as before)
-        #expect(LupeFirmware.skiff251.sha256 == "80b21b33d05ccaa384636261e229eb94efdac847c93cc1f534d69082ff71302c")
+        #expect(LupeFirmware.skiff251.sha256 == "2cb940c71557049ba3c46f11d35311b1e69e81d1f9348d9e0b906ec82847383b")   // (with B1, 2026-11-15)
+        #expect(f.sha256 == "c44cad2d5242776358ced78ab062c33149ece3eedd7b2e77b41f40fa2f8a7d8f")
     }
     #endif
 

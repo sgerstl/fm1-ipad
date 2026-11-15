@@ -73,7 +73,7 @@ The suite still ends "HOST TESTS FAILED", for reasons that have nothing to do wi
 - `web/test_web.mjs`: two `fm1pkg.js` checks that want M-VAVE's stock packages (V016) fail the same way on untouched 737e3fb here. A third, "NEON LEAD … factory preset defaults", failed once in the long emulated run and passed both times when re-run alone: a flake.
 - The ThreadSanitizer run can't start under amd64 emulation on Apple silicon ("unexpected memory mapping").
 
-**The package, experimental and not for install:** `firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc`, 610,429 B, SHA-256 `2cb940c71557049ba3c46f11d35311b1e69e81d1f9348d9e0b906ec82847383b`. App `felucca.bin` SHA-256 `46999bc9e2446dc5ce9b93f52cec9df0b51e6285ee9d39f609174b2c8ec7945b`.
+**The package, experimental and not for install:** `firmware/releases/Skiff-Lupe-2.5.1.fwsc` (the experimental file, pinned as Skiff-Lupe 2.5.1 since 2026-11-15), 610,429 B, SHA-256 `2cb940c71557049ba3c46f11d35311b1e69e81d1f9348d9e0b906ec82847383b`. App `felucca.bin` SHA-256 `46999bc9e2446dc5ce9b93f52cec9df0b51e6285ee9d39f609174b2c8ec7945b`.
 - **Not pinned** in Lupe and not released.
 - **Its identity is `FM-1_725`, the same as the 2.5.1 release** (`--release 2.5.1` sets it). **Open decision for Scott:** keep `FM-1_725` (Lupe would call it "Skiff-Lupe 2.5.1 · up to date" and couldn't tell the two apart), or give it its own identity (Lupe would offer the release over it, and could say which is installed).
 - *Skiff's builds aren't byte-for-byte reproducible:* the rebuilt 737e3fb package here hashes `3238eb82…`, not the pinned release's `80b21b33…`. Only this exact file is what was tested.

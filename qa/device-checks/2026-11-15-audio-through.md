@@ -262,7 +262,7 @@ So both phones insert gaps on both paths, and Lupe adds none. *Scott's ear; the 
 - **Size, measured:** +72 B of flash, +16 B of RAM.
 - **Skiff's own `uac_test`:** every 48 kHz packet is 48; every frame is the resampler at its traced phase; slips at the clock's rate (189 in 10 s, 192 expected); no glitch under random, maximal and alternating render loads.
 - **The band rule in the same harness:** 336 short and 530 long packets in 10 s.
-- **Package:** `firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc`, not for install.
+- **Package:** `firmware/releases/Skiff-Lupe-2.5.1.fwsc` (the experimental file, pinned as Skiff-Lupe 2.5.1 since 2026-11-15), not for install.
 - **Details** and the identity decision: `firmware/proposals/2026-11-15-b1-steady-usb-audio.md`, Results.
 - **The device check (B1-1..6)** waits for Scott's go-ahead and a backup.
 
