@@ -50,6 +50,8 @@ data class TimelineUi(
     val uses: Map<Int, Int> = emptyMap(),
     /** Entries in use on each track, of 16: where the next block would go, and whether one more fits. */
     val entries: Map<Int, Int> = emptyMap(),
+    /** Blocks deleted in the last ten seconds that can come back (batch item 13): the track and the block's id. */
+    val deleted: List<com.scottgerstl.lupe.core.ClearedPad> = emptyList(),
 )
 
 class TimelineActions(
@@ -70,6 +72,8 @@ class TimelineActions(
     val newBlock: (track: Int) -> Unit,
     val chain: (BlockUi) -> Unit,
     val split: (BlockUi) -> Unit,
+    /** Put a deleted block back (the core answers with a notice if the track changed since). */
+    val undoDelete: (com.scottgerstl.lupe.core.ClearedPad) -> Unit = {},
     /** Open the Edit tab on this block's pattern (its first entry). */
     val edit: (BlockUi) -> Unit = {},
 )
@@ -98,7 +102,7 @@ fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions,
     // the FM-1's selected track (the timeline area carries none): the pads' selection
     val pads = core.pads.collectAsStateWithLifecycle()
     val sounds = LocalSoundsHost.current
-    val ui = remember(st) { derivedStateOf(structuralEqualityPolicy()) { st.value.toUi(selected, pads.value.selected.track) } }
+    val ui = remember(st) { derivedStateOf(structuralEqualityPolicy()) { st.value.toUi(selected, pads.value.selected.track).copy(deleted = pads.value.clearUndo.filter { it.block }) } }
     val head = remember(st) { derivedStateOf { st.value.playheadBar } }
     val actions = remember(core, sounds, st) {
         TimelineActions(
@@ -119,13 +123,15 @@ fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions,
             stretch = { b, reps -> core.send(BlockStretch(b.track, b.id, reps)) },
             setPattern = { b, p -> core.send(BlockSetPattern(b.track, b.id, p, confirmed = true)) },
             duplicate = { core.send(BlockDuplicate(it.track, it.id)) },
-            delete = { core.send(BlockDelete(it.track, it.id, confirmed = true)); selected = null },
+            // no confirm (batch item 13): it goes at once and an Undo strip, and the lane's menu, put it back for ten seconds
+            delete = { core.send(BlockDelete(it.track, it.id)); selected = null },
             stop = { core.send(Intent.Stop) },
             openSounds = { sounds.open(it) },
             insert = { t, at, p -> core.send(com.scottgerstl.lupe.core.BlockInsert(t, at, p)) },
             newBlock = { core.send(com.scottgerstl.lupe.core.BlockNew(it)) },
             chain = { core.send(com.scottgerstl.lupe.core.BlockChain(it.track, it.id)) },
             split = { core.send(com.scottgerstl.lupe.core.BlockSplit(it.track, it.id)) },
+            undoDelete = { core.send(com.scottgerstl.lupe.core.UndoClear(it.track, it.entry)) },
             edit = { core.send(com.scottgerstl.lupe.core.Intent.PadSelect(it.track, it.id)); core.send(com.scottgerstl.lupe.core.Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) },
         )
     }

@@ -395,7 +395,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         val kept0 = keptPatterns(pads)
         val fullPool = empty && (pads.patternsFree == 0 || kept0.size >= 64)
         // a pad cleared a moment ago: the way back, here as well as in the Undo strip
-        val undo = pads.clearUndo.lastOrNull { it.track == row.track && it.entry == at }
+        val undo = pads.clearUndo.lastOrNull { !it.block && it.track == row.track && it.entry == at }
         if (undo != null) add(HoldItem("Undo clear", sub = undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
         if (empty) {
             // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap, and offers the ways on (board 79.4)

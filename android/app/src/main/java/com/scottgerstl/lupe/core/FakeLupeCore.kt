@@ -71,6 +71,8 @@ class FakeLupeCore(
     // the pattern pool (board 79): 52 of 64 kept, twelve unused; "FM-1: all 64 patterns taken" in the fake menu fills it
     private var pool: List<PoolPattern> = FakePool.initial()
     private var poolFull = false
+    /** The track as it was before a block was deleted, for ten seconds (batch item 13). */
+    private val blockUndo = mutableMapOf<ClearedPad, TimelineTrack>()
     private val _patterns = MutableStateFlow(FakePool.state(pool, false))
     override val patterns: StateFlow<PatternsState> = _patterns
     private val _patternPictures = MutableStateFlow(FakePool.pictures(pool, false))
@@ -255,6 +257,11 @@ class FakeLupeCore(
             is UndoClear -> {
                 val c = _pads.value.clearUndo.lastOrNull { intent.track == null || (it.track == intent.track && it.entry == intent.entry) }
                 if (c == null) refuse("There is no clear to undo any more.")
+                else if (c.block) {
+                    val was = blockUndo.remove(c)
+                    if (was != null) _timeline.update { st -> st.copy(tracks = st.tracks.map { if (it.track == c.track) was else it }) }
+                    _pads.update { it.copy(clearUndo = it.clearUndo - c) }
+                }
                 else { editEntry(c.track, c.entry) { if (c.pattern != null) PadEntry(PadKind.Pattern, c.pattern) else PadEntry(PadKind.Rest) }; _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
             }
             is Intent.TrackSelect -> {
@@ -323,7 +330,19 @@ class FakeLupeCore(
                 _freeTake.update { FakeTake.apply(it, intent, ed.track, ed.trackName) }
                 _shell.update { it.copy(bottom = if (_freeTake.value.picker != null) BottomPage(BottomKind.FreeTake) else if (it.bottom.kind == BottomKind.FreeTake) BottomPage() else it.bottom) }
             }
-            is BlockMove, is BlockStretch, is BlockDelete, is BlockSetPattern, is BlockDuplicate, is BlockInsert -> _timeline.update { FakeP6.timeline(it, intent) }
+            is BlockDelete -> {
+                // no confirm (batch item 13): it goes at once and can come back for ten seconds, the track as the delete left it
+                val tr = _timeline.value.tracks.firstOrNull { it.track == intent.track }
+                val b = tr?.blocks?.firstOrNull { it.id == intent.block }
+                _timeline.update { FakeP6.timeline(it, intent.copy(confirmed = true)) }
+                if (tr != null && b != null) {
+                    val c = ClearedPad(intent.track, intent.block, if (b.kind == "pattern") b.pattern else null, block = true)
+                    blockUndo[c] = tr
+                    _pads.update { it.copy(clearUndo = it.clearUndo.filter { u -> !(u.block && u.track == c.track) } + c) }
+                    scope.launch { kotlinx.coroutines.delay(10_000); blockUndo.remove(c); _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
+                }
+            }
+            is BlockMove, is BlockStretch, is BlockSetPattern, is BlockDuplicate, is BlockInsert -> _timeline.update { FakeP6.timeline(it, intent) }
             is BlockNew -> _timeline.update { FakeP6.timeline(it, BlockInsert(intent.track, Int.MAX_VALUE, _timeline.value.kept.maxOrNull()?.plus(1) ?: 1)) }
             is AutomationLanePick -> { autoLane = intent.lane; emitEditor() }
             is DrawLane -> {

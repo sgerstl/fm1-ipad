@@ -29,3 +29,17 @@ class UndoClearTest {
         assertEquals("Cleared T3 pad A · REST", clearedWords(ClearedPad(3, 0)))
     }
 }
+
+class BlockUndoTest {
+    @Test fun aBlocksUndoCarriesItsFlagAndItsWords() {
+        val p = lupeJson.decodeFromString<PadsState>("""{"rows":[],"scenes":[],"selected":{"track":1,"entry":0},"clearUndo":[{"track":2,"entry":4,"pattern":7,"block":true},{"track":2,"entry":5,"block":false}]}""")
+        assertEquals(listOf(ClearedPad(2, 4, 7, true), ClearedPad(2, 5, null, false)), p.clearUndo)
+        assertEquals("Deleted T2 block E · pattern 07", clearedWords(p.clearUndo[0]))
+        assertEquals("Cleared T2 pad F · REST", clearedWords(p.clearUndo[1]))
+    }
+
+    @Test fun theUndoForABlockIsTheSameIntent() {
+        assertEquals("""{"intent":"undoClear","track":2,"entry":4}""", lupeJson.encodeToString(Intent.serializer(), UndoClear(2, 4)))
+        assertEquals("""{"intent":"blockDelete","track":2,"block":4}""", lupeJson.encodeToString(Intent.serializer(), com.scottgerstl.lupe.core.BlockDelete(2, 4)))
+    }
+}

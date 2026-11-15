@@ -345,8 +345,8 @@ private fun BlockView(
         val at = mine.indexOfFirst { it.key == b.key }
         add(HoldItem("Move earlier", enabled = at > 0) { actions.moveBy(b, -1) })
         add(HoldItem("Move later", enabled = at in 0 until mine.size - 1) { actions.moveBy(b, 1) })
-        val gone = if (b.rest) "the REST" else "pattern $old"
-        add(HoldItem("Delete…", confirm = "Delete block: $gone (${barsText(b.length)}) from track ${b.track}" + if (erases) ". It is used nowhere else, so it's erased" else "") { actions.delete(b) })
+        // no confirm: it goes at once and can come back for ten seconds (the Undo strip, and "Undo delete" in this track's lane menu)
+        add(HoldItem("Delete", sub = if (erases) "Pattern $old is used nowhere else" else null) { actions.delete(b) })
         // a chain plays its patterns as one block; Chain joins this block to the next, Split takes a chain apart
         if (ui.blocks.any { it.track == b.track && !it.gap && it.id == b.id + b.entries }) add(HoldItem("Chain with the next") { actions.chain(b) })
         if (b.entries > 1) add(HoldItem("Split the chain") { actions.split(b) })
@@ -382,7 +382,7 @@ private fun BlockView(
                     CustomAccessibilityAction("One pass longer") { actions.stretch(b, b.reps + 1); true },
                     CustomAccessibilityAction("One pass shorter") { actions.stretch(b, b.reps - 1); true },
                     CustomAccessibilityAction("Duplicate") { actions.duplicate(b); true },
-                    CustomAccessibilityAction("Delete…") { openMenuAtCentre(); true },
+                    CustomAccessibilityAction("Delete") { actions.delete(b); true },
                 )
             }
             // only a selected block drags (an unselected one's drag is the song's pan)
@@ -450,7 +450,10 @@ private fun TrackEnd(track: Int, ui: TimelineUi, actions: TimelineActions, barPx
         val full = (ui.entries[track] ?: 0) >= 16
         val at = ui.entries[track] ?: 0
         val why = if (full) "The track's 16 entries are full" else null
-        listOf(
+        // a block deleted a moment ago: the way back, here as well as in the Undo strip (only while the track is as the delete left it)
+        val undo = ui.deleted.lastOrNull { it.track == track }
+        listOfNotNull(
+            undo?.let { u -> HoldItem("Undo delete", sub = u.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { actions.undoDelete(u) } },
             HoldItem("New pattern", sub = why, enabled = !full) { actions.newBlock(track) },
             HoldItem("Add a pattern…", sub = why, enabled = !full, children = { ui.kept.map { p -> HoldItem("Pattern ${"%02d".format(p)}") { actions.insert(track, at, p) } } }),
             HoldItem("Add a REST", sub = why, enabled = !full) { actions.insert(track, at, 65) },
