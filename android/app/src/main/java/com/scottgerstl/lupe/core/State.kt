@@ -138,6 +138,8 @@ data class PadEntry(
     val hasSound: Boolean = false,
     /** A waiting entry: the clock pulse its launch point comes on (the `clock` area counts them); null when there is no clock. */
     val launchTick: Double? = null,
+    /** The core's stable id for this pad (P1's 0e8eeb3): 0 on an empty pad, otherwise a number that stays with the pad as the list is rewritten. Never persisted. */
+    val key: Int = 0,
 )
 
 @Serializable

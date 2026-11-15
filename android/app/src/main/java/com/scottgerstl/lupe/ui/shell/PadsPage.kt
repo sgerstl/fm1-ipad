@@ -151,7 +151,9 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                     Box {
                                     Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
                                         // each keeps its identity as the list is rewritten, and slides to its new place (nothing pops)
-                                        val ids = entryIds.update(r.track, r.entries)
+                                        // the core's own ids when it sends them (0 = an empty pad: its place stands for it); else matched by content
+                                        val ids = if (r.entries.any { it.key != 0 }) r.entries.mapIndexed { i, e -> if (e.key != 0) e.key.toLong() else -(r.track * 100L + i) }
+                                                  else entryIds.update(r.track, r.entries)
                                         r.entries.forEachIndexed { i, e ->
                                             key(ids[i]) {
                                                 // a pad that goes shrinks and fades where it stood while the others close up; one that comes (an Undo) grows in

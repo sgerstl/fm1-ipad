@@ -34,3 +34,11 @@ class EntryIdsTest {
         assertEquals(listOf(1L, 2L), m(listOf("a", "b"), listOf(1, 2), listOf("a", "b")))
     }
 }
+
+class EntryKeyDecodeTest {
+    @org.junit.Test fun theCoresKeyDecodesAndDefaultsToZero() {
+        val e = com.scottgerstl.lupe.core.lupeJson.decodeFromString<com.scottgerstl.lupe.core.PadEntry>("""{"kind":"pattern","pattern":7,"key":12}""")
+        org.junit.Assert.assertEquals(12, e.key)
+        org.junit.Assert.assertEquals(0, com.scottgerstl.lupe.core.lupeJson.decodeFromString<com.scottgerstl.lupe.core.PadEntry>("""{"kind":"empty"}""").key)
+    }
+}
