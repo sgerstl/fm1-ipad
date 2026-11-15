@@ -4,8 +4,9 @@ import SwiftUI
 // the iPad's and iPhone's options, drawn as a wheel. A filled circle in the track's colour at about 45 % over the page
 // grows under the finger (64 pt, an elastic grow-in: Labs › Hold menu spring); beside it a thin rim on a shallow curve
 // (nearly vertical, a gentle bow: Scott, 2026-11-14), and on that curve
-// up to five choices, each on its own 22 pt stalk from the rim, so every stalk is the same short length. More than five,
-// a small triangle past either end says there are more that way, and a drag turns the wheel and the others roll into the arc along the curve, fading as they near
+// up to five choices, each on its own 22 pt stalk from the rim, so every stalk is the same short length (more where the
+// screen is tall enough for them all). More than fit, the column spans the screen's usable height, header to foot
+// (Scott, 2026-11-15), and a small triangle past either end says there are more that way, and a drag turns the wheel and the others roll into the arc along the curve, fading as they near
 // its ends; it opens with the first choice at the arc's top and settles on a choice when the finger lifts. Five or fewer
 // are just the arc. The arc stays on screen under the header and flips side near an edge (Settings › Menus open). The
 // page dims and a tap outside closes. A choice that loses work asks once more in place (red outline, its words naming
@@ -108,6 +109,18 @@ struct RadialMenu: View {
         return min(max(y, headerClear + half), h - 16 - half)
     }
 
+    /// A menu that scrolls (Scott, 2026-11-15): its column spans the screen's usable height, from under the header to 8 pt
+    /// above the foot, the triangles at its ends, so as many choices show as fit. `half`: from the column's middle to the
+    /// choices' outer reach (the triangles beyond it).
+    static func column(_ h: CGFloat) -> (mid: CGFloat, half: CGFloat) {
+        let top = headerClear, bottom = h - 8
+        return ((top + bottom) / 2, (bottom - top) / 2 - arrowGap - arrowH)
+    }
+    /// How many whole choices that column holds (never fewer than the arc's five).
+    static func fullColumn(_ h: CGFloat) -> Int {
+        max(inView, Int(((2 * column(h).half - itemH) / step).rounded(.down)) + 1)
+    }
+
     /// The circle's size as it grows in: past its size (`spring` 0…1 sets how far), one undershoot, settle.
     static func hubScale(_ p: Double, spring: Double) -> Double {
         if p >= 1 { return 1 }
@@ -133,12 +146,16 @@ struct RadialMenu: View {
     var body: some View {
         let list = shown.isEmpty ? items : shown
         let n = list.count
-        let wheel = n > Self.inView
-        let visible = min(n, Self.inView)
-        let most = Double(max(0, n - Self.inView))
+        // more than fit: the full-height column, scrolling; the rest (as many as the full column holds) all show, level with
+        // the finger as before
+        let wheel = n > max(Self.inView, Self.fullColumn(layer.height))
+        let visible = wheel ? Self.fullColumn(layer.height) : n
+        let most = Double(max(0, n - visible))
         let edges = (-margins.leading)...(layer.width + margins.trailing)
         let left = Self.opensLeft(at.x, edges, hand: hand)
-        let mid = Self.mid(at.y, shown: visible, layer.height, arrows: wheel)
+        let mid = wheel ? Self.column(layer.height).mid : Self.mid(at.y, shown: visible, layer.height, arrows: false)
+        // how far the choices reach from the middle: the full column's, or the choices' own
+        let reach = wheel ? Self.column(layer.height).half : CGFloat(visible - 1) / 2 * Self.step + Self.itemH / 2
         TimelineView(.animation) { tl in
             // ms since it opened, at the Labs speed
             let e = tl.date.timeIntervalSince(start) * 1000 * Labs.menuSpeed.value / 100
@@ -151,7 +168,7 @@ struct RadialMenu: View {
             let spots = pos.map { Self.spot(p: $0, centre: centre, left: left, edges: edges) }
             let seen: [Double] = pos.map { p in
                 guard wheel else { return 1 }
-                return min(1, max(0, 1 - (abs(p) - 2) / 0.8))
+                return min(1, max(0, 1 - (abs(p) - Double(visible - 1) / 2) / 0.8))
             }
             ZStack(alignment: .topLeading) {
                 // the page behind stays as it is (Scott, 2026-11-15: no page-wide dim; the soft backing behind the choices is
@@ -166,7 +183,7 @@ struct RadialMenu: View {
                     // a soft black field behind the choices and stalks, following the arc, so the pads under the menu stop
                     // competing (Scott, 2026-11-14): 70 %, feathered by a blur, faded in with the menu
                     do {
-                        let reachY = CGFloat(visible - 1) / 2 * Self.step + Self.itemH / 2 + (wheel ? Self.arrowGap + Self.arrowH : 0) + 14
+                        let reachY = reach + (wheel ? Self.arrowGap + Self.arrowH : 0) + 14
                         let r0 = Self.rim - 12, r1 = Self.bow + Self.itemW + 12
                         let a0 = asin(min(1, reachY / r0)) * 180 / .pi, a1 = asin(min(1, reachY / r1)) * 180 / .pi
                         let base = left ? 180.0 : 0.0
@@ -190,7 +207,7 @@ struct RadialMenu: View {
                     // wheel a small triangle past each end in the track colour while there are choices beyond that end
                     let rimP = reduceMotion ? 1 : min(1, max(0, (e - 100) / 260))
                     if rimP > 0 {
-                        let reachY = CGFloat(visible - 1) / 2 * Self.step + Self.itemH / 2
+                        let reachY = reach
                         let half = asin(min(1, reachY / Self.rim)) * 180 / .pi
                         let base = left ? 180.0 : 0.0
                         var rimPath = Path()
@@ -287,7 +304,7 @@ struct RadialMenu: View {
             // VoiceOver's three-finger swipe turns the wheel a page (WCAG 2.5.7: the drag has another way in)
             guard wheel else { return }
             let now = turn(Date())
-            settle(to: min(max(now + (edge == .bottom ? -Double(Self.inView) : Double(Self.inView)), 0), most), from: now)
+            settle(to: min(max(now + (edge == .bottom ? -Double(visible) : Double(visible)), 0), most), from: now)
         }
         .onKeyPress(.escape) { dismiss(); return .handled }
         .onKeyPress(.downArrow) { guard wheel else { return .ignored }; let now = turn(Date()); settle(to: min(now + 1, most).rounded(), from: now); return .handled }
