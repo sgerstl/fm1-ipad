@@ -12,7 +12,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PadDragTest {
-    private val feel = WellFeel(glowPx = 96f, hotPx = 48f)
+    private val feel = WellFeel(glowPx = 200f, hotPx = 64f)
     private val w = 874f; private val h = 402f
     // (grabbed in the middle: the finger is the pad's centre)
     private fun drag(finger: Offset, track: Int = 2, from: Int = 1, pattern: Int? = 7) =
@@ -40,24 +40,20 @@ class PadDragTest {
         val b = EdgeWellsGeometry.rect(EdgeAction.Delete, w, h, 1f)
         assertNull(EdgeWellsGeometry.hot(Offset(b.center.x, 20f), w, h, 1f, playing))
         assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Delete, Offset(b.center.x, 20f), w, h, 1f, playing), 0.001f)
-        assertEquals(EdgeAction.ClearSteps, EdgeWellsGeometry.hot(Offset(EdgeWellsGeometry.rect(EdgeAction.ClearSteps, w, h, 1f).center.x, 20f), w, h, 1f, playing))   // Clear steps works playing
-    }
-
-    @Test fun theSideWellByTheCameraCutoutWidensByItsMargin() {
-        val plain = EdgeWellsGeometry.rect(EdgeAction.Duplicate, w, h, 1f); val cut = EdgeWellsGeometry.rect(EdgeAction.Duplicate, w, h, 1f, insetLeft = 40f)
-        assertEquals(0f, cut.left, 0.01f); assertEquals(plain.width + 40f, cut.width, 0.01f)
-        val e = EdgeWellsGeometry.rect(EdgeAction.Edit, w, h, 1f, insetRight = 40f)
-        assertEquals(w, e.right, 0.01f); assertEquals(64f + 40f, e.width, 0.01f)
+        // Clear steps works playing
+        assertEquals(EdgeAction.ClearSteps, EdgeWellsGeometry.hot(Offset(EdgeWellsGeometry.rect(EdgeAction.ClearSteps, w, h, 1f).center.x, 20f), w, h, 1f, playing))
     }
 
     @Test fun hotWithinTheHotDistanceGlowFromTheGlowDistance() {
         assertNull(EdgeWellsGeometry.hot(Offset(400f, 200f), w, h, 1f, feel))
-        assertEquals(EdgeAction.Cancel, EdgeWellsGeometry.hot(Offset(437f, h - 52f - 40f), w, h, 1f, feel))
-        assertNull(EdgeWellsGeometry.hot(Offset(437f, h - 52f - 60f), w, h, 1f, feel))
+        assertEquals(EdgeAction.Cancel, EdgeWellsGeometry.hot(Offset(437f, h - 52f - 60f), w, h, 1f, feel))
+        assertNull(EdgeWellsGeometry.hot(Offset(437f, h - 52f - 80f), w, h, 1f, feel))
         assertEquals(EdgeAction.Edit, EdgeWellsGeometry.hot(Offset(w - 64f - 10f, 200f), w, h, 1f, feel))
         assertEquals(EdgeAction.Duplicate, EdgeWellsGeometry.hot(Offset(60f, 200f), w, h, 1f, feel))
-        assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 52f - 96f), w, h, 1f, feel), 0.001f)
-        assertEquals(0.5f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 52f - 48f), w, h, 1f, feel), 0.001f)
+        // 0 at the glow distance (200), rising steadily to 1 at the hot distance (64)
+        assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 52f - 200f), w, h, 1f, feel), 0.001f)
+        assertEquals(0.5f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 52f - 132f), w, h, 1f, feel), 0.001f)
+        assertEquals(1f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 52f - 64f), w, h, 1f, feel), 0.001f)
         assertEquals(1f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 10f), w, h, 1f, feel), 0.001f)
     }
 
@@ -73,18 +69,18 @@ class PadDragTest {
     }
 
     @Test fun aDropOnASlotOfItsOwnTrackMoves() {
-        val s = listOf(slot(2, 0, false, 100f, 100f), slot(2, 4, true, 300f, 100f, landing = 3), slot(3, 2, false, 100f, 200f), slot(3, 5, true, 300f, 200f, landing = 4))
-        assertEquals(DropAction.Move(2, 1, 0), decideDrop(drag(Offset(120f, 110f)), s, w, h, 1f, feel))
-        assertEquals(DropAction.Move(2, 1, 3), decideDrop(drag(Offset(320f, 110f)), s, w, h, 1f, feel))
-        assertNull(decideDrop(drag(Offset(120f, 210f)), s, w, h, 1f, feel))
-        assertNull(decideDrop(drag(Offset(500f, 300f)), s, w, h, 1f, feel))
-        assertNull(decideDrop(drag(Offset(305f, 105f), from = 0), listOf(slot(2, 0, false, 300f, 100f)), w, h, 1f, feel))
+        val s = listOf(slot(2, 0, false, 250f, 160f), slot(2, 4, true, 400f, 160f, landing = 3), slot(3, 2, false, 250f, 240f), slot(3, 5, true, 400f, 240f, landing = 4))
+        assertEquals(DropAction.Move(2, 1, 0), decideDrop(drag(Offset(270f, 170f)), s, w, h, 1f, feel))
+        assertEquals(DropAction.Move(2, 1, 3), decideDrop(drag(Offset(420f, 170f)), s, w, h, 1f, feel))
+        assertNull(decideDrop(drag(Offset(270f, 250f)), s, w, h, 1f, feel))
+        assertNull(decideDrop(drag(Offset(600f, 200f)), s, w, h, 1f, feel))
+        assertNull(decideDrop(drag(Offset(405f, 165f), from = 0), listOf(slot(2, 0, false, 400f, 160f)), w, h, 1f, feel))
     }
 
     @Test fun aPatternOnAnotherTracksEmptySlotAsksAndARestDoesNot() {
-        val s = listOf(slot(3, 5, true, 300f, 200f, landing = 4))
-        assertEquals(DropAction.Offer(3, 4, 7), decideDrop(drag(Offset(320f, 210f)), s, w, h, 1f, feel))
-        assertNull(decideDrop(drag(Offset(320f, 210f), pattern = null), s, w, h, 1f, feel))
+        val s = listOf(slot(3, 5, true, 400f, 240f, landing = 4))
+        assertEquals(DropAction.Offer(3, 4, 7), decideDrop(drag(Offset(420f, 250f)), s, w, h, 1f, feel))
+        assertNull(decideDrop(drag(Offset(420f, 250f), pattern = null), s, w, h, 1f, feel))
     }
 
     @Test fun theMoveTravelsAsPadMove() {

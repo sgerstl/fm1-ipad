@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,11 +81,24 @@ fun LupeShell(core: LupeCore) {
     val soundsHost = remember { SoundsHost() }
     val holdMenu = remember { HoldMenuState() }
     val padDrag = remember { PadDragState() }
+    // the page recorded as it is drawn, and a blurred copy of it for the edge wells' glass (a 12 dp blur; recorded only while a pad is dragged)
+    val pageLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val blurLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val blurPx = 12f * androidx.compose.ui.platform.LocalDensity.current.density
+    androidx.compose.runtime.SideEffect {
+        padDrag.pageLayer = pageLayer; padDrag.blurLayer = blurLayer
+        blurLayer.renderEffect = androidx.compose.ui.graphics.BlurEffect(blurPx, blurPx, androidx.compose.ui.graphics.TileMode.Clamp)
+    }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
       CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag) {
         Column(
             Modifier.fillMaxSize()
+                .drawWithContent {
+                    pageLayer.record(this, layoutDirection, androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())) { this@drawWithContent.drawContent() }
+                    drawLayer(pageLayer)
+                    if (padDrag.drag != null) blurLayer.record(this, layoutDirection, androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())) { drawLayer(pageLayer) }
+                }
                 .greyedBy { grey.value }
                 .then(if (mode != LinkMode.Normal || sheetOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {

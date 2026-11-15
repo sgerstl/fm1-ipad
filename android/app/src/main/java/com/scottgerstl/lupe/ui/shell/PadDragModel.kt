@@ -30,15 +30,15 @@ enum class EdgeAction(val title: String, val edge: WellEdge, val staggerMs: Int)
 }
 
 /**
- * The distances to tune by hand (CLAUDE.md rule 3), from Labs in dp, as the geometry needs them in px; [insetLeft] and [insetRight] the camera
- * cutout's margin on each side (the well on that side widens by it and insets its icon and label, staying attached to the edge); [off] the wells
- * that refuse a drop now (Delete pattern while playing): greyed, never hot.
+ * The distances to tune by hand (CLAUDE.md rule 3), from Labs in dp, as the geometry needs them in px: the glow starts [glowPx] out and rises steadily to full at
+ * [hotPx], where the well is hot; [off] the wells that refuse a drop now (Delete pattern while playing): greyed, never hot. (No camera-cutout inset on Android:
+ * Scott, 2026-11-15, "not needed".)
  */
-data class WellFeel(val glowPx: Float, val hotPx: Float, val insetLeft: Float = 0f, val insetRight: Float = 0f, val off: Set<EdgeAction> = emptySet())
+data class WellFeel(val glowPx: Float, val hotPx: Float, val off: Set<EdgeAction> = emptySet())
 
 object EdgeWellsGeometry {
     /** Board 81.4 at the iPhone's 874 × 402: the bottom well 434 × 52 (half the width at most), the side wells 64 wide and 238 tall (a half of the height at most, a 0.6 of it at most), centred. [d] is the density. */
-    fun rect(a: EdgeAction, w: Float, h: Float, d: Float, insetLeft: Float = 0f, insetRight: Float = 0f): Rect {
+    fun rect(a: EdgeAction, w: Float, h: Float, d: Float): Rect {
         val sideH = minOf(h * 0.6f, maxOf(238f * d, h * 0.5f))
         // the top pair: two 260 × 52 wells 8 apart, at most 0.6 of the width
         val topW = minOf((2 * 260f + 8f) * d, w * 0.6f); val half = (topW - 8f * d) / 2; val topX = (w - topW) / 2
@@ -46,8 +46,8 @@ object EdgeWellsGeometry {
             EdgeAction.Cancel -> { val bw = minOf(434f * d, w * 0.5f); Rect((w - bw) / 2, h - 52f * d, (w + bw) / 2, h) }
             EdgeAction.ClearSteps -> Rect(topX, 0f, topX + half, 52f * d)
             EdgeAction.Delete -> Rect(topX + half + 8f * d, 0f, topX + topW, 52f * d)
-            EdgeAction.Duplicate -> Rect(0f, (h - sideH) / 2, 64f * d + insetLeft, (h + sideH) / 2)
-            EdgeAction.Edit -> Rect(w - 64f * d - insetRight, (h - sideH) / 2, w, (h + sideH) / 2)
+            EdgeAction.Duplicate -> Rect(0f, (h - sideH) / 2, 64f * d, (h + sideH) / 2)
+            EdgeAction.Edit -> Rect(w - 64f * d, (h - sideH) / 2, w, (h + sideH) / 2)
         }
     }
 
@@ -57,13 +57,13 @@ object EdgeWellsGeometry {
         return hypot(dx, dy)
     }
 
-    /** 0…1: how near the pad's centre is to a well, from the glow distance in. */
+    /** 0…1: how near the pad's centre is to a well: 0 at the glow distance, rising steadily to 1 at the hot distance (so the target shows well before you reach it). */
     fun closeness(a: EdgeAction, centre: Offset, w: Float, h: Float, d: Float, feel: WellFeel): Float =
-        if (a in feel.off) 0f else (1f - distance(centre, rect(a, w, h, d, feel.insetLeft, feel.insetRight)) / feel.glowPx).coerceIn(0f, 1f)
+        if (a in feel.off) 0f else ((feel.glowPx - distance(centre, rect(a, w, h, d))) / (feel.glowPx - feel.hotPx).coerceAtLeast(1f)).coerceIn(0f, 1f)
 
     /** The well a drop at [centre] lands in: the nearest within the hot distance. */
     fun hot(centre: Offset, w: Float, h: Float, d: Float, feel: WellFeel): EdgeAction? =
-        EdgeAction.entries.filter { it !in feel.off }.map { it to distance(centre, rect(it, w, h, d, feel.insetLeft, feel.insetRight)) }.filter { it.second <= feel.hotPx }.minByOrNull { it.second }?.first
+        EdgeAction.entries.filter { it !in feel.off }.map { it to distance(centre, rect(it, w, h, d)) }.filter { it.second <= feel.hotPx }.minByOrNull { it.second }?.first
 }
 
 /** One pad slot on the screen, in window pixels: [idx] the slot drawn, [landing] the entry a touch on it acts on (an outlined slot past the list's end stands for the first free one). */
@@ -111,8 +111,11 @@ class PadDragState {
     var drag by mutableStateOf<PadDrag?>(null)
     var sprout by mutableStateOf<PadSprout?>(null)
     /** The wells' feel as drawn now (one place, so a drop decides on what was shown). */
-    fun feel(glowPx: Float, hotPx: Float, insetLeft: Float, insetRight: Float, playing: Boolean) =
-        WellFeel(glowPx, hotPx, insetLeft, insetRight, if (playing) setOf(EdgeAction.Delete) else emptySet()).also { lastFeel = it }
+    fun feel(glowPx: Float, hotPx: Float, playing: Boolean) =
+        WellFeel(glowPx, hotPx, if (playing) setOf(EdgeAction.Delete) else emptySet()).also { lastFeel = it }
+    /** The page, recorded as it is drawn, and a blurred copy of it for the wells' glass (only while a pad is dragged). */
+    var pageLayer: androidx.compose.ui.graphics.layer.GraphicsLayer? = null
+    var blurLayer: androidx.compose.ui.graphics.layer.GraphicsLayer? = null
     var lastFeel = WellFeel(0f, 0f)
     /** The slots on screen, kept by each pad as it is placed (plain, not observed: read at the drop). */
     val slots = HashMap<Any, DropSlot>()

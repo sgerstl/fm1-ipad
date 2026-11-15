@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -36,6 +34,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -59,7 +60,7 @@ private val SlideIn = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 /**
  * The wells for a dragged pad (board 81.4) and the lifted pad over them, in one layer over the whole screen. Three wells sit flush on the edges, square on the
  * edge side and rounded 12 inside, dashed on the three inner sides, resting as dark glass (black 62 %; the iPhone blurs what is behind, which this does not):
- * Decision 41: Cancel at the bottom, Clear steps and Delete pattern on the top, Edit on the right, Duplicate on the left. They slide in from their edges as the pad lifts (Labs: slide, staggered 30 ms) and out in 72 %
+ * Dark glass: a 12 dp blur of the page behind (a recorded copy of the page, blurred), black 62 % over it. Decision 41: Cancel at the bottom, Clear steps and Delete pattern on the top, Edit on the right, Duplicate on the left. They slide in from their edges as the pad lifts (Labs: slide, staggered 30 ms) and out in 72 %
  * of that; a glow in the track colour (red for Clear) builds from the glow distance; hot, within the hot distance, the well fills solid with a dark label, ticks,
  * and the lifted pad tilts toward it. Reduce Motion: they fade, the pad doesn't tilt or grow. It takes no touches. TalkBack keeps the hold menu.
  */
@@ -71,13 +72,10 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
     val density = LocalDensity.current
     val d = density.density
     val drag = state.drag
-    // the camera cutout's margin on each side (landscape): the well on that side widens by it and insets its icon and label, staying on the edge
-    val cutL = WindowInsets.displayCutout.getLeft(density, androidx.compose.ui.unit.LayoutDirection.Ltr).toFloat()
-    val cutR = WindowInsets.displayCutout.getRight(density, androidx.compose.ui.unit.LayoutDirection.Ltr).toFloat()
     // the last pad stays drawn while the wells leave
     var last by remember { mutableStateOf<PadDrag?>(null) }
     if (drag != null) last = drag
-    val feel = state.feel(labs.wellGlowDp * d, labs.wellHotDp * d, cutL, cutR, playing)
+    val feel = state.feel(labs.wellGlowDp * d, labs.wellHotDp * d, playing)
     val w = state.screen.width; val h = state.screen.height
     val hot = if (drag != null && w > 0f) EdgeWellsGeometry.hot(drag.centre - state.origin, w, h, d, feel) else null
     LaunchedEffect(hot) { if (hot != null && labs.haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
@@ -96,7 +94,7 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
                     val on = (drag ?: last)
                     // Cancel neutral (a soft white when hot), Delete red, the others the track's colour
                     val tint = when (a) { EdgeAction.Cancel -> Tok.text; EdgeAction.Delete -> Tok.rec; else -> on?.colour ?: Tok.text }
-                    Well(a, Rect(0f, 0f, w, h), d, p.value, hot == a, a in feel.off,
+                    Well(a, Rect(0f, 0f, w, h), d, p.value, hot == a, a in feel.off, state,
                         if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f, tint, reduce, feel)
                 }
             }
@@ -177,8 +175,8 @@ private fun Sprout(state: PadDragState, s: PadSprout, reduce: Boolean) {
 
 /** One well: [full] is the screen, [p] 0…1 how far it has slid in, [glow] 0…1 how near the pad is, [off] it refuses a drop now (greyed, "Stop first"). */
 @Composable
-private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, glow: Float, tint: Color, reduce: Boolean, feel: WellFeel) {
-    val r = EdgeWellsGeometry.rect(a, full.width, full.height, d, feel.insetLeft, feel.insetRight)
+private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, state: PadDragState, glow: Float, tint: Color, reduce: Boolean, feel: WellFeel) {
+    val r = EdgeWellsGeometry.rect(a, full.width, full.height, d)
     // the hot one grows by 8 dp into the screen
     val hotT = com.scottgerstl.lupe.ui.theme.animatedFloat(if (hot) 1f else 0f, 120).value
     val g = 8f * d * hotT
@@ -216,7 +214,11 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
             val path = Path().apply { addRoundRect(shape) }
             // the glow around it, building in its colour
             if (glowA > 0f) for (k in 3 downTo 1) drawPath(path, tint.copy(alpha = (if (hot) 0.5f else 0.4f * glowA) * 0.18f), style = Stroke(width = k * 5.dp.toPx() * glowA.coerceAtLeast(0.2f)))
-            if (!hot) drawPath(path, Color.Black.copy(alpha = 0.62f))
+            if (!hot) {
+                // dark glass: a blurred copy of the page behind this well, then black 62 % (a plain dark fill if the page isn't recorded)
+                state.blurLayer?.let { bl -> clipPath(path) { translate(-(grown.left + slide.x), -(grown.top + slide.y)) { drawLayer(bl) } } }
+                drawPath(path, Color.Black.copy(alpha = 0.62f))
+            }
             // (Cancel's a soft white, not a colour)
             drawPath(path, tint.copy(alpha = if (hot) (if (a == EdgeAction.Cancel) 0.85f else 1f) else (if (a == EdgeAction.Cancel) 0.18f else 0.35f) * glowA))
             // dashes on the three inner sides: the outline, pushed 4 dp past the edge it sits on so that side is off the screen
@@ -233,10 +235,7 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
         val ink = if (hot) Tok.onColour else Tok.text
         val icon = when (a) { EdgeAction.Cancel -> R.drawable.ms_close; EdgeAction.ClearSteps -> R.drawable.ms_delete_sweep; EdgeAction.Delete -> R.drawable.ms_delete; EdgeAction.Edit -> R.drawable.ms_edit; EdgeAction.Duplicate -> R.drawable.ms_library_add }
         val tintF = ColorFilter.tint(if (hot) Tok.onColour else Tok.text2)
-        // the side well by the camera cutout: its icon and label keep clear of the hole punch by the cutout's margin (the well stays on the edge)
-        val inL = if (a == EdgeAction.Duplicate) with(dens) { feel.insetLeft.toDp() } else 0.dp
-        val inR = if (a == EdgeAction.Edit) with(dens) { feel.insetRight.toDp() } else 0.dp
-        val labelBox = Modifier.align(Alignment.Center).padding(start = inL, end = inR)
+        val labelBox = Modifier.align(Alignment.Center)
         if (a.across) {
             Row(labelBox, verticalAlignment = Alignment.CenterVertically) {
                 Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = tintF)

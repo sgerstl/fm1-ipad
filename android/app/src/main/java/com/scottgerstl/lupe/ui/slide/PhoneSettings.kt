@@ -58,7 +58,7 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     /**
      * Pad drag and the edge wells (CLAUDE.md rule 3; added 2026-11-15, review 2026-11-29; the iPhone's numbers, 373dadb): how far a pad is slid before it lifts (dp, 8),
      * how long a press must be before a slide counts as a drag, not a swipe (ms, 150), how long the wells take to slide in (ms, 220; out takes 72 % of it),
-     * how near the pad's centre comes before a well glows (dp, 96) and before it is hot, so a drop there acts (dp, 48).
+     * how far out a well starts to glow (dp, 200; the glow rises steadily to full at the hot point) and how near before it is hot, so a drop there acts (dp, 64).
      */
     var padSlideStart by mutableStateOf(prefs?.getInt(PAD_SLIDE, 8) ?: 8)
         private set
@@ -69,12 +69,12 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     var wellSlideMs by mutableStateOf(prefs?.getInt(WELL_SLIDE, 220) ?: 220)
         private set
     fun chooseWellSlide(v: Int) { wellSlideMs = v.coerceIn(100, 500); prefs?.edit()?.putInt(WELL_SLIDE, wellSlideMs)?.apply() }
-    var wellGlowDp by mutableStateOf(prefs?.getInt(WELL_GLOW, 96) ?: 96)
+    var wellGlowDp by mutableStateOf(prefs?.getInt(WELL_GLOW, 200) ?: 200)
         private set
-    fun chooseWellGlow(v: Int) { wellGlowDp = v.coerceIn(48, 160); prefs?.edit()?.putInt(WELL_GLOW, wellGlowDp)?.apply() }
-    var wellHotDp by mutableStateOf(prefs?.getInt(WELL_HOT, 48) ?: 48)
+    fun chooseWellGlow(v: Int) { wellGlowDp = v.coerceIn(48, 320); prefs?.edit()?.putInt(WELL_GLOW, wellGlowDp)?.apply() }
+    var wellHotDp by mutableStateOf(prefs?.getInt(WELL_HOT, 64) ?: 64)
         private set
-    fun chooseWellHot(v: Int) { wellHotDp = v.coerceIn(24, 96); prefs?.edit()?.putInt(WELL_HOT, wellHotDp)?.apply() }
+    fun chooseWellHot(v: Int) { wellHotDp = v.coerceIn(24, 120); prefs?.edit()?.putInt(WELL_HOT, wellHotDp)?.apply() }
 
     /**
      * Handedness (the iPhone's setting, decision 33): right-handed, a hold menu opens to the left of the finger so the hand doesn't cover it,
@@ -117,8 +117,8 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val PAD_SLIDE = "labs_pad_slide_start"
         const val PAD_DWELL = "labs_pad_slide_dwell"
         const val WELL_SLIDE = "labs_well_slide"
-        const val WELL_GLOW = "labs_well_glow"
-        const val WELL_HOT = "labs_well_hot"
+        const val WELL_GLOW = "labs_well_glow2"      // (new keys with the new defaults, 2026-11-15)
+        const val WELL_HOT = "labs_well_hot2"
         const val GRAPHICS = "show_graphics"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"
