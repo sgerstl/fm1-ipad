@@ -1,0 +1,200 @@
+import SwiftUI
+
+// Edge action wells for a dragged pad (board 81, tile 81.4; Scott's pick 2026-11-15; batch item 12): while a held pad is
+// lifted into a drag, three wells sit flush on the screen's edges, square on the edge side and rounded 12 inside, 1.5 pt
+// dashes on the three inner sides, resting as dark glass (black 62 % over a 12 pt blur of what's behind). Bottom Clear,
+// right Edit, left Duplicate; the top is free. Each slides in from its own edge as the pad lifts (Labs › Wells: slide,
+// staggered 30 ms: bottom, left, right) and back out faster on the drop. As the pad's centre nears a well a glow builds
+// on it in the track colour (red for Clear), growing with closeness (Labs › Wells: glow distance); closer still it goes
+// hot (Labs › Wells: hot distance): solid fill, solid border, dark label, a light tick, the lifted pad tilting toward it.
+// Reduce Motion: fades, no slides. VoiceOver keeps the hold menu. iPhone and iPad.
+
+enum EdgeAction: CaseIterable, Equatable {
+    case clear, edit, duplicate
+    var title: String { switch self { case .clear: "Clear"; case .edit: "Edit"; case .duplicate: "Duplicate" } }
+    var icon: String { switch self { case .clear: "trash"; case .edit: "pencil"; case .duplicate: "plus.square.on.square" } }
+    var edge: Edge { switch self { case .clear: .bottom; case .edit: .trailing; case .duplicate: .leading } }
+    /// The order they slide in (bottom, left, right).
+    var stagger: Double { switch self { case .clear: 0; case .duplicate: 0.03; case .edit: 0.06 } }
+}
+
+/// The pad being dragged, for the wells: its centre (global) and its track.
+struct PadDragShow: Equatable {
+    var centre: CGPoint
+    var track: Int
+}
+
+enum EdgeWellsGeometry {
+    /// Board 81.4 at the iPhone's 874 × 402: the bottom well 434 × 52, the side wells 64 wide and 238 tall, centred; the
+    /// iPad's are the same sizes, scaled up by its height for the side wells.
+    static func rect(_ a: EdgeAction, in screen: CGSize) -> CGRect {
+        let sideH = min(screen.height * 0.6, max(238, screen.height * 0.5))
+        switch a {
+        case .clear:
+            let w = min(434, screen.width * 0.5)
+            return CGRect(x: (screen.width - w) / 2, y: screen.height - 52, width: w, height: 52)
+        case .duplicate: return CGRect(x: 0, y: (screen.height - sideH) / 2, width: 64, height: sideH)
+        case .edit: return CGRect(x: screen.width - 64, y: (screen.height - sideH) / 2, width: 64, height: sideH)
+        }
+    }
+
+    /// How far a point is from a well's rectangle (0 inside).
+    static func distance(_ p: CGPoint, _ r: CGRect) -> CGFloat {
+        let dx = max(r.minX - p.x, 0, p.x - r.maxX), dy = max(r.minY - p.y, 0, p.y - r.maxY)
+        return hypot(dx, dy)
+    }
+
+    /// 0…1: how near the pad's centre is to the well, from the glow distance in.
+    static func closeness(_ a: EdgeAction, centre: CGPoint, screen: CGSize) -> Double {
+        let d = distance(centre, rect(a, in: screen))
+        let glow = CGFloat(Labs.wellGlow.value)
+        return Double(max(0, min(1, 1 - d / glow)))
+    }
+
+    /// The well a drop at `centre` lands in: the nearest within the hot distance.
+    static func hot(centre: CGPoint, screen: CGSize) -> EdgeAction? {
+        let hotD = CGFloat(Labs.wellHot.value)
+        return EdgeAction.allCases
+            .map { ($0, distance(centre, rect($0, in: screen))) }
+            .filter { $0.1 <= hotD }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    @MainActor static var screen: CGSize {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size ?? .zero
+    }
+}
+
+/// The wells layer: over the whole screen (safe areas included), drawing nothing while no pad is dragged.
+struct EdgeWells: View {
+    let ui: EditorUI
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { g in
+            let screen = g.size
+            let origin = g.frame(in: .global).origin
+            let drag = ui.padDrag
+            let hot = drag.flatMap { EdgeWellsGeometry.hot(centre: $0.centre, screen: screen) }
+            ZStack(alignment: .topLeading) {
+                ForEach(EdgeAction.allCases, id: \.self) { a in
+                    if let d = drag {
+                        well(a, drag: d, hot: hot == a, screen: screen)
+                            .transition(transition(a))
+                    }
+                }
+                // the lifted pad, over the wells, tilting toward a hot one
+                if let d = drag, let face = ui.padDragFace {
+                    let size = ui.padDragSize
+                    let tilt: (Double, (x: CGFloat, y: CGFloat, z: CGFloat)) = switch hot {
+                        case .edit: (14, (0, 1, 0)); case .duplicate: (-14, (0, 1, 0)); case .clear: (-14, (1, 0, 0)); case nil: (0, (0, 1, 0))
+                    }
+                    face
+                        .frame(width: size.width, height: size.height)
+                        .rotation3DEffect(.degrees(reduceMotion ? 0 : tilt.0), axis: tilt.1, perspective: 0.6)
+                        .scaleEffect(reduceMotion ? 1 : 1.06)
+                        .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
+                        .animation(.easeOut(duration: 0.15), value: hot)
+                        .position(x: d.centre.x - origin.x, y: d.centre.y - origin.y)
+                }
+            }
+            .animation(animation(drag != nil), value: drag != nil)
+            .animation(.easeOut(duration: 0.12), value: hot)
+            .sensoryFeedback(.impact(weight: .light), trigger: hot) { _, new in new != nil }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)          // (VoiceOver keeps the hold menu)
+    }
+
+    private func animation(_ coming: Bool) -> Animation {
+        if reduceMotion { return .easeOut(duration: 0.15) }
+        let d = Labs.wellSlide.value
+        return coming ? .timingCurve(0.2, 0.8, 0.2, 1, duration: d) : .easeIn(duration: d * 0.72)
+    }
+
+    private func transition(_ a: EdgeAction) -> AnyTransition {
+        if reduceMotion { return .opacity }
+        return .asymmetric(insertion: .move(edge: a.edge).animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: Labs.wellSlide.value).delay(a.stagger)),
+                           removal: .move(edge: a.edge))
+    }
+
+    private func well(_ a: EdgeAction, drag: PadDragShow, hot: Bool, screen: CGSize) -> some View {
+        let r = EdgeWellsGeometry.rect(a, in: screen)
+        let tint = a == .clear ? Theme.rec : Theme.track[drag.track]
+        let glow = hot ? 1 : EdgeWellsGeometry.closeness(a, centre: drag.centre, screen: screen)
+        let shape = UnevenRoundedRectangle(topLeadingRadius: a == .duplicate ? 0 : 12,
+                                           bottomLeadingRadius: a == .clear || a == .duplicate ? 0 : 12,
+                                           bottomTrailingRadius: a == .clear || a == .edit ? 0 : 12,
+                                           topTrailingRadius: a == .edit ? 0 : 12)
+        // the hot one grows by 8 into the screen (the board's 64 → 72)
+        let grown: CGRect = {
+            guard hot else { return r }
+            switch a {
+            case .clear: return r.insetBy(dx: -4, dy: 0).offsetBy(dx: 0, dy: -4).insetBy(dx: 0, dy: -4)
+            case .edit: return CGRect(x: r.minX - 8, y: r.minY - 8, width: r.width + 8, height: r.height + 16)
+            case .duplicate: return CGRect(x: r.minX, y: r.minY - 8, width: r.width + 8, height: r.height + 16)
+            }
+        }()
+        return ZStack {
+            // resting: dark glass (a 12 pt blur of what's behind, black 62 % over it)
+            shape.fill(.ultraThinMaterial).opacity(hot ? 0 : 1)
+            shape.fill(Color.black.opacity(0.62)).opacity(hot ? 0 : 1)
+            // the glow building in the track colour (red for Clear), then the hot fill
+            shape.fill(tint.opacity(hot ? 1 : 0.35 * glow))
+            InnerDashes(edge: a.edge, radius: 12)
+                .stroke(hot ? tint : Theme.textSecondary.opacity(0.55 + 0.45 * glow),
+                        style: StrokeStyle(lineWidth: 1.5, dash: hot ? [] : [5, 4]))
+            labelView(a, hot: hot)
+        }
+        .frame(width: grown.width, height: grown.height)
+        .shadow(color: tint.opacity(hot ? 0.5 : 0.4 * glow), radius: 16 * glow)
+        .offset(x: grown.minX, y: grown.minY)
+    }
+
+    @ViewBuilder private func labelView(_ a: EdgeAction, hot: Bool) -> some View {
+        let ink = hot ? Theme.onColour : Theme.text
+        let icon = Image(systemName: a.icon).font(.system(size: 18, weight: .semibold)).foregroundStyle(hot ? Theme.onColour : Theme.textSecondary)
+        if a == .clear {
+            HStack(spacing: 8) { icon; Text(a.title).font(.lupe(14, .semibold)).foregroundStyle(ink) }
+        } else {
+            VStack(spacing: 4) { icon; Text(a.title).font(.lupe(13, .semibold)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.7) }
+        }
+    }
+}
+
+/// A well's outline on its three inner sides only (the side on the screen's edge has none), rounded `radius` inside.
+struct InnerDashes: Shape {
+    let edge: Edge
+    let radius: CGFloat
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let r = min(radius, rect.width / 2, rect.height / 2)
+        switch edge {
+        case .bottom:         // open at the bottom
+            p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+            p.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+            p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+            p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r, startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        case .trailing:       // open on the right
+            p.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.minX + r, y: rect.minY))
+            p.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r, startAngle: .degrees(270), endAngle: .degrees(180), clockwise: true)
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
+            p.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r, startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        case .leading:        // open on the left
+            p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+            p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r, startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+            p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        case .top:
+            p.addRect(rect)
+        }
+        return p
+    }
+}

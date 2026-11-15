@@ -123,6 +123,7 @@ struct PhoneAppView: View {
         .sheet(isPresented: Binding(get: { ui.projectsOpen && session.dialect != .skiff }, set: { ui.projectsOpen = $0 })) {
             ProjectsSheet(store: projects, session: session)
         }
+        .overlay { EdgeWells(ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { TrackPickerLayer(session: session, ui: ui) }
         .overlay { KnobPanelLayer(ui: ui) }

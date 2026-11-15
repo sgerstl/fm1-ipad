@@ -151,6 +151,12 @@ struct PadsPage: View {
         .overlay(alignment: .bottom) { undoStrip.padding(.bottom, phone ? 44 : 72) }
         .animation(reduceMotion ? .easeOut(duration: 0.15) : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.3), value: ui.padClear?.id)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
+        // the edge wells follow the dragged pad's centre (EdgeWells); a refused lift shows none
+        .onChange(of: drag) { _, d in
+            if d == nil { ui.padDragFace = nil }
+            ui.padDrag = d.flatMap { d in d.refused ? nil : PadDragShow(centre: CGPoint(x: d.at.x - d.grab.width, y: d.at.y - d.grab.height), track: d.track) }
+        }
+        .onDisappear { ui.padDrag = nil }
         .onAppear { shownAt = Date() }
         // another pad, or another track: its controls back
         .task(id: store.offline) { if !store.offline { await store.follow() } }
@@ -364,7 +370,7 @@ struct PadsPage: View {
                                 .overlay {
                                     // where the drop goes: a pad of its row to move to, or an empty pad (any row) to copy into,
                                     // filled faintly so an empty target reads as one (Scott, 2026-11-10)
-                                    if let tg = drag.flatMap({ dropTarget(of: $0) }) ?? panelDrop, tg.key == PadKey(track: k, entry: i) {
+                                    if let tg = drag.flatMap({ overWell($0) ? nil : dropTarget(of: $0) }) ?? panelDrop, tg.key == PadKey(track: k, entry: i) {
                                         RoundedRectangle(cornerRadius: 16)
                                             .fill(Theme.text.opacity(tg.empty ? 0.1 : 0))
                                             .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.text, style: StrokeStyle(lineWidth: 2, dash: [8, 5])) }
@@ -415,7 +421,12 @@ struct PadsPage: View {
                                     .transition(.opacity.animation(.easeOut(duration: 0.15)))
                             }
                         }
-                        if let d = drag, !d.refused, let m = marks[d.track] { dragged(d, m, cell: cell, date: tl.date) }
+                        // the lifted pad is drawn in the edge wells' layer, over the wells and the whole screen (EdgeWells): handed
+                        // its face once as it lifts
+                        if let d = drag, !d.refused, let m = marks[d.track] {
+                            Color.clear.frame(width: 0, height: 0)
+                                .onAppear { ui.padDragFace = AnyView(pad(d.track, d.from, m, size: cell, date: tl.date, copy: true)); ui.padDragSize = cell }
+                        }
                     }
                     .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: framed)
                     // the controls unrolling out of the pad's foot and rolling back in, shown or hidden (Scott, 2026-11-09)
@@ -815,11 +826,52 @@ struct PadsPage: View {
         launched += 1
     }
 
+    /// A pad dropped on an edge well: Clear (no confirm, the Undo strip), Edit (its pattern on the Edit tab, or the iPad's
+    /// editor), Duplicate (a copy into the track's next empty slot: SET there, then COPY to a new number; said when there's
+    /// no empty slot or no free number).
+    private func wellDrop(_ a: EdgeAction, track t: Int, entry i: Int) {
+        guard let list = store.song?.tracks[safe: t], let e = list.entries[safe: i], !e.isEmpty else { return }
+        switch a {
+        case .clear:
+            if session.playing && !e.isRest {
+                store.refuse(track: t, entry: i, "Stop to clear: the FM-1 clears pads only while stopped", needsStop: true)
+            } else { clear(t, i, e) }
+        case .edit:
+            edit(t, i)
+        case .duplicate:
+            let target = Self.landing(list, list.entries.count)
+            guard target < list.entries.count, list.entries[safe: target]?.isEmpty == true else {
+                store.refuse(track: t, entry: i, "No empty slot on T\(t + 1) to duplicate into"); return
+            }
+            if e.isRest {
+                Task { await store.send(.set(track: t, entry: target, pattern: SongEntry.rest)) }
+                return
+            }
+            guard let p = e.poolIndex else { return }
+            guard (store.pool?.free ?? 0) > 0 else {
+                store.refuse(track: t, entry: i, "All 64 patterns are taken: clear unused ones to duplicate"); return
+            }
+            Task { if await store.send(.set(track: t, entry: target, pattern: p + 1)) { await store.send(.copy(track: t, entry: target)) } }
+        }
+    }
+
+    /// The dragged pad is over a hot edge well: the slot under it isn't the target then.
+    private func overWell(_ d: PadDrag) -> Bool {
+        EdgeWellsGeometry.hot(centre: CGPoint(x: d.at.x - d.grab.width, y: d.at.y - d.grab.height), screen: EdgeWellsGeometry.screen) != nil
+    }
+
     private func endDrag(at: CGPoint) {
         guard var d = drag else { return }
         drag = nil
         d.at = at
-        guard !d.refused, let tg = dropTarget(of: d) else { return }
+        guard !d.refused else { return }
+        // on an edge well (board 81.4): Clear, Edit or Duplicate, before any slot
+        let centre = CGPoint(x: at.x - d.grab.width, y: at.y - d.grab.height)
+        if let a = EdgeWellsGeometry.hot(centre: centre, screen: EdgeWellsGeometry.screen) {
+            wellDrop(a, track: d.track, entry: d.from)
+            return
+        }
+        guard let tg = dropTarget(of: d) else { return }
         if tg.empty {
             offerDrop(from: PadKey(track: d.track, entry: d.from), to: tg.key, at: at)
         } else if session.playing {
@@ -959,15 +1011,7 @@ struct PadsPage: View {
     }
 
     /// The lifted copy under the finger, a little larger, over the grid.
-    private func dragged(_ d: PadDrag, _ m: SongPlayback.Marks, cell: CGSize, date: Date) -> some View {
-        pad(d.track, d.from, m, size: cell, date: date, copy: true)
-            .frame(width: cell.width, height: cell.height)
-            .scaleEffect(reduceMotion ? 1 : 1.06)
-            .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
-            .position(x: d.at.x - d.grab.width - gridFrame.minX, y: d.at.y - d.grab.height - gridFrame.minY)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
+
 
     private func releaseHold(_ key: String) {
         guard heldKey == key else { return }

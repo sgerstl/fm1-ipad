@@ -207,6 +207,11 @@ final class EditorUI {
     /// The pad last cleared (batch item 13: no confirm, an Undo strip instead), offered for undo until the next change:
     /// valid while the song store's undo stack is as deep as it was right after the clear.
     var padClear: PadClear?
+    /// The pad being dragged (Pads), for the edge wells (EdgeWells): its centre and track; nil when none is.
+    var padDrag: PadDragShow?
+    /// The lifted pad's face and size, drawn by the wells' layer over everything (not observed: padDrag drives redraws).
+    @ObservationIgnored var padDragFace: AnyView?
+    var padDragSize: CGSize = .zero
     /// The phone's Mix pop-up (GLO's pages, board 77), and its Settings sheet (from the song-name menu).
     var mixPopup = LaunchArgs.all.contains("-mix-popup")      // (-mix-popup: open on it, for captures)
     var phoneSettingsOpen = LaunchArgs.all.contains("-settings")

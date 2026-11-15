@@ -54,6 +54,17 @@ enum Labs {
     static let menuSpeed = LabItem(
         key: "labs.menuSpeed", title: "Hold menu speed (iPhone)", detail: "How quickly the hold menu draws out, in percent of the mockup's timing.",
         range: 50...200, step: 10, standard: 100, format: "%.0f %%", added: "2026-11-14", review: "2026-11-28")
+    /// The edge wells for a dragged pad (board 81.4, 2026-11-15): how long they take to slide in (out takes 72 % of it),
+    /// how near the pad's centre comes before a well starts to glow, and how near before it's hot (a drop lands there).
+    static let wellSlide = LabItem(
+        key: "labs.wellSlide", title: "Pad drag wells: slide in", detail: "How long the Clear, Edit and Duplicate wells take to slide in from the edges when a pad lifts.",
+        range: 0.1...0.5, step: 0.01, standard: 0.22, format: "%.2f s", added: "2026-11-15", review: "2026-11-29")
+    static let wellGlow = LabItem(
+        key: "labs.wellGlow", title: "Pad drag wells: glow distance", detail: "How near the dragged pad comes before a well starts to glow.",
+        range: 48...160, step: 4, standard: 96, format: "%.0f pt", added: "2026-11-15", review: "2026-11-29")
+    static let wellHot = LabItem(
+        key: "labs.wellHot", title: "Pad drag wells: hot distance", detail: "How near the dragged pad comes before a well is hot and a drop there acts.",
+        range: 24...96, step: 4, standard: 48, format: "%.0f pt", added: "2026-11-15", review: "2026-11-29")
     static let padPlayFade = LabItem(
         key: "labs.padPlayFade", title: "Pad colour fade on play", detail: "How gently pads light up when play starts (and go out, a little quicker, on stop). 0: at once.",
         range: 0...0.5, step: 0.05, standard: 0.2, format: "%.2f s", added: "2026-11-09", review: "2026-11-23")
@@ -91,7 +102,7 @@ enum Labs {
     /// (the iPhone's three only on the phone: the iPad's Labs stay as they were)
     @MainActor static var sections: [(title: String, items: [LabItem])] { [
         ("Motion", [menuOpen, songSlide, padPlayFade] + (UIDevice.current.userInterfaceIdiom == .phone ? [tabChange, menuSpring, menuSpeed] : [])),
-        ("Touch", [holdToPaint, padSlideStart, padSlideDwell]),
+        ("Touch", [holdToPaint, padSlideStart, padSlideDwell, wellSlide, wellGlow, wellHot]),
     ] }
     @MainActor static var all: [LabItem] { sections.flatMap(\.items) }
 
