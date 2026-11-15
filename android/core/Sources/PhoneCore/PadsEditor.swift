@@ -64,7 +64,7 @@ extension PhoneCore {
         let kept = (0..<64).filter { (store?.pool?.patterns[safe: $0]?.length ?? 0) > 0 }.map { $0 + 1 }
         let pool = store?.pool
         let unused = (0..<64).filter { pool?.patterns[safe: $0].map { $0.length > 0 && $0.uses == 0 } ?? false }.map { $0 + 1 }
-        return PadsArea(rows: rows, scenes: scenes, selected: selectedPad(), kept: kept, patternsFree: pool?.free, unused: unused)
+        return PadsArea(rows: rows, scenes: scenes, selected: selectedPad(), kept: kept, patternsFree: pool?.free, unused: unused, clearUndo: clearUndos())
     }
 
     /// The pad the editor shows: the one the screen picked (padSelect), else the selected track's current entry.
@@ -150,7 +150,8 @@ extension PhoneCore {
             kind: kit ? .drum : .roll, steps: steps, selected: selectedStep, playhead: playhead,
             chord: false, lock: heldStep != nil ? .held : lockLatched ? .latched : .off,
             lanes: lanes, lane: lane, laneValues: laneValues,
-            maxNotes: kit ? 0 : Self.maxStepNotes, kitLanes: kit ? Self.laneShort : [], kitNotes: kit ? Music.skiffLaneNotes : [])
+            maxNotes: kit ? 0 : Self.maxStepNotes, kitLanes: kit ? Self.laneShort : [], kitNotes: kit ? Music.skiffLaneNotes : [],
+            patternSteps: max(1, min(s.stepCount, tr.length)), patternStepsMax: s.stepCount)
     }
 }
 

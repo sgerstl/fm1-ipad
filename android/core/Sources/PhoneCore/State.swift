@@ -106,6 +106,8 @@ public struct PadsArea: Codable, Equatable, Sendable {
     /// The kept patterns nothing uses (1…64): what the FM-1's CLEAR UNUSED would clear. "Uses" is the FM-1's own
     /// count (POOL): entries in any track's list, entries in the saved projects, and a track on it.
     public var unused: [Int] = []
+    /// Pads just cleared that undoClear can still put back (PadClearUndo.swift), for the Undo strip.
+    public var clearUndo: [ClearUndo] = []
 }
 
 // MARK: editor (P3's EditorState)
@@ -162,6 +164,10 @@ public struct EditorArea: Codable, Equatable, Sendable {
     /// note track.
     public var kitLanes: [String] = []
     public var kitNotes: [Int] = []
+    /// The pattern's step count (the FM-1's LENGTH, 1…`patternStepsMax`); setPatternSteps sets it. `steps` above
+    /// still carries the first sixteen only.
+    public var patternSteps = 16
+    public var patternStepsMax = 64
 }
 
 // MARK: diag

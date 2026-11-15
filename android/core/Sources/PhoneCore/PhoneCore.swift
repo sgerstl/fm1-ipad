@@ -39,6 +39,8 @@ public final class PhoneCore {
     var projectBusy = false
     /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
     var auditions: [Int: Task<Void, Never>] = [:]
+    /// Pads cleared lately, for undoClear (PadClearUndo.swift).
+    var clearedPads: [ClearedPad] = []
     /// The Patterns sheet is showing (Patterns.swift): the stored pictures may be read while stopped.
     var patternsOpen = false
     var patternsReading = false
@@ -188,6 +190,7 @@ public final class PhoneCore {
             while !Task.isCancelled {
                 guard let self else { return }
                 await self.pollPatternPictures()
+                await self.pollClearedPads()
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
@@ -284,7 +287,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects

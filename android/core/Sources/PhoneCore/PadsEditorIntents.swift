@@ -109,8 +109,7 @@ extension PhoneCore {
             }
             Task { if !(await store.send(.set(track: t1 - 1, entry: e, pattern: p))) { reportRefusal(store) } }
         case .padClear(let t1, let e):
-            guard let store else { return }
-            Task { if !(await store.send(.clear(track: t1 - 1, entry: e))) { reportRefusal(store) } }
+            clearPad(track: t1 - 1, entry: e)       // no confirm; undoClear puts it back (PadClearUndo.swift)
         case .padSelectSound:
             log("padSelectSound not wired: the entry's sound picker is a later phase")
         case .trackSelect(let t1):
