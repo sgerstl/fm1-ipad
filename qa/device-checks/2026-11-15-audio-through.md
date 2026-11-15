@@ -255,3 +255,13 @@ So both phones insert gaps on both paths, and Lupe adds none. *Scott's ear; the 
 - Models: the phone gets 0 gaps at any render load up to 2.5 ms late, against today's 21 underruns and 41 drops a second.
 - B1 is also the FM6 fix: render timing no longer reaches the packets.
 - Host tests come first, in Skiff's `uac_test.c`. Then a device check (B1-1..6) after a backup, and only with Scott's go-ahead.
+
+## Round 5: B1 built and host-tested (Mac only, Scott's go-ahead)
+
+- **Where:** branch `lupe-skiff-2.5.1-b1` in `~/code/skiff-src`, in its own worktree, off 737e3fb. Not pushed; screen-link untouched.
+- **Size, measured:** +72 B of flash, +16 B of RAM.
+- **Skiff's own `uac_test`:** every 48 kHz packet is 48; every frame is the resampler at its traced phase; slips at the clock's rate (189 in 10 s, 192 expected); no glitch under random, maximal and alternating render loads.
+- **The band rule in the same harness:** 336 short and 530 long packets in 10 s.
+- **Package:** `firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc`, not for install.
+- **Details** and the identity decision: `firmware/proposals/2026-11-15-b1-steady-usb-audio.md`, Results.
+- **The device check (B1-1..6)** waits for Scott's go-ahead and a backup.

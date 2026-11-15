@@ -1,6 +1,44 @@
 # Proposal B1: steady USB audio packets from Skiff-Lupe (48 kHz)
 
-*A plan, not a build. Nothing here has been flashed, and nothing is to be until Scott says so, with a backup first.* Written 2026-11-15 by the audio-through session (branch `claude/audio-through-398a74`). The evidence is in `qa/device-checks/2026-11-15-audio-through.md` (rounds 1–3), and the models are in `android/app/src/main/cpp/through/tests/through_test.cpp`.
+*Built and tested on the Mac only (Scott: "Yes, Mac only", 2026-11-15). Nothing has been flashed or installed, and nothing is to be until Scott says so, with a backup first.* Written 2026-11-15 by the audio-through session (branch `claude/audio-through-398a74`). The evidence is in `qa/device-checks/2026-11-15-audio-through.md` (rounds 1–4), and the models are in `android/app/src/main/cpp/through/tests/through_test.cpp`.
+
+## Results (host only, 2026-11-15)
+
+**The branch:** `lupe-skiff-2.5.1-b1` in `~/code/skiff-src`, commit **72d4170**, off `lupe-skiff-2.5.1-screen-link` (737e3fb). It's a separate worktree, `~/code/skiff-src/.claude/worktrees/skiff-b1`; the screen-link branch is untouched. Not pushed.
+
+**The change:** `firmware/src/usb.c` behind `FELUCCA_UAC_STEADY` (1 on this branch, 0 gives Skiff's band rule back), plus a test-only hook `UAC_TRACE_OUT`, empty in the firmware.
+
+**Size, measured** (release build `tools/build.py --release 2.5.1`, the same command as the shipped 2.5.1):
+
+| | 2.5.1 (737e3fb, rebuilt here) | B1 | difference |
+|---|---|---|---|
+| App image | 578,360 B | 578,432 B | **+72 B** (3,132 B left of 581,564) |
+| RAM .data + .bss | 86,296 of 94,208 | 86,312 | +16 B |
+| Pool / RAM code + .ramx | 351,128 / 29,648 | the same | 0 |
+| `.ram_text` (no calls), register access | ok | ok | – |
+
+**Skiff's own host test** (`tests/uac_test.c`, which `#include`s the real `usb.c`), the B1 build:
+- **Every 48 kHz packet is 48 frames:** 10,000 of 10,000 with random render times. Also with renders alternating 7 % / 85 % of a half, the band rule's worst case.
+- **Every frame is the double-precision resampler at the exact phase `uac_tap48` used** (traced): 0 off, at the existing ±10 LSB tolerance. Phase steps are only 147, or 148/146 inside a slip.
+- **Slips follow the clock:** 189 in 10 s at +400 ppm, where the clock needs 192. 0 slips the other way. A slow clock (44,085 Hz) gives only "one more" slips.
+- **No underrun or overrun.** The fill at render start stays 76..169 of 512. 1,000 packets with 2.5 ms renders: no glitch.
+- **Rate switches** 48 → 44.1 → 48 mid-stream are as before. The resampler's own response and SNR are unchanged.
+- **The band-rule build (STEADY 0), for comparison:** in the same harness, 336 short and 530 long packets in 10 s of random render times, 47s and 49s in runs. That's what the Pixel's 16-frame cushion couldn't ride out.
+- `run_tests.sh` now builds `uac_test` three ways (STEADY 1 with and without CDC, STEADY 0). All three pass.
+
+**Skiff's whole host suite** (`tests/run_tests.sh` in the `skiff-tests` Docker image, amd64 under emulation, on a `FELUCCA_CDC=0` build): everything that touches this passes:
+- all three uac builds, the USB descriptor layouts, the MIDI and USB tests;
+- the 176 regression goldens (0 changed), health, voices, the CPU budget, and the second-core runs (bit for bit);
+- the fuzzers.
+
+The suite still ends "HOST TESTS FAILED", for reasons that have nothing to do with B1:
+- `web/test_web.mjs`: two `fm1pkg.js` checks that want M-VAVE's stock packages (V016) fail the same way on untouched 737e3fb here. A third, "NEON LEAD … factory preset defaults", failed once in the long emulated run and passed both times when re-run alone: a flake.
+- The ThreadSanitizer run can't start under amd64 emulation on Apple silicon ("unexpected memory mapping").
+
+**The package, experimental and not for install:** `firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc`, 610,429 B, SHA-256 `2cb940c71557049ba3c46f11d35311b1e69e81d1f9348d9e0b906ec82847383b`. App `felucca.bin` SHA-256 `46999bc9e2446dc5ce9b93f52cec9df0b51e6285ee9d39f609174b2c8ec7945b`.
+- **Not pinned** in Lupe and not released.
+- **Its identity is `FM-1_725`, the same as the 2.5.1 release** (`--release 2.5.1` sets it). **Open decision for Scott:** keep `FM-1_725` (Lupe would call it "Skiff-Lupe 2.5.1 · up to date" and couldn't tell the two apart), or give it its own identity (Lupe would offer the release over it, and could say which is installed).
+- *Skiff's builds aren't byte-for-byte reproducible:* the rebuilt 737e3fb package here hashes `3238eb82…`, not the pinned release's `80b21b33…`. Only this exact file is what was tested.
 
 ## Why
 
@@ -47,13 +85,13 @@ Changes in `firmware/src/usb.c`, against Skiff-Lupe 2.5.1 (`lupe-skiff-2.5.1-scr
    if (!rs.slip && uac.acc <= -(1 << 16)) { rs.slip = -148; uac.acc += 1 << 16; uac.adj_down++; } /* too low: one more */
    ```
 
-   These are the host test's constants (`B1_SHIFT 7`, `B1_KP 1`, `B1_KIDIV 64`). They hold the slips at the clock's own rate, ~21 a second at +422 ppm, at every render load modelled. Faster constants chased render noise: 59 slips a second at 2.5 ms.
+   These are the model's constants (`B1_SHIFT 7`, `B1_KP 1`, `B1_KIDIV 64`, per packet). They hold the slips at the clock's own rate, ~21 a second at +422 ppm, at every render load modelled. Faster constants chased render noise: 59 slips a second at 2.5 ms. *As built,* the loop runs once per render in `uac_render_start`, in the audio ISR with `uac_tap48`, so `rs.slip` has one writer and no race with TIMER5. Its constants are scaled for a render's 2.9 ms: filter `>> 7`, `sint += err >> 4`, rate `err * 3 + (sint >> 4)`.
 4. **`uac_tap48`:** `ph += UAC_FIR_M;` becomes `ph += UAC_FIR_M + (rs.slip > 0) - (rs.slip < 0); if (rs.slip) rs.slip -= (rs.slip > 0) - (rs.slip < 0);`
    - Phases stay in 0..159, so the table lookups don't change.
    - The block's room check (`n + n / 8 + 2`) already allows one extra output frame.
-5. **State:** `uac.fillq`, `uac.integ`, `uac.acc` (int32) and `rs.slip` (int16): 14 bytes of RAM (.data + .bss is 84,040 of 98,304). `adj_up` and `adj_down` now count slips, for the console.
+5. **State:** `uac.fillq`, `uac.sint`, `uac.sacc` and `rs.slip` (int32 each): **+16 B of RAM, measured** (86,312 of 94,208). `adj_up` and `adj_down` now count slips, for the console.
 
-**Flash:** a filter line, a dozen lines of integer PI and accumulator, two lines in the FIR loop, and the 48 kHz band branch removed. **Estimate: about 100–200 bytes.** Skiff-Lupe 2.5.1's release build has **3,204 bytes free** (`skiff-2.5.1-rebase.md`). The real number comes from the build's size report, which must stay under 581,564. No extra CPU: the FIR does the same work per output frame.
+**Flash: +72 B, measured** (the estimate was 100–200). That leaves 3,132 B in the release build. No extra CPU: the FIR does the same work per output frame.
 
 **Latency:** unchanged (same ring centre, 113 frames ≈ 2.4 ms).
 
@@ -68,7 +106,7 @@ No separate fix: B1 is that fix.
 
 ## How to test it, without risking the unit
 
-**On the host first (nothing flashed):**
+**On the host first (nothing flashed; done 2026-11-15, see Results):**
 - Add `test_b1` to Skiff's own `tests/uac_test.c`, which `#include`s `usb.c` and already drives renders against packets (`run(ms, rend_ns, …)`):
   - every 48 kHz packet is 48 frames, with renders late by 0–2.5 ms;
   - the ring never empties (`uac.underruns == 0`) or overflows (`uac.overruns == 0`);
@@ -77,7 +115,7 @@ No separate fix: B1 is that fix.
 - Re-run Skiff's whole host suite and the build's size and `.ram_text` checks.
 - The models in `through_test.cpp` (`testPhoneModel`, `polySlipSnr`) already pass.
 
-**Then the device check, only with Scott's go-ahead:**
+**Then the device check, only with Scott's go-ahead (not given yet: "Mac only" covered the build and the host tests):**
 1. **Back up first:** Lupe's install flow backs up the FM-1 before it writes and stops if the backup fails. Keep the backup's Files path.
 2. **Package:** build `Skiff-Lupe 2.5.1-b1` from a branch of `skiff-src` (not `main`, not the release tag), as a `.fwsc`, with its SHA-256 recorded.
    - *Decision for whoever builds it:* the identity string. The same `FM-1_725` keeps Lupe calling it "up to date"; a new one makes Lupe offer the release over it.
