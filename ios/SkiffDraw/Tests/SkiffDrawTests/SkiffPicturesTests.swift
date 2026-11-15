@@ -63,6 +63,53 @@ import Testing
         }
     }
 
+    @Test func everySoundPageItCanDrawAndNoOther() async throws {
+        let (s, fake, run) = try await connect(link: 6)
+        defer { run.cancel() }
+        let p = SkiffPictures(), sc = p.mirror.screen, map = SkiffFirmware.v2_5_1.pageMap
+        var drawn: [String] = [], refused: [String] = []
+        for d in 0..<sc.pageCount {
+            let title = sc.pageName(d), fam = sc.pageFamily(d)
+            let want = SkiffPictures.families.contains(fam) && !SkiffPictures.ownPages.contains(title)
+            let got = p.picture(s, lupePage: map.lupe(d), gloInk: 0xC4C4CC, surface: 0x111114) != nil
+            #expect(got == want, "\(d) \(title) family \(fam)")
+            if got { drawn.append(title) } else { refused.append(title) }
+            if got, let out = ProcessInfo.processInfo.environment["SKIFFDRAW_ALL"],
+               let pic = p.picture(s, lupePage: map.lupe(d), gloInk: 0xC4C4CC, surface: 0x111114) {
+                var pam = Array("P7\nWIDTH \(pic.width)\nHEIGHT \(pic.height)\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n".utf8)
+                pam += pic.rgba
+                try Data(pam).write(to: URL(fileURLWithPath: String(format: "%@/%02d %@.pam", out, d, title)))
+            }
+        }
+        // Scott's list (2026-11-15): SEL's three, ARP, MOD, DRIVE, INSERT, SLICER, DUCK, FX's FX, VOICE, the FM6 pages,
+        // SOUND, LANES, besides decision 46's first set
+        for t in ["SCALE", "CHORD", "FOLLOW", "ARP", "ARP 2", "MOD", "DRIVE", "INSERT", "SLICER", "DUCK", "FX", "VOICE",
+                  "VOICE 2", "OPERATOR", "ALL OPS", "SOUND", "LANES", "LANE MIX", "DELAY", "REVERB", "CHORUS", "GLOBAL"] {
+            #expect(drawn.contains(t), "\(t)")
+        }
+        #expect(refused.contains("SAMPLES") && refused.contains("SLICES") && refused.contains("MIXER") && refused.contains("NOTES"))
+        #expect(fake.unanswered.isEmpty, "\(fake.unanswered)")
+    }
+
+    @Test func theDrumTracksEditIsTheSeaAfterAnotherTracksPicture() async throws {
+        // the emulator, 2026-11-15: SEL on track 1, then track 6 (DRUM) selected and EDIT 1: the mirror kept ANALOG
+        let (s, _, run) = try await connect(link: 6)
+        defer { run.cancel() }
+        let p = SkiffPictures()
+        _ = try #require(p.picture(s, lupePage: 11, gloInk: 0, surface: 0x111114))        // SEL › SCALE on track 1
+        let drum = try #require(s.trackIndices.first { s.tracks[$0].engine == 10 })
+        s.select(track: drum)
+        let t0 = Date()
+        while s.selectedTrack != drum || s.params.isEmpty {
+            guard Date().timeIntervalSince(t0) < 5 else { Issue.record("not selected"); break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try await Task.sleep(for: .milliseconds(300))                                     // (the DUMP of the new track)
+        let edit = try #require(p.picture(s, lupePage: 14, gloInk: 0, surface: 0x111114))
+        #expect(edit.animated, "EDIT 1 on DRUM is the sea")
+        #expect(p.mirror.screen.trackParam(drum, 0) == s.params.first)                    // the mirror has the drum track's own values
+    }
+
     @Test func anotherScreenLinkBuildGetsTheHandDrawnPicture() async throws {
         let (s, _, run) = try await connect(link: 4)
         defer { run.cancel() }

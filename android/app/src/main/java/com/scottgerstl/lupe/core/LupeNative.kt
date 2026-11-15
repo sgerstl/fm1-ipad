@@ -31,6 +31,8 @@ object LupeNative {
     @JvmStatic private external fun nativeInit(): String
     @JvmStatic external fun onOpening()
     /** Starts the link: [raw] true for gate 3's raw-bytes mode (no Session), false for PhoneCore over Session. */
+    /** Debug builds: the core talks to SloopKit's FakeSkiff (2.5.1, screen link 6) instead of the FM-1 (prefs core = "demo"). Before [startCore]. */
+    @JvmStatic external fun setDemo(on: Boolean, fixtures: String)
     @JvmStatic external fun startCore(raw: Boolean)
     /** True: only reads reach the FM-1 (the default). Takes effect for the next connection. */
     @JvmStatic external fun setReadOnly(on: Boolean)

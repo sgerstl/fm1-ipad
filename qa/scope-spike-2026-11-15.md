@@ -150,3 +150,36 @@ The Pixel 10 run with the real FM-1 found two faults. Both are fixed:
 - **FX 1/7 (FX's send sliders)** isn't in decision 46's first set, so it stays hand-drawn.
 
 Checks: `swift test` (SkiffDraw) 13 of 13 pass. `pixdiff` still shows 0 differing pixels on the 24 board renders. Gradle `testDebugUnitTest` and `assembleDebug` pass, with `SkiffPictureTest` at 7 tests.
+
+### Every sound page (2026-11-15, branch `claude/skiffdraw-all-pages`)
+
+After the Pixel check (Scott: "SEL 1/3 isn't the same as the FM-1"), SkiffDraw now draws every page of the sound panel's families (ENV, LFO, FX, SEL, EDIT, ARP and GLO) on Android. The same version check and hand-drawn fallback apply. The exceptions are SAMPLES and SLICES, and EDIT on a SAMPLE track, because their waveforms are in the FM-1's flash.
+
+- **New in the mirror**, each through a copy of `editor.c`'s own decoder:
+  - every track's steps (`ed_step_put`), for DUCK's source hits;
+  - every track's read values (root, scale, length, chord, follow and the rest), for FOLLOW and SCALE;
+  - SCREEN's cursor and window (`ed_scr_set`), for MOD's route, the lane, SOUND's sound and OPERATOR's operator;
+  - the DRUM-X kit's lanes (KIT_PUT), from `skiffEdit.kit`.
+- **What can differ from the FM-1 while it happens:** CHORD (the last chord played), FOLLOW (the followed track's live chord), VOICE 2 (the voices sounding), ARP and ARP 2 (the keys held). Between notes they match.
+- **Pages with a list of names** (MOD's routes, LANES, LANE MIX, SOUND, OPERATOR's six) keep Lupe's tappable tiles. The FM-1's picture goes under them, half and half, only while its half gives it at least 2× the FM-1's pixels (276 px). Otherwise the tiles have the space alone, because they're the controls and the picture repeats them (`skiffBesideTiles`). The Pixel 10's panel has about 600 px under the dials, so it shows both.
+- **Checks:** `swift test` (SkiffDraw) 14 of 14 pass, including all 47 pages against FakeSkiff (pictures exactly for the sound families minus SAMPLES and SLICES, and no unanswered requests). Gradle `testDebugUnitTest` and `assembleDebug` pass, with `SkiffPictureTest` at 8 tests. Images: `qa/skiffdraw-android-2026-11-15/all-sound-pages-fake-2.5.1.png`. Device check: `qa/device-checks/2026-11-15-skiffdraw-all-pages.md`.
+
+### The rail went dead with 6ef765f (2026-11-15), found and fixed on the emulator
+
+On the Pixel with 6ef765f, rail taps opened nothing and the core logged nothing. I reproduced it on the emulator using a new debug-only **demo core**. The demo core is the real Swift core talking to SloopKit's FakeSkiff (2.5.1, screen link 6) instead of the USB FM-1. Turn it on with `run-as com.scottgerstl.lupe` and set `shared_prefs/lupe.xml` core = "demo", plus `allowWrites` true so SCREEN_GOTO goes through. It needs `LaunchArgs.extra`, `SkiffFixture.directory` and the fixtures packaged as debug assets, because the APK has no SwiftPM resource bundle.
+
+- **Cause.** A moving picture (the sea, the LFO) left in the docked panel asked for a new frame through `withFrameMillis` on every vsync. So a frame was always pending, and Choreographer's sync barrier held back the main thread's ordinary messages. A tap's intent waits behind that barrier (Kotlin logged "sent"; the Swift core never got it), so the rail did nothing. Each frame was also heavy: every track's steps and values were copied into the mirror on every frame, and Kotlin built new bitmaps each time.
+- **Fix.**
+  - The loop now sets a picture, waits for an ordinary posted message (it runs once the frame that draws the picture is done, after any intent queued before it), then pauses 50 ms with nothing pending. That makes 20 pictures a second at most.
+  - The mirror copies only what changed.
+  - The bitmaps are made once and refilled straight from the core's RGBA, with no conversion. A moving picture uploads only its 234 × 138 pixels and the GPU scales it.
+  - The mirror takes the session's `selectedTrack`, not SCREEN's last track. Right after a track change the two differ, which had drawn track 1's picture with the drum track's values.
+- **On the emulator after the fix:**
+  - A cold start, then SEL on track 1: the panel opens with the FM-1's SCALE picture (fm1Screen in 35–47 ms).
+  - EDIT on the drum track: the sea.
+  - After 4 s of the sea, EDIT, LFO, ARP and FX all answer in 13–67 ms.
+  - Before the fix, the same taps never reached the core.
+  - Screenshots: `qa/skiffdraw-android-2026-11-15/emulator-demo-*.png`. A throttled log line (`skiffPicture page N: x ms`) now reports each picture's cost on any device.
+- **Not this change:** on a DRUM track, SEL and ENV reach no pages in Lupe's page table (`SoundPage.reached` is empty), and PhoneCore's pickPage then does nothing, silently. That's existing trunk behaviour. The hand-drawn live LFO (`PageGraphs.kt`, the fallback on other builds) still waits on every vsync and could cause the same stall.
+
+Checks: `swift test` (SkiffDraw) 15 of 15 pass, including the drum-track case. Gradle `testDebugUnitTest` and `assembleDebug` pass.

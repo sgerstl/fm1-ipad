@@ -63,6 +63,14 @@ void skd_set_lfo_seconds(int track, double seconds);
  * outside transparent. Returns w * h. */
 /* a track's FM6 patch as FM6_GET sends it (128 bytes, eng_fm6.c fm6_pack), through the firmware's own fm6_unpack */
 void skd_set_fm6_patch(int track, const uint8_t *packed, int n);
+/* (all pages) a track's step as TRACK_STEP sends it (n, 4 notes, time, flags, vel, hits, ...; editor.c ed_step_put,
+ * copied), so DUCK sees its source's hits and the step pages their notes */
+void skd_set_step(int track, int index, const uint8_t *bytes, int n);
+/* the page's cursor and second cursor as SCREEN reports them (editor.c ed_scr_set, copied): MOD's route, LANES' and
+ * LANE MIX's lane, SOUND's sound and window, OPERATOR's operator and window, ALL OPS' window; -1 none */
+void skd_set_cursor(int cursor, int cursor2);
+/* a DRUM-X kit lane as KIT_GET sends it (16 bytes: lane, wave, filter, snap, pitch mod, drive, A's five, B's five) */
+void skd_set_dx_lane(const uint8_t *bytes, int n);
 void skd_panel_rect(int *x, int *y, int *w, int *h);
 int skd_render_panel_rgba(uint8_t *out, int max_bytes);
 /* the build this library is (decision 46: SkiffDraw draws only for the unit running it): INFO's version string, the

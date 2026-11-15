@@ -172,13 +172,29 @@ public func onOpening(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) { ga
 
 /// Starts the link in `raw` or `session` mode (once, on the UI thread, after nativeInit). Session mode builds
 /// PhoneCore, which publishes the ViewState areas through LupeNative.onState.
+/// Debug builds: the session talks to SloopKit's FakeSkiff (the 2.5.1 fixture, Skiff-Lupe's screen link 6) instead of
+/// the USB FM-1, for the emulator (prefs core = "demo"). Call before startCore.
+nonisolated(unsafe) private var demoCore = false
+@_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_setDemo")
+public func setDemo(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ on: jboolean, _ fixtures: jstring?) {
+    #if DEBUG
+    demoCore = on != 0
+    if let fixtures, let c = env.pointee!.pointee.GetStringUTFChars(env, fixtures, nil) {
+        SkiffFixture.directory = URL(fileURLWithPath: String(cString: c))
+        env.pointee!.pointee.ReleaseStringUTFChars(env, fixtures, c)
+    }
+    if demoCore { LaunchArgs.extra = ["-demo", "-demo-fw", "2.5.1", "-demo-meter", "-demo-link-version", "6"] }
+    debug("demo core: \(demoCore ? "FakeSkiff 2.5.1, screen link 6" : "off")")
+    #endif
+}
+
 @_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_startCore")
 public func startCore(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ raw: jboolean) {
     rawMode = raw != 0
     debug("link mode: \(rawMode ? "raw bytes (no Session)" : "session"), read-only: \(gate.readOnly)")
     guard !rawMode, core == nil else { return }
     MainActor.assumeIsolated {
-        let c = PhoneCore(session: DeviceSession(transport: { gate.makeTransport() }),
+        let c = PhoneCore(session: demoCore ? DeviceSession(demo: true) : DeviceSession(transport: { gate.makeTransport() }),
                           publish: { area, json in publish(area: area, json: json) },
                           log: { debug($0) },
                           canWrite: { !gate.readOnly })
