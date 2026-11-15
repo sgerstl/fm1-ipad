@@ -33,3 +33,7 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 
 12. **Record on a drum track with the keys open (no flash write).** Select a Drum Kit track, open the keyboard drawer, press Record: it records and plays, the kit's keys light with the lanes as they play, and Lupe doesn't crash (it did every time).
 13. **The active track's pad menu toggles (iPad).** Stopped, tap the selected track's framed pad: its menu opens. Tap the same pad again: the menu closes and stays shut. A pad on another track still works as before. The iPhone's wheel opens and closes the same way.
+
+## The iPad's track heads (Scott, after 63db236)
+
+14. **A tap selects, a hold picks the sound (no flash write).** On Pads, tap a track head anywhere, the name included: the track selects and nothing opens. Hold a head: the track menu opens beside the finger with Select sound first; it opens the sounds panel. Same on the Timeline's lane heads and the Mix strips. The heads' names have no ⌄ now. MUTE and S keep their own taps.

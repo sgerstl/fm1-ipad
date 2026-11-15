@@ -83,7 +83,7 @@ Words to retire: "Presets panel", "presets popover", "library" and "Browse" for 
 - **S15** A list cut by its box fades at the cut edge, and its scroll bar flashes when it comes up cut (Scott, 2026-11-06).
 
 **Behaviour**
-- **B1** Ways in: the track head's name ⌄ (Pads, Timeline, Mix strips), SAVE (the FM-1's or the function key), the sound panel's Sounds ⌄, a track's hold menu › Select sound, a pad's or block's Select sound (structure map).
+- **B1** Ways in: the track head's hold menu › Select sound (Pads, Timeline, Mix strips; the name ⌄ went 2026-11-15), SAVE (the FM-1's or the function key), the sound panel's Sounds ⌄, a track's hold menu › Select sound, a pad's or block's Select sound (structure map).
 - **B2** SAVE steps the FM-1's SAVE pages: the first press opens the panel on presets, the next on User presets, the next closes it and opens the Patterns drawer on Song, the next opens Projects (`SkiffNavigator.save`; device check `2026-11-09-perform-grid-map.md` 50).
 - **B3** It closes with Done, SAVE's next press, another tab or Escape (structure map).
 - **B4** The page behind doesn't dim and stays live: pads, track heads and the sound panel still answer (Scott, 2026-11-10).

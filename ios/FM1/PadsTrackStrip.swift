@@ -68,6 +68,7 @@ struct TrackStripCard: View {
                 }
                 .buttonStyle(.plain)
                 .trackMenuPress(session: session, ui: ui, track: t)
+                .accessibilityAction(named: "Sounds") { session.select(track: t); ui.chooseSound(session, track: t) }
                 // selected as a trait, not words in the label (2026-11-10): VoiceOver says it the system's way, and
                 // the rotor and Switch Control see it
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
@@ -218,6 +219,7 @@ struct TrackStripRow: View {
                 }
                 .buttonStyle(.plain)
                 .trackMenuPress(session: session, ui: ui, track: t)
+                .accessibilityAction(named: "Sounds") { session.select(track: t); ui.chooseSound(session, track: t) }
                 .accessibilityLabel("Track \(t + 1), \(Entries.trackName(t, session: session))")
                 .accessibilityValue(lines.plays + (preview.map { ", the scene would: " + TrackStripCard.previewText($0, list) } ?? ""))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -361,9 +363,10 @@ struct EntryTitle: View {
 
 // MARK: The sound's name as a key (Scott, 2026-11-10: the Sounds tab went, so the head shows the way in)
 
-/// A head's instrument name (it's the track's sound) with a small chevron: the visible way into the sounds panel, so a
-/// new user needn't know SAVE or the sound panel's "Sounds". Laid out in the head's label (hidden there) and drawn over it
-/// by SoundNameKey, a button of its own: the head's tap still selects, its hold still opens the track menu.
+/// A head's instrument name (it's the track's sound). Laid out in the head's label (hidden there) and drawn over it by
+/// SoundNameKey, drawn only: the head's tap selects the track and its hold opens the track menu, Select sound first
+/// (Scott, 2026-11-15, as the phones' heads, decision 29; the name was a button into the sounds, and taps meant to
+/// select kept landing on it).
 struct SoundName: View {
     let session: DeviceSession
     let track: Int
@@ -374,7 +377,7 @@ struct SoundName: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(Entries.trackName(track, session: session)).font(.lupe(size, weight)).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: size * 0.6, weight: .bold)).foregroundStyle(Theme.textSecondary)
+            // (no ⌄ since 2026-11-15: a tap on the head selects; the sounds are its long press)
         }
         .foregroundStyle(colour)
     }
@@ -398,15 +401,14 @@ struct SoundNameKey: View {
         GeometryReader { g in
             if let anchor {
                 let r = g[anchor]
-                Button { ui.chooseSound(session, track: track) } label: {
-                    SoundName(session: session, track: track, size: size, weight: weight, colour: colour)
-                        .frame(width: r.width, height: r.height, alignment: .leading)
-                        .contentShape(Rectangle().inset(by: -8))       // (34 pt or more to touch; the head's tap round it)
-                }
-                .buttonStyle(PressSink())
-                .position(x: r.midX, y: r.midY)
-                .accessibilityLabel("Sound, \(Entries.trackName(track, session: session))")
-                .accessibilityHint("Opens the sounds for track \(track + 1)")
+                // drawn only (Scott, 2026-11-15: selecting a track on the iPad kept hitting the sounds): a tap on the head
+                // selects, as on the phones (decision 29); the sounds are the head's long press (its menu, Select sound) and
+                // its VoiceOver action
+                SoundName(session: session, track: track, size: size, weight: weight, colour: colour)
+                    .frame(width: r.width, height: r.height, alignment: .leading)
+                    .position(x: r.midX, y: r.midY)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
     }

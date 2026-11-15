@@ -79,7 +79,7 @@ Words to retire: "mixer panel" and "mixer key" (the tab replaced them, 2026-11-0
 - **B5** The card in the middle becomes the current page once the swipe settles, and its page goes to the FM-1.
 - **B6** A slide on a card's column turns the value; the carousel moves only from elsewhere on the card.
 - **B7** A tap anywhere on a side card brings it to the middle; its columns work once it's there.
-- **B8** A strip head: tap selects the track; its name ⌄ opens the Sounds panel; hold opens the track's menu; Mute is PERFORM's, at the launch point while playing (Scott, 2026-11-10).
+- **B8** A strip head: tap selects the track; hold opens the track's menu, Select sound first (2026-11-15: the name ⌄ went); Mute is PERFORM's, at the launch point while playing (Scott, 2026-11-10).
 - **B9** iPhone: one page at a time; the selector shows it; GLO steps them. No swipe between pages: a slide on a column turns it (structure map).
 
 **Content**

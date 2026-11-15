@@ -55,7 +55,7 @@ Names as in the code. Forms: **card** = `TrackStripCard` (No grid on Pads; Timel
 - **badge** (`BigTrackChip`): the track number in a square of the track colour. Large on the card, small on the row and phone.
 - **entry title** (`EntryTitle`): the entry the track is on, letter then pattern number, as a pad writes it. Card only.
 - **plays line**: what it's on and its pass ("pass 2 of 4", "looping"). Card (without chips): the pass; row: the entry ("B · 05").
-- **sound name** (`SoundName`, drawn by `SoundNameKey`): the track's sound with a chevron, a button of its own.
+- **sound name** (`SoundName`, drawn by `SoundNameKey`): the track's sound, drawn only (no chevron, no tap of its own since 2026-11-15).
 - **pass bar** (`SmoothBar`): progress through the playing pass.
 - **preview line**: where a held scene would send this track ("→ B · 05 · muted"), with a dashed outline round the head.
 - **effect chips** (`ChipView`, `MoreChips`): the track's ARP, CHORD, SCALE, SLICER, DUCK, FOLLOW. Card: up to three stacked, then "+N"; row: the count only.
@@ -91,7 +91,7 @@ Names as in the code. Forms: **card** = `TrackStripCard` (No grid on Pads; Timel
 
 **Behaviour**
 - **B1** Tap anywhere on the head (card padding included) selects the track: the editor and the FM-1's knobs follow. No dead spot (Scott, 2026-11-09; device check `2026-11-09-perform-grid-map.md` 14).
-- **B2** Tap the sound name: opens the Sounds panel for that track (Scott, 2026-11-10: the Sounds tab went, so the head shows the way in). The head's tap round it still selects.
+- **B2** A tap anywhere on the head selects the track and nothing else, on the iPad as on the phones; the Sounds panel is the hold menu's Select sound, and VoiceOver's "Sounds" action (Scott, 2026-11-15: "when I go to select a track on the iPad, it always hits the sound selector panel"; it was the sound name's own tap, 2026-11-10).
 - **B3** Hold the head: selects the track and opens the track menu at the finger, a fan in the track's tint (Scott, 2026-11-09: "the track header longpress should get the same treatment"). Hold time: Settings › Touch, `holdToMenu`.
 - **B4** Track menu, in groups: Select sound; Record sample… (synth tracks, when the firmware has samples); Clear motion (N steps), when there is motion; Clear all pads (destructive, confirm in place); Clear pattern NN's steps (with Undo).
 - **B5** Clear all pads is off when there are none, or when the list can't be rewritten (it says why, "stop first" while playing).
@@ -136,6 +136,7 @@ Names as in the code. Forms: **card** = `TrackStripCard` (No grid on Pads; Timel
 - A bold sound name on the card: "too bold" (Scott, 2026-11-09).
 - Mute on Mix's strip foot: the head's Mute replaces it (Scott, 2026-11-10).
 - On the phones, a tap on the head reaching Sounds: taps were landing on Sounds, so sounds moved to the hold menu (decision 29, 2026-11-14).
+- On the iPad too, a tap on the sound name reaching Sounds: taps meant to select landed on it (Scott, 2026-11-15).
 
 ### Out of scope
 
@@ -161,6 +162,7 @@ Particular to the head:
 - 2026-11-09: one set of heads for Pads and the Timeline (Scott).
 - 2026-11-09: the whole head selects, padding too (Scott).
 - 2026-11-10: the sound name with a chevron is the visible way into Sounds (Scott).
+- 2026-11-15: the iPad's heads (Pads, Timeline, Mix strips) do as the phones': a tap selects, the hold menu has Select sound; the chevron goes (Scott).
 - 2026-11-10: waiting mutes and solos get the pads' waiting trace (Scott).
 - 2026-11-10: effect chips stacked between the words and the keys, three then "+N" (Scott, board 46).
 - 2026-11-14: phones take Android's head; taps select, holds open menus; mutes paint (Scott, decisions 29 and 31).
@@ -168,7 +170,7 @@ Particular to the head:
 
 ## 3. Build notes
 
-- `SoundName` is laid out hidden inside the head's button and drawn on top by `SoundNameKey` through an anchor preference, so the name is its own button while the head's tap and hold still work round it. Keep that split.
+- `SoundName` is laid out hidden inside the head's button and drawn on top by `SoundNameKey` through an anchor preference; since 2026-11-15 it takes no touches, so the head's button gets every tap and its hold.
 - `TrackMenuPress` selects the track as the hold fires, then places the menu at the press point in `AppView.space`.
 - The Mute key on the row form has no countdown in its accessibility value ("mutes at the launch point"), while the card's says the countdown. The phone's `HeadKeySurface` gets no `left:` closure, so its trace has no time to draw against; checked in code only.
 - `TrackMenu.swift`'s doc comment says "Sounds…" first; the item is "Select sound".
