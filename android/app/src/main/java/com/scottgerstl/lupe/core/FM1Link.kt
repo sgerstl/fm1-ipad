@@ -58,23 +58,32 @@ class FM1Link(context: Context) {
             val all = midi.getDevicesForTransport(MidiManager.TRANSPORT_MIDI_BYTE_STREAM)
             log("${all.size} MIDI device(s) at start")
             all.forEach { remember(it); log("present: ${describe(it)}") }
-            all.firstOrNull(::isFM1)?.let(::consider)
+            // the FM-1 on an editor firmware first, if something else the filter takes is plugged in too
+            (all.firstOrNull { isFM1(it) && nameFor(it).contains("felucca", ignoreCase = true) } ?: all.firstOrNull(::isFM1))?.let(::consider)
         }
     }
 
     /**
-     * Whether [info] is the FM-1. From the Pixel 10 Pro's own report (`dumpsys midi`, 2026-11-13, Skiff-Lupe 2.2):
+     * Whether [info] may be the FM-1 (on an editor firmware, in its update loader, or stock; see [MATCH]). From the Pixel 10 Pro's own report (`dumpsys midi`, 2026-11-13, Skiff-Lupe 2.2):
      * USB, one port each way, manufacturer "Hügelton Instruments", product "Felucca", name "Hügelton Instruments
      * Felucca", USB vendor 0x1209 product 1. Skiff keeps Felucca's USB name, as the iPad's findDevice assumes.
      */
     fun isFM1(info: MidiDeviceInfo): Boolean {
         if (info.type != MidiDeviceInfo.TYPE_USB) return false
         if (info.inputPortCount < 1 || info.outputPortCount < 1) return false
+        return candidates(info).any { MATCH.containsMatchIn(it) }
+    }
+
+    /**
+     * The name Swift hears for [info]: its USB name, or its product where only that one matches. Swift decides from it
+     * who may talk to the device: the editor ("…Felucca"), or only the firmware installer (the update loader
+     * "Felucca Update", a stock FM-1), android/core AndroidLink.
+     */
+    fun nameFor(info: MidiDeviceInfo): String = candidates(info).firstOrNull { MATCH.containsMatchIn(it) } ?: candidates(info).firstOrNull() ?: ""
+
+    private fun candidates(info: MidiDeviceInfo): List<String> {
         val p = info.properties
-        return MATCH.any { m ->
-            p.getString(MidiDeviceInfo.PROPERTY_PRODUCT)?.contains(m, ignoreCase = true) == true ||
-                p.getString(MidiDeviceInfo.PROPERTY_NAME)?.contains(m, ignoreCase = true) == true
-        }
+        return listOfNotNull(p.getString(MidiDeviceInfo.PROPERTY_NAME), p.getString(MidiDeviceInfo.PROPERTY_PRODUCT))
     }
 
     private fun consider(info: MidiDeviceInfo) {
@@ -99,7 +108,7 @@ class FM1Link(context: Context) {
         device = dev; deviceInfo = info; input = inPort; output = outPort
         outPort.connect(receiver)
         setState(State.Open)
-        LupeNative.onOpened()
+        LupeNative.onOpenedNamed(nameFor(info))
         log("open: input port max message ${inPort.maxMessageSize} bytes")
     }
 
@@ -155,8 +164,13 @@ class FM1Link(context: Context) {
 
     companion object {
         private const val TAG = "LupeLink"
-        /** What the FM-1's product or name contains (see [isFM1]). */
-        val MATCH = listOf("Felucca")
+        /**
+         * The names an FM-1 goes by, on any firmware: the firmware installer's own filter (SloopKit's
+         * FirmwareInstaller.portPattern, from SLOOP's installer). "Felucca" is an editor firmware (Skiff, SLOOP),
+         * "Felucca Update" its update loader; the rest are the stock firmware's and M-VAVE's loader's candidates.
+         * A device that isn't an FM-1 gets nothing but the installer's identity question, and no answer ends it.
+         */
+        val MATCH = Regex("fm-1|felucca|sloop|clipper|ota|composite|sinco|usb-midi", RegexOption.IGNORE_CASE)
 
         fun strings(info: MidiDeviceInfo): List<String> {
             val p = info.properties

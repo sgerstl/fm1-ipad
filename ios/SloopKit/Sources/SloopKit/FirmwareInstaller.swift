@@ -1,5 +1,3 @@
-#if canImport(CryptoKit)
-// Apple-only: not built for Android (android/BRIDGE.md §3).
 // Installs a Felucca-family package (Skiff, SLOOP), or M-VAVE's own V15, on an FM-1 over USB-MIDI: a port of Skiff's
 // tools/fm1_install.py and web/fm1ota.js (GPL-3.0, Leo Kuroshita), with SLOOP's narrower port filter and loader rule.
 //
@@ -434,5 +432,3 @@ struct WriteMeter {
         return pct
     }
 }
-
-#endif

@@ -35,6 +35,8 @@ object LupeNative {
     /** One [Intent] as JSON, on the UI thread. */
     @JvmStatic external fun intent(json: String)
     @JvmStatic external fun onOpened()
+    /** The ports are open on the device Android names [name] (FM1Link.nameFor): Swift decides who may talk to it. */
+    @JvmStatic external fun onOpenedNamed(name: String)
     @JvmStatic external fun onLost()
     @JvmStatic external fun onBytes(bytes: ByteArray, offset: Int, count: Int, timestamp: Long)
     /** Debug: sends Skiff's version request (INFO) on the open connection. */
@@ -45,6 +47,7 @@ object LupeNative {
     // Swift → Kotlin (looked up by name in JNI_OnLoad; keep the signatures)
     @JvmStatic fun send(frame: ByteArray) { link?.send(frame) }
     @JvmStatic fun onState(area: String, json: String) {
+        if (area == "firmware") FirmwareDownloader.onFirmware(json)      // a download the core is waiting for
         val l = stateListener
         if (l == null) android.util.Log.w("LupeState", "onState($area) with no listener") else l(area, json)
     }

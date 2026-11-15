@@ -182,6 +182,9 @@ public func startCore(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ ra
                           publish: { area, json in publish(area: area, json: json) },
                           log: { debug($0) },
                           canWrite: { !gate.readOnly })
+        // the firmware installer's ports are the link's, and it takes the FM-1 from the Session while it writes
+        c.firmwareLink = FirmwareLink(ports: gate, hold: { gate.hold($0) },
+                                      mayProbe: { gate.deviceName.map { !LinkGate.isEditorDevice(name: $0) } ?? false })
         core = c
         c.start()
     }
@@ -207,6 +210,16 @@ public func intent(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ json:
 @_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_onOpened")
 public func onOpened(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) {
     let t = gate.opened()
+    if rawMode { startRawReader(t) }
+}
+
+/// The ports are open on the device Android names `name`. The gate gives it to the editor's Session only when the
+/// name is an editor firmware's; an update loader or a stock FM-1 is left for the firmware installer to ask.
+@_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_onOpenedNamed")
+public func onOpenedNamed(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ name: jstring?) {
+    let n = string(env, name)
+    debug("open: \"\(n)\" (\(LinkGate.isEditorDevice(name: n) ? "the editor's" : "not an editor firmware: the installer's"))")
+    let t = gate.opened(name: n.isEmpty ? nil : n)
     if rawMode { startRawReader(t) }
 }
 

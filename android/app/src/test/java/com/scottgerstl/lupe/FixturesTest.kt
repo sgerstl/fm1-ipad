@@ -52,6 +52,8 @@ class FixturesTest {
                 "patternPictures" -> assertTrue("${f.name}: patternPictures", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("pictures"))
                 // P1's playhead on its own (ClockArea.swift): no Kotlin class yet, so only its shape is checked
                 "playhead" -> assertTrue("${f.name}: playhead", (fr.state as kotlinx.serialization.json.JsonObject).let { it.containsKey("step") && it.containsKey("steps") })
+                // P1's firmware install state (Firmware.swift): no Kotlin class yet, so only its shape is checked
+                "firmware" -> assertTrue("${f.name}: firmware", (fr.state as kotlinx.serialization.json.JsonObject).let { it.containsKey("state") && it.containsKey("progress") })
                 "notice" -> assertTrue("${f.name}: notice", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("text"))
                 else -> error("${f.name}: unknown area ${fr.area}")
             }
