@@ -176,6 +176,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     public var themePalette = 0
     public var customColours: [UInt16]? = nil
     private var backupListed = false
+    /// For tests: how many BACKUP_LISTs came (each stops the transport), and the patterns POOL EMPTY emptied.
+    public private(set) var backupLists = 0
+    public private(set) var emptiedPatterns: [Int] = []
     /// USER's 32 slots (engine, name; nil empty) and PROJECT's 4 (nil empty), for the SAVE pages.
     var userSlots: [(engine: Int, name: String)?] = Array(repeating: nil, count: 32)
     var projectSlots: [String?] = ["SONG ONE", nil, nil, nil]
@@ -967,6 +970,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case 65:
             setPlaying(false)                                // (LIST stops the transport, editor_backup.c; the clock with it)
             backupListed = true
+            backupLists += 1
             let objs = (0..<16).map { (16 + $0, bankObject($0)) } + sampleSlots.indices.map { (32 + $0, sampleObject($0)) }
             var b: [UInt8] = [1, 0, UInt8(objs.count)]
             for (id, o) in objs { b += [UInt8(id)] + Pack7.u35(UInt32(o.count)) + Pack7.u35(CRC32.of(o)) }
@@ -1170,6 +1174,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             if a[0] == 1 {
                 guard uses(p) == 0 else { return poolReply(1, 2) }
                 poolLen[p] = 0
+            } else {
+                emptiedPatterns.append(p)          // (pool_empty: its steps gone, the number, LEN and entries kept)
             }
             return poolReply(a[0], 0)
         case (20, 1): return [a[0], 1]

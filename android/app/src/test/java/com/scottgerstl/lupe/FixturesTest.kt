@@ -46,6 +46,10 @@ class FixturesTest {
                 "clock" -> assertTrue("${f.name}: clock", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("running"))
                 "fm1Screen" -> { val sc = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.Fm1ScreenState.serializer(), fr.state); assertTrue("${f.name}: ${sc.key}", sc.key in setOf("", "HOME", "FX", "SEL", "ENV", "LFO", "EDIT", "ARP", "GLO", "SAVE", "SEQ")) }
                 "homeKnobs" -> { val h = lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.HomeKnobsState.serializer(), fr.state); assertEquals("${f.name}: HOME's four", 4, h.controls.size); assertTrue(h.hot in -1..3) }
+                // P1's Patterns sheet data (Patterns.swift, board 79): no Kotlin classes yet (P2's to add), so only their shape is checked
+                "patterns" -> assertTrue("${f.name}: patterns", (fr.state as kotlinx.serialization.json.JsonObject).let { it.containsKey("patterns") && it.containsKey("free") })
+                "patternPictures" -> assertTrue("${f.name}: patternPictures", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("pictures"))
+                "notice" -> assertTrue("${f.name}: notice", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("text"))
                 else -> error("${f.name}: unknown area ${fr.area}")
             }
         }
