@@ -394,6 +394,9 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         }
         val kept0 = keptPatterns(pads)
         val fullPool = empty && (pads.patternsFree == 0 || kept0.size >= 64)
+        // a pad cleared a moment ago: the way back, here as well as in the Undo strip
+        val undo = pads.clearUndo.lastOrNull { it.track == row.track && it.entry == at }
+        if (undo != null) add(HoldItem("Undo clear", sub = undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
         if (empty) {
             // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap, and offers the ways on (board 79.4)
             val full = fullPool
@@ -427,8 +430,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         }
         if (!empty) {
             val erases = e.kind == PadKind.Pattern && others.isEmpty()
-            add(HoldItem("Clear", sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null,
-                confirm = if (erases) "Clear $letter: erases pattern %02d".format(e.pattern ?: 0) else null) { core.send(Intent.PadClear(row.track, at)) })
+            // no confirm (batch item 13): it clears at once and an Undo strip, and "Undo clear" in this pad's menu, put it back for ten seconds
+            add(HoldItem("Clear", sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null) { core.send(Intent.PadClear(row.track, at)) })
         }
     }
     val what = when (e.kind) { PadKind.Empty -> "empty"; PadKind.Rest -> "rest"; PadKind.Pattern -> "pattern ${e.pattern}" }

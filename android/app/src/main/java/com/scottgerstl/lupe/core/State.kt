@@ -182,6 +182,8 @@ data class PadsState(
     val patternsFree: Int? = null,
     /** The kept patterns nothing uses (1…64), as the FM-1's CLEAR UNUSED counts them: what "Clear N unused patterns" would erase. */
     val unused: List<Int> = emptyList(),
+    /** Pads cleared in the last ten seconds that can come back, oldest first (batch item 13). */
+    val clearUndo: List<ClearedPad> = emptyList(),
 )
 
 // ---- editor (P3)

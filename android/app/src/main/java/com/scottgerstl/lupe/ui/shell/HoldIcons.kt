@@ -13,6 +13,7 @@ import com.scottgerstl.lupe.R
  * | Edit steps, Edit pattern            | edit             | pencil                            |
  * | Select sound, Sounds                | graphic_eq       | waveform                          |
  * | Set pattern, Pick a pattern, Patterns | grid_view      | square.grid.2x2 (.fill)           |
+ * | Undo clear                         | undo             | arrow.uturn.backward              |
  * | Recycle an unused pattern           | recycling        | arrow.triangle.2.circlepath       |
  * | Put a kept pattern here             | content_paste    | doc.on.clipboard                  |
  * | Pattern NN (a list's choices)       | tag              | (a number chip)                   |
@@ -41,6 +42,7 @@ fun holdIcon(title: String): Int? {
     return when {
         t.startsWith("Edit") -> R.drawable.ms_edit
         t.startsWith("Select sound") || t.startsWith("Sounds") -> R.drawable.ms_graphic_eq
+        t.startsWith("Undo clear") -> R.drawable.ms_undo
         t.startsWith("Recycle") -> R.drawable.ms_recycling
         t.startsWith("Put a kept pattern") -> R.drawable.ms_content_paste
         t.startsWith("Set pattern") || t.startsWith("Pick a pattern") || t == "Patterns…" -> R.drawable.ms_grid_view

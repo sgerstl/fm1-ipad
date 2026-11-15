@@ -138,7 +138,11 @@ fun LupeShell(core: LupeCore) {
             }
         }
         // what the FM-1 refused: at the foot of the page (or the sheet) where the action was taken, until it is dismissed
-        RefusalStrip(core, Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 4.dp))
+        // …and, above it, the Undo strip after a pad was cleared (batch item 13)
+        androidx.compose.foundation.layout.Column(
+            Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 4.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+        ) { UndoStrip(core); RefusalStrip(core) }
         // the hold menu: over the page and the sheets, under the finger that opened it
         HoldMenuHost(holdMenu)
         // the Magnifier floats over everything, above the finger

@@ -242,7 +242,21 @@ class FakeLupeCore(
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is ClearUnusedPatterns -> { val p = _pads.value; if (intent.confirmed && p.unused.isNotEmpty()) { val n = p.unused.size
                 _pads.value = p.copy(unused = emptyList(), kept = p.kept - p.unused.toSet(), patternsFree = (p.patternsFree ?: 0) + n); refuse("Cleared $n unused pattern${if (n == 1) "" else "s"}: their numbers are free") } }
-            is Intent.PadClear -> editEntry(intent.track, intent.entry) { PadEntry() }
+            is Intent.PadClear -> {
+                // no confirm (batch item 13): the pad is cleared at once and can come back for ten seconds
+                val e = _pads.value.rows.firstOrNull { it.track == intent.track }?.entries?.getOrNull(intent.entry)
+                editEntry(intent.track, intent.entry) { PadEntry() }
+                if (e != null && e.kind != PadKind.Empty) {
+                    val c = ClearedPad(intent.track, intent.entry, if (e.kind == PadKind.Pattern) e.pattern else null)
+                    _pads.update { it.copy(clearUndo = it.clearUndo + c) }
+                    scope.launch { kotlinx.coroutines.delay(10_000); _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
+                }
+            }
+            is UndoClear -> {
+                val c = _pads.value.clearUndo.lastOrNull { intent.track == null || (it.track == intent.track && it.entry == intent.entry) }
+                if (c == null) refuse("There is no clear to undo any more.")
+                else { editEntry(c.track, c.entry) { if (c.pattern != null) PadEntry(PadKind.Pattern, c.pattern) else PadEntry(PadKind.Rest) }; _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
+            }
             is Intent.TrackSelect -> {
                 _mix.update { FakeP5.mix(it, intent) }
                 val row = _pads.value.rows.firstOrNull { it.track == intent.track } ?: return
