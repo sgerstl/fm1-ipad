@@ -628,7 +628,11 @@ struct PadsPage: View {
             // toggle the track controls, which the head's double tap and the controls' tab still do). Playing, taps keep
             // queuing and the hold opens the menu.
             if !session.playing, t == session.selectedTrack, framedPad(t) == i {
+                // the same pad tapped with its menu open: it closes and stays shut, as before item 11 (the touch-down already
+                // closed it; Scott, 2026-11-15: on the iPad the active track's menu reopened instead of toggling)
+                if menuPad == key, OutsideTouch.justClosed || ui.menu != nil { menuPad = nil; ui.menu = nil; return }
                 openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero)
+                menuPad = key
                 return
             }
             launched += 1

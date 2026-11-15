@@ -1158,13 +1158,17 @@ public final class DeviceSession {
 
     /// The notes (or drum lanes) the selected track plays at the playhead, to light the keys.
     public var sounding: Set<Int> {
-        guard playing else { return [] }
+        guard playing, tracks.indices.contains(selectedTrack), positions.indices.contains(selectedTrack), stepCount > 0 else { return [] }
         let t = selectedTrack, i = positions[t].step % stepCount
-        if isKit(t) { return Set(tracks[t].drumSteps[i].lanes) }
+        // a kit's lanes: Skiff's live in its steps (gridSteps); only a fixed drum track has drumSteps of its own. (Reading
+        // drumSteps on a Skiff kit track crashed: it's empty there. Scott, 2026-11-15: record on a drum track, keys open)
+        if isKit(t) { return tracks[t].gridSteps[safe: i].map { Set($0.lanes) } ?? [] }
         // a held note sounds through its TIE steps
+        let steps = tracks[t].steps
+        guard steps.indices.contains(i) else { return [] }
         var k = i
-        while k > 0, tracks[t].steps[k].time == .tie { k -= 1 }
-        let s = tracks[t].steps[k]
+        while k > 0, steps[k].time == .tie { k -= 1 }
+        let s = steps[k]
         return s.time == .note ? Set(s.notes) : []
     }
 

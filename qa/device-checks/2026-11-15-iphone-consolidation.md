@@ -28,3 +28,8 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 ## The trunk merged in (Android combined, P1's SloopKit move)
 
 11. **iPad HOME knobs (no flash write).** Select each track in turn: the four tiles over the track controls name the same parameters as KNOB 1–4 on the FM-1's HOME (they now come from SloopKit's table, the phones' one).
+
+## Two iPad bugs from the trunk build (299b346)
+
+12. **Record on a drum track with the keys open (no flash write).** Select a Drum Kit track, open the keyboard drawer, press Record: it records and plays, the kit's keys light with the lanes as they play, and Lupe doesn't crash (it did every time).
+13. **The active track's pad menu toggles (iPad).** Stopped, tap the selected track's framed pad: its menu opens. Tap the same pad again: the menu closes and stays shut. A pad on another track still works as before. The iPhone's wheel opens and closes the same way.
