@@ -7,7 +7,7 @@ Where everything lives (CLAUDE.md, rule 4). Change this first, get Scott's OK, t
 | Tab | What's on it | Panels that come in over it |
 |---|---|---|
 | **Song** | Pads (default; from 2026-11-09 a grid of all six tracks' entries, section below) or Timeline, switched at the top left; the pattern editor below the divider (No grid / Half / Max) | Sound panel (right), Sounds panel, Sampler (in the editor's place) |
-| **Mix** | Mixer carousel: levels, sends, the FX pages | Sound panel, Sounds panel |
+| **Mix** | The six track strips, the whole page (level, pan, send, meters, Mute and Solo); two rows of three beside the sound panel while it's open. GLO's DELAY … GLOBAL are sound-panel pages (decisions 44, 48, 2026-11-15) | Sound panel, Sounds panel |
 
 **One row above the pages** (Scott, 2026-11-10, board 47 direction b, built): the FM-1 key ("Demo ⌄", its menu now also Projects… and Play through the iPad), Pads · Timeline · Mix (since 2026-11-10; was Song · Mix and a Pads / Timeline switch), then the tab's tools (Pads: Patterns, Launch at ⌄, Cancel N waiting; Timeline: Undo, Patterns, zoom), then Keys, REC, Play and the readout ("Song · 120 BPM": the playback mode's word; its three keys are in the tempo popup). As the row narrows the tools give way in order: the "Launch at" words, Patterns to its icon, Cancel to ✕ N; Play, the tabs and Cancel never go. A refusal, an unseen scene or the Timeline's "Tracks end at…" shows on a strip under the row until it's dealt with. The Pads and Timeline start at the page's top (52 pt back).
 
@@ -147,7 +147,7 @@ The iPad's Mix holds six strips across the top and the four effect cards under t
 | **Mixer** | The six tracks as **six rows** (one a track, like the Pads rows): number and name (tap: select), LEVEL on a horizontal fader in the track's colour with its dB, PAN, the REVERB send (the iPad's faders, laid across), Mute. Rows 48 tall. |
 | **Delay, Reverb, Chorus, Global** | That page's card, the iPad's own (its four columns and graph), filling the space. No swipe between pages: a slide on a column turns it. |
 
-Nothing changes on the iPad's Mix.
+Nothing changes on the iPad's Mix. *(Until decision 48, 2026-11-15: the iPad's Mix drops its effect cards and the strips take the page; see the Mix row of the tabs table.)*
 
 ## The Android phone with a Skiff FM-1 (Pixel, portrait; decided 2026-11-12, boards 53–58; **retired 2026-11-14 by decision 28, see the landscape section below**)
 

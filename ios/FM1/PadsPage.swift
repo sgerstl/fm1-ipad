@@ -643,11 +643,13 @@ struct PadsPage: View {
                 store.launch(track: t, entry: on)
                 return
             }
-            // on the selected track the selection goes with the tap, playing or not: a pin left from Edit pattern or
-            // New pattern held the highlight and the controls on the old pad (Scott, 2026-11-09, row 5)
-            if t == session.selectedTrack { ui.pinnedEntry = EntryRef(track: t, entry: i) }
-            // any other pad launches, on any row, without selecting its track (question 10); while playing, the one
-            // playing too: it's queued again and comes back in at the launch point (Scott, 2026-11-09)
+            // a tap selects the pad and its track, and still launches it (decision 29; Scott, 2026-11-15: on the iPad too, the
+            // row becoming the active one; it used to launch other rows without selecting them, question 10). The
+            // selection goes with the tap, playing or not: a pin left from Edit pattern or New pattern held the highlight
+            // and the controls on the old pad (Scott, 2026-11-09, row 5)
+            if t != session.selectedTrack { session.select(track: t) }
+            ui.pinnedEntry = EntryRef(track: t, entry: i)
+            // while playing, the one playing too: it's queued again and comes back in at the launch point (Scott, 2026-11-09)
             store.launch(track: t, entry: i)
         } label: {
             if short {

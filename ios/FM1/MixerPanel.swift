@@ -1,49 +1,37 @@
 import SloopKit
 import SwiftUI
 
-// Skiff's GLO pages as the Mixer tab (Scott, 2026-11-05: "we might want a mixer tab"; it replaced the bottom panel
-// and the mixer key beside the tempo). Song · Mix · Sounds. The six tracks' strips (Skiff's MIXER, GR_TRK)
-// fill the top and don't scroll, so their faders take the finger at once; under them the shared Delay, Reverb,
-// Chorus and Global as Shape's cards (their columns over GR_DELAY, GR_REVERB, GR_CHORUS, GR_GLOBAL), side by side
-// in the phone Shape's carousel: a swipe snaps the next card into the middle with a little bounce. GLO on the
-// FM-1 (or its pad here) lands here, and again steps the sections; linked, the card swiped to (or the strips
-// touched) shows its page on the FM-1.
+// Skiff's GLO MIXER as the Mix tab (Scott, 2026-11-05: "we might want a mixer tab"; it replaced the bottom panel and
+// the mixer key beside the tempo). The six tracks' strips (Skiff's MIXER, GR_TRK) are the whole page and don't scroll, so
+// their faders take the finger at once (decision 48, 2026-11-15: the shared Delay, Reverb, Chorus and Global are
+// sound-panel pages since decision 44, so their cards under the strips went; MixerCards stays for now, unused here).
+// With the sound panel open the strips stand in two rows of three beside it. Linked, a strip touched shows MIXER on
+// the FM-1.
 
 struct MixerPage: View {
     let session: DeviceSession
     let ui: EditorUI
     @Environment(\.soundPanelRoom) private var panelRoom
-
-    /// The cards' whole height (the selector beside the carousel), once laid out.
-    @State private var cardsHeight: CGFloat?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let _ = BodyCounter.tick("MixerPage")
-        let shared = SoundPage.pages(session).filter { $0.family == .glo }
-        // Fixed sizes for the strips and the cards, worked out here: with flexible stacks, a value turning on a card
-        // (its text a little wider) re-measured the whole tab, every strip and fader, on every frame. 98% of the
-        // main thread on the iPad Air, hitches up to 233 ms (Instruments, 2026-11-06). A fixed frame stops it there.
+        // the strips are the page (decision 48, 2026-11-15): GLO's DELAY, REVERB, CHORUS and GLOBAL are sound-panel pages
+        // (decision 44), so the effect cards under the strips went. With the sound panel open the strips stand in two rows
+        // of three beside it, the panel at full size and every control in reach; one row again when it closes. Fixed
+        // sizes worked out here: flexible stacks re-measured the whole tab on every value change (Instruments, 2026-11-06).
         GeometryReader { g in
-            let w = g.size.width, cards = shared.isEmpty ? 0 : (cardsHeight.map { $0 + 24 } ?? 0)
-            let strips = max(200, g.size.height - 8 - cards - 32)                 // the panel's padding
-            // no headings and no section list over the strips or the cards (Scott, 2026-11-06): the strips and the
-            // cards speak for themselves, and the selector beside the cards says which is in the middle
-            VStack(alignment: .leading, spacing: 24) {
-                MixerStrips(session: session, ui: ui, touched: { show(.mixer) })
-                    .frame(width: max(0, w - panelRoom - 32), height: strips)
+            let w = g.size.width, twoRows = panelRoom > 0
+            VStack(alignment: .leading, spacing: 0) {
+                MixerStrips(session: session, ui: ui, rows: twoRows ? 2 : 1, touched: { show(.mixer) })
+                    .frame(width: max(0, w - panelRoom - 32), height: max(200, g.size.height - 8 - 32))
                     .padding(16)
                     .panel()
                     .overlay(alignment: .top) { MixerDeviceEdge(session: session) }      // (the FM-1's screen read there)
                     .accessibilityAction(named: "Show on the FM-1") { show(.mixer) }
                     .padding(.trailing, panelRoom)
-                if !shared.isEmpty {
-                    MixerCards(session: session, ui: ui, pages: shared, trailing: panelRoom, width: w)
-                        .frame(width: w, height: cardsHeight, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: cardsHeight == nil)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
-                            if cardsHeight == nil, h > 0 { cardsHeight = h.rounded(.up) }
-                        }
-                }
+                    // the strips move between one row and two with the panel (moving and blending, nothing pops)
+                    .animation(reduceMotion ? .easeOut(duration: 0.15) : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.3), value: twoRows)
             }
             .padding(.bottom, 8)
             .frame(width: w, height: g.size.height, alignment: .topLeading)
@@ -285,6 +273,8 @@ struct MixRow: Equatable {
 struct MixerStrips: View {
     let session: DeviceSession
     let ui: EditorUI
+    /// 1: six across; 2: three and three (the sound panel open beside them, decision 48).
+    var rows = 1
     var touched: () -> Void = {}
 
     var revID: Int? { SoundPage.pages(session).first { $0.title == "FX" }?.ids[safe: 3] ?? nil }
@@ -292,7 +282,7 @@ struct MixerStrips: View {
     var body: some View {
         let _ = BodyCounter.tick("mixer.strips")
         let id = revID
-        HStack(alignment: .top, spacing: 8) {
+        StripsLayout(rows: rows, spacing: 8) {
             ForEach(Array(session.trackIndices), id: \.self) { t in
                 MixerStrip(session: session, ui: ui, row: row(t, id), touched: touched).equatable()
             }
@@ -330,6 +320,28 @@ struct MixerStrips: View {
     static func pan(_ p: Int) -> String { p == 0 ? "C" : p < 0 ? "L\(-p * 100 / 64)" : "R\(p * 100 / 63)" }
     /// 0 dB on the LEVEL fader.
     static let unity = 112
+}
+
+/// The strips in `rows` rows, left to right, top to bottom, each the same size and filling the space: one row of six,
+/// or two of three beside the sound panel (decision 48). A change of `rows` animates each strip to its new place.
+struct StripsLayout: Layout {
+    var rows: Int
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let r = max(1, rows), perRow = Int((Double(subviews.count) / Double(r)).rounded(.up))
+        let w = (bounds.width - CGFloat(perRow - 1) * spacing) / CGFloat(perRow)
+        let h = (bounds.height - CGFloat(r - 1) * spacing) / CGFloat(r)
+        for (k, v) in subviews.enumerated() {
+            let x = bounds.minX + CGFloat(k % perRow) * (w + spacing), y = bounds.minY + CGFloat(k / perRow) * (h + spacing)
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: w, height: h))
+        }
+    }
 }
 
 /// One track's strip: its chip and name (tap to select the track, as the Song tab's lane headers), LEVEL on a

@@ -41,13 +41,14 @@ It is not where one track's sound is shaped (the sound panel) and not the track 
 
 Names as in the code.
 
-- **page** (`MixerPage`): the tab. The **strips panel** on top, the **effects row** under it.
+- **page** (`MixerPage`): the tab. The **strips panel**, the whole page (decision 48, 2026-11-15: the effects row under it went; GLO's DELAY, REVERB, CHORUS and GLOBAL are sound-panel pages, decision 44).
+- **strips layout** (`StripsLayout`): one row of six, or two rows of three while the sound panel is open.
 - **strips** (`MixerStrips`): six **strips** (`MixerStrip`) side by side.
   - **head**: the compact track head (`TrackStripRow`) with name ⌄, what it plays, pass bar, Mute and Solo. Older firmware without Skiff's song: a **name key** and a **MUTE key** instead.
   - **level fader**: LEVEL, vertical, with the **meter** (`LevelLine`). See `faders.md`.
   - **pan fader** and **send fader** (REVERB, the only send shown), across. See `faders.md`.
 - **device edge** (`MixerDeviceEdge`): the strips panel lit along its top while the FM-1 shows MIXER.
-- **effects row** (`MixerCards`): the **selector** (Delay, Reverb, Chorus, Global) beside the **carousel** of effect **cards** (the sound panel's `SoundCard`; columns: `column-face.md`).
+- ~~**effects row** (`MixerCards`)~~: retired on the iPad's Mix (decision 48); the code stays for now, unused there.
 - iPhone (`PhoneMix`): the **selector** down the left (Mixer, Delay, Reverb, Chorus, Global) and one page beside it: **mixer rows** (`PhoneMixerRow`) or one card.
 
 Words to retire: "mixer panel" and "mixer key" (the tab replaced them, 2026-11-05); "sections" for the cards in prose (the code's `mixerSection` stays).
@@ -57,22 +58,22 @@ Words to retire: "mixer panel" and "mixer key" (the tab replaced them, 2026-11-0
 **Functional**
 - **F1** All six tracks' strips are in view at once on the iPad, and don't scroll, so a fader takes the finger at once.
 - **F2** Each strip sets its track's LEVEL, PAN and REVERB send.
-- **F3** The four shared effects are cards with their four columns, page settings and picture, as in the sound panel.
+- **F3** The four shared effects are sound-panel pages (GLO 2/5 … 5/5, decision 44), not part of the Mix page (decision 48).
 - **F4** Every track's REVERB is read when the tab opens and again every few seconds while it's up; the protocol doesn't push another track's parameters.
 - **F5** The Mix tab is full width, with no left column: a strip's head selects its track (Scott, 2026-11-06).
+- **F6** The strips take the page's whole height (decision 48). While the sound panel is open (GLO 2–5, or any family's key), they stand in two rows of three beside it, every control in reach, the panel at full size; one row again when it closes (decision 48).
 
 **States**
 - **S1** Selected strip: its background tinted with the track colour; others in the well.
 - **S2** Muted strip: the level fader and meter in the tertiary grey.
 - **S3** The FM-1 on MIXER: the device edge lit.
-- **S4** Centred card: full size, the selector's word lit with the selected-key look. Neighbours smaller, partly in view.
-- **S5** A card the FM-1 shows: its forward lift and badge, counted as GLO's five ("DELAY 2/5").
-- **S6** The sound panel open over Mix: the strips and carousel narrow at once to make room, and widen when it closes.
+- ~~**S4**, **S5**~~ (the cards' states): retired on the iPad's Mix with the effects row (decision 48).
+- **S6** The sound panel open over Mix: the strips move into two rows of three beside it, and back to one row when it closes, moving and blending, nothing popping (decision 48; it was a narrower single row).
 - **S7** Older firmware: name key and MUTE key with LED, no Solo.
 - **S8** iPhone: the lit selector key is the page on screen.
 
 **Behaviour**
-- **B1** GLO (the FM-1's or the function key) opens Mix on MIXER; pressed again, it steps MIXER, DELAY, REVERB, CHORUS, GLOBAL, round. Linked, the FM-1 shows the same page.
+- **B1** GLO (the FM-1's or the function key) opens Mix on MIXER; pressed again, DELAY, REVERB, CHORUS and GLOBAL come in on the sound panel (decision 44), the strips in two rows beside it (decision 48). Linked, the FM-1 shows the same page.
 - **B2** Touching a strip's control shows MIXER on the FM-1.
 - **B3** A tap on a selector word brings that card to the middle and, linked, its page to the FM-1.
 - **B4** A swipe on the carousel lands on the card it started from or one either side, never further (Scott, 2026-11-06: "it too easily flings past the next pane"). A flick goes one on; a slow release goes to the nearest.
@@ -102,6 +103,7 @@ Words to retire: "mixer panel" and "mixer key" (the tab replaced them, 2026-11-0
 - **I3** GLO › DELAY's MODE on Skiff 2.5.1 is a page setting on the Delay card (device check `2026-11-11-skiff-2.5.1-support.md` 5).
 
 ### Ruled out
+- On the iPad, the shared effects as cards under the strips once they're sound-panel pages (decision 48, 2026-11-15).
 
 - A mixer panel at the bottom and a mixer key beside the tempo: the tab replaced them (Scott, 2026-11-05: "we might want a mixer tab").
 - Dots and section names for the carousel: the selector down the left (Scott, 2026-11-06).
@@ -124,7 +126,7 @@ Words to retire: "mixer panel" and "mixer key" (the tab replaced them, 2026-11-0
 
 Boards: iPhone 48–49 (`phone-skiff.html`); Android 64–65 (`phone-portrait-2.html`); the pop-up's pictures, board 77 (`phone-mix-pictures.html`), drawn from the FM-1's own screens (`design/boards/fm1-screens/`, formulas with file and line in its NOTES.md); `phone-consolidation.html` row 9 (iPhone tab and Android sheet side by side).
 
-Motion follows `DESIGN.md`. Particular to Mix: the carousel snaps with a short spring and a hint of bounce; the strips never move while the sound panel slides (S6).
+Motion follows `DESIGN.md`. Particular to Mix: the strips move between one row and two as the sound panel comes and goes, with the panel's ease-out (S6, decision 48; before, they never moved while it slid, for frame time).
 
 ### Decision log
 
@@ -135,6 +137,7 @@ Motion follows `DESIGN.md`. Particular to Mix: the carousel snaps with a short s
 - 2026-11-10: the iPhone shows one GLO page at a time, picked down the left (Scott, boards 48–49).
 - 2026-11-13: Android's PAN in the row's hold menu (decision 14).
 - 2026-11-14: phones get a pop-up, not a tab (decisions 28, 31); its pictures redrawn from the FM-1's, in greys (decision 34).
+- 2026-11-15: the iPad's Mix drops the effects row (GLO 2–5 are sound-panel pages, decision 44); the strips take the page, and stand in two rows of three while the sound panel is open (Scott, decision 48).
 
 ## 3. Build notes
 
