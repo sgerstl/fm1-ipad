@@ -182,6 +182,72 @@ void skd_set_fm6_patch(int t, const uint8_t *b, int n)
     fm6_set_patch((uint32_t)t, v);
     ui.force = 1;
 }
+/* editor.c ed_step_put (Skiff-Lupe 2.5.1, 737e3fb), copied: editor.c isn't part of the UI's host build */
+void skd_set_step(int t, int idx, const uint8_t *a, int na)
+{
+    step_t *st;
+    uint32_t i;
+    skd_need();
+    if (t < 0 || t >= (int)NTRK || idx < 0 || idx >= (int)NSTEP || na < 8) return;
+    st = &trk[t].step[idx];
+    st->n = (uint8_t)(a[0] > 4u ? 4u : a[0]);
+    for (i = 0; i < 4u; i++)
+        st->note[i] = a[1 + i] & 0x7Fu;
+    st->time = (uint8_t)(a[5] > ST_REST ? ST_REST : a[5]);
+    st->flags = (uint8_t)((a[6] & (SF_ACCENT | SF_SLIDE)) | (st->flags & (SF_RATCH | SF_FLAM)));
+    st->vel = a[7] & 0x7Fu;
+    if (na >= 11) {
+        st->hit = (uint8_t)((a[8] & 0x7Fu) | (a[10] & 1u) << 7);
+        st->acc = (uint8_t)(((a[9] & 0x7Fu) | (a[10] & 2u) << 6) & st->hit);
+    }
+    if (na >= 12) step_set_chance(st, a[11] <= 100u ? a[11] : 100u);
+    if (na >= 13 && a[12] != step_ratchet(st)) step_set_ratchet(st, a[12]);
+    if (na >= 16) {
+        if (a[13] && step_ratchet(st) == 1u) st->flags |= SF_FLAM; else st->flags &= (uint8_t)~SF_FLAM;
+        st->cond = (uint8_t)(a[14] < TC_COUNT ? a[14] : 0u);
+        st->nudge = (int8_t)((a[15] > 63u ? 63 : (int32_t)a[15]) - 32);
+    }
+    if (!st->hit)
+        st->acc = (uint8_t)(na >= 17 && st->time != ST_TIE ? a[16] & ((1u << st->n) - 1u) : 0u);
+    ui.force = 1;
+}
+/* editor.c ed_scr_set's sound pages, copied, and the windows SCREEN's second cursor carries (ed_scr_cur) */
+void skd_set_cursor(int c, int c2)
+{
+    uint32_t g;
+    skd_need();
+    if (ui.home) return;
+    g = PAGES[ui.page % NPAGES].graph;
+    if (c >= 0) switch (g) {
+    case GR_MOD: mod_ui_route = (uint8_t)clamp(c, 0, MOD_ROUTES - 1); break;
+    case GR_LANES: case GR_LMIX: *page_lane_p() = (uint8_t)clamp(c, 0, 7); break;
+    case GR_DXSND: dx_ui_lane = (uint8_t)clamp(c, 0, 7); break;
+    case GR_FMOP: fm_ui[0] = (uint8_t)clamp(c, 0, 5); break;
+    default: break;
+    }
+    if (c2 >= 0) switch (g) {
+    case GR_DXSND: dx_ui_win = (uint8_t)c2; break;
+    case GR_FMOP: fm_ui[1] = (uint8_t)c2; break;
+    case GR_FMALL: fm_ui[2] = (uint8_t)c2; break;
+    default: break;
+    }
+    ui.force = 1;
+}
+/* editor.c ED_KIT_PUT, copied */
+void skd_set_dx_lane(const uint8_t *a, int n)
+{
+    dx_lane_t *L;
+    uint32_t i;
+    skd_need();
+    if (n < 6 + 2 * (int)DXP_N) return;
+    L = &dx_kit[a[0] & 7u];
+    L->mode = DX_MODE(a[1], a[2], a[3]) | (uint8_t)(a[4] << 5) | (a[5] ? DX_DRIVE : 0u);
+    for (i = 0; i < DXP_N; i++) {
+        L->a[i] = a[6 + i];
+        L->b[i] = a[6 + DXP_N + i];
+    }
+    ui.force = 1;
+}
 void skd_panel_rect(int *x, int *y, int *w, int *h) { skd_need(); *x = 3; *y = Y_GRAPH; *w = 234; *h = (int)graph_h(); }
 const char *skd_build_version(void) { return "FELUCCA " FELUCCA_VERSION; }
 
@@ -226,7 +292,8 @@ int skd_render_panel_rgba(uint8_t *out, int max)
             uint8_t *q = out + 4 * (y * w + x);
             int cx = x < r ? r - x : x >= w - r ? x - (w - 1 - r) : 0, cy = y < r ? r - y : y >= h - r ? y - (h - 1 - r) : 0;
             memcpy(q, p, 4);
-            if (cx && cy && cx * cx + cy * cy > r * r) q[3] = 0;     /* (outside the rounded corner: the page shows) */
+            if (cx && cy && cx * cx + cy * cy > r * r) memset(q, 0, 4);   /* (outside the rounded corner: the page shows;
+                                                                           * all four 0, as a premultiplied bitmap takes it) */
         }
     return w * h;
 }

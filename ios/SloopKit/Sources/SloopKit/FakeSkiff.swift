@@ -14,8 +14,16 @@ public struct SkiffFixture: Codable, Sendable {
     /// MENU_DESC by index, the whole list (recorded from 2.5.1 on; the 2.2 fixture has none).
     var menu: [String: [UInt8]]? = nil
 
+    /// Where the fixtures are read from instead of the package's resources: Android's debug demo core, whose APK has no
+    /// SwiftPM resource bundle (Bundle.module traps there), copies them into the app's files.
+    nonisolated(unsafe) public static var directory: URL?
+    static func url(_ name: String) -> URL? {
+        if let d = directory { return d.appendingPathComponent(name + ".json") }
+        return Bundle.module.url(forResource: name, withExtension: "json")
+    }
+
     public static func load(_ firmware: SkiffFirmware = .v2_2) throws -> SkiffFixture {
-        guard let url = Bundle.module.url(forResource: "skiff-\(firmware.short)", withExtension: "json") else { throw CocoaError(.fileNoSuchFile) }
+        guard let url = url("skiff-\(firmware.short)") else { throw CocoaError(.fileNoSuchFile) }
         return try JSONDecoder().decode(SkiffFixture.self, from: Data(contentsOf: url))
     }
 }
@@ -32,7 +40,7 @@ struct SkiffEngineTable: Decodable, Sendable {
     var engines: [Engine]
 
     static func load(_ firmware: SkiffFirmware) -> SkiffEngineTable? {
-        guard firmware == .v2_5_1, let url = Bundle.module.url(forResource: "skiff-2.5.1-engines", withExtension: "json"),
+        guard firmware == .v2_5_1, let url = SkiffFixture.url("skiff-2.5.1-engines"),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(SkiffEngineTable.self, from: data)
     }
@@ -202,6 +210,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             if a.contains("-demo-link-v1") { screenLinkVersion = 1 }   // the first build: no cursor
             if a.contains("-demo-meter") { screenLinkVersion = 3 }     // the third: METER
             if a.contains("-demo-scope") { screenLink = true; screenLinkVersion = 4 }   // the fourth: SCOPE (the link implied)
+            // -demo-link-version N: the screen link's build as INFO reports it (6: Skiff-Lupe 2.5.1 as Lupe carries it)
+            if let i = a.firstIndex(of: "-demo-link-version"), a.indices.contains(i + 1), let n = Int(a[i + 1]) { screenLink = true; screenLinkVersion = n }
             // -demo-track N: track N selected (1…6), -demo-engine E: on engine E (DRUM-X 14, SLICE 13: none in the fixture)
             if let i = a.firstIndex(of: "-demo-track"), a.indices.contains(i + 1), let n = Int(a[i + 1]), (1...steps.count).contains(n) { selected = n - 1 }
             if let i = a.firstIndex(of: "-demo-engine"), a.indices.contains(i + 1), let e = Int(a[i + 1]) { engines[selected].engine = e }

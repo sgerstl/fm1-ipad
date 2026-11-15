@@ -3,6 +3,7 @@ package com.scottgerstl.lupe
 import com.scottgerstl.lupe.ui.page.SKIFF_GLO_INK
 import com.scottgerstl.lupe.ui.page.decodeSkiffPicture
 import com.scottgerstl.lupe.ui.page.skiffFit
+import com.scottgerstl.lupe.ui.page.skiffBesideTiles
 import com.scottgerstl.lupe.ui.page.SKIFF_SURFACE
 import org.junit.Assert.*
 import org.junit.Test
@@ -20,8 +21,8 @@ class SkiffPictureTest {
     @Test fun theFm1sPanelDecodesAs234By138Argb() {
         val p = decodeSkiffPicture(bytes(234, 138, false, 410) { i -> if (i == 0) intArrayOf(0, 0, 0, 0) else intArrayOf(0xFF, 0x5A, 0x36, 0xFF) })!!
         assertEquals(234, p.width); assertEquals(138, p.height); assertFalse(p.animated); assertEquals(410, p.drawMicros)
-        assertEquals(0x00000000, p.argb[0])                                  // outside a rounded corner: transparent
-        assertEquals(0xFFFF5A36.toInt(), p.argb[1])                          // SKIFF's track 1, RGBA → ARGB
+        assertEquals(0x00000000, p.argb(0))                                  // outside a rounded corner: transparent
+        assertEquals(0xFFFF5A36.toInt(), p.argb(1))                          // SKIFF's track 1, RGBA → ARGB
     }
 
     @Test fun theSeaAndTheLfoSayTheyMove() {
@@ -57,6 +58,12 @@ class SkiffPictureTest {
 
     @Test fun thePictureSitsOnTheBoxsOwnBackground() {
         assertEquals(com.scottgerstl.lupe.ui.theme.Tok.well.value, androidx.compose.ui.graphics.Color(0xFF000000.toInt() or SKIFF_SURFACE).value)
+    }
+
+    @Test fun aListOfTilesKeepsItsSpaceUnlessThePictureGets2x() {
+        assertTrue(skiffBesideTiles(600f))                                   // the Pixel 10's panel under the dials: about 600 px, 300 each
+        assertFalse(skiffBesideTiles(500f))                                  // 250 each: under 2×, the tiles alone
+        assertTrue(skiffBesideTiles(552f))                                   // exactly 2× (276 each)
     }
 }
 

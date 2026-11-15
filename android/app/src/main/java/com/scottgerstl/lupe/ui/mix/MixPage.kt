@@ -4,6 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -72,168 +75,155 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlin.math.roundToInt
 
-/** The Mix tab (batch item 11): the six tracks, each with its level fader, mute and meter; the row's hold menu has PAN and the reverb send. */
+/** The Mix row's measures (the iPhone's PhoneMixerRow, 5ce07a3; dp): 48 tall, 4 apart, the head 92 wide, PAN and the send 84, Mute and Solo 40, the level fader at least 120. */
+object MixRowSpec {
+    const val HEIGHT = 48f
+    const val GAP = 4f
+    const val HEAD = 92f
+    const val PAN = 84f
+    const val SEND = 84f
+    const val KEY = 40f
+    const val LEVEL_MIN = 120f
+    /** The row height for [available] dp and [rows] rows: 48, or less when the six don't fit (never under 36). */
+    fun rowHeight(available: Float, rows: Int): Float = ((available - GAP * (rows - 1)) / rows.coerceAtLeast(1)).coerceIn(36f, HEIGHT)
+}
+
+/**
+ * The Mix tab (batch item 11; decision 49: the iPhone's): one column of the six tracks, each row lined up like the Pads rows: the track head (its number chip
+ * in the track's colour and its name; a tap selects it), then LEVEL, PAN and the reverb SEND as faders right in the row (no long press), Mute and Solo, and the
+ * track's meter as a thin line along the row's leading edge. [soundDock] is the width the docked sound panel takes at the right.
+ */
 @Composable
-fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize()) { Mixer(ui, actions, meters) }
+fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier, soundDock: androidx.compose.ui.unit.Dp = 0.dp) {
+    Box(modifier.fillMaxSize().padding(end = soundDock)) { Mixer(ui, actions, meters) }
 }
 
 @Composable
 private fun Mixer(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val gap = 4.dp
-        // landscape: the six tracks in two columns of three, so each row keeps a long fader and room for its meter and send line
-        val cols = if (maxWidth >= 600.dp) 2 else 1
-        val rows = ((ui.tracks.size + cols - 1) / cols).coerceAtLeast(1)
-        val rh = ((maxHeight - gap * (rows - 1)) / rows).coerceAtLeast(36.dp)
-        val roomy = rh >= 64.dp      // the meter and the send line show
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ui.tracks.chunked(rows).forEach { col ->
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) { col.forEach { t -> TrackRow(t, rh, roomy, actions, meters) } }
-            }
+        val rh = MixRowSpec.rowHeight(maxHeight.value, ui.tracks.size).dp
+        Column(Modifier.padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(MixRowSpec.GAP.dp)) {
+            ui.tracks.forEach { t -> TrackRow(t, rh, actions, meters) }
         }
     }
 }
 
 @Composable
-private fun TrackRow(t: MixTrackUi, h: androidx.compose.ui.unit.Dp, roomy: Boolean, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>) {
+private fun TrackRow(t: MixTrackUi, h: androidx.compose.ui.unit.Dp, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>) {
     val colour = Tok.track[(t.number - 1) % Tok.track.size]
-    val haptic = LocalHapticFeedback.current
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
-    val selected = animatedFloat(if (t.selected) 1f else 0f, Dur.STATE)
+    val sel = animatedFloat(if (t.selected) 1f else 0f, Dur.STATE)
     val dim = animatedFloat(if (t.muted) 1f else 0f, Dur.STATE)
-    Row(
-        Modifier.fillMaxWidth().height(h).clip(RoundedCornerShape(8.dp)).background(Tok.panel)
-            .semantics { onLongClick("Track menu: pan and reverb send") { menuAt = Offset(80f, 40f); true } }
-            .pointerInput(t.number) { detectTapGestures(onLongPress = { at -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = at }) },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // the number (tap: select the track), the track's colour
-        Box(
-            Modifier.width(36.dp).fillMaxHeight().background(colour, RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp))
-                .drawBehind { drawRoundRect(Tok.text.copy(alpha = selected.value), cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(4.dp.toPx())) }
-                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Track ${t.number}, ${t.name}" + if (t.solo) ", solo" else ""; stateDescription = if (t.selected) "Selected" else "" }
-                .pointerInput(t.number) { detectTapGestures { actions.select(t.number) } },
-            contentAlignment = Alignment.Center,
-        ) { BasicText("${t.number}", style = LupeType.key.copy(fontSize = 16.sp, color = Tok.onColour)) }
-        Column(Modifier.width(92.dp).padding(horizontal = 8.dp), verticalArrangement = Arrangement.Center) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                BasicText(t.name, Modifier.weight(1f, fill = false), style = LupeType.key.copy(fontSize = 14.sp), maxLines = 1, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 0.5.sp))
-                // solo: a lit pill with the word (never the colour alone)
-                if (t.solo) BasicText("SOLO", Modifier.background(Tok.primaryTop, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp), style = LupeType.label.copy(fontSize = 10.sp, lineHeight = 11.sp, color = Tok.onColour))
-            }
-            BasicText("${t.levelText} · ${t.panText}", style = LupeType.small.copy(fontSize = 12.sp), maxLines = 1)
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    val haptic = LocalHapticFeedback.current
+    Box(Modifier.fillMaxWidth().height(h)) {
+        // the track's meter, read while drawing (20 updates a second redraw only this line): a live line in its colour along the row's leading edge
+        Canvas(Modifier.align(Alignment.CenterStart).offset(x = (-6).dp).width(3.dp).fillMaxHeight().padding(vertical = 6.dp).clearAndSetSemantics { }) {
+            drawRoundRect(Tok.control, cornerRadius = CornerRadius(1.5.dp.toPx()))
+            val m = (meters.value.levels.getOrNull(t.number - 1)?.toFloat() ?: 0f).coerceIn(0f, 1f)
+            if (m > 0f) drawRoundRect(lerp(colour, Tok.text3, dim.value), Offset(0f, size.height * (1f - m)), Size(size.width, size.height * m), CornerRadius(1.5.dp.toPx()))
         }
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-            if (roomy) BasicText("LEVEL · send REV ${t.sendText}", style = LupeType.small.copy(fontSize = 12.sp), maxLines = 1)
-            LevelFader(t, colour, dim.value, actions)
-            if (roomy) {
-                Canvas(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clearAndSetSemantics { }) {
-                    drawRect(Tok.control)
-                    drawRect(lerp(colour, Tok.text3, dim.value).copy(alpha = 0.55f), size = Size(size.width * (t.send / 127f), size.height))
-                }
-                // the meter: the core's `meters` area, read while drawing so 20 updates a second redraw only this line
-                Canvas(Modifier.padding(top = 3.dp).fillMaxWidth().height(3.dp).clearAndSetSemantics { }) {
-                    drawRect(Tok.control)
-                    val m = meters.value.levels.getOrNull(t.number - 1)?.toFloat() ?: 0f
-                    drawRect(lerp(colour, Tok.text3, dim.value), size = Size(size.width * m.coerceIn(0f, 1f), size.height))
-                }
+        Row(
+            Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(lerp(Tok.well, colour, 0.28f * sel.value)).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // the head: the number chip and the name; a tap selects the track, a hold has Sounds…
+            Row(
+                Modifier.width(MixRowSpec.HEAD.dp).fillMaxHeight().defaultMinSize(minHeight = 44.dp)
+                    .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Track ${t.number}, ${t.name}"; stateDescription = if (t.selected) "Selected" else ""
+                        onLongClick("Track menu: Sounds") { menuAt = Offset(80f, 40f); true } }
+                    .pointerInput(t.number) { detectTapGestures(onTap = { actions.select(t.number) }, onLongPress = { at -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = at }) },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(Modifier.size(28.dp).background(colour, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) { BasicText("${t.number}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
+                BasicText(t.name, Modifier.weight(1f), style = LupeType.key.copy(fontSize = 13.sp, color = if (t.selected) Tok.text else Tok.text2Raised), maxLines = 1,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 13.sp, stepSize = 0.5.sp))
             }
-        }
-        Box(Modifier.padding(horizontal = 6.dp)) {
-            Key({ actions.mute(t.number) }, "Mute ${t.name}", width = 56.dp, height = 32.dp, minTarget = 40.dp, on = t.muted, role = Role.Switch, state = if (t.muted) "Muted" else "Not muted") { fg ->
-                KeyLabel("Mute", fg, style = LupeType.key.copy(fontSize = 13.sp))
+            RowFader("Level", t.name, t.level, t.levelText, if (t.muted) Tok.text3 else colour, dim.value, bipolarAt = null, onSet = { actions.level(t.number, it) }, modifier = Modifier.weight(1f).defaultMinSize(minWidth = MixRowSpec.LEVEL_MIN.dp), detent = UNITY)
+            RowFader("Pan", t.name, t.pan, t.panText, colour, 0f, bipolarAt = 64, onSet = { actions.pan(t.number, it) }, modifier = Modifier.width(MixRowSpec.PAN.dp))
+            RowFader("Reverb send", t.name, t.send, t.sendText, colour, 0f, bipolarAt = null, onSet = { actions.send(t.number, it) }, modifier = Modifier.width(MixRowSpec.SEND.dp))
+            Key({ actions.mute(t.number) }, "Mute ${t.name}", width = MixRowSpec.KEY.dp, height = MixRowSpec.KEY.dp, minTarget = 40.dp, on = t.muted, role = Role.Switch, state = if (t.muted) "Muted" else "Not muted") { fg ->
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(if (t.muted) com.scottgerstl.lupe.R.drawable.ms_volume_off else com.scottgerstl.lupe.R.drawable.ms_volume_up), null,
+                    Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(fg))
+            }
+            Key({ actions.solo(t.number) }, "Solo ${t.name}", width = MixRowSpec.KEY.dp, height = MixRowSpec.KEY.dp, minTarget = 40.dp, on = t.solo, role = Role.Switch, state = if (t.solo) "Solo" else "Not solo") { fg ->
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.scottgerstl.lupe.R.drawable.ms_headphones), null,
+                    Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(fg))
             }
         }
     }
     RowMenu(t, menuAt, { menuAt = null }, actions)
 }
 
-/** The level fader: drawn across, turned by the slide setting (up and down by default), the Magnifier above the finger. */
+/** The level's unity (the FM-1's 0 dB): a small detent while sliding across it. */
+const val UNITY = 100
+
+/**
+ * A horizontal fader in a row, turned by sliding across it (LEVEL, PAN, the reverb SEND): the track, the fill in the track's colour (from the centre for PAN), a thumb. The
+ * Magnifier shows its name and value above the finger. TalkBack gets the range, Increase, Decrease and, for LEVEL, put back. Double tap puts it back to what it was when the row
+ * appeared. [detent] is a value the slide slows at.
+ */
 @Composable
-private fun LevelFader(t: MixTrackUi, colour: Color, dim: Float, actions: MixActions) {
+private fun RowFader(
+    what: String, track: String, value: Int, text: String, colour: Color, dim: Float, bipolarAt: Int?, onSet: (Int) -> Unit, modifier: Modifier = Modifier, detent: Int? = null,
+) {
     var optimistic by remember { mutableIntStateOf(Int.MIN_VALUE) }
-    androidx.compose.runtime.LaunchedEffect(t.level) { if (optimistic == t.level) optimistic = Int.MIN_VALUE }
-    val raw = if (optimistic != Int.MIN_VALUE) optimistic else t.level
-    val latest by rememberUpdatedState(t)
-    val send by rememberUpdatedState(actions.level)
-    val opened = remember(t.number) { t.level }
+    androidx.compose.runtime.LaunchedEffect(value) { if (optimistic == value) optimistic = Int.MIN_VALUE }
+    val raw = if (optimistic != Int.MIN_VALUE) optimistic else value
+    val latestValue by rememberUpdatedState(value)
+    val send by rememberUpdatedState(onSet)
+    val latestText by rememberUpdatedState(text)
+    val opened = remember(track, what) { value }
     var base by remember { mutableIntStateOf(0) }
-    fun now() = if (optimistic != Int.MIN_VALUE) optimistic else latest.level
-    fun set(v: Int) { val n = v.coerceIn(0, 127); if (n != now()) { optimistic = n; send(latest.number, n) } }
+    fun now() = if (optimistic != Int.MIN_VALUE) optimistic else latestValue
+    fun set(v: Int) { val n = v.coerceIn(0, 127); if (n != now()) { optimistic = n; send(n) } }
     val haptic = LocalHapticFeedback.current
     Box(
-        Modifier.fillMaxWidth().height(34.dp)
+        modifier.fillMaxHeight().defaultMinSize(minHeight = 40.dp)
             .semantics(mergeDescendants = true) {
-                contentDescription = "Level, ${t.name}"; stateDescription = t.levelText; role = Role.Button
+                contentDescription = "$what, $track"; stateDescription = text; role = Role.Button
                 progressBarRangeInfo = ProgressBarRangeInfo(raw.toFloat(), 0f..127f, 126)
                 setProgress { v -> set(v.roundToInt()); true }
                 customActions = listOf(
-                    CustomAccessibilityAction("Increase level, ${t.name}") { set(now() + 1); true },
-                    CustomAccessibilityAction("Decrease level, ${t.name}") { set(now() - 1); true },
-                    CustomAccessibilityAction("Put level back, ${t.name}") { set(opened); true },
+                    CustomAccessibilityAction("Increase ${what.lowercase()}, $track") { set(now() + 1); true },
+                    CustomAccessibilityAction("Decrease ${what.lowercase()}, $track") { set(now() - 1); true },
+                    CustomAccessibilityAction("Put ${what.lowercase()} back, $track") { set(opened); true },
                 )
             }
             .pointerInput(opened) { detectTapGestures(onDoubleTap = { set(opened); haptic.performHapticFeedback(HapticFeedbackType.Confirm) }) }
             .slideToTurn(
                 enabled = true, stepDp = 2f,
-                face = remember(t.name, colour) { MagnifierFace("LEVEL · ${t.name}", { latest.levelText }, { now() / 127f }, tint = colour) },
+                face = remember(track, what, colour) { MagnifierFace("${what.uppercase()} · $track", { latestText }, { now() / 127f }, bipolar = bipolarAt != null, tint = colour) },
                 onStart = { base = now() }, onSlide = { set(base + it) },
                 bounds = { -now()..(127 - now()) },
-                forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways,   // drawn across: it follows the finger across (decision 10's setting is for knobs and value boxes)
+                forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways,   // drawn across: it follows the finger across
             ),
         contentAlignment = Alignment.CenterStart,
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val trackH = 6.dp.toPx(); val y = (size.height - trackH) / 2
-            val thumbW = 26.dp.toPx(); val thumbH = 20.dp.toPx()
+            val thumbW = 22.dp.toPx(); val thumbH = 20.dp.toPx()
             val x = thumbW / 2 + (size.width - thumbW) * (raw / 127f)
             val fill = lerp(colour, Tok.text3, dim)
             drawRoundRect(Tok.control, Offset(0f, y), Size(size.width, trackH), CornerRadius(trackH / 2))
-            drawRoundRect(fill, Offset(0f, y), Size(x, trackH), CornerRadius(trackH / 2))
-            drawRoundRect(lerp(Tok.primaryTop, Tok.text2, dim), Offset(x - thumbW / 2, (size.height - thumbH) / 2), Size(thumbW, thumbH), CornerRadius(8.dp.toPx()))
+            if (bipolarAt != null) {
+                val cx = thumbW / 2 + (size.width - thumbW) * (bipolarAt / 127f)
+                drawRoundRect(fill, Offset(minOf(cx, x), y), Size(kotlin.math.abs(x - cx).coerceAtLeast(2.dp.toPx()), trackH), CornerRadius(trackH / 2))
+                drawRect(Tok.text3, Offset(cx - 0.75.dp.toPx(), y - 3.dp.toPx()), Size(1.5.dp.toPx(), trackH + 6.dp.toPx()))      // the centre mark
+            } else {
+                drawRoundRect(fill, Offset(0f, y), Size(x, trackH), CornerRadius(trackH / 2))
+                if (detent != null) drawRect(Tok.text3, Offset(thumbW / 2 + (size.width - thumbW) * (detent / 127f) - 0.75.dp.toPx(), y - 3.dp.toPx()), Size(1.5.dp.toPx(), trackH + 6.dp.toPx()))
+            }
+            drawRoundRect(lerp(Tok.primaryTop, Tok.text2, dim), Offset(x - thumbW / 2, (size.height - thumbH) / 2), Size(thumbW, thumbH), CornerRadius(7.dp.toPx()))
         }
     }
 }
 
-/** The row's hold menu, beside the finger: PAN and the reverb send, each turned by sliding (the Magnifier would sit behind this window, so the value is large here). */
+/** The row's hold menu (an extra beside the faders): Solo and Sounds…, as the track head has. */
 @Composable
 private fun RowMenu(t: MixTrackUi, at: Offset?, close: () -> Unit, actions: MixActions) {
     LupeMenu(at != null, close, width = 248.dp, at = at) {
         MenuHeading("${t.number} ${t.name}")
         val sounds = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
-        com.scottgerstl.lupe.ui.shell.MenuRow("Solo", { actions.solo(t.number); close() }, checked = t.solo, sub = "Plays this track alone")
         com.scottgerstl.lupe.ui.shell.MenuRow("Sounds…", { close(); sounds.open(t.number) })
-        CompositionLocalProvider(LocalMagnifier provides null) {
-            MenuSlide("PAN", t.panText, t.pan, "Pan, ${t.name}", bipolar = true, mid = 64) { actions.pan(t.number, it) }
-            MenuSlide("REVERB SEND", t.sendText, t.send, "Reverb send, ${t.name}") { actions.send(t.number, it) }
-        }
-    }
-}
-
-@Composable
-private fun MenuSlide(label: String, text: String, raw: Int, name: String, bipolar: Boolean = false, mid: Int = 0, onSet: (Int) -> Unit) {
-    val latest by rememberUpdatedState(raw)
-    val send by rememberUpdatedState(onSet)
-    var base by remember { mutableIntStateOf(0) }
-    val colour = Tok.text
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(Tok.well)
-            .semantics(mergeDescendants = true) {
-                contentDescription = name; stateDescription = text; role = Role.Button
-                progressBarRangeInfo = ProgressBarRangeInfo(raw.toFloat(), 0f..127f, 126)
-                setProgress { v -> send(v.roundToInt().coerceIn(0, 127)); true }
-                customActions = listOf(CustomAccessibilityAction("Increase $name") { send((latest + 1).coerceIn(0, 127)); true }, CustomAccessibilityAction("Decrease $name") { send((latest - 1).coerceIn(0, 127)); true })
-            }
-            .slideToTurn(enabled = true, stepDp = 2f, face = null, onStart = { base = latest }, onSlide = { send((base + it).coerceIn(0, 127)) }, bounds = { -latest..(127 - latest) })
-            .padding(10.dp),
-    ) {
-        BasicText(label, style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2, letterSpacing = 0.5.sp))
-        BasicText(text, style = LupeType.number.copy(fontSize = 28.sp, lineHeight = 30.sp))
-        Canvas(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp)) {
-            drawRect(Tok.stepEmpty)
-            val x = (raw / 127f) * size.width; val from = if (bipolar) (mid / 127f) * size.width else 0f
-            drawRect(colour, Offset(minOf(from, x), 0f), Size(maxOf(kotlin.math.abs(x - from), if (bipolar) 2f else 0f), size.height))
-        }
     }
 }

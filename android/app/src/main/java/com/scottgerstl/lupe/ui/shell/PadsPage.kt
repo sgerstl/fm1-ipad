@@ -13,6 +13,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.LaunchedEffect
+import com.scottgerstl.lupe.ui.theme.EaseOut
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -87,6 +91,9 @@ import kotlinx.coroutines.delay
 
 private val PAD_W = 80.dp
 private val GAP = 4.dp
+/** A scene key's width in the scrolling row (the iPhone's 40; the iPad's is 52). */
+val SCENE_KEY_W = 40.dp
+private val SCENE_PAD = 4.dp
 
 /**
  * The Pads tab in landscape (decision 28, board 74): six track rows (a wide head to select the track and reach its sounds, MUTE with the
@@ -111,7 +118,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     val clock = core.clock.collectAsStateWithLifecycle()
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val scenesH = 40.dp
+        val scenesH = 34.dp
         val rows = pads.rows.ifEmpty { return@BoxWithConstraints }
         val rh = ((maxHeight - scenesH - 8.dp - GAP * (rows.size - 1)) / rows.size).coerceAtLeast(24.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -187,7 +194,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
             }
             // scenes: Store, then all sixteen
             Box(Modifier.fillMaxWidth().height(scenesH)) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {   // (8 between Store, the scenes and the knobs)
                     // the iPhone's short Store key with a dot (decision 33): the same word either way, lit while armed, so the scenes beside it never move
                     Key({ store = !store }, "Store scene", width = 88.dp, height = scenesH, minTarget = scenesH, on = store,
                         role = Role.Switch, state = if (store) "On: tap a scene to store what plays now" else "Off") { fg ->
@@ -197,12 +204,35 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                             KeyLabel("Store", fg)
                         }
                     }
-                    Spacer(Modifier.width(2.dp))
+                    // the sixteen scroll across the room the HOME knobs leave (decision 50): the last recalled kept in view, a fade at a clipped edge
+                    val sceneScroll = rememberScrollState()
+                    val reduceMotion = LocalReduceMotion.current
+                    val keyPx = with(androidx.compose.ui.platform.LocalDensity.current) { (SCENE_KEY_W + GAP).toPx() }
+                    val current = pads.scenes.indexOfFirst { it.current }
+                    var viewPx by remember { mutableStateOf(0) }
+                    LaunchedEffect(current, viewPx) {
+                        if (current < 0 || viewPx == 0) return@LaunchedEffect
+                        val want = sceneScrollTarget(current, keyPx, viewPx, sceneScroll.maxValue)
+                        if (reduceMotion) sceneScroll.scrollTo(want) else sceneScroll.animateScrollTo(want, androidx.compose.animation.core.tween(250, easing = EaseOut))
+                    }
+                    val fadeL = animatedFloat(if (sceneScroll.value > 1) 1f else 0f, Dur.STATE); val fadeR = animatedFloat(if (sceneScroll.value < sceneScroll.maxValue - 1) 1f else 0f, Dur.STATE)
+                    Row(
+                        Modifier.weight(1f).fillMaxHeight().onSizeChanged { viewPx = it.width }
+                            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                val f = 24.dp.toPx()
+                                if (fadeL.value > 0f) drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 1f - fadeL.value), Color.Black), 0f, f), size = Size(f, size.height), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                                if (fadeR.value > 0f) drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color.Black, Color.Black.copy(alpha = 1f - fadeR.value)), size.width - f, size.width), Offset(size.width - f, 0f), Size(f, size.height), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                            }
+                            .horizontalScroll(sceneScroll).padding(horizontal = SCENE_PAD),   // (the keys' press sink stays inside the clip)
+                        horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically,
+                    ) {
                     pads.scenes.forEachIndexed { i, s ->
                         val kept = animatedFloat(if (s.stored || s.current) 1f else 0f, Dur.STATE); val cur = animatedFloat(if (s.current) 1f else 0f, Dur.STATE)
                         val label = "Scene ${i + 1}" + (if (!s.stored) ", empty" else if (s.current) ", current" else "") + if (s.waiting) ", waiting for the launch point" else ""
                         Box(
-                            Modifier.weight(1f).height(scenesH)
+                            Modifier.width(SCENE_KEY_W).height(scenesH)
                                 .clip(RoundedCornerShape(8.dp))
                                 // the current scene white, a stored one filled, an empty one only outlined (the fills and the outline blend, nothing pops)
                                 .drawBehind {
@@ -229,6 +259,8 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                             if (s.waiting) LaunchTrace({ clock.value.ticksLeft(s.launchTick, android.os.SystemClock.uptimeMillis()) }, if (s.current) Tok.onColour else Tok.text, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
                         }
                     }
+                    }   // the scenes' scroller
+                    SceneHomeKnobs(core, scenesH)
                 }
                 // Store over a kept scene: a red-outlined row naming it, Cancel beside it; a tap ignores the first 0.4 s
                 LupeCrossfade(confirmScene, Modifier.fillMaxSize()) { c ->
@@ -669,3 +701,6 @@ private fun PassBar(progress: () -> Float?, modifier: Modifier) {
         drawRoundRect(Tok.onColour.copy(alpha = 0.55f), size = Size(size.width * (read() ?: 0f).coerceIn(0f, 1f), size.height), cornerRadius = CornerRadius(size.height / 2))
     }
 }
+
+/** Where the scene scroller rests to keep scene [current] (0-based) in the middle of a [viewPx]-wide view, within 0…[max]; [keyPx] is a key and its gap. */
+fun sceneScrollTarget(current: Int, keyPx: Float, viewPx: Int, max: Int): Int = (current * keyPx + keyPx / 2 - viewPx / 2f).toInt().coerceIn(0, max)

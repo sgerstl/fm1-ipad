@@ -3,6 +3,11 @@ package com.scottgerstl.lupe.ui.shell
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,5 +74,63 @@ fun HomeKnobsStrip(ed: EditorState, core: LupeCore, modifier: Modifier = Modifie
             Spacer(Modifier.height(4.dp))
         }
         com.scottgerstl.lupe.ui.page.PageControlsRow(home.controls, track, home.hot, home.hotSeq, opened = { slot, c -> opened.getOrPut(slot) { c.raw } }, onSet = { slot, v -> core.send(SetHomeKnob(slot, v)) })
+    }
+}
+
+/** The scene row's HOME knob: the iPhone's 84 (the iPad's is 104), ring = row height - 10, stroke 3 (decision 50). */
+val HOME_KNOB_W = 84.dp
+private val HOME_KNOB_GAP = 4.dp
+
+/**
+ * The selected track's four HOME knobs at the end of the Pads scene row (decision 50): each a well with a ring in the track's colour
+ * and, beside it, the label over the value. Turned by the app's slide (the same [KnobTarget] as the sound page's dials, so the Magnifier,
+ * double tap back and TalkBack come with it), and the FM-1's own knob lights it, white, for a moment. None before the FM-1 is read.
+ */
+@Composable
+fun SceneHomeKnobs(core: LupeCore, height: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    val home by core.homeKnobs.collectAsStateWithLifecycle()
+    if (home.controls.none { it != null }) return
+    val colour = Tok.track[(home.track - 1).coerceAtLeast(0) % Tok.track.size]
+    val opened = remember(home.track, home.engine) { mutableMapOf<Int, Int>() }
+    val kc = com.scottgerstl.lupe.ui.page.KnobControls(home.controls, colour, { slot, c -> opened.getOrPut(slot) { c.raw } }, { slot, v -> core.send(SetHomeKnob(slot, v)) })
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(HOME_KNOB_GAP)) {
+        for (slot in 0 until 4) {
+            val c = home.controls.getOrNull(slot)
+            if (c == null) Spacer(Modifier.size(HOME_KNOB_W, height))
+            else SceneHomeKnob(slot, c, colour, if (slot == home.hot) home.hotSeq else -1, kc, height)
+        }
+    }
+}
+
+@Composable
+private fun SceneHomeKnob(slot: Int, c: com.scottgerstl.lupe.core.PageControl, colour: androidx.compose.ui.graphics.Color, litKey: Int, kc: com.scottgerstl.lupe.ui.page.KnobControls, height: androidx.compose.ui.unit.Dp) {
+    val reduce = LocalReduceMotion.current
+    val lit = remember { Animatable(0f) }
+    var sliding by remember { mutableStateOf(false) }
+    LaunchedEffect(litKey) {
+        if (litKey < 0) return@LaunchedEffect
+        unscaled { lit.animateTo(1f, tween(if (reduce) 0 else 80)); lit.animateTo(0f, tween(LIT_FADE_MS, easing = EaseOut)) }
+    }
+    val on = if (sliding) 1f else lit.value
+    val frac = if (c.max > c.min) (c.raw - c.min).toFloat() / (c.max - c.min) else 0f
+    val ring = lerp(colour, Tok.text, on)
+    Box(Modifier.size(HOME_KNOB_W, height)) {
+        Row(
+            Modifier.fillMaxSize().graphicsLayer { alpha = if (c.fixed) 0.5f else 1f }.clip(RoundedCornerShape(8.dp)).background(Tok.control).clearAndSetSemantics { }.padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Canvas(Modifier.size(height - 10.dp)) {
+                val w = 3.dp.toPx(); val tl = Offset(w / 2, w / 2); val sz = Size(size.width - w, size.height - w)
+                drawArc(Tok.outline, 135f, 270f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+                if (!c.ringless && frac > 0.003f) drawArc(ring, 135f, 270f * frac.coerceIn(0f, 1f), false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+            }
+            Column(Modifier.weight(1f)) {
+                BasicText(c.label, style = LupeType.small.copy(fontSize = 9.sp, lineHeight = 11.sp, color = lerp(Tok.text2Raised, Tok.text, on)), maxLines = 1)
+                BasicText(c.value, style = LupeType.number.copy(fontSize = 13.sp, lineHeight = 15.sp, color = Tok.text), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Clip)
+            }
+        }
+        // the FM-1's knob lights the edge of its well in the track's colour while it turns, as the iPad's does
+        if (on > 0f) Box(Modifier.fillMaxSize().border(1.5.dp, colour.copy(alpha = on), RoundedCornerShape(8.dp)))
+        if (!c.ringless && !c.fixed) com.scottgerstl.lupe.ui.page.KnobTarget(slot, kc, Modifier, HOME_KNOB_W, height, onHot = { sliding = it })
     }
 }

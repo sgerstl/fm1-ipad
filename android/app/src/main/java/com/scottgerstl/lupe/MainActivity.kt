@@ -62,6 +62,17 @@ class MainActivity : ComponentActivity() {
         // adb shell am start -n com.scottgerstl.lupe/.MainActivity --es scenario lost
         intent.getStringExtra("scenario")?.let { (core as? FakeLupeCore)?.play(it) }
 
+        // A debuggable build can start the demo and open a tab without a finger, to look at a screen:
+        //   adb shell am start -n com.scottgerstl.lupe/.MainActivity --ez demo true --es tab mix --ez intro false
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && intent.getBooleanExtra("demo", false)) {
+            app.useDemo()
+            intent.getStringExtra("tab")?.let { name ->
+                com.scottgerstl.lupe.core.Tab.entries.firstOrNull { it.name.equals(name, true) }?.let { tab ->
+                    android.os.Handler(mainLooper).postDelayed({ app.core.send(com.scottgerstl.lupe.core.Intent.SetTab(tab)) }, 4000)
+                }
+            }
+        }
+
         // Settings arrive in P5; until then the slide direction and the Magnifier are flipped by launch extras and kept:
         // adb shell am start -n com.scottgerstl.lupe/.MainActivity --es slide sideways|updown|both --ez magnifier false
         val slide = SlideSettings.from(this)
