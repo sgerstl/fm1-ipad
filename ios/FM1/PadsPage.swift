@@ -58,6 +58,12 @@ struct PadsPage: View {
     @State private var pressStart: [String: (at: Date, point: CGPoint, swiped: Bool)] = [:]
     /// A pattern dragged from the Patterns panel over a pad: the pad it would land on, and whether that one is empty.
     @State private var panelDrop: DropTarget?
+    /// A duplicate sprouting into its slot (Scott, 2026-11-15): from where it came (global), to the new pad, then a ring.
+    @State private var sprout: Sprout?
+    /// The phone's pads: a slot to bring into view (a duplicate landing past the eight that fit).
+    @State private var phoneScrollTo: Int?
+    @State private var phoneScroll = ScrollPosition(x: 0)
+    struct Sprout: Equatable { var track: Int, entry: Int, from: CGRect, id = UUID(); var landed = false, swapped = false, ring = false }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Full size (the editor shut), over the editor (rows as tall as the lane heads, a shorter scene row), or over the
     /// largest editor (the selected track's row of 16, no heads, no scenes) (boards 35, 37, 38).
@@ -148,6 +154,8 @@ struct PadsPage: View {
         }
         // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
         .padding(.bottom, compact && !phone ? 8 : 0)
+        .overlay { GeometryReader { g in sproutLayer(g.frame(in: .global).origin) } }
+        .onChange(of: sprout?.id) { _, id in if let id { UIAccessibility.post(notification: .announcement, argument: "Duplicated") ; _ = id } }
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
         // the edge wells follow the dragged pad's centre (EdgeWells); a refused lift shows none
         .onChange(of: drag) { _, d in
@@ -197,6 +205,14 @@ struct PadsPage: View {
                 // the columns past the screen's edge: a pan sideways (one finger or two, as the grids since 2026-11-07)
                 ScrollView(.horizontal) {
                     grid(t, tracks, r).frame(width: gridW, height: r.height)
+                }
+                .scrollPosition($phoneScroll)
+                .onChange(of: phoneScrollTo) { _, c in
+                    guard let c else { return }
+                    phoneScrollTo = nil
+                    let x = CGFloat(c) * (pad + Self.phoneGap), view = avail
+                    // only when it's out of view: as far as shows it whole
+                    if x + pad > view { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { phoneScroll = ScrollPosition(x: x + pad - view) } }
                 }
                 .scrollIndicators(.hidden)
                 .scrollBounceBehavior(.basedOnSize)
@@ -365,7 +381,8 @@ struct PadsPage: View {
                                 .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22), value: rowSel)
                                 // one piece on the spring: without it the box bounced and its words stood still
                                 .geometryGroup()
-                                .opacity(drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35 : 1)
+                                .opacity(drag.map { !$0.refused && $0.track == k && $0.from == i } == true ? 0.35
+                                         : sprout.map { $0.track == k && $0.entry == i && !$0.swapped } == true ? 0 : 1)
                                 .overlay {
                                     // where the drop goes: a pad of its row to move to, or an empty pad (any row) to copy into,
                                     // filled faintly so an empty target reads as one (Scott, 2026-11-10)
@@ -847,14 +864,69 @@ struct PadsPage: View {
                 store.refuse(track: t, entry: i, "No empty slot on T\(t + 1) to duplicate into"); return
             }
             if e.isRest {
-                Task { await store.send(.set(track: t, entry: target, pattern: SongEntry.rest)) }
+                let from = padFrames[PadKey(track: t, entry: i)] ?? .zero
+                Task { if await store.send(.set(track: t, entry: target, pattern: SongEntry.rest)) { sproutDuplicate(track: t, entry: target, from: from) } }
                 return
             }
             guard let p = e.poolIndex else { return }
             guard (store.pool?.free ?? 0) > 0 else {
                 store.refuse(track: t, entry: i, "All 64 patterns are taken: clear unused ones to duplicate"); return
             }
-            Task { if await store.send(.set(track: t, entry: target, pattern: p + 1)) { await store.send(.copy(track: t, entry: target)) } }
+            let from = padFrames[PadKey(track: t, entry: i)] ?? .zero
+            Task {
+                if await store.send(.set(track: t, entry: target, pattern: p + 1)), await store.send(.copy(track: t, entry: target)) {
+                    sproutDuplicate(track: t, entry: target, from: from)
+                }
+            }
+        }
+    }
+
+    /// A duplicate landed on (t, target): the new pad grows out of `from` (the source pad or the drop point), travels to its
+    /// slot and settles with a small overshoot (320 ms), then one soft ring in the track colour. Reduce Motion: a fade in
+    /// place, then the ring. The slot is scrolled into view first (the phone's pads pan past eight).
+    private func sproutDuplicate(track t: Int, entry target: Int, from: CGRect) {
+        if phone { phoneScrollTo = target }
+        sprout = Sprout(track: t, entry: target, from: from)
+        let id = sprout?.id
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(60))           // (the slot laid out, and in view)
+            guard sprout?.id == id else { return }
+            withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.68)) { sprout?.landed = true }
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 200 : 340))
+            guard sprout?.id == id else { return }
+            // the copy hands over to the real pad at once (no fade between them), then the ring
+            var t = Transaction(); t.disablesAnimations = true
+            withTransaction(t) { sprout?.swapped = true }
+            withAnimation(.easeOut(duration: 0.6)) { sprout?.ring = true }
+            try? await Task.sleep(for: .milliseconds(650))
+            if sprout?.id == id { sprout = nil }
+        }
+    }
+
+    /// The sprouting copy and its ring, over the page (global coordinates into this view's).
+    @ViewBuilder private func sproutLayer(_ origin: CGPoint) -> some View {
+        if let sp = sprout, let to = padFrames[PadKey(track: sp.track, entry: sp.entry)] {
+            let m = store.marks(sp.track, launchIn: nil)
+            let now = sp.landed ? to : CGRect(x: sp.from.midX - to.width * 0.3, y: sp.from.midY - to.height * 0.3, width: to.width * 0.6, height: to.height * 0.6)
+            let rad = Self.padRadius(to.size)
+            ZStack(alignment: .topLeading) {
+                if !sp.swapped {
+                    pad(sp.track, sp.entry, m, size: to.size, date: Date(), copy: true)
+                        .frame(width: to.width, height: to.height)
+                        .scaleEffect(reduceMotion ? 1 : now.width / to.width)
+                        .opacity(reduceMotion ? (sp.landed ? 1 : 0) : 1)
+                        .shadow(color: .black.opacity(sp.landed ? 0 : 0.45), radius: 10, y: 4)
+                        .position(x: (reduceMotion ? to.midX : now.midX) - origin.x, y: (reduceMotion ? to.midY : now.midY) - origin.y)
+                }
+                // one soft ring in the track colour, growing out of the new pad and fading
+                RoundedRectangle(cornerRadius: rad + 4).strokeBorder(Theme.track[sp.track], lineWidth: 2)
+                    .frame(width: to.width + 8, height: to.height + 8)
+                    .scaleEffect(sp.ring ? 1.18 : 1)
+                    .opacity(sp.ring ? 0 : (sp.swapped ? 1 : 0))      // (after it settles, not during the flight)
+                    .position(x: to.midX - origin.x, y: to.midY - origin.y)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 
@@ -1166,7 +1238,9 @@ struct PadsPage: View {
             let room = list.entries.indices.contains { $0 > i && list.entries[$0].isEmpty }
             copy.append(MenuItem(title: room ? "Duplicate to next empty pad" : "Duplicate: no empty pad after it", icon: "plus.square.on.square",
                                  enabled: free && room && idle) {
-                Task { await store.send(.copyPlus(track: t, entry: i)) }
+                let target = list.entries.indices.first { $0 > i && list.entries[$0].isEmpty }
+                let from = padFrames[PadKey(track: t, entry: i)] ?? .zero
+                Task { if await store.send(.copyPlus(track: t, entry: i)), let target { sproutDuplicate(track: t, entry: target, from: from) } }
             })
         }
         if !copy.isEmpty { g.append(copy) }

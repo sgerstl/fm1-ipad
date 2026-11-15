@@ -33,7 +33,7 @@ struct PadDragShow: Equatable {
     var track: Int
 }
 
-enum EdgeWellsGeometry {
+@MainActor enum EdgeWellsGeometry {
     /// Board 81.4 at the iPhone's 874 × 402: the bottom well 434 × 52, the side wells 64 wide and 238 tall, centred; the
     /// iPad's are the same sizes, scaled up by its height for the side wells.
     static func rect(_ a: EdgeAction, in screen: CGSize) -> CGRect {
@@ -45,8 +45,28 @@ enum EdgeWellsGeometry {
             return CGRect(x: (screen.width - w) / 2, y: screen.height - 52, width: w, height: 52)
         case .clearSteps: return CGRect(x: topX, y: 0, width: half, height: 52)
         case .delete: return CGRect(x: topX + half + 8, y: 0, width: half, height: 52)
-        case .duplicate: return CGRect(x: 0, y: (screen.height - sideH) / 2, width: 64, height: sideH)
-        case .edit: return CGRect(x: screen.width - 64, y: (screen.height - sideH) / 2, width: 64, height: sideH)
+        // the side well on the Dynamic Island's side widens by the Island's margin, so its icon and label clear it (it stays
+        // attached to the edge; the content sits in the inner 64)
+        case .duplicate:
+            let w = 64 + island.leading
+            return CGRect(x: 0, y: (screen.height - sideH) / 2, width: w, height: sideH)
+        case .edit:
+            let w = 64 + island.trailing
+            return CGRect(x: screen.width - w, y: (screen.height - sideH) / 2, width: w, height: sideH)
+        }
+    }
+
+    /// The Dynamic Island's margin on each side in landscape (the iPhone only; the iPad has none): the window's safe area on
+    /// the side the Island is on by the orientation, 0 on the other.
+    @MainActor static var island: (leading: CGFloat, trailing: CGFloat) {
+        guard UIDevice.current.userInterfaceIdiom == .phone,
+              let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first else { return (0, 0) }
+        let insets = window.safeAreaInsets
+        switch scene.interfaceOrientation {
+        case .landscapeRight: return (insets.left, 0)        // the device's top (the Island) on the left
+        case .landscapeLeft: return (0, insets.right)
+        default: return (0, 0)
         }
     }
 
@@ -169,6 +189,8 @@ struct EdgeWells: View {
                 .stroke(hot ? tint : Theme.textSecondary.opacity(0.55 + 0.45 * glow),
                         style: StrokeStyle(lineWidth: 1.5, dash: hot ? [] : [5, 4]))
             labelView(a, hot: hot, off: off)
+                .padding(.leading, a == .duplicate ? EdgeWellsGeometry.island.leading : 0)
+                .padding(.trailing, a == .edit ? EdgeWellsGeometry.island.trailing : 0)
         }
         .opacity(off ? 0.45 : 1)
         .frame(width: grown.width, height: grown.height)
