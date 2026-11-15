@@ -41,6 +41,10 @@ enum ListUndo {
                        store: SkiffSongStore, session: DeviceSession, ui: EditorUI) {
         guard let list = store.song?.tracks[safe: t] else { return }
         let before = list.entries
+        // refused before anything is sent (P1, 4d2e44a): otherwise the REST steps would land and the rewrite then refuse
+        if let why = store.blocked(track: t, to: after) {
+            store.refuse(track: t, entry: range.lowerBound, why, needsStop: why.hasPrefix("Stop")); return
+        }
         let gone = Set(store.erased([t: after]))
         if !gone.isEmpty, session.playing {
             store.refuse(track: t, entry: range.lowerBound, "Stop to delete: the FM-1 changes the song only while stopped", needsStop: true)
