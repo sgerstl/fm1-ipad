@@ -56,6 +56,8 @@ data class TimelineState(
     val bars: Double = 0.0,
     /** The clock in bars since Start; null when stopped. */
     val playheadBar: Double? = null,
+    /** Clock pulses in a bar (96): the smooth playhead is the clock's pulse count over this (P1's 6f2f933 makes [playheadBar] step by the beat). */
+    val ticksPerBar: Int = 96,
     val playing: Boolean = false,
     /** Pattern numbers the FM-1 holds (what Set pattern may name). */
     val kept: List<Int> = emptyList(),

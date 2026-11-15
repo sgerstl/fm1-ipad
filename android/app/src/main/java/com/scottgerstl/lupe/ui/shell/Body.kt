@@ -140,7 +140,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
             })
         }
         Row(modifier.fillMaxSize()) {
-            if (rail && labs.leftHanded) { railNode(); Spacer(Modifier.width(4.dp)) }
+            if (rail && labs.railLeft) { railNode(); Spacer(Modifier.width(4.dp)) }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
                     if (take) com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
@@ -161,7 +161,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                 }
                 SoundPanel(dockT.value, docked, soundPage, soundCore, notice, { panel.dismiss() }, Modifier.align(Alignment.TopEnd).countTouches(onSoundTouch), graphics = labs.showGraphics)
             }
-            if (rail && !labs.leftHanded) { Spacer(Modifier.width(4.dp)); railNode() }
+            if (rail && !labs.railLeft) { Spacer(Modifier.width(4.dp)); railNode() }
         }
     }
 }

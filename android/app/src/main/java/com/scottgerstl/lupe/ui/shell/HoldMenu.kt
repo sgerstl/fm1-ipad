@@ -362,7 +362,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
         // the finger, in this layer's dp
         val fingerPx = origin?.takeIf { it.isAttached }?.windowToLocal(m.at) ?: m.at
         val fx = with(density) { fingerPx.x.toDp().value }; val fy = with(density) { fingerPx.y.toDp().value }
-        val wheel = remember(m, w, h, fx, fy, labs.leftHanded) { HoldWheel(fx, fy, m.items.size, w, h, leftHanded = labs.leftHanded) }
+        val wheel = remember(m, w, h, fx, fy, labs.menusRight) { HoldWheel(fx, fy, m.items.size, w, h, leftHanded = labs.menusRight) }
         wheelNow = wheel
         val spots = List(m.items.size) { wheel.spot(it, turn) }
         val itemW = HoldWheel.ROW_W; val itemH = HoldWheel.ROW_H
@@ -529,7 +529,11 @@ private fun HoldSlideRow(title: String, sl: HoldSlide, enabled: Boolean = true) 
  */
 fun Modifier.tapOrHoldMenu(
     key: Any?, colour: Color, items: () -> List<HoldItem>, onTap: () -> Unit, pressed: (Boolean) -> Unit = {}, enabled: Boolean = true,
+    /** Something that can be picked up and carried (a pad): press then slide lifts it at once with no menu; a still hold opens the menu, and moving off the hold closes it and lifts. */
+    dragger: PadDragger? = null,
 ): Modifier = composed {
+    val labs = LocalPhoneSettings.current
+    val carry by rememberUpdatedState(dragger)
     val menu = LocalHoldMenu.current
     val haptic = LocalHapticFeedback.current
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -543,8 +547,31 @@ fun Modifier.tapOrHoldMenu(
             val down = awaitFirstDown()
             press(true)
             var cancelled = false
-            val up = withTimeoutOrNull(HOLD_MS) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
+            var lifted = false
+            val up = if (carry == null) withTimeoutOrNull(HOLD_MS) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
+            else withTimeoutOrNull(HOLD_MS) {
+                // watch the finger: lifting is a tap; sliding past the slop is a lift (after the dwell) or a swipe (before it: the row scrolls)
+                val slop = labs.padSlideStart.dp.toPx()
+                while (true) {
+                    val ev = awaitPointerEvent()
+                    val ch = ev.changes.firstOrNull { it.id == down.id }
+                    if (ch == null || ch.isConsumed) { cancelled = true; return@withTimeoutOrNull null }
+                    if (!ch.pressed) return@withTimeoutOrNull ch
+                    when (liftsOrSwipes((ch.position - down.position).getDistance(), slop, ch.uptimeMillis - down.uptimeMillis, labs.padSlideDwellMs.toLong())) {
+                        true -> { lifted = true; return@withTimeoutOrNull null }
+                        false -> { cancelled = true; return@withTimeoutOrNull null }
+                        null -> Unit
+                    }
+                }
+                @Suppress("UNREACHABLE_CODE") null
+            }
             press(false)
+            if (lifted) {
+                val c0 = coords?.takeIf { it.isAttached } ?: return@awaitEachGesture
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                carryOn(down, c0, carry)
+                return@awaitEachGesture
+            }
             if (cancelled) return@awaitEachGesture
             if (up != null) { tap(); return@awaitEachGesture }
             val c = coords?.takeIf { it.isAttached }
@@ -555,14 +582,41 @@ fun Modifier.tapOrHoldMenu(
             menu.open(c.localToWindow(currentEvent.changes.firstOrNull { it.id == down.id }?.position ?: down.position), tint, choices)
             // the same finger, still down, does nothing more (decision 36: a tap picks; sliding onto a choice and letting go does not):
             // its moves are swallowed until it lifts, so nothing under it sees them
+            val slop = labs.padSlideStart.dp.toPx()
+            val holdAt = currentEvent.changes.firstOrNull { it.id == down.id }?.position ?: down.position
             while (true) {
                 val e = awaitPointerEvent()
                 val ch = e.changes.firstOrNull { it.id == down.id } ?: break
                 ch.consume()
                 if (!ch.pressed) break
+                // held, then moved off the hold: the menu goes and the pad lifts and follows the finger
+                if (carry != null && (ch.position - holdAt).getDistance() > slop) {
+                    menu.close()
+                    carryOn(down, c, carry, startedAt = ch.position)
+                    break
+                }
             }
         }
     }
+}
+
+/** The carried thing follows the finger until it lifts: [PadDragger.lift], each move, then [PadDragger.drop] (or [PadDragger.cancel] if the gesture is taken away). */
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.carryOn(
+    down: androidx.compose.ui.input.pointer.PointerInputChange, c: LayoutCoordinates, dragger: PadDragger?, startedAt: Offset = down.position,
+) {
+    if (dragger == null) return
+    dragger.lift(c.localToWindow(startedAt), down.position)
+    var done = false
+    try {
+        while (true) {
+            val e = awaitPointerEvent()
+            val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+            ch.consume()
+            val at = c.localToWindow(ch.position)
+            if (!ch.pressed) { done = true; dragger.drop(at); break }
+            dragger.move(at)
+        }
+    } finally { if (!done) dragger.cancel() }
 }
 
 /** How long a hold is before its menu opens (the mockup's 0.35 s). */

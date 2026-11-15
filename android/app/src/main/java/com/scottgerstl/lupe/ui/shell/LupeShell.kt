@@ -78,9 +78,10 @@ fun LupeShell(core: LupeCore) {
     val sheets = remember { SheetHost() }
     val soundsHost = remember { SoundsHost() }
     val holdMenu = remember { HoldMenuState() }
+    val padDrag = remember { PadDragState() }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag) {
         Column(
             Modifier.fillMaxSize()
                 .greyedBy { grey.value }
@@ -118,7 +119,7 @@ fun LupeShell(core: LupeCore) {
             )
         }
         // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
-        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu) {
+        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag) {
             SettingsSheet(link, fake = core is com.scottgerstl.lupe.core.FakeLupeCore)
             val projects = rememberProjects(core)
             ProjectsSheet(projects.first, projects.second)
@@ -143,6 +144,8 @@ fun LupeShell(core: LupeCore) {
             Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 4.dp),
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
         ) { UndoStrip(core); RefusalStrip(core) }
+        // a pad being dragged, with the Clear / Edit / Duplicate wells on the screen's edges (board 81.4)
+        PadDragOverlay(padDrag)
         // the hold menu: over the page and the sheets, under the finger that opened it
         HoldMenuHost(holdMenu)
         // the Magnifier floats over everything, above the finger

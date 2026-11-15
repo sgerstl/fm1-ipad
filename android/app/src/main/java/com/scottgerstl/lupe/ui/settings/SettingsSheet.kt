@@ -92,9 +92,11 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         ) { slide.chooseDirection(SlideDirection.entries[it]) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Magnifier", "A bigger copy of the value floats above your finger as you slide", slide.magnifier) { slide.chooseMagnifier(it) }
-        Text2("Handedness", if (phone.leftHanded) "Menus open to the right of your finger, so your hand doesn't cover them. The sound keys sit on the left."
-            else "Menus open to the left of your finger, so your hand doesn't cover them. The sound keys sit on the right.")
-        Segmented(options = listOf("Right-handed", "Left-handed"), selected = if (phone.leftHanded) 1 else 0, name = "Handedness") { phone.chooseLeftHanded(it == 1) }
+        Text2("Sound keys side", "Which edge the sound keys sit on (when Sound keys is on).")
+        Segmented(options = listOf("Left", "Right"), selected = if (phone.railLeft) 0 else 1, name = "Sound keys side") { phone.chooseRailLeft(it == 0) }
+        Spacer(Modifier.height(8.dp))
+        Text2("Menus open", "Which side of your finger hold menus and pop-outs open to; they flip when there is no room.")
+        Segmented(options = listOf("Left", "Right"), selected = if (phone.menusRight) 1 else 0, name = "Menus open") { phone.chooseMenusRight(it == 1) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Haptics", "On pads and value steps", phone.haptics) { phone.chooseHaptics(it) }
 
@@ -115,6 +117,12 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("TAB CHANGE · MS", "${phone.tabSlideMs} ms", phone.tabSlideMs / 10, 15, 70, "How long a tab change takes", stepDp = 8f, revertTo = 38) { phone.chooseTabSlide(it * 10) }
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPRING", "${phone.menuSpring}", phone.menuSpring / 5, 0, 20, "How far the hold menu's circle springs past its size", stepDp = 12f, revertTo = 12) { phone.chooseMenuSpring(it * 5) }
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPEED", "${phone.menuSpeed}%", phone.menuSpeed / 10, 5, 20, "How fast the hold menu opens", stepDp = 12f, revertTo = 10) { phone.chooseMenuSpeed(it * 10) }
+        // pad drag and its edge wells (added 2026-11-15, review 2026-11-29)
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · SLIDE BEFORE IT LIFTS", "${phone.padSlideStart} dp", phone.padSlideStart, 4, 30, "How far you slide a pad before it picks up", stepDp = 8f, revertTo = 8) { phone.choosePadSlideStart(it) }
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · PRESS BEFORE SLIDING", "${phone.padSlideDwellMs} ms", phone.padSlideDwellMs / 10, 5, 40, "A slide quicker than this after you touch is a swipe and doesn't pick the pad up", stepDp = 8f, revertTo = 15) { phone.choosePadSlideDwell(it * 10) }
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · WELLS SLIDE IN", "${phone.wellSlideMs} ms", phone.wellSlideMs / 10, 10, 50, "How long the Clear, Edit and Duplicate wells take to slide in", stepDp = 8f, revertTo = 22) { phone.chooseWellSlide(it * 10) }
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · WELL GLOW DISTANCE", "${phone.wellGlowDp} dp", phone.wellGlowDp / 4, 12, 40, "How near the dragged pad comes before a well starts to glow", stepDp = 8f, revertTo = 24) { phone.chooseWellGlow(it * 4) }
+        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · WELL HOT DISTANCE", "${phone.wellHotDp} dp", phone.wellHotDp / 4, 6, 24, "How near the dragged pad comes before a well is hot and a drop there acts", stepDp = 8f, revertTo = 12) { phone.chooseWellHot(it * 4) }
         SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
         SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
     }

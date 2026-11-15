@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -372,6 +373,11 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val pool by core.patterns.collectAsStateWithLifecycle()
     val soundsHost = LocalSoundsHost.current
     var padCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val dragState = LocalPadDrag.current
+    val labs = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current
+    val dens = androidx.compose.ui.platform.LocalDensity.current.density
+    // this slot, for a drop to find (window pixels; kept as it is placed, forgotten when it goes)
+    androidx.compose.runtime.DisposableEffect(row.track, idx) { onDispose { dragState?.slots?.remove(row.track to idx) } }
     /**
      * The pad's hold menu (the iPad's rows, decision 31: the full set the core can do): Edit steps, Select sound, Set pattern, Play once more /
      * less, Duplicate after, Move earlier / later, Clear; an empty slot: New pattern, Rest, Pick a pattern. Not here because the core has no
@@ -456,7 +462,49 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         core.send(Intent.PadSelect(row.track, at)); if (!selectMode && !empty) core.send(Intent.PadTap(row.track, at))
     }
 
-    Box(modifier.width(PAD_W).height(h).onGloballyPositioned { padCoords = it }) {
+    // dragging (the iPhone's rule): press then slide lifts the pad with no menu; a still hold opens the menu and moving off it lifts; the drop goes to a well, a slot or back
+    val dragger = if (empty || dragState == null) null else object : PadDragger {
+        override fun lift(finger: Offset, grabLocal: Offset) {
+            val sz = padCoords?.size ?: return
+            dragState.drag = PadDrag(row.track, at, e.kind == PadKind.Rest, e.pattern, color, Size(sz.width.toFloat(), sz.height.toFloat()), grabLocal, finger, letter)
+        }
+        override fun move(finger: Offset) { dragState.drag = dragState.drag?.copy(finger = finger) }
+        override fun cancel() { dragState.drag = null }
+        override fun drop(finger: Offset) {
+            val d = dragState.drag?.copy(finger = finger); dragState.drag = null
+            if (d == null) return
+            val feel = WellFeel(labs.wellGlowDp * dens, labs.wellHotDp * dens)
+            // (the finger and the slots are both in window pixels; the wells are in the layer's own)
+            val act = decideDrop(d.copy(finger = finger - dragState.origin), dragState.slots.values.map { it.copy(rect = it.rect.translate(-dragState.origin)) }, dragState.screen.width, dragState.screen.height, dens, feel) ?: return
+            when (act) {
+                is DropAction.Move -> core.send(com.scottgerstl.lupe.core.PadMove(act.track, act.from, act.track, act.to))
+                is DropAction.Offer -> holdMenu?.open(finger, color, listOf(
+                    HoldItem("Same pattern", sub = "Edits are shared") { core.send(Intent.PadSet(act.toTrack, act.to, act.pattern)) },
+                    HoldItem("A copy", sub = "Takes a free number") { core.send(com.scottgerstl.lupe.core.CopyPattern(act.pattern, act.toTrack, act.to)) },
+                ))
+                is DropAction.Well -> when (act.action) {
+                    // no confirm (batch item 13): it clears at once and the Undo strip puts it back
+                    EdgeAction.Clear -> core.send(Intent.PadClear(row.track, at))
+                    EdgeAction.Edit -> { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) }
+                    EdgeAction.Duplicate -> {
+                        // into the track's next empty slot; with none, or no free number, the core says so in its refusal
+                        val free = row.entries.indexOfFirst { it.kind == PadKind.Empty }
+                        val blk = core.timeline.value.tracks.firstOrNull { it.track == row.track }?.blocks.orEmpty().firstOrNull { it.kind != "gap" && at in it.first..it.last }
+                        when {
+                            free < 0 || free >= 16 -> blk?.let { core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, it.id)) }
+                            e.kind == PadKind.Rest -> core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, free, 65))
+                            e.pattern != null -> core.send(com.scottgerstl.lupe.core.CopyPattern(e.pattern, row.track, free))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    val lifted = dragState?.drag?.let { it.track == row.track && it.from == at } == true
+    Box(modifier.width(PAD_W).height(h).graphicsLayer { alpha = if (lifted) 0.35f else 1f }.onGloballyPositioned {
+        padCoords = it
+        dragState?.slots?.set(row.track to idx, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
+    }) {
         Box(
             Modifier.matchParentSize()
                 .drawBehind {
@@ -492,7 +540,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                         if (!empty) add(CustomAccessibilityAction("Clear pad") { core.send(Intent.PadClear(row.track, at)); true })
                     }
                 }
-                .tapOrHoldMenu(Triple(row.track, at, e.kind), color, { padItems() }, onTap = { tap() }, pressed = { pressed = it }),
+                .tapOrHoldMenu(Triple(row.track, at, e.kind), color, { padItems() }, onTap = { tap() }, pressed = { pressed = it }, dragger = dragger),
         ) {
             val fg = Color.lerp(Tok.text, Tok.onColour, fill.value)
             if (empty) {

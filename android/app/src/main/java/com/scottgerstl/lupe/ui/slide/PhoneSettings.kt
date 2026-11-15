@@ -56,12 +56,38 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     fun chooseMenuSpeed(v: Int) { menuSpeed = v.coerceIn(50, 200); prefs?.edit()?.putInt(MENU_SPEED, menuSpeed)?.apply() }
 
     /**
+     * Pad drag and the edge wells (CLAUDE.md rule 3; added 2026-11-15, review 2026-11-29; the iPhone's numbers, 373dadb): how far a pad is slid before it lifts (dp, 8),
+     * how long a press must be before a slide counts as a drag, not a swipe (ms, 150), how long the wells take to slide in (ms, 220; out takes 72 % of it),
+     * how near the pad's centre comes before a well glows (dp, 96) and before it is hot, so a drop there acts (dp, 48).
+     */
+    var padSlideStart by mutableStateOf(prefs?.getInt(PAD_SLIDE, 8) ?: 8)
+        private set
+    fun choosePadSlideStart(v: Int) { padSlideStart = v.coerceIn(4, 30); prefs?.edit()?.putInt(PAD_SLIDE, padSlideStart)?.apply() }
+    var padSlideDwellMs by mutableStateOf(prefs?.getInt(PAD_DWELL, 150) ?: 150)
+        private set
+    fun choosePadSlideDwell(v: Int) { padSlideDwellMs = v.coerceIn(50, 400); prefs?.edit()?.putInt(PAD_DWELL, padSlideDwellMs)?.apply() }
+    var wellSlideMs by mutableStateOf(prefs?.getInt(WELL_SLIDE, 220) ?: 220)
+        private set
+    fun chooseWellSlide(v: Int) { wellSlideMs = v.coerceIn(100, 500); prefs?.edit()?.putInt(WELL_SLIDE, wellSlideMs)?.apply() }
+    var wellGlowDp by mutableStateOf(prefs?.getInt(WELL_GLOW, 96) ?: 96)
+        private set
+    fun chooseWellGlow(v: Int) { wellGlowDp = v.coerceIn(48, 160); prefs?.edit()?.putInt(WELL_GLOW, wellGlowDp)?.apply() }
+    var wellHotDp by mutableStateOf(prefs?.getInt(WELL_HOT, 48) ?: 48)
+        private set
+    fun chooseWellHot(v: Int) { wellHotDp = v.coerceIn(24, 96); prefs?.edit()?.putInt(WELL_HOT, wellHotDp)?.apply() }
+
+    /**
      * Handedness (the iPhone's setting, decision 33): right-handed, a hold menu opens to the left of the finger so the hand doesn't cover it,
      * and the sound keys sit down the right edge; left-handed, the other way round.
      */
-    var leftHanded by mutableStateOf(prefs?.getBoolean(LEFT_HANDED, false) ?: false)
+    // two settings now (Scott, 2026-11-15): the sound keys' side and the side hold menus open to, each its own; the old handedness carries into both
+    // (left-handed meant the rail on the left and menus opening to the right)
+    var railLeft by mutableStateOf(prefs?.takeIf { it.contains(RAIL_LEFT) }?.getBoolean(RAIL_LEFT, false) ?: (prefs?.getBoolean(LEFT_HANDED, false) ?: false))
         private set
-    fun chooseLeftHanded(on: Boolean) { leftHanded = on; put(LEFT_HANDED, on) }
+    var menusRight by mutableStateOf(prefs?.takeIf { it.contains(MENUS_RIGHT) }?.getBoolean(MENUS_RIGHT, false) ?: (prefs?.getBoolean(LEFT_HANDED, false) ?: false))
+        private set
+    fun chooseRailLeft(on: Boolean) { railLeft = on; put(RAIL_LEFT, on) }
+    fun chooseMenusRight(on: Boolean) { menusRight = on; put(MENUS_RIGHT, on) }
 
     /**
      * Sound keys (decision 32, off by default): a rail of FX SEL ENV LFO EDIT ARP down the edge, so the phone can open the sound panel too.
@@ -81,11 +107,18 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     companion object {
         fun from(context: android.content.Context) = PhoneSettings(context.getSharedPreferences("lupe_settings", android.content.Context.MODE_PRIVATE))
         const val HAPTICS = "haptics"
-        const val LEFT_HANDED = "left_handed"
+        const val LEFT_HANDED = "left_handed"       // (the old one, read once to fill the two below)
+        const val RAIL_LEFT = "rail_left"
+        const val MENUS_RIGHT = "menus_right"
         const val SOUND_KEYS = "soundKeys"   // the same key as P4's branch, so either copy reads the other's
         const val TAB_MS = "labs_tab_slide_ms"
         const val MENU_SPRING = "labs_menu_spring"
         const val MENU_SPEED = "labs_menu_speed"
+        const val PAD_SLIDE = "labs_pad_slide_start"
+        const val PAD_DWELL = "labs_pad_slide_dwell"
+        const val WELL_SLIDE = "labs_well_slide"
+        const val WELL_GLOW = "labs_well_glow"
+        const val WELL_HOT = "labs_well_hot"
         const val GRAPHICS = "show_graphics"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"

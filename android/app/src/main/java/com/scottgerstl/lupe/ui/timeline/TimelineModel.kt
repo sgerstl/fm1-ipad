@@ -6,6 +6,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -103,7 +104,24 @@ fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions,
     val pads = core.pads.collectAsStateWithLifecycle()
     val sounds = LocalSoundsHost.current
     val ui = remember(st) { derivedStateOf(structuralEqualityPolicy()) { st.value.toUi(selected, pads.value.selected.track).copy(deleted = pads.value.clearUndo.filter { it.block }) } }
-    val head = remember(st) { derivedStateOf { st.value.playheadBar } }
+    // the playhead from the clock, every frame, as the pass bars are (P1's playheadBar steps by the beat now): bars = pulses / ticksPerBar, only
+    // while the clock runs and the song plays; without a clock the core's beat-stepped bar still shows
+    val clock = core.clock.collectAsStateWithLifecycle()
+    val playingNow = core.top.collectAsStateWithLifecycle()
+    var frame by remember { mutableLongStateOf(0L) }
+    val running = playingNow.value.playing && clock.value.running
+    androidx.compose.runtime.LaunchedEffect(running) { if (running) while (true) androidx.compose.runtime.withFrameNanos { frame = it } }
+    val head = remember(st, clock, playingNow) {
+        object : State<Double?> {
+            override val value: Double? get() {
+                if (playingNow.value.playing && clock.value.running && st.value.ticksPerBar > 0) {
+                    frame      // (read, so a drawn playhead redraws each frame)
+                    return clock.value.ticksNow(android.os.SystemClock.uptimeMillis()) / st.value.ticksPerBar
+                }
+                return st.value.playheadBar
+            }
+        }
+    }
     val actions = remember(core, sounds, st) {
         TimelineActions(
             select = { selected = it },

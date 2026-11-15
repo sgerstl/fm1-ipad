@@ -244,6 +244,21 @@ class FakeLupeCore(
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is ClearUnusedPatterns -> { val p = _pads.value; if (intent.confirmed && p.unused.isNotEmpty()) { val n = p.unused.size
                 _pads.value = p.copy(unused = emptyList(), kept = p.kept - p.unused.toSet(), patternsFree = (p.patternsFree ?: 0) + n); refuse("Cleared $n unused pattern${if (n == 1) "" else "s"}: their numbers are free") } }
+            is PadMove -> {
+                // the FM-1 rewrites a list only while stopped; a pad moves within its own track, the rest shifting along (P1's real one answers the same way)
+                if (_top.value.playing) refuse("Stop to rearrange: the FM-1 moves pads only while stopped")
+                else if (intent.toTrack != intent.track) refuse("A pad moves within its own track. Copy it to put it on another one.")
+                else {
+                    _pads.update { p -> p.copy(rows = p.rows.map { r ->
+                        if (r.track != intent.track || intent.from !in r.entries.indices || r.entries[intent.from].kind == PadKind.Empty) r
+                        else {
+                            val l = r.entries.toMutableList(); val x = l.removeAt(intent.from)
+                            val firstEmpty = l.indexOfFirst { it.kind == PadKind.Empty }.let { if (it < 0) l.size else it }
+                            l.add(intent.to.coerceIn(0, firstEmpty), x); r.copy(entries = l)
+                        } }) }
+                    recount()
+                }
+            }
             is Intent.PadClear -> {
                 // no confirm (batch item 13): the pad is cleared at once and can come back for ten seconds
                 val e = _pads.value.rows.firstOrNull { it.track == intent.track }?.entries?.getOrNull(intent.entry)
