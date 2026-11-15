@@ -73,7 +73,10 @@ struct CoreStats {
     int64_t catchUps = 0;       // the ring held far too much (a stall's backlog): skipped to the target
     int64_t overflows = 0;      // input arrived with no room (the output had stopped pulling)
     int64_t zeroRuns = 0;       // exact-zero runs inside a signal: the phone's USB path filled a gap
-    int64_t repeatRuns = 0;     // exactly repeated frames inside a signal: likewise
+    int64_t repeatRuns = 0;     // 8+ exactly repeated loud frames: the FM-1's own ring underran (uac_packet repeats its last frame), or the phone repeated
+    int64_t concealed = 0;      // gap zero runs concealed (Config::conceal): dropped, or filled, with crossfades
+    int gapMode = 0;            // 0 not known yet, 1 the phone INSERTS its zeros (extra frames: dropped), 2 it REPLACES real frames (filled)
+    double insertedness = 0;    // the last window's raw surplus over the gap frames: ~1 inserted, ~0 replaced
     int64_t framesIn = 0, framesOut = 0;
     bool blind = false;         // no non-zero input for 0.5 s: undithered silence, gaps can't be seen
     bool playing = false;       // primed and pulling (false while it fills up at the start or after an underrun)
@@ -90,6 +93,7 @@ public:
         double safetyMs = 1.0;        // added to the measured jitter
         double jitterHalfLifeS = 30;  // how long a bad patch keeps the buffer up
         double maxPpm = 2000;         // the ratio nudge's limit (0.2 %, 3.5 cents)
+        bool conceal = true;          // take gap zero runs out of the stream (a stopgap for the phone's USB path)
     };
 
     explicit ThroughCore(const Config &c)
@@ -108,16 +112,9 @@ public:
 
     /** Input frames as they arrive (interleaved stereo float). */
     void push(const float *x, int frames) {
-        for (int i = 0; i < frames; i++) {
-            float l = x[2 * i], r = x[2 * i + 1];
-            detect(l, r);
-            // room: frames older than the window's start (rd_ - kTapsHalf + 1) may be overwritten
-            if (w_ - (rd_ - kTapsHalf + 1) >= cfg_.ringFrames) { st_.overflows++; continue; }
-            ring_[size_t(w_ & mask_) * 2] = l;
-            ring_[size_t(w_ & mask_) * 2 + 1] = r;
-            w_++;
-        }
+        for (int i = 0; i < frames; i++) take(x[2 * i], x[2 * i + 1]);
         st_.framesIn += frames;
+        winRawIn_ += frames;
     }
 
     /** Frames ahead of the read point that the resampler can still use (input rate). */
@@ -175,6 +172,7 @@ public:
         }
         st_.framesOut += frames;
         control(frames);
+        judgeGaps(frames);
     }
 
     const CoreStats &stats() {
@@ -213,36 +211,108 @@ private:
         target_ = std::clamp(safety_ + 1.5 * jitter_, minTarget_, maxTarget_);
     }
 
-    void detect(float l, float r) {
-        // The FM-1 dithers (Skiff 2.5, #110): even its silence is +-1 LSB noise, never a long run of exact zeros. So:
-        //  * right after real signal, 4 exact-zero frames are a gap the phone's USB path filled;
-        //  * in quiet (dither only), a run of 32 exact-zero frames is too (dither gives a zero frame on both sides
-        //    about half the time: 32 in a row by chance is ~1e-8, a few a day). A gap is usually a packet, 44-49 frames.
-        //  * input with no non-zero frame for half a second isn't dithered at all (not the FM-1, or muted upstream):
-        //    gaps can't be seen in it, and the stats say so (blind).
+    /**
+     * One input frame: gap detection and (optionally) concealment, then the ring.
+     *
+     * The FM-1 dithers (Skiff 2.5, #110): even its silence is +-1 LSB noise, never a long run of exact zeros. So a run
+     * of exact-zero frames is held back until it ends, and judged then:
+     *  * 4+ right after real signal, or 32+ in quiet (dither alone gives 32 zero frames in a row ~1e-8 of the time),
+     *    is a gap the phone's USB path filled. With conceal on it is taken out of the stream, and the next 32 frames
+     *    fade from the last frame before it, so the join doesn't click. The adaptive buffer makes up the frames.
+     *    (If the phone *inserted* the zeros, nothing real is lost; if it *replaced* real frames, a 1 ms skip with a
+     *    crossfade is still far quieter than a 1 ms hole.)
+     *  * Shorter runs are real and go in as they were.
+     *  * A run that reaches kHoldCap (5 ms) isn't held any longer: it's silence (undithered: blind) or a long dropout,
+     *    written as it is; after real signal it still counts as a gap.
+     * Repeats: 8 identical loud frames. Dither makes a flat waveform top repeat by chance (a square wave's top, two or
+     * three frames often), so fewer than 8 isn't evidence. The FM-1 itself repeats its last frame when its ring runs
+     * dry (uac_packet), so repeats point at the FM-1, zeros at the phone.
+     */
+    void take(float l, float r) {
         const float loud = 1e-3f;   // about -60 dBFS (33 LSB at 16 bits): well above the dither
-        bool zero = (l == 0.f && r == 0.f);
-        bool same = (l == lastL_ && r == lastR_);
-        if (zero) {
-            ++zeroRun_;
-            if (zeroRun_ == 4 && lastLoud_) st_.zeroRuns++;
-            else if (zeroRun_ == 32 && !lastLoud_) st_.zeroRuns++;
+        if (l == 0.f && r == 0.f) {
             if (++sinceNonZero_ >= cfg_.inRate / 2) st_.blind = true;
-        } else {
-            if (sinceNonZero_ >= cfg_.inRate / 2 && zeroRun_ >= 32 && !lastLoud_) st_.zeroRuns--;   // that long run was undithered silence, not a gap
-            zeroRun_ = 0;
-            sinceNonZero_ = 0;
-            st_.blind = false;
+            if (passZeros_) { write(0.f, 0.f); return; }
+            if (++held_ >= kHoldCap) {
+                if (lastLoud_) st_.zeroRuns++;          // a long dropout after real signal
+                for (int k = 0; k < held_; k++) write(0.f, 0.f);
+                held_ = 0;
+                passZeros_ = true;                      // the rest of this run goes straight in
+            }
+            return;
         }
-        if (same && !zero && (std::fabs(l) > loud || std::fabs(r) > loud)) {
-            if (++repeatRun_ == 3) st_.repeatRuns++;
-        } else {
-            repeatRun_ = 0;
+        if (held_ > 0) {
+            bool gap = lastLoud_ ? held_ >= 4 : held_ >= 32;
+            if (gap) st_.zeroRuns++;
+            if (gap) winGapFrames_ += held_;
+            if (gap && cfg_.conceal) {
+                st_.concealed++;
+                if (st_.gapMode != 1) {
+                    // replaced: the time is real, the sound lost. Fill it with the frames just before it (a repeat),
+                    // faded in from the last frame so the start doesn't click
+                    int n = std::min<int64_t>(held_, w_ - (rd_ - kTapsHalf + 1) - 1);
+                    int64_t base = w_ - n;
+                    for (int k = 0; k < held_; k++) {
+                        size_t q = size_t((base + (k % std::max(1, n))) & mask_) * 2;
+                        float fl = ring_[q], fr = ring_[q + 1];
+                        if (k < 16) { float t = float(k + 1) / 17.f; fl = lastWL_ + (fl - lastWL_) * t; fr = lastWR_ + (fr - lastWR_) * t; }
+                        write(fl, fr);
+                    }
+                }
+                // inserted: the zeros were extra; leave them out. Until it's known, fill: a wrong fill only grows the
+                // buffer for a moment (the next catch-up trims it), a wrong drop empties it (a hole)
+                fade_ = kFade; fadeL_ = lastWL_; fadeR_ = lastWR_;
+            } else {
+                for (int k = 0; k < held_; k++) write(0.f, 0.f);
+            }
+            held_ = 0;
         }
-        if (!zero) lastLoud_ = std::fabs(l) > loud || std::fabs(r) > loud;
-        lastL_ = l;
-        lastR_ = r;
+        passZeros_ = false;
+        sinceNonZero_ = 0;
+        st_.blind = false;
+        bool isLoud = std::fabs(l) > loud || std::fabs(r) > loud;
+        if (isLoud && l == lastL_ && r == lastR_) { if (++repeatRun_ == 7) st_.repeatRuns++; }
+        else repeatRun_ = 0;
+        lastL_ = l; lastR_ = r;
+        lastLoud_ = isLoud;
+        float wl = l, wr = r;
+        if (fade_ > 0) {   // from the frame before the gap to the stream, over kFade frames
+            float t = float(kFade - fade_ + 1) / float(kFade + 1);
+            wl = fadeL_ + (l - fadeL_) * t;
+            wr = fadeR_ + (r - fadeR_) * t;
+            fade_--;
+        }
+        write(wl, wr);
     }
+
+    void write(float l, float r) {
+        // room: frames older than the window's start (rd_ - kTapsHalf + 1) may be overwritten
+        if (w_ - (rd_ - kTapsHalf + 1) >= cfg_.ringFrames) { st_.overflows++; return; }
+        ring_[size_t(w_ & mask_) * 2] = l;
+        ring_[size_t(w_ & mask_) * 2 + 1] = r;
+        w_++;
+        lastWL_ = l; lastWR_ = r;
+    }
+
+    /**
+     * Every 2 s of output: did the gap zeros come on top of the stream, or in place of it? The raw input (zeros
+     * included) against the output's consumption at the nominal ratio: inserted zeros make it run fast by about the
+     * gap frames (15 gaps a second of 48 frames is 1.5 %, against clocks within 0.05 %); replaced ones don't.
+     */
+    void judgeGaps(int frames) {
+        winOut_ += frames;
+        if (winOut_ < int64_t(cfg_.outRate) * 2) return;
+        if (winGapFrames_ >= 300) {
+            // (the fills this window added are in the ring, not in the raw count: raw is what the phone handed us)
+            double surplus = double(winRawIn_) - double(winOut_) * step0_;
+            st_.insertedness = surplus / double(winGapFrames_);
+            st_.gapMode = st_.insertedness > 0.5 ? 1 : 2;
+        }
+        winOut_ = winRawIn_ = winGapFrames_ = 0;
+    }
+
+    static constexpr int kHoldCap = 256;   // frames: the longest zero run held back (5 ms at 48 kHz)
+    static constexpr int kFade = 32;       // frames: the crossfade over a concealed gap
 
     Config cfg_;
     int64_t mask_;
@@ -254,10 +324,11 @@ private:
     double ratio_ = 0, integ_ = 0;
     double mean_ = 0, jitter_ = 0, target_ = 0;
     double minTarget_ = 0, maxTarget_ = 0, safety_ = 0;
-    int zeroRun_ = 0, repeatRun_ = 0;
+    int held_ = 0, repeatRun_ = 0, fade_ = 0;
+    int64_t winRawIn_ = 0, winOut_ = 0, winGapFrames_ = 0;
     int64_t sinceNonZero_ = 0;
-    bool lastLoud_ = false;
-    float lastL_ = 0, lastR_ = 0;
+    bool lastLoud_ = false, passZeros_ = false;
+    float lastL_ = 0, lastR_ = 0, lastWL_ = 0, lastWR_ = 0, fadeL_ = 0, fadeR_ = 0;
     CoreStats st_;
 };
 

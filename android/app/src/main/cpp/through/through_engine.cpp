@@ -46,6 +46,10 @@ enum Stat {
     S_LAST_ERROR,    // the last error callback's AAudio code (0: none)
     S_LAST_ERROR_INPUT,  // 1: that error came from the input stream
     S_BLIND,         // 1: the input has been exact digital silence for 0.5 s (gaps can't be detected in it)
+    S_CONCEALED,     // gap zero runs concealed
+    S_GAP_MODE,      // 0 not known, 1 the phone inserts its zeros, 2 it replaces real frames
+    S_INSERTEDNESS,  // the last judgement's measure (~1 inserted, ~0 replaced)
+    S_CAPTURE,       // 0 none, 1 recording the raw input, 2 a capture is ready to take
     S_COUNT
 };
 
@@ -54,7 +58,7 @@ public:
     ~Engine() { stop(); }
 
     /** Opens and starts both streams. Returns 0, or an AAudio error (negative). */
-    int start(int inDevice, int inRate, bool exclusiveIn, bool exclusiveOut, int outDevice) {
+    int start(int inDevice, int inRate, bool exclusiveIn, bool exclusiveOut, int outDevice, bool conceal) {
         std::lock_guard<std::mutex> g(lock_);
         closeLocked();
         disconnected_ = false;
@@ -105,6 +109,7 @@ public:
         through::ThroughCore::Config c;
         c.inRate = inRate_;
         c.outRate = outRate_;
+        c.conceal = conceal;
         core_ = std::make_unique<through::ThroughCore>(c);
         inBuf_.assign(size_t(std::max(4096, AAudioStream_getBufferCapacityInFrames(in_))) * 2, 0.f);
         lastOutXruns_ = 0;
@@ -197,9 +202,33 @@ public:
         s[S_FRAMES_OUT] = double(c.framesOut);
         s[S_PLAYING] = c.playing ? 1 : 0;
         s[S_BLIND] = c.blind ? 1 : 0;
+        s[S_CONCEALED] = double(c.concealed);
+        s[S_GAP_MODE] = c.gapMode;
+        s[S_INSERTEDNESS] = c.insertedness;
+        s[S_CAPTURE] = capState();
         s[S_CALLBACKS] = double(callbacks_.load());
         s[S_PEAK] = peak_.exchange(0.f);
     }
+
+    /** Records the next `seconds` of raw input (allocated here, off the audio thread). */
+    void captureArm(int seconds) {
+        std::lock_guard<std::mutex> g(lock_);
+        if (capArmed_) return;   // one at a time: the audio thread is writing into cap_ while armed
+        cap_.assign(size_t(std::max(1, seconds)) * size_t(std::max(8000, inRate_)) * 2, 0.f);
+        capPos_ = 0;
+        capArmed_ = true;
+    }
+    int capState() { return capArmed_ ? 1 : (!cap_.empty() && capPos_.load() >= int64_t(cap_.size() / 2)) ? 2 : 0; }
+    /** The finished capture (interleaved stereo), then forgets it. Empty if none is ready. */
+    std::vector<float> captureTake() {
+        std::lock_guard<std::mutex> g(lock_);
+        if (capState() != 2) return {};
+        std::vector<float> v;
+        v.swap(cap_);
+        capPos_ = 0;
+        return v;
+    }
+    int inRate() { return inRate_; }
 
     std::string error() {
         std::lock_guard<std::mutex> g(lock_);
@@ -233,6 +262,13 @@ private:
             for (int i = 0; i < 2 * n; i++) peak = std::max(peak, std::fabs(inBuf_[i]));
             core_->push(inBuf_.data(), n);
             framesRead_ += n;
+            if (capArmed_.load(std::memory_order_acquire)) {   // the raw input, before any concealment
+                int64_t pos = capPos_.load(std::memory_order_relaxed), room = int64_t(cap_.size() / 2) - pos;
+                int64_t k = std::min<int64_t>(room, n);
+                if (k > 0) std::memcpy(&cap_[size_t(pos) * 2], inBuf_.data(), sizeof(float) * 2 * size_t(k));
+                capPos_.store(pos + k, std::memory_order_release);
+                if (pos + k >= int64_t(cap_.size() / 2)) capArmed_.store(false, std::memory_order_release);
+            }
             if (n < cap) break;
         }
         peak_.store(peak);
@@ -286,6 +322,9 @@ private:
     std::atomic<bool> lastErrorInput_{false};
     std::atomic<int64_t> callbacks_{0}, framesRead_{0}, framesWritten_{0};
     std::atomic<float> peak_{0.f};
+    std::vector<float> cap_;
+    std::atomic<bool> capArmed_{false};
+    std::atomic<int64_t> capPos_{0};
     // a spin-free try-lock copy of the core's stats for the reader
     std::mutex snapLock_;
     through::CoreStats snap_;
@@ -302,8 +341,21 @@ Engine &engine() {
 extern "C" {
 
 JNIEXPORT jint JNICALL Java_com_scottgerstl_lupe_audio_ThroughNative_nativeStart(
-    JNIEnv *, jclass, jint inDevice, jint inRate, jboolean exclusiveIn, jboolean exclusiveOut, jint outDevice) {
-    return engine().start(inDevice, inRate, exclusiveIn, exclusiveOut, outDevice);
+    JNIEnv *, jclass, jint inDevice, jint inRate, jboolean exclusiveIn, jboolean exclusiveOut, jint outDevice, jboolean conceal) {
+    return engine().start(inDevice, inRate, exclusiveIn, exclusiveOut, outDevice, conceal);
+}
+
+JNIEXPORT void JNICALL Java_com_scottgerstl_lupe_audio_ThroughNative_nativeCaptureArm(JNIEnv *, jclass, jint seconds) {
+    engine().captureArm(seconds);
+}
+
+/** The finished capture as interleaved stereo floats, or null if none is ready. */
+JNIEXPORT jfloatArray JNICALL Java_com_scottgerstl_lupe_audio_ThroughNative_nativeCaptureTake(JNIEnv *env, jclass) {
+    std::vector<float> v = engine().captureTake();
+    if (v.empty()) return nullptr;
+    jfloatArray a = env->NewFloatArray(jsize(v.size()));
+    if (a) env->SetFloatArrayRegion(a, 0, jsize(v.size()), v.data());
+    return a;
 }
 
 JNIEXPORT void JNICALL Java_com_scottgerstl_lupe_audio_ThroughNative_nativeStop(JNIEnv *, jclass) { engine().stop(); }

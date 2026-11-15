@@ -5,8 +5,14 @@ object ThroughNative {
     private val loaded: Boolean by lazy { runCatching { System.loadLibrary("LupeThrough") }.isSuccess }
 
     /** Starts both streams; 0, or an AAudio error code (negative). inDevice/outDevice 0: the phone's choice. inRate 0: the input's own rate. */
-    fun start(inDevice: Int, inRate: Int, exclusiveIn: Boolean, exclusiveOut: Boolean, outDevice: Int = 0): Int =
-        if (!loaded) -1 else nativeStart(inDevice, inRate, exclusiveIn, exclusiveOut, outDevice)
+    fun start(inDevice: Int, inRate: Int, exclusiveIn: Boolean, exclusiveOut: Boolean, outDevice: Int = 0, conceal: Boolean = true): Int =
+        if (!loaded) -1 else nativeStart(inDevice, inRate, exclusiveIn, exclusiveOut, outDevice, conceal)
+
+    /** Records the next `seconds` of the raw input (before concealment), for the gap analysis (tools/gapcount.swift). */
+    fun captureArm(seconds: Int) { if (loaded) nativeCaptureArm(seconds) }
+
+    /** The finished capture, interleaved stereo, or null until it's ready. */
+    fun captureTake(): FloatArray? = if (!loaded) null else nativeCaptureTake()
 
     fun stop() { if (loaded) nativeStop() }
 
@@ -19,7 +25,9 @@ object ThroughNative {
 
     fun error(): String = if (!loaded) "The audio engine didn't load" else nativeError()
 
-    @JvmStatic private external fun nativeStart(inDevice: Int, inRate: Int, exclusiveIn: Boolean, exclusiveOut: Boolean, outDevice: Int): Int
+    @JvmStatic private external fun nativeStart(inDevice: Int, inRate: Int, exclusiveIn: Boolean, exclusiveOut: Boolean, outDevice: Int, conceal: Boolean): Int
+    @JvmStatic private external fun nativeCaptureArm(seconds: Int)
+    @JvmStatic private external fun nativeCaptureTake(): FloatArray?
     @JvmStatic private external fun nativeStop()
     @JvmStatic private external fun nativeStats(out: DoubleArray)
     @JvmStatic private external fun nativeError(): String

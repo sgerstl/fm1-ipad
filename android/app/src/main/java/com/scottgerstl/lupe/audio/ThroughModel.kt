@@ -46,6 +46,12 @@ data class ThroughStats(
     val restarts: Int = 0,
     /** The input has been exact digital silence for half a second: the FM-1 dithers, so that isn't the FM-1's quiet, and gaps can't be seen. */
     val blind: Boolean = false,
+    /** Gap zero runs concealed (dropped if the phone inserts them, filled if it replaces real frames). */
+    val concealed: Long = 0,
+    /** 0 not known yet, 1 the phone inserts its zeros, 2 it replaces real frames; and the measure behind it (~1 / ~0). */
+    val gapMode: Int = 0, val insertedness: Double = 0.0,
+    /** 0 no capture, 1 recording, 2 ready. */
+    val capture: Int = 0,
 ) {
     /** Gaps the phone's own USB audio path filled before the sound reached Lupe (the FM-1 dithers, so it never sends these). */
     val phoneDropouts get() = zeroRuns + repeatRuns
@@ -64,9 +70,10 @@ data class ThroughStats(
                 jitterMs = d(17), ratioPpm = d(18), underruns = l(19), catchUps = l(20), overflows = l(21), zeroRuns = l(22),
                 repeatRuns = l(23), inXruns = l(24), outXruns = l(25), framesIn = l(26), framesOut = l(27), playing = b(28),
                 callbacks = l(29), inChannels = n(30), peak = d(31), tsFlags = n(32), lastError = n(33), lastErrorInput = b(34), blind = b(35),
+                concealed = l(36), gapMode = n(37), insertedness = d(38), capture = n(39),
             )
         }
-        const val COUNT = 36
+        const val COUNT = 40
     }
 }
 
@@ -156,7 +163,10 @@ object ThroughModel {
             (if (s.outLowLatency) "" else " (not low latency)") +
             " · in ${ms(s.inLatencyMs)} + buffer ${ms(s.ringMs + s.filterMs)} + out ${ms(s.outLatencyMs)} ms" +
             " · burst ${s.outBurst} · ${"%+.0f".format(s.ratioPpm)} ppm" +
-            " · Lupe gaps ${s.underruns} · phone gaps ${s.phoneDropouts}${if (s.blind) " (blind: the input is digital silence)" else ""} · xruns ${s.inXruns}/${s.outXruns}" +
+            " · Lupe gaps ${s.underruns} · phone gaps ${s.phoneDropouts} (${s.zeroRuns} zero, ${s.repeatRuns} repeat)${if (s.blind) " (blind: the input is digital silence)" else ""}" +
+            (if (s.concealed > 0) " · concealed ${s.concealed}" else "") +
+            (when (s.gapMode) { 1 -> " · gaps inserted (${"%.2f".format(s.insertedness)})"; 2 -> " · gaps replace (${"%.2f".format(s.insertedness)})"; else -> "" }) +
+            " · xruns ${s.inXruns}/${s.outXruns}" +
             " · timestamps ${if (s.tsFlags and 1 != 0) "in" else "–"}/${if (s.tsFlags and 2 != 0) "out" else "–"}" +
             (if (s.restarts > 0) " · restarts ${s.restarts}" else "")
     }

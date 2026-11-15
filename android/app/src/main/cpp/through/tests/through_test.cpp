@@ -198,15 +198,18 @@ struct Scenario {
     int burst = 240;           // the output callback's frames (5 ms at 48 kHz: the Pixel's)
     int inRate = 48000;
     bool quiet = false;        // the FM-1 silent: only its dither (Skiff 2.5's uac_dith on zero: -1, 0 or +1 LSB)
+    bool insertGaps = false;   // a gap is 48 zero frames *added* before the packet (an underrun filled), not the packet replaced
+    bool conceal = true;       // ThroughCore::Config::conceal
 };
 
-struct SimResult { int64_t underruns, catchUps, zeroRuns; double meanLatencyMs, maxLatencyMs, ppm, targetMs; int64_t gapsInjected; };
+struct SimResult { int64_t underruns, catchUps, zeroRuns; double meanLatencyMs, maxLatencyMs, ppm, targetMs; int64_t gapsInjected; int64_t concealed; double minPeak; int gapMode; double insertedness; };
 
 static SimResult simulate(const Scenario &sc, double seconds, uint32_t seed = 1) {
     std::mt19937 rng(seed);
     std::uniform_real_distribution<double> uni(0, 1);
-    ThroughCore::Config c; c.inRate = sc.inRate; c.outRate = 48000;
+    ThroughCore::Config c; c.inRate = sc.inRate; c.outRate = 48000; c.conceal = sc.conceal;
     ThroughCore core(c);
+    double minPeak = 1e9;      // the quietest 1 ms of output after settling (a 0.3 sine: ~0.3; a hole: ~0)
     SkiffSource src; src.paced = sc.paced;
     struct Pk { double at; int n; bool gap; int64_t first; };
     std::deque<Pk> inFlight;                 // packets received by the phone, waiting to be handed to the app
@@ -240,6 +243,12 @@ static SimResult simulate(const Scenario &sc, double seconds, uint32_t seed = 1)
             // the output callback: read what has been handed over (non-blocking), then pull a burst
             while (!handed.empty() && handed.front().at <= tCb) {
                 Pk p = handed.front(); handed.pop_front();
+                if (p.gap && sc.insertGaps) {   // the phone added 48 frames of zeros, then the real packet
+                    std::vector<float> z(96, 0.f);
+                    core.push(z.data(), 48);
+                    gaps++;
+                    p.gap = false;
+                }
                 buf.resize(size_t(p.n) * 2);
                 for (int i = 0; i < p.n; i++) {
                     if (p.gap) { buf[2 * i] = buf[2 * i + 1] = 0.f; continue; }
@@ -256,6 +265,13 @@ static SimResult simulate(const Scenario &sc, double seconds, uint32_t seed = 1)
                 core.push(buf.data(), p.n);
             }
             core.pull(out.data(), sc.burst);
+            if (tCb > 3 && !sc.quiet) {
+                for (int w0 = 0; w0 + 48 <= sc.burst; w0 += 48) {
+                    float pk = 0;
+                    for (int i = w0; i < w0 + 48; i++) pk = std::max(pk, std::fabs(out[2 * i]));
+                    minPeak = std::min(minPeak, double(pk));
+                }
+            }
             if (tCb > 3) {   // after settling
                 auto &s = core.stats();
                 double lat = s.fillMean / sc.inRate * 1000 + core.filterDelayMs();
@@ -263,13 +279,13 @@ static SimResult simulate(const Scenario &sc, double seconds, uint32_t seed = 1)
             }
             if (tCb > 3 && tCb - cbPeriod <= 3) {   // reset the counters at the settle point
                 auto &s = core.stats();
-                r.underruns = -s.underruns; r.catchUps = -s.catchUps; r.zeroRuns = -s.zeroRuns; gaps = 0;
+                r.underruns = -s.underruns; r.catchUps = -s.catchUps; r.zeroRuns = -s.zeroRuns; r.concealed = -s.concealed; gaps = 0;
             }
             tCb += cbPeriod;
         }
     }
     auto &s = core.stats();
-    r.underruns += s.underruns; r.catchUps += s.catchUps; r.zeroRuns += s.zeroRuns;
+    r.underruns += s.underruns; r.catchUps += s.catchUps; r.zeroRuns += s.zeroRuns; r.concealed += s.concealed; r.minPeak = minPeak; r.gapMode = s.gapMode; r.insertedness = s.insertedness;
     r.meanLatencyMs = latSum / std::max<int64_t>(1, latN); r.maxLatencyMs = latMax;
     r.ppm = s.ratioPpm; r.targetMs = s.target / sc.inRate * 1000; r.gapsInjected = gaps;
     return r;
@@ -305,6 +321,25 @@ static void testAdaptive() {
     Scenario clean{"no gaps: no false dropouts", 0, 4, 2};
     r = simulate(clean, 63);
     CHECK(r.zeroRuns == 0, "false dropouts: %lld", (long long)r.zeroRuns);
+    // concealment: the output's quietest millisecond, with the phone filling 15 gaps a second (both Pixels' rate)
+    for (int insert = 0; insert < 2; insert++) {
+        for (int conceal = 0; conceal < 2; conceal++) {
+            Scenario cg{"", 0, 1, 0, 0, 0, 15}; cg.insertGaps = insert; cg.conceal = conceal;
+            cg.name = std::string(insert ? "15 inserted" : "15 replaced") + " gaps/s, conceal " + (conceal ? "on" : "off");
+            auto rc = simulate(cg, 33);
+            std::printf("  %-44s quietest 1 ms of a 0.3 sine: peak %.3f · gaps %lld, concealed %lld, Lupe gaps %lld · judged %s (%.2f)\n", cg.name.c_str(),
+                        rc.minPeak, (long long)rc.zeroRuns, (long long)rc.concealed, (long long)rc.underruns,
+                        rc.gapMode == 1 ? "inserted" : rc.gapMode == 2 ? "replaced" : "unknown", rc.insertedness);
+            if (conceal) {
+                // a fill repeats the 48 frames before the gap, not period-aligned: a short dip (~-4 dB), not a hole
+                CHECK(rc.minPeak > (insert ? 0.2 : 0.15), "%s: a hole still reaches the output (peak %.3f)", cg.name.c_str(), rc.minPeak);
+                CHECK(rc.gapMode == (insert ? 1 : 2), "%s: judged the gaps wrongly (mode %d, %.2f)", cg.name.c_str(), rc.gapMode, rc.insertedness);
+                CHECK(rc.underruns == 0, "%s: concealment cost %lld Lupe gaps", cg.name.c_str(), (long long)rc.underruns);
+            } else {
+                CHECK(rc.minPeak < 0.05, "%s: the test should see the hole without concealment (peak %.3f)", cg.name.c_str(), rc.minPeak);
+            }
+        }
+    }
     // the FM-1 silent (dither only): gaps still show, and the dither alone raises none
     Scenario qg{"FM-1 silent (dither), 5 gaps a second", 0, 1, 0, 0, 0, 5}; qg.quiet = true;
     r = simulate(qg, 63);

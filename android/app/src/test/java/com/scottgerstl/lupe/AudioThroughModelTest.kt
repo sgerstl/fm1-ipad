@@ -51,7 +51,7 @@ class AudioThroughModelTest {
 
     @Test fun statsArrayInTheEnginesOrder() {
         val a = DoubleArray(ThroughStats.COUNT)
-        a[0] = 1.0; a[2] = 48000.0; a[3] = 48000.0; a[4] = 1.0; a[7] = 240.0; a[15] = 23.6; a[19] = 2.0; a[22] = 5.0; a[23] = 1.0; a[31] = 0.5; a[32] = 2.0; a[33] = -899.0; a[34] = 1.0; a[35] = 1.0
+        a[0] = 1.0; a[2] = 48000.0; a[3] = 48000.0; a[4] = 1.0; a[7] = 240.0; a[15] = 23.6; a[19] = 2.0; a[22] = 5.0; a[23] = 1.0; a[31] = 0.5; a[32] = 2.0; a[33] = -899.0; a[34] = 1.0; a[35] = 1.0; a[36] = 7.0; a[37] = 1.0; a[38] = 1.04; a[39] = 2.0
         val s = ThroughStats.from(a)
         assertTrue(s.running); assertTrue(s.inExclusive)
         assertEquals(48000, s.inRate); assertEquals(240, s.outBurst)
@@ -60,6 +60,7 @@ class AudioThroughModelTest {
         assertEquals(6L, s.phoneDropouts)
         assertEquals(0.5, s.peak, 1e-9)
         assertEquals(2, s.tsFlags); assertEquals(-899, s.lastError); assertTrue(s.lastErrorInput); assertTrue(s.blind)
+        assertEquals(7L, s.concealed); assertEquals(1, s.gapMode); assertEquals(1.04, s.insertedness, 1e-9); assertEquals(2, s.capture)
         // a short array (an older engine) reads as zeros, not a crash
         assertEquals(0, ThroughStats.from(DoubleArray(3)).outBurst)
     }
@@ -85,12 +86,14 @@ class AudioThroughModelTest {
             inLatencyMs = 4.0, ringMs = 3.0, filterMs = 0.4, outLatencyMs = 10.0, outBurst = 96, ratioPpm = 412.0, underruns = 1, zeroRuns = 3)
         val d = ThroughModel.details(s)
         assertTrue(d, d.startsWith("44.1 → 48 kHz · in exclusive, out shared"))
-        assertTrue(d, d.contains("Lupe gaps 1 · phone gaps 3"))
+        assertTrue(d, d.contains("Lupe gaps 1 · phone gaps 3 (3 zero, 0 repeat)"))
         assertTrue(d, d.contains("+412 ppm"))
         assertTrue(d, d.contains("timestamps –/–"))
         assertTrue(d, !d.contains("restarts"))
         assertTrue(ThroughModel.details(s.copy(tsFlags = 3, restarts = 2)).contains("timestamps in/out · restarts 2"))
-        assertTrue(ThroughModel.details(s.copy(blind = true)).contains("phone gaps 3 (blind"))
+        assertTrue(ThroughModel.details(s.copy(blind = true)).contains("(blind"))
+        val g = ThroughModel.details(s.copy(concealed = 5, gapMode = 2, insertedness = 0.04))
+        assertTrue(g, g.contains("concealed 5 · gaps replace (0.04)"))
         assertEquals("Stopped", ThroughModel.details(ThroughStats()))
     }
 }

@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
         val phone = PhoneSettings.from(this)
         // Play through the phone (the song-name menu and Settings). adb, for the device check and the emulator:
         //   --ez through true|false · --ei throughRate 0|44100|48000 (0: the input's own) · --ez throughExclusiveIn true|false (default false) --ez throughExclusiveOut true|false (default true)
+        //   --ez throughConceal true|false (default true) · --ei throughCapture 10 (seconds of raw input to a WAV in the app's files)
         //   --ez throughAnyInput true (the default input when no FM-1 is there: the emulator; never on a phone with its speaker on)
         val through = app.through
         through.requestPermission = { askMic.launch(android.Manifest.permission.RECORD_AUDIO) }
@@ -105,6 +106,8 @@ class MainActivity : ComponentActivity() {
         if (i.hasExtra("throughExclusiveIn")) { through.testExclusiveIn = i.getBooleanExtra("throughExclusiveIn", false); changed = true }
         if (i.hasExtra("throughExclusiveOut")) { through.testExclusiveOut = i.getBooleanExtra("throughExclusiveOut", true); changed = true }
         if (i.hasExtra("throughAnyInput")) { through.testAnyInput = i.getBooleanExtra("throughAnyInput", false); changed = true }
+        if (i.hasExtra("throughConceal")) { through.testConceal = i.getBooleanExtra("throughConceal", true); changed = true }
+        if (i.hasExtra("throughCapture")) through.testCapture = i.getIntExtra("throughCapture", 10)   // no restart: it records from now
         if (i.hasExtra("through")) through.choose(i.getBooleanExtra("through", false))
         if (changed && !cold) through.restartForSettings()
     }

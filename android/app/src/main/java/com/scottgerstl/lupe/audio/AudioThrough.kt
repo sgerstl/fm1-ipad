@@ -43,6 +43,11 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
     var testExclusiveOut = true
         set(v) { field = v; exclusiveOut = v }
     var testAnyInput = false
+    /** Conceal the phone's gaps (on by default; --ez throughConceal false to hear them as they come). */
+    var testConceal = true
+    /** Seconds of raw input to record to a WAV in the app's files (--ei throughCapture 10), for tools/gapcount.swift. */
+    var testCapture = 0
+        set(v) { field = v; if (v > 0 && running) ThroughNative.captureArm(v) }
 
     /** Asks the Activity for RECORD_AUDIO; set by MainActivity. */
     var requestPermission: (() -> Unit)? = null
@@ -105,6 +110,7 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
     /** Test settings changed (adb extras on a running app): reopen the streams with them. */
     fun restartForSettings() {
         exclusiveIn = testExclusiveIn; exclusiveOut = testExclusiveOut
+        if (running && testCapture > 0) { ThroughNative.captureArm(testCapture) }
         errorTimes.clear()
         if (running) { Log.i(TAG, "restart for new test settings"); stopEngine() }
         check()
@@ -135,7 +141,7 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
         }
         if (running) return
         Log.i(TAG, "check: starting (input ${fm1?.name ?: "default"} id ${fm1?.id ?: 0}, rate ${if (testRate == 0) "its own" else testRate}, in ${if (exclusiveIn) "exclusive" else "shared"}, out ${if (exclusiveOut) "exclusive" else "shared"})")
-        val r = ThroughNative.start(fm1?.id ?: 0, testRate, exclusiveIn, exclusiveOut)
+        val r = ThroughNative.start(fm1?.id ?: 0, testRate, exclusiveIn, exclusiveOut, conceal = testConceal)
         if (r != 0) {
             Log.w(TAG, "start failed: ${ThroughNative.error()}")
             state = ThroughState.Failed("The phone's audio couldn't start (${ThroughNative.error()})")
@@ -158,6 +164,7 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
         lastPollAt = 0L
         logHandler.removeCallbacks(logRunnable)
         logHandler.postDelayed(logRunnable, 1000)
+        if (testCapture > 0) ThroughNative.captureArm(testCapture)
     }
 
     private fun poll() {
@@ -190,10 +197,24 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
         stats = s
         restarts = 0
         state = playingState(s)
+        if (s.capture == 2) saveCapture(s.inRate)
         // the main thread was busy: say so (the screen's figures lag by that much; the audio doesn't, it has its own thread)
         val now = android.os.SystemClock.uptimeMillis()
         if (lastPollAt != 0L && now - lastPollAt > 1000) Log.w(TAG, "poll ran ${now - lastPollAt} ms after the last (main thread busy)")
         lastPollAt = now
+    }
+
+    /** The finished raw capture to a 32-bit float WAV in the app's external files (adb pull the path in the log). */
+    private fun saveCapture(rate: Int) {
+        val data = ThroughNative.captureTake() ?: return
+        testCapture = 0
+        logHandler.post {
+            val dir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+            val f = java.io.File(dir, "through-capture-${System.currentTimeMillis() / 1000}.wav")
+            runCatching { CaptureWav.write(f, data, rate) }
+                .onSuccess { Log.i(TAG, "capture: ${data.size / 2} frames at $rate Hz → ${f.absolutePath}") }
+                .onFailure { Log.w(TAG, "capture failed: ${it.message}") }
+        }
     }
 
     private fun playingState(s: ThroughStats): ThroughState {

@@ -163,3 +163,55 @@ Send back the Details line from each variant (or `adb -s <pixel> logcat -s LupeT
 Before any of them, a read-only look costs nothing: a Skiff build with the serial console (`FELUCCA_CDC=1`) reports `uac_adj_up`, `uac_adj_down`, `uac_missed`, `uac_underruns` and `uac_fill_lo/hi` (`console.c`, `con_uac`). That's the FM-1's own count of short and long packets during a Pixel session. It needs a flash, so it's Scott's call, with a backup, and not part of this check.
 
 **After the run:** record the numbers in the vault note `Projects/Dev/fm1-ipad/bluetooth-poc.md` (the audio spike section). Failures go on the batch list with the check number.
+
+## Round 2: both Pixels, both input paths (after dd12637)
+
+**What came back.**
+- **Pixel 7, shared input:** 17.9 ms, Lupe gaps 0, phone gaps ~67 a second, dejitter 316 in 22 s.
+- **Pixel 7, exclusive input:** 16.9 ms, phone gaps ~25 a second, dejitter 280 in 22 s.
+- **Pixel 10, shared input:** Scott: the crunch is "still there". The earlier 0 was the silent-input blind spot.
+
+So both phones insert gaps on both paths, and Lupe adds none. *Scott's ear; the counts from the session's runs.*
+
+**A correction to round 1's firmware read.** Round 1 said the evidence pointed at the Pixel 10's MMAP path. It doesn't: the gaps come with any Pixel input path, so the MMAP-path explanation is out.
+
+**The working hypothesis (H), to test, not yet shown:**
+- The phones' USB capture takes a fixed number of frames per USB millisecond (48), with a 16-frame cushion ("Size 16"). It does not follow an asynchronous source's real rate.
+- So any clock offset between the FM-1 and the USB frame clock empties or overfills the cushion at a steady rate: one glitch per frame of mismatch, |offset| × 48,000 a second.
+- The dejitter counts fit: 316 in 22 s is 14 a second, which would be a ~300 ppm offset. usb.c's own comment puts the FM-1's I2S about 400 ppm off 44.1 kHz.
+- An ordinary USB mic is within ±50 ppm, about 2 glitches a second, which few would notice. The FM-1's offset is six times that.
+- Note "phone gaps" counts more than the dejitter lines (25–67 against 14 a second). Before this commit the repeat rule fired on dither: three repeats of a flat waveform top happen by chance. It now needs 8 identical loud frames, and zeros and repeats are counted apart.
+
+**How to tell the FM-1 from Android's USB path.** Cheapest first:
+
+| # | Do this | It says |
+|---|---|---|
+| 16 | `android/scripts/dejitter-intervals.sh 20 -s <pixel>` while Lupe plays the FM-1 (either Pixel). | **Evenly spaced** lines (CV under 0.3) at ~70 ms mean H: a rate mismatch, and the script gives it as ppm. Irregular means load, the bus, or the FM-1's own pacing. It also lists the `Avail/Had/Received` numbers: always "Received 48" means the FM-1 sends steady 48s. |
+| 17 | Lupe on the Pixel with `--ei throughCapture 10` (on a running app add `--activity-single-top`), the FM-1 holding a note. Logcat says `capture: … → <path>`; `adb -s <pixel> pull <path>`, then `swift tools/gapcount.swift file <the wav>`. | The real gaps: how long each is (one packet, 48? a few frames?), zeros or repeats, and their spacing. This is the raw input, before concealment. |
+| 18 | **The FM-1 into the Mac**: `swift tools/gapcount.swift live 20 Felucca --wav /tmp/fm1-mac.wav`, the same held note, then the pattern. | **No gaps on the Mac, gaps on the Pixel**: the FM-1's stream is legal, and Android's USB path can't follow it (H). **Gaps on the Mac too**: the FM-1 sends them. Repeats mean its ring runs dry; zeros mean packets it never filled. |
+| 19 | Any other class-compliant USB audio source (a USB mic or interface) into the Pixel, recorded with any app, while running check 16. | Clean, or a few lines a second: the FM-1's large clock offset is what trips the Pixel. As bad: the Pixel's USB capture is generally poor. |
+| 20 | (If one is to hand) a non-Pixel Android phone (Samsung or any Qualcomm phone) with the FM-1 and Lupe. | Whether this is Google's Tensor USB stack (both Pixels have it) or Android's in general. |
+
+**The firmware options, re-costed with H in mind.** Even pacing (round 1's option A) doesn't help under H: it spreads the 49s evenly but keeps the average rate, and the average is what the phone can't follow. What would help is making the FM-1's average rate match the USB frame clock exactly, so every packet is exactly 48:
+
+| Option | What changes in usb.c | Flash (of ~3,204 B free) | CPU | Expected effect |
+|---|---|---|---|---|
+| A. Even pacing | the band rule → filtered fill + accumulator | ~120–200 B | nil | **Under H: none.** Kept only for the record. |
+| B1. Exactly 48, with a sample slip | `uac_packet` always sends 48 (44.1: the exact 44/45 pattern). The ring absorbs the ~400 ppm, and when its fill leaves the band, one 48 kHz frame is dropped (FM-1 fast) or repeated (slow), crossfaded over ~16 frames so it doesn't click. That's ~19 slips a second at 400 ppm, each a one-sample time shift under a crossfade. | ~150–300 B | a few hundred cycles per slip | Under H: the phone's cushion never empties; no 48-frame holes. What's left is a one-sample slip 19 times a second inside the FM-1, far milder than a hole. Cheapest real fix. |
+| B2. Exactly 48, variable-ratio resampling | the 160/147 FIR driven by a phase accumulator steered by the ring's fill (or the SOF count), so the FM-1 resamples its own clock to the host's | ~0.6–1.2 KB (accumulator, per-phase interpolation, steering) | the 48 kHz FIR's cost about doubles; Skiff is at ~65 % CPU under load | Clean: no slips at all. The quality cost is small if it interpolates between phases. Tight on CPU. |
+| C. App bypass | none; Lupe reads the isochronous packets itself over usbfs | 0 | app side | Bypasses the HAL, but detaching the kernel's audio driver takes down MIDI too. Large; last resort. |
+
+**Recommendation:** run 16–18 first (no flash). If 16 shows evenly spaced lines and 18 shows a clean Mac, H stands. Then **B1** is the firmware change worth building, as an experimental Skiff-Lupe build to test on the Pixel, with a backup first and Scott's go-ahead. B2 only if B1's slips are audible. If 18 shows gaps on the Mac, the problem is in the FM-1's own pacing or rendering, and the console counters (`uac_missed`, `uac_underruns`) come next.
+
+**App-side stopgap, in this commit:** concealment, on by default (`--ez throughConceal false` to hear the gaps as they come).
+- A run of exact zeros the phone filled is held back until it ends (5 ms at most), then concealed.
+- **If the phone inserted the zeros** (extra frames: an underrun filled in), they're left out, and the next 32 frames fade from the frame before the gap. Nothing real is lost; the adaptive buffer evens it out.
+- **If the phone replaced real frames,** the gap is filled with the frames just before it, faded in at the start and out into the stream.
+- Which one it is gets judged every 2 s from the stream itself. Inserted zeros make the raw input run fast by about the gap frames (1.5 % at 15 gaps a second, against clocks within 0.05 %). The Details line shows it: `gaps inserted (1.04)` or `gaps replace (0.04)`. That alone answers how the Pixel fills its gaps.
+- Host test, 15 gaps a second of 48 frames on a 0.3 sine. Inserted: the quietest millisecond of output goes from 0.008 (a hole) to 0.244. Replaced: from 0.000 to 0.179 (a short ~4 dB dip: the fill repeats a block that isn't period-aligned).
+- Not concealed: gaps shorter than 4 frames after signal, or under 32 in quiet; repeats; the phone dropping frames without a trace.
+- On the Pixel, compare by ear: `--ez throughConceal true` against `false` (check 21).
+
+| # | Do this | You should see | Result |
+|---|---|---|---|
+| 21 | Pixel 10, shared input, the FM-1 playing. Launch with `--ez throughConceal false`, then `true` (cold start `-S`, or `--activity-single-top`). | By ear: the crunch with it off; with it on, gone or much less. Details: `phone gaps N (Z zero, R repeat) · concealed C · gaps inserted/replace (x.xx)`. | ☐ gone ☐ less ☐ same · Z __ R __ · inserted/replace __ |
