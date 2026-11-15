@@ -28,7 +28,7 @@ Before designing a new tab, panel or screen, or moving where something lives, up
 
 ## 5. The fakes are strict
 
-`FakeSloop` and `FakeSkiff` record every request they don't model in `unanswered`, and the tests expect it to be empty (`unansweredCommands`). When a test fails on that, **teach the fake from evidence**: a capture (`tools/sloopcapture.swift`), skiff-sim, or the firmware's own source. Never from what the app happens to send. Copy the firmware's refusals too: short forms, wrong argument counts, writes refused while playing. Both REC (a 1-byte LIVE op) and the INSERT knob names passed against a fake that was more forgiving than the real FM-1.
+`FakeSkiff` records every request it doesn't model in `unanswered`, and the tests expect it to be empty (`unansweredCommands`). When a test fails on that, **teach the fake from evidence**: a probe of the real FM-1 (`tools/skiffprobe.swift`), skiff-sim, or the firmware's own source. Never from what the app happens to send. Copy the firmware's refusals too: short forms, wrong argument counts, writes refused while playing. The INSERT knob names passed against a fake that was more forgiving than the real FM-1.
 
 ## 6. Accessibility is a release gate
 
