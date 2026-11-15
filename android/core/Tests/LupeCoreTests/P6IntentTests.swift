@@ -97,11 +97,11 @@ import Testing
         let last = try #require(core.timelineArea().tracks[1].blocks.last)
         let p = try #require(last.pattern)
         #expect(fake.poolLen[p - 1] >= 0)
+        // no confirm any more (batch item 13): the block goes, and its pattern is kept for the undo
         send(core, #"{"intent":"blockDelete","track":2,"block":\#(last.id)}"#)
-        try await Task.sleep(for: .milliseconds(250))
-        #expect(fake.lists[1][last.id].p == p && box.log.contains { $0.contains("must confirm") }, "\(box.log)")
-        send(core, #"{"intent":"blockDelete","track":2,"block":\#(last.id),"confirmed":true}"#)
         try await settle({ fake.lists[1][last.id].p == 0 }, "deleted")
+        try await settle({ core.timelineArea().clearUndo.contains { $0.block && $0.track == 2 && $0.entry == last.id } }, "undo offered")
+        #expect(fake.poolLen[p - 1] > 0)
         // set pattern: an empty number refused
         let empty = try #require((1...64).first { !core.timelineArea().kept.contains($0) })
         send(core, #"{"intent":"blockSetPattern","track":2,"block":0,"pattern":\#(empty)}"#)

@@ -48,7 +48,7 @@ extension PhoneCore {
             return true
         }
 
-        guard let i = w.step, s.tracks[t].steps.indices.contains(i), i < 16 else { log("\(w.intent): no step \(w.step.map(String.init) ?? "")"); return true }
+        guard let i = w.step, s.tracks[t].steps.indices.contains(i), i < editorStepCount(t) else { log("\(w.intent): no step \(w.step.map(String.init) ?? "")"); return true }
         var st = s.tracks[t].steps[i]
         switch w.intent {
         case "toggleHit":

@@ -74,6 +74,16 @@ extension PhoneCore {
         return PadsArea.Ref(track: t + 1, entry: session.skiffSong?.song?.tracks[safe: t]?.entryOn ?? 0)
     }
 
+    /// How many steps the editor carries for track `t`: its LENGTH rounded up to whole chunks of 16, at least one
+    /// chunk and at most the FM-1's NSTEP. The steps past LENGTH in the last chunk are there (the FM-1 holds them)
+    /// but don't play.
+    func editorStepCount(_ t: Int) -> Int {
+        let s = session
+        guard s.tracks.indices.contains(t) else { return 16 }
+        let len = max(1, min(s.stepCount, s.tracks[t].length))
+        return max(16, min(s.stepCount, (len + 15) / 16 * 16))
+    }
+
     public func editorArea() -> EditorArea {
         let s = session
         let ref = selectedPad()
@@ -83,7 +93,9 @@ extension PhoneCore {
         let on = list?.entryOn
         let entry = on ?? ref.entry
         let kit = s.isKit(t)
-        let src = Array(tr.steps.prefix(16))
+        // every step of the pattern, in whole 16-step chunks (the Edit grid scrolls by chunk): 16, 32, 48 or 64
+        let count = editorStepCount(t)
+        let src = Array(tr.steps.prefix(count))
         var steps: [EditorArea.Step] = []
         for (i, st) in src.enumerated() {
             var e = EditorArea.Step()
@@ -118,7 +130,7 @@ extension PhoneCore {
             if x.count > 7 { e.nudge = Int(x[7]) - 32 }
             steps.append(e)
         }
-        while steps.count < 16 { steps.append(EditorArea.Step()) }
+        while steps.count < count { steps.append(EditorArea.Step()) }
         // MOTION (read every few seconds): a step's locks and recorded changes as its values; the lanes the track has
         let m = s.motion[t] ?? TrackMotion()
         func label(_ id: Int) -> String { s.trackDescs[id]?.label ?? "P\(id)" }
@@ -134,12 +146,12 @@ extension PhoneCore {
         if let id = laneIDs.first(where: { label($0) == lane }) {
             let d = s.trackDescs[id], lo = d?.min ?? 0, hi = max(lo + 1, d?.max ?? 127)
             let base = t == s.selectedTrack ? s.cell(id).value : lo
-            laneValues = (0..<16).map { k in ((m.value(of: id, at: k, base: base).value - lo) * 100 / (hi - lo)).clamped(0, 100) }
+            laneValues = (0..<count).map { k in ((m.value(of: id, at: k, base: base).value - lo) * 100 / (hi - lo)).clamped(0, 100) }
         }
         var playhead = -1
         if s.playing, let prog = s.passProgress(t) {
             let i = Int(prog * Double(max(1, tr.length)))
-            if i < 16 { playhead = i }
+            if i < count { playhead = i }
         }
         let scaleName = Music.scales[safe: tr.scale]?.name.lowercased() ?? ""
         return EditorArea(

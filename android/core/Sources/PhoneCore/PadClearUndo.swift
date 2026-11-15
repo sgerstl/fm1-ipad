@@ -16,8 +16,10 @@ extension PadsArea {
     public struct ClearUndo: Codable, Equatable, Sendable {
         public var track: Int            // 1…6
         public var entry: Int            // 0…15
-        /// What it held: a pattern number 1…64, or nil for a REST.
+        /// What it held: a pattern number 1…64, or nil for a REST. A block: its first entry's.
         public var pattern: Int?
+        /// A Timeline block deleted (`entry` is the block's id, its first entry), not one pad cleared.
+        public var block = false
     }
 }
 
@@ -26,8 +28,10 @@ struct ClearedPad {
     var track: Int, entry: Int           // 0-based
     var before: [SongEntry]              // the track's list before the clear
     var after: [SongEntry]               // … and after it, as the FM-1 answered
-    /// The pattern (1…64) kept alive for the undo: cleared for real when the undo's time is up.
-    var parked: Int?
+    /// The patterns (1…64) kept alive for the undo: cleared for real when the undo's time is up.
+    var parked: [Int] = []
+    /// A Timeline block's delete: undone whole, or not at all.
+    var block = false
     var at: Date
     var undoable = true
 }
@@ -37,7 +41,7 @@ extension PhoneCore {
     static var undoClearWindow: TimeInterval = 10
 
     func clearUndos() -> [PadsArea.ClearUndo] {
-        clearedPads.filter(\.undoable).map { .init(track: $0.track + 1, entry: $0.entry, pattern: $0.before[safe: $0.entry]?.poolIndex.map { $0 + 1 }) }
+        clearedPads.filter(\.undoable).map { .init(track: $0.track + 1, entry: $0.entry, pattern: $0.before[safe: $0.entry]?.poolIndex.map { $0 + 1 }, block: $0.block) }
     }
 
     /// padClear: no confirm. What the pad held is remembered for undoClear.
@@ -60,7 +64,35 @@ extension PhoneCore {
             guard await store.send(.clear(track: t, entry: e)) else { self.reportRefusal(store); return }
             self.clearedPads.removeAll { $0.track == t && $0.entry == e }
             self.clearedPads.append(ClearedPad(track: t, entry: e, before: list.entries, after: store.song?.tracks[safe: t]?.entries ?? emptied,
-                                               parked: erases ? was.pattern : nil, at: Date()))
+                                               parked: erases ? [was.pattern] : [], at: Date()))
+            self.pokeAreas(["pads", "timeline", "patterns", "editor"])
+        }
+    }
+
+    /// blockDelete: no confirm either. The track's list rewritten without the block; the patterns that would be left
+    /// with nothing naming them are kept for the undo (an entry the rewrite would CLEAR, erasing its pattern, is set
+    /// to a REST first), and cleared when the undo's time is up.
+    func deleteBlock(track t: Int, to es: [SongEntry], block id: Int) {
+        guard let store = session.skiffSong, let list = store.song?.tracks[safe: t] else { return }
+        if let why = store.blocked(track: t, to: es) { refuse("Delete: \(why)", track: t + 1, entry: id); return }
+        let gone = store.erased([t: es])
+        let rests = list.entries.indices.filter { i in es[i].isEmpty && (list.entries[i].poolIndex.map { gone.contains($0) } ?? false) }
+        Task {
+            for i in rests {
+                guard await store.send(.set(track: t, entry: i, pattern: SongEntry.rest)) else {
+                    self.reportRefusal(store)
+                    _ = await store.rewrite(track: t, to: list.entries, focus: id, confirmed: true)      // as it was
+                    return
+                }
+            }
+            guard await store.rewrite(track: t, to: es, focus: id, confirmed: true) else {
+                self.reportRefusal(store)
+                if !rests.isEmpty { _ = await store.rewrite(track: t, to: list.entries, focus: id, confirmed: true) }
+                return
+            }
+            self.clearedPads.removeAll { $0.track == t }             // (the list moved: an older undo on it no longer fits)
+            self.clearedPads.append(ClearedPad(track: t, entry: id, before: list.entries, after: store.song?.tracks[safe: t]?.entries ?? es,
+                                               parked: gone.map { $0 + 1 }, block: true, at: Date()))
             self.pokeAreas(["pads", "timeline", "patterns", "editor"])
         }
     }
@@ -89,13 +121,16 @@ extension PhoneCore {
             clearedPads.remove(at: k)
             refuse("Pattern \(was.label) is gone from the FM-1, so the pad can't come back.", track: t1, entry: e); return true
         }
-        guard now[e].isEmpty else {
+        guard c.block || now[e].isEmpty else {
             clearedPads.remove(at: k)
             refuse("T\(t1) pad \(e + 1) holds something new, so the clear wasn't undone.", track: t1, entry: e); return true
         }
         // nothing else changed on the track since: the whole list as it was (a chain's link with it); else this pad alone
         var back = now
-        if now == c.after { back = c.before } else { back[e] = was; back[e].chained = false }
+        if now == c.after { back = c.before } else if !c.block { back[e] = was; back[e].chained = false } else {
+            clearedPads.remove(at: k)
+            refuse("T\(t1) changed after the delete, so it can't be undone.", track: t1, entry: e); return true
+        }
         clearedPads.remove(at: k)
         pokeAreas(["pads"])
         Task {
@@ -114,13 +149,14 @@ extension PhoneCore {
         for i in clearedPads.indices where clearedPads[i].undoable && now.timeIntervalSince(clearedPads[i].at) > Self.undoClearWindow {
             clearedPads[i].undoable = false; changed = true
         }
-        clearedPads.removeAll { !$0.undoable && $0.parked == nil }
+        clearedPads.removeAll { !$0.undoable && $0.parked.isEmpty }
         if changed { pokeAreas(["pads"]) }
         guard let store = session.skiffSong, session.isConnected else { clearedPads.removeAll(); return }
         // not in the middle of the person's own changes: a second quiet first (the store takes one change at a time)
         guard !session.playing, !store.busy, now.timeIntervalSince(store.lastChange) > 1, let pool = store.pool?.patterns, pool.count == 64,
-              let k = clearedPads.firstIndex(where: { !$0.undoable }), let n = clearedPads[k].parked else { return }
-        clearedPads.remove(at: k)
+              let k = clearedPads.firstIndex(where: { !$0.undoable }), let n = clearedPads[k].parked.first else { return }
+        clearedPads[k].parked.removeFirst()                      // one pattern a look
+        if clearedPads[k].parked.isEmpty { clearedPads.remove(at: k) }
         // used again since (put on a pad from the Patterns sheet), or gone: left as it is
         guard pool[n - 1].length > 0, pool[n - 1].uses == 0,
               !(store.song?.tracks.contains { $0.patternOn == n - 1 } ?? false) else { return }

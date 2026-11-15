@@ -130,7 +130,8 @@ extension PhoneCore {
             es += Array(repeating: .empty, count: 16 - es.count)
             // a rest left at the start or end would be passed over: it stays a rest
             es = SongSections.restsAtEdges(es, range: sp.lowerBound..<(sp.upperBound + 1 - b.entries.count))
-            arrangeRewrite(t, es, focus: b.entries.lowerBound, confirmed: confirmed, what: "Delete")
+            _ = confirmed                                    // no confirm any more: undoClear puts it back (PadClearUndo.swift)
+            deleteBlock(track: t, to: es, block: b.id)
         case .blockSetPattern(let t1, let id, let p, let confirmed):
             guard let t = track(t1), var es = arrangeEntries(t), let b = block(t, id) else { return }
             guard p == SongEntry.rest || (store.pool?.patterns[safe: p - 1]?.length ?? 0) > 0 else {

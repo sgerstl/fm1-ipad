@@ -321,7 +321,7 @@ public final class PhoneCore {
             pickedOnTrack = session.selectedTrack      // (after the select: the pick belongs to the track now selected)
             poke(["pads", "editor"])
         case .stepSelect(let i):
-            selectedStep = max(0, min(15, i))
+            selectedStep = max(0, min(editorStepCount(editorTrack()) - 1, i))
             if lockLatched { syncLockStep() }   // a latched lock follows the selection (the iPad's Lock does)
             poke(["editor"])
         case .setPlaybackMode(let m):
