@@ -285,6 +285,7 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
     val colour = if (glo) Tok.text3 else trackColour(last.track)
     val inkColour = if (glo) Tok.text2Raised else colour
     val tiles = last.tiles
+    val compactTiles = tiles != null && tiles.kind == "pick" && tiles.labels.size <= 4
     val picture = com.scottgerstl.lupe.ui.page.pictureOf(last)
     val pictured = graphics && com.scottgerstl.lupe.ui.page.hasPicture(picture)
     // It stands out from the page: the track's colour muted, 35 % over the page. Computed for all six track colours (2026-11-14): white text is
@@ -315,13 +316,22 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
         })
         if (tiles != null) {
             Spacer(Modifier.height(8.dp))
-            PageTilesContent(tiles, inkColour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) }, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(8.dp)))
+            // a single row of choices (MONO / STEREO / PING-PONG) is only as tall as a row; the picture under it takes the rest. A long list (MOD's routes, SOUND's tiles) shares the height.
+            PageTilesContent(tiles, inkColour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) },
+                (if (compactTiles) Modifier.fillMaxWidth().height(56.dp) else Modifier.fillMaxWidth().weight(1f)).clip(RoundedCornerShape(8.dp)))
         }
         // Show graphics: the page's picture, under the dials, in what height is left
         if (pictured) {
             Spacer(Modifier.height(8.dp))
             LupeCrossfade(picture.kind to last.page, Modifier.fillMaxWidth().weight(1f), Dur.STATE) { _ ->
-                com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                val turned = if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1
+                if (tiles == null) com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    // under a row of tiles the picture takes all the height that is left, at the FM-1's 936 : 552 where the width allows, centred
+                    val ratio = 936f / 552f
+                    val w = minOf(maxWidth.value, maxHeight.value * ratio).dp
+                    com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.width(w).height(w / ratio).background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                }
             }
         }
     }
