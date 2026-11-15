@@ -67,9 +67,11 @@ data class TopState(
 @Serializable
 enum class Tab {
     @SerialName("pads") Pads,
-    /** The step editor (decision 28: landscape, Pads · Edit · Timeline; Mix is a sheet). */
+    /** The step editor. */
     @SerialName("edit") Edit,
     @SerialName("timeline") Timeline,
+    /** The six tracks' levels, mutes and meters (batch item 11). The Mix pop-up keeps DELAY, REVERB, CHORUS and GLOBAL. */
+    @SerialName("mix") Mix,
 }
 
 @Serializable

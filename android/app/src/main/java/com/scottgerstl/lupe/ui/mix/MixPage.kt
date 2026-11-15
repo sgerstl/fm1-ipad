@@ -73,17 +73,19 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlin.math.roundToInt
 
 /**
- * The Mix pop-up (decision 31, board 77): GLO's five pages one at a time. No title: MIXER DELAY REVERB CHORUS GLOBAL sit as words in one
- * line with the close key, and the room goes to the page. Mixer is the six tracks as rows: LEVEL on a fader in the track's colour, Mute,
- * and the row's hold menu for PAN and the reverb send. Delay, Reverb, Chorus and Global are the shared buses: four white dials at the
+ * The Mix pop-up (decision 31, board 77): GLO's shared pages one at a time. No title: DELAY REVERB CHORUS GLOBAL sit as words in one
+ * line with the close key, and the room goes to the page. (The mixer, the six tracks as rows, is the Mix tab: [MixTab].) Delay, Reverb,
+ * Chorus and Global are the shared buses: four white dials at the
  * left (white because turning them changes every track) and the FM-1's own picture at the right, at its 1.7 : 1.
  */
 @Composable
 fun MixPage(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, onClose: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // the pop-up is the four shared pages; MIXER is the Mix tab now (batch item 11)
+        val busPages = ui.pages.drop(1); val shownTab = (ui.page - 1).coerceAtLeast(0)
         Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-            WordTabs(ui.pages.map { it.uppercase() }, ui.page) { actions.page(it) }
-            BasicText("${ui.page + 1}/${ui.pages.size}", Modifier.padding(start = 16.dp).clearAndSetSemantics { }, style = LupeType.number.copy(fontSize = 15.sp, color = Tok.text2))
+            WordTabs(busPages.map { it.uppercase() }, shownTab) { actions.page(it + 1) }
+            BasicText("${shownTab + 1}/${busPages.size}", Modifier.padding(start = 16.dp).clearAndSetSemantics { }, style = LupeType.number.copy(fontSize = 15.sp, color = Tok.text2))
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
             Key(onClose, "Close Mix", width = 40.dp, height = 36.dp, minTarget = 44.dp) { fg ->
                 Canvas(Modifier.width(12.dp).height(12.dp)) {
@@ -93,9 +95,7 @@ fun MixPage(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.Sta
                 }
             }
         }
-        LupeCrossfade(ui.page, Modifier.weight(1f).fillMaxWidth(), Dur.STATE) { p ->
-            if (p == 0) Mixer(ui, actions, meters) else BusPage(ui, p, actions)
-        }
+        LupeCrossfade(ui.page.coerceAtLeast(1), Modifier.weight(1f).fillMaxWidth(), Dur.STATE) { p -> BusPage(ui, p, actions) }
     }
 }
 
@@ -115,6 +115,12 @@ private fun WordTabs(labels: List<String>, selected: Int, onPick: (Int) -> Unit)
             ) { BasicText(label, style = LupeType.key.copy(fontSize = 15.sp, color = lerp(Tok.text2, Tok.text, on.value))) }
         }
     }
+}
+
+/** The Mix tab (batch item 11): the six tracks, each with its level fader, mute and meter; the row's hold menu has PAN and the reverb send. */
+@Composable
+fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize()) { Mixer(ui, actions, meters) }
 }
 
 @Composable

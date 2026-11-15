@@ -21,8 +21,8 @@ sealed interface PlaceAction {
 data class PlaceNow(val tab: Tab, val lane: Boolean = false, val mixOpen: Boolean = false, val soundsOpen: Boolean = false, val projectsOpen: Boolean = false)
 
 /**
- * The phone follows the FM-1's own GLO, SAVE and SEQ (decisions 24, 27, 28): the Mix sheet for GLO (its section follows the core's own `mix`
- * area), the Sounds sheet for SAVE's PRESETS and USER or Projects for PROJECT, the Edit tab for SEQ, with AUTOMATION to its lane view and
+ * The phone follows the FM-1's own GLO, SAVE and SEQ (decisions 24, 27, 28): for GLO the Mix tab on its MIXER page and the Mix sheet on
+ * DELAY, REVERB, CHORUS and GLOBAL (its section follows the core's own `mix` area), the Sounds sheet for SAVE's PRESETS and USER or Projects for PROJECT, the Edit tab for SEQ, with AUTOMATION to its lane view and
  * SONG to the Timeline tab. HOME, or a sound family, puts it back as it was: it closes what it opened and restores the tab and the lane
  * view it changed. It closes only what it opened itself. The first screen it sees after start or a reconnect is only the baseline.
  */
@@ -66,7 +66,8 @@ class PlaceFollower {
         when (screen.key) {
             // every GLO page: the sheet, re-opened if it was dismissed. Its section is the core's own: the `mix` area follows the FM-1's GLO page
             // by itself (P1), so the phone sends nothing for it (a send could pull the FM-1 back a page)
-            "GLO" -> { sounds(false); projects(false); lane(false); mix(true) }
+            // the MIXER page is the Mix tab now (batch item 11); DELAY, REVERB, CHORUS and GLOBAL are the pop-up
+            "GLO" -> { sounds(false); projects(false); lane(false); if (screen.title == "MIXER") { mix(false); goTab(Tab.Mix) } else mix(true) }
             "SAVE" -> { mix(false); lane(false); when (screen.title) {
                 "PRESETS", "USER" -> { projects(false); sounds(true); out += PlaceAction.SoundsView(user = screen.title == "USER") }
                 "PROJECT" -> { sounds(false); projects(true) }
