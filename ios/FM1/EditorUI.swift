@@ -153,7 +153,7 @@ final class EditorUI {
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
     var trackPicker: CGPoint?                    // the phone's one chip tapped (more than four tracks): the tracks, there
     var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
-    var lastClear: DeviceSession.ClearedTrack?   // offered for undo for a few seconds
+    var lastClear: StepsKept?                    // offered for undo for a few seconds (StepClear)
     var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user
         : LaunchArgs.all.contains("-library-samples") ? .samples : .engine(0)
     /// The Presets panel is up on the Sequencer, in place of the step panel and knobs. Closed, it chooses for the track
@@ -266,7 +266,7 @@ struct PadClear: Equatable {
     var before: [SongEntry] = []   // the track's list as it was (undo puts it back: the entry, its REPS, chain, sound)
     var kept: Int? = nil           // a pattern kept on the FM-1 for the undo (P1's route); cleared when the undo ends
     var keptAll: [Int] = []        // every pattern kept (a Timeline delete can keep several)
-    var steps: DeviceSession.ClearedTrack? = nil   // Clear steps: the notes it took, written back on Undo
+    var steps: StepsKept? = nil    // Clear steps: the notes it took, written back on Undo (StepClear)
     /// What the strip says: "Cleared T3 · B (pattern 09)", "Deleted T2 · C–D".
     var title: String { what.hasPrefix("Deleted") || what.hasPrefix("Cleared steps") ? what : "Cleared T\(track + 1) · \(SongEntry.letter(entry)) (\(what))" }
     var id = UUID()

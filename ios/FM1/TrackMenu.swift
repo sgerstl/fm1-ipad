@@ -86,7 +86,7 @@ struct TrackMenuLayer: View {
         let on = session.skiffSong?.song?.tracks[safe: t]?.patternOn
         let stepsTitle = on.map { "Clear pattern \(String(format: "%02d", $0 + 1))'s steps" } ?? "Clear all steps"
         clears.append(MenuItem(title: empty ? stepsTitle + ": none yet" : stepsTitle, icon: "trash", enabled: !empty) {
-            ui.lastClear = session.clearAll(track: t)
+            ui.lastClear = StepClear.clear(session, track: t)
         })
         g.append(clears)
         return g

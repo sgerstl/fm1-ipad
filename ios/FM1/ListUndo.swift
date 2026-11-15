@@ -20,7 +20,7 @@ enum ListUndo {
         guard undoable(ui, store), let c = ui.padClear else { return }
         ui.padClear = nil
         // Clear steps: the notes written back (steps edited since are left as they are)
-        if let steps = c.steps { session.undo(steps); return }
+        if let steps = c.steps { StepClear.undo(session, steps); return }
         Task { _ = await store.rewrite(track: c.track, to: c.before, focus: c.entry, confirmed: true) }
     }
 

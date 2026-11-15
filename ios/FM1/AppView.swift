@@ -333,7 +333,7 @@ extension AppView {
                     TrackChip(track: c.track)
                     Text("Cleared track \(c.track + 1)").font(.lupe(15, .semibold))
                     Button {
-                        session.undo(c)
+                        StepClear.undo(session, c)
                         ui.lastClear = nil
                     } label: {
                         Text("Undo clear").fontWeight(.semibold).padding(.horizontal, 16).frame(height: 44).raisedKey()

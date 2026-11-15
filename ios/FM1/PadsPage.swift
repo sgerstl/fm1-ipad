@@ -1345,7 +1345,7 @@ struct PadsPage: View {
                 guard await store.send(.play(track: t, entry: i)) else { return }
                 await session.rereadSteps(track: t)
             }
-            let c = session.clearAll(track: t)
+            let c = StepClear.clear(session, track: t)
             if let old = ui.padClear { ListUndo.finish(old, store, session) }
             ui.padClear = PadClear(track: t, entry: i, what: "Cleared steps of T\(t + 1) · \(Entries.letter(i)) (pattern \(Entries.number(p + 1)))",
                                    depth: store.undoStack.count, before: list.entries, steps: c)
