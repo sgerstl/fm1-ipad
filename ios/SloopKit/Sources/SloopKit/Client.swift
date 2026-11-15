@@ -1,12 +1,12 @@
 import Foundation
 
-/// Something that carries whole SysEx frames to and from a SLOOP device: CoreMIDI, or the fake.
+/// Something that carries whole SysEx frames to and from an FM-1: CoreMIDI, or the fake.
 public protocol SysExTransport: AnyObject, Sendable {
     /// Complete frames from the device, in arrival order. Finishes when the device goes away.
     var frames: AsyncStream<[UInt8]> { get }
     /// Notes the device sends (its keys, with KEY OUT on). The fake sends none.
     var notes: AsyncStream<NoteEvent> { get }
-    /// MIDI clock the device sends (Skiff's CLOCK OUT); none from SLOOP or the fake.
+    /// MIDI clock the device sends (Skiff's CLOCK OUT); none from the fake.
     var clock: AsyncStream<ClockEvent> { get }
     func send(_ frame: [UInt8])
 }
@@ -147,10 +147,6 @@ public extension SloopClient {
     func desc(scope: Int, id: Int) async throws -> ParamDesc { try ParamDesc(await send(.desc(scope: scope, id: id))) }
     func watch(_ on: Int) async throws -> Int { Int(try await send(.watch(on)).first ?? 0) }
     func ping() async throws { _ = try await send(.ping) }
-    func live() async throws -> LiveState { try LiveState(await send(.live, timeout: .milliseconds(150), retries: 0)) }
-    func transport(play: Bool) async throws -> LiveState { try LiveState(await send(.transport(play: play))) }
-    /// REC, as the FM-1's button: arms, records, or stops recording. Sent once (it toggles).
-    func rec() async throws -> LiveState { try LiveState(await send(.rec, retries: 0)) }
     /// Writes return the value as the device stored it (clamped, levels of off lanes cleared).
     func setSynthStep(track: Int, index: Int, _ step: SynthStep) async throws -> SynthStep {
         try TrackStepReply(await send(.setTrackStep(track: track, index: index, step))).step
@@ -169,9 +165,6 @@ public extension SloopClient {
     func dump(paramCount: Int, globalCount: Int) async throws -> ParamDump {
         try ParamDump(await send(.dump), paramCount: paramCount, globalCount: globalCount)
     }
-    /// The FM-1's screen state; throws on stock SLOOP, which doesn't answer.
-    func uiState() async throws -> UIState { try UIState(await send(.uiState, timeout: .milliseconds(200), retries: 0)) }
-    func uiGoto(page: Int) async throws -> UIState { try UIState(await send(.uiGoto(page: page))) }
     func userPresets() async throws -> [UserPreset] {
         var all: [UserPreset] = []
         var start = 0
@@ -188,71 +181,6 @@ public extension SloopClient {
         let b = try await send(.userLoad(slot: slot))
         return Int(b.count > 1 ? b[1] : 1)
     }
-    /// LIVE op 2: a key of a layer (pressed and let go). Sent once each: these toggle.
-    func layerTap(layer: Int, key: Int) async throws -> [UInt8] {
-        _ = try await send(.layerKey(layer: layer, key: key, down: true), retries: 0)
-        // a key left held would keep the layer on: a lost key-up is sent again (releasing twice is harmless)
-        if let up = try? await send(.layerKey(layer: layer, key: key, down: false), retries: 0) { return up }
-        return try await send(.layerKey(layer: layer, key: key, down: false), retries: 0)
-    }
-    /// The FM-1's master level (speaker and headphones), 0..126; 127 gives it back to the MASTER knob. Sets a state: may be resent.
-    func masterLevel(_ v: Int) async throws -> [UInt8] { try await send(.masterLevel(v)) }
-
-    /// BK_LIST: every backup object's length and CRC-32, and a snapshot of the working loop and the
-    /// settings for the GETs that follow.
-    func objectList() async throws -> [Int: (length: Int, crc: UInt32)] {
-        let list = try await send(.bkList)
-        guard list.count >= 2, list[0] == 0 else { throw ClientError.timeout("BK_LIST rc \(list.first ?? 99)") }
-        var r = 2, out: [Int: (length: Int, crc: UInt32)] = [:]
-        for _ in 0..<Int(list[1]) {
-            guard r + 11 <= list.count else { break }
-            out[Int(list[r])] = (Int(Pack7.readU35(list[(r + 1)...])), Pack7.readU35(list[(r + 6)...]))
-            r += 11
-        }
-        return out
-    }
-
-    /// A backup object's bytes (BK_GET, 256 at a time), from the snapshot the last BK_LIST took.
-    func object(id: Int, length: Int) async throws -> [UInt8] {
-        guard length >= 0, length <= 8192 else { throw ClientError.timeout("object \(id): length \(length)") }
-        var out: [UInt8] = []
-        while out.count < length {
-            let n = min(256, length - out.count)
-            let b = try await send(.bkGet(id: id, offset: out.count, count: n), timeout: .milliseconds(600))
-            guard b.count > 9, b[1] == 0 else { throw ClientError.timeout("BK_GET rc \(b.count > 1 ? b[1] : 99)") }
-            let chunk = Pack7.decode(Array(b[9...])).prefix(n)
-            guard !chunk.isEmpty else { throw ClientError.timeout("BK_GET returned no data") }
-            out += chunk
-        }
-        return out
-    }
-
-    /// The settings object (backup object 1), which holds the song order: LIST snapshots it, GET reads it.
-    func settingsObject() async throws -> [UInt8] {
-        let length = try await objectList()[1]?.length ?? 0
-        guard length > 0, length <= 4096 else { throw ClientError.timeout("no settings object (length \(length))") }
-        return try await object(id: 1, length: length)
-    }
-
-    /// Writes the settings object back (the song order, USB AUDIO). rc: 0 ok, 2 invalid, 3 stop the song first.
-    func putSettings(_ s: [UInt8]) async throws -> Int { try await putObject(id: 1, s) }
-
-    /// Writes a backup object (editor.c BK_PUT): 0 the working loop (loaded at once), 1 the settings, 2…5
-    /// sections A–D (no bytes: the section emptied). rc: 0 ok, 2 invalid, 3 stop first.
-    func putObject(id: Int, _ s: [UInt8]) async throws -> Int {
-        var b = try await send(.bkPut(op: 0, id: id, args: Pack7.u35(UInt32(s.count)) + Pack7.u35(CRC32.of(s))))
-        guard b.count >= 3, b[2] == 0 else { return Int(b.count >= 3 ? b[2] : 99) }
-        var off = 0
-        while off < s.count {
-            let chunk = Array(s[off..<min(off + 256, s.count)])
-            b = try await send(.bkPut(op: 1, id: id, args: Pack7.u35(UInt32(off)) + Pack7.encode(chunk)), timeout: .milliseconds(600))
-            guard b.count >= 3, b[2] == 0 else { _ = try? await send(.bkPut(op: 3, id: id, args: [])); return Int(b.count >= 3 ? b[2] : 99) }
-            off += chunk.count
-        }
-        b = try await send(.bkPut(op: 2, id: id, args: []), timeout: .seconds(5), retries: 0)    // a resent commit would answer "nothing staged"
-        return Int(b.count >= 3 ? b[2] : 99)
-    }
-
     // User sample slots (editor.c ED_SMP_*). Each returns the device's rc (0 ok; 99: no rc in the reply).
 
     /// SMP_INFO: every slot's zone count (0 = empty), name and data KiB.

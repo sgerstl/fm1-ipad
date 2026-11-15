@@ -1,6 +1,6 @@
-// The backup taken before a firmware install, in each firmware's own file format so its web editor restores it:
-// SLOOP's "sloop-backup" (editor.html backupCapture: BK_LIST 34 / BK_GET 35) and Felucca's and Skiff's
-// "felucca-backup" (web/fm1backup.js captureBackup: BACKUP_LIST 65 / BACKUP_GET 66).
+// The backup taken before a firmware install, in Felucca's and Skiff's own file format so Skiff's web editor
+// restores it: "felucca-backup" (web/fm1backup.js captureBackup: BACKUP_LIST 65 / BACKUP_GET 66). Lupe no longer
+// speaks SLOOP (decision 43), so it takes no "sloop-backup" (SLOOP's BK_LIST 34 / BK_GET 35) any more.
 //
 // What an install touches (from the sources, 2026-11-05): the loader writes only the app area [0x4000, 0x93000),
 // never the head nor the store [0x97000, 0xE0000) where projects, presets and samples live (Skiff ldr_core.c
@@ -12,7 +12,7 @@
 import Foundation
 
 public struct DeviceBackup: Sendable {
-    /// "sloop-backup" or "felucca-backup".
+    /// "felucca-backup" (older files Lupe wrote from SLOOP say "sloop-backup").
     public let format: String
     public let firmware: String
     public let created: Date
@@ -30,7 +30,8 @@ public struct DeviceBackup: Sendable {
         return "\(f.string(from: created)) \(fw).json"
     }
 
-    /// The firmware's own folder in Lupe's documents: "SLOOP" or "Skiff" (each keeps its own files, nothing shared).
+    /// The firmware's own folder in Lupe's documents: "Skiff" ("SLOOP" for the backups Lupe took from SLOOP before
+    /// 2026-11-15, which stay where they are).
     public var folder: String { Self.folder(format: format) }
     public static func folder(format: String) -> String { format == "sloop-backup" ? "SLOOP" : "Skiff" }
 
@@ -67,43 +68,40 @@ public enum BackupError: Error, Equatable, CustomStringConvertible {
 public typealias BackupRequest = @Sendable (_ cmd: UInt8, _ args: [UInt8], _ match: Int) async throws -> [UInt8]
 
 public enum BackupCapture {
-    static let sloopList: UInt8 = 34, sloopGet: UInt8 = 35
     static let feluccaList: UInt8 = 65, feluccaGet: UInt8 = 66
     static let chunk = 256
 
-    /// Every object the running firmware lists. `skiff`: Felucca's commands and file; else SLOOP's.
-    public static func capture(skiff: Bool, firmware: String, request: BackupRequest,
+    /// Every object the running firmware lists, with Felucca's commands and file.
+    public static func capture(firmware: String, request: BackupRequest,
                                progress: @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> DeviceBackup {
-        let items = try await list(skiff: skiff, request: request)
+        let items = try await list(request: request)
         let total = items.reduce(0) { $0 + $1.size }
         var done = 0
         var objects: [(id: Int, crc: UInt32, data: [UInt8])] = []
         for it in items {
-            let data = try await read(it, skiff: skiff, request: request) { n in done += n; progress(done, total) }
+            let data = try await read(it, request: request) { n in done += n; progress(done, total) }
             objects.append((it.id, it.crc, data))
         }
         let created = Date()
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let file: [String: Any] = skiff
-            ? ["format": "felucca-backup", "version": 1, "firmware": firmware, "created": iso.string(from: created),
-               "objects": objects.map { ["id": $0.id, "size": $0.data.count, "crc": $0.crc, "data": Data($0.data).base64EncodedString()] }]
-            : ["format": "sloop-backup", "version": 1, "firmware": firmware, "date": iso.string(from: created),
-               "objects": objects.map { ["id": $0.id, "len": $0.data.count, "crc": $0.crc, "data": Data($0.data).base64EncodedString()] }]
+        let file: [String: Any] =
+            ["format": "felucca-backup", "version": 1, "firmware": firmware, "created": iso.string(from: created),
+             "objects": objects.map { ["id": $0.id, "size": $0.data.count, "crc": $0.crc, "data": Data($0.data).base64EncodedString()] }]
         let json = try JSONSerialization.data(withJSONObject: file, options: [.sortedKeys])
-        return DeviceBackup(format: skiff ? "felucca-backup" : "sloop-backup", firmware: firmware, created: created,
+        return DeviceBackup(format: "felucca-backup", firmware: firmware, created: created,
                             objects: objects, json: json)
     }
 
     typealias Item = (id: Int, size: Int, crc: UInt32)
 
     /// LIST: every object the firmware keeps, with its size and CRC-32 (and a snapshot for the GETs). It stops the
-    /// transport. SLOOP: rc, count, items. Felucca: 1, rc, count, items. Each item: id, size (5 × 7 bit), CRC (5 × 7 bit).
-    static func list(skiff: Bool, request: BackupRequest) async throws -> [Item] {
-        let list = try await request(skiff ? feluccaList : sloopList, [], 0)
-        let head = skiff ? 1 : 0
+    /// transport. Felucca: 1, rc, count, items. Each item: id, size (5 × 7 bit), CRC (5 × 7 bit).
+    static func list(request: BackupRequest) async throws -> [Item] {
+        let list = try await request(feluccaList, [], 0)
+        let head = 1
         guard list.count >= head + 2 else { throw BackupError.unreadable("a short list") }
-        if skiff, list[0] != 1 { throw BackupError.unreadable("archive protocol \(list[0])") }
+        if list[0] != 1 { throw BackupError.unreadable("archive protocol \(list[0])") }
         if list[head] != 0 { throw BackupError.refused(Int(list[head])) }
         let count = Int(list[head + 1])
         guard list.count >= head + 2 + count * 11 else { throw BackupError.unreadable("an incomplete list") }
@@ -117,13 +115,13 @@ public enum BackupCapture {
     }
 
     /// One object's bytes, 256 at a time, checked against its CRC.
-    static func read(_ it: Item, skiff: Bool, request: BackupRequest, got: (Int) -> Void = { _ in }) async throws -> [UInt8] {
+    static func read(_ it: Item, request: BackupRequest, got: (Int) -> Void = { _ in }) async throws -> [UInt8] {
         var data: [UInt8] = []
         data.reserveCapacity(it.size)
         while data.count < it.size {
             let n = min(chunk, it.size - data.count)
             let args = [UInt8(it.id)] + Pack7.u35(UInt32(data.count)) + [UInt8(n & 127), UInt8(n >> 7)]
-            let b = try await request(skiff ? feluccaGet : sloopGet, args, 1)
+            let b = try await request(feluccaGet, args, 1)
             guard b.count >= 9, Int(b[0]) == it.id else { throw BackupError.unreadable("an unexpected reply") }
             if b[1] == 5 { throw BackupError.changed }
             if b[1] != 0 { throw BackupError.refused(Int(b[1])) }
@@ -142,26 +140,25 @@ public enum BackupCapture {
     /// One object by id (nil: the firmware keeps none, or it's empty), through a connected driver: Skiff's user
     /// sample slots are objects 32..34 (EDITOR_PROTOCOL.md v7), the header then the ADPCM data.
     public static func object(_ id: Int, driver: FirmwareDriver) async throws -> [UInt8]? {
-        guard let (skiff, request) = route(driver) else { throw BackupError.notSupported }
-        guard let it = try await list(skiff: skiff, request: request).first(where: { $0.id == id }), it.size > 0 else { return nil }
-        return try await read(it, skiff: skiff, request: request)
+        guard let request = route(driver) else { throw BackupError.notSupported }
+        guard let it = try await list(request: request).first(where: { $0.id == id }), it.size > 0 else { return nil }
+        return try await read(it, request: request)
     }
 
     /// The driver's client as a backup request: LIST stops the transport and snapshots, so it gets time and is never
     /// sent twice.
-    static func route(_ driver: FirmwareDriver) -> (skiff: Bool, request: BackupRequest)? {
-        let client: SloopClient
-        if let d = driver as? SkiffDriver { client = d.client } else if let d = driver as? SloopDriver { client = d.client } else { return nil }
-        return (driver is SkiffDriver, { cmd, args, match in
-            let list = cmd == sloopList || cmd == feluccaList
+    static func route(_ driver: FirmwareDriver) -> BackupRequest? {
+        guard let client = (driver as? SkiffDriver)?.client else { return nil }
+        return { cmd, args, match in
+            let list = cmd == feluccaList
             return try await client.send(.raw(cmd: cmd, args: args, match: match, name: list ? "BACKUP_LIST" : "BACKUP_GET"),
                                          timeout: .milliseconds(list ? 5000 : 1500), retries: list ? 0 : 2)
-        })
+        }
     }
 
     /// The backup through a connected driver.
     public static func capture(driver: FirmwareDriver, progress: @escaping @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> DeviceBackup {
-        guard let (skiff, request) = route(driver) else { throw BackupError.notSupported }
-        return try await capture(skiff: skiff, firmware: driver.info.version, request: request, progress: progress)
+        guard let request = route(driver) else { throw BackupError.notSupported }
+        return try await capture(firmware: driver.info.version, request: request, progress: progress)
     }
 }

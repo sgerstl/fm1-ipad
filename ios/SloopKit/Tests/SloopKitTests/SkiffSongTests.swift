@@ -615,10 +615,8 @@ extension SkiffSongTests {
 @Suite(.serialized) @MainActor struct SkiffOnTheDeviceTests {
     @Test func theKeyboardPlaysOnTheSelectedTracksChannel() {
         // Skiff's MIDI IN CH1-6 drops channel 16; track k listens on channel k + 1
-        #expect(DeviceSession.keyChannel(.skiff, track: 0) == 0)
-        #expect(DeviceSession.keyChannel(.skiff, track: 5) == 5)
-        // SLOOP routes channel 16 to the selected track
-        #expect(DeviceSession.keyChannel(.sloop, track: 3) == 15)
+        #expect(DeviceSession.keyChannel(track: 0) == 0)
+        #expect(DeviceSession.keyChannel(track: 5) == 5)
     }
 
     @Test func passProgressCountsThroughEachPass() {
@@ -643,7 +641,6 @@ extension SkiffSongTests {
         session.resyncInterval = .seconds(60)
         let run = Task { await session.run() }
         try await waitFor(10) { if case .connected = session.status { true } else { false } }
-        #expect(session.canQuietSpeaker == false)
         session.muteSpeaker(true)
         try await waitFor(5) { session.usbAudioFull == true }
         #expect(fake.usbLevel == 1 && session.usbAudioProblem == nil)

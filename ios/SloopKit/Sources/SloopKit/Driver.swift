@@ -2,29 +2,31 @@ import Foundation
 
 // The firmware seam: what the session needs from a device, whatever it runs. INFO names the firmware;
 // a driver turns the session's requests into that firmware's commands and its replies and pushes back
-// into the shared types (TrackList, SynthStep, ParamDesc, Push). Anything one firmware alone has (SLOOP's
-// sections, backups and sample slots) stays with that firmware's driver and is reached through it.
+// into the shared types (TrackList, SynthStep, ParamDesc, Push). Anything one firmware alone has stays with
+// that firmware's driver and is reached through it. Lupe speaks Skiff only (decision 43, 2026-11-15); SLOOP's
+// driver is in the tag sloop-archive-2026-11-15 (design/archive/sloop.md).
 
 /// A firmware Lupe knows how to talk to, found from INFO.
 public enum FirmwareDialect: Equatable, Sendable {
-    case sloop
     /// Skiff 2.2 or 2.5.1 (github.com/illuminus5/skiff): Felucca's command numbers, six tracks, INFO's tags.
     case skiff
 
     /// The dialect INFO reports, or nil for firmware Lupe doesn't know (it refuses to connect). `body` is
     /// INFO's whole reply, for the tags Skiff ends it with.
     public static func detect(_ info: DeviceInfo, body: [UInt8] = []) -> FirmwareDialect? {
-        if info.version == DeviceInfo.expectedVersion, info.protocolVersion == DeviceInfo.expectedProtocol { return .sloop }
         if SkiffFirmware(version: info.version) != nil, let s = SkiffInfo(body), s.isSupported { return .skiff }
         return nil
     }
 
     /// Every firmware and version Lupe speaks, for the "other firmware" message.
-    public static let known = "FELUCCA SLOOP 2.8.4 (protocol 12), Skiff 2.2 (FELUCCA v2.2) or Skiff 2.5.1 (FELUCCA v2.5.1)"
+    public static let known = "Skiff 2.2 (FELUCCA v2.2) or Skiff 2.5.1 (FELUCCA v2.5.1)"
+
+    /// SLOOP's INFO (FELUCCA SLOOP 2.x): Lupe no longer speaks it, but knows it, to offer Skiff-Lupe in its place.
+    public static func isSLOOP(_ version: String) -> Bool { version.uppercased().contains("SLOOP") }
 }
 
-/// The parameter ids the session itself reads and follows (the Sound tab reads every one by DESC). Most
-/// are Felucca's and the same on both; the chord keys moved, and SLOOP's drum and MIDI globals are SLOOP's.
+/// The parameter ids the session itself reads and follows (the Sound tab reads every one by DESC): Felucca's
+/// numbers until the driver finds Skiff's own by DESC.
 public struct ParamIDs: Equatable, Sendable {
     public var level = Param.level, root = Param.root, scale = Param.scale, quant = Param.quant
     public var transpose = Param.transpose, length = Param.length, division = Param.division
@@ -33,22 +35,18 @@ public struct ParamIDs: Equatable, Sendable {
     public var direction: Int?, swing: Int?
     /// Skiff's per-track effects that get a chip on the head (Scott, 2026-11-10): SLICER, DUCK's BY, FOLLOW; nil elsewhere.
     public var slicer: Int?, duck: Int?, follow: Int?
-    /// The INSERT's type and ENV SYNC, which change how other knobs read on SLOOP's screen.
-    public var insertType: Int? = Param.insertType, envSync: Int? = Param.envSync
     public var bpm = Global.bpm, globalSwing = Global.swing
-    public var drumLevel: Int? = Global.drumLevel, otherChannels: Int? = Global.otherChannels, drumMap: Int? = Global.drumMap
 
     public init() {}
-    public static let sloop = ParamIDs()
 
     /// The track parameters read for every track.
     public var trackReads: [Int] {
         [level, root, scale, quant, transpose, length, division, pan, mute, chord, arpMode] + [direction, swing, slicer, duck, follow].compactMap { $0 }
     }
-    public var globalReads: [Int] { [bpm, globalSwing] + [drumLevel, otherChannels, drumMap].compactMap { $0 } }
+    public var globalReads: [Int] { [bpm, globalSwing] }
 }
 
-/// The transport, polled on firmware without LIVE (Skiff's TRANSPORT, its keep-alive too).
+/// The transport, polled (Skiff's TRANSPORT, its keep-alive too).
 public struct TransportState: Equatable, Sendable {
     public var playing: Bool
     public var countingIn: Bool
@@ -97,7 +95,7 @@ public struct PageSpec: Equatable, Sendable {
 public struct DeviceShape: Equatable, Sendable {
     public var trackCount: Int
     public var stepCount: Int
-    /// A fixed drum track (SLOOP's track 4: 16 lanes, kits, no presets); nil when every track is a synth part.
+    /// A fixed drum track (16 lanes, kits, no presets; SLOOP had one); nil when every track is a synth part, as on Skiff.
     public var drumTrack: Int?
     /// Tracks that can't play some engines (a bit per track), and those engines (a bit per engine).
     public var lightTracks: Int
@@ -106,21 +104,18 @@ public struct DeviceShape: Equatable, Sendable {
     public var trackColours: [UInt32]
 
     public init(trackCount: Int, stepCount: Int, drumTrack: Int?, lightTracks: Int = 0, lightEngines: Int = 0,
-                trackColours: [UInt32] = DeviceShape.sloopColours) {
+                trackColours: [UInt32] = DeviceShape.skiffColours) {
         self.trackCount = trackCount; self.stepCount = stepCount; self.drumTrack = drumTrack
         self.lightTracks = lightTracks; self.lightEngines = lightEngines
         self.trackColours = trackColours
     }
 
-    /// SLOOP 2.8.4's track colours (its editor CSS and firmware gfx.c TE_COL).
-    public static let sloopColours: [UInt32] = [0x287CFF, 0x1ECC70, 0xFFC618, 0xFF621A]
     /// Skiff's SKIFF theme (build/gen ui_palettes.h, as picked for Lupe in the Arrange spec, 2026-11-05):
     /// vermilion, teal, amber, violet, pink, lime.
     public static let skiffColours: [UInt32] = [0xFF5A36, 0x22C3B4, 0xFFBF00, 0x9580FF, 0xFF6FAE, 0xA3E635]
 
-    /// SLOOP 2.8.4: four tracks of 64 steps, the fourth the drum track. Also what the app shows before
-    /// anything is connected.
-    public static let sloop = DeviceShape(trackCount: 4, stepCount: 64, drumTrack: 3)
+    /// What the app shows before anything is connected: Skiff's six tracks of 64 steps.
+    public static let initial = DeviceShape(trackCount: 6, stepCount: 64, drumTrack: nil)
 
     public func isDrums(_ t: Int) -> Bool { t == drumTrack }
     public func canPlay(track t: Int, engine e: Int) -> Bool {
@@ -133,22 +128,14 @@ public struct FirmwareCapabilities: OptionSet, Sendable {
     public let rawValue: Int
     public init(rawValue: Int) { self.rawValue = rawValue }
 
-    /// Step positions over SysEx (SLOOP's LIVE): the playhead is polled.
-    public static let livePlayhead = Self(rawValue: 1 << 0)
-    /// The FM-1's page followed and set (fm1-ipad's patch to SLOOP); found at connect.
+    /// The FM-1's page followed and set (Skiff-Lupe's screen link); found at connect.
     public static let screenLink = Self(rawValue: 1 << 1)
     /// User sample slots (SMP_*).
     public static let samples = Self(rawValue: 1 << 2)
-    /// SLOOP's song: sections A–D, the song order, chains, SONG REC.
-    public static let sloopSong = Self(rawValue: 1 << 3)
-    /// Projects read and written whole (SLOOP's backup objects).
-    public static let projects = Self(rawValue: 1 << 4)
     /// User presets (UP_LIST, UP_LOAD).
     public static let userPresets = Self(rawValue: 1 << 5)
     /// REC as the FM-1's button.
     public static let recording = Self(rawValue: 1 << 6)
-    /// The FM-1's master level, to quiet its speaker while the iPad plays its sound.
-    public static let masterLevel = Self(rawValue: 1 << 7)
 }
 
 /// One connected device, spoken to in its firmware's dialect. One request in flight at a time.
@@ -160,7 +147,7 @@ public protocol FirmwareDriver: AnyObject, Sendable {
     /// Pushes from the device, already in the session's terms.
     var pushes: AsyncStream<Push> { get }
     var params: ParamIDs { get }
-    /// The Sound tab's pages, when the firmware's differ from the app's own (SLOOP's); nil: the app's.
+    /// The Sound tab's pages, when the firmware lays them out itself (Skiff, from DESC); nil: the app's own.
     var pageLayout: [PageSpec]? { get }
 
     /// Whatever the driver reads once before the session does (Skiff: every DESC, to find its ids).
@@ -196,9 +183,9 @@ public protocol FirmwareDriver: AnyObject, Sendable {
     func userPresets() async throws -> [UserPreset]
     /// 0: loaded; anything else: empty or refused.
     func userLoad(slot: Int) async throws -> Int
-    /// PLAY or STOP; the state after it, where the firmware reports one.
-    func transport(play: Bool) async throws -> LiveState?
-    /// The transport, on firmware that has no LIVE (nil: LIVE covers it).
+    /// PLAY or STOP.
+    func transport(play: Bool) async throws
+    /// The transport: PLAY, counting in, the armed tracks and the selected one (nil: the firmware doesn't say).
     func transportState() async throws -> TransportState?
 }
 
@@ -218,7 +205,6 @@ public enum FirmwareDetector {
             let body = try await c.send(.info)
             let i = try DeviceInfo(body)
             switch FirmwareDialect.detect(i, body: body) {
-            case .sloop: return .driver(SloopDriver(client: c, info: i))
             case .skiff:
                 let d = try SkiffDriver(client: c, body: body)
                 try await d.prepare()

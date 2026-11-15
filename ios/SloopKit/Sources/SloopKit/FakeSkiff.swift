@@ -787,19 +787,20 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     /// User sample slots USR1..USR3 (Skiff 2.2: three, eng_sample.c SMP_SLOTS), cmds 11–15 as editor.c handles them.
     /// USR1 holds a sample so the demo has a full slot to show.
-    var sampleSlots: [FakeSloop.SampleSlotState] = [FakeSkiff.kalimba.state, .init(), .init()]
+    struct SampleSlotState { var zones = 0; var name = ""; var dataLength = 0; var data: [UInt8] = []; var open = false }
+    var sampleSlots: [SampleSlotState] = [FakeSkiff.kalimba.state, .init(), .init()]
     /// Each full slot's header as SMP_END wrote it (the backup's object 32 + slot is the header, then the data).
     var slotHeaders: [Int: [UInt8]] = [0: FakeSkiff.kalimba.header]
 
     /// USR1's demo sample: a decaying 660 Hz tone, about a second, so it can be heard back.
-    static let kalimba: (state: FakeSloop.SampleSlotState, header: [UInt8]) = {
+    static let kalimba: (state: SampleSlotState, header: [UInt8]) = {
         let n = UserSample.rate
         let s = (0..<n).map { i -> Int16 in
             let t = Double(i) / Double(UserSample.rate)
             return Int16(20000 * exp(-4 * t) * sin(2 * .pi * 660 * t))
         }
         let (h, d) = (try? UserSample.slot(name: "KALIMBA", samples: s)) ?? ([], [])
-        return (FakeSloop.SampleSlotState(zones: 1, name: "KALIMBA", dataLength: d.count, data: d), h)
+        return (SampleSlotState(zones: 1, name: "KALIMBA", dataLength: d.count, data: d), h)
     }()
 
     /// SMP_BEGIN / WRITE / END / ERASE / INFO (Skiff editor.c 896–951): as SLOOP's, but END has no rc 6 (a slot not
@@ -815,7 +816,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case Cmd.smpBegin, Cmd.smpErase:
             // past the last slot: no reply at all (editor.c 898, `return`)
             guard let k = a.first.map(Int.init), k < sampleSlots.count else { unanswered.append((cmd, a)); return nil }
-            sampleSlots[k] = FakeSloop.SampleSlotState(open: cmd == Cmd.smpBegin)
+            sampleSlots[k] = SampleSlotState(open: cmd == Cmd.smpBegin)
             slotHeaders[k] = nil
             return [a[0], 0]
         case Cmd.smpWrite:

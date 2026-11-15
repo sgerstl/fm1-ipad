@@ -29,7 +29,7 @@ public struct TrackState: Equatable, Sendable {
     public var swing = 0
     public var loaded = false
 
-    public init(index: Int, shape: DeviceShape = .sloop) {
+    public init(index: Int, shape: DeviceShape = .initial) {
         self.index = index
         isDrums = shape.isDrums(index)
         steps = Array(repeating: .empty, count: shape.stepCount)
@@ -72,56 +72,30 @@ public enum ConnectionStatus: Equatable, Sendable {
 public final class DeviceSession {
     public private(set) var status: ConnectionStatus = .searching
     public var isConnected: Bool { if case .connected = status { true } else { false } }
-    /// Recording anything: a loop's notes or knobs, or SLOOP's song.
-    public var isRecordingAnything: Bool { recording || song.songRecording }
+    /// Recording anything: a loop's notes or knobs.
+    public var isRecordingAnything: Bool { recording }
     public private(set) var info: DeviceInfo?
     /// The connected firmware (nil until one connects).
     public private(set) var dialect: FirmwareDialect?
-    /// Tracks, steps and the drum track. SLOOP's until a device says otherwise.
-    public private(set) var shape = DeviceShape.sloop
+    /// Tracks and steps. Skiff's six until a device says otherwise.
+    public private(set) var shape = DeviceShape.initial
     public private(set) var capabilities: FirmwareCapabilities = []
     /// The parameter ids this firmware uses for what the session follows.
-    public private(set) var ids = ParamIDs.sloop
+    public private(set) var ids = ParamIDs()
     /// The Sound tab's pages, when the firmware lays them out itself (Skiff, from DESC); nil: the app's own.
     public private(set) var pageLayout: [PageSpec]?
-    public private(set) var tracks = (0..<DeviceShape.sloop.trackCount).map { TrackState(index: $0) }
+    public private(set) var tracks = (0..<DeviceShape.initial.trackCount).map { TrackState(index: $0) }
     public private(set) var selectedTrack = 0
     /// When the transport last stopped (the pool's pictures wait a few seconds after it, 2026-11-11).
     public private(set) var stoppedAt = Date.distantPast
     public private(set) var playing = false {
-        // stopped (from the FM-1 or the iPad): the song order the iPad kept for now goes to the FM-1
-        didSet {
-            if oldValue, !playing { stoppedAt = Date() }
-            if oldValue, !playing, pendingOrder != nil { drainSettings() }
-        }
+        didSet { if oldValue, !playing { stoppedAt = Date() } }
     }
-    /// The song: sections A–D, the mode, the position (LIVE), and the order (the settings object).
-    public private(set) var song = SongState()
-    public private(set) var songOrder: SongOrder?
-    /// The tracks were edited from the iPad since the last section was stored or loaded: picking a
-    /// section in loop mode would replace those edits (SLOOP keeps no copy there).
-    public private(set) var tracksEdited = false
-    /// Why the last song edit didn't take, for the Song page to say (nil: fine).
-    public private(set) var songMessage: String?
-    private var settingsCache: [UInt8]?
-    @ObservationIgnored private var pendingOrder: SongOrder?
-    @ObservationIgnored private var orderWriting = false
-    @ObservationIgnored private var orderWriteBefore: SongOrder?
-    /// False until the first LIVE after a connect: that one only fills `song` in, it isn't an edit.
-    @ObservationIgnored private var liveSeen = false
-    /// The FM-1's HOME > AUDIO > USB AUDIO, from the settings object (nil until read): FULL sends a fixed
-    /// level over USB whatever the MASTER, so the speaker can be muted while the iPad plays the sound.
+    /// Skiff's MENU › USB LEVEL is FIXED (nil until read): the iPad gets the full level whatever the MASTER knob, so
+    /// the speaker can be turned down while the iPad plays the sound.
     public private(set) var usbAudioFull: Bool?
-    /// Whether Lupe can quiet the FM-1's speaker itself (SLOOP's MASTER over the protocol). Skiff's MASTER is
-    /// its knob alone: there Lupe sets USB LEVEL = FIXED and the person turns MASTER down.
-    public var canQuietSpeaker: Bool { sloop != nil }
     /// Why the iPad's sound setting didn't take on the FM-1, if it didn't.
     public private(set) var usbAudioProblem: String?
-    /// The iPad plays the FM-1's sound and wants its speaker quiet (AudioThrough, via the app).
-    @ObservationIgnored private var speakerMuted = false
-    @ObservationIgnored private var wantUSBFull = false
-    /// A new song order the FM-1 will take once playback stops (SLOOP refuses one while anything plays).
-    public private(set) var orderWaitingForStop = false
 
     /// Recording (a track is REC) or armed and waiting for a note: the REC pad lights.
     public private(set) var recording = false
@@ -129,15 +103,11 @@ public final class DeviceSession {
     public private(set) var armedTracks = 0
     public private(set) var motion: [Int: TrackMotion] = [:]
     /// Skiff records every knob move on the selected track, the iPad's included, while it's armed and playing.
-    public var recordingKnobs: Bool { dialect == .skiff && playing && armedTracks & (1 << selectedTrack) != 0 }
+    public var recordingKnobs: Bool { dialect != nil && playing && armedTracks & (1 << selectedTrack) != 0 }
     public private(set) var bpm = 120
     public private(set) var swing = 0
-    public private(set) var otherChannelsPlaySelected = true
-    public private(set) var drumMapGM = true
-    public private(set) var positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: DeviceShape.sloop.trackCount)
+    public private(set) var positions = Array(repeating: TrackPosition(step: 0, length: 16), count: DeviceShape.initial.trackCount)
     public private(set) var isDemo = false
-    /// The demo pretends to be Skiff (FakeSkiff) rather than SLOOP; false for a real FM-1.
-    public private(set) var demoSkiff = false
     /// Counted on every poll (the tests check the polling rate), and no view reads it: kept out of observation so a
     /// poll doesn't count as a change.
     @ObservationIgnored public private(set) var stats = Stats()
@@ -152,18 +122,13 @@ public final class DeviceSession {
     /// Called on anything that may change the project: an edit from the iPad, or a push about one made
     /// on the FM-1. Not observed: a knob drag would otherwise redraw whoever watched a counter.
     @ObservationIgnored public var onEdit: (@MainActor () -> Void)?
-    /// A project being written: the settings writer waits, so the two never interleave their BK_PUTs.
-    @ObservationIgnored private var projectBusy = false
-    /// One backup operation at a time. SLOOP stages a restore in the buffer BK_LIST snapshots into, so a
-    /// LIST between a BK_PUT begin and its commit drops what was staged (rc 5): that broke New project
-    /// on the FM-1, when emptying sections made LIVE ask for the song order mid-write (2026-11-02).
+    /// One backup operation at a time (sample writes, read-backs and the firmware backup): neither interleaves its
+    /// frames with another's.
     @ObservationIgnored private var backupHeld = false
     @ObservationIgnored private var backupWaiting: [CheckedContinuation<Void, Never>] = []
-    @ObservationIgnored private var loopFingerprint: (raw: UInt32, music: UInt32)?
-    @ObservationIgnored private var stepStart = Array(repeating: Date.distantPast, count: DeviceShape.sloop.trackCount)
-    @ObservationIgnored private var lastPoll = Date.distantPast
-    /// The playhead counted from MIDI clock, on firmware without LIVE (Skiff).
-    @ObservationIgnored private var counted = CountedPlayhead(tracks: DeviceShape.sloop.trackCount)
+    @ObservationIgnored private var stepStart = Array(repeating: Date.distantPast, count: DeviceShape.initial.trackCount)
+    /// The playhead counted from MIDI clock (Skiff sends no step positions).
+    @ObservationIgnored private var counted = CountedPlayhead(tracks: DeviceShape.initial.trackCount)
     /// The clock and each track's last fresh phrase (NOTES OUT), for the LFO page's live wave. Read at draw time.
     @ObservationIgnored public private(set) var lfoClock = LFOClock()
     /// Skiff's song (lists and pool), on Skiff 2.0 and later; kept, offline, after the device goes away.
@@ -253,10 +218,8 @@ public final class DeviceSession {
     }
 
     private(set) var driver: FirmwareDriver?
-    /// SLOOP's client, for what only SLOOP has (LIVE, the song, backups, samples, the screen link).
-    private var sloop: SloopClient? { (driver as? SloopDriver)?.client }
-    /// The client that carries the user-sample commands (11–15): SLOOP's and Skiff's take the same bytes.
-    var sampleClient: SloopClient? { (driver as? SloopDriver)?.client ?? (driver as? SkiffDriver)?.client }
+    /// The client that carries the user-sample commands (11–15).
+    var sampleClient: SloopClient? { (driver as? SkiffDriver)?.client }
     /// Factory preset names per engine (NAMES), all read at connect: the library's lists.
     public private(set) var namesCache: [Int: [String]] = [:]
     public private(set) var userPresets: [UserPreset] = []
@@ -308,7 +271,7 @@ public final class DeviceSession {
     /// DESC of every parameter: label, range, format, enum names. The engine's P_E0..P_E7 are re-read
     /// whenever the selected track or its engine changes.
     public private(set) var trackDescs: [Int: ParamDesc] = [:]
-    /// Skiff's release (2.2 or 2.5.1), nil on SLOOP: the pages, settings and undo depth that differ.
+    /// Skiff's release (2.2 or 2.5.1), nil until connected: the pages, settings and undo depth that differ.
     public private(set) var skiffFirmware: SkiffFirmware?
     /// MENU › CONTROL › KEEP SENDS (Skiff 2.5, editor menu id 21): a sound load keeps the track's CHORUS, DELAY and
     /// REVERB sends. nil: this firmware doesn't offer it, or it hasn't been read yet.
@@ -322,7 +285,7 @@ public final class DeviceSession {
     public internal(set) var takeOffer: TakeOffer?
     public private(set) var takeLinked = false
     public private(set) var globalDescs: [Int: ParamDesc] = [:]
-    /// fm1-ipad firmware (SLOOP 2.8.4 plus the UI push): the FM-1 reports its page and the iPad can set it.
+    /// Skiff-Lupe's screen link: the FM-1 reports its page and the iPad can set it.
     public private(set) var screenLinked = false
     /// What the FM-1's screen shows, when screenLinked.
     public private(set) var deviceScreen: UIState?
@@ -344,15 +307,13 @@ public final class DeviceSession {
     @ObservationIgnored private var soundLoadedAt = Date.distantPast
 
     @ObservationIgnored private var pendingSteps: Set<Int> = []        // stepKey(track, index)
-    /// Steps and parameters the iPad wrote lately. SLOOP doesn't push about the editor's own writes,
-    /// and a read already queued before a write would bring back the old value, so reads leave these
+    /// Steps and parameters the iPad wrote lately. The FM-1 doesn't always push about the editor's own
+    /// writes, and a read already queued before a write would bring back the old value, so reads leave these
     /// alone for a moment. Keys: "s<stepKey>", "p<track>.<id>", "g<id>".
     /// (This bookkeeping is never drawn: ignored by Observation, or every knob write woke whatever read it while
     /// drawing; the Mixer's strips redrew on each turn of a shared card's column, 2026-11-06.)
     @ObservationIgnored private var recentWrites: [String: Date] = [:]
     @ObservationIgnored private var stepWrites: [Int: SynthStep] = [:]
-    @ObservationIgnored private var reloadingAll = false
-    @ObservationIgnored private var reloadAgain = false
     @ObservationIgnored private var stepSending: Set<Int> = []
     @ObservationIgnored private var drumWrites: [Int: DrumStep] = [:]
     @ObservationIgnored private var drumSending: Set<Int> = []
@@ -374,46 +335,32 @@ public final class DeviceSession {
     public func isDrums(_ t: Int) -> Bool { shape.isDrums(t) }
     public var selectedIsDrums: Bool { shape.isDrums(selectedTrack) }
 
-    /// A track shown as a drum grid: SLOOP's drum track, or on Skiff a track on a kit engine (DRUM,
-    /// DRUM-X), whose steps carry lane hits (Scott, 2026-11-05: as SLOOP's drum track).
+    /// A track shown as a drum grid: a fixed drum track, or a track on a kit engine (DRUM, DRUM-X), whose steps
+    /// carry lane hits (Scott, 2026-11-05).
     public func isKit(_ t: Int) -> Bool {
         if isDrums(t) { return true }
-        guard dialect == .skiff, trackIndices.contains(t), let names = info?.engines,
+        guard trackIndices.contains(t), let names = info?.engines,
               let name = names[safe: tracks[t].engine] else { return false }
         return name == "DRUM" || name == "DRUM-X"
     }
-    /// The track the drum grid edits: SLOOP's drum track, or the selected track when it's a kit.
+    /// The track the drum grid edits: a fixed drum track, or the selected track when it's a kit.
     public var kitTrack: Int? { drumTrack ?? (isKit(selectedTrack) ? selectedTrack : nil) }
-    /// The drum grid's lanes: SLOOP's 16, or Skiff's 8 (EDITOR_PROTOCOL.md "v5: the drum grid").
-    public var drumLanes: [String] { dialect == .skiff ? Music.skiffDrumLanes : Music.drumLanes }
-    /// Hit levels as the firmware keeps them: SLOOP's four, Skiff's accent or not.
-    public var drumLevelsAreAccents: Bool { dialect == .skiff }
+    /// The drum grid's lanes: Skiff's 8 (EDITOR_PROTOCOL.md "v5: the drum grid").
+    public var drumLanes: [String] { Music.skiffDrumLanes }
+    /// Hit levels as the firmware keeps them: Skiff's accent or not.
+    public var drumLevelsAreAccents: Bool { true }
     /// A step's key in the session's bookkeeping (one number per track and step).
     private func stepKey(_ t: Int, _ i: Int) -> Int { t * 256 + i }
 
-    /// About 20 a second once a reply's 2 ms is added. SLOOP pushes only while its USB send ring is
-    /// at most half full (editor.c ed_room), so polling harder can hold the pushes back.
-    public var pollInterval: Duration = .milliseconds(48)
-    /// While nothing plays.
-    public var stoppedPollInterval: Duration = .milliseconds(120)
     /// The selected track is re-read this often: the device only edits the selected track, and a
     /// push it held back shows up here at the latest. Each pass also re-reads one other track.
     public var resyncInterval: Duration = .seconds(1)
 
-    /// `skiff`: which firmware the demo FM-1 pretends to run (Scott, 2026-11-06: the menu offers a Skiff demo and a
-    /// SLOOP demo); nil takes it from the launch flag.
-    public init(demo: Bool = false, skiff: Bool? = nil) {
+    /// The demo FM-1 is a pretend Skiff (FakeSkiff); `demo` false: a real FM-1 over USB MIDI.
+    public init(demo: Bool = false) {
         isDemo = demo
-        // -demo-still: the demo FM-1 makes no edits of its own (screen recordings, screenshots)
-        let still = LaunchArgs.all.contains("-demo-still")
-        // -demo-skiff: a pretend Skiff 2.2 answering as skiff-sim did (FakeSkiff), instead of SLOOP
-        let skiff = skiff ?? Self.launchedSkiffDemo
-        demoSkiff = demo && skiff
-        makeTransport = !demo ? { MIDITransport() } : skiff ? { FakeSkiff(demo: true) } : { FakeSloop(autoEdits: !still) }
+        makeTransport = !demo ? { MIDITransport() } : { FakeSkiff(demo: true) }
     }
-
-    /// The launch asked for the Skiff demo (-demo-skiff: screenshots and tests).
-    public static var launchedSkiffDemo: Bool { LaunchArgs.all.contains("-demo-skiff") }
 
     public init(transport: @escaping () -> SysExTransport?) {
         makeTransport = transport
@@ -440,9 +387,8 @@ public final class DeviceSession {
     private func connect(_ transport: SysExTransport) async {
         meters.reset()
         scope.reset()
-        settingsCache = nil; songOrder = nil; usbAudioFull = nil; usbAudioProblem = nil     // never write a settings object read from another FM-1
+        usbAudioFull = nil; usbAudioProblem = nil
         sampleSlots = []
-        liveSeen = false
         if case .wrongFirmware = status {} else { status = .connecting }
         let c: FirmwareDriver
         do {
@@ -469,10 +415,8 @@ public final class DeviceSession {
             adopt(c.shape)
             deviceNotes = []          // whatever the USB buffer held from before isn't live
             try await readEverything()
-            // fm1-ipad firmware answers UI; stock SLOOP doesn't (a short timeout, then the link stays off). Skiff
-            // with the screen link patch says so in INFO (56 01 01, or 02 with the cursor): asked only then
-            if let s = sloop, let ui = try? await s.uiState() { deviceScreen = ui; screenLinked = true }
-            else if let k = c as? SkiffDriver, k.skiff.hasScreenLink, let ui = try? await k.screen() { deviceScreen = ui; screenLinked = true }
+            // Skiff with the screen link patch says so in INFO (56 01 01, or 02 with the cursor): asked only then
+            if let k = c as? SkiffDriver, k.skiff.hasScreenLink, let ui = try? await k.screen() { deviceScreen = ui; screenLinked = true }
             else { screenLinked = false; deviceScreen = nil }
             if screenLinked { capabilities.insert(.screenLink) }
             screenCursor = screenLinked && (c as? SkiffDriver)?.skiff.hasScreenCursor == true
@@ -522,13 +466,9 @@ public final class DeviceSession {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.pushLoop(c) }
             group.addTask { await self.pingLoop(c) }
-            if let s = self.sloop, self.capabilities.contains(.livePlayhead) {
-                group.addTask { await self.liveLoop(s) }
-            } else {
-                // no step positions over SysEx: TRANSPORT polled, the playhead counted from MIDI clock
-                group.addTask { await self.transportLoop(c) }
-                group.addTask { await self.clockLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
-            }
+            // no step positions over SysEx: TRANSPORT polled, the playhead counted from MIDI clock
+            group.addTask { await self.transportLoop(c) }
+            group.addTask { await self.clockLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
             group.addTask { await self.resyncLoop(c) }
             if let k = self.driver as? SkiffDriver { group.addTask { await self.themeLoop(k) } }
             group.addTask { await self.noteLoop(transport); try? await Task.sleep(for: .seconds(86400 * 365)) }
@@ -556,7 +496,7 @@ public final class DeviceSession {
         guard s != shape else { return }
         shape = s
         tracks = (0..<s.trackCount).map { TrackState(index: $0, shape: s) }
-        positions = Array(repeating: LiveState.TrackPosition(step: 0, length: 16, meter: 0), count: s.trackCount)
+        positions = Array(repeating: TrackPosition(step: 0, length: 16), count: s.trackCount)
         stepStart = Array(repeating: Date.distantPast, count: s.trackCount)
         counted = CountedPlayhead(tracks: s.trackCount)
         if selectedTrack >= s.trackCount { selectedTrack = 0 }
@@ -571,11 +511,8 @@ public final class DeviceSession {
         for t in trackIndices { _ = try await readSteps(t) }
         try await readLibrary()
         try await readSoundParams(descs: true)
-        if capabilities.contains(.sloopSong) { try? await readSongOrder() }
         if capabilities.contains(.samples) { await refreshSampleSlots() }
     }
-
-    // MARK: The song
 
     /// Runs `body` when no other backup operation is under way (the session is on the main actor, so
     /// the flag needs no lock of its own).
@@ -588,17 +525,6 @@ public final class DeviceSession {
         }
         return try await body()
     }
-
-    public func readSongOrder() async throws {
-        guard let c = sloop else { return }
-        let s = try await backupTurn { try await c.settingsObject() }
-        settingsCache = s
-        songOrder = SongOrder(settings: s)
-        usbAudioFull = Self.usbFull(in: s)
-    }
-
-    /// USB AUDIO = FULL: bit 11 of the settings' last word (persist_t.lights at byte 84, panel.c lights_word).
-    static func usbFull(in s: [UInt8]) -> Bool? { s.count >= 88 ? s[85] & 0x08 != 0 : nil }
 
     // MARK: Before a firmware install
 
@@ -614,153 +540,16 @@ public final class DeviceSession {
         case notConnected, playing, unreadable(String), refused(object: Int, rc: Int)
     }
 
-    /// What the FM-1 holds now, as a project. Reading doesn't need a stop.
-    public func readProject() async throws -> ProjectData {
-        try await backupTurn { try await readProjectNow() }
-    }
-
-    private func readProjectNow() async throws -> ProjectData {
-        guard let c = sloop else { throw ProjectError.notConnected }
-        var attempt = 0
-        while true {
-            do {
-                let list = try await c.objectList()
-                let working = try await c.object(id: 0, length: list[0]?.length ?? 0)
-                var sections: [[UInt8]] = []
-                for k in 0..<4 { sections.append(try await c.object(id: 2 + k, length: list[2 + k]?.length ?? 0)) }
-                let settings = try await c.object(id: 1, length: list[1]?.length ?? 0)
-                guard Fun6(working) != nil else { throw ProjectError.unreadable("the loop isn't a SLOOP 2.8 project") }
-                guard settings.count >= SongOrder.offset + SongOrder.size else { throw ProjectError.unreadable("no song order") }
-                return ProjectData(working: working, sections: sections,
-                                   songOrder: Array(settings[SongOrder.offset..<(SongOrder.offset + SongOrder.size)]))
-            } catch let e as ProjectError {
-                throw e
-            } catch {
-                // the settings writer's LIST between ours and a GET drops the snapshot (rc 5): once more
-                attempt += 1
-                if attempt > 1 { throw error }
-            }
-        }
-    }
-
-    /// The fingerprint of what the FM-1 holds (ProjectData.fingerprint), cheaply: BK_LIST gives the
-    /// sections' CRCs, the settings are one GET, and the loop is read again only when its snapshot changed.
-    public func deviceFingerprint() async throws -> String {
-        try await backupTurn { try await deviceFingerprintNow() }
-    }
-
-    private func deviceFingerprintNow() async throws -> String {
-        guard let c = sloop else { throw ProjectError.notConnected }
-        let list = try await c.objectList()
-        var music: UInt32
-        if let l = list[0], let known = loopFingerprint, known.raw == l.crc {
-            music = known.music
-        } else {
-            let working = try await c.object(id: 0, length: list[0]?.length ?? 0)
-            music = Fun6(working).map { CRC32.of($0.musicOnly) } ?? CRC32.of(working)
-            if let l = list[0] { loopFingerprint = (l.crc, music) }
-        }
-        let sections = (2...5).map { (list[$0]?.length ?? 0) == 0 ? CRC32.of([]) : list[$0]!.crc }
-        let settings = try await c.object(id: 1, length: list[1]?.length ?? 0)
-        guard settings.count >= SongOrder.offset + SongOrder.size else { throw ProjectError.unreadable("no song order") }
-        let order = CRC32.of(Array(settings[SongOrder.offset..<(SongOrder.offset + SongOrder.size)]))
-        return ([music] + sections + [order]).map { String($0, radix: 16) }.joined(separator: "-")
-    }
-
-    /// Puts a project on the FM-1: the loop (loaded at once), sections A–D, then the song order spliced
-    /// into the settings as they are now. SLOOP takes all of it only stopped. `progress` goes 0…1.
-    public func writeProject(_ p: ProjectData, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {
-        guard driver != nil else { throw ProjectError.notConnected }
-        guard !playing, !song.songPlaying else { throw ProjectError.playing }
-        guard p.loop != nil else { throw ProjectError.unreadable("not a SLOOP 2.8 project") }
-        projectBusy = true
-        defer { projectBusy = false; drainSettings() }
-        pendingOrder = nil
-        do {
-            try await backupTurn { try await writeProjectNow(p, progress: progress) }
-        } catch {
-            await rereadAfterProject()          // part of it may be on the FM-1 now: show what is
-            throw error
-        }
-        await rereadAfterProject()
-    }
-
-    /// A BK_PUT, once more if SLOOP lost what was staged (rc 5).
-    /// A BK_PUT, again if SLOOP lost what was staged (rc 5), or briefly said "stop first" (rc 3) while
-    /// the app knows it is stopped: loading a loop queues a stop (project_apply, transport_req) that the
-    /// audio clears on its next block, and a commit before then is refused (2026-11-02, the FM-1).
-    private func put(_ c: SloopClient, id: Int, _ bytes: [UInt8]) async throws -> Int {
-        var rc = try await c.putObject(id: id, bytes)
-        if rc == 5 { rc = try await c.putObject(id: id, bytes) }
-        var tries = 0
-        while rc == 3, !playing, tries < 10 {
-            try await Task.sleep(for: .milliseconds(50))
-            rc = try await c.putObject(id: id, bytes)
-            tries += 1
-        }
-        return rc
-    }
-
-    /// The order matters: the song order and the sections first, the loop last, since only the loop
-    /// queues a stop on the FM-1 (and with it, a moment of "stop first" for whatever comes next).
-    private func writeProjectNow(_ p: ProjectData, progress: @escaping @MainActor (Double) -> Void) async throws {
-        guard let c = sloop else { throw ProjectError.notConnected }
-        guard let loop = p.loop?.sealed else { throw ProjectError.unreadable("not a SLOOP 2.8 project") }
-        func check(_ id: Int, _ rc: Int) throws {
-            if rc == 3 { throw ProjectError.playing }
-            guard rc == 0 else { throw ProjectError.refused(object: id, rc: rc) }
-        }
-        progress(0)
-        let fresh = try await c.settingsObject()
-        guard fresh.count >= SongOrder.offset + SongOrder.size, p.songOrder.count == SongOrder.size else {
-            throw ProjectError.unreadable("no song order")
-        }
-        var settings = fresh
-        settings.replaceSubrange(SongOrder.offset..<(SongOrder.offset + SongOrder.size), with: p.songOrder)
-        if settings != fresh { try check(1, try await put(c, id: 1, settings)) }
-        settingsCache = settings
-        songOrder = SongOrder(settings: settings)
-        orderWriteBefore = nil
-        for k in 0..<4 {
-            progress(Double(1 + k) / 6)
-            try check(2 + k, try await put(c, id: 2 + k, k < p.sections.count ? p.sections[k] : []))
-        }
-        progress(5.0 / 6)
-        try check(0, try await put(c, id: 0, loop.bytes))
-        progress(1)
-    }
-
-    private func rereadAfterProject() async {
-        // SLOOP pushes nothing for the editor's own restore: read everything the app shows again
-        try? await readTrackList()
-        for t in trackIndices { try? await readParams(t) }
-        try? await readGlobals()
-        for t in trackIndices { _ = try? await readSteps(t, deviceWins: true) }
-        try? await readSoundParams(descs: false)
-        try? await readSongOrder()
-        tracksEdited = false
-    }
-
     // MARK: The FM-1's speaker while the iPad plays
 
-    /// Quiets the FM-1's speaker (and its headphones) while the iPad plays its sound over USB, or gives
-    /// the MASTER knob back. Quieting needs USB AUDIO = FULL first, or the iPad would go quiet too: the
-    /// app writes that setting once (it's refused while the FM-1 plays, so it waits for a stop).
-    /// Unplugged while quiet, the FM-1 stays quiet until its MASTER knob turns (SLOOP gives the knob back then).
+    /// The iPad plays the FM-1's sound over USB and wants its speaker quiet: Skiff's MASTER is its knob alone, so
+    /// Lupe sets USB LEVEL = FIXED (the iPad keeps the full level) and the person turns MASTER down.
     public func muteSpeaker(_ mute: Bool) {
-        speakerMuted = mute
-        if mute, let k = driver as? SkiffDriver { fixSkiffUSBLevel(k); return }
-        guard let c = sloop else { return }
-        if mute, usbAudioFull != true {
-            wantUSBFull = true
-            drainSettings()
-            return
-        }
-        Task { _ = try? await c.masterLevel(mute ? 0 : 127) }
+        if mute, let k = driver as? SkiffDriver { fixSkiffUSBLevel(k) }
     }
 
     /// Skiff: MENU > USB LEVEL = FIXED (MENU_SET id 10), so the iPad gets the full level whatever the MASTER
-    /// knob, and turning it down quiets only the FM-1's speaker. Set once; left so afterwards, as SLOOP's FULL is.
+    /// knob, and turning it down quiets only the FM-1's speaker. Set once; left so afterwards.
     private func fixSkiffUSBLevel(_ k: SkiffDriver) {
         guard usbAudioFull != true else { return }
         Task {
@@ -775,141 +564,6 @@ public final class DeviceSession {
             }
         }
     }
-
-    private let saveLayer = 7          // LIVE op 2's layer for SAVE held (ui_layers.c LY_SONG)
-
-    // MARK: Sections and song mode
-
-    /// Plays a section from the next bar (playing) or loads it as the loop (stopped), as SAVE + key 1–4.
-    public func playSection(_ k: Int) {
-        guard let c = sloop else { return }
-        if song.songPlaying { songMessage = "The song is playing: stop it to pick a section"; return }
-        if !song.stored(k) { songMessage = "Section \(Self.sectionName(k)) is empty: store a loop in it first"; return }
-        songMessage = nil
-        if playing { song.sectionQueued = k } else { song.sectionPlaying = k }
-        Task {
-            _ = try? await c.layerTap(layer: saveLayer, key: k)
-            // stopped, the section loads at once: read what it put on the tracks (when playing, the
-            // change of section in LIVE triggers the same on the bar)
-            if !self.playing { self.tracksEdited = false; self.reloadAllTracks() }
-        }
-    }
-
-    /// Stores the working loop into a section, as SAVE + key 5–8 (over a used one the FM-1 wants the key
-    /// twice within 3 s: the iPad asks first, then sends both).
-    /// Empties section k (the editor's restore of no bytes, project.c project_restore). SLOOP does it only
-    /// stopped, and keeps no copy.
-    public func clearSection(_ k: Int) {
-        guard let c = sloop, (0..<4).contains(k) else { return }
-        guard !playing else { songMessage = "Stop the FM-1 to clear a section"; return }
-        songMessage = nil
-        Task {
-            let rc = await self.backupTurn { (try? await c.putObject(id: 2 + k, [])) ?? 99 }
-            if rc == 0 {
-                self.song.sectionsStored &= ~(1 << k)
-                self.onEdit?()
-            } else {
-                self.songMessage = rc == 3 ? "Stop the FM-1 to clear a section" : "The FM-1 didn't clear section \(Self.sectionName(k)) (code \(rc))"
-            }
-        }
-    }
-
-    public func storeLoop(in k: Int) {
-        guard let c = sloop else { return }
-        let twice = song.stored(k)
-        song.sectionsStored |= 1 << k
-        tracksEdited = false
-        onEdit?()
-        songMessage = nil
-        Task {
-            _ = try? await c.layerTap(layer: saveLayer, key: 4 + k)
-            if twice { _ = try? await c.layerTap(layer: saveLayer, key: 4 + k) }
-            try? await self.readSongOrder()
-        }
-    }
-
-    /// Loop mode / song mode (SAVE + key 13): in song mode PLAY plays the song order.
-    public func toggleSongMode() {
-        guard let c = sloop else { return }
-        if song.songRecording { songMessage = "SONG REC is on"; return }
-        song.songMode.toggle()
-        Task { _ = try? await c.layerTap(layer: saveLayer, key: 12) }
-    }
-
-    /// SONG REC (SAVE + key 14): from the next bar, every section played (and how long) becomes the song.
-    public func toggleSongRec() {
-        guard let c = sloop else { return }
-        if !song.songRecording && song.songPlaying { songMessage = "Stop the song first"; return }
-        songMessage = nil
-        let ending = song.songRecording
-        song.songRecording.toggle()
-        Task {
-            _ = try? await c.layerTap(layer: saveLayer, key: 13)
-            // ending it writes the order on the FM-1: read it back (the flag above already flipped, so
-            // the LIVE check for "SONG REC just ended" won't see it)
-            if ending { try? await self.readSongOrder() }
-        }
-    }
-
-    /// Writes a new song order (only while the song is stopped, as on the device).
-    /// Each write re-reads the settings object first and changes only the order's bytes, so settings
-    /// changed on the FM-1 since connect are kept; one write runs at a time and the latest order wins.
-    public func setSongOrder(_ order: SongOrder) {
-        guard driver != nil, songOrder != nil else { return }     // never over an order the app couldn't read
-        if song.songPlaying || song.songRecording { songMessage = "Stop the song to change its order"; return }
-        if orderWriteBefore == nil { orderWriteBefore = songOrder }
-        songOrder = order
-        songMessage = nil
-        onEdit?()
-        pendingOrder = order
-        drainSettings()
-    }
-
-    /// The one writer of the settings object: the song order and USB AUDIO = FULL go through here, one
-    /// write at a time, each on a fresh read so settings changed on the FM-1 since are kept.
-    private func drainSettings() {
-        guard let c = sloop, !orderWriting, !projectBusy else { return }
-        orderWriting = true
-        Task {
-            while self.pendingOrder != nil || self.wantUSBFull {
-                // SLOOP takes a new order only when stopped (settings_restore): it waits for the stop
-                let order = self.playing ? nil : self.pendingOrder, full = self.wantUSBFull
-                if order == nil, !full { break }
-                if order != nil { self.pendingOrder = nil }
-                self.wantUSBFull = false
-                var rc = 99
-                let written: [UInt8]? = await self.backupTurn {
-                    guard let fresh = try? await c.settingsObject(), SongOrder(settings: fresh) != nil else { return nil }
-                    var bytes = order.map { $0.written(into: fresh) } ?? fresh
-                    if full, bytes.count >= 88 { bytes[85] |= 0x08 }
-                    rc = bytes == fresh ? 0 : (try? await c.putSettings(bytes)) ?? 99
-                    return bytes
-                }
-                if let bytes = written {
-                    if rc == 0 {
-                        self.settingsCache = bytes
-                        self.usbAudioFull = Self.usbFull(in: bytes)
-                    }
-                }
-                if let order, rc == 3 {
-                    // still playing as far as the FM-1 knows: keep it for the next stop, don't roll back
-                    if self.pendingOrder == nil { self.pendingOrder = order }
-                    break
-                }
-                if order != nil, rc != 0, self.pendingOrder == nil {
-                    self.songOrder = self.orderWriteBefore
-                    self.songMessage = "The FM-1 didn't take the order (code \(rc))"
-                }
-                // FULL now: the speaker can go quiet without the iPad losing the sound
-                if full, self.usbAudioFull == true, self.speakerMuted { _ = try? await c.masterLevel(0) }
-            }
-            self.orderWaitingForStop = self.pendingOrder != nil
-            if self.pendingOrder == nil { self.orderWriteBefore = nil }
-            self.orderWriting = false
-        }
-    }
-
-    public static func sectionName(_ k: Int) -> String { ["A", "B", "C", "D"][k & 3] }
 
     // MARK: Reading: each part of the FM-1
 
@@ -1122,12 +776,9 @@ public final class DeviceSession {
         switch id {
         case ids.bpm:
             // the counted playhead shifts as Skiff's sequencer does when its own clock changes speed
-            if v != bpm, !capabilities.contains(.livePlayhead) { counted.tempoChanged(from: bpm, to: v) }
+            if v != bpm { counted.tempoChanged(from: bpm, to: v) }
             if bpm != v { bpm = v }
         case ids.globalSwing: if swing != v { swing = v }
-        case ids.drumLevel: if let dt = drumTrack, tracks[dt].level != v { tracks[dt].level = v }
-        case ids.otherChannels: if otherChannelsPlaySelected != (v == 0) { otherChannelsPlaySelected = v == 0 }
-        case ids.drumMap: if drumMapGM != (v == 0) { drumMapGM = v == 0 }
         default: break
         }
     }
@@ -1288,25 +939,6 @@ public final class DeviceSession {
         }
     }
 
-    private func liveLoop(_ c: SloopClient) async {
-        var misses = 0
-        while !Task.isCancelled {
-            do {
-                let l = try await c.live()
-                misses = 0
-                applyLive(l)
-            } catch ClientError.closed {
-                return
-            } catch {
-                misses += 1
-                if misses > 40 { return }     // about 6 s with no answer: treat it as gone
-            }
-            // stopped, there is no playhead to keep smooth: a slower poll still catches a track switch or
-            // PLAY quickly, with about half the traffic (2026-11-02, battery)
-            try? await Task.sleep(for: playing ? pollInterval : stoppedPollInterval)
-        }
-    }
-
     /// TRANSPORT about every 150 ms playing, 250 ms stopped: PLAY, STOP, REC and the selected track (Skiff
     /// pushes nothing when they change on the device), and the keep-alive.
     private func transportLoop(_ c: FirmwareDriver) async {
@@ -1358,7 +990,7 @@ public final class DeviceSession {
     private func applyCounted(at now: Date = Date()) {
         stats.polls += 1
         for (k, step) in counted.steps.enumerated() where k < positions.count && step >= 0 {
-            let new = LiveState.TrackPosition(step: step, length: tracks[k].length, meter: 0)
+            let new = TrackPosition(step: step, length: tracks[k].length)
             if positions[k] != new {
                 if positions[k].step != step { stepStart[k] = now }
                 positions[k] = new
@@ -1373,10 +1005,9 @@ public final class DeviceSession {
             do {
                 let sel = selectedTrack
                 // Skiff pushes its step changes (WATCH bit 0): the full read is a backstop, every fourth pass (64
-                // requests each time); SLOOP's every pass
-                // (all in the client's back queue: a backstop never delays a poll or a write)
+                // requests each time; all in the client's back queue: a backstop never delays a poll or a write)
                 try await inBackground {
-                    if !(c is SkiffDriver) || pass % 4 == 0 { _ = try await readSteps(sel) }
+                    if pass % 4 == 0 { _ = try await readSteps(sel) }
                     if pass % 3 == 0 {                       // every third pass: the next other track, params, globals
                         let n = trackCount
                         let other = (sel + 1 + (pass / 3) % max(1, n - 1)) % n
@@ -1389,75 +1020,6 @@ public final class DeviceSession {
             } catch ClientError.closed { return } catch {}
             pass += 1
         }
-    }
-
-    /// Every track's steps and settings again, once (a call while one runs asks for one more pass).
-    private func reloadAllTracks() {
-        guard !reloadingAll else { reloadAgain = true; return }
-        reloadingAll = true
-        Task {
-            repeat {
-                reloadAgain = false
-                for t in self.trackIndices {
-                    try? await self.readParams(t)
-                    _ = try? await self.readSteps(t, deviceWins: true)
-                }
-            } while reloadAgain
-            reloadingAll = false
-        }
-    }
-
-    func applyLive(_ l: LiveState, at now: Date = Date()) {
-        stats.polls += 1
-        // About 20 a second: every write here is guarded, because writing an observed property (even
-        // the same value, and any element of `tracks`) makes every view that reads it draw again; the
-        // drum grid redrew its whole canvas on every poll (2026-11-02, battery)
-        let wasPlaying = playing
-        if l.selected != selectedTrack, trackIndices.contains(l.selected) { selectedTrack = l.selected }
-        if playing != l.playing { playing = l.playing }
-        let rec = l.recTracks != 0 || l.recArmed
-        if recording != rec { recording = rec }
-        let before = song
-        let firstLive = !liveSeen
-        liveSeen = true
-        if song != l.song { song = l.song }
-        // SONG REC just ended, or a section was stored on the device: the order may have changed. Not on
-        // the first LIVE after a connect, where `song` goes from blank to the device's (it marked a just-
-        // opened project edited, and failed the sample test when that poll landed mid-upload)
-        if !firstLive, (before.songRecording && !l.song.songRecording) || before.sectionsStored != l.song.sectionsStored {
-            onEdit?()
-            Task { try? await self.readSongOrder() }
-        }
-        // a section loaded over the tracks, or the song stopped and SLOOP put the loop back: SLOOP only
-        // pushes RELOAD for the selected track, so re-read them all (arranger_scene.c)
-        let songStopped = before.songPlaying && !l.song.songPlaying
-        if before.sectionPlaying != l.song.sectionPlaying || songStopped { reloadAllTracks() }
-        if before.sectionPlaying != l.song.sectionPlaying, !l.song.songPlaying { tracksEdited = false }
-        if bpm != l.bpm { bpm = l.bpm }
-        // mutes from the device too (GLO + key on the FM-1), unless the iPad just set one
-        for k in trackIndices where !recentlyWritten("p\(k).\(ids.mute)") {
-            let m = l.mutes >> k & 1 == 1
-            if tracks[k].mute != m { tracks[k].mute = m }
-        }
-        for k in 0..<min(trackCount, l.tracks.count) {
-            let new = l.tracks[k], old = positions[k]
-            if new.step != old.step || !wasPlaying {
-                let dur = stepDuration(k)
-                let predicted = stepStart[k].addingTimeInterval(dur)
-                let advancedByOne = (old.step + 1) % max(old.length, 1) == new.step
-                // The step changed somewhere between the last poll and now. Keep the phase we
-                // predicted when it falls in that window; otherwise take the middle.
-                if wasPlaying, advancedByOne, predicted > lastPoll, predicted <= now {
-                    stepStart[k] = predicted
-                } else {
-                    stepStart[k] = lastPoll > now.addingTimeInterval(-0.25) ? lastPoll.addingTimeInterval(now.timeIntervalSince(lastPoll) / 2) : now
-                }
-            }
-            if positions[k] != new { positions[k] = new }
-            let len = max(1, min(stepCount, new.length))
-            if tracks[k].length != len { tracks[k].length = len }
-        }
-        lastPoll = now
     }
 
     /// Seconds per step for a track, from BPM and its division.
@@ -1477,7 +1039,7 @@ public final class DeviceSession {
 
     // MARK: Actions from the iPad
 
-    /// Selects a track on the FM-1. SLOOP doesn't push about the editor's own TRACK, so the app
+    /// Selects a track on the FM-1. The FM-1 doesn't push about the editor's own TRACK, so the app
     /// updates itself at once.
     public func select(track t: Int) {
         guard t != selectedTrack else { return }
@@ -1493,17 +1055,12 @@ public final class DeviceSession {
 
     // MARK: Playing from the iPad's keyboard
 
-    /// The channel the keyboard plays on: 16, which no track owns by default, so SLOOP plays the
-    /// selected track with it (GLO > MIDI > OTHER = SEL, seq.c midi_route), drums included.
-    public static let keyboardChannel: UInt8 = 15
-    /// On Skiff, channel 16 is dropped: MENU > MIDI > MIDI IN is CH1-6 by default (channels 1..6 play tracks
+    /// The channel the keyboard plays on. On Skiff, channel 16 is dropped: MENU > MIDI > MIDI IN is CH1-6 by default (channels 1..6 play tracks
     /// 1..6, 7..16 ignored; seq.c midi_slot, midi_control.c), and its AUTO CHANNEL is OFF. So the keyboard
     /// plays on the selected track's own channel, track k on channel k + 1 (T1..T6 CHANNEL's default; Lupe reads
     /// Skiff's NOTES OUT the same way). With MIDI IN = SEL any channel plays the selected track: this one too.
     /// A track moved to another channel in MENU > MIDI isn't followed (the editor protocol doesn't report it).
-    public static func keyChannel(_ dialect: FirmwareDialect?, track: Int) -> UInt8 {
-        dialect == .skiff ? UInt8(track & 15) : keyboardChannel
-    }
+    public static func keyChannel(track: Int) -> UInt8 { UInt8(track & 15) }
     private var held: [Int: (note: Int, channel: UInt8)] = [:]   // key id -> what went out, so a note-off matches
     /// The FM-1's OCT buttons (song.octave), which the protocol doesn't report. The iPad keeps its own
     /// and follows the FM-1: a note from the FM-1's keys that only fits another octave moves it there.
@@ -1514,11 +1071,7 @@ public final class DeviceSession {
     public func pitch(ofKey k: Int, octave: Int? = nil) -> Int? {
         let t = tracks[selectedTrack]
         // Skiff maps keys its own way (QNT's five modes; chord keys build on the note, not the map)
-        if dialect == .skiff {
-            return SkiffChord.keyPitch(k, root: t.root, scale: t.scale, quant: t.quant, transpose: t.transpose, octave: octave ?? keyboardOctave)
-        }
-        return Music.keyPitch(k, root: t.root, scale: t.scale, quant: t.quant, chord: t.chord,
-                              transpose: t.transpose, octave: octave ?? keyboardOctave)
+        return SkiffChord.keyPitch(k, root: t.root, scale: t.scale, quant: t.quant, transpose: t.transpose, octave: octave ?? keyboardOctave)
     }
     /// Notes held on the FM-1's own keys right now (MIDI notes it sends), to light the iPad's keys too.
     public private(set) var deviceNotes: Set<Int> = []
@@ -1526,17 +1079,12 @@ public final class DeviceSession {
     /// The key id a note from the device lights: the note itself, or on the drum track its lane.
     public func keyID(forDeviceNote n: Int) -> Int {
         guard selectedIsDrums else { return n }
-        if drumMapGM { return Music.laneNotes.firstIndex(of: n) ?? Music.laneNotes.enumerated().min { abs($0.element - n) < abs($1.element - n) }!.offset }
-        return ((n - 36) % 16 + 16) % 16
+        return Music.laneNotes.firstIndex(of: n) ?? Music.laneNotes.enumerated().min { abs($0.element - n) < abs($1.element - n) }!.offset
     }
 
     private func noteLoop(_ t: SysExTransport) async {
         for await e in t.notes {
             let n = Int(e.note)
-            if capabilities.contains(.livePlayhead) {
-                if e.on { deviceNotes.insert(n); followOctave(n) } else { deviceNotes.remove(n) }
-                continue
-            }
             // Skiff sends every track's notes (NOTES OUT ALL, channels 1..6), the sequencer's included: only
             // the selected track's light the keys, and they don't move the keyboard's octave
             let track = Int(e.channel)
@@ -1557,25 +1105,13 @@ public final class DeviceSession {
         applyCounted()
     }
 
-    /// A note from the FM-1 that no key plays at the iPad's octave, but one does at another: the FM-1's
-    /// OCT buttons moved, so follow them (nearest octave first).
-    private func followOctave(_ n: Int) {
-        guard !selectedIsDrums else { return }
-        func fits(_ o: Int) -> Bool { (0..<27).contains { pitch(ofKey: $0, octave: o) == n } }
-        guard !fits(keyboardOctave) else { return }
-        for d in [1, -1, 2, -2, 3, -3] where fits(keyboardOctave + d) && abs(keyboardOctave + d) <= 3 {
-            keyboardOctave += d
-            return
-        }
-    }
-
     /// A key down. `key` is the FM-1 key index on a synth track (0...26), the lane (0...15) on drums.
     public func keyDown(_ key: Int, velocity: Int = 100) {
         let note: Int
-        if selectedIsDrums { note = drumMapGM ? Music.laneNotes[key % 16] : 36 + key % 16 }
+        if selectedIsDrums { note = Music.laneNotes[key % 16] }
         else if isKit(selectedTrack) { note = Music.skiffLaneNotes[key % 8] }
         else if let p = pitch(ofKey: key) { note = p } else { return }
-        let ch = Self.keyChannel(driver?.dialect, track: selectedTrack)
+        let ch = Self.keyChannel(track: selectedTrack)
         held[key] = (note, ch)
         driver?.sendMIDI([0x90 | ch, UInt8(note & 0x7F), UInt8(min(max(velocity, 1), 127))])
         if !playing { takeNoteHeard(track: selectedTrack, note: note) }   // (FREE TAKE: Lupe's keys play into it too)
@@ -1583,7 +1119,7 @@ public final class DeviceSession {
 
     /// A piano-roll row: that exact note, held while touched (drum lanes go through keyDown).
     public func noteDown(_ note: Int) {
-        let ch = Self.keyChannel(driver?.dialect, track: selectedTrack)
+        let ch = Self.keyChannel(track: selectedTrack)
         held[1000 + note] = (note, ch)
         driver?.sendMIDI([0x90 | ch, UInt8(note & 0x7F), 100])
     }
@@ -1598,7 +1134,7 @@ public final class DeviceSession {
     public var sounding: Set<Int> {
         guard playing else { return [] }
         let t = selectedTrack, i = positions[t].step % stepCount
-        if isDrums(t) || (dialect == .skiff && isKit(t)) { return Set(tracks[t].drumSteps[i].lanes) }   // (a Skiff kit's lanes too)
+        if isKit(t) { return Set(tracks[t].drumSteps[i].lanes) }
         // a held note sounds through its TIE steps
         var k = i
         while k > 0, tracks[t].steps[k].time == .tie { k -= 1 }
@@ -1623,7 +1159,6 @@ public final class DeviceSession {
         var st = step
         if st.time != .note { st.notes = []; st.levels = []; st.ratchets = [] }
         tracks[t].steps[i] = st
-        tracksEdited = true
         onEdit?()
         let key = stepKey(t, i)
         recentWrites["s\(key)"] = Date()
@@ -1653,7 +1188,6 @@ public final class DeviceSession {
         }
         guard let dt = drumTrack else { return }
         tracks[dt].drumSteps[i] = step
-        tracksEdited = true
         onEdit?()
         recentWrites["s\(stepKey(dt, i))"] = Date()
         // as synth steps: latest value wins, one write in flight, a reply lands only if nothing newer waits
@@ -1736,7 +1270,6 @@ public final class DeviceSession {
         }
         if everyTrack[id] != nil { everyTrack[id]?[t] = v }
         apply(track: t, id: id, value: v)
-        if isDrums(t), id == ids.level, let dl = ids.drumLevel { sendParam("g\(dl)", v) { c, v in try await c.setGlobal(id: dl, value: v) } ; return }
         sendParam("p\(t).\(id)", v) { c, v in try await c.setTrackParam(track: t, id: id, value: v) }
     }
 
@@ -1802,7 +1335,7 @@ public final class DeviceSession {
 
     // MARK: The library (step 3)
 
-    /// Loads a factory preset onto the selected synth track. SLOOP switches the engine if needed and
+    /// Loads a factory preset onto the selected synth track. The FM-1 switches the engine if needed and
     /// keeps the pattern, mix and key; it pushes RELOAD, which re-reads the track.
     public func loadPreset(engine e: Int, index i: Int) {
         let t = selectedTrack
@@ -1899,8 +1432,6 @@ public final class DeviceSession {
     /// An iPad project onto the FM-1 as the music, named `name` (SkiffProject.swift), then everything read again.
     public func writeSkiffProject(_ p: SkiffProjectData, name: String?, progress: @escaping @MainActor (Double) -> Void = { _ in }) async throws {
         guard let k = driver as? SkiffDriver else { throw ProjectError.notConnected }
-        projectBusy = true
-        defer { projectBusy = false }
         do {
             try await backupTurn {
                 try await SkiffProjectTransfer.write(p, name: name, request: SkiffProjectTransfer.request(k)) { v in Task { @MainActor in progress(v) } }
@@ -1910,6 +1441,14 @@ public final class DeviceSession {
             throw error
         }
         await rereadAfterSkiffProject()
+    }
+    /// A project went onto the FM-1 from the editor: read everything the app shows again.
+    private func rereadAfterProject() async {
+        try? await readTrackList()
+        for t in trackIndices { try? await readParams(t) }
+        try? await readGlobals()
+        for t in trackIndices { _ = try? await readSteps(t, deviceWins: true) }
+        try? await readSoundParams(descs: false)
     }
     private func rereadAfterSkiffProject() async {
         await rereadAfterProject()
@@ -1926,7 +1465,7 @@ public final class DeviceSession {
 
     // MARK: Track actions
 
-    /// What a clear took away, so the iPad can put it back (SLOOP's own undo covers device edits only).
+    /// What a clear took away, so the iPad can put it back.
     public struct ClearedTrack: Equatable, Sendable {
         public let track: Int
         let steps: [SynthStep]
@@ -1988,11 +1527,7 @@ public final class DeviceSession {
                 if let s = try? await k.screenGoto(page, cursor: cursor) { self.deviceScreen = s; self.adoptTrack(from: s) }
                 else { self.deviceScreen = before }
             }
-            return
         }
-        guard let c = sloop else { return }
-        deviceScreen = UIState(home: false, page: page)
-        Task { if let s = try? await c.uiGoto(page: page) { self.deviceScreen = s } }
     }
 
     /// Skiff's screen state carries the selected track, so one push is complete: another one selected on the
@@ -2019,9 +1554,7 @@ public final class DeviceSession {
     // MARK: Transport
 
     public func toggleRec() {
-        if let s = driver as? SkiffDriver { Task { await skiffRec(s) }; return }
-        guard let c = sloop else { return }
-        Task { if let l = try? await c.rec() { self.applyLive(l) } }
+        if let s = driver as? SkiffDriver { Task { await skiffRec(s) } }
     }
 
     /// Lupe's REC is on while any track is armed, as Skiff's LED is, and pressing it then stops recording. Skiff's
@@ -2041,12 +1574,11 @@ public final class DeviceSession {
         playing = on
         recentWrites["play"] = Date()
         guard let c = driver else { return }
-        Task { if let l = try? await c.transport(play: on) { self.applyLive(l) } }
+        Task { try? await c.transport(play: on) }
     }
 
     /// Play from the start, as Skiff's GLO + PLAY (Scott, 2026-11-06: hold PLAY): every track from its first entry
-    /// with SONG on, the patterns from their first step with it off. Skiff only: SLOOP's editor has no restart (LIVE
-    /// op 1 plays or stops), so there the hold does nothing.
+    /// with SONG on, the patterns from their first step with it off.
     public var canPlayFromStart: Bool { driver is SkiffDriver }
 
     public func playFromStart() {
@@ -2056,7 +1588,7 @@ public final class DeviceSession {
         Task {
             // a request that went unanswered part way: plain PLAY at least, as a tap would
             do { try await s.playFromStart() } catch {
-                _ = try? await s.transport(play: true)
+                try? await s.transport(play: true)
             }
             if let after = try? await s.transportState() { applyTransport(after) }
             await skiffSong?.refresh()
@@ -2078,22 +1610,22 @@ extension DeviceSession {
         case refused(stage: String, rc: Int)   // "begin", "write", "end" or "erase", and the device's rc
     }
 
-    /// SAMPLE's SET: the factory sets, then the user slots. SLOOP: eight, then USR1..USR4. Skiff 2.2: five (SMP_NSETS),
-    /// then USR1..USR3 (core.h, EDITOR_PROTOCOL.md).
-    public var firstUserSet: Int { dialect == .skiff ? (userSetBase ?? 5) : 8 }
-    /// How many user slots this firmware has: what SMP_INFO said, else the dialect's.
-    public var sampleSlotCount: Int { sampleSlots.isEmpty ? (dialect == .skiff ? 3 : 4) : sampleSlots.count }
-    /// A user slot's name as the FM-1 shows it: SLOOP's SMPL1…4, Skiff's USR1…3.
-    public func sampleSlotName(_ k: Int) -> String { (dialect == .skiff ? "USR" : "SMPL") + "\(k + 1)" }
+    /// SAMPLE's SET: the factory sets, then the user slots. Skiff 2.2: five (SMP_NSETS), then USR1..USR3 (core.h,
+    /// EDITOR_PROTOCOL.md).
+    public var firstUserSet: Int { userSetBase ?? 5 }
+    /// How many user slots this firmware has: what SMP_INFO said, else Skiff's three.
+    public var sampleSlotCount: Int { sampleSlots.isEmpty ? 3 : sampleSlots.count }
+    /// A user slot's name as the FM-1 shows it: USR1…3.
+    public func sampleSlotName(_ k: Int) -> String { "USR\(k + 1)" }
     public func sampleSlot(forSet v: Int) -> Int? { (firstUserSet..<(firstUserSet + sampleSlotCount)).contains(v) ? v - firstUserSet : nil }
 
     /// Skiff stops the song for any sample write (SMP_BEGIN, WRITE and ERASE call ed_flash_stop, editor.c 542) and for
     /// the read-back (BACKUP_LIST stops the transport, editor_backup.c), and its audio goes quiet while flash is
     /// erased. The sampler says so before it starts.
-    public var sampleWorkStopsSong: Bool { dialect == .skiff }
+    public var sampleWorkStopsSong: Bool { true }
 
     /// Runs a sample write or read on Skiff and, when the song was playing before it, starts the song again after
-    /// (TRANSPORT op 1, as PLAY), whether the work went through or not. SLOOP plays on through its own writes.
+    /// (TRANSPORT op 1, as PLAY), whether the work went through or not.
     private func resumingSong<T>(_ body: () async throws -> T) async rethrows -> T {
         let resume = sampleWorkStopsSong && playing
         defer { if resume { setPlaying(true) } }
@@ -2109,8 +1641,7 @@ extension DeviceSession {
     /// Builds the slot (one zone over the whole keyboard, one-shot) and writes it: SMP_BEGIN empties the
     /// slot, SMP_WRITE sends the ADPCM 256 bytes at a time, SMP_END the header, which the FM-1 checks
     /// against the data's CRC before it writes it. A failure part way leaves the slot empty. Samples
-    /// are the FM-1's, not the project's, so this is no project edit (no onEdit). SLOOP takes it while
-    /// playing too (editor.c checks no transport): a track on that slot goes quiet until END.
+    /// are the FM-1's, not the project's, so this is no project edit (no onEdit).
     public func uploadSample(slot: Int, name: String, samples: [Int16], root: Int = 60,
                              progress: @escaping @MainActor (Double) -> Void) async throws {
         let (header, data) = try UserSample.slot(name: name, samples: samples, root: root)
@@ -2145,7 +1676,7 @@ extension DeviceSession {
     /// What a slot holds, to hear before it's replaced: read back through the backup (Skiff's objects 32..34; the
     /// sample commands only write). The read stops the transport. Nil: empty, or this firmware can't read it back.
     public func storedSample(slot: Int) async throws -> (samples: [Int16], rate: Double)? {
-        guard dialect == .skiff, let d = driver else { return nil }
+        guard let d = driver else { return nil }
         let obj = try await resumingSong { try await backupTurn { try await BackupCapture.object(32 + slot, driver: d) } }
         return obj.flatMap(UserSample.stored)
     }
@@ -2181,7 +1712,7 @@ extension DeviceSession {
         onEdit?()
         _ = try? await c.preset(engine: e, index: 0)
         // Skiff: where USR1 sits in SET, from SET's own names now the track is on SAMPLE
-        if dialect == .skiff, let d = try? await c.desc(scope: 0, id: set), let u = d.names.firstIndex(of: "USR1") { userSetBase = d.min + u }
+        if let d = try? await c.desc(scope: 0, id: set), let u = d.names.firstIndex(of: "USR1") { userSetBase = d.min + u }
         apply(track: t, id: set, value: firstUserSet + slot)
         apply(track: t, id: loop, value: 0)
         _ = try? await c.setTrackParam(track: t, id: set, value: firstUserSet + slot)

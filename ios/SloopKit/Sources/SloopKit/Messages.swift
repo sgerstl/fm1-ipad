@@ -1,4 +1,5 @@
-// Requests, replies and pushes of SLOOP 2.8.4's editor protocol (v12), the subset pass 1 uses.
+// Requests, replies and pushes of Felucca's editor protocol as Skiff keeps it: the typed requests are the commands
+// Skiff shares with Felucca; Skiff's own go as `.raw` (SkiffDriver).
 
 public enum Cmd {
     public static let info: UInt8 = 1
@@ -22,11 +23,8 @@ public enum Cmd {
     public static let trackParam: UInt8 = 31
     public static let trackChanged: UInt8 = 32
     public static let drumStep: UInt8 = 33
-    public static let bkList: UInt8 = 34, bkGet: UInt8 = 35, bkPut: UInt8 = 36
-    public static let live: UInt8 = 77
-    /// fm1-ipad's addition to SLOOP (not in stock 2.8.4): the FM-1's screen state, queried or pushed.
+    /// The screen link's screen state (Skiff-Lupe), pushed.
     public static let ui: UInt8 = 90
-    public static let uiGoto: UInt8 = 91
 
     /// Frames the device sends on its own; they are never replies.
     /// Skiff's METER (the screen link's `56 01 03`): a push only (Lupe never asks for it).
@@ -67,14 +65,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case desc(scope: Int, id: Int)
     case watch(Int)
     case ping
-    case live
-    case transport(play: Bool)                 // LIVE op 1
-    case rec                                   // LIVE op 4: REC, as the FM-1's REC button
-    case layerKey(layer: Int, key: Int, down: Bool)   // LIVE op 2: a layer's key (SAVE = 7: sections, store, mode, SONG REC)
-    case masterLevel(Int)                      // LIVE op 11: the master level 0..126; 127 gives it back to the MASTER knob
-    case bkList                                // backup: list the objects (and snapshot them)
-    case bkGet(id: Int, offset: Int, count: Int)
-    case bkPut(op: Int, id: Int, args: [UInt8])  // 0 begin, 1 data, 2 commit, 3 abort
     case setTrackStep(track: Int, index: Int, SynthStep)
     case setDrumStep(index: Int, DrumStep)
     case setTrackParam(track: Int, id: Int, value: Int)
@@ -83,8 +73,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
     case userList(start: Int, count: Int)
     case userLoad(slot: Int)
     case dump                                  // the selected track's parameters and every global
-    case uiState                               // fm1-ipad firmware only: the FM-1's page
-    case uiGoto(page: Int)                     // fm1-ipad firmware only: open a page (index into SLOOP's PAGES)
     case smpBegin(slot: Int)                   // erases the slot's header sector: the slot is empty from now on
     case smpWrite(slot: Int, offset: Int, data: [UInt8])   // ≤ 256 bytes at offset ≥ 512, a multiple of 256, in order
     case smpEnd(slot: Int, header: [UInt8])    // the 480-byte header: the device checks the data CRC, then writes it
@@ -107,10 +95,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: Cmd.desc
         case .watch: Cmd.watch
         case .ping: Cmd.ping
-        case .live, .transport, .rec, .layerKey, .masterLevel: Cmd.live
-        case .bkList: Cmd.bkList
-        case .bkGet: Cmd.bkGet
-        case .bkPut: Cmd.bkPut
         case .setTrackStep: Cmd.trackStep
         case .setDrumStep: Cmd.drumStep
         case .setTrackParam: Cmd.trackParam
@@ -119,8 +103,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .userList: Cmd.userList
         case .userLoad: Cmd.userLoad
         case .dump: Cmd.dump
-        case .uiState: Cmd.ui
-        case .uiGoto: Cmd.uiGoto
         case .smpBegin: Cmd.smpBegin
         case .smpWrite: Cmd.smpWrite
         case .smpEnd: Cmd.smpEnd
@@ -140,14 +122,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .global(let id): [1, UInt8(id)]
         case .desc(let s, let id): [UInt8(s), UInt8(id)]
         case .watch(let on): [UInt8(on)]
-        case .live: [0]
-        case .transport(let play): [1, play ? 1 : 0]
-        case .rec: [4, 0]                       // padded: SLOOP runs a LIVE op only with 2+ bytes (editor_live.c), as its editor pads
-        case .layerKey(let l, let k, let d): [2, UInt8(l), UInt8(k), d ? 1 : 0]
-        case .masterLevel(let v): [11, UInt8(max(0, min(127, v)))]
-        case .bkList: []
-        case .bkGet(let id, let off, let n): [UInt8(id)] + Pack7.u35(UInt32(off)) + [UInt8(n & 127), UInt8(n >> 7)]
-        case .bkPut(let op, let id, let a): [UInt8(op), UInt8(id)] + a
         case .setTrackStep(let t, let i, let step): [UInt8(t), UInt8(i)] + step.encoded
         case .setDrumStep(let i, let step): [UInt8(i)] + step.encoded
         case .setTrackParam(let t, let id, let v): [UInt8(t), UInt8(id)] + Frame.v14(v)
@@ -155,8 +129,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset(let e, let i): [UInt8(e), UInt8(i)]
         case .userList(let s, let n): [UInt8(s), UInt8(n)]
         case .userLoad(let slot): [UInt8(slot)]
-        case .dump, .uiState: []
-        case .uiGoto(let p): [UInt8(p)]
+        case .dump: []
         case .smpBegin(let k), .smpErase(let k): [UInt8(k)]
         case .smpWrite(let k, let off, let d): [UInt8(k), UInt8(off & 0x7F), UInt8(off >> 7 & 0x7F), UInt8(off >> 14 & 0x7F)] + Pack7.encode(d)
         case .smpEnd(let k, let h): [UInt8(k)] + Pack7.encode(h)
@@ -178,14 +151,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .trackParam(let t, let id): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(id)
         case .global(let id): body.count >= 2 && body[0] == 1 && body[1] == UInt8(id)
         case .desc(let s, let id): body.count >= 2 && body[0] == UInt8(s) && body[1] == UInt8(id)
-        case .live: body.first == 0
-        case .transport: body.first == 1
-        case .rec: body.first == 4
-        case .layerKey: body.first == 2
-        case .masterLevel: body.first == 11
-        case .bkList: true
-        case .bkGet(let id, let off, _): body.count >= 7 && body[0] == UInt8(id) && Pack7.readU35(body[2...]) == UInt32(off)
-        case .bkPut(let op, let id, _): body.count >= 3 && body[0] == UInt8(op) && body[1] == UInt8(id)
         case .setTrackStep(let t, let i, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(i)
         case .setDrumStep(let i, _): body.first == UInt8(i)
         case .setTrackParam(let t, let id, _): body.count >= 2 && body[0] == UInt8(t) && body[1] == UInt8(id)
@@ -193,7 +158,7 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .preset: true                     // the reply is the track's engine and preset after the load
         case .userList(let s, _): body.first == UInt8(s)
         case .userLoad(let slot): body.first == UInt8(slot)
-        case .dump, .uiState, .uiGoto: true
+        case .dump: true
         case .smpBegin(let k), .smpEnd(let k, _), .smpErase(let k): body.first == UInt8(k)
         case .smpWrite(let k, let off, _): body.count >= 5 && body[0] == UInt8(k) && Int(body[1]) | Int(body[2]) << 7 | Int(body[3]) << 14 == off
         case .smpInfo: true
@@ -201,8 +166,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         }
     }
 
-    /// The doc says requests that toggle are never sent twice: REC and layer keys are sent with
-    /// retries: 0 (Client); the rest set an explicit state and may be retried after a timeout.
     public var description: String {
         let a = args.prefix(8).map(String.init).joined(separator: ",")     // (a sample write carries ~290 bytes)
         return "\(self.cmdName)(\(a)\(args.count > 8 ? ",…" : ""))"
@@ -219,10 +182,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .desc: "DESC"
         case .watch: "WATCH"
         case .ping: "PING"
-        case .live, .transport, .rec, .layerKey, .masterLevel: "LIVE"
-        case .bkList: "BK_LIST"
-        case .bkGet: "BK_GET"
-        case .bkPut: "BK_PUT"
         case .setTrackStep: "TRACK_STEP set"
         case .setDrumStep: "DRUM_STEP set"
         case .setTrackParam: "TRACK_PARAM set"
@@ -231,8 +190,6 @@ public enum Request: Equatable, Sendable, CustomStringConvertible {
         case .userList: "UP_LIST"
         case .userLoad: "UP_LOAD"
         case .dump: "DUMP"
-        case .uiState: "UI"
-        case .uiGoto: "UI_GOTO"
         case .smpBegin: "SMP_BEGIN"
         case .smpWrite: "SMP_WRITE"
         case .smpEnd: "SMP_END"
@@ -254,10 +211,6 @@ public struct DeviceInfo: Equatable, Sendable {
     public var firstEngineParam: Int
     public var trackCount: Int
     public var protocolVersion: Int
-
-    public static let expectedVersion = "FELUCCA SLOOP 2.8.4"
-    public static let expectedProtocol = 12
-    public var isSupported: Bool { version == Self.expectedVersion && protocolVersion == Self.expectedProtocol }
 
     public init(_ body: [UInt8]) throws {
         var r = ByteReader(body, cmd: Cmd.info)
@@ -522,48 +475,10 @@ public struct ParamDesc: Equatable, Sendable {
     }
 }
 
-/// LIVE's state (firmware editor_live.c): op, then 49 bytes.
-public struct LiveState: Equatable, Sendable {
-    public struct TrackPosition: Equatable, Sendable {
-        public var step: Int, length: Int, meter: Int
-        public init(step: Int, length: Int, meter: Int) { self.step = step; self.length = length; self.meter = meter }
-    }
-    public var playing: Bool
-    public var recArmed: Bool          // REC pressed, waiting for the first note
-    public var songMode: Bool
-    public var bpm: Int
-    public var section: Int?          // 0..3 = A..D
-    public var mutes: Int
-    public var solos: Int
-    public var recTracks: Int
-    public var selected: Int
-    public var cpu: Int
-    public var tracks: [TrackPosition]
-    public var song = SongState()
-
-    public init(playing: Bool, songMode: Bool = false, bpm: Int, section: Int? = nil, mutes: Int = 0, solos: Int = 0,
-                recTracks: Int = 0, selected: Int, cpu: Int = 0, tracks: [TrackPosition]) {
-        self.playing = playing; self.recArmed = false; self.songMode = songMode; self.bpm = bpm; self.section = section; self.mutes = mutes
-        self.solos = solos; self.recTracks = recTracks; self.selected = selected; self.cpu = cpu; self.tracks = tracks
-    }
-
-    public init(_ body: [UInt8]) throws {
-        var r = ByteReader(body, cmd: Cmd.live)
-        _ = try r.u8()                                  // op
-        let flags = try r.u8(), flags2 = try r.u8()
-        playing = flags & 1 != 0; songMode = flags & 4 != 0
-        recArmed = flags2 & 1 != 0
-        bpm = try r.v14()
-        let sec = try r.u8(); section = sec == 0 ? nil : sec - 1
-        _ = try r.u8(); _ = try r.u8(); _ = try r.u8()  // section asked for, chain entries, chain index
-        mutes = try r.u8(); solos = try r.u8(); recTracks = try r.u8()
-        selected = try r.u8()
-        _ = try r.u8()                                  // punch-in effect
-        cpu = try r.u8()
-        for _ in 0..<5 { _ = try r.u8() }               // song entry, entries, bar, bars, sections stored
-        tracks = try (0..<4).map { _ in TrackPosition(step: try r.u8(), length: try r.u8(), meter: try r.u8()) }
-        song = LiveState.song(body) ?? SongState()
-    }
+/// Where a track's playhead is: its step and pattern length (counted from MIDI clock on Skiff).
+public struct TrackPosition: Equatable, Sendable {
+    public var step: Int, length: Int
+    public init(step: Int, length: Int) { self.step = step; self.length = length }
 }
 
 /// DUMP: engine, preset, then P_COUNT values (the selected track), then G_COUNT values (globals).
@@ -604,12 +519,12 @@ public struct UserPresetList: Equatable, Sendable {
     }
 }
 
-/// What the FM-1's screen shows (fm1-ipad firmware): HOME or a page (index into SLOOP's PAGES table),
-/// the layer of a held function button (0 none), and the menu (0 off).
+/// What the FM-1's screen shows (Skiff-Lupe's screen link): HOME or a page, the layer of a held function button
+/// (0 none), and the menu (0 off).
 public struct UIState: Equatable, Sendable {
     public var home: Bool, page: Int, layer: Int, menu: Int
     /// Skiff's screen link sends two more: the selected track and flags (bit 0 HOME shows the scope, bit 1 the
-    /// layer is locked open, bit 2 HOME held). nil from SLOOP, whose UI has the first four only.
+    /// layer is locked open, bit 2 HOME held).
     public var track: Int?, flags: Int?
     /// The page's cursor and second cursor (Skiff's `56 01 02`: MOD's route, the lane, the sample, …; nil where the
     /// page has none, 127 on the wire, or from a build that doesn't send them).

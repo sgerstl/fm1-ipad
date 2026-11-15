@@ -19,8 +19,8 @@ public struct SKF4: Equatable, Sendable {
     public private(set) var bytes: [UInt8]
 
     public init?(_ bytes: [UInt8]) {
-        guard bytes.count == Self.size, Fun6.u32(bytes, 0) == Self.magic, Fun6.u32(bytes, 4) == UInt32(Self.size),
-              bytes[8] == Self.layout, Fun6.u32(bytes, Self.sumAt) == Self.hash(bytes[0..<Self.sumAt]) else { return nil }
+        guard bytes.count == Self.size, Self.u32(bytes, 0) == Self.magic, Self.u32(bytes, 4) == UInt32(Self.size),
+              bytes[8] == Self.layout, Self.u32(bytes, Self.sumAt) == Self.hash(bytes[0..<Self.sumAt]) else { return nil }
         self.bytes = bytes
     }
 
@@ -109,6 +109,11 @@ public struct SKF4: Equatable, Sendable {
     /// A name as Skiff takes one (editor_project.c ed_proj_name_in): 32…126, upper case, 12 at most.
     public static func skiffName(_ s: String) -> [UInt8] {
         Array(s.uppercased().unicodeScalars.filter { $0.value >= 32 && $0.value <= 126 }.map { UInt8($0.value) }.prefix(nameLength))
+    }
+
+    /// A little-endian 32-bit word at `o`.
+    static func u32(_ b: [UInt8], _ o: Int) -> UInt32 {
+        UInt32(b[o]) | UInt32(b[o + 1]) << 8 | UInt32(b[o + 2]) << 16 | UInt32(b[o + 3]) << 24
     }
 
     static func hash(_ b: ArraySlice<UInt8>) -> UInt32 {     // project.c proj_hash: FNV-1a

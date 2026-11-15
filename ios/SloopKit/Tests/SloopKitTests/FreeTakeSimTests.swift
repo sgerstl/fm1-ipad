@@ -20,7 +20,7 @@ import Testing
 
     /// Eight quarter notes at 120 BPM on track t's channel, then Skiff's 2.5 s pause (ui_take.c FR_GAP) and a little.
     private func play(_ d: SkiffDriver, track t: Int) async throws {
-        let ch = DeviceSession.keyChannel(.skiff, track: t)
+        let ch = DeviceSession.keyChannel(track: t)
         let clock = ContinuousClock(), start = clock.now
         for i in 0..<8 {                                  // (on absolute times: sleeps one after another drift late)
             let n = UInt8(60 + [0, 3, 7, 10][i % 4])

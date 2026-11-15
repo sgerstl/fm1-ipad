@@ -1,11 +1,12 @@
 import Foundation
 
-/// Whose projects: each firmware keeps its own on the iPad, in its own folder (Files › Lupe › SLOOP or Skiff), in its
-/// own words. Connected to one, the other's files and name don't show (Scott, 2026-11-06).
+/// Whose projects: each firmware kept its own on the iPad, in its own folder (Files › Lupe › SLOOP or Skiff), in its
+/// own words (Scott, 2026-11-06). Lupe speaks Skiff only since 2026-11-15 (decision 43): the SLOOP folder is left as
+/// it was, for the files in it, and Lupe no longer shows it.
 public enum ProjectFirmware: String, Sendable {
     case sloop, skiff
 
-    public init(_ d: FirmwareDialect) { self = d == .skiff ? .skiff : .sloop }
+    public init(_ d: FirmwareDialect) { self = .skiff }
 
     /// The folder's name and the firmware's, as the user reads it.
     public var name: String { self == .sloop ? "SLOOP" : "Skiff" }

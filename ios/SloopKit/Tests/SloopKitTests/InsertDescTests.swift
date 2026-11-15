@@ -3,25 +3,6 @@ import Testing
 @testable import SloopKit
 
 @Suite(.serialized) @MainActor struct InsertDescTests {
-    /// The FM-1's DESC says INS A / B / C whatever the TYPE (editor.c ed_tdesc); the app names them as the
-    /// device's screen does (params.c ins_desc).
-    @Test func insertKnobsFollowTheType() async throws {
-        let fake = FakeSloop(autoEdits: false)
-        var once = false
-        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
-        let run = Task { await session.run() }
-        try await waitFor { if case .connected = session.status { true } else { false } }
-        #expect(session.trackDescs[54]?.label == "INS A")                                 // the wire, as the device sends it
-        session.set(track: session.selectedTrack, param: Param.insertType, to: 4)          // FUZZ
-        #expect(session.trackDesc(54)?.label == "DRIVE" && session.trackDesc(55)?.label == "TONE" && session.trackDesc(56)?.label == "LEVEL")
-        session.set(track: session.selectedTrack, param: Param.insertType, to: 5)          // CRUSH
-        #expect(session.trackDesc(54)?.label == "BITS" && session.trackDesc(56)?.label == "LPF")
-        session.set(track: session.selectedTrack, param: Param.insertType, to: 0)          // OFF: SLOOP's own
-        #expect(session.trackDesc(54)?.label == "INS A")
-        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
-        run.cancel()
-    }
-
     /// param_format's curves, against values worked out from tools/gen_tables.py.
     @Test func valuesAsTheDeviceShowsThem() throws {
         func d(_ f: Int, max: Int = 127, names: [String] = []) -> ParamDesc {

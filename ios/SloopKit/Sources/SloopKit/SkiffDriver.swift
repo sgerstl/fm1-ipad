@@ -289,10 +289,8 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         p.direction = first("DIR", in: track)
         p.swing = first("SWING", in: track, after: p.length)           // the PATTERN page's, after ARP's
         p.slicer = first("SLICER", in: track); p.duck = first("BY", in: track); p.follow = first("FOLLOW", in: track)
-        p.insertType = nil; p.envSync = nil                            // SLOOP's screen rules: not Skiff's
         p.bpm = first("BPM", in: globals) ?? 0
         p.globalSwing = first("SWING+", in: globals) ?? 1
-        p.drumLevel = nil; p.otherChannels = nil; p.drumMap = nil
         return p
     }
 
@@ -437,9 +435,8 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
         let b = try await request(SkiffCmd.userLoad, [UInt8(slot)], match: 1, "UP_LOAD")
         return Int(b.count > 1 ? b[1] : 1)
     }
-    public func transport(play: Bool) async throws -> LiveState? {
+    public func transport(play: Bool) async throws {
         _ = try await request(SkiffCmd.transport, [play ? 1 : 2], match: 0, "TRANSPORT", retries: 0)
-        return nil
     }
     /// TRANSPORT's state: rc, playing, counting in, the request the audio has yet to take, armed tracks,
     /// selected. A PLAY or STOP still pending counts as done (the reply comes before the audio takes it).
@@ -465,7 +462,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
             return
         }
         if playing {
-            _ = try await transport(play: false)
+            try await transport(play: false)
             // the audio takes the STOP at its next block (seq.c transport_req): a few ms
             for _ in 0..<30 {
                 let (on, pending) = try await transportRaw()
@@ -477,7 +474,7 @@ public final class SkiffDriver: FirmwareDriver, @unchecked Sendable {
             guard let e = l.entries.firstIndex(where: { !$0.isEmpty }) else { continue }
             _ = try await list(.play(track: t, entry: e))
         }
-        _ = try await transport(play: true)
+        try await transport(play: true)
     }
 
     /// TRANSPORT's playing and the request the audio has yet to take, as they are (transportState counts a pending

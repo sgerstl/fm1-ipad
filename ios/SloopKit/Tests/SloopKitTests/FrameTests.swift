@@ -3,7 +3,7 @@ import Testing
 
 @Suite struct FrameTests {
     @Test func encodeAndDecode() {
-        #expect(Frame.encode(Cmd.live, [0]) == [0xF0, 0x7D, 0x46, 0x4C, 0x4D, 0x00, 0xF7])
+        #expect(Frame.encode(77, [0]) == [0xF0, 0x7D, 0x46, 0x4C, 0x4D, 0x00, 0xF7])
         let d = Frame.decode([0xF0, 0x7D, 0x46, 0x4C, 0x19, 0x00, 0xF7])
         #expect(d?.cmd == Cmd.ping && d?.body == [0])
         #expect(Frame.decode([0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]) == nil)
@@ -27,7 +27,6 @@ import Testing
     }
 
     @Test func shortRepliesThrow() {
-        #expect(throws: DecodeError.self) { try LiveState([0, 0, 2]) }
         #expect(throws: DecodeError.self) { try TrackStepReply([0, 1, 2]) }
     }
 
@@ -96,22 +95,6 @@ import Testing
         #expect(a.drainNotes() == [NoteEvent(on: true, channel: 0, note: 60, velocity: 100), NoteEvent(on: true, channel: 0, note: 64, velocity: 90),
                                    NoteEvent(on: false, channel: 0, note: 60, velocity: 0), NoteEvent(on: false, channel: 1, note: 64, velocity: 0)])
         #expect(a.drainNotes().isEmpty)
-    }
-
-    @Test func keyPitchFollowsTheFM1() {
-        // OFF: chromatic from F3; OCT and TRN shift it
-        #expect(Music.keyPitch(0, root: 0, scale: 0, quant: 0, chord: 0, transpose: 0, octave: 0) == 53)
-        #expect(Music.keyPitch(7, root: 0, scale: 0, quant: 0, chord: 0, transpose: -12, octave: -1) == 36)
-        // SNAP to C minor: E4 (key 11) rounds down to D#4
-        #expect(Music.keyPitch(11, root: 0, scale: 2, quant: 1, chord: 0, transpose: 0, octave: 0) == 63)
-        // WHITE, C major: C4 (key 7) is the root, D4 the next degree, black keys silent
-        #expect(Music.keyPitch(7, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == 60)
-        #expect(Music.keyPitch(9, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == 62)
-        #expect(Music.keyPitch(8, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == nil)
-        // WHITE, C minor pentatonic: the white key after C4 walks to D#4
-        #expect(Music.keyPitch(9, root: 0, scale: 6, quant: 2, chord: 0, transpose: 0, octave: 0) == 63)
-        // F3 (key 0) in WHITE C major: three degrees below C4 = F3
-        #expect(Music.keyPitch(0, root: 0, scale: 1, quant: 2, chord: 0, transpose: 0, octave: 0) == 53)
     }
 
     @Test func userPresetListFromTheDoc() throws {

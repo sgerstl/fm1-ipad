@@ -2,31 +2,9 @@ import Foundation
 import Testing
 @testable import SloopKit
 
-/// The backup before an install: SLOOP's BK_LIST / BK_GET against FakeSloop, Skiff's BACKUP_LIST / GET against a
-/// small responder, each written in the file format its web editor restores.
+/// The backup before an install: Skiff's BACKUP_LIST / GET against a small responder, written in the file format its
+/// web editor restores.
 @Suite(.serialized) struct FirmwareBackupTests {
-    @Test func sloopBackupHasEveryObject() async throws {
-        let fake = FakeSloop(autoEdits: false)
-        let client = SloopClient(transport: fake)
-        await client.start()
-        defer { Task { await client.close() } }
-        let b = try await BackupCapture.capture(skiff: false, firmware: "FELUCCA SLOOP 2.8.4") { cmd, args, match in
-            try await client.send(.raw(cmd: cmd, args: args, match: match, name: "bk"), timeout: .seconds(2))
-        }
-        #expect(b.format == "sloop-backup")
-        #expect(b.objects.map(\.id) == [0, 1, 2, 3, 4, 5])
-        #expect(b.objects[0].data.count > 1000)
-        let file = try #require(try JSONSerialization.jsonObject(with: b.json) as? [String: Any])
-        #expect(file["format"] as? String == "sloop-backup" && file["version"] as? Int == 1)
-        let objs = try #require(file["objects"] as? [[String: Any]])
-        for (o, raw) in zip(objs, b.objects) {
-            let data = try #require(Data(base64Encoded: o["data"] as? String ?? ""))
-            #expect(o["len"] as? Int == data.count && [UInt8](data) == raw.data)
-            #expect((o["crc"] as? NSNumber)?.uint32Value == CRC32.of([UInt8](data)))
-        }
-        #expect(b.fileName.hasSuffix("SLOOP 2.8.4.json"))
-    }
-
     /// Skiff's archive: 1, rc, count, then id, size, crc; GET in 256-byte pieces.
     static func skiffResponder(_ objects: [Int: [UInt8]], rcList: UInt8 = 0, changeAfter: Int? = nil) -> BackupRequest {
         final class Box: @unchecked Sendable { var gets = 0; var objects: [Int: [UInt8]] = [:] }
@@ -51,7 +29,7 @@ import Testing
     @Test func skiffBackupIsAFeluccaArchive() async throws {
         let objects: [Int: [UInt8]] = [0: (0..<2560).map { UInt8($0 % 251) }, 1: Array(repeating: 7, count: 656),
                                        2: [], 32: (0..<9000).map { UInt8($0 & 0xFF) }]
-        let b = try await BackupCapture.capture(skiff: true, firmware: "SKIFF 2.2", request: Self.skiffResponder(objects)) { d, t in
+        let b = try await BackupCapture.capture(firmware: "SKIFF 2.2", request: Self.skiffResponder(objects)) { d, t in
             #expect(d <= t)
         }
         #expect(b.objects.map(\.id) == [0, 1, 2, 32])
@@ -66,13 +44,13 @@ import Testing
     @Test func aChangeDuringTheBackupIsCaught() async throws {
         let objects: [Int: [UInt8]] = [0: Array(repeating: 1, count: 1000), 1: Array(repeating: 2, count: 300)]
         await #expect(throws: BackupError.changed) {
-            try await BackupCapture.capture(skiff: true, firmware: "SKIFF 2.2", request: Self.skiffResponder(objects, changeAfter: 2))
+            try await BackupCapture.capture(firmware: "SKIFF 2.2", request: Self.skiffResponder(objects, changeAfter: 2))
         }
     }
 
     @Test func playingRefusesTheList() async throws {
         await #expect(throws: BackupError.refused(3)) {
-            try await BackupCapture.capture(skiff: true, firmware: "SKIFF 2.2", request: Self.skiffResponder([:], rcList: 3))
+            try await BackupCapture.capture(firmware: "SKIFF 2.2", request: Self.skiffResponder([:], rcList: 3))
         }
     }
 
@@ -82,7 +60,7 @@ import Testing
                              objects: [], json: Data("{}".utf8))
         let url = try b.save(in: dir)
         #expect(url.path.contains("/SLOOP/Backups/") && FileManager.default.fileExists(atPath: url.path))
-        // each firmware its own folder: Skiff's beside SLOOP's, never in it
+        // each firmware its own folder: Skiff's beside the SLOOP backups Lupe took before 2026-11-15, never in them
         let k = DeviceBackup(format: "felucca-backup", firmware: "FELUCCA v2.2", created: Date(timeIntervalSince1970: 0),
                              objects: [], json: Data("{}".utf8))
         let ku = try k.save(in: dir)

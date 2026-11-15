@@ -1,9 +1,9 @@
 import Foundation
 
-// What the FM-1's own screen shows that the editor protocol doesn't send (2026-11-03). SLOOP's DESC
-// reply is the static descriptor (editor.c ed_tdesc): INS A / B / C whatever the INSERT's TYPE, raw
-// ATK DEC REL with ENV SYNC on, and no curves for TIME, LFOHZ, CUTOFF and DB. The device draws with
-// params.c track_desc and param_format, ported here from SLOOP 2.8.4 so both screens agree.
+// What the FM-1's own screen shows that the editor protocol doesn't send (2026-11-03). DESC's reply is the
+// static descriptor (editor.c ed_tdesc): INS A / B / C whatever the INSERT's TYPE, raw ATK DEC REL with ENV SYNC
+// on, and no curves for TIME, LFOHZ, CUTOFF and DB. The device draws with params.c track_desc and param_format,
+// first ported from SLOOP 2.8.4 (Felucca's tables, which Skiff keeps) so both screens agree.
 
 public enum DeviceDisplay {
     // MARK: Names that depend on the track (params.c track_desc)
@@ -22,20 +22,6 @@ public enum DeviceDisplay {
         [("BITS", Format.int, crushBits, ""), ("RATE", Format.int, crushRate, "Hz"), ("LPF", Format.cutoff, [], "")],
         [("RATE", Format.lfoHz, [], ""), ("DEPTH", Format.pct, [], ""), ("FDBK", Format.pct, [], "")],
     ]
-
-    /// The descriptor the FM-1's screen uses for track param `id`, given the track's values.
-    public static func trackDesc(_ d: ParamDesc?, id: Int, params p: [Int]) -> ParamDesc? {
-        guard var d else { return nil }
-        let value = { (k: Int) in k < p.count ? p[k] : 0 }
-        if (54...56).contains(id), case let type = value(Param.insertType), type > 0, type < insertTypes.count {
-            let x = insertDesc[type < 5 ? 0 : type == 5 ? 1 : 2][id - 54]
-            d.label = x.label; d.format = x.format; d.names = x.names; d.unit = x.unit
-            d.min = 0; d.max = 127
-        } else if [1, 2, 4].contains(id), value(Param.envSync) != 0 {
-            d.format = Format.int; d.names = envSyncNames; d.unit = ""
-        }
-        return d
-    }
 
     // MARK: Values (params.c param_format)
 
@@ -91,8 +77,7 @@ public enum DeviceDisplay {
 extension DeviceSession {
     /// The selected track's param `id` as the FM-1's screen names it (DeviceDisplay.trackDesc).
     public func trackDesc(_ id: Int) -> ParamDesc? {
-        guard dialect != .skiff else { return skiffTrackDesc(id) }   // Skiff's own rules (SkiffDisplay)
-        return DeviceDisplay.trackDesc(trackDescs[id], id: id, params: params)
+        skiffTrackDesc(id)                                            // Skiff's own rules (SkiffDisplay)
     }
 }
 

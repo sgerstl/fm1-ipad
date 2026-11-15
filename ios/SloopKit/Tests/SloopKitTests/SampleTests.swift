@@ -45,54 +45,6 @@ import Testing
 }
 
 @Suite(.serialized) @MainActor struct SampleSessionTests {
-    @Test func uploadEraseAndUseOnTheDemo() async throws {
-        let fake = FakeSloop(autoEdits: false)
-        fake.manualClock = true
-        fake.sampleWriteDelay = 0.002
-        var once = false
-        let session = DeviceSession(transport: { if once { return nil }; once = true; return fake })
-        session.resyncInterval = .seconds(60)
-        let run = Task { await session.run() }
-        try await waitFor { if case .connected = session.status { true } else { false } }
-
-        // read on connect: USR1 holds the demo's sample, the rest are empty
-        #expect(session.sampleSlots.count == 4)
-        #expect(session.sampleSlots[0] == SampleSlot(zones: 1, name: "GUITAR", kib: 41))
-        #expect(session.sampleSlots[1].isEmpty)
-
-        var edits = 0
-        session.onEdit = { edits += 1 }
-        let x = UserSample.resample(UserSampleTests.signal(48000), from: 48000, to: UserSample.rate)
-        var steps: [Double] = []
-        try await session.uploadSample(slot: 1, name: "Tape 1", samples: UserSample.toInt16(x)) { steps.append($0) }
-        #expect(steps.first == 0 && steps.last == 1 && steps.count == 1 + 22)     // 5513 bytes: 22 writes
-        #expect(session.sampleSlots[1] == SampleSlot(zones: 1, name: "TAPE 1", kib: 6))
-        #expect(fake.sampleSlots[1].data == UserSample.imaEncode(UserSample.toInt16(x)))
-        #expect(edits == 0)                                  // samples are the FM-1's, not the project's
-
-        await #expect(throws: DeviceSession.SampleError.tooLong) {
-            try await session.uploadSample(slot: 2, name: "LONG", samples: Array(repeating: 1, count: UserSample.maxSamples + 2)) { _ in }
-        }
-        #expect(session.sampleSlots[2].isEmpty)
-
-        try await session.eraseSample(slot: 1)
-        #expect(session.sampleSlots[1].isEmpty)
-
-        // USR3 on track 0, which the demo has on DIGITAL (track 1 is already SAMPLE)
-        let info = try #require(session.info)
-        await session.useSample(slot: 2, onTrack: 0)
-        let e = try #require(info.engines.firstIndex(of: "SAMPLE"))
-        #expect(session.tracks[0].engine == e && session.tracks[0].presetName == "SMPL3")
-        #expect(edits >= 1)
-        try await waitFor { fake.engine[0] == e && fake.params[0][info.firstEngineParam] == 10 && fake.params[0][info.firstEngineParam + 3] == 0 }
-        // the RELOAD the preset pushed re-reads the track: the name holds, from SET
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(session.tracks[0].presetName == "SMPL3")
-        #expect(session.params[info.firstEngineParam] == 10)
-        #expect(fake.unansweredCommands.isEmpty, "the app sent a request this fake was never taught")
-        run.cancel()
-    }
-
     @Test func skiffTakesSamplesInItsThreeSlots() async throws {
         // Skiff 2.2: the same cmds 11–15 as SLOOP, three slots, and SET's USR1 found from SET's own names
         let fake = FakeSkiff(try SkiffFixture.load())
@@ -186,20 +138,5 @@ import Testing
         #expect(y.count == x.count)
         let err = zip(x.dropFirst(200), y.dropFirst(200)).map { abs(Int($0) - Int($1)) }.max() ?? 0
         #expect(err < 3000)
-    }
-
-    @Test func endRefusesBadData() async throws {
-        // the firmware's checks, on the demo: END without BEGIN, writes out of order, a CRC that doesn't match
-        let fake = FakeSloop(autoEdits: false)
-        let c = SloopClient(transport: fake)
-        await c.start()
-        let (h, d) = try UserSample.slot(name: "X", samples: (0..<1000).map { Int16($0 % 200 * 100) })
-        #expect(try await c.sampleEnd(slot: 2, header: h) == 6)
-        #expect(try await c.sampleBegin(slot: 2) == 0)
-        #expect(try await c.sampleWrite(slot: 2, offset: 768, Array(d.prefix(256))) == 1)
-        #expect(try await c.sampleWrite(slot: 2, offset: 512, Array(d.prefix(256))) == 0)
-        #expect(try await c.sampleEnd(slot: 2, header: h) == 3)     // the rest of the data never came
-        #expect(try await c.sampleSlots()[2].isEmpty)
-        await c.close()
     }
 }
