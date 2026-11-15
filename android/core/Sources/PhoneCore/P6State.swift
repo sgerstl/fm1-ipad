@@ -54,6 +54,8 @@ public struct TimelineArea: Codable, Equatable, Sendable {
     public var kept: [Int]
     /// How many pattern numbers are free (as the pads area's): New and Duplicate need one. nil until the pool is read.
     public var patternsFree: Int? = nil
+    /// Blocks and pads just removed that undoClear can still put back (the pads area's list, PadClearUndo.swift).
+    public var clearUndo: [PadsArea.ClearUndo] = []
 }
 
 // MARK: automation (decision 7: one lane at a time under the grid; SEQ › AUTOMATION opens it)
