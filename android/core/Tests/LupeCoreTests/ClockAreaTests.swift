@@ -143,4 +143,59 @@ import Testing
         let last = try #require(f.clock.last.flatMap { try? JSONDecoder().decode(ClockArea.self, from: Data($0.utf8)) })
         #expect(last.running && abs(Double(last.atMs) - LagClock.now()) < 1500)
     }
+
+    /// The playhead on its own (2026-11-15): while a pattern plays the `playhead` area goes out a step at a time,
+    /// small, and the editor area (up to 15 KB) isn't sent again.
+    @Test func thePlayheadGoesOutAloneWhileTheEditorStaysPut() async throws {
+        final class Frames { var sent: [(area: String, json: String)] = [] }
+        let frames = Frames()
+        let fake = try #require(FakeSkiff(demo: true))
+        var once = false
+        let core = PhoneCore(session: DeviceSession(transport: { if once { return nil }; once = true; return fake }),
+                             publish: { a, j in frames.sent.append((a, j)) }, log: { _ in }, canWrite: { true })
+        core.start()
+        defer { core.stop() }
+        func wait(_ what: String, _ ok: () -> Bool) async throws {
+            let end = Date().addingTimeInterval(10)
+            while Date() < end, !ok() { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(ok(), "\(what)")
+        }
+        try await wait("connected") { core.session.isConnected && core.session.skiffSong?.song != nil }
+        if !fake.playing { core.handle(json: #"{"intent":"play"}"#) }
+        try await wait("playing with a clock") { core.session.playing && core.session.clockTicks >= 24 }
+        try await Task.sleep(for: .milliseconds(500))                          // (the first reads settle)
+        frames.sent.removeAll()
+        try await Task.sleep(for: .seconds(3))
+        let heads = frames.sent.filter { $0.area == "playhead" }.compactMap { try? JSONDecoder().decode(PlayheadArea.self, from: Data($0.json.utf8)) }
+        let editors = frames.sent.filter { $0.area == "editor" }
+        var counts: [String: (n: Int, bytes: Int)] = [:]
+        for f in frames.sent { counts[f.area, default: (0, 0)].n += 1; counts[f.area, default: (0, 0)].bytes += f.json.utf8.count }
+        print("AREAS IN 3 S PLAYING:", counts.sorted { $0.value.bytes > $1.value.bytes }.map { "\($0.key) \($0.value.n)x \($0.value.bytes) B" }.joined(separator: ", "))
+        // a step at a time: several in three seconds, each small, on the editor's track, with the pulses to run between
+        #expect(heads.count >= 4, "\(heads.count) playhead frames in 3 s")
+        #expect(frames.sent.filter { $0.area == "playhead" }.allSatisfy { $0.json.utf8.count < 160 })
+        let t = core.editorTrack()
+        for h in heads where h.step >= 0 {
+            #expect(h.track == t + 1 && h.step < h.steps && h.steps == core.session.tracks[t].length)
+            let a = try #require(h.startTick), b = try #require(h.nextTick)
+            #expect(b > a)
+        }
+        // forward: each frame the step after the last (wrapping at the pattern's length)
+        if core.session.tracks[t].direction == 0 {
+            let steps = heads.map(\.step).filter { $0 >= 0 }
+            for (x, y) in zip(steps, steps.dropFirst()) { #expect(y == (x + 1) % heads[0].steps || y == x, "\(steps)") }
+        }
+        // the editor: not once for the playhead (nothing in it changed)
+        #expect(editors.isEmpty, "\(editors.count) editor frames while only the playhead moved")
+        // nor the pads and the Timeline many times a second (they were, 19 times: 180 KB a second between them)
+        let pads = counts["pads"]?.n ?? 0, timeline = counts["timeline"]?.n ?? 0
+        #expect(pads <= 12 && timeline <= 12, "pads \(pads), timeline \(timeline) frames in 3 s")
+        #expect(frames.sent.reduce(0) { $0 + $1.json.utf8.count } < 60_000, "bytes sent in 3 s of playing")
+        #expect(core.editorArea().playhead == -1)
+        // stopped: the playhead says so
+        core.handle(json: #"{"intent":"stop"}"#)
+        try await wait("stopped") { !core.session.playing }
+        try await wait("no step") { core.playheadArea().step == -1 && core.playheadArea().startTick == nil }
+        #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
+    }
 }

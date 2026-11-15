@@ -48,7 +48,12 @@ public struct TimelineArea: Codable, Equatable, Sendable {
     public var bars: Double
     /// Where the clock is, in bars since Start (4/4); nil when stopped or unknown. With SONG on the tracks move through
     /// their lists from there; with SONG off each loops its block (the blocks' `playing` and `pass` say where).
+    /// The song's playhead in bars, stepped to the beat (2026-11-15; before, a hundredth of a bar, which resent this
+    /// whole area many times a second). For a smooth one: clock ticksNow / `ticksPerBar`. To be dropped once the
+    /// screens use that.
     public var playheadBar: Double?
+    /// Clock pulses in a bar (96 in 4/4).
+    public var ticksPerBar: Double = 96
     public var playing: Bool
     /// The pattern numbers the FM-1 holds (what Set pattern may name).
     public var kept: [Int]

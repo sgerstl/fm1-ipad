@@ -115,6 +115,7 @@ public final class PhoneCore {
             AreaWatch(name: "freetake", build: { [unowned self] in self.freeTakeArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             // HOME's four knobs (decision 21): the selected track's engine's, as the FM-1 shows them
+            AreaWatch(name: "playhead", build: { [unowned self] in AreaJSON.encode(self.playheadArea()) }, publish: publish),
             AreaWatch(name: "patterns", build: { [unowned self] in self.patternsArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "patternPictures", build: { [unowned self] in self.patternPicturesArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "homeKnobs", build: { [unowned self] in self.homeKnobsArea().map(AreaJSON.encode) }, publish: publish),
@@ -280,7 +281,7 @@ public final class PhoneCore {
     public func diagArea() -> DiagArea {
         let s = session, d = s.deviceScreen
         return DiagArea(firmware: s.info?.version, tracks: s.trackCount, selectedTrack: s.selectedTrack, screenLinked: s.screenLinked,
-                        page: d?.page, layer: d?.layer, menu: d?.menu, home: d?.home, clockTicks: s.clockTicks, playing: s.playing, notesIn: notesIn)
+                        page: d?.page, layer: d?.layer, menu: d?.menu, home: d?.home, clockTicks: s.clockTicks < 0 ? -1 : s.clockTicks / 24 * 24, playing: s.playing, notesIn: notesIn)
     }
 
     // MARK: Intents
