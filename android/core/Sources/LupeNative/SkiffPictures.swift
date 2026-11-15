@@ -1,6 +1,7 @@
 // The sound panel's pictures drawn by Skiff's own code (decision 46: Android first). Kotlin asks for the picture of the
 // page the panel shows; nil means "draw your own" (not connected, another firmware build, a page SkiffDraw doesn't
 // draw). See ios/SkiffDraw/Sources/SkiffDrawLink/SkiffPictures.swift.
+#if os(Android)
 import CAndroid
 import SkiffDraw
 import SkiffDrawLink
@@ -31,3 +32,4 @@ public func skiffPicture(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _
     }
     return arr
 }
+#endif
