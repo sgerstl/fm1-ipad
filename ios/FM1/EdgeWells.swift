@@ -76,22 +76,30 @@ struct PadDragShow: Equatable {
         return hypot(dx, dy)
     }
 
-    /// 0…1: how near the pad's centre is to the well: 0 from the glow distance out, 1 at the hot distance.
-    static func closeness(_ a: EdgeAction, centre: CGPoint, screen: CGSize, off: Set<EdgeAction> = []) -> Double {
-        if off.contains(a) { return 0 }
-        // (Scott, 2026-11-15: earlier and steadier) 0 at the glow distance, rising evenly to full at the hot distance
-        let d = distance(centre, rect(a, in: screen))
-        let glow = CGFloat(Labs.wellGlow.value), hot = CGFloat(Labs.wellHot.value)
-        return Double(max(0, min(1, (glow - d) / max(1, glow - hot))))
+    /// The glow and hot distances for a well, by its axis (Scott, 2026-11-15): the glow a share of the screen's extent
+    /// along that axis (the height for the top and bottom wells, the width for the sides), the hot distance its own.
+    static func reach(_ a: EdgeAction, in screen: CGSize) -> (glow: CGFloat, hot: CGFloat) {
+        switch a.edge {
+        case .leading, .trailing:
+            (screen.width * CGFloat(Labs.wellGlowSide.value) / 100, CGFloat(Labs.wellHotSide.value))
+        default:
+            (screen.height * CGFloat(Labs.wellGlow.value) / 100, CGFloat(Labs.wellHot.value))
+        }
     }
 
-    /// The well a drop at `centre` lands in: the nearest within the hot distance.
+    /// 0…1: how near the pad's centre is to the well: 0 from the glow distance out, rising evenly to 1 at the hot distance.
+    static func closeness(_ a: EdgeAction, centre: CGPoint, screen: CGSize, off: Set<EdgeAction> = []) -> Double {
+        if off.contains(a) { return 0 }
+        let d = distance(centre, rect(a, in: screen)), r = reach(a, in: screen)
+        return Double(max(0, min(1, (r.glow - d) / max(1, r.glow - r.hot))))
+    }
+
+    /// The well a drop at `centre` lands in: of those within their hot distance, the one it's deepest into.
     /// `off`: wells that refuse a drop now (Delete pattern while playing): never hot.
     static func hot(centre: CGPoint, screen: CGSize, off: Set<EdgeAction> = []) -> EdgeAction? {
-        let hotD = CGFloat(Labs.wellHot.value)
-        return EdgeAction.allCases.filter { !off.contains($0) }
-            .map { ($0, distance(centre, rect($0, in: screen))) }
-            .filter { $0.1 <= hotD }
+        EdgeAction.allCases.filter { !off.contains($0) }
+            .map { a in (a, distance(centre, rect(a, in: screen)) / max(1, reach(a, in: screen).hot)) }
+            .filter { $0.1 <= 1 }
             .min { $0.1 < $1.1 }?.0
     }
 
