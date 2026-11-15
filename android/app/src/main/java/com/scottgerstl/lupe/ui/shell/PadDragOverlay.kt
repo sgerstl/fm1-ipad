@@ -78,7 +78,7 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
     // the last pad stays drawn while the wells leave
     var last by remember { mutableStateOf<PadDrag?>(null) }
     if (drag != null) last = drag
-    val feel = state.feel(labs.wellGlowDp * d, labs.wellHotDp * d, labs.wellSideGlowDp * d, labs.wellSideHotDp * d, playing)
+    val feel = state.feel(labs.wellGlowPct / 100f * state.screen.height, labs.wellHotDp * d, labs.wellSideGlowPct / 100f * state.screen.width, labs.wellSideHotDp * d, playing)
     val w = state.screen.width; val h = state.screen.height
     val hot = if (drag != null && w > 0f) EdgeWellsGeometry.hot(drag.centre - state.origin, w, h, d, feel) else null
     // the window as it is when the pad lifts, for the wells' glass (a snapshot: the glass is blurred, so the page moving under it doesn't show)

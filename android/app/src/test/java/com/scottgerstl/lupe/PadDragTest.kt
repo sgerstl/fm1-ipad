@@ -100,7 +100,7 @@ class PadMenuIdleTest {
 
 class SideWellsGlowSoonerTest {
     private val w = 874f; private val h = 402f
-    private val feel = WellFeel(glowPx = 180f, hotPx = 64f, sideGlowPx = 390f, sideHotPx = 96f)
+    private val feel = WellFeel(glowPx = 181f, hotPx = 64f, sideGlowPx = 393f, sideHotPx = 96f)
     @Test fun aSideWellGlowsFromFarAndIsHotEarlier() {
         val e = EdgeWellsGeometry.rect(EdgeAction.Edit, w, h, 1f)
         // 300 out: the side well already glows, the bottom would not at that distance
@@ -111,5 +111,18 @@ class SideWellsGlowSoonerTest {
         assertNull(EdgeWellsGeometry.hot(Offset(e.left - 100f, 200f), w, h, 1f, feel))
         val c = EdgeWellsGeometry.rect(EdgeAction.Cancel, w, h, 1f)
         assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, c.top - 200f), w, h, 1f, feel), 0.001f)   // beyond its 180
+    }
+}
+
+class NearestWellTest {
+    @Test fun whenTwoAreHotTheSmallerShareOfItsHotDistanceWins() {
+        val w = 874f; val h = 402f; val feel = WellFeel(glowPx = 181f, hotPx = 64f, sideGlowPx = 393f, sideHotPx = 96f)
+        // between Clear steps (top) and Duplicate (left): 40 from the top well (0.62 of 64) and 50 from the side one (0.52 of 96)
+        val top = EdgeWellsGeometry.rect(EdgeAction.ClearSteps, w, h, 1f)
+        val p = Offset(top.left - 50f + 0f, 40f + 52f)
+        val dTop = EdgeWellsGeometry.distance(p, top); val dSide = EdgeWellsGeometry.distance(p, EdgeWellsGeometry.rect(EdgeAction.Duplicate, w, h, 1f))
+        val want = if (dTop / 64f < dSide / 96f) EdgeAction.ClearSteps else EdgeAction.Duplicate
+        val got = EdgeWellsGeometry.hot(p, w, h, 1f, feel)
+        if (dTop <= 64f && dSide <= 96f) assertEquals(want, got)
     }
 }

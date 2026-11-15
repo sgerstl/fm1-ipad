@@ -70,7 +70,7 @@ object EdgeWellsGeometry {
 
     /** The well a drop at [centre] lands in: the nearest within the hot distance. */
     fun hot(centre: Offset, w: Float, h: Float, d: Float, feel: WellFeel): EdgeAction? =
-        EdgeAction.entries.filter { it !in feel.off }.map { it to distance(centre, rect(it, w, h, d)) }.filter { it.second <= feel.hot(it.first) }.minByOrNull { it.second }?.first
+        EdgeAction.entries.filter { it !in feel.off }.map { it to distance(centre, rect(it, w, h, d)) }.filter { it.second <= feel.hot(it.first) }.minByOrNull { it.second / feel.hot(it.first) }?.first
 }
 
 /** One pad slot on the screen, in window pixels: [idx] the slot drawn, [landing] the entry a touch on it acts on (an outlined slot past the list's end stands for the first free one). */

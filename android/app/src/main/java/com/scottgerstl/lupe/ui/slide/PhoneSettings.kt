@@ -69,16 +69,17 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     var wellSlideMs by mutableStateOf(prefs?.getInt(WELL_SLIDE, 220) ?: 220)
         private set
     fun chooseWellSlide(v: Int) { wellSlideMs = v.coerceIn(100, 500); prefs?.edit()?.putInt(WELL_SLIDE, wellSlideMs)?.apply() }
-    var wellGlowDp by mutableStateOf(prefs?.getInt(WELL_GLOW, 180) ?: 180)
+    /** The glow starts at this share of the screen's height (top and bottom wells) or width (the sides), in percent: 45 (20–70). */
+    var wellGlowPct by mutableStateOf(prefs?.getInt(WELL_GLOW, 45) ?: 45)
         private set
-    fun chooseWellGlow(v: Int) { wellGlowDp = v.coerceIn(96, 320); prefs?.edit()?.putInt(WELL_GLOW, wellGlowDp)?.apply() }
+    fun chooseWellGlow(v: Int) { wellGlowPct = v.coerceIn(20, 70); prefs?.edit()?.putInt(WELL_GLOW, wellGlowPct)?.apply() }
     // the side wells (Edit, Duplicate) light up sooner, since the drag crosses much more width: about 45 % of the width out, hot at 96 dp (the top and bottom: 45 % of the height, 64 dp)
-    var wellSideGlowDp by mutableStateOf(prefs?.getInt(WELL_SIDE_GLOW, 390) ?: 390)
+    var wellSideGlowPct by mutableStateOf(prefs?.getInt(WELL_SIDE_GLOW, 45) ?: 45)
         private set
-    fun chooseWellSideGlow(v: Int) { wellSideGlowDp = v.coerceIn(160, 600); prefs?.edit()?.putInt(WELL_SIDE_GLOW, wellSideGlowDp)?.apply() }
+    fun chooseWellSideGlow(v: Int) { wellSideGlowPct = v.coerceIn(20, 70); prefs?.edit()?.putInt(WELL_SIDE_GLOW, wellSideGlowPct)?.apply() }
     var wellSideHotDp by mutableStateOf(prefs?.getInt(WELL_SIDE_HOT, 96) ?: 96)
         private set
-    fun chooseWellSideHot(v: Int) { wellSideHotDp = v.coerceIn(24, 160); prefs?.edit()?.putInt(WELL_SIDE_HOT, wellSideHotDp)?.apply() }
+    fun chooseWellSideHot(v: Int) { wellSideHotDp = v.coerceIn(32, 192); prefs?.edit()?.putInt(WELL_SIDE_HOT, wellSideHotDp)?.apply() }
     var wellHotDp by mutableStateOf(prefs?.getInt(WELL_HOT, 64) ?: 64)
         private set
     fun chooseWellHot(v: Int) { wellHotDp = v.coerceIn(24, 128); prefs?.edit()?.putInt(WELL_HOT, wellHotDp)?.apply() }
@@ -124,9 +125,9 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val PAD_SLIDE = "labs_pad_slide_start"
         const val PAD_DWELL = "labs_pad_slide_dwell"
         const val WELL_SLIDE = "labs_well_slide"
-        const val WELL_SIDE_GLOW = "labs_well_side_glow"
+        const val WELL_SIDE_GLOW = "labs_well_side_glow_pct"
         const val WELL_SIDE_HOT = "labs_well_side_hot"
-        const val WELL_GLOW = "labs_well_glow3"      // (new keys with the new defaults, 2026-11-15)
+        const val WELL_GLOW = "labs_well_glow_pct"      // (new keys with the new defaults, 2026-11-15)
         const val WELL_HOT = "labs_well_hot2"
         const val GRAPHICS = "show_graphics"
         const val PAUSE = "labs_pause_following"
