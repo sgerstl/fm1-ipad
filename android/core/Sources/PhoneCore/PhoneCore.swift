@@ -39,6 +39,28 @@ public final class PhoneCore {
     var projectBusy = false
     /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
     var auditions: [Int: Task<Void, Never>] = [:]
+    /// The firmware install (Firmware.swift): the link's ports and hold, where the app keeps files, and its state.
+    public var firmwareLink: FirmwareLink?
+    public var appStorage: URL?
+    /// Release files beside the app, for a build that carries them (the tests: the repository's firmware/releases).
+    public var firmwareLocalReleases: URL?
+    var fwState = "idle"
+    var fwProgress = 0.0
+    var fwMessage = ""
+    var fwTarget = LupeFirmware.skiff251
+    var fwOffer: FirmwareArea.Offer?
+    var fwDismissed: FirmwareArea.Offer?
+    var fwRunning: String?
+    var fwIdentity: String?
+    var fwSeen: DeviceIdentity?
+    var fwBackup: String?
+    var fwInUpdateMode = false
+    var fwDownloads = false
+    var fwAwaitingFile = false
+    var fwSkipBackup = false
+    var fwInstaller: FirmwareInstaller?
+    private var firmwareTask: Task<Void, Never>?
+    var firmwareWatchEvery: Duration = .seconds(3)
     /// Each track's entry keys, the list they were made for, and where the core's next rewrite puts them (EntryKeys.swift).
     var keys: [Int: [Int]] = [:]
     var keySeen: [Int: [Int]] = [:]
@@ -120,6 +142,7 @@ public final class PhoneCore {
             AreaWatch(name: "freetake", build: { [unowned self] in self.freeTakeArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             // HOME's four knobs (decision 21): the selected track's engine's, as the FM-1 shows them
+            AreaWatch(name: "firmware", build: { [unowned self] in AreaJSON.encode(self.firmwareArea()) }, publish: publish),
             AreaWatch(name: "playhead", build: { [unowned self] in AreaJSON.encode(self.playheadArea()) }, publish: publish),
             AreaWatch(name: "patterns", build: { [unowned self] in self.patternsArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "patternPictures", build: { [unowned self] in self.patternPicturesArea().map(AreaJSON.encode) }, publish: publish),
@@ -191,6 +214,14 @@ public final class PhoneCore {
         // A sheet showing (OPERATOR, ALL OPS, SOUND): its patch or sound read again every 300 ms. The FM-1 pushes
         // neither when its own knobs turn them (EDITOR_PROTOCOL.md "FM6 patches", "DRUM-X kit"), so this is how the
         // phone's four follow them; the store skips a read within a second of the phone's own edit
+        // What the FM-1 runs, for the firmware offer, every 3 s while no install runs (Firmware.swift)
+        firmwareTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.watchFirmware()
+                try? await Task.sleep(for: self.firmwareWatchEvery)
+            }
+        }
         // The stored patterns' pictures while the Patterns sheet shows, stopped only (Patterns.swift)
         picturesTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -246,6 +277,7 @@ public final class PhoneCore {
         followTask?.cancel(); followTask = nil
         sendsTask?.cancel(); sendsTask = nil
         sheetTask?.cancel(); sheetTask = nil
+        firmwareTask?.cancel(); firmwareTask = nil
         picturesTask?.cancel(); picturesTask = nil
         stampTask?.cancel(); stampTask = nil
         areas.forEach { $0.stop() }; areas = []
@@ -293,7 +325,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) || handleFirmwareJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects

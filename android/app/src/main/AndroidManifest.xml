@@ -3,6 +3,9 @@
 
     <!-- BRIDGE.md §1: the FM-1 is a USB MIDI device; P1 uses android.media.midi. -->
     <uses-feature android:name="android.software.midi" android:required="true" />
+    <!-- Only to download the firmware Lupe installs on the FM-1 (Skiff-Lupe, from Lupe's GitHub release), when the
+         person asks for an install. Nothing else in the app uses the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".LupeApp"

@@ -34,6 +34,12 @@ object LupeStartup {
         LupeNative.link = l
         link = l
         LupeNative.startCore(rawMode(app))
+        // where the core keeps the downloaded firmware and the backups it takes before an install
+        FirmwareDownloader.start(app)
+        LupeNative.intent(kotlinx.serialization.json.buildJsonObject {
+            put("intent", kotlinx.serialization.json.JsonPrimitive("appStorage"))
+            put("path", kotlinx.serialization.json.JsonPrimitive(app.filesDir.absolutePath))
+        }.toString())
         l.start()
         return core
     }

@@ -1,5 +1,3 @@
-#if canImport(CryptoKit)
-// Apple-only: not built for Android (android/BRIDGE.md §3).
 // A pretend FM-1 for the installer: the device side of both update steps, as the firmware plays them.
 // Step 1 follows Skiff's firmware/src/ota.c (ota_stage, an own Felucca loader): the UFW header in two 512-byte
 // reads, flash.bin's size checked (0x93000), the loader's head read and checked for FELUCCA-LOADER-1, read again,
@@ -486,5 +484,3 @@ final class SilentLink: UpdateLink, @unchecked Sendable {
     var lost: Bool { false }
     func close() {}
 }
-
-#endif

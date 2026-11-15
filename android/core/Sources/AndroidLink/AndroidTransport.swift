@@ -77,6 +77,10 @@ public final class LinkGate: @unchecked Sendable {
     private var current: AndroidTransport?
     private var handedOut = false
     private var _state: State = .none
+    /// The open device's USB name, as Android gives it ("Hügelton Instruments Felucca", "Felucca Update", "FM-1").
+    private var _name: String?
+    /// The installer has the FM-1 to itself (UpdateLink.swift): the Session's factory gets nothing.
+    private var held = false
 
     private var _readOnly = true
     private let onBlocked: @Sendable ([UInt8]) -> Void
@@ -98,13 +102,14 @@ public final class LinkGate: @unchecked Sendable {
     /// FM1Link found the FM-1 and asked Android to open it.
     public func opening() { lock.withLock { if _state == .none { _state = .opening } } }
 
-    /// Both ports are open: a new connection, not yet handed to Session.
+    /// Both ports are open: a new connection, not yet handed to Session. `name` is the device's USB name; nil (the
+    /// tests, the raw debug mode) counts as the FM-1 running an editor firmware.
     @discardableResult
-    public func opened() -> AndroidTransport {
+    public func opened(name: String? = nil) -> AndroidTransport {
         let t = AndroidTransport(send: sender)
         let old: AndroidTransport? = lock.withLock {
             let o = current
-            current = t; handedOut = false; _state = .open
+            current = t; handedOut = false; _state = .open; _name = name
             return o
         }
         old?.finish()
@@ -115,7 +120,32 @@ public final class LinkGate: @unchecked Sendable {
     public func lost() {
         let old: AndroidTransport? = lock.withLock {
             let o = current
-            current = nil; handedOut = false; _state = .none
+            current = nil; handedOut = false; _state = .none; _name = nil
+            return o
+        }
+        old?.finish()
+    }
+
+    /// The open device's USB name, nil when nothing is open.
+    public var deviceName: String? { lock.withLock { _state == .open ? _name : nil } }
+
+    /// A device the editor's Session may talk to: one running a Felucca-family firmware. The update loader ("Felucca
+    /// Update") and a stock FM-1 (any other name the installer's filter takes) answer none of the editor's questions;
+    /// they are the installer's to ask (UpdateLink.swift).
+    public static func isEditorDevice(name: String?) -> Bool {
+        guard let n = name?.lowercased() else { return true }
+        return n.contains("felucca") && !n.contains("update")
+    }
+
+    /// The installer takes the FM-1 (true) or gives it back (false). Taking it finishes the Session's connection (the
+    /// Session sees the FM-1 gone and waits); the ports stay open, and a fresh connection over them is the
+    /// installer's, or the Session's again after it's given back.
+    public func hold(_ on: Bool) {
+        let old: AndroidTransport? = lock.withLock {
+            guard held != on else { return nil }
+            held = on
+            let o = current
+            if _state == .open { current = AndroidTransport(send: sender); handedOut = false }
             return o
         }
         old?.finish()
@@ -134,7 +164,7 @@ public final class LinkGate: @unchecked Sendable {
     /// `Session(transport:)`'s factory: the open connection once, then nil until the next `opened()`.
     public func makeTransport() -> SysExTransport? {
         lock.withLock {
-            guard let t = current, !handedOut, !t.isFinished else { return nil }
+            guard !held, Self.isEditorDevice(name: _name), let t = current, !handedOut, !t.isFinished else { return nil }
             handedOut = true
             return _readOnly ? GuardedTransport(t, onBlocked: onBlocked) : t
         }
