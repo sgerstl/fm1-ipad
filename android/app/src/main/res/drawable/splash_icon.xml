@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The splash screen's icon: Lupe's art as a 160 dp square in the 288 dp the system gives an icon without a background of its own (192 dp circle
+     visible). The launch intro (ui/intro, SPLASH_ICON_DP) starts its zoom from exactly this square, so the hand-off is seamless. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="160dp" android:height="160dp" android:gravity="center" android:drawable="@drawable/lupe_icon" />
+</layer-list>
