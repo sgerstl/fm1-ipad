@@ -12,7 +12,6 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(Labs.holdToMenu.key) private var holdToMenu = Labs.holdToMenu.standard
     @AppStorage(Labs.columnTravel.key) private var columnTravel = Labs.columnTravel.standard
-    @AppStorage(PadsPage.confirmClearKey) private var confirmPadClear = true
     @AppStorage(SlideToTurn.key) private var slideToTurn = SlideToTurn.sideways
     @AppStorage(Magnifier.key) private var magnifier = true
     @AppStorage(PadPreviews.key) private var padPreviews = true
@@ -76,11 +75,10 @@ struct SettingsSheet: View {
                         Text("How far you slide a value across its whole range. Fine is longer and more exact.")
                             .font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     }
-                    Toggle("Confirm before clearing a pad", isOn: $confirmPadClear)
                 } header: {
                     Text("Touch")
                 } footer: {
-                    Text("Clearing a pad whose pattern nothing else uses erases that pattern, and it can't be undone. With the confirm on, Lupe asks first; \u{201C}Don't ask again\u{201D} turns it off.")
+                    Text("Clearing a pad needs no confirm: an Undo strip comes up under the pads, and Undo clear stays in the pad's menu until the next change.")
                 }
 
                 // the phone (decision 33): Show graphics joins Sound buttons, the union of both phones' options

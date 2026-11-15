@@ -204,6 +204,9 @@ final class EditorUI {
         return SoundPanelState(family: f)
     }()
     var projectsOpen = false
+    /// The pad last cleared (batch item 13: no confirm, an Undo strip instead), offered for undo until the next change:
+    /// valid while the song store's undo stack is as deep as it was right after the clear.
+    var padClear: PadClear?
     /// The phone's Mix pop-up (GLO's pages, board 77), and its Settings sheet (from the song-name menu).
     var mixPopup = LaunchArgs.all.contains("-mix-popup")      // (-mix-popup: open on it, for captures)
     var phoneSettingsOpen = LaunchArgs.all.contains("-settings")
@@ -246,4 +249,14 @@ struct PatternUndo: Equatable {
 struct SoundEntryTarget: Equatable {
     var ref: EntryRef
     var pad: Bool
+}
+
+/// A pad cleared, for its Undo strip and its menu's Undo clear.
+struct PadClear: Equatable {
+    var track: Int
+    var entry: Int
+    var what: String           // "pattern 02", "REST"
+    var depth: Int             // the store's undo stack right after the clear
+    var stripGone = false      // the strip has left (8 s); Undo clear stays in the pad's menu until the next change
+    var id = UUID()
 }

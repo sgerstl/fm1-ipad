@@ -148,6 +148,8 @@ struct PadsPage: View {
         }
         // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
         .padding(.bottom, compact && !phone ? 8 : 0)
+        .overlay(alignment: .bottom) { undoStrip.padding(.bottom, phone ? 44 : 72) }
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.3), value: ui.padClear?.id)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
         .onAppear { shownAt = Date() }
         // another pad, or another track: its controls back
@@ -999,6 +1001,17 @@ struct PadsPage: View {
     /// An empty pad: a new pattern (the editor on it), a copy of the one the track is on, one from the pool, a rest.
     private func emptyMenu(_ t: Int, _ i: Int) -> [[MenuItem]] {
         guard let list = store.song?.tracks[safe: t] else { return [] }
+        // the pad just cleared: Undo clear first, until the next change (batch item 13)
+        if let c = ui.padClear, c.track == t, c.entry == i, clearUndoable {
+            let undo = MenuItem(title: "Undo clear", icon: "arrow.uturn.backward", enabled: idle) { undoClear() }
+            var g = emptyMenuRest(t, i, list)
+            if g.isEmpty { g = [[undo]] } else { g[0].insert(undo, at: 0) }
+            return g
+        }
+        return emptyMenuRest(t, i, list)
+    }
+
+    private func emptyMenuRest(_ t: Int, _ i: Int, _ list: SongList) -> [[MenuItem]] {
         let free = (store.pool?.free ?? 0) > 0
         var first = [MenuItem(title: free ? "New pattern" : "New pattern: all 64 taken", icon: "plus", enabled: free && idle) {
             Task {
@@ -1154,18 +1167,50 @@ struct PadsPage: View {
     /// the entry and can't be undone: asked first.
     /// Asked unless "Don't ask again" was ticked (Scott, 2026-11-10); Settings › Confirm before clearing a pad brings it back.
     static let confirmClearKey = "confirmPadClear"
+    /// Clear entry: no confirm any more (batch item 13, Scott 2026-11-15); an Undo strip under the pads instead, and Undo
+    /// clear in the pad's menu until the next change. The clear goes through the store, which keeps it for undo.
     private func clear(_ t: Int, _ i: Int, _ e: SongEntry) {
-        let alone = e.poolIndex.map { (store.pool?.patterns[safe: $0]?.uses ?? 0) <= 1 } ?? false
-        let ask = UserDefaults.standard.object(forKey: Self.confirmClearKey) as? Bool ?? true
-        if alone, ask, let p = e.poolIndex, !session.playing {
-            ui.menu = AppMenu.confirm("Clear entry \(Entries.letter(i))", confirm: "Clear entry \(Entries.letter(i))",
-                                      caption: "Pattern \(Entries.number(p + 1)) is used nowhere else, so it's erased with the entry. This can't be undone.",
-                                      tint: t, at: pressAt,
-                                      optOut: .init(key: Self.confirmClearKey, hint: "Clears pads without asking, erasing a pattern nothing else uses. Turn back on in Settings")) {
-                Task { await store.send(.clear(track: t, entry: i)) }
+        let what = e.isRest ? "REST" : "pattern \(e.label)"
+        Task {
+            guard await store.send(.clear(track: t, entry: i)) else { return }
+            ui.padClear = PadClear(track: t, entry: i, what: what, depth: store.undoStack.count)
+        }
+    }
+
+    /// Whether the last pad clear can still be undone (nothing changed the song since).
+    private var clearUndoable: Bool { ui.padClear.map { $0.depth == store.undoStack.count && $0.depth > 0 } ?? false }
+
+    private func undoClear() {
+        guard clearUndoable else { return }
+        ui.padClear = nil
+        Task { await store.undo() }
+    }
+
+    /// The Undo strip: what was cleared, and Undo; it leaves after 8 s (Undo clear stays in the pad's menu), or as soon
+    /// as anything else changes the song.
+    @ViewBuilder private var undoStrip: some View {
+        if let c = ui.padClear, clearUndoable, !c.stripGone {
+            HStack(spacing: 10) {
+                Text("Cleared T\(c.track + 1) · \(Entries.letter(c.entry)) (\(c.what))").font(.lupe(14)).lineLimit(1)
+                Spacer(minLength: 0)
+                Button { undoClear() } label: {
+                    Text("Undo").font(.lupe(14, .semibold)).padding(.horizontal, 14).frame(height: 32)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(PressSink())
+                .accessibilityHint("Puts the entry back")
             }
-        } else {
-            Task { await store.send(.clear(track: t, entry: i)) }
+            .padding(.leading, 14).padding(.trailing, 6)
+            .frame(maxWidth: 520)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held))
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .id(c.id)
+            .task(id: c.id) {
+                try? await Task.sleep(for: .seconds(8))
+                if ui.padClear?.id == c.id { ui.padClear?.stripGone = true }
+            }
+            .onAppear { UIAccessibility.post(notification: .announcement, argument: "Cleared. Undo is available") }
         }
     }
 
