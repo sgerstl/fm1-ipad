@@ -380,6 +380,12 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val dragState = LocalPadDrag.current
     val labs = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current
     val dens = androidx.compose.ui.platform.LocalDensity.current.density
+    /** Every duplicate sprouts (Scott, 2026-11-15): the new pad grows out of this one and travels to [idx] of [track] once the core has put it there. */
+    fun sproutTo(track: Int, idx: Int) {
+        val from = padCoords?.takeIf { it.isAttached }?.boundsInWindow() ?: return
+        val used = pads.rows.firstOrNull { it.track == track }?.entries?.count { it.kind != PadKind.Empty } ?: 0
+        dragState?.sprout = PadSprout(track, idx, from, color, usedBefore = used)
+    }
     // this slot, for a drop to find (window pixels; kept as it is placed, forgotten when it goes)
     androidx.compose.runtime.DisposableEffect(row.track, idx) { onDispose { dragState?.slots?.remove(row.track to idx) } }
     /**
@@ -434,7 +440,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             add(HoldItem("Play once more", sub = stopFirst ?: (if (chained) "The chain: " else "") + "×${block.reps} to ×${minOf(16, block.reps + 1)}", enabled = idle && block.reps < 16) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps + 1)) })
             add(HoldItem("Play once less", sub = stopFirst ?: (if (chained) "The chain: " else "") + "×${block.reps} to ×${maxOf(1, block.reps - 1)}", enabled = idle && block.reps > 1) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps - 1)) })
             val full = (tl.tracks.firstOrNull { it.track == row.track }?.entriesUsed ?: 0) >= 16
-            add(HoldItem("Duplicate after", sub = stopFirst ?: if (full) "The track's 16 entries are full" else null, enabled = idle && !full) { core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, block.id)) })
+            add(HoldItem("Duplicate after", sub = stopFirst ?: if (full) "The track's 16 entries are full" else null, enabled = idle && !full) { sproutTo(row.track, block.last + 1); core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, block.id)) })
             val at = blocks.indexOfFirst { it.id == block.id }
             add(HoldItem("Move earlier", sub = stopFirst, enabled = idle && at > 0) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, -1)) })
             add(HoldItem("Move later", sub = stopFirst, enabled = idle && at in 0 until blocks.size - 1) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, 1)) })
@@ -481,7 +487,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             e.pattern != null -> core.send(com.scottgerstl.lupe.core.CopyPattern(e.pattern, row.track, free))
             else -> return
         }
-        if (free in 0..15 && from != null) dragState?.sprout = PadSprout(row.track, free, from, color)
+        if (free in 0..15) sproutTo(row.track, free)
     }
     // dragging (the iPhone's rule): press then slide lifts the pad with no menu; a still hold opens the menu and moving off it lifts; the drop goes to a well, a slot or back
     val dragger = if (empty || dragState == null) null else object : PadDragger {
@@ -500,8 +506,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             when (act) {
                 is DropAction.Move -> core.send(com.scottgerstl.lupe.core.PadMove(act.track, act.from, act.track, act.to))
                 is DropAction.Offer -> holdMenu?.open(finger, color, listOf(
-                    HoldItem("Same pattern", sub = "Edits are shared") { core.send(Intent.PadSet(act.toTrack, act.to, act.pattern)) },
-                    HoldItem("A copy", sub = "Takes a free number") { core.send(com.scottgerstl.lupe.core.CopyPattern(act.pattern, act.toTrack, act.to)) },
+                    HoldItem("Same pattern", sub = "Edits are shared") { sproutTo(act.toTrack, act.to); core.send(Intent.PadSet(act.toTrack, act.to, act.pattern)) },
+                    HoldItem("A copy", sub = "Takes a free number") { sproutTo(act.toTrack, act.to); core.send(com.scottgerstl.lupe.core.CopyPattern(act.pattern, act.toTrack, act.to)) },
                 ))
                 is DropAction.Well -> when (act.action) {
                     EdgeAction.Cancel -> Unit          // the pad goes back
@@ -518,8 +524,9 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     // a duplicate that sprouted from another pad: its slot is this one, so the flight can aim here (the slot is scrolled into view first)
     val bring = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     val sp = dragState?.sprout
-    androidx.compose.runtime.LaunchedEffect(sp, e.kind) {
-        if (sp != null && sp.to == null && sp.track == row.track && sp.idx == idx && e.kind != PadKind.Empty) {
+    val usedNow = row.entries.count { it.kind != PadKind.Empty }
+    androidx.compose.runtime.LaunchedEffect(sp, usedNow) {
+        if (sp != null && sp.to == null && sp.track == row.track && sp.idx == idx && e.kind != PadKind.Empty && usedNow > sp.usedBefore) {
             bring.bringIntoView()
             androidx.compose.runtime.withFrameNanos { }
             val b = padCoords?.takeIf { it.isAttached }?.boundsInWindow() ?: return@LaunchedEffect

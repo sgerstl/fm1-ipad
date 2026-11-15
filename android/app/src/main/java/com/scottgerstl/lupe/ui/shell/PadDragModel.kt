@@ -105,7 +105,7 @@ fun liftsOrSwipes(movedPx: Float, slopPx: Float, heldMs: Long, dwellMs: Long): B
     if (movedPx <= slopPx) null else heldMs >= dwellMs
 
 /** A duplicate on its way into its slot: grown out of [from] (the source pad, window px), travelling to [to] (set once the new pad is placed). */
-data class PadSprout(val track: Int, val idx: Int, val from: Rect, val colour: Color, val to: Rect? = null)
+data class PadSprout(val track: Int, val idx: Int, val from: Rect, val colour: Color, val to: Rect? = null, val usedBefore: Int = 0)
 
 class PadDragState {
     var drag by mutableStateOf<PadDrag?>(null)
