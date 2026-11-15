@@ -217,7 +217,7 @@ struct Lane: View {
     /// A hold that wanders further than this before it lifts is a scroll, not a hold.
     static let holdSlop: CGFloat = 10
 
-    private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
+    private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store, ui: ui) }
     private func x(_ ticks: Double) -> CGFloat { CGFloat(ticks / SongPlacement.ticksPerBar) * barWidth }
     /// Loop entry (SONG OFF): the blocks say ↻ in place of ×N.
     private var loops: Bool { store.song?.mode == .off }

@@ -265,5 +265,8 @@ struct PadClear: Equatable {
     var stripGone = false      // the strip has left (8 s); Undo clear stays in the pad's menu until the next change
     var before: [SongEntry] = []   // the track's list as it was (undo puts it back: the entry, its REPS, chain, sound)
     var kept: Int? = nil           // a pattern kept on the FM-1 for the undo (P1's route); cleared when the undo ends
+    var keptAll: [Int] = []        // every pattern kept (a Timeline delete can keep several)
+    /// What the strip says: "Cleared T3 · B (pattern 09)", "Deleted T2 · C–D".
+    var title: String { what.hasPrefix("Deleted") ? what : "Cleared T\(track + 1) · \(SongEntry.letter(entry)) (\(what))" }
     var id = UUID()
 }

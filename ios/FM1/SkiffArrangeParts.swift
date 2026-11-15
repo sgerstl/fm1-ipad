@@ -9,6 +9,8 @@ import SwiftUI
 @MainActor struct ArrangeEdits {
     let session: DeviceSession
     let store: SkiffSongStore
+    /// For a delete's Undo strip (ListUndo); nil: the store's own confirm, as before.
+    var ui: EditorUI? = nil
 
     /// The track's entries, dangling CHAIN flags off (anything moved in after one would join it).
     private func entries(_ t: Int) -> [SongEntry]? { store.song?.tracks[safe: t].map { SongSections.unchainDangling($0.entries) } }
@@ -64,7 +66,10 @@ import SwiftUI
         es += Array(repeating: .empty, count: 16 - es.count)
         // a rest left at the start or end would be passed over: it stays a rest
         es = SongSections.restsAtEdges(es, range: sp.lowerBound..<(sp.upperBound + 1 - b.entries.count))
-        Task { await store.rewrite(track: t, to: es, focus: b.entries.lowerBound) }
+        // no confirm (batch item 13 follow-up): the Undo strip instead, the patterns kept for it (ListUndo)
+        guard let ui else { Task { await store.rewrite(track: t, to: es, focus: b.entries.lowerBound) }; return }
+        ListUndo.remove(track: t, entries: b.entries, after: es, what: "Deleted T\(t + 1) · \(Entries.letters(b.entries))",
+                        store: store, session: session, ui: ui)
     }
 
     /// The block one place earlier or later among the track's blocks (the hold menu's route, without a drag).
@@ -133,7 +138,7 @@ struct EntryInspector: View {
     let block: SongBlock
     let list: SongList
 
-    private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
+    private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store, ui: ui) }
     private var first: SongEntry { list.entries[block.entries.lowerBound] }
     private var poolIndex: Int? { first.poolIndex }
 
@@ -377,7 +382,7 @@ struct PatternBin: View {
             .scrollIndicators(.hidden)
             Button {
                 let t = selection?.track ?? session.selectedTrack
-                ArrangeEdits(session: session, store: store).newPatternAtEnd(t)
+                ArrangeEdits(session: session, store: store, ui: ui).newPatternAtEnd(t)
             } label: {
                 Group {
                     if drawer {

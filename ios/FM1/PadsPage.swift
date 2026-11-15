@@ -148,8 +148,6 @@ struct PadsPage: View {
         }
         // room under the scene row over the editor: its keys' base edge sat on the clip and looked cut (2026-11-07)
         .padding(.bottom, compact && !phone ? 8 : 0)
-        .overlay(alignment: .bottom) { undoStrip.padding(.bottom, phone ? 44 : 72) }
-        .animation(reduceMotion ? .easeOut(duration: 0.15) : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.3), value: ui.padClear?.id)
         .sensoryFeedback(.impact(weight: .light), trigger: launched)
         // the edge wells follow the dragged pad's centre (EdgeWells); a refused lift shows none
         .onChange(of: drag) { _, d in
@@ -157,10 +155,7 @@ struct PadsPage: View {
             ui.padDrag = d.flatMap { d in d.refused ? nil : PadDragShow(centre: CGPoint(x: d.at.x - d.grab.width, y: d.at.y - d.grab.height), track: d.track) }
         }
         .onDisappear { ui.padDrag = nil }
-        // anything else changing the song ends the clear's undo: its kept pattern goes
-        .onChange(of: store.undoStack.count) { _, n in
-            if let c = ui.padClear, c.depth != n { ui.padClear = nil; finishClear(c) }
-        }
+
         .onAppear { shownAt = Date() }
         // another pad, or another track: its controls back
         .task(id: store.offline) { if !store.offline { await store.follow() } }
@@ -914,7 +909,7 @@ struct PadsPage: View {
         let n = Entries.number(p + 1)
         let free = (store.pool?.free ?? 0) > 0
         // short enough for the fan's width (its buttons are one line): "Copy 04 here (as 15)"
-        let becomes = free ? ArrangeEdits(session: session, store: store).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+        let becomes = free ? ArrangeEdits(session: session, store: store, ui: ui).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
         let t = to.track, j = to.entry
         var choices = [
             MenuItem(title: "Copy \(n) here\(becomes)", icon: "square.on.square", enabled: free && idle) {
@@ -962,7 +957,7 @@ struct PadsPage: View {
         guard let old = store.song?.tracks[safe: t]?.entries[safe: j] else { return }
         let was = old.poolIndex.map { Entries.number($0 + 1) } ?? (old.isRest ? "REST" : "it")
         let free = (store.pool?.free ?? 0) > 0
-        let becomes = free ? ArrangeEdits(session: session, store: store).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+        let becomes = free ? ArrangeEdits(session: session, store: store, ui: ui).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
         let choices = [
             // shared: the same pattern, named here too (an edit shows everywhere it's used)
             MenuItem(title: "Replace \(was) with \(n)", icon: "link", enabled: idle && old.poolIndex != p) {
@@ -1050,7 +1045,7 @@ struct PadsPage: View {
     private func emptyMenu(_ t: Int, _ i: Int) -> [[MenuItem]] {
         guard let list = store.song?.tracks[safe: t] else { return [] }
         // the pad just cleared: Undo clear first, until the next change (batch item 13)
-        if let c = ui.padClear, c.track == t, c.entry == i, clearUndoable {
+        if let c = ui.padClear, !c.what.hasPrefix("Deleted"), c.track == t, c.entry == i, clearUndoable {
             let undo = MenuItem(title: "Undo clear", icon: "arrow.uturn.backward", enabled: idle) { undoClear() }
             var g = emptyMenuRest(t, i, list)
             if g.isEmpty { g = [[undo]] } else { g[0].insert(undo, at: 0) }
@@ -1160,7 +1155,7 @@ struct PadsPage: View {
         var copy: [MenuItem] = []
         if let p = e.poolIndex {
             let free = (store.pool?.free ?? 0) > 0
-            let n = free ? ArrangeEdits(session: session, store: store).copyNumber(after: p).map { " (becomes \(Entries.number($0)))" } ?? "" : ": all 64 taken"
+            let n = free ? ArrangeEdits(session: session, store: store, ui: ui).copyNumber(after: p).map { " (becomes \(Entries.number($0)))" } ?? "" : ": all 64 taken"
             copy.append(MenuItem(title: "Make unique\(n)", icon: "square.on.square.dashed", enabled: free && idle) {
                 Task { await store.send(.copy(track: t, entry: i)) }
             })
@@ -1234,60 +1229,18 @@ struct PadsPage: View {
         Task {
             if erases { guard await store.send(.set(track: t, entry: i, pattern: SongEntry.rest)) else { return } }
             guard await store.send(.clear(track: t, entry: i)) else { return }
-            if let old = ui.padClear { finishClear(old) }
-            ui.padClear = PadClear(track: t, entry: i, what: what, depth: store.undoStack.count, before: before, kept: erases ? e.poolIndex : nil)
+            if let old = ui.padClear { ListUndo.finish(old, store, session) }
+            ui.padClear = PadClear(track: t, entry: i, what: what, depth: store.undoStack.count, before: before,
+                                   kept: erases ? e.poolIndex : nil, keptAll: erases ? (e.poolIndex.map { [$0] } ?? []) : [])
         }
     }
 
-    /// The undo ended (the next change): a pattern kept only for it is cleared as the FM-1's own CLEAR would have, when
-    /// it's still unused and the FM-1 stopped; the store takes one change at a time, so after it's quiet.
-    private func finishClear(_ c: PadClear) {
-        guard let p = c.kept else { return }
-        Task {
-            while store.busy || Date().timeIntervalSince(store.lastChange) < 1 { try? await Task.sleep(for: .milliseconds(250)) }
-            let onTrack = store.song?.tracks.contains { $0.patternOn == p } ?? false
-            guard !session.playing, !onTrack, (store.pool?.patterns[safe: p]?.uses ?? 1) == 0 else { return }
-            _ = await store.poolOp(1, pattern: p)
-        }
-    }
 
-    /// Whether the last pad clear can still be undone (nothing changed the song since).
-    private var clearUndoable: Bool { ui.padClear.map { $0.depth == store.undoStack.count && $0.depth > 0 } ?? false }
 
-    private func undoClear() {
-        guard clearUndoable, let c = ui.padClear else { return }
-        ui.padClear = nil
-        // the track's whole list as it was (nothing else has changed since): the pattern, REPS, chain and sound come back
-        Task { _ = await store.rewrite(track: c.track, to: c.before, focus: c.entry, confirmed: true) }
-    }
+    private var clearUndoable: Bool { ListUndo.undoable(ui, store) }
+    private func undoClear() { ListUndo.undo(ui, store) }
 
-    /// The Undo strip: what was cleared, and Undo; it leaves after 8 s (Undo clear stays in the pad's menu), or as soon
-    /// as anything else changes the song.
-    @ViewBuilder private var undoStrip: some View {
-        if let c = ui.padClear, clearUndoable, !c.stripGone {
-            HStack(spacing: 10) {
-                Text("Cleared T\(c.track + 1) · \(Entries.letter(c.entry)) (\(c.what))").font(.lupe(14)).lineLimit(1)
-                Spacer(minLength: 0)
-                Button { undoClear() } label: {
-                    Text("Undo").font(.lupe(14, .semibold)).padding(.horizontal, 14).frame(height: 32)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
-                        .frame(minHeight: 44).contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-                .accessibilityHint("Puts the entry back")
-            }
-            .padding(.leading, 14).padding(.trailing, 6)
-            .frame(maxWidth: 520)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held))
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-            .id(c.id)
-            .task(id: c.id) {
-                try? await Task.sleep(for: .seconds(8))
-                if ui.padClear?.id == c.id { ui.padClear?.stripGone = true }
-            }
-            .onAppear { UIAccessibility.post(notification: .announcement, argument: "Cleared. Undo is available") }
-        }
-    }
+
 
     /// Pattern (0...63) → the tracks whose lists name it.
     static func owners(_ song: SkiffSong?) -> [Int: [Int]] {

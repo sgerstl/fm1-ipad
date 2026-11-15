@@ -127,7 +127,7 @@ struct LibraryPage: View {
     private func setEntry(_ s: EntrySound) {
         guard let entry, let store = session.skiffSong,
               let b = store.blocks(entry.ref.track).first(where: { $0.entries.contains(entry.ref.entry) }) else { return }
-        ArrangeEdits(session: session, store: store).setSound(entry.ref.track, b, s)
+        ArrangeEdits(session: session, store: store, ui: ui).setSound(entry.ref.track, b, s)
     }
     /// The lit key's id in the grid (what the target has now), for keeping it in view.
     private var currentKey: String? {

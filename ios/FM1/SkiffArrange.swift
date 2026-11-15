@@ -438,7 +438,7 @@ struct SkiffArrangePage: View {
 
     private func moveSelected(by delta: Int) {
         guard let sel = selection, let b = store.blocks(sel.track).first(where: { $0.entries.contains(sel.entry) }) else { return }
-        if let i = ArrangeEdits(session: session, store: store).move(sel.track, b, by: delta) { selection = EntryRef(track: sel.track, entry: i) }
+        if let i = ArrangeEdits(session: session, store: store, ui: ui).move(sel.track, b, by: delta) { selection = EntryRef(track: sel.track, entry: i) }
     }
 
     // MARK: Sections
@@ -476,7 +476,7 @@ struct SkiffArrangePage: View {
     // MARK: Keyboard
 
     private func key(_ k: KeyEquivalent) -> Bool {
-        let edits = ArrangeEdits(session: session, store: store)
+        let edits = ArrangeEdits(session: session, store: store, ui: ui)
         if k == .escape, section != nil { section = nil; leftOut = []; return true }
         guard let sel = selection else {
             let t = session.selectedTrack

@@ -275,6 +275,9 @@ struct RadialMenu: View {
         }, including: wheel ? .all : .subviews)       // (no layer-wide drag on a short menu: only a wheel turns)
         .onAppear { start = Date(); turnFrom = 0; turnTo = 0 }
         .task { try? await Task.sleep(for: .seconds(3)); timedOut = true }
+        // the opening finger's lift, seen at the window whatever it started on (a pad's or block's own gesture can be cancelled
+        // by the menu covering it, and then never says it ended)
+        .background(FingersUpWatch { HoldFinger.shared.down = false })
         .onDisappear { HoldFinger.shared.down = false }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
@@ -369,4 +372,42 @@ struct RadialMenu: View {
 final class HoldFinger {
     static let shared = HoldFinger()
     var down = false
+}
+
+/// Calls `up` when the last finger on the window lifts. Watches the window's touches and never claims one.
+struct FingersUpWatch: UIViewRepresentable {
+    let up: () -> Void
+    func makeUIView(context: Context) -> Host { let v = Host(); v.isUserInteractionEnabled = false; v.up = up; return v }
+    func updateUIView(_ v: Host, context: Context) { v.up = up }
+    static func dismantleUIView(_ v: Host, coordinator: ()) { v.detach() }
+
+    final class Host: UIView {
+        var up: (() -> Void)?
+        private var watcher: Watcher?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            detach()
+            guard let w = window else { return }
+            let g = Watcher(); g.host = self
+            w.addGestureRecognizer(g); watcher = g
+        }
+        func detach() { watcher?.view?.removeGestureRecognizer(watcher!); watcher = nil }
+    }
+
+    final class Watcher: UIGestureRecognizer, UIGestureRecognizerDelegate {
+        weak var host: Host?
+        override init(target: Any?, action: Selector?) {
+            super.init(target: target, action: action)
+            cancelsTouchesInView = false; delaysTouchesBegan = false; delaysTouchesEnded = false; delegate = self
+        }
+        convenience init() { self.init(target: nil, action: nil) }
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith o: UIGestureRecognizer) -> Bool { true }
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { check(event) }
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { check(event) }
+        private func check(_ event: UIEvent) {
+            let down = (event.allTouches ?? []).contains { $0.phase != .ended && $0.phase != .cancelled }
+            if !down { host?.up?() }
+            state = .failed
+        }
+    }
 }

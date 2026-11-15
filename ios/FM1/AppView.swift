@@ -123,6 +123,7 @@ struct AppView: View {
         .overlay(alignment: .bottom) { keyboard }
         .overlay(alignment: .bottom) { undoToast }
         .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 32) }
+        .overlay { ListUndoStrip(session: session, ui: ui) }   // (a pad cleared or blocks deleted: Undo)
         .overlay { EdgeWells(ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { sectionMenuLayer }

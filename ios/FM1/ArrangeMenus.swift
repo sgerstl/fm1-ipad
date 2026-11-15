@@ -22,7 +22,7 @@ struct OpenMenu: Hashable {
     /// Where a move puts the block, for the selection to follow.
     let select: (EntryRef) -> Void
 
-    private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store) }
+    private var edits: ArrangeEdits { ArrangeEdits(session: session, store: store, ui: ui) }
     private var idle: Bool { !store.busy && !store.offline }
 
     /// A block's menu (hold, then let go).
