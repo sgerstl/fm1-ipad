@@ -23,6 +23,8 @@ figma:
 
 # Mix
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 *The FM-1's GLO pages: MIXER (the six tracks' strips), then the shared DELAY, REVERB, CHORUS and GLOBAL. A tab on the iPad and today's iPhone.*
 
 > **Under revision (2026-11-14):** on both phones Mix stops being a tab and becomes a **pop-up**: GLO on the FM-1 opens it, and so does the project menu; the tabs are Pads · Edit · Timeline (decision 28). The pop-up has **no "Mix" title**; its page tabs sit **in line with the close button**, and the room goes to pictures **redrawn to look like the FM-1's** (DELAY, REVERB, CHORUS, the GLO pages; decision 31). Those pictures come from the FM-1's own drawings, in **greys and white**, since the GLO pages set every track; the per-track FX › DELAY and FX › REVERB keep the track colour (decision 34, board 77). PAN goes in the track row's hold menu and the row stays one level slider (decision 14); LEVEL and PAN live in Mix and the track head's hold menu (decision 31). The iPhone's Mix tab becomes that pop-up with the same drawing; Android drops its title and puts the tabs beside close (build plan `phone-consolidation-build-plan-2026-11-14.md`, row "Mix / GLO"). Decisions: vault `phone-skiff-decisions-2026-11-12.md`. Section 1 below is what's built: the iPad's tab and the iPhone's.

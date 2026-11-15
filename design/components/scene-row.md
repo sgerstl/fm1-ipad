@@ -22,6 +22,8 @@ figma:
 
 # Scene row
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14):** decision 33 keeps the iPhone's scene row on both phones: the short Store key and outlined empty scenes (vault `phone-skiff-decisions-2026-11-12.md`, decision 33; `phone-consolidation-build-plan-2026-11-14.md`, "Scenes row"). The iPhone keeps what's built, which is the iPad's row at `.phone`. Android switches from its wider "Store scene" key and empty scenes drawn as plain numbers in a well. Section 1 below describes the iPad and iPhone as built.
 
 ## 1. Requirements

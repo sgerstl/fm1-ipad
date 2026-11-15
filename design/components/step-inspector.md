@@ -25,6 +25,8 @@ figma:
 
 # Step inspector
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14):** both phones' Edit consolidates on the iPhone's step grid (decision 31, vault `phone-skiff-decisions-2026-11-12.md`; `phone-consolidation-build-plan-2026-11-14.md`, row "Edit"). The iPhone's step panel is this component. Android's own step panel (NOTES · FEEL · SOUND tabs over four dials, `EditorPage.kt` on the Android branch) carries decisions 9a and 9b; this one doesn't. Board 75 leaves the step panel out ("Not shown: the step panel"). `[open]` Which step panel both phones carry, and whether 9a (hold a step to lock), 9b (each lock cleared on its own, Clear all confirmed in place) and the ◆ on locked steps come to it. Section 1 below is the iPad and iPhone as built.
 
 ## 1. Requirements

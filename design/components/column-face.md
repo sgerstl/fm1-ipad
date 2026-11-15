@@ -21,6 +21,8 @@ figma:
 
 # Column face (the knob tile)
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14):** on the phones, the sound panel shows the FM-1's four knobs as **round dials**, with the page's picture under them when Settings › Show graphics is on (decisions 21, 25, 30 and 32 in the vault's `phone-skiff-decisions-2026-11-12.md`; the build plan's iPhone row: "four dials + picture"). Android draws them with `RoundDial.kt`; the iPhone's sound panel draws column faces today. **Slide to turn defaults to Up and down on the phone** (decision 10); Android does, the iPhone's default is Sideways today. Section 1 is the iPad and today's iPhone.
 
 ## 1. Requirements

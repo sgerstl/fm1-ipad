@@ -20,6 +20,8 @@ figma:
 
 # Tempo popup
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 *Opens from the top bar's readout ("12 · 3 / Song · 120 BPM"). Code name: `TempoPanel`.*
 
 ## 1. Requirements

@@ -3,7 +3,7 @@
 Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it with the iPad and the FM-1; the branch merges to `main` only after it passes.
 
 **Setup:** firmware and version on the FM-1 · Lupe build (branch, commit) · cable / headphones · launch flags if any.
-**Back up first?** Yes / No. If yes: which checks write the FM-1's flash, and how to back up (Lupe › Projects, or SLOOP's editor › Song & sections › Save a backup).
+**Back up first?** Yes / No. If yes: which checks write the FM-1's flash, and how to back up (Lupe › Projects, Lupe's backup before an install, or Skiff's web editor).
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|

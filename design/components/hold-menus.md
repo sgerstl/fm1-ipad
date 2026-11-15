@@ -25,6 +25,8 @@ figma:
 
 # Hold menus
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 *Lupe's own menus, every one of them: the fan at the finger (pads, track heads, drops, confirms) and the placed menu (keys, submenus). No system menus or alerts.*
 
 > **Under revision (2026-11-14):** on both phones the hold menu takes **Android's radial styling** and carries the **iPad and iPhone's full option set** (decision 31, vault `phone-skiff-decisions-2026-11-12.md`; build plan `phone-consolidation-build-plan-2026-11-14.md`, row "Hold menu": Android adds the iPad's options, the iPhone ports the styling). Android's radial as built (`HoldMenu.kt`, board `radial-menu.html`, Scott 2026-11-14): a disc in the track colour grows under the finger; lines in the track colour run out from its edge to each choice, each ending in a small node, the lit choice's line white; the choices stack round a circle about the finger and open to the left near the right edge. While the finger stays down, sliding onto a choice lights it and lifting picks it; lifting on nothing leaves the menu open for a tap. The page behind dims and takes no touches; a tap outside closes. Leaving: choices and lines fade, the disc shrinks out faster than it came. Reduce Motion: fades only. TalkBack reads a plain menu. A destructive choice asks in place, red-outlined, with the same tap guard. Section 1 below is the iPad and iPhone as built.

@@ -19,6 +19,8 @@ figma:
 
 # Faders
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14):** on the phones, LEVEL and PAN live in the Mix pop-up and the track head's hold menu (decision 31 in the vault's `phone-skiff-decisions-2026-11-12.md`; decision 14 had put PAN in the row's hold menu). The iPhone's Mix tab becomes the pop-up, drawn as Android's (build plan). Android's level fader turns by the Slide to turn setting with the Magnifier (`MixPage.kt` `LevelFader`); the iPad and iPhone `Fader` follows the finger. `[open]` Which fader behaviour the phones keep, and what draws LEVEL and PAN in the hold menu, isn't decided. Section 1 is the iPad and today's iPhone.
 
 ## 1. Requirements

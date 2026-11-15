@@ -1,5 +1,7 @@
 # SLOOP 2.8.4 + screen link
 
+> **History.** Lupe no longer speaks SLOOP or offers SLOOP-Lupe (decision 43, 2026-11-15). This folder stays as the record of the patch; the app's last SLOOP state is the tag `sloop-archive-2026-11-15` (`design/archive/sloop.md`).
+
 A small addition to [SLOOP](https://github.com/isod89/sloop-fm1) 2.8.4 (GPL-3.0, by isod89, a fork of Leo Kuroshita's Felucca) so the iPad app and the FM-1 can follow each other's screen. Everything else is stock 2.8.4.
 
 | File | What |

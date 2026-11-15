@@ -1,22 +1,9 @@
 # Protocol
 
-The app speaks **SLOOP's own editor protocol**: SysEx `F0 7D 46 4C <cmd> ... F7` over USB MIDI. The reference is pinned in `vendor/sloop-2.8.4/EDITOR_PROTOCOL.md`; there is no protocol of my own. The one firmware change is the screen link (`sloop/`): two commands, 90 UI and 91 UI_GOTO, which the app uses when the FM-1 answers them and does without when it doesn't.
+The app speaks **Skiff's editor protocol**: SysEx `F0 7D 46 4C <cmd> ... F7` over USB MIDI, Felucca's framing and command numbers as Skiff keeps them. The reference is Skiff's `web/EDITOR_PROTOCOL.md` (github.com/illuminus5/skiff); there is no protocol of my own. The one firmware change is the screen link (`skiff/README.md`: SCREEN 90, SCREEN_GOTO 91, and the later builds' METER, SCOPE and TAKE), which the app uses when INFO's `56 01` tag says the FM-1 has it.
 
-What pass 1 uses:
+The typed requests in `ios/SloopKit/Sources/SloopKit/Messages.swift` are the commands Felucca's firmwares share (INFO, sent typed at connect to tell the firmware; the sample commands 11–15; the rest). `SkiffDriver` sends its requests with Skiff's own numbers and argument forms as raw requests (`SkiffCmd`).
 
-| Command | Use |
-|---|---|
-| `INFO` (1) | Version check: must be `FELUCCA SLOOP 2.8.4`, protocol 12 |
-| `TRACK` (27) | Each track's engine and preset, the selected track |
-| `NAMES` (10) | Preset names per engine |
-| `TRACK_STEP` (30) | Synth steps of any track |
-| `DRUM_STEP` (33) | The drum track's 16 lanes per step |
-| `TRACK_PARAM` (31), `GET` (2) | Knob values (level, length, pan, scale; global swing) |
-| `WATCH 3` (22), `PING` (25) | Pushes: `CHANGED`, `RELOAD`, `STEP_CHANGED`, `TRACK_CHANGED` |
-| `LIVE` op 0 (77) | Playing, BPM, selection, each track's step and length, polled 20+ times a second |
-
-**With the screen link firmware** (`sloop/`: SLOOP 2.8.4 plus 47 lines), two more: `UI` (90) reports the FM-1's page, layer and menu, and is pushed whenever they change (`WATCH 7`); `UI_GOTO` (91) opens a page. The app asks `UI` at connect and uses the link only when the FM-1 answers.
-
-The Swift package lives in `ios/SloopKit`: frame encoding and decoding, typed replies, tests against captured traffic in `ios/SloopKit/Tests/SloopKitTests/Fixtures`.
+**History.** Until 2026-11-15 the app also spoke SLOOP 2.8.4 (protocol 12, pinned in `vendor/sloop-2.8.4/EDITOR_PROTOCOL.md`): LIVE (77) polled for the playhead, BK_LIST / BK_GET / BK_PUT (34–36) for projects and the song order, and SLOOP's screen link (`sloop/`: UI 90, UI_GOTO 91). Lupe became Skiff-only then (decision 43); an FM-1 on SLOOP now answers INFO with `FELUCCA SLOOP 2.8.4`, is treated as unknown firmware and offered Skiff-Lupe. The last SLOOP state is the tag `sloop-archive-2026-11-15`.
 
 The earlier custom protocol (`F0 7D 'F' 'I' ...`) is archived on the `slice-1-link` branch.

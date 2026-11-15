@@ -22,6 +22,8 @@ figma:
 
 # Connection states
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14):** the phones' No FM-1 screen. Decision 33 (vault `phone-skiff-decisions-2026-11-12.md`) picks the iPhone's card with the firmware versions and the demo button for both phones, its Skiff 2.2 text corrected to 2.5.1. Android replaces its `LinkPage` (title, line, Try again) with that card and a demo button that starts the fake core; the iPhone keeps `ConnectionState` with the corrected text (`phone-consolidation-build-plan-2026-11-14.md`, row "No FM-1"). Section 1 below is what's built until this closes.
 > - `[open]` Does Android keep its lost card (`LinkCard`, option A) beside the new page? Decision 33 names only the No FM-1 screen.
 > - `[open]` Does the iPhone get the held page and card (accessibility P15), or keep falling back to the full page on a loss?

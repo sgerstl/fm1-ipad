@@ -188,7 +188,9 @@ Nothing changes on the iPad's Mix.
 
 Motion: lost in 300 ms (page fade) and 250 ms (card down, ease-out); state blends 150 ms; picked up 200 ms (card up, ease-in) and 250 ms (page back). Reduce Motion: cross-fades only. Options B (a page of its own) and C (status in the top bar) are on the board.
 
-## SLOOP: the same tabs, its own song (2026-11-10, proposed: Scott to agree before merging)
+## SLOOP: the same tabs, its own song (2026-11-10; removed 2026-11-15)
+
+> **History.** Lupe became Skiff-only on 2026-11-15 (decision 43): this section and boards S1–S6 (`design/boards/sloop.py`) describe the SLOOP layout that went. The tag `sloop-archive-2026-11-15` holds the code; `design/archive/sloop.md` lists it.
 
 *From the SLOOP design pass (`qa/sloop-design-pass-2026-11-10/README.md`, boards S1 to S6). SLOOP-Lupe is SLOOP 2.8.4 plus Lupe's screen link. Until now it kept the pre-Skiff layout (Sequence · Shape · Arrange · Browse on the iPad and the phone). The aim: one product whichever firmware is on the FM-1. The tabs, the panels, the divider and the gestures are the same; what's inside the Song tab is SLOOP's own model, not Skiff's faked.*
 
@@ -263,4 +265,4 @@ Four exports (vault `export-plan.md`): the song as audio, a session as audio ("C
 
 A take in progress shows in one place (board 52): **1** the readout turns into the take's time, level and Stop (proposed); **2** a strip under the row; **3** a ring and the time on the FM-1 key. Capture never looks like the FM-1's REC: a level waveform and the word Capture, never a red dot.
 
-Files go to `Documents/Skiff/Exports` (and `SLOOP/Exports`), then the share sheet. The FM-1's buttons don't change.
+Files go to `Documents/Skiff/Exports`, then the share sheet. The FM-1's buttons don't change.

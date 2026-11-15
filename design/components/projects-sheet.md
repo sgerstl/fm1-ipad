@@ -20,6 +20,8 @@ figma:
 
 # Projects sheet
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14):** the phones. Decision 33 (vault `phone-skiff-decisions-2026-11-12.md`) gives both phones Android's four-slot sheet. Android keeps its sheet; the iPhone, which has none today, gets it new (`phone-consolidation-build-plan-2026-11-14.md`, row "Projects"). Android's sheet holds only the FM-1's four slots: the playing one marked, with Save; the others Load; an empty one Save here, its name typed in place; a ⋯ with Rename and "Save the playing project here". Every confirm is a red-outlined row in place. Section 1 below is the iPad's sheet, unchanged by this.
 > - `[open]` The phones get no projects kept on the phone and no safety copies. Intended, or only not yet decided?
 > - `[open]` The iPhone's way in: Android opens it from the FM-1 key's menu; the iPhone's ⋯ menu moves into Android's song-name menu (decision 33, App menu).

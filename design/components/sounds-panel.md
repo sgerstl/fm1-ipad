@@ -25,6 +25,8 @@ figma:
 
 # Sounds panel
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 *Not the sound panel (ENV, LFO…; `sound-panel.md`). This one picks which sound a track, pad or block plays. In code it's still `PresetsPanel` and `ui.presetsPanel`.*
 
 > **Under revision (2026-11-14):** on both phones the browser is Android's **sheet**, opened from the track head's hold menu and from SAVE on the FM-1. The iPhone's Sounds tab goes (decision 33, vault `phone-skiff-decisions-2026-11-12.md`; build plan `phone-consolidation-build-plan-2026-11-14.md`, row "Sounds"). On a drum track a pad's hold menu › Select sound overrides that one pad, marked (decision 15). Android's sheet as built: engines down the left, then User and its 32 slots; presets two to a row; a tap loads at once; Save puts the track's sound in a user slot, asking in place over a used one; Done or Back closes it (`SoundsBrowser.kt`). Section 1 below is the iPad's panel and today's iPhone.

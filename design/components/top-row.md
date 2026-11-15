@@ -25,6 +25,8 @@ figma:
 
 # Top row (iPad)
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 *The iPad's row above the pages on a Skiff FM-1. The phones' header is `phone-header.md`. SLOOP draws the same row with its own tools (`SloopTools`, `SloopStrip`); not covered here.*
 
 ## 1. Requirements

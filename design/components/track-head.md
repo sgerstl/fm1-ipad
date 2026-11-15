@@ -29,6 +29,8 @@ figma:
 
 # Track head
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14), phones only:** decisions 29 and 31 (vault `phone-skiff-decisions-2026-11-12.md`) make Android's head the keeper on both phones, and the iPhone's selected-row tint the keeper for selection. Build plan: vault `phone-consolidation-build-plan-2026-11-14.md`, rows "Track heads" and "Selected track". What changes:
 > - **iPhone:** `PhonePadHead` (number key and speaker) is replaced by Android's head: a colour block with the number, the sound's name, the engine under it, and a MUTE key with the word on it. A tap on the head selects the track and does nothing else; a hold opens the track's menu; a swipe up or down the MUTE column paints every key it crosses to the first key's new state (decision 29). Waiting mutes get the outline timer (the iPad's `LaunchTrace`).
 > - **Android:** keeps its head; adds the iPhone's selected-row tint, the track's muted colour under every square of the row (decision 31).

@@ -24,6 +24,8 @@ figma:
 
 # Phone header
 
+> **SLOOP removed (decision 43, 2026-11-15).** Lupe speaks Skiff only; lines below about SLOOP describe what it did until then (tag `sloop-archive-2026-11-15`, `design/archive/sloop.md`).
+
 > **Under revision (2026-11-14):** both phones get Android's header (decisions 23, 29 and 31 in the vault's `phone-skiff-decisions-2026-11-12.md`):
 > - the project as a word with ⌄ that opens the **song-name menu**, which also takes the iPhone's audio, demo and Developer items; the iPhone's ⋯ goes (decision 33);
 > - tabs **Pads · Edit · Timeline** as words with the gliding white underline, the selected track's outline travelling between them (decision 29; the build plan calls it "the track thread");

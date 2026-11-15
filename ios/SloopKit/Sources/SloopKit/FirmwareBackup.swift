@@ -5,8 +5,9 @@
 // What an install touches (from the sources, 2026-11-05): the loader writes only the app area [0x4000, 0x93000),
 // never the head nor the store [0x97000, 0xE0000) where projects, presets and samples live (Skiff ldr_core.c
 // FL_RANGE_OK and LDR_DATA_LO/HI; SLOOP's README: "SLOOP keeps projects, presets, samples and settings across
-// installs"). A switch between the two firmwares keeps the bytes but not their reading: Skiff converts SLOOP's FUN
-// projects on load (project.c proj_old_magic), SLOOP doesn't read Skiff's SKF projects (proj_ok wants FUN6), and the
+// installs"). A switch between the two firmwares keeps the bytes but not their reading: Skiff 2.x keeps SLOOP's FUN
+// projects as OLD FORMAT without converting them (project.c proj_old_magic, proj_old; its web converter, web/conv,
+// converts them on Restore; corrected 2026-11-15, Skiff 1.x converted on load), SLOOP doesn't read Skiff's SKF projects (proj_ok wants FUN6), and the
 // two keep the autosave and the FM6 patches in each other's sectors. So the backup covers every object the running
 // firmware lists: the projects, the music now, the settings, the presets, the samples (and Skiff's pattern bank).
 import Foundation

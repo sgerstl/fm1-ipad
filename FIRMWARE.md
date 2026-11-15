@@ -2,13 +2,15 @@
 
 Lupe installs the FM-1 firmware it speaks, so testers don't need a computer, and puts M-VAVE's stock firmware back. It installs exactly the files that were tested with the app, and refuses any file whose SHA-256 differs (`LupeFirmware` in `ios/SloopKit/Sources/SloopKit/FirmwarePackage.swift`).
 
-**Since 2026-11-08 the two GPL builds are named Skiff-Lupe and SLOOP-Lupe and aren't in the app.** Lupe downloads the chosen one from its GitHub release (`lupe-firmware-1`), checks the SHA-256 before anything else sees it, and keeps it in Application Support (`FirmwareStore.swift`). So an App Store or TestFlight build carries no GPL firmware. The files and their release notes live in `firmware/releases/`. Stock V15 (Apache-2.0) stays in the app, in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
+**Since 2026-11-15 Lupe speaks Skiff only (decision 43).** SLOOP-Lupe 2.8.4 is no longer offered, and an FM-1 on SLOOP no longer connects: Lupe recognises SLOOP's INFO and offers Skiff-Lupe instead. The last SLOOP state is the tag `sloop-archive-2026-11-15`; what was removed is listed in `design/archive/sloop.md`. The SLOOP-Lupe column and the SLOOP notes below stay as history.
+
+**Since 2026-11-08 the GPL builds (Skiff-Lupe; SLOOP-Lupe until 2026-11-15) aren't in the app.** Lupe downloads the chosen one from its GitHub release (`lupe-firmware-1`), checks the SHA-256 before anything else sees it, and keeps it in Application Support (`FirmwareStore.swift`). So an App Store or TestFlight build carries no GPL firmware. The files and their release notes live in `firmware/releases/`. Stock V15 (Apache-2.0) stays in the app, in `ios/SloopKit/Sources/SloopKit/Resources/Firmware/`.
 
 **Skiff-Lupe 2.5.1 is staged (2026-11-11), not yet tested on an FM-1:** `firmware/releases/Skiff-Lupe-2.5.1.fwsc`, 610,429 bytes, SHA-256 `80b21b33d05ccaa384636261e229eb94efdac847c93cc1f534d69082ff71302c`, identity `FM-1_725` (loader `ota-FM-1_725`), pinned as `LupeFirmware.skiff251`, to be released as `lupe-firmware-2`. See `firmware/releases/Skiff-Lupe-2.5.1.md`. Lupe speaks both 2.2 and 2.5.1.
 
-| | Skiff-Lupe 2.2 (Skiff 2.2 + screen link) | SLOOP-Lupe 2.8.4 (SLOOP 2.8.4 + screen link) | Stock V15 |
+| | Skiff-Lupe 2.2 (Skiff 2.2 + screen link) | SLOOP-Lupe 2.8.4 (SLOOP 2.8.4 + screen link; not offered since 2026-11-15) | Stock V15 |
 |---|---|---|---|
-| File | `firmware/releases/Skiff-Lupe-2.2.fwsc` (downloaded) | `firmware/releases/SLOOP-Lupe-2.8.4.fwsc` (downloaded) | `FM-1_015.fwsc` (in the app) |
+| File | `firmware/releases/Skiff-Lupe-2.2.fwsc` (downloaded) | `firmware/releases/SLOOP-Lupe-2.8.4.fwsc` (now a test fixture only) | `FM-1_015.fwsc` (in the app) |
 | Size | 610,429 bytes | 610,052 bytes | 699,956 bytes |
 | SHA-256 | `77d4bdff4b4452b4891b4a4fcbfd918e5b1c623a79c6cb399511fdb05d1c06e6` | `97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110` | `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a` |
 | Identity it reports | `FM-1_722` (its update loader: `ota-FM-1_722`) | `FM-1_900` (loader: `ota-FM-1_900`) | `FM-1_015` (M-VAVE's loader: `ota-FM-1_015`) |
@@ -22,7 +24,7 @@ Notes:
 
 - The Skiff file was built here from Skiff v2.2 plus Lupe's screen link patch (`skiff/README.md`: 131 lines in `editor.c`, SCREEN 90 with the page's cursor, SCREEN_GOTO 91, WATCH bit 2). Skiff's build isn't byte-for-byte reproducible, so the pin is this file's. Until 2026-11-05 Lupe carried stock 2.2 (`d0013c4f…8603`). An FM-1 on stock Skiff 2.2, or on an earlier screen-link build (`9d8eb232…acb71`, `56 01 01`, no cursor; `f11c90e3…f11e`, `56 01 02`, no METER), is offered this one as an update (same identity, `FM-1_722`; Lupe tells them apart by INFO's `56 01` tag). **Not installed on a real FM-1 yet.**
 - The V15 file's hash is the one Skiff pins for its own "return to official V15" (`STOCK_V15_SHA256` in Skiff's `tools/fm1_install.py` and `web/fm1pkg.js`). That is the same file the FM-1 Firmware Hub serves for "Back to official V15".
-- Stock SLOOP 2.8.4 also reports `FM-1_900`; the app tells the screen-link build apart by asking `UI` (cmd 90) after connecting.
+- (History) Stock SLOOP 2.8.4 also reports `FM-1_900`; until 2026-11-15 the app told the screen-link build apart by asking `UI` (cmd 90) after connecting. Now any `FELUCCA SLOOP` INFO is unknown firmware (`FirmwareDialect.isSLOOP`), offered Skiff-Lupe.
 - All three packages' flash.bin is 0x93000 bytes. Skiff's and SLOOP's pass Skiff's `files_ok` and SLOOP's `package_damage`. V15's extra entries (types 50, 52, 161, 251) store CRCs of something else, so for it only flash.bin and the loader are CRC-checked, as Skiff's `files_ok` does. Only the pinned V15 file is ever installed with M-VAVE's loader: any other package without a Felucca loader is refused.
 - M-VAVE's current download is V16 (`FM-1_016`, 718,196 bytes, sha256 `d017fb65…61d5`). Lupe doesn't carry it: Scott's FM-1 shipped with V15 and never ran V16, and V16's flash.bin (0xA9000) runs over the custom firmwares' project store.
 - Building Skiff on this Mac needs Python 3.12 with Pillow, fontTools and Homebrew's libraqm: `PYTHON=<a wrapper running uv run --python 3.12 --with pillow --with fonttools python> ./build.sh --release 2.2` (the system Python 3.9 fails in the font tools).
@@ -41,7 +43,7 @@ A port of Skiff's `tools/fm1_install.py` and `web/fm1ota.js` (`FirmwareInstaller
 2. **Step 2, the update loader** (USB name "Felucca Update") gets UPGRADE, reads the whole flash.bin once and checks its CRC, then writes the app area sector by sector (the app's header erased first and written last), asks 0xF0000000 and restarts.
 3. The new firmware's identity is checked against the package's.
 
-The device asks; Lupe only answers. Only MIDI ports whose names an FM-1 uses (SLOOP's filter: `fm-1|felucca|sloop|clipper|ota|composite|sinco|usb-midi`) are opened, and a port gets nothing but the identity question until it answers with an FM-1 identity. A write is only finished by the loader that belongs to the package: Skiff's or SLOOP's (`ota-FM-1_7xx`, `ota-FM-1_9xx`) for those, M-VAVE's (`ota-FM-1_015`) for V15 and nothing else.
+The device asks; Lupe only answers. Only MIDI ports whose names an FM-1 uses (SLOOP's filter: `fm-1|felucca|sloop|clipper|ota|composite|sinco|usb-midi`) are opened, and a port gets nothing but the identity question until it answers with an FM-1 identity. A write is only finished by the loader that belongs to the package: Skiff's (`ota-FM-1_7xx`; Felucca's and SLOOP's `ota-FM-1_9xx` too, where a cut-off install is finished) for those, M-VAVE's (`ota-FM-1_015`) for V15 and nothing else.
 
 **Stock V15 takes the same two steps**, through M-VAVE's own loader. From the sources:
 
@@ -56,7 +58,7 @@ The device asks; Lupe only answers. Only MIDI ports whose names an FM-1 uses (SL
 
 **Cut off?** The update record stays, so the FM-1 comes back as the loader at every power-on until a write finishes, and writing again is safe. Lupe waits up to two minutes for the loader to return and resumes, up to five tries; after that, running the install again finishes it.
 
-**What survives an install** (from the sources): Skiff's and SLOOP's loaders write only the app area 0x4000–0x93000, never the store at 0x97000–0xE0000 where projects, presets and samples live. Switching firmware keeps those bytes but not always their meaning. Skiff converts SLOOP's projects when it loads them, and SLOOP doesn't read Skiff's. The two also keep the autosave and the FM6 patches in each other's sectors, and use 0xE7000–0xFBFFF differently (Skiff's pattern bank, SLOOP's 80 KiB sample slot). So Lupe backs up everything the running firmware lists before it writes (`FirmwareBackup.swift`), as `sloop-backup` or `felucca-backup` JSON that the firmware's own web editor restores.
+**What survives an install** (from the sources): Skiff's and SLOOP's loaders write only the app area 0x4000–0x93000, never the store at 0x97000–0xE0000 where projects, presets and samples live. Switching firmware keeps those bytes but not always their meaning. **Corrected 2026-11-15 from Skiff's sources (`~/code/skiff-src` at `b5a0686`):** Skiff 2.x does *not* convert SLOOP's projects when it loads them. A project slot of an earlier format (FUN1–FUN9, so SLOOP's FUN6) keeps its bytes and shows OLD FORMAT (`project.c` `proj_old`, `proj_old_magic`); the old readers are built only with `FELUCCA_LEGACY`, which 2.x leaves off (`core.h`). Skiff's web converter (`web/conv`, the Skiff Editor's Restore of a backup, or Skiff's installer page) converts them; `fm1_install.py`, and so Lupe's installer, converts nothing (Skiff's README, "Updating to 2.0"). The earlier line here ("Skiff converts SLOOP's projects when it loads them") held for Skiff 1.x. SLOOP doesn't read Skiff's projects. The two also keep the autosave and the FM6 patches in each other's sectors, and use 0xE7000–0xFBFFF differently (Skiff's pattern bank, SLOOP's 80 KiB sample slot). So Lupe backs up everything the running firmware lists before it writes (`FirmwareBackup.swift`), as `felucca-backup` JSON that Skiff's web editor restores. Since Lupe no longer connects to SLOOP, it takes no backup before installing over SLOOP: the offer says to save one in SLOOP's own web editor first.
 
 ## Going through stock V15 between custom firmwares: not offered
 
@@ -73,7 +75,7 @@ So Lupe doesn't offer "install through stock V15". It switches directly, after a
 
 ## New FM-1s on stock V16 (checked 2026-11-05)
 
-M-VAVE released V16 on 2026-10-21, and new units likely ship with it. Can Lupe's first run take one to Skiff or SLOOP? Labels as above.
+M-VAVE released V16 on 2026-10-21, and new units likely ship with it. Can Lupe's first run take one to Skiff (or, until 2026-11-15, SLOOP)? Labels as above.
 
 - **V16 still takes a custom firmware's loader in step 1.**
   - *Emerging:* an FM-1 that shipped with V16 got Skiff, then went Skiff → V16 → Skiff 2.0.2 "smoothly" (Skiff #64, the maintainer confirming). SLOOP #203 says people install over V16. On a stock V16 unit, SLOOP's loader did appear before failing (SLOOP #239).
@@ -87,22 +89,20 @@ M-VAVE released V16 on 2026-10-21, and new units likely ship with it. Can Lupe's
   - *Speculative:* that a V16 unit has the new chip. They arrived about the same time ("sold from late 2026"), but nothing ties the two.
 - **Routes from V16:**
   - Skiff 2.2 directly. That's what Lupe offers.
-  - SLOOP via Skiff: Skiff first, then SLOOP 2.8.5 or later, which Lupe doesn't carry yet. Lupe's screen-link SLOOP is built on 2.8.4.
   - Stock V15: none. A V16 unit's head isn't V15's (above).
   - Its way back to stock is V16, with M-VAVE's M-UPGRADE, or Skiff's own installer since 2.0.2.
 - **What Lupe does.** When the update ports say the FM-1 runs stock V16 or later:
   - the offer says Lupe can install Skiff 2.2
-  - the picker shows SLOOP and Stock V15 as unavailable, each with its reason
-  - `FirmwareInstaller.refusal(for:running:)` refuses SLOOP (`.flashChip`) and V15 (`.otherStock`) before anything but the handshake is sent
+  - the picker shows Stock V15 as unavailable, with its reason
+  - `FirmwareInstaller.refusal(for:running:)` refuses V15 (`.otherStock`) before anything but the handshake is sent
 
-  The chip can't be read over USB-MIDI, so a new unit already running Skiff isn't caught up front. There, SLOOP's loader turning it down is caught when the FM-1 comes back on its old firmware after at most three reads. Lupe says nothing was written and why, instead of waiting two minutes for a loader that won't return.
-- **Follow-up:** rebuild the screen-link SLOOP on 2.8.5 so new units can run SLOOP too. Then the V16 refusal for SLOOP can go.
+  (Until 2026-11-15 it also refused SLOOP-Lupe 2.8.4 there, `.flashChip`: SLOOP 2.8.4's loader doesn't know the newer chip.) A loader that turns a unit down after its first reads (at most three) is still caught when the FM-1 comes back on its old firmware: Lupe says nothing was written and why, instead of waiting two minutes for a loader that won't return.
 
 ## Tested
 
 Offline, `swift test` in `ios/SloopKit` (FirmwareInstallTests, FirmwareStockTests, FirmwareBackupTests) against `FakeFM1`. The fake plays both steps as Skiff's `ota.c` and `ldr_core.c` do, plus ota.c's official branch and M-VAVE's loader as Skiff's tests play it. Covered:
 
-- Full installs: SLOOP to Skiff, Skiff to SLOOP, stock to Skiff, Skiff and SLOOP to V15, and V15 → Skiff → V15 → SLOOP.
+- Full installs: SLOOP to Skiff, stock to Skiff, Skiff and SLOOP to V15, and V15 → Skiff → V15 (the SLOOP package is a test fixture: an FM-1 can still run SLOOP; the installer is still tested putting it on, as a package of another firmware).
 - Cable cuts: at 12 points of the custom write and 10 of the V15 write, and at 4 points of each check.
 - Repeated cuts, and a cut left unplugged, then finished from Skiff's or M-VAVE's loader.
 - Stalled loaders, and a loader that never appears.
@@ -110,7 +110,7 @@ Offline, `swift test` in `ios/SloopKit` (FirmwareInstallTests, FirmwareStockTest
 - Other gear on the MIDI setup.
 - Mismatched update modes: Skiff's update mode refuses V15, and M-VAVE's refuses Skiff.
 - A unit with V16's head refuses V15, and so does a unit running stock V16.
-- A new unit on stock V16 with the newer chip takes Skiff, and refuses SLOOP and V15 up front. On such a unit running Skiff, SLOOP 2.8.4's loader turns it down after 3 reads, and Lupe says so at once.
+- A new unit on stock V16 with the newer chip takes Skiff, and refuses V15 up front. On such a unit running Skiff, a loader that doesn't know the chip (SLOOP 2.8.4's, in the fake) turns it down after 3 reads, and Lupe says so at once.
 - A wrong identity after the write, and cancel.
 
 What the fake doesn't do: the chip-key check (it does play SLOOP 2.8.4's flash-chip refusal), and anything M-VAVE's loader may do beyond flash.bin.
