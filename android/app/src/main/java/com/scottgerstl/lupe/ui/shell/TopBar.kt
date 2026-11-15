@@ -78,6 +78,12 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too
                 val poolNow by core.patterns.collectAsStateWithLifecycle()
                 MenuRow("Patterns…", { menu = null; sheets.showPatterns() }, sub = if (poolNow.kept > 0) "${poolNow.kept} kept · ${poolNow.unused} unused" else "The FM-1's 64 pattern numbers")
+                // Play through the phone (as the iPhone's "Play through the iPhone"): the FM-1's USB audio to the phone's output
+                com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { through ->
+                    MenuDivider()
+                    MenuRow("Play through the phone", { menu = null; through.choose(!through.enabled) }, checked = through.enabled,
+                        sub = if (through.enabled) through.summary else "The FM-1's sound on the phone's speaker or headphones")
+                }
                 val demo = LocalDemo.current
                 if (demo.inDemo) { MenuDivider(); MenuRow("Leave the demo", { menu = null; demo.leave() }, sub = "Back to looking for your FM-1") }
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }

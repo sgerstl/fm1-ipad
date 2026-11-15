@@ -6,11 +6,13 @@ import Foundation
 /// Since 2026-11-08 the GPL builds with Lupe's screen link (Skiff-Lupe) aren't in the app: they're downloaded from Lupe's GitHub releases when chosen (FirmwareStore), so an App Store or TestFlight build
 /// carries no GPL firmware. M-VAVE's stock V15 (Apache-2.0) stays in the app, the way back that needs no internet.
 public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
-    /// Skiff 2.5.1 with Lupe's screen link, rebased (skiff-src branch lupe-skiff-2.5.1-screen-link, 737e3fb). Staged
-    /// 2026-11-11, not yet on a device: its GitHub release (`release`) is made when Scott accepts it.
+    /// Skiff 2.5.1 with Lupe's screen link, rebased, and steady 48 kHz USB audio (B1) (skiff-src branch
+    /// lupe-skiff-2.5.1-screen-link, 72d4170). This exact file ran on Scott's FM-1 on 2026-11-15 (the Mac, the Pixel 7
+    /// and the Pixel 10: no dropouts). Its GitHub release (`release`) is made when Scott accepts it.
     case skiff251 = "Skiff-Lupe-2.5.1"
-    /// Skiff-Lupe 2.5.1 with the screen link's v7 (skiff-src branch lupe-skiff-2.5.1-freetake, 5e10a37): FREE TAKE
-    /// from the iPad (TAKE 94) and UNDO (95), INFO `56 01 07`. Staged 2026-11-11, not on a device yet; its own release.
+    /// Skiff-Lupe 2.5.1 with the screen link's v7 and B1 (skiff-src branch lupe-skiff-2.5.1-freetake, 6926117): FREE
+    /// TAKE from the iPad (TAKE 94) and UNDO (95), INFO `56 01 07`. Rebuilt with B1 2026-11-15, not on a device yet;
+    /// its own release.
     case skiff251Take = "Skiff-Lupe-2.5.1-take"
     /// Skiff 2.2 with Lupe's screen link patch (skiff/README.md).
     case skiff = "Skiff-Lupe-2.2"
@@ -54,8 +56,8 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
     }
     public var sha256: String {
         switch self {
-        case .skiff251: "80b21b33d05ccaa384636261e229eb94efdac847c93cc1f534d69082ff71302c"
-        case .skiff251Take: "3266e2b6247f8452b209a1ed4b1d8f08b8b31db9b37de838d1c885a2727aa689"
+        case .skiff251: "2cb940c71557049ba3c46f11d35311b1e69e81d1f9348d9e0b906ec82847383b"
+        case .skiff251Take: "c44cad2d5242776358ced78ab062c33149ece3eedd7b2e77b41f40fa2f8a7d8f"
         case .skiff: "77d4bdff4b4452b4891b4a4fcbfd918e5b1c623a79c6cb399511fdb05d1c06e6"
         case .stock: "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a"
         }
@@ -70,8 +72,8 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
     /// Where its source is offered (GPL-3.0), or where the file comes from (V15: Apache-2.0, no source).
     public var source: String {
         switch self {
-        case .skiff251: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-screen-link (Skiff v2.5.1 plus the screen link; tag lupe-skiff-2.5.1-screen-link.1 once accepted)"
-        case .skiff251Take: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-freetake (Skiff v2.5.1 plus the screen link v7; not pushed yet)"
+        case .skiff251: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-screen-link at 72d4170 (Skiff v2.5.1 plus the screen link and steady USB audio; tag lupe-skiff-2.5.1-screen-link.1 once accepted; not pushed yet)"
+        case .skiff251Take: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-freetake at 6926117 (Skiff v2.5.1 plus the screen link v7 and steady USB audio; not pushed yet)"
         case .skiff: "github.com/sgerstl/skiff, tag lupe-skiff-2.2-screen-link.6 (Skiff v2.2 plus skiff/0001-screen-link.patch in Lupe's repository)"
         case .stock: "github.com/m-vave/fm1_open, sdk/firmware/FM-1_015.fwsc (Apache-2.0)"
         }

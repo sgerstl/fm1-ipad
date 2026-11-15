@@ -173,6 +173,7 @@ Motion follows `DESIGN.md`. Particular to the panel:
 - 2026-11-08: flush to the screen edge when no rail is on the right (Scott: "anchored to the side of the screen, no gap").
 - 2026-11-14: phones take the iPad's panel rule, Settings › Sound keys (decision 32).
 - 2026-11-14: phones show the picture under the dials with Settings › Show graphics (decision 30, partly reversing 25).
+- 2026-11-15: Android's pictures are drawn by Skiff's own code (SkiffDraw, `ios/SkiffDraw`) for GLO's four, FX › DELAY and REVERB, ENV, LFO, and EDIT (OSC, FLT, FM6, the SKIFF scope's sea), only when the FM-1 runs the Skiff-Lupe 2.5.1 build it was copied from; elsewhere the hand-drawn ones. GLO's in the panel's grey ink with white kept (decision 34), track pages in the FM-1's own colours. iOS keeps its hand-drawn pictures until Skiff's authors allow the App Store (Scott, decision 46; verdict `qa/scope-spike-2026-11-15.md`).
 
 ## 3. Build notes
 

@@ -25,6 +25,8 @@ class LupeApp : Application() {
     var inDemo by androidx.compose.runtime.mutableStateOf(false)
         private set
     private var scenarios: Map<String, Scenario> = emptyMap()
+    /** Play through the phone (the FM-1's USB audio to the phone's output). One for the app: it outlives the Activity. */
+    val through by lazy { com.scottgerstl.lupe.audio.AudioThrough(this, getSharedPreferences("audio", MODE_PRIVATE)) }
 
     /** The no-FM-1 card's "Use the demo FM-1" (decision 33): the fake core takes the screen. The real one keeps looking for the FM-1 behind it. */
     fun useDemo() { if (inDemo || core is FakeLupeCore) return; started = core; core = FakeLupeCore(scope, scenarios); inDemo = true }

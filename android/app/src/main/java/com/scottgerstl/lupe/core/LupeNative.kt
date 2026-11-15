@@ -11,6 +11,8 @@ import android.os.Looper
  */
 object LupeNative {
     @Volatile private var loaded = false
+    /** Whether libLupeNative.so is loaded (false in unit tests and previews). */
+    val isLoaded: Boolean get() = loaded
     /** Where Swift's frames go: the app's one FM1Link. */
     @Volatile var link: FM1Link? = null
     /** ViewState areas from Swift (gate 5). */
@@ -43,6 +45,9 @@ object LupeNative {
     @JvmStatic external fun requestVersion()
     /** Debug: gate 2's main-actor hop, inside the app; the result arrives in [LinkLog]. */
     @JvmStatic external fun mainActorCheck()
+    /** Decision 46: the FM-1's picture for the sound panel's page (Lupe's number), drawn by Skiff's own code; null: draw the app's own.
+     *  8 bytes (width, height u16 LE; animated; draw µs u16 LE; 0), then RGBA. GLO's shared pages in [gloInk], the FM-1's panel surface as [surface] (0xRRGGBB). */
+    @JvmStatic external fun skiffPicture(page: Int, gloInk: Int, surface: Int): ByteArray?
 
     // Swift → Kotlin (looked up by name in JNI_OnLoad; keep the signatures)
     @JvmStatic fun send(frame: ByteArray) { link?.send(frame) }

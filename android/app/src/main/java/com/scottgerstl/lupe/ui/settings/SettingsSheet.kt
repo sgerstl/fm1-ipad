@@ -83,6 +83,8 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         )
         Plain("Theme", "Follows the FM-1 (SKIFF)")
 
+        com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { AudioSection(it) }
+
         Section("Touch")
         Text2("Slide to turn", "Which way a finger slides a value. Up and right raise it.")
         Segmented(
@@ -127,6 +129,28 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · SIDE HOT DISTANCE", "${phone.wellSideHotDp} dp", phone.wellSideHotDp / 4, 8, 48, "How near the dragged pad comes before Edit or Duplicate is hot and a drop there acts", stepDp = 8f, revertTo = 24) { phone.chooseWellSideHot(it * 4) }
         SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
         SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
+    }
+}
+
+/**
+ * Audio: Play through the phone (the iPhone's "Play through the iPhone"). While it plays: where the sound goes, the phone's
+ * share of the delay, what Bluetooth adds, and one technical line for the device check.
+ */
+@Composable
+private fun AudioSection(through: com.scottgerstl.lupe.audio.AudioThrough) {
+    Section("Audio")
+    SwitchRow("Play through the phone", "The FM-1's sound on the phone's speaker or headphones, over the USB cable", through.enabled) { through.choose(it) }
+    if (!through.enabled) return
+    val state = through.state
+    com.scottgerstl.lupe.audio.ThroughModel.action(state)?.let { Plain("Needs a hand", it) }
+    if (state is com.scottgerstl.lupe.audio.ThroughState.Playing) {
+        Plain("Output", state.output)
+        val ms = com.scottgerstl.lupe.audio.ThroughModel.latencyText(through.stats)
+        Plain("Delay", if (ms == null) "Measuring…" else "$ms on the phone, from the USB cable to the output")
+        com.scottgerstl.lupe.audio.ThroughModel.bluetoothNote(state.kind)?.let { Text2("Bluetooth", it) }
+        Plain("Details", com.scottgerstl.lupe.audio.ThroughModel.details(through.stats))
+    } else if (state == com.scottgerstl.lupe.audio.ThroughState.Starting) {
+        Plain("Output", "Starting…")
     }
 }
 

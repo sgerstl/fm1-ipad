@@ -7,6 +7,8 @@ options:
 packages:
   SloopKit:
     path: SloopKit
+  SkiffDraw:                                   # decision 45's spike (2026-11-15): Skiff's own drawing code
+    path: SkiffDraw
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -26,6 +28,8 @@ targets:
         excludes: [LaunchScreen-Info.plist]     # merged into the Info.plist, not a resource
     dependencies:
       - package: SloopKit
+      - package: SkiffDraw
+        products: [SkiffDraw, SkiffDrawLink]
     postBuildScripts:
       # Debug only: copy the release firmware into the app so the installer works on a device without a GitHub
       # release (the repo is private, downloads 404). Release builds download as before. Added 2026-11-11.

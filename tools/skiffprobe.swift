@@ -1,5 +1,5 @@
 // skiffprobe: talk to Skiff's editor protocol (Felucca's numbering, F0 7D 46 4C cmd ... F7), on an FM-1 or skiff-sim.
-// usage: skiffprobe info | desc | clock <secs> | seed | playhead [secs] [scenario...]
+// usage: skiffprobe info | desc | clock <secs> | seed | playhead [secs] [scenario...] | scope [secs]
 // Finds the port by name (skiff-sim's first, then "Felucca"), so other MIDI devices can stay plugged in.
 import CoreMIDI
 import Foundation
@@ -15,10 +15,11 @@ var partial: [UInt8] = []
 var replies: [UInt8: [UInt8]] = [:]
 let got = DispatchSemaphore(value: 0)
 var waitingFor: UInt8 = 0xFF
-let pushes: Set<UInt8> = [23, 24, 26, 32]
+let pushes: Set<UInt8> = [23, 24, 26, 32, 90, 92, 93]
 var onPush: (([UInt8]) -> Void)? = nil
 var onOther: ((UInt8, UInt8, UInt8) -> Void)? = nil    // status, d1, d2 (realtime: status only)
 var onTruth: (([UInt8]) -> Void)? = nil                 // skiff-sim --truth (test-only): each track's playing step
+var rxBytes = 0, rxByCmd: [UInt8: (n: Int, bytes: Int)] = [:]   // scope mode: what arrives, all and per command
 var pktTime: UInt64 = 0                                 // the packet being read: its mach time (the sender's stamp)
 
 func frame(_ bytes: [UInt8]) {
@@ -29,6 +30,7 @@ func frame(_ bytes: [UInt8]) {
         print("RX other sysex", hex(bytes)); return
     }
     let cmd = bytes[4], body = Array(bytes[5..<(bytes.count - 1)])
+    lock.lock(); let c = rxByCmd[cmd] ?? (0, 0); rxByCmd[cmd] = (c.n + 1, c.bytes + bytes.count); lock.unlock()
     if pushes.contains(cmd) { onPush?([cmd] + body); return }
     lock.lock(); replies[cmd] = body; let w = waitingFor; lock.unlock()
     if cmd == w { got.signal() }
@@ -38,6 +40,7 @@ var running: [UInt8] = []
 MIDIInputPortCreateWithBlock(client, "in" as CFString, &inp) { list, _ in
     for packet in list.unsafeSequence() {
         let len = Int(packet.pointee.length)
+        rxBytes += len
         pktTime = packet.pointee.timeStamp != 0 ? packet.pointee.timeStamp : mach_absolute_time()
         let raw = UnsafeRawPointer(packet) + MemoryLayout<MIDIPacket>.offset(of: \MIDIPacket.data)!
         for b in UnsafeRawBufferPointer(start: raw, count: len) {
@@ -475,6 +478,45 @@ case "playhead":
     _ = transport(2)
     setG(1, 0)
 
+case "scope":
+    // (decision 45's spike) SCOPE's link load: with the pushes on (WATCH steps, parameters, screen, METER) and playing,
+    // GET round trips and what arrives a second, first without SCOPE, then with it (WATCH bit 4).
+    //   skiffprobe scope [secs per phase]
+    let secs = args.count > 2 ? Double(args[2]) ?? 8 : 8
+    guard let info = readInfo() else { print("no INFO"); exit(1) }
+    let link = info.tags.first(where: { $0.0 == 0x56 })?.1.first ?? 0
+    print("\(info.version), screen link \(link)")
+    for i in 0..<16 {
+        let step: [UInt8] = i % 2 == 0 ? [1, UInt8(48 + i), 0, 0, 0, 0, 0, 100] : [0, 0, 0, 0, 0, 2, 0, 100]
+        _ = request(30, [0, UInt8(i)] + step)
+    }
+    _ = request(76, [1])                                     // TRANSPORT: play
+    func phase(_ name: String, _ bits: UInt8) {
+        _ = request(22, [bits])                              // WATCH
+        Thread.sleep(forTimeInterval: 0.5)
+        lock.lock(); rxBytes = 0; rxByCmd = [:]; lock.unlock()
+        var rtt: [Double] = [], lost = 0
+        let t0 = Date()
+        while Date().timeIntervalSince(t0) < secs {
+            let a = Date()
+            if request(2, [1, 0], timeout: 0.5) != nil { rtt.append(Date().timeIntervalSince(a) * 1000) } else { lost += 1 }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        let dt = Date().timeIntervalSince(t0)
+        lock.lock(); let all = rxBytes, by = rxByCmd; lock.unlock()
+        rtt.sort()
+        let p = { (q: Double) in rtt.isEmpty ? 0 : rtt[min(rtt.count - 1, Int(Double(rtt.count) * q))] }
+        let sc = by[93] ?? (0, 0), me = by[92] ?? (0, 0)
+        print(String(format: "%@: in %.0f B/s (MIDI bytes); SCOPE %.1f/s, %.0f B/s, %d B a frame; METER %.1f/s; GET round trip median %.1f ms, 95%% %.1f ms, max %.1f ms (%d of %d lost)",
+                     name, Double(all) / dt, Double(sc.n) / dt, Double(sc.bytes) / dt, sc.n > 0 ? sc.bytes / sc.n : 0,
+                     Double(me.n) / dt, p(0.5), p(0.95), rtt.last ?? 0, lost, rtt.count + lost))
+    }
+    phase("without SCOPE", 15)
+    phase("with SCOPE   ", 31)
+    phase("without SCOPE", 15)
+    _ = request(22, [3])
+    _ = request(76, [2])                                     // stop
+
 default:
-    print("usage: skiffprobe info | desc | clock <secs> | seed | playhead [secs] [scenario...]")
+    print("usage: skiffprobe info | desc | clock <secs> | seed | playhead [secs] [scenario...] | scope [secs]")
 }

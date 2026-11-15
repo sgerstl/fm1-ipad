@@ -29,6 +29,10 @@ import com.scottgerstl.lupe.ui.theme.LupeTheme
 
 class MainActivity : ComponentActivity() {
     private var reduceMotion by mutableStateOf(false)
+    // Play through the phone: Android asks for the microphone (the FM-1's USB audio counts as one)
+    private val askMic = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {
+        (application as LupeApp).through.permissionResult()
+    }
     private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { reduceMotion = readReduceMotion() }
     }
@@ -65,6 +69,13 @@ class MainActivity : ComponentActivity() {
         if (intent.hasExtra("magnifier")) slide.chooseMagnifier(intent.getBooleanExtra("magnifier", true))
 
         val phone = PhoneSettings.from(this)
+        // Play through the phone (the song-name menu and Settings). adb, for the device check and the emulator:
+        //   --ez through true|false · --ei throughRate 0|44100|48000 (0: the input's own) · --ez throughExclusiveIn true|false (default false) --ez throughExclusiveOut true|false (default true)
+        //   --ez throughConceal true|false (default true) · --ei throughCapture 10 (seconds of raw input to a WAV in the app's files)
+        //   --ez throughAnyInput true (the default input when no FM-1 is there: the emulator; never on a phone with its speaker on)
+        val through = app.through
+        through.requestPermission = { askMic.launch(android.Manifest.permission.RECORD_AUDIO) }
+        applyThroughExtras(intent, cold = true)
         // The launch intro (ui/intro): a cold start only (not a rotation or a restore), and not for adb launches that ask for a scenario, so screenshot scripts
         // don't wait for it. adb: --ez intro false skips it; --ef introAt 1.2 holds it at 1.2 s (to compare frames with the iPhone's -intro-at).
         val introWanted = savedInstanceState == null && !intent.hasExtra("scenario") && intent.getBooleanExtra("intro", true)
@@ -76,7 +87,7 @@ class MainActivity : ComponentActivity() {
                 // the core on screen: the one that looks for the FM-1, or the demo once the no-FM-1 card's button starts it (decision 33)
                 val shown = app.core
                 val demo = com.scottgerstl.lupe.ui.shell.DemoControl(canStart = shown !is FakeLupeCore, inDemo = app.inDemo, start = { app.useDemo() }, leave = { app.leaveDemo() })
-                CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone, com.scottgerstl.lupe.ui.page.LocalPictureCore provides shown, com.scottgerstl.lupe.ui.shell.LocalDemo provides demo) {
+                CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone, com.scottgerstl.lupe.audio.LocalAudioThrough provides through, com.scottgerstl.lupe.ui.page.LocalPictureCore provides shown, com.scottgerstl.lupe.ui.shell.LocalDemo provides demo) {
                     var intro by rememberSaveable { mutableStateOf(introWanted) }
                     Box(Modifier.fillMaxSize()) {
                         GatedHaptics(phone) { androidx.compose.runtime.key(shown) { LupeShell(shown) } }
@@ -86,6 +97,29 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /** Play through the phone's adb extras, on a cold start and on onNewIntent (a running app): see onCreate. */
+    private fun applyThroughExtras(i: android.content.Intent, cold: Boolean) {
+        val through = (application as LupeApp).through
+        var changed = false
+        if (i.hasExtra("throughRate")) { through.testRate = i.getIntExtra("throughRate", 0); changed = true }
+        if (i.hasExtra("throughExclusiveIn")) { through.testExclusiveIn = i.getBooleanExtra("throughExclusiveIn", false); changed = true }
+        if (i.hasExtra("throughExclusiveOut")) { through.testExclusiveOut = i.getBooleanExtra("throughExclusiveOut", true); changed = true }
+        if (i.hasExtra("throughAnyInput")) { through.testAnyInput = i.getBooleanExtra("throughAnyInput", false); changed = true }
+        if (i.hasExtra("throughConceal")) { through.testConceal = i.getBooleanExtra("throughConceal", true); changed = true }
+        if (i.hasExtra("throughCapture")) through.testCapture = i.getIntExtra("throughCapture", 10)   // no restart: it records from now
+        if (i.hasExtra("through")) through.choose(i.getBooleanExtra("through", false))
+        if (changed && !cold) through.restartForSettings()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyThroughExtras(intent, cold = false)
+    }
+
+    override fun onStart() { super.onStart(); (application as LupeApp).through.foreground(true) }
+    override fun onStop() { (application as LupeApp).through.foreground(false); super.onStop() }
 
     override fun onDestroy() {
         contentResolver.unregisterContentObserver(observer)

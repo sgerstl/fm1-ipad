@@ -1,0 +1,2 @@
+Skiff-Lupe 2.5.1, github.com/sgerstl/skiff lupe-skiff-2.5.1-screen-link 737e3fb (upstream Skiff by illuminus5 / Hugelton, GPL-3.0-only).
+firmware/src, firmware/hal, tests/ui_test.c, tests/hostsim.c, tests/*.h: untouched copies. gen/: build.py generate() output at that commit.
