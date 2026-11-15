@@ -111,7 +111,7 @@ struct PhonePatternsSheet: View {
         let here = uses(p)
         let isUnused = unused(p)
         let firstColour = here.first.map { Theme.track[$0.0] } ?? Theme.textTertiary
-        let saved = (pool[safe: p]?.uses ?? 0) > here.count       // saved projects name it too
+        let saved = (pool[safe: p]?.uses ?? 0) > localRefs(p, here: here)       // saved projects name it too
         let sel = picked.contains(p)
         let dim = selecting && !isUnused
         return Button { tap(p, isUnused: isUnused, here: here) } label: {
@@ -173,6 +173,16 @@ struct PhonePatternsSheet: View {
         .accessibilityLabel(spoken(p, here: here, isUnused: isUnused, saved: saved))
         .accessibilityAddTraits(sel ? .isSelected : [])
         .accessibilityHint(picking != nil ? "Puts it on the pad" : selecting ? (isUnused ? "Picks it to clear" : "Used: can't be cleared") : "")
+    }
+
+    /// What this project's own state accounts for in the FM-1's use count (P1's rule, bank.c pool_refs minus LIST): the
+    /// entries naming it, plus each track on it whose own entry doesn't name it. More than that: saved projects too.
+    private func localRefs(_ p: Int, here: [(Int, Int)]) -> Int {
+        guard let song = store.song else { return here.count }
+        let tracksOn = song.tracks.filter { l in
+            l.patternOn == p && (l.entryOn.flatMap { l.entries[safe: $0]?.poolIndex } != p)
+        }.count
+        return here.count + tracksOn
     }
 
     /// "T2 A · T4 C": each use's track number in its colour, the entry's letter in grey.
@@ -287,13 +297,23 @@ extension PadThumb {
     /// The Patterns sheet's sketches (board 79): while stopped only, every kept pattern without a current drawing, read
     /// from the FM-1's pool (reading stops playback, so never while playing). Cached in the session's drawings.
     @MainActor static func forSheet(_ session: DeviceSession, _ store: SkiffSongStore, _ ui: EditorUI) async {
-        // the patterns the tracks are on now draw from their live steps first (no read)
+        // the patterns the tracks are on now draw from their live steps first (no read), and are never replaced by the
+        // stored copy (an edit can still be on its way to flash)
         learn(session, store, ui)
-        guard !session.playing, !store.offline, let pool = store.pool?.patterns, pool.count == 64 else { return }
-        let missing = (0..<64).filter { pool[$0].length > 0 && ui.padThumbs[$0]?.length != pool[$0].length }
+        // P1's rules (as the iPad's PadThumb.fromPool): never while playing, nor while the store is busy; 3 s quiet after
+        // a stop or a change first (the first read on a connection sends BACKUP_LIST, which writes to flash)
+        while true {
+            guard !session.playing, !store.offline, !Task.isCancelled else { return }
+            let quiet = Date().timeIntervalSince(max(session.stoppedAt, store.lastChange))
+            if quiet >= 3, !store.busy { break }
+            try? await Task.sleep(for: .milliseconds(max(200, Int((3 - quiet) * 1000))))
+        }
+        guard let pool = store.pool?.patterns, pool.count == 64 else { return }
+        let live = Set(session.trackIndices.compactMap { store.song?.tracks[safe: $0]?.patternOn })
+        let missing = (0..<64).filter { pool[$0].length > 0 && !live.contains($0) && ui.padThumbs[$0]?.length != pool[$0].length }
         let chunks = Array(Set(missing.map { $0 / 4 })).sorted()
         guard !chunks.isEmpty, let recs = await session.readSkiffPool(chunks: chunks) else { return }
-        for (p, r) in recs where ui.padThumbs[p]?.length != pool[safe: p]?.length {
+        for (p, r) in recs where !live.contains(p) && ui.padThumbs[p]?.length != pool[safe: p]?.length {
             if let s = SkiffPatternSketch(record: r) { var th = of(s); th.direction = s.direction; th.motion = s.motion; ui.padThumbs[p] = th }
         }
     }
