@@ -1,21 +1,30 @@
+import SloopKit
 import SwiftUI
 
-// Edge action wells for a dragged pad (board 81, tile 81.4; Scott's pick 2026-11-15; batch item 12): while a held pad is
+// Edge action wells for a dragged pad (board 81, tile 81.4; Scott's pick 2026-11-15; batch item 12; layout decision 41): while a held pad is
 // lifted into a drag, three wells sit flush on the screen's edges, square on the edge side and rounded 12 inside, 1.5 pt
 // dashes on the three inner sides, resting as dark glass (black 62 % over a 12 pt blur of what's behind). Bottom Clear,
-// right Edit, left Duplicate; the top is free. Each slides in from its own edge as the pad lifts (Labs › Wells: slide,
+// right Edit, left Duplicate. Decision 41: Cancel at the bottom; the top split between Clear steps and Delete pattern. Each slides in from its own edge as the pad lifts (Labs › Wells: slide,
 // staggered 30 ms: bottom, left, right) and back out faster on the drop. As the pad's centre nears a well a glow builds
 // on it in the track colour (red for Clear), growing with closeness (Labs › Wells: glow distance); closer still it goes
 // hot (Labs › Wells: hot distance): solid fill, solid border, dark label, a light tick, the lifted pad tilting toward it.
 // Reduce Motion: fades, no slides. VoiceOver keeps the hold menu. iPhone and iPad.
 
 enum EdgeAction: CaseIterable, Equatable {
-    case clear, edit, duplicate
-    var title: String { switch self { case .clear: "Clear"; case .edit: "Edit"; case .duplicate: "Duplicate" } }
-    var icon: String { switch self { case .clear: "trash"; case .edit: "pencil"; case .duplicate: "plus.square.on.square" } }
-    var edge: Edge { switch self { case .clear: .bottom; case .edit: .trailing; case .duplicate: .leading } }
-    /// The order they slide in (bottom, left, right).
-    var stagger: Double { switch self { case .clear: 0; case .duplicate: 0.03; case .edit: 0.06 } }
+    // decision 41 (Scott, 2026-11-15): Cancel at the bottom, Clear steps and Delete pattern sharing the top, Edit right,
+    // Duplicate left
+    case cancel, clearSteps, delete, edit, duplicate
+    var title: String {
+        switch self { case .cancel: "Cancel"; case .clearSteps: "Clear steps"; case .delete: "Delete pattern"; case .edit: "Edit"; case .duplicate: "Duplicate" }
+    }
+    var icon: String {
+        switch self { case .cancel: "xmark"; case .clearSteps: "eraser"; case .delete: "trash"; case .edit: "pencil"; case .duplicate: "plus.square.on.square" }
+    }
+    var edge: Edge { switch self { case .cancel: .bottom; case .clearSteps, .delete: .top; case .edit: .trailing; case .duplicate: .leading } }
+    /// The order they slide in (bottom, top, left, right).
+    var stagger: Double { switch self { case .cancel: 0; case .clearSteps, .delete: 0.03; case .duplicate: 0.06; case .edit: 0.09 } }
+    /// Laid out along its edge (the bottom and top wells) rather than up it.
+    var across: Bool { edge == .top || edge == .bottom }
 }
 
 /// The pad being dragged, for the wells: its centre (global) and its track.
@@ -29,10 +38,13 @@ enum EdgeWellsGeometry {
     /// iPad's are the same sizes, scaled up by its height for the side wells.
     static func rect(_ a: EdgeAction, in screen: CGSize) -> CGRect {
         let sideH = min(screen.height * 0.6, max(238, screen.height * 0.5))
+        let topW = min(2 * 260 + 8, screen.width * 0.6), half = (topW - 8) / 2, topX = (screen.width - topW) / 2
         switch a {
-        case .clear:
+        case .cancel:
             let w = min(434, screen.width * 0.5)
             return CGRect(x: (screen.width - w) / 2, y: screen.height - 52, width: w, height: 52)
+        case .clearSteps: return CGRect(x: topX, y: 0, width: half, height: 52)
+        case .delete: return CGRect(x: topX + half + 8, y: 0, width: half, height: 52)
         case .duplicate: return CGRect(x: 0, y: (screen.height - sideH) / 2, width: 64, height: sideH)
         case .edit: return CGRect(x: screen.width - 64, y: (screen.height - sideH) / 2, width: 64, height: sideH)
         }
@@ -45,16 +57,18 @@ enum EdgeWellsGeometry {
     }
 
     /// 0…1: how near the pad's centre is to the well, from the glow distance in.
-    static func closeness(_ a: EdgeAction, centre: CGPoint, screen: CGSize) -> Double {
+    static func closeness(_ a: EdgeAction, centre: CGPoint, screen: CGSize, off: Set<EdgeAction> = []) -> Double {
+        if off.contains(a) { return 0 }
         let d = distance(centre, rect(a, in: screen))
         let glow = CGFloat(Labs.wellGlow.value)
         return Double(max(0, min(1, 1 - d / glow)))
     }
 
     /// The well a drop at `centre` lands in: the nearest within the hot distance.
-    static func hot(centre: CGPoint, screen: CGSize) -> EdgeAction? {
+    /// `off`: wells that refuse a drop now (Delete pattern while playing): never hot.
+    static func hot(centre: CGPoint, screen: CGSize, off: Set<EdgeAction> = []) -> EdgeAction? {
         let hotD = CGFloat(Labs.wellHot.value)
-        return EdgeAction.allCases
+        return EdgeAction.allCases.filter { !off.contains($0) }
             .map { ($0, distance(centre, rect($0, in: screen))) }
             .filter { $0.1 <= hotD }
             .min { $0.1 < $1.1 }?.0
@@ -65,8 +79,12 @@ enum EdgeWellsGeometry {
     }
 }
 
+/// The wells that refuse a drop now: Delete pattern while playing (it shows greyed with "Stop first").
+@MainActor func offWells(_ session: DeviceSession) -> Set<EdgeAction> { session.playing ? [.delete] : [] }
+
 /// The wells layer: over the whole screen (safe areas included), drawing nothing while no pad is dragged.
 struct EdgeWells: View {
+    let session: DeviceSession
     let ui: EditorUI
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -75,11 +93,12 @@ struct EdgeWells: View {
             let screen = g.size
             let origin = g.frame(in: .global).origin
             let drag = ui.padDrag
-            let hot = drag.flatMap { EdgeWellsGeometry.hot(centre: $0.centre, screen: screen) }
+            let off = offWells(session)
+            let hot = drag.flatMap { EdgeWellsGeometry.hot(centre: $0.centre, screen: screen, off: off) }
             ZStack(alignment: .topLeading) {
                 ForEach(EdgeAction.allCases, id: \.self) { a in
                     if let d = drag {
-                        well(a, drag: d, hot: hot == a, screen: screen)
+                        well(a, drag: d, hot: hot == a, off: off.contains(a), screen: screen)
                             .transition(transition(a))
                     }
                 }
@@ -87,7 +106,8 @@ struct EdgeWells: View {
                 if let d = drag, let face = ui.padDragFace {
                     let size = ui.padDragSize
                     let tilt: (Double, (x: CGFloat, y: CGFloat, z: CGFloat)) = switch hot {
-                        case .edit: (14, (0, 1, 0)); case .duplicate: (-14, (0, 1, 0)); case .clear: (-14, (1, 0, 0)); case nil: (0, (0, 1, 0))
+                        case .edit: (14, (0, 1, 0)); case .duplicate: (-14, (0, 1, 0)); case .cancel: (-14, (1, 0, 0))
+                        case .clearSteps, .delete: (14, (1, 0, 0)); case nil: (0, (0, 1, 0))
                     }
                     face
                         .frame(width: size.width, height: size.height)
@@ -119,48 +139,59 @@ struct EdgeWells: View {
                            removal: .move(edge: a.edge))
     }
 
-    private func well(_ a: EdgeAction, drag: PadDragShow, hot: Bool, screen: CGSize) -> some View {
+    private func well(_ a: EdgeAction, drag: PadDragShow, hot: Bool, off: Bool, screen: CGSize) -> some View {
         let r = EdgeWellsGeometry.rect(a, in: screen)
-        let tint = a == .clear ? Theme.rec : Theme.track[drag.track]
-        let glow = hot ? 1 : EdgeWellsGeometry.closeness(a, centre: drag.centre, screen: screen)
-        let shape = UnevenRoundedRectangle(topLeadingRadius: a == .duplicate ? 0 : 12,
-                                           bottomLeadingRadius: a == .clear || a == .duplicate ? 0 : 12,
-                                           bottomTrailingRadius: a == .clear || a == .edit ? 0 : 12,
-                                           topTrailingRadius: a == .edit ? 0 : 12)
-        // the hot one grows by 8 into the screen (the board's 64 → 72)
+        // Cancel neutral (white-ish when hot), Delete red, the others the track's colour
+        let tint: Color = switch a { case .cancel: Theme.text; case .delete: Theme.rec; default: Theme.track[drag.track] }
+        let glow = hot ? 1 : EdgeWellsGeometry.closeness(a, centre: drag.centre, screen: screen, off: off ? [a] : [])
+        let e = a.edge
+        let shape = UnevenRoundedRectangle(topLeadingRadius: e == .bottom || e == .trailing ? 12 : 0,
+                                           bottomLeadingRadius: e == .top || e == .trailing ? 12 : 0,
+                                           bottomTrailingRadius: e == .top || e == .leading ? 12 : 0,
+                                           topTrailingRadius: e == .bottom || e == .leading ? 12 : 0)
+        // the hot one grows 8 into the screen
         let grown: CGRect = {
             guard hot else { return r }
-            switch a {
-            case .clear: return r.insetBy(dx: -4, dy: 0).offsetBy(dx: 0, dy: -4).insetBy(dx: 0, dy: -4)
-            case .edit: return CGRect(x: r.minX - 8, y: r.minY - 8, width: r.width + 8, height: r.height + 16)
-            case .duplicate: return CGRect(x: r.minX, y: r.minY - 8, width: r.width + 8, height: r.height + 16)
+            switch e {
+            case .bottom: return CGRect(x: r.minX - 4, y: r.minY - 8, width: r.width + 8, height: r.height + 8)
+            case .top: return CGRect(x: r.minX - 4, y: r.minY, width: r.width + 8, height: r.height + 8)
+            case .trailing: return CGRect(x: r.minX - 8, y: r.minY - 8, width: r.width + 8, height: r.height + 16)
+            case .leading: return CGRect(x: r.minX, y: r.minY - 8, width: r.width + 8, height: r.height + 16)
             }
         }()
         return ZStack {
             // resting: dark glass (a 12 pt blur of what's behind, black 62 % over it)
             shape.fill(.ultraThinMaterial).opacity(hot ? 0 : 1)
             shape.fill(Color.black.opacity(0.62)).opacity(hot ? 0 : 1)
-            // the glow building in the track colour (red for Clear), then the hot fill
-            shape.fill(tint.opacity(hot ? 1 : 0.35 * glow))
-            InnerDashes(edge: a.edge, radius: 12)
+            // the glow building in its colour, then the hot fill (Cancel's a soft white, not a colour)
+            shape.fill(tint.opacity(hot ? (a == .cancel ? 0.85 : 1) : (a == .cancel ? 0.18 : 0.35) * glow))
+            InnerDashes(edge: e, radius: 12)
                 .stroke(hot ? tint : Theme.textSecondary.opacity(0.55 + 0.45 * glow),
                         style: StrokeStyle(lineWidth: 1.5, dash: hot ? [] : [5, 4]))
-            labelView(a, hot: hot)
+            labelView(a, hot: hot, off: off)
         }
+        .opacity(off ? 0.45 : 1)
         .frame(width: grown.width, height: grown.height)
         .shadow(color: tint.opacity(hot ? 0.5 : 0.4 * glow), radius: 16 * glow)
         .offset(x: grown.minX, y: grown.minY)
     }
 
-    @ViewBuilder private func labelView(_ a: EdgeAction, hot: Bool) -> some View {
+    @ViewBuilder private func labelView(_ a: EdgeAction, hot: Bool, off: Bool) -> some View {
         let ink = hot ? Theme.onColour : Theme.text
         let icon = Image(systemName: a.icon).font(.system(size: 18, weight: .semibold)).foregroundStyle(hot ? Theme.onColour : Theme.textSecondary)
-        if a == .clear {
-            HStack(spacing: 8) { icon; Text(a.title).font(.lupe(14, .semibold)).foregroundStyle(ink) }
+        if a.across {
+            HStack(spacing: 8) {
+                icon
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(a.title).font(.lupe(14, .semibold)).foregroundStyle(ink)
+                    if off { Text("Stop first").font(.lupe(11)).foregroundStyle(Theme.textSecondary) }
+                }
+            }
         } else {
             VStack(spacing: 4) { icon; Text(a.title).font(.lupe(13, .semibold)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.7) }
         }
     }
+
 }
 
 /// A well's outline on its three inner sides only (the side on the screen's edge has none), rounded `radius` inside.
@@ -192,8 +223,13 @@ struct InnerDashes: Shape {
             p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
             p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
             p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        case .top:
-            p.addRect(rect)
+        case .top:            // open at the top
+            p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
+            p.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r, startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+            p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.maxY))
+            p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r, startAngle: .degrees(90), endAngle: .degrees(0), clockwise: true)
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         }
         return p
     }

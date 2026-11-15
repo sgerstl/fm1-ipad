@@ -13,12 +13,14 @@ import SwiftUI
 enum ListUndo {
     /// Whether the last removal can still be undone: nothing has changed the song since.
     static func undoable(_ ui: EditorUI, _ store: SkiffSongStore) -> Bool {
-        ui.padClear.map { $0.depth == store.undoStack.count && $0.depth > 0 } ?? false
+        ui.padClear.map { $0.depth == store.undoStack.count && ($0.depth > 0 || $0.steps != nil) } ?? false
     }
 
-    static func undo(_ ui: EditorUI, _ store: SkiffSongStore) {
+    static func undo(_ ui: EditorUI, _ store: SkiffSongStore, _ session: DeviceSession) {
         guard undoable(ui, store), let c = ui.padClear else { return }
         ui.padClear = nil
+        // Clear steps: the notes written back (steps edited since are left as they are)
+        if let steps = c.steps { session.undo(steps); return }
         Task { _ = await store.rewrite(track: c.track, to: c.before, focus: c.entry, confirmed: true) }
     }
 
@@ -74,7 +76,7 @@ struct ListUndoStrip: View {
                 HStack(spacing: 10) {
                     Text(c.title).font(.lupe(14)).lineLimit(1)
                     Spacer(minLength: 0)
-                    Button { ListUndo.undo(ui, store) } label: {
+                    Button { ListUndo.undo(ui, store, session) } label: {
                         Text("Undo").font(.lupe(14, .semibold)).padding(.horizontal, 14).frame(height: 32)
                             .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
                             .frame(minHeight: 44).contentShape(Rectangle())

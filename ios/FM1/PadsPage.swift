@@ -825,16 +825,20 @@ struct PadsPage: View {
         launched += 1
     }
 
-    /// A pad dropped on an edge well: Clear (no confirm, the Undo strip), Edit (its pattern on the Edit tab, or the iPad's
+    /// A pad dropped on an edge well (decision 41): Cancel (back where it was), Clear steps (its notes, the pattern kept),
+    /// Delete pattern (no confirm, the Undo strip), Edit (its pattern on the Edit tab, or the iPad's
     /// editor), Duplicate (a copy into the track's next empty slot: SET there, then COPY to a new number; said when there's
     /// no empty slot or no free number).
     private func wellDrop(_ a: EdgeAction, track t: Int, entry i: Int) {
         guard let list = store.song?.tracks[safe: t], let e = list.entries[safe: i], !e.isEmpty else { return }
         switch a {
-        case .clear:
-            if session.playing && !e.isRest {
-                store.refuse(track: t, entry: i, "Stop to clear: the FM-1 clears pads only while stopped", needsStop: true)
-            } else { clear(t, i, e) }
+        case .cancel:
+            return                                    // back where it was
+        case .clearSteps:
+            clearSteps(t, i, e)
+        case .delete:
+            // (never hot while playing: the well shows "Stop first")
+            clear(t, i, e)
         case .edit:
             edit(t, i)
         case .duplicate:
@@ -856,7 +860,7 @@ struct PadsPage: View {
 
     /// The dragged pad is over a hot edge well: the slot under it isn't the target then.
     private func overWell(_ d: PadDrag) -> Bool {
-        EdgeWellsGeometry.hot(centre: CGPoint(x: d.at.x - d.grab.width, y: d.at.y - d.grab.height), screen: EdgeWellsGeometry.screen) != nil
+        EdgeWellsGeometry.hot(centre: CGPoint(x: d.at.x - d.grab.width, y: d.at.y - d.grab.height), screen: EdgeWellsGeometry.screen, off: offWells(session)) != nil
     }
 
     private func endDrag(at: CGPoint) {
@@ -866,7 +870,7 @@ struct PadsPage: View {
         guard !d.refused else { return }
         // on an edge well (board 81.4): Clear, Edit or Duplicate, before any slot
         let centre = CGPoint(x: at.x - d.grab.width, y: at.y - d.grab.height)
-        if let a = EdgeWellsGeometry.hot(centre: centre, screen: EdgeWellsGeometry.screen) {
+        if let a = EdgeWellsGeometry.hot(centre: centre, screen: EdgeWellsGeometry.screen, off: offWells(session)) {
             wellDrop(a, track: d.track, entry: d.from)
             return
         }
@@ -1178,7 +1182,18 @@ struct PadsPage: View {
         g.append([MenuItem.submenu(title: "Move to…", icon: "arrow.up.and.down.and.arrow.left.and.right",
                            enabled: idle && !session.playing, children: { [moveTargets(t, i, list)] })])
         g.append([MenuItem(title: "Patterns", icon: "square.grid.2x2.fill") { ui.poolOpen = true }])
-        g.append([MenuItem(title: "Clear entry", icon: "trash", enabled: idle) { clear(t, i, e) }])
+        // decision 41: Clear steps (its notes; works playing) and Delete pattern (off the pad, erased if nothing else uses it;
+        // stopped only), each with the Undo strip
+        var clearSteps = MenuItem(title: "Clear steps", icon: "eraser", enabled: idle && e.poolIndex != nil) { self.clearSteps(t, i, e) }
+        clearSteps.sub = e.poolIndex == nil ? "A rest has no steps" : "Keeps the pattern on its pad"
+        let others: [String] = e.poolIndex.map { p in
+            (store.song?.tracks ?? []).enumerated().flatMap { k, l in l.entries.enumerated().compactMap { j, x in
+                x.poolIndex == p && !(k == t && j == i) ? "T\(k + 1) \(Entries.letter(j))" : nil } }
+        } ?? []
+        var delete = MenuItem(title: "Delete pattern", icon: "trash", enabled: idle && (!session.playing || e.isRest)) { clear(t, i, e) }
+        delete.sub = session.playing && !e.isRest ? "Stop first"
+            : others.first.map { "Pattern \(e.label) stays: \($0) uses it" } ?? (e.isRest ? "Takes the rest off the pad" : "Erases pattern \(e.label)")
+        g.append([clearSteps, delete])
         return g
     }
 
@@ -1238,7 +1253,30 @@ struct PadsPage: View {
 
 
     private var clearUndoable: Bool { ListUndo.undoable(ui, store) }
-    private func undoClear() { ListUndo.undo(ui, store) }
+    private func undoClear() { ListUndo.undo(ui, store, session) }
+
+    /// Clear steps (decision 41): the pattern's notes go, the pattern stays on its pad. Each step is written empty, so it
+    /// works while playing; the old notes (every step, chords, ties, velocity, accent) are kept for the Undo strip. Skiff
+    /// edits only the pattern a track is on: another pad's while stopped moves the track to it first; while playing,
+    /// it says to launch it first.
+    private func clearSteps(_ t: Int, _ i: Int, _ e: SongEntry) {
+        guard let list = store.song?.tracks[safe: t], let p = e.poolIndex else {
+            store.refuse(track: t, entry: i, "A rest has no steps to clear"); return
+        }
+        Task {
+            if list.entryOn != i {
+                guard !session.playing else {
+                    store.refuse(track: t, entry: i, "Clear steps works on the pattern the track plays: launch \(Entries.letter(i)) first"); return
+                }
+                guard await store.send(.play(track: t, entry: i)) else { return }
+                await session.rereadSteps(track: t)
+            }
+            let c = session.clearAll(track: t)
+            if let old = ui.padClear { ListUndo.finish(old, store, session) }
+            ui.padClear = PadClear(track: t, entry: i, what: "Cleared steps of T\(t + 1) · \(Entries.letter(i)) (pattern \(Entries.number(p + 1)))",
+                                   depth: store.undoStack.count, before: list.entries, steps: c)
+        }
+    }
 
 
 

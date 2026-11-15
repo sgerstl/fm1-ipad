@@ -124,7 +124,7 @@ struct PhoneAppView: View {
             ProjectsSheet(store: projects, session: session)
         }
         .overlay { ListUndoStrip(session: session, ui: ui) }   // (a pad cleared or blocks deleted: Undo)
-        .overlay { EdgeWells(ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)
+        .overlay { EdgeWells(session: session, ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { TrackPickerLayer(session: session, ui: ui) }
         .overlay { KnobPanelLayer(ui: ui) }
