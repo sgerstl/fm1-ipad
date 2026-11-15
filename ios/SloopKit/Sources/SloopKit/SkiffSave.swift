@@ -67,4 +67,11 @@ extension SkiffDriver {
                                   timeout: .milliseconds(5000), retries: 0)
         return Int(b.count > 1 ? b[1] : 2)
     }
+    /// PROJ_NAME RENAME: slot 0…3's name (EDITOR_PROTOCOL.md op 2; rc 1 refused: an empty slot). Writes the slot's
+    /// name only, not the music. Returns rc (0 done).
+    public func projectRename(slot: Int, name: String) async throws -> Int {
+        let b = try await request(77, [2, UInt8(slot)] + Self.nameBytes(name), match: 1, "PROJ_NAME RENAME",
+                                  timeout: .milliseconds(3000), retries: 0)
+        return Int(b.count > 1 ? b[1] : 2)
+    }
 }

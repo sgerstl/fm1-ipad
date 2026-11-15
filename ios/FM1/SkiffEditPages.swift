@@ -28,16 +28,8 @@ enum SkiffEdit {
         [a, b].contains { s in s.map { !$0.home && $0.page == p.fw } == true }
     }
 
-    /// The user set a SAMPLE track plays (0…2 for USR1…USR3), found by the names of SAMPLE's SET (P_E0, the
-    /// first engine parameter): nil on a built-in set or another engine.
-    @MainActor static func userSlot(_ session: DeviceSession) -> Int? {
-        let t = session.tracks[session.selectedTrack]
-        guard session.dialect == .skiff, t.engine == SkiffPages.Engine.sample,
-              let e0 = SoundPage.pages(session).first(where: { $0.engineEdit == 1 })?.ids.first ?? nil,
-              let d = session.trackDesc(e0), let usr1 = d.names.firstIndex(of: "USR1") else { return nil }
-        let k = session.cell(e0).value - d.min - usr1
-        return (0..<3).contains(k) ? k : nil
-    }
+    /// The user set a SAMPLE track plays (0…2 for USR1…USR3): SloopKit's SoundPage knows it.
+    @MainActor static func userSlot(_ session: DeviceSession) -> Int? { SoundPage.userSlot(session) }
 }
 
 // MARK: LANES and LANE MIX

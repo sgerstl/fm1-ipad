@@ -20,6 +20,24 @@ public struct SkiffFixture: Codable, Sendable {
     }
 }
 
+/// Skiff 2.5.1's engines as its own tables have them (tests/descdump.c, by android/scripts/skiff-page-dump.sh): each
+/// engine's EDIT descriptors, which DESC answers for the track's engine (editor.c ED_DESC: param_desc_of), and its
+/// presets' values, which PRESET loads (hostsim.c host_preset_values, as ui.c apply_preset_to). The recorded fixture
+/// holds the DESC of one engine only (the track's when it was recorded).
+struct SkiffEngineTable: Decodable, Sendable {
+    struct Desc: Decodable, Sendable { var label: String; var fmt: Int; var min: Int; var max: Int; var def: Int; var names: [String]?; var unit: String }
+    struct Preset: Decodable, Sendable { var name: String; var e: [Int]; var env: [Int]; var mono: Int; var more: [[Int]] }
+    struct Engine: Decodable, Sendable { var name: String; var edit: [Desc]; var presets: [Preset] }
+    var P_E0: Int
+    var engines: [Engine]
+
+    static func load(_ firmware: SkiffFirmware) -> SkiffEngineTable? {
+        guard firmware == .v2_5_1, let url = Bundle.module.url(forResource: "skiff-2.5.1-engines", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SkiffEngineTable.self, from: data)
+    }
+}
+
 /// A pretend Skiff 2.2 or 2.5.1 (the fixture it's built on says which), built on what the sim answered: the recorded INFO, DESC and NAMES as they are, and
 /// steps, parameters, the selection and the transport kept as state from the recorded starting point. Like
 /// the device, it holds one request at a time: a frame that arrives before the last is answered is dropped.
@@ -42,7 +60,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     let clockSink: AsyncStream<ClockEvent>.Continuation
     private var clockTimer: DispatchSourceTimer?
     private let lock = NSLock()
+    /// Plain MIDI sent to the FM-1 (notes from the editor's keys), as it arrived.
+    public private(set) var midiIn: [[UInt8]] = []
     private let fx: SkiffFixture
+    /// 2.5.1: every engine's EDIT descriptors and presets (nil on 2.2: DESC and PRESET as recorded).
+    private let engineTable: SkiffEngineTable?
     private let pCount: Int, gCount: Int
 
     var selected = 0
@@ -75,6 +97,11 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var launch = 1
     var muted: [Bool] = []
     var stagedMute: [Int] = []
+    /// LIST PLAY while playing: the entry staged for the launch point (127 none), landing 2 s on as a staged mute
+    /// does. EDITOR_PROTOCOL.md LIST op 3: "the track to the entry: at once stopped, at the LAUNCH point playing";
+    /// PERFORM 4 CANCEL drops it ("all that is staged: entries, mutes"). Before 2026-11-14 the fake landed every
+    /// launch at once, which hid the phone's stale-lists bug.
+    var stagedEntry: [Int] = []
     /// MENU > USB LEVEL (0 MASTER, 1 FIXED): the one MENU setting the fake offers (MENU_DESC index 0, id 10).
     var usbLevel = 0
     /// Armed tracks, a bit each (song.rec), as TRANSPORT op 4 toggles them: ui_input.c rec_tap.
@@ -113,6 +140,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     var cursor = 0
     /// The pages with a cursor and its top (skiff/README.md): MOD's routes, the lanes, the samples, USER's slots.
     static let cursorRange: [Int: Int] = [4: 10, 16: 5, 18: 7, 19: 7, 20: 7, 22: 15, 36: 31, 37: 63, 41: 63, 42: 63]
+    /// The sheets' windows (EDITOR_PROTOCOL.md "The page's cursor": the second cursor, read only): OPERATOR and ALL
+    /// OPS five each, SOUND four, by Lupe page. Each sheet keeps its own, as ui.c's fm_ui[1], fm_ui[2] and dx_ui_win.
+    static let windowCount: [Int: Int] = [16: 5, 17: 5, 19: 4]
+    var windows: [Int: Int] = [:]
     var screenWatched = false
     /// FREE TAKE levels 2 and 3 (the screen link's seventh build, `screenLinkVersion` 7; ui_take.c and editor.c's TAKE
     /// and UNDO on branch lupe-skiff-2.5.1-freetake): the picker, pushed with WATCH bit 5 (32).
@@ -145,11 +176,16 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     public var themePalette = 0
     public var customColours: [UInt16]? = nil
     private var backupListed = false
+    /// For tests: how many BACKUP_LISTs came (each stops the transport), and the patterns POOL EMPTY emptied.
+    public private(set) var backupLists = 0
+    public private(set) var emptiedPatterns: [Int] = []
     /// USER's 32 slots (engine, name; nil empty) and PROJECT's 4 (nil empty), for the SAVE pages.
     var userSlots: [(engine: Int, name: String)?] = Array(repeating: nil, count: 32)
     var projectSlots: [String?] = ["SONG ONE", nil, nil, nil]
     var musicSlot: Int? = 0
     var projectLoads = 0
+    /// PROJ_NAME's "changed since then 0/1" (EDITOR_PROTOCOL.md): set by a test; a load or a save clears it.
+    var musicChanged = false
 
     /// The sim's answers as recorded; nil if the fixture is missing from the bundle.
     public convenience init?(demo: Bool) {
@@ -248,6 +284,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     public init(_ fx: SkiffFixture) {
         self.fx = fx
+        engineTable = SkiffEngineTable.load(SkiffInfo(fx.info)?.firmware ?? .v2_2)
         (frames, sink) = AsyncStream.makeStream(of: [UInt8].self)
         (notes, notesSink) = AsyncStream.makeStream(of: NoteEvent.self)
         (clock, clockSink) = AsyncStream.makeStream(of: ClockEvent.self)
@@ -274,6 +311,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         entryOn = Array(repeating: 127, count: info.trackCount)
         muted = Array(repeating: false, count: info.trackCount)
         stagedMute = Array(repeating: 0, count: info.trackCount)
+        stagedEntry = Array(repeating: 127, count: info.trackCount)
     }
 
     /// The song on the canvas's board A (vault skiff-arrange-spec.md): six lanes, linked copies, rests,
@@ -310,7 +348,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     private func uses(_ p: Int) -> Int { lists.reduce(0) { $0 + $1.filter { $0.p == p + 1 }.count } }
 
     private func projectReply(_ op: UInt8, _ rc: UInt8) -> [UInt8] {
-        [op, rc, UInt8(musicSlot ?? 127), 0] + Array((musicSlot.flatMap { projectSlots[$0] } ?? "").utf8) + [0]
+        [op, rc, UInt8(musicSlot ?? 127), musicChanged ? 1 : 0] + Array((musicSlot.flatMap { projectSlots[$0] } ?? "").utf8) + [0]
             + projectSlots.flatMap { n -> [UInt8] in [n == nil ? 0 : 1] + Array((n ?? "").utf8) + [0] }
     }
 
@@ -341,7 +379,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             }
             lastScene = Int(a[1])
         case 3 where Int(a[1]) < muted.count: stage(Int(a[1]))
-        case 4: stagedMute = stagedMute.map { _ in 0 }
+        case 4: stagedMute = stagedMute.map { _ in 0 }; stagedEntry = stagedEntry.map { _ in 127 }
         case 5 where a[1] < 4: launch = Int(a[1])
         default: return nil
         }
@@ -367,7 +405,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let on = entryOn[t]
             let pat = on < 16 && lists[t][on].p >= 1 && lists[t][on].p <= 64 ? lists[t][on].p - 1 : 127
             // (the song's next is staged in SONG ON and ONCE; in SONG OFF nothing is, until a launch)
-            b += [UInt8(on), on < 16 && playing && songMode != 0 ? UInt8((on + 1) % 16) : 127, UInt8(pat)]
+            let next = on < 16 && playing && songMode != 0 ? UInt8((on + 1) % 16) : 127
+            b += [UInt8(on), t < stagedEntry.count && stagedEntry[t] != 127 ? UInt8(stagedEntry[t]) : next, UInt8(pat)]
             for x in lists[t] { b += [UInt8(x.p), UInt8(x.r), UInt8(x.s0), UInt8(x.s1)] }
         }
         return b
@@ -394,7 +433,16 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             guard (1...64).contains(x.p) else { return listReply(2, 1) }
             guard let n = freePattern(after: x.p - 1) else { return listReply(2, 4) }
             poolLen[n] = poolLen[x.p - 1]; x.p = n + 1
-        case 3: entryOn[t] = i; return listReply(3, 0)
+        case 3:
+            guard playing else { entryOn[t] = i; stagedEntry[t] = 127; return listReply(3, 0) }
+            stagedEntry[t] = i                              // replaces one staged before (a take-back stages the entry on)
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self else { return }
+                self.lock.lock()
+                if self.stagedEntry[t] == i { self.entryOn[t] = i; self.stagedEntry[t] = 127 }
+                self.lock.unlock()
+            }
+            return listReply(3, 0)
         case 4:
             if playing && x.p != 65 { return listReply(4, 3) }
             let old = x.p
@@ -428,6 +476,13 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
 
     /// Pushes (CHANGED, STEP_CHANGED, ...) as the device sends them while watched.
     func push(_ cmd: UInt8, _ body: [UInt8]) { if watching { sink.yield(Frame.encode(cmd, body)) } }
+
+    /// A knob turned once on the FM-1 to `v`, for track parameter `id` of the selected track: the value kept and CHANGED
+    /// pushed as editor.c's watch writes it (ED_SCOPE, ED_ID7: a wide id, 128 on, as scope 2 and its low seven bits).
+    public func turnKnobOnDevice(id: Int, to v: Int) {
+        lock.lock(); let sel = selected; if id < params[sel].count { params[sel][id] = v }; lock.unlock()
+        push(Cmd.changed, [UInt8((id >> 7) << 1), UInt8(id & 127)] + v14(v))
+    }
 
     private var turnTimer: DispatchSourceTimer?
     /// A knob turned slowly back and forth on the FM-1: CHANGED for `id` every 40 ms, a step each, 0…127 and back.
@@ -465,7 +520,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         let b: [UInt8] = [screen.home ? 1 : 0, UInt8(wire), UInt8(screen.layer), UInt8(screen.menu), UInt8(selected), UInt8(flags)]
         guard screenLinkVersion >= 2 else { return b }
         let c: UInt8 = !screen.home && Self.cursorRange[screen.page] != nil ? UInt8(cursor) : 127
-        // NOTES and FEEL: the second is the selection's last step (one step here, so the same)
+        // NOTES and FEEL: the second is the selection's last step (one step here, so the same); a sheet's: its window
+        if !screen.home, Self.windowCount[screen.page] != nil { return b + [c, UInt8(windows[screen.page] ?? 0)] }
         return b + [c, c != 127 && [41, 42].contains(screen.page) ? c : 127]
     }
 
@@ -474,6 +530,19 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         lock.lock()
         if let page { if page != screen.page || screen.home { cursor = 0 }; screen = (false, page, 0, 0, 0) } else { screen.home = true }
         if let track { selected = track }
+        let b = screenBytes(), on = screenWatched
+        lock.unlock()
+        if on { push(90, b) }
+    }
+
+    /// SELECT on the FM-1 on a sheet: its window down (`by` > 0) or up, within its ends (sheet_rows), and, watched, it
+    /// says so. Off a sheet, nothing here (past a sheet's ends SELECT goes on to the pages beside it).
+    public func selectOnDevice(by d: Int) {
+        lock.lock()
+        guard !screen.home, let n = Self.windowCount[screen.page] else { lock.unlock(); return }
+        let w = (windows[screen.page] ?? 0) + (d > 0 ? 1 : -1)
+        guard (0..<n).contains(w) else { lock.unlock(); return }
+        windows[screen.page] = w
         let b = screenBytes(), on = screenWatched
         lock.unlock()
         if on { push(90, b) }
@@ -726,7 +795,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     deinit { clockTimer?.cancel() }
 
     /// A few notes on each track and PLAY, so the demo has something to show (the recorded unit is blank).
-    private func seedDemo() {
+    func seedDemo() {
         let roots = [48, 60, 55, 36, 64, 38]
         for t in steps.indices {
             for i in stride(from: 0, to: 16, by: t % 2 == 0 ? 2 : 4) {
@@ -763,7 +832,10 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
     }
 
     public func send(_ frame: [UInt8]) {
-        guard let (cmd, a) = Frame.decode(frame) else { return }     // plain MIDI: no reply
+        guard let (cmd, a) = Frame.decode(frame) else {               // plain MIDI: no reply; kept for the tests
+            lock.lock(); midiIn.append(frame); lock.unlock()
+            return
+        }
         lock.lock()
         if busy { dropped += 1; lock.unlock(); return }               // one incoming frame at a time
         busy = true
@@ -776,7 +848,30 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         }
     }
 
-    private func v14(_ v: Int) -> [UInt8] { Frame.v14(v) }
+    func v14(_ v: Int) -> [UInt8] { Frame.v14(v) }
+
+    /// DESC of an engine parameter on 2.5.1, for the selected track's engine, as editor.c writes it: scope and id as
+    /// asked, FMT, MIN MAX DEF, the label and unit (8 letters, 0-terminated), a list's names (up to 24).
+    private func engineDesc(_ pid: Int, _ a0: UInt8, _ a1: UInt8) -> [UInt8]? {
+        guard let t = engineTable, (t.P_E0..<(t.P_E0 + 8)).contains(pid), let eng = t.engines[safe: engines[selected].engine],
+              let d = eng.edit[safe: pid - t.P_E0] else { return nil }
+        func str(_ s: String) -> [UInt8] { Array(s.utf8.prefix(8)).map { $0 & 0x7F } + [0] }
+        var b: [UInt8] = [a0, a1, UInt8(d.fmt)] + v14(d.min) + v14(d.max) + v14(d.def) + str(d.label) + str(d.unit)
+        if d.fmt == 8, let n = d.names { for x in n.prefix(min(24, d.max - d.min + 1)) { b += str(x) } }
+        return b
+    }
+
+    /// PRESET's values on 2.5.1 (hostsim.c host_preset_values: the engine's eight, the ENV, VOICE from MONO, the
+    /// preset's other values). No push follows: editor.c ed_load_after takes the load into the watch's copy, so the
+    /// editor that asked hears nothing (the phone reads the track again itself).
+    private func loadPresetValues(engine e: Int, preset pi: Int) {
+        guard let t = engineTable, let p = t.engines[safe: e]?.presets[safe: pi], selected < params.count else { return }
+        let s = selected
+        for (k, v) in p.e.enumerated() where t.P_E0 + k < pCount { params[s][t.P_E0 + k] = v }
+        for (k, v) in p.env.enumerated() where 1 + k < pCount { params[s][1 + k] = v }          // P_ATK P_DEC P_SUS P_REL
+        if 37 < pCount { params[s][37] = p.mono != 0 ? 2 : 0 }                                   // P_VOICE: V_LEGATO or V_POLY
+        for m in p.more where m.count == 2 && m[0] < pCount { params[s][m[0]] = m[1] }
+    }
     private func id(_ scope: UInt8, _ i: UInt8) -> Int { scope == 2 ? Int(i) + 128 : Int(i) }
 
     private func trackList() -> [UInt8] {
@@ -875,6 +970,7 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case 65:
             setPlaying(false)                                // (LIST stops the transport, editor_backup.c; the clock with it)
             backupListed = true
+            backupLists += 1
             let objs = (0..<16).map { (16 + $0, bankObject($0)) } + sampleSlots.indices.map { (32 + $0, sampleObject($0)) }
             var b: [UInt8] = [1, 0, UInt8(objs.count)]
             for (id, o) in objs { b += [UInt8(id)] + Pack7.u35(UInt32(o.count)) + Pack7.u35(CRC32.of(o)) }
@@ -949,8 +1045,8 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             guard Int(a[0]) == SkiffMenu.usbLevel else { return [1, a[0]] + v14(v) }
             usbLevel = max(0, min(1, v))
             return [0, a[0]] + v14(usbLevel)
-        case (5, 2) where a == SkiffDriver.wire(pCount - 8) && engines[selected].engine == 4:
-            // SAMPLE's SET (E0: 138 on 2.2, 140 on 2.5.1): the built-in sets, then the user's (eng_sample.c SMP_ALL_NAMES)
+        case (5, 2) where engineTable == nil && a == SkiffDriver.wire(pCount - 8) && engines[selected].engine == 4:
+            // SAMPLE's SET on 2.2 (E0 138): the built-in sets, then the user's (eng_sample.c SMP_ALL_NAMES); 2.5.1's from engineTable
             return a + [8] + v14(0) + v14(5) + v14(0) + Array("SET".utf8) + [0, 0]
                 + ["PIANO", "STRINGS", "CHOIR", "USR1", "USR2", "USR3"].flatMap { Array($0.utf8) + [0] }
         case (68, 2) where a[0] == 0 && Int(a[1]) < fm6.count: return [0, a[1], 0] + fm6[Int(a[1])].bytes
@@ -969,7 +1065,9 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             let s = Int(a[0])
             if !mixZones[s].isEmpty { mixValues[s] = a[1...].map(Int.init) }
             return mixReply(s)
-        case (5, 2): return fx.desc["\(a[0] == 1 ? 1 : 0).\(a[0] == 1 ? Int(a[1]) : id(a[0], a[1]))"]
+        case (5, 2):
+            if a[0] != 1, let b = engineDesc(id(a[0], a[1]), a[0], a[1]) { return b }
+            return fx.desc["\(a[0] == 1 ? 1 : 0).\(a[0] == 1 ? Int(a[1]) : id(a[0], a[1]))"]
         case (10, 1): return fx.names["\(a[0])"]
         case (27, 0): return trackList()
         case (27, 1):
@@ -1054,14 +1152,19 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
         case (9, 2) where a[0] == 0 && a[1] < 4:
             // PROJECT load: a used slot replaces the music, the transport stopped
             let k = Int(a[1]), used = projectSlots[k] != nil
-            if used { setPlaying(false); musicSlot = k; projectLoads += 1 }
+            if used { setPlaying(false); musicSlot = k; projectLoads += 1; musicChanged = false }
             return [0, a[1], used ? 1 : 0]
         case (77, 0): return projectReply(0, 0)
         case (77, _) where a.count >= 2 && a[0] == 1 && a[1] < 4:
             setPlaying(false)
             projectSlots[Int(a[1])] = String(decoding: a[2...].prefix { $0 != 0 }, as: UTF8.self).uppercased()
-            musicSlot = Int(a[1])
+            musicSlot = Int(a[1]); musicChanged = false
             return projectReply(1, 0)
+        case (77, _) where a.count >= 2 && a[0] == 2 && a[1] < 4:
+            // RENAME (EDITOR_PROTOCOL.md PROJ_NAME op 2): a used slot's name; "rc 1 refused: … RENAME of an empty slot"
+            guard projectSlots[Int(a[1])] != nil else { return projectReply(2, 1) }
+            projectSlots[Int(a[1])] = String(decoding: a[2...].prefix { $0 != 0 }, as: UTF8.self).uppercased()
+            return projectReply(2, 0)
         case (78, 2) where a[0] == 1 || a[0] == 2:
             // CLEAR one nothing uses, or EMPTY one (its steps; it stays): stopped only
             let p = Int(a[1])
@@ -1071,11 +1174,15 @@ public final class FakeSkiff: SysExTransport, @unchecked Sendable {
             if a[0] == 1 {
                 guard uses(p) == 0 else { return poolReply(1, 2) }
                 poolLen[p] = 0
+            } else {
+                emptiedPatterns.append(p)          // (pool_empty: its steps gone, the number, LEN and entries kept)
             }
             return poolReply(a[0], 0)
         case (20, 1): return [a[0], 1]
         case (8, 2):
-            engines[selected] = (Int(a[0]), Int(a[1])); return [a[0], a[1]]
+            engines[selected] = (Int(a[0]), Int(a[1]))
+            loadPresetValues(engine: Int(a[0]), preset: Int(a[1]))
+            return [a[0], a[1]]
         case (80, 0): return performReply(0, 0)
         case (80, _): return performOp(a)
         case (82, 0): return listReply(0, 0)

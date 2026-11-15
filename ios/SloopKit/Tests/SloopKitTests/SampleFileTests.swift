@@ -1,3 +1,5 @@
+#if canImport(AVFoundation)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 import AVFoundation
 import Foundation
 import Testing
@@ -61,3 +63,5 @@ import Testing
         #expect(throws: SampleFile.Problem.unreadable) { try SampleFile.read(url) }
     }
 }
+
+#endif

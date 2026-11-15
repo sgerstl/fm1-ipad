@@ -1,3 +1,5 @@
+#if canImport(CoreMIDI)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 import Foundation
 import Testing
 @testable import SloopKit
@@ -125,3 +127,5 @@ import Testing
         try await clear(d, [0, 1])
     }
 }
+
+#endif

@@ -1,3 +1,5 @@
+#if canImport(CryptoKit)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 import Foundation
 import Testing
 @testable import SloopKit
@@ -233,3 +235,5 @@ import Testing
         #expect(try await Self.installer(dev).install(Self.sloop) == "FM-1_900")
     }
 }
+
+#endif

@@ -94,9 +94,9 @@ Words to retire, used for the same things elsewhere: "staged", "queued" and "lau
 - **B15** Drop onto a filled pad on its own row: the two swap. Onto a filled pad on another row: nothing.
 - **B16** Drop onto an empty pad, any row: a fan asks first. Copy here, Repeat here (own row) or Share with Tn (other row), Move here (own row only), Cancel. A REST has nothing to copy, so it only moves within its own row.
 - **B17** While playing, a pattern pad still lifts (copy and share work); a move is refused at the drop with "Stop to rearrange". A REST is refused at the lift.
-- **B18** `[open]` A move onto an empty pad mid-list leaves the dragged pad's old place empty. Keep the gap, or close it? (batch list, open since 2026-11-09)
+- **B18** `[open]` A move onto an empty pad mid-list leaves the dragged pad's old place empty. Keep the gap, or close it? (batch list, open since 2026-11-09) Android's `padMove` keeps the gap, as the iPad does today (Scott through the main session, 2026-11-15: match the iPad for now; the question stays open).
 - **B19** A pattern dropped from the Patterns panel: onto an empty pad, it's taken at once (shared); onto a filled pad, a fan asks Replace / Copy here / Cancel. Nothing is replaced until a choice is picked (Scott, 2026-11-10).
-- **B20** Clear entry asks in place only when the pattern is used nowhere else, Lupe is stopped, and the confirm hasn't been turned off. Otherwise it clears at once. Clearing works stopped only.
+- **B20** Clear entry asks in place only when the pattern is used nowhere else, Lupe is stopped, and the confirm hasn't been turned off. Otherwise it clears at once. Clearing works stopped only. **Android, 2026-11-15 (batch item 13, Scott):** no confirm at all; the pad clears at once and can be put back for ten seconds (`undoClear`), pattern included, because the core clears it in a way that keeps the pattern until the undo's time is up. Decided for all three apps; the iPad and iPhone still behave as written here until they are changed.
 - **B21** The track controls hang from the selected pad at No grid and Half, open or shut as the user left them (Scott, 2026-11-09: "keep it open unless the user closes it"). Above by default, below where there's no room. They close at Max and come back after.
 - **B22** A launch, a hold and a drag start each give a light haptic.
 

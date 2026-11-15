@@ -2,7 +2,6 @@
 // Store or TestFlight build is only Lupe's own code. The file comes from Lupe's GitHub release (LupeFirmware.downloadURL),
 // is checked against its pinned SHA-256 before anything else sees it, and is kept in Application Support so the next
 // install, or a resumed one, needs no internet.
-import CryptoKit
 import Foundation
 
 /// Fetches a URL's bytes, reporting progress from 0 to 1. Injected, so the tests never touch the network.
@@ -31,6 +30,7 @@ public enum FirmwareDownloadError: Error, Equatable, CustomStringConvertible {
     }
 }
 
+#if canImport(Darwin)
 /// The real transport: URLSession, reading the body as it comes for the progress.
 public struct HTTPFirmwareTransport: FirmwareTransport {
     public init() {}
@@ -56,6 +56,16 @@ public struct HTTPFirmwareTransport: FirmwareTransport {
         return data
     }
 }
+#else
+/// Where there is no URLSession to stream from (Android): the app downloads the file itself and hands it to
+/// `FirmwareStore.adopt`, so a fetch that gets here has nothing to fetch with.
+public struct HTTPFirmwareTransport: FirmwareTransport {
+    public init() {}
+    public func fetch(_ url: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> Data {
+        throw FirmwareDownloadError.failed("this build downloads firmware outside SloopKit")
+    }
+}
+#endif
 
 /// The downloaded firmware: fetched on request, verified, cached.
 public final class FirmwareStore: Sendable {
@@ -87,7 +97,7 @@ public final class FirmwareStore: Sendable {
 
     private func place(_ f: LupeFirmware) -> URL { directory.appending(path: f.fileName) }
 
-    static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    static func digest(_ data: Data) -> String { LupeDigest.sha256Hex(data) }
 
     /// The cached file, if it's there and still matches its pin (one that doesn't is deleted).
     public func cachedFile(_ f: LupeFirmware) -> URL? {
@@ -112,11 +122,21 @@ public final class FirmwareStore: Sendable {
             data = try await transport.fetch(remote, progress: progress)
         } catch let e as FirmwareDownloadError {
             throw e
-        } catch let e as URLError {
-            throw Self.offlineCodes.contains(e.code) ? FirmwareDownloadError.offline : FirmwareDownloadError.failed(e.localizedDescription)
         } catch {
-            throw FirmwareDownloadError.failed("\(error)")
+            throw Self.downloadError(error)
         }
+        guard Self.digest(data) == f.sha256 else { throw FirmwareDownloadError.hashMismatch }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = place(f)
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    /// A file downloaded outside SloopKit (the phone's own downloader) taken into the cache: only if it is exactly the
+    /// pinned file. Anything else is refused and nothing is kept.
+    @discardableResult
+    public func adopt(_ f: LupeFirmware, file: URL) throws -> URL {
+        guard let data = try? Data(contentsOf: file) else { throw FirmwareDownloadError.failed("the downloaded file can't be read") }
         guard Self.digest(data) == f.sha256 else { throw FirmwareDownloadError.hashMismatch }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = place(f)
@@ -134,8 +154,20 @@ public final class FirmwareStore: Sendable {
     /// Drops a cached download (a new pin, or the tests).
     public func forget(_ f: LupeFirmware) { try? FileManager.default.removeItem(at: place(f)) }
 
+    /// A transport's error in the words for the person installing: no internet said as such.
+    static func downloadError(_ error: Error) -> FirmwareDownloadError {
+        #if canImport(Darwin)
+        if let e = error as? URLError {
+            return offlineCodes.contains(e.code) ? .offline : .failed(e.localizedDescription)
+        }
+        #endif
+        return .failed("\(error)")
+    }
+
+    #if canImport(Darwin)
     static let offlineCodes: Set<URLError.Code> = [
         .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost,
         .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff,
     ]
+    #endif
 }

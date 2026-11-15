@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- page surface from tokens.json, so the window never flashes white before Compose draws -->
+    <color name="page">#0D0D0F</color>
+    <!-- the iOS launch screen's background (LaunchBackground) and the intro's glass -->
+    <color name="launch_background">#0A0A0B</color>
+    <style name="Theme.Lupe" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/page</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <!-- the system splash screen (Android 12+; minSdk is 33): the launch screen's #0A0A0B with the icon at 160 dp, where the launch intro's zoom starts -->
+        <item name="android:windowSplashScreenBackground">@color/launch_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+    </style>
+</resources>
