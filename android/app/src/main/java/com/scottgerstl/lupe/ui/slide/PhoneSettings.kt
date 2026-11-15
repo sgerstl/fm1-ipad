@@ -71,10 +71,10 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     fun chooseWellSlide(v: Int) { wellSlideMs = v.coerceIn(100, 500); prefs?.edit()?.putInt(WELL_SLIDE, wellSlideMs)?.apply() }
     var wellGlowDp by mutableStateOf(prefs?.getInt(WELL_GLOW, 200) ?: 200)
         private set
-    fun chooseWellGlow(v: Int) { wellGlowDp = v.coerceIn(48, 320); prefs?.edit()?.putInt(WELL_GLOW, wellGlowDp)?.apply() }
+    fun chooseWellGlow(v: Int) { wellGlowDp = v.coerceIn(96, 320); prefs?.edit()?.putInt(WELL_GLOW, wellGlowDp)?.apply() }
     var wellHotDp by mutableStateOf(prefs?.getInt(WELL_HOT, 64) ?: 64)
         private set
-    fun chooseWellHot(v: Int) { wellHotDp = v.coerceIn(24, 120); prefs?.edit()?.putInt(WELL_HOT, wellHotDp)?.apply() }
+    fun chooseWellHot(v: Int) { wellHotDp = v.coerceIn(24, 128); prefs?.edit()?.putInt(WELL_HOT, wellHotDp)?.apply() }
 
     /**
      * Handedness (the iPhone's setting, decision 33): right-handed, a hold menu opens to the left of the finger so the hand doesn't cover it,
