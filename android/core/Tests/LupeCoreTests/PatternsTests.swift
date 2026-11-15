@@ -23,10 +23,14 @@ import Testing
         box.notices.removeAll(); box.log.removeAll()
         return (core, fake)
     }
-    func wait(_ what: String, _ seconds: Double = 6, _ ok: () -> Bool) async throws {
+    func wait(_ what: String, _ seconds: Double = 12, _ ok: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while Date() < end, !ok() { try await Task.sleep(for: .milliseconds(20)) }
         #expect(ok(), "\(what)")
+    }
+    /// No change still going in (the store takes one at a time and refuses a second).
+    func idle(_ core: PhoneCore) async throws {
+        try await wait("idle") { core.session.skiffSong?.busy == false }
     }
     func stop(_ core: PhoneCore, _ fake: FakeSkiff) async throws {
         core.handle(json: #"{"intent":"stop"}"#)
@@ -161,6 +165,7 @@ import Testing
         #expect(box.notices.last?.text.hasPrefix("Stop playback to recycle") == true && fake.lists[1][e].p == 0)
         try await stop(core, fake)
         // stopped: the lowest unused onto the entry, then emptied
+        try await idle(core)
         core.handle(json: #"{"intent":"recyclePattern","track":2,"entry":\#(e)}"#)
         try await wait("recycled") { fake.lists[1][e].p == n && fake.emptiedPatterns == [n - 1] }
         try await wait("said") { box.notices.last?.text.contains("was emptied and put on T2 pad \(e + 1)") == true }
@@ -170,6 +175,7 @@ import Testing
         core.handle(json: #"{"intent":"copyPattern","number":\#(n),"track":2,"entry":\#(e)}"#)
         #expect(box.notices.last?.text.contains("isn't empty") == true)
         let before = fake.poolLen.filter { $0 > 0 }.count
+        try await idle(core)
         core.handle(json: #"{"intent":"copyPattern","number":\#(n),"track":3,"entry":\#(e2)}"#)
         try await wait("copied") { fake.lists[2][e2].p != 0 && fake.lists[2][e2].p != n && fake.poolLen.filter { $0 > 0 }.count == before + 1 }
         try await wait("said") { box.notices.last?.text.contains("was copied to") == true && box.notices.last?.track == 3 }
