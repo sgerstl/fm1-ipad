@@ -14,7 +14,7 @@ struct PhoneAppView: View {
     @Environment(AudioThrough.self) private var through
     @Environment(ProjectStore.self) private var projects
 
-    /// A tab's page (Pads · Edit · Timeline, decision 28). SLOOP's song has one Song page for Pads and the Timeline.
+    /// A tab's page (Pads · Edit · Timeline, decision 28).
     @ViewBuilder private func tabPage(_ t: PhoneTab) -> some View {
         switch t {
         case .edit: PhoneSequence(session: session, ui: ui)
@@ -22,8 +22,7 @@ struct PhoneAppView: View {
             // the six tracks' levels, pans, sends, mutes and meters (GLO's MIXER); the shared pages are the pop-up's
             PhoneMixerRows(session: session, ui: ui).padding(.leading, 8)
         case .pads, .timeline:
-            if session.capabilities.contains(.sloopSong) { SongPage(session: session, ui: ui, compact: true) }
-            else if let store = session.skiffSong {
+            if let store = session.skiffSong {
                 if t == .pads {
                     // Skiff's Pads, the grid (board 40, 46): six rows, the scenes under them
                     PadsPage(session: session, store: store, ui: ui, layout: .phone)
@@ -305,8 +304,8 @@ struct PhoneSequence: View {
         }
     }
 
-    /// Skiff's step inspector rather than SLOOP's panel (a melodic Skiff track).
-    private var skiffInspector: Bool { session.dialect == .skiff && !session.isKit(session.selectedTrack) }
+    /// Skiff's step inspector rather than the kit's panel (a melodic track).
+    private var skiffInspector: Bool { !session.isKit(session.selectedTrack) }
 
     // The iPad's selected-step panel, scrolling inside a narrower overlay; × closes it.
     private var panel: some View {

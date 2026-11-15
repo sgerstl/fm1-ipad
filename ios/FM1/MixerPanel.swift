@@ -56,8 +56,6 @@ struct MixerPage: View {
 
     private func show(_ t: SkiffButtonMap.MixerTab) {
         if ui.mixerSection != t { ui.mixerSection = t }
-        // (SkiffButtonMap's pages are Skiff's: on SLOOP 30 is the SONG page. SLOOP has no MIXER page, so its strips
-        // touched leave the FM-1 where it is; its cards show their own pages, by their SLOOP numbers)
         guard session.dialect == .skiff else { return }
         if session.screenLinked, ui.followDevice, !onDevice(t.page) { session.showOnDevice(page: t.page) }
     }
@@ -69,7 +67,6 @@ private struct MixerDeviceEdge: View {
 
     var body: some View {
         let page = SkiffButtonMap.MixerTab.mixer.page
-        // (Skiff's MIXER page; SLOOP has none, and its page 30 is SONG)
         DeviceEdge(on: session.dialect == .skiff && session.screenLinked && session.deviceScreen.map { !$0.home && $0.page == page } == true)
     }
 }
@@ -232,13 +229,6 @@ private struct MixerCards: View {
 
     private func commit() {
         guard let id = centred, let p = pages.first(where: { $0.id == id }) else { return }
-        // SLOOP: the card's own page, by SLOOP's number (SkiffButtonMap's sections are Skiff's)
-        if session.dialect != .skiff {
-            if session.screenLinked, ui.followDevice, session.deviceScreen.map({ !$0.home && $0.page == p.fw }) != true {
-                session.showOnDevice(page: p.fw)
-            }
-            return
-        }
         guard let t = tab(for: p) else { return }
         if ui.mixerSection != t { ui.mixerSection = t }
         guard session.screenLinked, ui.followDevice,
@@ -263,8 +253,7 @@ private struct MixerCards: View {
     /// GLO's five pages as the FM-1 counts them (MIXER first), so a card's "On the FM-1" reads as its screen does:
     /// DELAY 2/5 … GLOBAL 5/5.
     private var glo: [SoundPage] {
-        guard session.dialect == .skiff else { return pages }        // (SLOOP's GLO has no MIXER page to count)
-        return [SoundPage(fw: SkiffButtonMap.MixerTab.mixer.page, title: "MIXER", family: .glo, scope: 1, ids: [nil, nil, nil, nil])] + pages
+        [SoundPage(fw: SkiffButtonMap.MixerTab.mixer.page, title: "MIXER", family: .glo, scope: 1, ids: [nil, nil, nil, nil])] + pages
     }
 
     private func tab(for p: SoundPage) -> SkiffButtonMap.MixerTab? { SkiffButtonMap.MixerTab.allCases.first { $0.pageTitle == p.title } }

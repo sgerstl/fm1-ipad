@@ -10,7 +10,6 @@ struct TopBar: View {
     @Environment(FirmwareCentre.self) private var firmware
     @State private var connectionFrame: CGRect = .zero
     private var projectsOpen: Binding<Bool> { Binding(get: { ui.projectsOpen }, set: { ui.projectsOpen = $0 }) }
-    @State private var naming: NamePrompt?
     @State private var readoutFrame: CGRect = .zero
     @State private var settingsOpen = LaunchArgs.all.contains("-settings")      // (-settings: open on Settings, for captures)
 
@@ -41,32 +40,11 @@ struct TopBar: View {
                     SongStrip(session: session, store: store, ui: ui)
                         .padding(.top, 64 + 4)
                 }
-            } else if ui.sloopShell {
-                // SLOOP in the same row (2026-11-10, after board 47 b): the FM-1 key (with Projects and the iPad's audio),
-                // Pads · Timeline · Mix, SLOOP's tools, Keys and the transport; Loop · Song in the tempo panel, its word in
-                // the readout; refusals in the strip under the row
-                HStack(spacing: 12) {
-                    connection.fixedSize()
-                    songTabs
-                    if ui.page == .song {
-                        SloopTools(session: session, ui: ui)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .layoutPriority(-1)
-                    } else {
-                        Spacer(minLength: 12)
-                    }
-                    skiffTransport
-                }
-                .overlay(alignment: .top) {
-                    SloopStrip(session: session, ui: ui).padding(.top, 64 + 4)
-                }
             } else {
                 // the tabs sit in the middle of the bar whatever the two sides hold
                 ZStack {
                     HStack(spacing: 0) {
                         connection
-                        // projects are SLOOP's backup objects: firmware without them (Skiff) shows none
-                        if session.dialect == nil || session.capabilities.contains(.projects) { project }
                         Spacer(minLength: 12)
                         transport
                     }
@@ -77,7 +55,6 @@ struct TopBar: View {
         .frame(height: 64)
         .zIndex(1)              // the play key's "Playing from the start" tag hangs below the bar, over the page
         .sheet(isPresented: projectsOpen) { ProjectsSheet(store: projects, session: session) }
-        .namePrompt($naming, store: projects, into: Binding(get: { ui.textPrompt }, set: { ui.textPrompt = $0 }))
     }
 
     /// Skiff's folder: the Projects sheet, its 4 slots on the FM-1 beside the iPad's projects (SAVE > PROJECT).
@@ -131,7 +108,7 @@ struct TopBar: View {
     }
 
     /// The connection menu (Lupe's own, 2026-11-05). Scott, 2026-11-06, cut to four things: one line of status, the
-    /// source (the FM-1 over USB, or a demo FM-1 running Skiff or SLOOP), Install firmware… and Settings…. Gone: the
+    /// source (the FM-1 over USB, or the demo FM-1), Install firmware… and Settings…. Gone: the
     /// "Follow the FM-1's screen" switch (it always follows now), the iPad's audio and its lines (Settings has them),
     /// the diagnostics line and the Developer submenu (its look switch with it).
     private var connectionGroups: [[MenuItem]] {
@@ -139,8 +116,7 @@ struct TopBar: View {
         return [
             [.note("\(statusLine) · \(versionLine)")],
             [MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !demo) { useDemo = false },
-             MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: demo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
-             MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: demo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }],
+             MenuItem(title: "Demo", icon: "play.rectangle", checked: demo) { useDemo = true }],
             // Skiff: what's set once moved here from the top bar (Scott, 2026-11-10, board 47): Projects, the iPad's audio
             ui.shell ? [MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true },
                           MenuItem(title: "Play through the iPad", icon: through.enabled ? "speaker.wave.2.fill" : "speaker.wave.2",
@@ -158,76 +134,6 @@ struct TopBar: View {
         }
     }
 
-    // MARK: The project on the FM-1: tap for the Projects sheet; Save when there's something to save
-
-    private var project: some View {
-        HStack(spacing: 8) {
-            Rectangle().fill(Theme.ledOff).frame(width: 1, height: 24).padding(.horizontal, 12)
-                .accessibilityHidden(true)
-            Button { ui.projectsOpen = true } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "folder").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
-                    Text(projectName)
-                        .font(.lupe(15, .semibold))
-                        .foregroundStyle(projectNamed ? Theme.text : Theme.textSecondary)
-                        .lineLimit(1).truncationMode(.tail)
-                        .frame(maxWidth: 170, alignment: .leading)
-                        .fixedSize(horizontal: true, vertical: false)
-                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textTertiary)
-                }
-                .frame(height: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(projectAccessibility)
-            .accessibilityHint("Opens your projects")
-            // Save as an icon that stays put; the dot on it is the "edited" mark (2026-11-03: the word
-            // "edited" and the Save text key took more room than the name)
-            if session.isConnected, projects.busy == nil {
-                let dirty = projects.needsSaving
-                Button {
-                    if projects.canSaveInPlace { Task { await projects.save() } } else { naming = .saveAs(projects.nextName()) }
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(dirty ? Theme.text : Theme.textTertiary)
-                        .frame(width: 44, height: 44)
-                        .overlay(alignment: .topTrailing) {
-                            if dirty { Circle().fill(Theme.text).frame(width: 7, height: 7).padding(8) }
-                        }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-                .disabled(!dirty)
-                .accessibilityLabel(projects.canSaveInPlace ? "Save \(projectName)" : "Save as a new project")
-                .accessibilityValue(dirty ? "unsaved changes" : "saved")
-            } else if projects.busy != nil {
-                ProgressView().controlSize(.small).frame(width: 44, height: 44)
-                    .accessibilityLabel(projects.busy?.label ?? "Working")
-            }
-        }
-    }
-
-    private var projectName: String {
-        switch projects.state {
-        case .project(let n): n
-        case .untitled: "Untitled"
-        case .unknown: "Not saved · on FM-1"
-        case .offline(let n): n ?? "Projects"
-        }
-    }
-
-    private var projectNamed: Bool { if case .project = projects.state { true } else { false } }
-
-    private var projectAccessibility: String {
-        switch projects.state {
-        case .project(let n): projects.edited ? "Project \(n), edited" : "Project \(n)"
-        case .untitled: projects.edited ? "Untitled project, edited" : "Untitled project"
-        case .unknown: "What's on the FM-1 isn't saved as a project"
-        case .offline(let n): n.map { "Project \($0)" } ?? "Projects"
-        }
-    }
-
     private var statusLine: String {
         switch session.status {
         case .searching: "No FM-1"
@@ -242,7 +148,7 @@ struct TopBar: View {
         switch session.status {
         case .connected(let v): session.screenLinked ? "\(v) · screen link" : v
         case .wrongFirmware(let found, _): found.replacingOccurrences(of: "FELUCCA ", with: "")
-        default: "needs SLOOP 2.8.4 or Skiff 2.2"
+        default: "needs Skiff 2.2 or 2.5.1"
         }
     }
 
@@ -256,7 +162,7 @@ struct TopBar: View {
     private var tabs: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                ForEach(ui.songTab ? Page.skiffPadTabs : ui.sloopShell ? Page.sloopPadTabs : Page.sloopTabs) { p in
+                ForEach(ui.songTab ? Page.skiffPadTabs : Page.classicTabs) { p in
                     let current = ui.page == p
                     Button {
                         ui.page = p
@@ -288,7 +194,7 @@ struct TopBar: View {
     /// so going between them is the same slide as before, the editor staying put under them; the tab line is the same.
     private var songTabs: some View {
         let tabs: [(title: String, current: Bool, pick: () -> Void)] = [
-            ("Pads", ui.page == .song && ui.songView == .pads, { pickSong(.pads) }),   // (SLOOP: its sections; the Timeline its order)
+            ("Pads", ui.page == .song && ui.songView == .pads, { pickSong(.pads) }),
             ("Timeline", ui.page == .song && ui.songView == .timeline, { pickSong(.timeline) }),
             ("Mix", ui.page == .mixer, { ui.page = .mixer; Self.driveDevice(session: session, ui: ui, to: .mixer) }),
         ]
@@ -346,9 +252,7 @@ struct TopBar: View {
         case .sound:
             if let first = SoundPage.shown(session, ui.soundFamily).first { session.showOnDevice(page: first.fw) }
         case .mixer:
-            // SLOOP has no MIXER page: GLO's first page (GLOBAL) stands for Mix
-            if session.dialect == .skiff { session.showOnDevice(page: ui.mixerSection.page) }
-            else if let g = SoundPage.pages(session).first(where: { $0.family == .glo }) { session.showOnDevice(page: g.fw) }
+            session.showOnDevice(page: ui.mixerSection.page)
         }
     }
 
@@ -398,15 +302,14 @@ struct TopBar: View {
         .disabled(!session.isConnected)
         .opacity(session.isConnected ? 1 : 0.4)
         .accessibilityLabel("Record")
-        .accessibilityValue(session.song.songRecording ? "song recording" : session.recording ? "recording" : "off")
+        .accessibilityValue(session.recording ? "recording" : "off")
         .accessibilityAddTraits(.isToggle)
     }
 
     /// Tap: play or stop. Hold (half a second): play from the start, as the FM-1's GLO + PLAY (Scott, 2026-11-06):
     /// every track from its first entry with SONG on, the patterns from their first step with it off. A hold shows
     /// nothing until it happens, so it has three other ways in: the VoiceOver action "Play from the start", ⇧Space,
-    /// and the pointer's tooltip; and when it happens a tag under the key says so. Skiff only: SLOOP's editor can't
-    /// restart, so there the hold, the action and the shortcut aren't there.
+    /// and the pointer's tooltip; and when it happens a tag under the key says so.
     ///
     /// One press gesture decides tap or hold, not a Button with a long press beside it: whether the Button still
     /// fired on the release that ended a hold changed from press to press in the simulator (2026-11-06), so a hold
@@ -476,7 +379,7 @@ struct TopBar: View {
         }
         .help(canHold ? "Tap to play or stop · hold to play from the start (⇧Space)" : "Play or stop")
         .accessibilityElement()
-        .accessibilityLabel(session.playing ? "Stop" : session.song.songMode ? "Play the song" : "Play")
+        .accessibilityLabel(session.playing ? "Stop" : "Play")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { if session.isConnected { session.setPlaying(!session.playing) } }
         .accessibilityHint(canHold ? "Hold to play from the start" : "")
@@ -532,13 +435,10 @@ private struct ReadoutLabel: View {
 
     var body: some View {
         let pos = session.positions[session.selectedTrack]
-        let song = session.song.songMode
         let position = session.playing ? "\(pos.step / 16 + 1) · \(pos.step % 16 + 1)" : "– · –"
         // Skiff: the playback mode's word, always (its keys are in the tempo panel since 2026-11-10, board 47)
         let skiffMode: String? = session.skiffSong?.song.map { ["Loop", "Song", "Once"][safe: $0.mode.rawValue] ?? "Song" }
-        // SLOOP in the same layout: its song mode's word, always (its keys are in the tempo panel too)
-        let sloopMode: String? = TempoPanel.sloopMode(session) ? (session.song.songMode ? "Song" : "Loop") : nil
-        let mode = session.song.songRecording ? "SONG REC" : session.recording ? "REC" : skiffMode ?? sloopMode ?? (song ? "SONG" : nil)
+        let mode = session.recording ? "REC" : skiffMode
         VStack(alignment: .leading, spacing: 0) {
             Text(position).font(.lupe(20, .semibold)).monospacedDigit().lineLimit(1)
                 .foregroundStyle(recording ? Theme.recText : Theme.text)

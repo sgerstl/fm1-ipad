@@ -27,7 +27,6 @@ struct SessionUpkeep: ViewModifier {
         content
             // what the FM-1 holds: matched against the saved projects at connect, re-checked at each stop
             .onChange(of: session.isConnected, initial: true) { _, on in if on { projects.connected() } }
-            .onChange(of: session.playing) { _, on in projects.playingChanged(on) }
             // no sleeping mid-session: the screen stays on while an FM-1 is connected, and may sleep otherwise
             .onChange(of: session.isConnected, initial: true) { _, on in
                 UIApplication.shared.isIdleTimerDisabled = on
@@ -36,7 +35,7 @@ struct SessionUpkeep: ViewModifier {
             .onChange(of: speakerQuiet, initial: true) { _, quiet in session.muteSpeaker(quiet) }
             // iPad audio left on from last time: look again once the app is in front, as when the FM-1 connects
             .onChange(of: scenePhase) { _, p in if p == .active { through.recheck() } }
-            .onChange(of: [audioThrough ? 1 : 0, session.playing ? 1 : 0, session.song.songMode ? 1 : 0], initial: true) { _, _ in
+            .onChange(of: [audioThrough ? 1 : 0, session.playing ? 1 : 0], initial: true) { _, _ in
                 NowPlaying.shared.update(active: audioThrough, session: session)
             }
     }

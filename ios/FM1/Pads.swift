@@ -129,7 +129,7 @@ struct FunctionPads: View {
             SkiffNavigator.save(session: session, ui: ui)
         case .save:
             // as the FM-1's SAVE: the presets first, in the sounds panel over the page (Scott, 2026-11-10: keep the
-            // place); pressed again, the song (SLOOP's SECTION page)
+            // place); pressed again, the song
             if ui.presetsPanel || ui.page == .library { ui.presetsPanel = false; openSong() } else {
                 ui.chooseSound(session, track: session.selectedTrack)
                 if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).presets) }
@@ -139,13 +139,6 @@ struct FunctionPads: View {
             ui.mixerSection = ui.page == .mixer ? SkiffButtonMap.MixerTab(rawValue: (ui.mixerSection.rawValue + 1) % SkiffButtonMap.MixerTab.allCases.count)! : .mixer
             ui.page = .mixer
             if session.screenLinked, ui.followDevice { session.showOnDevice(page: ui.mixerSection.page) }
-        case .seq where ui.shell && session.dialect != .skiff:
-            // SLOOP in the Song · Mix tabs: SEQ is the Song tab's editor (its NOTES and PATTERN pages on the FM-1)
-            ui.soundPanel = nil
-            if ui.page != .song { ui.page = .song }
-            let map = ScreenMap.of(session)
-            let again = session.deviceScreen.map { !$0.home && $0.page == map.notes } ?? false
-            if session.screenLinked, ui.followDevice { session.showOnDevice(page: again ? map.pattern : map.notes) }
         case .seq where ui.songTab:
             // as the rail's SEQ: the Song tab's places, NOTES first (from Mix or Sounds, the Song tab)
             ui.soundPanel = nil
@@ -172,7 +165,6 @@ struct FunctionPads: View {
         default:
             guard let f = pad.family else { return }
             // the Mixer tab keeps its place: the button's pages come in on the sound panel, as from its rail
-            // SLOOP in the Song · Mix tabs: GLO's pages are Mix's (Skiff's GLO has its own case above)
             if ui.shell, f == .glo {
                 ui.soundPanel = nil
                 ui.page = .mixer

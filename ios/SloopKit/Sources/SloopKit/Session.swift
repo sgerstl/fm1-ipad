@@ -347,8 +347,6 @@ public final class DeviceSession {
     public var kitTrack: Int? { drumTrack ?? (isKit(selectedTrack) ? selectedTrack : nil) }
     /// The drum grid's lanes: Skiff's 8 (EDITOR_PROTOCOL.md "v5: the drum grid").
     public var drumLanes: [String] { Music.skiffDrumLanes }
-    /// Hit levels as the firmware keeps them: Skiff's accent or not.
-    public var drumLevelsAreAccents: Bool { true }
     /// A step's key in the session's bookkeeping (one number per track and step).
     private func stepKey(_ t: Int, _ i: Int) -> Int { t * 256 + i }
 

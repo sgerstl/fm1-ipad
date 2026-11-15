@@ -53,7 +53,6 @@ struct SkiffStepInspector: View {
                     Button("Clear locks") { Task { await session.clearLocks(track: t, step: i) } }
                         .font(.lupe(12, .semibold)).underline()
                         .frame(minHeight: 44)
-                        .disabled(session.song.songPlaying)
                         .accessibilityHint("Takes this step's locks off; its recorded changes stay")
                 }
                 stepKey("chevron.left", "Previous step") { go(-1) }
@@ -287,7 +286,6 @@ struct SkiffStepInspector: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressSink())
-        .disabled(session.song.songPlaying)
         .accessibilityLabel(session.lockStep == nil ? "Lock knob turns to step \(i + 1)" : "Locking knob turns to step \(i + 1)")
         .accessibilityHint("While on, turning a knob of this track sets a lock on this step instead of changing the sound")
         .accessibilityAddTraits(.isToggle)

@@ -10,16 +10,14 @@ enum Page: String, CaseIterable, Identifiable {
     /// Skiff's GLO pages (its Song tab's firmware only): the strips and the shared effects.
     case mixer = "Mixer"
     var id: String { rawValue }
-    /// The tabs on SLOOP (no Mixer: its GLO pages are Shape's).
-    static let sloopTabs: [Page] = [.sequencer, .sound, .song, .library]
+    /// The four tabs without the Song tab (an FM-1 whose Skiff has no song lists; the layout SLOOP had).
+    static let classicTabs: [Page] = [.sequencer, .sound, .song, .library]
     /// The tabs on Skiff: Song · Mix · Sounds.
     static let skiffTabs: [Page] = [.song, .mixer, .library]
     /// The iPad's tabs on Skiff since 2026-11-10 (Scott): Song · Mix. The Sounds tab's browser is the sounds panel
     /// (PresetsPanel), opened from SAVE, the track controls' sound key, the sound panel and the menus. The phone keeps
     /// Sounds (skiffTabs) until its Song tab exists.
     static let skiffPadTabs: [Page] = [.song, .mixer]
-    /// SLOOP on the iPad, in the same tabs (2026-11-10, proposed): Song · Mix.
-    static let sloopPadTabs: [Page] = [.song, .mixer]
     /// Whether this is the iPad, where Skiff has no Sounds tab.
     @MainActor static var padHasNoSoundsTab: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     /// The phone's tabs on Skiff: Song split into Pads and Edit (the pattern and its step panel), then Mix and Sounds
@@ -75,14 +73,8 @@ final class EditorUI {
     var songTab = false {
         didSet { if songTab { enterShell() } }
     }
-    /// SLOOP on the iPad in the Skiff tabs (the SLOOP design pass, 2026-11-10, boards S1–S5): Song · Mix, the sound panel
-    /// for Shape, the sounds panel for Browse, the Song tab holding SLOOP's sections, its order and the editor.
-    var sloopShell = false {
-        didSet { if sloopShell { enterShell() } }
-    }
-    /// The Song · Mix layout, whichever firmware: Skiff's Song tab, or SLOOP's in the same tabs. (`songTab` stays Skiff's
-    /// own: its song store, the pool, its playback mode.)
-    var shell: Bool { songTab || sloopShell }
+    /// The Song · Mix layout: Skiff's Song tab.
+    var shell: Bool { songTab }
     private func enterShell() {
         // (turning on, the phone too opens on Pads, unless -page edit asked for Edit)
         if (page == .sequencer && !(phone && LaunchArgs.all.contains("edit"))) || page == .sound
@@ -140,9 +132,6 @@ final class EditorUI {
     /// The tabs follow the FM-1's screen (and tapping a tab moves it), when the screen link is there. Always, since
     /// Scott took the switch out of the menu (2026-11-06); kept as a property so what reads it stays as it was.
     var followDevice: Bool { true }
-    /// Which firmware the demo FM-1 pretends to run: Skiff, or SLOOP (the menu's "Skiff demo" / "SLOOP demo",
-    /// 2026-11-06). Starts from the launch flag (-demo-skiff) so screenshots and tests open where they did.
-    var demoSkiff = DeviceSession.launchedSkiffDemo
     /// The track box's timeline, pulled open with its handle on the other tabs; shut again on a page change.
     /// On Sequence it is always open.
     var timelineOpen = false
@@ -152,7 +141,6 @@ final class EditorUI {
     var viewJump: ViewJump?
     var trackMenu: TrackMenu?                    // a long-pressed track's menu, where the finger was
     var trackPicker: CGPoint?                    // the phone's one chip tapped (more than four tracks): the tracks, there
-    var sectionMenu: SectionMenu?                // a held stored section's menu, where the finger was
     var lastClear: StepsKept?                    // offered for undo for a few seconds (StepClear)
     var librarySection: LibrarySection = LaunchArgs.all.contains("-library-user") ? .user
         : LaunchArgs.all.contains("-library-samples") ? .samples : .engine(0)

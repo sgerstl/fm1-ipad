@@ -52,24 +52,6 @@ struct AppView: View {
                             if let s, !SoundPanelControl.follow(s, session: session, ui: ui) { SkiffNavigator.follow(s, session: session, ui: ui) }
                             return
                         }
-                        // SLOOP in the Song · Mix tabs: a sound button brings the sound panel over the tab, as on Skiff;
-                        // SAVE held (the song layer) shows the sections
-                        if ui.sloopShell, let s {
-                            if SoundPanelControl.follow(s, session: session, ui: ui) { return }
-                            if s.layer == 7, ui.followDevice { ui.songView = .pads }
-                            // SAVE again (the FM-1 on its song pages): the sounds panel goes, the sections show
-                            if ui.followDevice, SoundPage.tab(for: s, session) == .song, ui.presetsPanel {
-                                ui.presetsPanel = false
-                                ui.songView = .pads
-                            }
-                            // GLO's pages are Mix's; SEQ's (NOTES, PATTERN) the Song tab's editor
-                            if ui.followDevice, !s.home, s.layer == 0, s.menu == 0, let p = SoundPage.page(session, fw: s.page),
-                               p.family == .glo || p.family == .seq {
-                                let tab: Page = p.family == .glo ? .mixer : .song
-                                if tab != ui.page { ui.pageFromDevice = true; ui.page = tab }
-                                return
-                            }
-                        }
                         guard ui.followDevice, let s, let tab = SoundPage.tab(for: s, session), tab != ui.page else { return }
                         ui.pageFromDevice = true
                         ui.page = tab
@@ -83,10 +65,6 @@ struct AppView: View {
         .onChange(of: session.isConnected, initial: true) { _, on in if on { everConnected = true } }
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.songTab = on }
-        // SLOOP in the same tabs (the SLOOP design pass, 2026-11-10); -sloop-classic keeps the old four tabs, for comparing
-        .onChange(of: session.dialect == .sloop && session.capabilities.contains(.sloopSong), initial: true) { _, on in
-            ui.sloopShell = on && !LaunchArgs.all.contains("-sloop-classic")
-        }
         // the card is said when it comes and when the FM-1 is back, once each (4.1.3: a status message reaches
         // VoiceOver without moving focus; the card's own line blends, which VoiceOver doesn't hear)
         .onChange(of: held) { was, now in
@@ -126,7 +104,6 @@ struct AppView: View {
         .overlay { ListUndoStrip(session: session, ui: ui) }   // (a pad cleared or blocks deleted: Undo)
         .overlay { EdgeWells(session: session, ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
-        .overlay { sectionMenuLayer }
         .overlay { KnobPanelLayer(ui: ui) }
         .overlay { ValueLoupeLayer(loupe: ui.loupe) }
         .coordinateSpace(name: Self.space)
@@ -172,18 +149,7 @@ extension AppView {
                     }
                 case .song:
                     HStack(alignment: .top, spacing: 16) {
-                        if session.capabilities.contains(.sloopSong), ui.sloopShell {
-                            // SLOOP's Song tab in the Skiff layout: its sections as pads or its order as a lane, the editor below
-                            SoundPanelHost(session: session, ui: ui) {
-                                SloopSongPage(session: session, ui: ui)
-                            }
-                        } else if session.capabilities.contains(.sloopSong) {
-                            leftColumn {
-                                FunctionPads(session: session, ui: ui)
-                                SongModePanel(session: session)
-                            }
-                            SongPage(session: session, ui: ui)
-                        } else if let store = session.skiffSong {
+                        if let store = session.skiffSong {
                             // Skiff's Song tab: Arrange's lanes over the pattern editor, a divider between (boards 19, 20)
                             SoundPanelHost(session: session, ui: ui) {
                                 SkiffSongPage(session: session, store: store, ui: ui)
@@ -269,7 +235,7 @@ extension AppView {
     }
 
     /// Arrange on Skiff has its own lane headers: no track box over it.
-    private var skiffArrange: Bool { ui.page == .song && (session.skiffSong != nil || ui.sloopShell) }
+    private var skiffArrange: Bool { ui.page == .song && session.skiffSong != nil }
 
     /// The left column under the track box.
     private func leftColumn<C: View>(@ViewBuilder _ content: () -> C) -> some View {
@@ -279,50 +245,6 @@ extension AppView {
             Spacer(minLength: 0)
         }
         .frame(width: Overview.boxWidth)
-    }
-
-    /// A held stored section (SLOOP): replace it with the tracks, or clear it (asked again, with what clearing
-    /// costs). Placed as every menu is (PlacedMenu), its asks as notes in it.
-    var sectionMenuLayer: some View {
-        GeometryReader { g in
-            ZStack(alignment: .topLeading) {
-                Color.clear.allowsHitTesting(false)   // the layer's full size, for the placement; takes no touches
-                if let m = ui.sectionMenu {
-                    PlacedMenu(title: "Section \(DeviceSession.sectionName(m.section))", groups: sectionGroups(m), at: m.at,
-                               layer: g.size, close: { ui.sectionMenu = nil })
-                        .id("\(m.section)-\(String(describing: m.mode))")
-                        .transition(PlacedMenu.transition(at: m.at, layer: g.size, reduceMotion: reduceMotion))
-                }
-            }
-        }
-    }
-
-    /// A held section's items: replace or clear it; Clear asks again, here, with what clearing costs.
-    private func sectionGroups(_ m: SectionMenu) -> [[MenuItem]] {
-        let name = DeviceSession.sectionName(m.section)
-        let inSong = session.songOrder?.steps.contains { $0.section == m.section } ?? false
-        switch m.mode {
-        case .confirmLoad:
-            var items: [MenuItem] = [.note("Load \(name) over the tracks? They have changes that aren't in a section. Loading \(name) replaces them, and the FM-1 keeps no copy.")]
-            if let e = (0..<4).first(where: { !session.song.stored($0) }) {
-                items.append(MenuItem(title: "Save them to \(DeviceSession.sectionName(e)) first", icon: "square.and.arrow.down") {
-                    session.storeLoop(in: e)
-                    session.playSection(m.section)
-                })
-            }
-            items.append(MenuItem(title: "Load it, replacing them", icon: "arrow.uturn.down") { session.playSection(m.section) })
-            return [items, [MenuItem(title: "Keep my tracks", icon: "xmark") {}]]
-        case .confirmClear:
-            var items: [MenuItem] = [.note("Clear \(name)? The FM-1 keeps no copy." + (inSong ? " It's in the song, which won't play until \(name) holds tracks again." : ""))]
-            items.append(MenuItem(title: "Clear \(name)", icon: "trash") { session.clearSection(m.section) })
-            return [items, [MenuItem(title: "Keep it", icon: "xmark") {}]]
-        default:
-            return [[MenuItem(title: "Replace with the sequence", icon: "square.and.arrow.down") { session.storeLoop(in: m.section) },
-                     MenuItem(title: session.playing ? "Clear (stop first)" : "Clear section", icon: "trash", enabled: !session.playing) {
-                         var ask = m; ask.mode = .confirmClear; ui.sectionMenu = ask     // (the panel closed: open again, asking)
-                     }],
-                    [.note("Neither has an undo on the FM-1.")]]
-        }
     }
 
     /// After Clear all: what happened and a way back, for 8 seconds.
@@ -403,7 +325,7 @@ struct SequencerPage: View {
             HStack(alignment: .top, spacing: 16) {
                 VStack(spacing: 16) {
                     Group {
-                        if session.dialect == .skiff, !session.isKit(t) { SkiffStepInspector(session: session, ui: ui) }
+                        if !session.isKit(t) { SkiffStepInspector(session: session, ui: ui) }
                         else { SelectedStepPanel(session: session, ui: ui) }
                     }
                     .flashRing(ui, .stepPanel)
@@ -447,7 +369,7 @@ struct NotOnThisFirmware: View {
     let title: String
     let detail: String
 
-    /// Arrange is SLOOP's sections and song order. A Skiff that lands here has no song lists (older than 2.0),
+    /// A Skiff that lands here has no song lists (older than 2.0),
     /// so Lupe's Song tab can't show its song: say how to get it (2026-11-06, was "still being designed").
     @MainActor static func arrange(_ session: DeviceSession) -> NotOnThisFirmware {
         NotOnThisFirmware(title: "Update Skiff to use the Song tab",
@@ -515,7 +437,7 @@ struct ConnectionState: View {
     private var detail: String {
         switch status {
         case .searching:
-            "Connect it with a USB-C cable and switch it on. It has to be running SLOOP 2.8.4 or Skiff 2.5.1."
+            "Connect it with a USB-C cable and switch it on. It has to be running Skiff 2.2 or 2.5.1."
         case .connecting:
             "Reading every track. This takes about a second."
         case .connected: ""

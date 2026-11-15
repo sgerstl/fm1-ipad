@@ -26,7 +26,7 @@ struct RootView: View {
         HandednessMigration.run()   // the single Handedness becomes Sound buttons side and Menus open (2026-11-15)
         Labs.migrate()          // values under merged keys carry over (2026-11-10, the motion options cleaned up)
         let demo = LaunchArgs.all.contains("-demo")
-        let s = DeviceSession(demo: demo, skiff: DeviceSession.launchedSkiffDemo)
+        let s = DeviceSession(demo: demo)
         _session = State(initialValue: s)
         TrackColours.session = s
     }
@@ -64,7 +64,7 @@ struct RootView: View {
         }
         .background(Theme.page)
         // Skiff: Sequence and Arrange are one Song tab (Scott, 2026-11-05). Set here, over both layouts: it was in the
-        // iPad's AppView only, so the phone showed SLOOP's tabs on a Skiff FM-1 (found in the 2026-11-10 accessibility pass)
+        // iPad's AppView only, so the phone showed the four-tab layout on a Skiff FM-1 (the 2026-11-10 accessibility pass)
         .onChange(of: session.dialect == .skiff && session.skiffSong != nil, initial: true) { _, on in ui.phone = compact; ui.songTab = on }
         .onChange(of: compact, initial: true) { _, c in ui.phone = c }
         .environment(firmware)
@@ -77,10 +77,10 @@ struct RootView: View {
         // Lupe's intro on every cold launch, over the app, which starts (and connects) underneath it
         .overlay { if !introOver { LaunchIntro { introOver = true } } }
         .onAppear { TouchShow.installIfAsked() }       // -show-touches: screen recordings
-        // the source (Scott, 2026-11-06): the FM-1 over USB, the Skiff demo or the SLOOP demo; a change makes a new session
-        .task(id: SessionRun(demo: useDemo, skiff: ui.demoSkiff, paused: firmware.holdsDevice)) {
-            if session.isDemo != useDemo || (useDemo && session.demoSkiff != ui.demoSkiff) {
-                session = DeviceSession(demo: useDemo, skiff: ui.demoSkiff); TrackColours.session = session
+        // the source (Scott, 2026-11-06): the FM-1 over USB or the demo (Skiff); a change makes a new session
+        .task(id: SessionRun(demo: useDemo, paused: firmware.holdsDevice)) {
+            if session.isDemo != useDemo {
+                session = DeviceSession(demo: useDemo); TrackColours.session = session
             }
             guard !firmware.holdsDevice else { return }      // the firmware installer has the FM-1 to itself
             projects.attach(session)
@@ -91,4 +91,4 @@ struct RootView: View {
 }
 
 /// The session runs per source, and not while a firmware install holds the FM-1.
-private struct SessionRun: Equatable { var demo: Bool, skiff: Bool, paused: Bool }
+private struct SessionRun: Equatable { var demo: Bool, paused: Bool }

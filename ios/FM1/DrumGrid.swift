@@ -8,7 +8,7 @@ struct DrumGrid: View {
     @Environment(\.grid) private var grid
     let session: DeviceSession
     let ui: EditorUI
-    /// The drum track (SLOOP's track 4), or the selected kit track on Skiff.
+    /// The selected kit track (a fixed drum track, where the firmware has one).
     private var dt: Int { session.kitTrack ?? 0 }
     private var lanes: [String] { session.drumLanes }
     @State private var offset = CGPoint.zero
@@ -34,7 +34,7 @@ struct DrumGrid: View {
         VStack(spacing: 8) {
             if !inSongTab {
             EditorHeader(track: dt, title: t.mute ? "Drums · muted" : "Drums", muted: t.mute,
-                         detail: "\(lanes.count) lanes · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+                         detail: "\(lanes.count) lanes · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)")
             }
 
             StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[dt],
@@ -91,7 +91,7 @@ struct DrumGridContent: View {
     var grid = GridMetrics.pad
     let session: DeviceSession
     let ui: EditorUI
-    /// The drum track (SLOOP's track 4), or the selected kit track on Skiff.
+    /// The selected kit track (a fixed drum track, where the firmware has one).
     private var dt: Int { session.kitTrack ?? 0 }
     private var lanes: [String] { session.drumLanes }
     private var contentHeight: CGFloat { CGFloat(lanes.count) * grid.rowHeight }
@@ -142,9 +142,7 @@ struct DrumGridContent: View {
                         .accessibilityValue(ui.stepSel.contains(i) ? "picked" : "")
                         .accessibilityActions {
                             // pick steps for the selection bar without the drag (2026-11-10, 2.1.1; as the piano roll)
-                            if session.dialect == .skiff {      // (picking is Skiff's: SLOOP has no selection bar)
-                                Button(ui.stepSel.contains(i) ? "Unpick step" : "Pick step") { ui.stepSel.formSymmetricDifference([i]) }
-                            }
+                            Button(ui.stepSel.contains(i) ? "Unpick step" : "Pick step") { ui.stepSel.formSymmetricDifference([i]) }
                             ForEach(lanes.indices, id: \.self) { l in
                                 Button("\(lanes[l]) \(t.gridSteps[i].has(l) ? "off" : "on")") {
                                     ui.selectedStep[dt] = i; ui.selectedLane = l

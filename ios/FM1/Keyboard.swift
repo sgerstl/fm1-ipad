@@ -19,7 +19,7 @@ struct KeyboardDrawer: View {
     static let keyHeight: CGFloat = 112
 
     var body: some View {
-        // SLOOP's drum track, or a Skiff kit (DRUM, DRUM-X): the lanes on the white keys (Scott, 2026-11-06: on Skiff
+        // a fixed drum track, or a Skiff kit (DRUM, DRUM-X): the lanes on the white keys (Scott, 2026-11-06: on Skiff
         // the drawer was a piano whose keys played the kit's lanes out of order, none of them named)
         let drums = session.selectedIsDrums || (session.dialect == .skiff && session.isKit(session.selectedTrack))
         VStack(spacing: 12) {
@@ -44,10 +44,6 @@ struct KeyboardDrawer: View {
                     session.keyboardOctave = $0
                 }
             }
-            if !session.otherChannelsPlaySelected {
-                Text("GLO > MIDI > OTHER is OFF on the FM-1, so these keys play nothing. Set it to SEL.")
-                    .font(.lupe(13)).foregroundStyle(Theme.text)
-            }
             Spacer()
             Button { ui.keyboardOpen = false } label: {
                 Image(systemName: "xmark").font(.system(size: 15, weight: .semibold))
@@ -70,10 +66,10 @@ struct KeyboardDrawer: View {
         func pitch(_ k: Int) -> Int? { session.pitch(ofKey: k) }
         func name(_ k: Int) -> String { pitch(k).map(Music.noteName) ?? "" }
         func spoken(_ k: Int) -> String { pitch(k).map(Music.spokenNoteName) ?? "silent" }
-        // drums: a lane per white key, the kit's own names (Skiff's 8, SLOOP's 16); keys past the kit are silent
+        // drums: a lane per white key, the kit's own names (Skiff's 8); keys past the kit are silent
         let lanes = session.drumLanes
         func laneName(_ k: Int) -> String { k < lanes.count ? lanes[k] : "" }
-        let blackPlays = !(session.dialect == .skiff)        // SLOOP's black key plays the lane to its left, as on the FM-1
+        let blackPlays = false        // a kit's black keys are silent (Skiff's lanes are on the white keys)
         return GeometryReader { geo in
             let spacing = geo.size.width / 16, keyW = spacing * 0.74
             // (taller, 94 → 112, nearer the FM-1's own tall pills; Scott, 2026-11-06)

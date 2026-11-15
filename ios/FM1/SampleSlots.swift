@@ -1,7 +1,7 @@
 import SloopKit
 import SwiftUI
 
-/// The FM-1's user sample slots in the sound panel (Skiff's USR1–3, SLOOP's SMPL1–4): the "Your samples" section, and
+/// The FM-1's user sample slots in the sound panel (Skiff's USR1–3): the "Your samples" section, and
 /// the same keys under the Sample engine. Each slot is a key that plays it on the track (a full one) with a ▶ that
 /// reads it back and plays it here, and under it Record…, Import file… and, when full, Clear… (batch list 3,
 /// 2026-11-11). On Skiff a line says the song stops for these and starts again after.
@@ -45,7 +45,7 @@ struct SampleSlotList: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 if full, let s { useKey(k, sound: s, current: current) } else { emptyKey(k) }
-                // ▶ only where the slot can be read back (Skiff's backup objects 32–34; SLOOP's sample commands only write)
+                // ▶ only where the slot can be read back (Skiff's backup objects 32–34)
                 if full, session.dialect == .skiff { hearKey(k, sound: s?.name ?? "") }
             }
             HStack(spacing: 8) {

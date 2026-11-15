@@ -38,19 +38,18 @@ struct ProjectsSheet: View {
                 switch tab {
                 case .projects:
                     if session.dialect == .skiff { SkiffProjectSlots(session: session, menu: $menu, prompt: $prompt) }
-                    if ipadProjects {
+                    Group {
                         Section {
                             Button { request(nil) } label: { Label("New project", systemImage: "plus") }
                                 .disabled(!session.isConnected || store.busy != nil)
-                                .accessibilityHint(skiff ? "Clears the music: each track's power-on sound, no patterns. The pattern pool keeps its patterns"
-                                                         : "Clears the FM-1: empty tracks, no sections, the default sounds, 90 BPM")
+                                .accessibilityHint("Clears the music: each track's power-on sound, no patterns. The pattern pool keeps its patterns")
                             Button { naming = .saveAs(store.nextName()) } label: { Label("Save as…", systemImage: "square.and.arrow.down") }
                                 .disabled(!session.isConnected || store.busy != nil)
                         } header: {
-                            if skiff { Text("On this iPad") }      // (beside the FM-1's own slots)
+                            Text("On this iPad")      // (beside the FM-1's own slots)
                         } footer: {
                             if !session.isConnected { Text("Plug in the FM-1 to open or save a project. You can still rename and delete.") }
-                            else if skiff { Text("Saving here or opening stops the FM-1. A project keeps its patterns with it; user sounds and samples stay on the FM-1.") }
+                            else { Text("Saving here or opening stops the FM-1. A project keeps its patterns with it; user sounds and samples stay on the FM-1.") }
                         }
                         Section {
                             if store.projects.isEmpty {
@@ -91,11 +90,6 @@ struct ProjectsSheet: View {
         .namePrompt($naming, store: store, into: $prompt)
     }
 
-    /// SLOOP's backup objects make its iPad projects; Skiff's backup commands move one project and its patterns (qa/skiff-projects-2026-11-06).
-    private var ipadProjects: Bool { session.dialect == nil || skiff || session.capabilities.contains(.projects) }
-    /// Skiff's projects (connected to Skiff, or last connected to it): its words, its folder.
-    private var skiff: Bool { store.firmware == .skiff }
-
     // MARK: Rows
 
     /// The row opens the project; its ⋯ menu (and a long press, and a swipe) manages it. The menu sits
@@ -104,7 +98,7 @@ struct ProjectsSheet: View {
     private func row(_ p: ProjectFile) -> some View {
         HStack(spacing: 8) {
             openButton(p)
-            RowMenuKey(name: p.name, hint: p.skiff == nil ? "Rename, duplicate, export or delete" : "Rename, duplicate or delete",
+            RowMenuKey(name: p.name, hint: "Rename, duplicate or delete",
                        disabled: store.busy != nil) { at in openMenu(p, at, fromKey: true) }
         }
         // a long press anywhere on the row: the same menu, at the finger
@@ -116,18 +110,12 @@ struct ProjectsSheet: View {
         }
     }
 
-    /// A project's menu (Lupe's own): rename, duplicate, export, delete.
+    /// A project's menu (Lupe's own): rename, duplicate, delete. (The project file is Lupe's own, already in Files › Lupe ›
+    /// Skiff › Projects: no export.)
     private func openMenu(_ p: ProjectFile, _ at: CGPoint, fromKey: Bool) {
         menu = AppMenu(title: p.name, groups: {
             var g: [[MenuItem]] = [[MenuItem(title: "Rename", icon: "pencil") { naming = .rename(p) }]]
             if !p.isSafetyCopy { g[0].append(MenuItem(title: "Duplicate", icon: "plus.square.on.square") { store.duplicate(p) }) }
-            // SLOOP's song file: opens in SLOOP's web editor too; the share sheet is the system's. (Skiff's project file
-            // is Lupe's own, already in Files › Lupe › Skiff › Projects: no export)
-            if p.skiff == nil {
-                g[0].append(MenuItem(title: "Export…", icon: "square.and.arrow.up") {
-                    if let url = try? SloopSongExport(project: p).write() { ShareSheet.present(url, at: at) }
-                })
-            }
             g.append([MenuItem(title: "Delete", icon: "trash") { askDelete(p) }])
             return g
         }, at: at, fromKey: fromKey)
@@ -151,7 +139,6 @@ struct ProjectsSheet: View {
                     Text(detail(p)).font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer(minLength: 12)
-                if p.skiff == nil { SectionMarks(filled: p.data.sectionsFilled) }
             }
             .frame(minHeight: 52)
             .contentShape(Rectangle())
@@ -173,25 +160,19 @@ struct ProjectsSheet: View {
 
     private func detail(_ p: ProjectFile) -> String {
         let when = p.saved.formatted(.relative(presentation: .named))
-        let what = p.skiff.map { k in k.patternCount == 1 ? "1 pattern" : "\(k.patternCount) patterns" } ?? p.data.bpm.map { "\($0) BPM" }
-        return [p.isSafetyCopy ? "Taken \(when)" : "Saved \(when)", what].compactMap { $0 }.joined(separator: " · ")
+        let what = p.skiff.patternCount == 1 ? "1 pattern" : "\(p.skiff.patternCount) patterns"
+        return [p.isSafetyCopy ? "Taken \(when)" : "Saved \(when)", what].joined(separator: " · ")
     }
 
     private func accessibilityLabel(_ p: ProjectFile, onFM1: Bool) -> String {
-        if p.skiff != nil {
-            return [p.name, onFM1 ? (store.edited ? "on the FM-1, edited" : "on the FM-1") : nil, detail(p)].compactMap { $0 }.joined(separator: ", ")
-        }
-        let filled = p.data.sectionsFilled.enumerated().filter(\.element).map { DeviceSession.sectionName($0.offset) }
-        let sections = filled.isEmpty ? "no sections" : "sections \(filled.joined(separator: ", "))"
-        return [p.name, onFM1 ? (store.edited ? "on the FM-1, edited" : "on the FM-1") : nil, detail(p), sections]
-            .compactMap { $0 }.joined(separator: ", ")
+        [p.name, onFM1 ? (store.edited ? "on the FM-1, edited" : "on the FM-1") : nil, detail(p)].compactMap { $0 }.joined(separator: ", ")
     }
 
     // MARK: Opening
 
     private func request(_ target: ProjectFile?) {
         let o = Opening(target: target)
-        if store.needsSaving || session.playing || session.song.songPlaying { menu = openMenu(o) } else { go(o, saveFirst: false) }
+        if store.needsSaving || session.playing { menu = openMenu(o) } else { go(o, saveFirst: false) }
     }
 
     /// Save first, or stop, before opening: Lupe's choices at the finger, the question and what happens over them
@@ -237,32 +218,10 @@ struct ProjectsSheet: View {
     }
 
     private func openMessage(_ o: Opening) -> String {
-        let replaces = skiff
-            ? "Opening \(o.name) replaces the music on the FM-1. Patterns it brings go to free places in the pool; none are written over."
-            : "Opening \(o.name) replaces what's on the FM-1."
-        let stops = session.playing || session.song.songPlaying ? " It stops first." : ""
+        let replaces = "Opening \(o.name) replaces the music on the FM-1. Patterns it brings go to free places in the pool; none are written over."
+        let stops = session.playing ? " It stops first." : ""
         let copy = store.needsSaving ? " Without saving, Lupe still keeps a safety copy." : ""
         return replaces + stops + copy
-    }
-}
-
-/// A, B, C, D: bright for a filled section, dim for an empty one (the letters say it without colour).
-struct SectionMarks: View {
-    let filled: [Bool]
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<4, id: \.self) { k in
-                let on = k < filled.count && filled[k]
-                Text(DeviceSession.sectionName(k))
-                    .font(.lupe(12, .semibold))
-                    .foregroundStyle(on ? Theme.onColour : Theme.textSecondary)    // 4.5:1 and up on the sheet
-                    .frame(width: 22, height: 22)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(on ? Theme.text : Color.clear))
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(on ? Color.clear : Theme.ledOff, lineWidth: 1))
-            }
-        }
-        .accessibilityHidden(true)
     }
 }
 
@@ -286,8 +245,8 @@ private struct NamePromptModifier: ViewModifier {
             let rename: ProjectFile? = if case .rename(let p) = asked { p } else { nil }
             let start: String = switch asked { case .saveAs(let n): n; case .rename(let p): p.name }
             into = TextPrompt(title: rename == nil ? "Save project" : "Rename project",
-                              // Skiff: reading the music stops the transport (as a save on the FM-1 does)
-                              message: rename == nil ? (store.firmware == .skiff ? "Saved on this iPad. Saving stops the FM-1." : "Saved on this iPad.") : nil,
+                              // reading the music stops the transport (as a save on the FM-1 does)
+                              message: rename == nil ? "Saved on this iPad. Saving stops the FM-1." : nil,
                               text: start, confirm: rename == nil ? "Save" : "Rename") { name in
                 let before = store.message
                 if let p = rename { store.rename(p, to: name) } else { await store.save(as: name) }
@@ -324,18 +283,5 @@ private struct RowMenuKey: View {
         .globalFrame($frame)
         .accessibilityLabel("Manage \(name)")
         .accessibilityHint(hint)
-    }
-}
-
-/// The system's share sheet for a file, from wherever a Lupe menu was (a sheet included).
-@MainActor enum ShareSheet {
-    static func present(_ url: URL, at point: CGPoint) {
-        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
-              var top = scene.keyWindow?.rootViewController else { return }
-        while let p = top.presentedViewController { top = p }
-        let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        vc.popoverPresentationController?.sourceView = top.view
-        vc.popoverPresentationController?.sourceRect = CGRect(origin: top.view.convert(point, from: nil), size: .zero)
-        top.present(vc, animated: true)
     }
 }

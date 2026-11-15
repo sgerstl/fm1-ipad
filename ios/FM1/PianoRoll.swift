@@ -40,7 +40,7 @@ struct PianoRoll: View {
         VStack(spacing: 8) {
             if !inSongTab {
             EditorHeader(track: track, title: t.displayName + (t.mute ? " · muted" : ""), muted: t.mute,
-                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)\(rowsNote)" + (session.song.songPlaying ? " · song playing: edits here end at STOP" : ""))
+                         detail: "\(scaleName) · length \(t.length) · steps \(first)–\(min(session.stepCount, first + 15)) of \(session.stepCount)\(rowsNote)")
             }
 
             StepNumbers(steps: session.stepCount, offsetX: offset.x, selected: ui.selectedStep[track],

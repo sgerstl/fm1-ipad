@@ -164,14 +164,13 @@ struct SettingsSheet: View {
         case .denied:
             return "Turn on Microphone for Lupe in Settings"
         case .noInput:
-            return session.canQuietSpeaker ? "Plug in the FM-1 (USB AUDIO on)"
-                                           : "No sound from the FM-1 over USB: plug it in, or unplug it and plug it in again"
+            return "No sound from the FM-1 over USB: plug it in, or unplug it and plug it in again"
         case .failed(let why):
             return why
         case .playing:
             if let problem = session.usbAudioProblem { return problem }
             // Skiff: Lupe can't turn its MASTER (the knob alone sets it), so the speaker is the user's to quiet
-            if !session.canQuietSpeaker, session.usbAudioFull == true { return "Turn the FM-1's MASTER down to quiet its speaker" }
+            if session.usbAudioFull == true { return "Turn the FM-1's MASTER down to quiet its speaker" }
             return nil
         case .off, .starting:
             return nil

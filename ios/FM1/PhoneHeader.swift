@@ -61,7 +61,7 @@ struct PhoneHeader: View {
             }
             readout.padding(.trailing, 4)
             HeaderRound(lit: recording, litColour: Theme.rec, label: "Record",
-                        value: session.song.songRecording ? "song recording" : session.recording ? "recording" : "off") {
+                        value: session.recording ? "recording" : "off") {
                 session.toggleRec()
             } content: { lit in
                 Circle().fill(lit ? Theme.onColour : Theme.rec).frame(width: 14, height: 14)
@@ -106,7 +106,7 @@ struct PhoneHeader: View {
         ui.menu = AppMenu(title: songName, groups: {
             var g: [[MenuItem]] = []
             var main: [MenuItem] = []
-            if session.isConnected, session.dialect == .skiff || session.capabilities.contains(.projects) {
+            if session.isConnected, session.dialect == .skiff {
                 main.append(MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true })
             }
             if session.isConnected, ui.songTab {
@@ -123,8 +123,7 @@ struct PhoneHeader: View {
             if through.enabled { audio.append(.note(through.summary)) }
             g.append(audio)
             g.append([MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !useDemo) { useDemo = false },
-                      MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: useDemo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
-                      MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: useDemo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }])
+                      MenuItem(title: "Demo", icon: "play.rectangle", checked: useDemo) { useDemo = true }])
             return g
         }, at: CGPoint(x: nameFrame.minX, y: nameFrame.maxY), fromKey: true)
     }

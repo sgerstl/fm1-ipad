@@ -189,7 +189,6 @@ final class FirmwareCentre {
         let n = v.drop { !$0.isNumber }.split(separator: ".").map { Int($0) ?? 0 }
         let newer = n.lexicographicallyPrecedes([2, 5, 1]) == false && n != [2, 5, 1] && !n.isEmpty
         switch s.dialect {
-        case .sloop?: return .sloop(s.screenLinked ? "SLOOP-Lupe \(v.drop { !$0.isNumber })" : "SLOOP \(v.drop { !$0.isNumber })")
         case .skiff?:
             let short = String(v.drop { !$0.isNumber })
             if !s.screenLinked { return newer ? .newerSkiff("Skiff \(short)") : .stockSkiff("Skiff \(short)") }
@@ -635,7 +634,7 @@ struct FirmwarePicker: View {
         if centre.phone {
             return session.dialect == .skiff && session.screenLinked && session.skiffFirmware == .v2_5_1 ? .skiff251 : nil
         }
-        return session.dialect == .skiff ? .skiff : .sloop
+        return session.dialect == .skiff ? .skiff : nil
     }
 
     private var backupLine: String {

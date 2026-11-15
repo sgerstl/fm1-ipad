@@ -14,7 +14,7 @@ enum SoundFamily: String, CaseIterable, Identifiable {
 /// One page of the FM-1 (firmware params.c PAGES): its title, button, and the parameter under each
 /// knob (nil: an empty knob). scope 0 = the track's P_*, 1 = global G_*.
 struct SoundPage: Identifiable {
-    /// Its index in SLOOP's PAGES table (params.c): what the fm1-ipad firmware reports and opens.
+    /// Its index in the firmware's PAGES table (params.c): what the screen link reports and opens.
     let fw: Int
     let title: String
     let family: SoundFamily
@@ -71,7 +71,8 @@ struct SoundPage: Identifiable {
         SoundPage(fw: 35, title: "PATTERN", family: .seq, scope: 0, ids: [29, 30, 31, 32], drums: true),
     ]
 
-    /// The connected firmware's pages: its own layout where it gives one (Skiff, from DESC), else SLOOP's.
+    /// The connected firmware's pages: its own layout where it gives one (Skiff, from DESC), else the app's own
+    /// (Felucca's PAGES, first written for SLOOP).
     @MainActor
     static func pages(_ session: DeviceSession) -> [SoundPage] {
         guard let layout = session.pageLayout else { return all }
@@ -759,9 +760,8 @@ struct TouchFollower: View {
 }
 
 /// SEL: what each of the FM-1's 27 keys plays now (root, scale, SNAP / WHITE, transpose, OCT), the
-/// thing the device's SEL pages change but its screen can't show all at once. In chord mode each white
-/// key plays a chord of the scale: tap one to light its notes across the keys; the black keys are
-/// labelled with how they change it (SLOOP's CHORD+), as the FM-1's SEL layer lights them.
+/// thing the device's SEL pages change but its screen can't show all at once. In chord mode every key
+/// plays a chord (Skiff's chord.c): tap one to light its notes across the keys.
 struct KeyMapStrip: View {
     let session: DeviceSession
     @State private var picked: Int?            // chord mode: the white key whose chord is shown
@@ -771,7 +771,7 @@ struct KeyMapStrip: View {
         let chordMode = t.chord != 0 && !session.selectedIsDrums
         let key = picked ?? KeyboardDrawer.whiteOffsets.first { session.pitch(ofKey: $0) != nil } ?? 0
         // (Skiff's QNT SOLO: a black key plays its note alone, never a chord; seq.c kb_solo)
-        let solo = skiff && t.quant == 5 && !KeyboardDrawer.whiteOffsets.contains(key)
+        let solo = t.quant == 5 && !KeyboardDrawer.whiteOffsets.contains(key)
         let chord = chordMode ? session.pitch(ofKey: key).map { solo ? [$0] : chordNotes(on: $0, t) } ?? [] : []
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -805,7 +805,7 @@ struct KeyMapStrip: View {
                     Text("plays").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                     Text(chord.map(Music.noteName).joined(separator: " · ")).font(.lupe(13, .semibold))
                     if let n = skiffChord(t, key: key) { Text(n).font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary) }
-                    Text(skiff ? "Tap a key to see its chord." : "Tap a white key to see its chord.").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
+                    Text("Tap a key to see its chord.").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                 }
                 .frame(height: 18)
@@ -827,29 +827,27 @@ struct KeyMapStrip: View {
         let p = session.pitch(ofKey: key)
         let black = !KeyboardDrawer.whiteOffsets.contains(key)
         let lit = chordMode ? p.map { chord.contains($0) } ?? false : p.map { (($0 - t.root) % 12 + 12) % 12 == 0 } ?? false
-        // SLOOP's black keys change the chord (CHORD+); Skiff's play one too, as every key does
-        let modifier = chordMode && black && !skiff
-        let label = modifier ? (Music.chordModifier(ofKey: key) ?? "") : (p.map(Music.noteName) ?? "")
+        // Skiff's black keys play a chord too, as every key does
+        let label = p.map(Music.noteName) ?? ""
         let cell = Text(label)
-            .font(.lupe(modifier ? 11 : 12, lit ? .semibold : .regular))
-            .foregroundStyle(lit ? Theme.onColour : modifier ? Theme.textSecondary : Theme.text)
+            .font(.lupe(12, lit ? .semibold : .regular))
+            .foregroundStyle(lit ? Theme.onColour : Theme.text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: 8).fill(lit ? Theme.track[session.selectedTrack] : Color(hex: 0x232427)))
             .overlay { if chordMode && key == picked { RoundedRectangle(cornerRadius: 9).stroke(Theme.text, lineWidth: 2).padding(-2) } }
-            .opacity(p == nil && !modifier ? 0.35 : 1)
-        if chordMode && !modifier && p != nil {
+            .opacity(p == nil ? 0.35 : 1)
+        if chordMode && p != nil {
             Button { self.picked = key } label: { cell.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(p.map(Music.spokenNoteName) ?? "") chord")
                 .accessibilityAddTraits(key == picked ? .isSelected : [])
         } else {
-            cell.accessibilityLabel(modifier ? "Black key: \(label)" : (p.map(Music.spokenNoteName) ?? "silent"))
+            cell.accessibilityLabel(p.map(Music.spokenNoteName) ?? "silent")
         }
     }
 
-    // MARK: Chords as the firmware builds them: Skiff's chord.c (SkiffChord) or SLOOP's
+    // MARK: Chords as the firmware builds them: Skiff's chord.c (SkiffChord)
 
-    private var skiff: Bool { session.dialect == .skiff }
     private func value(_ title: String, _ k: Int) -> Int {
         (SoundPage.pages(session).first { $0.title == title }?.ids[safe: k] ?? nil).map { session.cell($0).value } ?? 0
     }
@@ -857,17 +855,15 @@ struct KeyMapStrip: View {
     private var oneVoice: Bool { value("VOICE", 0) != 0 && value("ARP", 0) == 0 }
 
     private func chordNotes(on p: Int, _ t: TrackState) -> [Int] {
-        guard skiff else { return Music.chordNotes(on: p, root: t.root, scale: t.scale, type: t.chord) }
-        return SkiffChord.make(note: p, mode: t.chord, voicing: value("CHORD", 1), root: t.root, scale: t.scale, oneVoice: oneVoice)?.notes ?? []
+        SkiffChord.make(note: p, mode: t.chord, voicing: value("CHORD", 1), root: t.root, scale: t.scale, oneVoice: oneVoice)?.notes ?? []
     }
-    /// The picked key's chord by name, as the FM-1 writes it ("Dm7"); nil on SLOOP.
+    /// The picked key's chord by name, as the FM-1 writes it ("Dm7").
     private func skiffChord(_ t: TrackState, key: Int) -> String? {
-        guard skiff, let p = session.pitch(ofKey: key),
+        guard let p = session.pitch(ofKey: key),
               let c = SkiffChord.make(note: p, mode: t.chord, voicing: value("CHORD", 1), root: t.root, scale: t.scale) else { return nil }
         return SkiffChord.name(root: c.root, mask: c.mask)
     }
     private func chordLine(_ t: TrackState) -> String {
-        guard skiff else { return "chord mode: each white key plays a \(Music.chordNames[safe: t.chord] ?? "chord"); the black keys change it" }
         let what = "chord keys: every key plays its \(SkiffChord.modeNames[safe: t.chord] ?? "chord") chord, \(SkiffChord.voicingNames[safe: value("CHORD", 1)] ?? "CLOSE")"
         return oneVoice ? what + " (one voice: the root only)" : what
     }

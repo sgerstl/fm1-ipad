@@ -63,8 +63,8 @@ enum SkiffNavigator {
             if patterns { if ui.songTab { ui.poolOpen = true }; flash(.patternBin, ui) }
         case .browse: browse(user: s.page == 36, session: session, ui: ui)
         case .projects:
-            // the Projects sheet: SLOOP's backups, or Skiff's 4 slots on the FM-1 beside the iPad's projects
-            if session.capabilities.contains(.projects) || session.dialect == .skiff { ui.presetsPanel = false; ui.projectsOpen = true }
+            // the Projects sheet: Skiff's 4 slots on the FM-1 beside the iPad's projects
+            if session.dialect == .skiff { ui.presetsPanel = false; ui.projectsOpen = true }
         case .mixer: break
         }
     }
@@ -106,11 +106,10 @@ enum SkiffNavigator {
     }
 }
 
-/// Where the screen link points, per firmware: the pages Lupe's tabs open on the FM-1, and the layer that
-/// is the keys' (SLOOP: SEL held, LY_SCALE; Skiff: SCL held). SLOOP's PAGES, or Skiff's (127: HOME).
+/// Where the screen link points: the pages Lupe's tabs open on the FM-1, and the layer that is the keys' (SCL held).
+/// Skiff's pages (127: HOME).
 struct ScreenMap {
     let home, presets, song, notes, pattern, selLayer: Int
-    static let sloop = ScreenMap(home: 37, presets: 28, song: 30, notes: 34, pattern: 35, selLayer: 5)
     static let skiff = ScreenMap(home: 127, presets: 35, song: 45, notes: 41, pattern: 43, selLayer: 3)
-    @MainActor static func of(_ s: DeviceSession) -> ScreenMap { s.dialect == .skiff ? .skiff : .sloop }
+    @MainActor static func of(_ s: DeviceSession) -> ScreenMap { .skiff }
 }

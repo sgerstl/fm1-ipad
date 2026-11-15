@@ -25,8 +25,6 @@ enum Entries {
 
     @MainActor static func trackName(_ t: Int, session: DeviceSession) -> String {
         let tr = session.tracks[t]
-        // SLOOP's drum track has kits, not presets: it's the drums (as its editor's header says)
-        if tr.presetName.isEmpty, session.dialect == .sloop, session.isDrums(t) { return "Drums" }
         return tr.presetName.isEmpty ? "Track \(t + 1)" : tr.presetName.capitalized
     }
 

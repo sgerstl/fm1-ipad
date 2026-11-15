@@ -38,7 +38,7 @@ final class AccessibilityAuditTests: XCTestCase {
 
     private func launch(_ extra: [String] = []) {
         app = XCUIApplication()
-        app.launchArguments = ["-demo", "-demo-skiff", "-no-intro"] + extra
+        app.launchArguments = ["-demo", "-no-intro"] + extra
         app.launch()
         // the demo FM-1 connects and reads in a moment
         _ = app.buttons["Pages"].waitForExistence(timeout: 2)

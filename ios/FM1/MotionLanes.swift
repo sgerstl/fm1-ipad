@@ -56,11 +56,10 @@ struct MotionLanes: View {
     }
 
     /// Motion waits for STOP: an entry that starts loads its pattern with its own motion (bank.c), so an edit made
-    /// while the song moves through its entries wouldn't last. SLOOP says so in LIVE; Skiff, whose firmware takes the
+    /// while the song moves through its entries wouldn't last. Skiff's firmware takes the
     /// write regardless (editor.c ED_MOTION, checked on skiff-sim 2026-11-06), when it plays with SONG ON or ONCE. Loop
     /// entry keeps one entry going, so its motion can be edited while it plays.
     static func songPlays(_ session: DeviceSession) -> Bool {
-        if session.song.songPlaying { return true }
         guard session.dialect == .skiff, session.playing, let mode = session.skiffSong?.song?.mode else { return false }
         return mode != .off
     }
