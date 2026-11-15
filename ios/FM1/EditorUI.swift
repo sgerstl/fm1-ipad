@@ -209,6 +209,8 @@ final class EditorUI {
     var padClear: PadClear?
     /// The pad being dragged (Pads), for the edge wells (EdgeWells): its centre and track; nil when none is.
     var padDrag: PadDragShow?
+    /// A duplicated Timeline block sprouting into its place (TimelineSprout).
+    var timelineSprout: TimelineSprout?
     /// The lifted pad's face and size, drawn by the wells' layer over everything (not observed: padDrag drives redraws).
     @ObservationIgnored var padDragFace: AnyView?
     var padDragSize: CGSize = .zero

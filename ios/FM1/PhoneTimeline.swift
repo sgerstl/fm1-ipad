@@ -158,8 +158,13 @@ struct PhoneTimeline: View {
                 })
                 .accessibilityHidden(true)
             ForEach(blocks.filter { $0.kind != .gap }) { b in
+                let x = CGFloat(b.start / SongPlacement.ticksPerBar) * barW
                 block(t, b, barW: barW)
-                    .offset(x: CGFloat(b.start / SongPlacement.ticksPerBar) * barW)
+                    .timelineSprout(ui, track: t, entry: b.entries.lowerBound,
+                                    dx: CGFloat((ui.timelineSprout?.fromStart ?? b.start) / SongPlacement.ticksPerBar) * barW - x)
+                    .offset(x: x)
+                    // a duplicate inserted before: the blocks after it slide along to their new places
+                    .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.8), value: x)
             }
         }
         .accessibilityElement(children: .contain)

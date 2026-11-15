@@ -39,7 +39,13 @@ import SwiftUI
         let copy = Array(es[b.entries])
         es.insert(contentsOf: copy, at: b.entries.upperBound + 1)
         es = Array(es.prefix(16))
-        Task { await store.rewrite(track: t, to: es, focus: b.entries.upperBound + 1) }
+        let target = b.entries.upperBound + 1, from = b.start
+        Task {
+            // the copy sprouts into its place (TimelineSprout), the blocks after it sliding along
+            if await store.rewrite(track: t, to: es, focus: target), let ui {
+                TimelineSprout.run(ui, track: t, entry: target, fromStart: from, reduceMotion: UIAccessibility.isReduceMotionEnabled)
+            }
+        }
     }
 
     /// The block goes on into the next one as one pattern (REPS 0, CHAIN).

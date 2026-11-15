@@ -404,6 +404,8 @@ struct Lane: View {
                       state: compact && session.playing ? LaneMarks.spoken(store.marks(track, launchIn: session.ticksToLaunch(track)), block: b, launch: session.launchMode) : nil,
                       loops: loops, thumb: first(b).flatMap { ui.padThumbs[$0] })
                 .frame(width: w, height: laneHeight - 12)
+                // a duplicate sprouting into its place (TimelineSprout)
+                .timelineSprout(ui, track: track, entry: b.entries.lowerBound, dx: x(ui.timelineSprout?.fromStart ?? start) - bx)
                 // carried: faint in its own place, or, once it would move, an empty dashed place where it lands
                 // (the block itself is under the finger). The view stays, so the finger's gesture does too
                 .opacity(landing ? 0 : finger != nil && lifted == ref ? 0.35 : 1)

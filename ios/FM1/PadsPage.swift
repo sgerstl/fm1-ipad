@@ -987,13 +987,18 @@ struct PadsPage: View {
         // short enough for the fan's width (its buttons are one line): "Copy 04 here (as 15)"
         let becomes = free ? ArrangeEdits(session: session, store: store, ui: ui).copyNumber(after: p).map { " (as \(Entries.number($0)))" } ?? "" : ": all 64 taken"
         let t = to.track, j = to.entry
+        let src = padFrames[from] ?? .zero        // (the copy sprouts out of the source pad)
         var choices = [
             MenuItem(title: "Copy \(n) here\(becomes)", icon: "square.on.square", enabled: free && idle) {
-                Task { if await store.send(.set(track: t, entry: j, pattern: p + 1)) { await store.send(.copy(track: t, entry: j)) } }
+                Task {
+                    if await store.send(.set(track: t, entry: j, pattern: p + 1)), await store.send(.copy(track: t, entry: j)) {
+                        sproutDuplicate(track: t, entry: j, from: src)
+                    }
+                }
             },
             // the same pattern, named twice: an edit shows in both places
             MenuItem(title: from.track == t ? "Repeat \(n) here" : "Share \(n) with T\(from.track + 1)", icon: "link", enabled: idle) {
-                Task { await store.send(.set(track: t, entry: j, pattern: p + 1)) }
+                Task { if await store.send(.set(track: t, entry: j, pattern: p + 1)) { sproutDuplicate(track: t, entry: j, from: src) } }
             },
         ]
         if from.track == t, PadMove.apply(store.song?.tracks[safe: t]?.entries ?? [], from: from.entry, to: j) != nil {
