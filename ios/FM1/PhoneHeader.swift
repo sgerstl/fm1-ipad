@@ -96,7 +96,7 @@ struct PhoneHeader: View {
         HeaderWord(text: songName, size: 17, primary: true, maxWidth: 130) { openMenu() }
             .globalFrame($nameFrame)
             .accessibilityLabel("Lupe menu, \(songName)")
-            .accessibilityHint("Projects, Mix, Settings, the iPhone's audio and the demo")
+            .accessibilityHint("Projects, Mix, the FM-1's firmware, Settings, the iPhone's audio and the demo")
     }
 
     /// Android's song-name menu, carrying what the iPhone's ⋯ held (decision 33): Projects, Mix, Settings, then the
@@ -113,6 +113,10 @@ struct PhoneHeader: View {
                 main.append(MenuItem(title: "Patterns…", icon: "square.grid.2x2") { ui.patternsSheet = .manage })
                 main.append(MenuItem(title: "Mix…", icon: "slider.vertical.3") { ui.mixPopup = true })
             }
+            // decision 42: what the FM-1 runs, Skiff-Lupe, and stock V15 back (it was Developer › Install firmware…, debug only)
+            main.append(MenuItem(title: "FM-1 firmware…", icon: "arrow.down.circle") {
+                firmware.pickerNote = nil; firmware.target = .skiff251; firmware.showPicker = true
+            })
             main.append(MenuItem(title: "Settings…", icon: "gearshape") { ui.phoneSettingsOpen = true })
             g.append(main)
             var audio = [MenuItem(title: "Play through the iPhone", icon: "speaker.wave.2", checked: through.enabled) { through.enabled.toggle() }]
@@ -121,7 +125,6 @@ struct PhoneHeader: View {
             g.append([MenuItem(title: "FM-1 over USB", icon: "cable.connector", checked: !useDemo) { useDemo = false },
                       MenuItem(title: "Skiff demo", icon: "play.rectangle", checked: useDemo && ui.demoSkiff) { ui.demoSkiff = true; useDemo = true },
                       MenuItem(title: "SLOOP demo", icon: "play.rectangle", checked: useDemo && !ui.demoSkiff) { ui.demoSkiff = false; useDemo = true }])
-            if let dev = DeveloperItems.item(firmware: firmware) { g.append([dev]) }
             return g
         }, at: CGPoint(x: nameFrame.minX, y: nameFrame.maxY), fromKey: true)
     }

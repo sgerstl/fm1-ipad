@@ -160,18 +160,3 @@ struct PressSink: ButtonStyle {
     }
 }
 
-/// Developer settings, in debug builds only, as a Lupe menu item (a submenu): Install firmware… (2026-11-05).
-/// At the foot of the phone's ⋯ menu (the iPad's connection menu dropped it, 2026-11-06).
-enum DeveloperItems {
-    @MainActor static func item(firmware: FirmwareCentre) -> MenuItem? {
-        #if DEBUG
-        return MenuItem.submenu(title: "Developer", icon: "hammer", children: {
-            [
-                [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true }],
-            ]
-        })
-        #else
-        return nil
-        #endif
-    }
-}

@@ -6,7 +6,8 @@ import UIKit
 /// USB-MIDI, 2026-11-05, and putting M-VAVE's stock V15 back (its own update loader writes it). Since 2026-11-08 the two
 /// GPL builds aren't in the app: the chosen one is downloaded from Lupe's GitHub release first (FirmwareStore), checked
 /// against its pin, and kept for next time. Stock V15 stays in the app.
-/// Offers it when the FM-1 runs something else or waits in an update loader; picks it from the connection menu (the phone's Developer submenu).
+/// Offers it when the FM-1 runs something else or waits in an update loader; picks it from the connection menu (the phone: the song-name menu, FM-1 firmware…).
+/// The phone offers Skiff-Lupe 2.5.1 over anything else, once per connection (decision 42, 2026-11-15).
 /// While it runs the session lets go of the FM-1, the screen stays awake, and a cover keeps the app on this.
 @Observable @MainActor
 final class FirmwareCentre {
@@ -15,6 +16,21 @@ final class FirmwareCentre {
         case foreignLoader(String)          // another firmware's update mode: not ours to finish
         case unsupported(String)            // runs something Lupe doesn't speak
         case update(String)                 // runs stock Skiff 2.2: Lupe offers Skiff-Lupe, the same with the screen link
+        case fork(ForkFrom)                 // the phone (decision 42): anything but Skiff-Lupe 2.5.1 with the current link
+    }
+
+    /// What a phone's FM-1 runs instead of Skiff-Lupe 2.5.1 (decision 42, 2026-11-15): the phone app is built on the
+    /// screen link, so it offers the fork for each of these, once per connection. The text is what the FM-1 reports.
+    enum ForkFrom: Equatable {
+        case stockSkiff(String)             // Skiff 2.5.1 or earlier, without the link
+        case newerSkiff(String)             // Skiff 2.6 or later, without the link: going to 2.5.1 loses what it added
+        case sloop(String)                  // SLOOP or SLOOP-Lupe: no songs, no Timeline
+        case olderLupe(String)              // Skiff-Lupe 2.2, or 2.5.1 with an earlier link
+        case mvave(String)                  // M-VAVE's own firmware: Lupe can't connect at all
+
+        var found: String {
+            switch self { case .stockSkiff(let f), .newerSkiff(let f), .sloop(let f), .olderLupe(let f), .mvave(let f): f }
+        }
     }
 
     enum Phase: Equatable {
@@ -32,6 +48,8 @@ final class FirmwareCentre {
     var dismissedOffer: Offer?
     var phase: Phase = .idle
     var target: LupeFirmware = .skiff
+    /// The phone: Skiff-Lupe 2.5.1 is the firmware it offers, from the song-name menu and the fork offer (decision 42).
+    let phone = UIDevice.current.userInterfaceIdiom == .phone
     /// Skiff-Lupe and SLOOP-Lupe, downloaded when chosen and kept (Application Support).
     #if DEBUG
     // a Debug build carries firmware/releases/ (the "Bundle release firmware (Debug)" build phase): no GitHub release needed
@@ -64,6 +82,7 @@ final class FirmwareCentre {
         // a fake FM-1 for screenshots
         let a = LaunchArgs.all
         demo = a.firstIndex(of: "-demo-firmware").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
+        if phone { target = .skiff251 }
         if let demo {
             let sloop = try? LupeFirmware.sloop.load(), skiff = try? LupeFirmware.skiff.load()
             let stock = try? LupeFirmware.stock.load()
@@ -80,6 +99,7 @@ final class FirmwareCentre {
             default: fake = FakeFM1(running: sloop)
             }
             fake.knows(skiff!, sloop!, stock!)
+            if let s251 = try? LupeFirmware.skiff251.load() { fake.knows(s251) }
             if demo == "failed" { fake.faults = [.unplug(stage: 2, after: 900, replugAfter: nil)] }
             ports = fake
         } else {
@@ -98,6 +118,14 @@ final class FirmwareCentre {
             try? await Task.sleep(for: .seconds(1))
             switch demo {
             case "picker": showPicker = true
+            // the phone's fork offer (decision 42) over the demo FM-1, as each firmware would bring it
+            case "fork-skiff", "fork-newer", "fork-sloop", "fork-older", "fork-mvave":
+                try? await Task.sleep(for: .seconds(1))
+                offer = .fork([
+                    "fork-skiff": .stockSkiff("Skiff 2.5.1"), "fork-newer": .newerSkiff("Skiff 2.6"),
+                    "fork-sloop": .sloop("SLOOP 2.8.4"), "fork-older": .olderLupe("Skiff-Lupe 2.2"),
+                    "fork-mvave": .mvave("FM-1_015"),
+                ][demo]!)
             case "picker-stock": target = .stock; showPicker = true
             case "v16-picker": await probe(); showPicker = true
             case "installing", "failed", "done", "restoring", "restored", "v16":
@@ -105,19 +133,26 @@ final class FirmwareCentre {
                     if case .connected = session.status { break }
                     try? await Task.sleep(for: .milliseconds(100))
                 }
-                start(["restoring", "restored", "v16"].contains(demo) ? .stock : .skiff, session: session)
+                start(["restoring", "restored", "v16"].contains(demo) ? .stock : phone ? .skiff251 : .skiff, session: session)
             default: await probe()
             }
             return
         }
+        var wasConnected = false
         while !Task.isCancelled {
             if !isActive {
+                // the phone: once per connection. A new connection brings the offer back unless Not now holds it off
+                let connected = if case .connected = session.status { true } else { false }
+                if phone, connected, !wasConnected { dismissedOffer = nil }
+                wasConnected = connected
                 switch session.status {
-                case .wrongFirmware(let found, _): offer = .unsupported(found)
+                case .wrongFirmware(let found, _): offer = phone ? Self.phoneOffer(unsupported: found) : .unsupported(found)
                 case .searching, .lost: await probe()
                 // stock Skiff 2.2 (no screen link tag in INFO), or an earlier screen-link build (56 01 01 no cursor,
                 // 56 01 02 no METER, 56 01 03 no SCOPE, 56 01 04 the scope at 15 a second, 56 01 05 the scope after MASTER): the firmware Lupe carries
                 // is an update
+                case .connected where phone:
+                    offer = session.isDemo ? nil : Self.forkFrom(session).map { .fork($0) }
                 case .connected:
                     offer = session.dialect == .skiff && !session.screenCurrent && !session.isDemo
                         ? .update(session.screenLinked ? "Skiff 2.2 with the screen link" : "Skiff 2.2") : nil
@@ -138,11 +173,57 @@ final class FirmwareCentre {
             offer = ours ? .loader(id.text) : .foreignLoader(id.text)
             if let f = LupeFirmware.matching(identity: id.text) { target = f }
         } else if LupeFirmware.matching(identity: id.text).map({ $0.isStock }) ?? true {
-            offer = .unsupported(id.text)               // (stock V15 is one Lupe carries, not one it speaks)
+            // (stock V15 is one Lupe carries, not one it speaks)
+            offer = phone ? Self.phoneOffer(unsupported: id.text) : .unsupported(id.text)
         }
     }
 
-    var visibleOffer: Offer? { offer == dismissedOffer ? nil : offer }
+    /// The phone's offer for firmware Lupe can't connect to: M-VAVE's own as the fork offer, anything else as before.
+    static func phoneOffer(unsupported found: String) -> Offer {
+        found.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil ? .fork(.mvave(found)) : .unsupported(found)
+    }
+
+    /// Why a connected FM-1 isn't on Skiff-Lupe 2.5.1 with the current link, or nil when it is (decision 42).
+    static func forkFrom(_ s: DeviceSession) -> ForkFrom? {
+        let v = (s.info?.version ?? "").replacingOccurrences(of: "FELUCCA ", with: "")
+        let n = v.drop { !$0.isNumber }.split(separator: ".").map { Int($0) ?? 0 }
+        let newer = n.lexicographicallyPrecedes([2, 5, 1]) == false && n != [2, 5, 1] && !n.isEmpty
+        switch s.dialect {
+        case .sloop?: return .sloop(s.screenLinked ? "SLOOP-Lupe \(v.drop { !$0.isNumber })" : "SLOOP \(v.drop { !$0.isNumber })")
+        case .skiff?:
+            let short = String(v.drop { !$0.isNumber })
+            if !s.screenLinked { return newer ? .newerSkiff("Skiff \(short)") : .stockSkiff("Skiff \(short)") }
+            if newer { return nil }                     // (a later Skiff-Lupe than this app knows: nothing to offer)
+            return s.skiffFirmware == .v2_5_1 && s.screenCurrent ? nil : .olderLupe("Skiff-Lupe \(short)")
+        case nil: return nil
+        }
+    }
+
+    // MARK: Not now, per FM-1 (the phone)
+
+    /// How long the phone's Not now holds the fork offer off for the FM-1 that brought it. It's always in the
+    /// song-name menu (FM-1 firmware…) meanwhile.
+    static let snoozeDays = 14
+    private static let snoozeKey = "firmware.forkSnooze"
+
+    /// The FM-1 reports no serial number, so "this FM-1" is what it runs: the same unit on the same firmware.
+    func snooze(_ f: ForkFrom) {
+        var d = UserDefaults.standard.dictionary(forKey: Self.snoozeKey) as? [String: Date] ?? [:]
+        d[f.found] = Date().addingTimeInterval(Double(Self.snoozeDays) * 86_400)
+        UserDefaults.standard.set(d, forKey: Self.snoozeKey)
+        dismissedOffer = .fork(f)
+    }
+
+    private func snoozed(_ f: ForkFrom) -> Bool {
+        guard demo == nil else { return false }
+        let d = UserDefaults.standard.dictionary(forKey: Self.snoozeKey) as? [String: Date] ?? [:]
+        return (d[f.found] ?? .distantPast) > Date()
+    }
+
+    var visibleOffer: Offer? {
+        if case .fork(let f)? = offer, snoozed(f) { return nil }
+        return offer == dismissedOffer ? nil : offer
+    }
 
     /// Why `f` can't go on the FM-1 Lupe last saw, in a line for the picker, or nil.
     func refusal(_ f: LupeFirmware) -> String? {
@@ -285,13 +366,17 @@ struct FirmwareLayer: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: centre.isActive)
     }
 
-    /// Centred, scrolling when it can't fit (a landscape phone).
+    /// Centred, scrolling from its top when it can't fit (a landscape phone). At least the screen's height, never
+    /// exactly it: a taller card spilt over both ends and its title couldn't be scrolled to (2026-11-15).
     private func fitted(@ViewBuilder _ card: () -> some View) -> some View {
-        ScrollView {
-            card().padding(16).frame(maxWidth: .infinity)
-                .containerRelativeFrame(.vertical, alignment: .center) { h, _ in h }
+        let c = card()
+        return GeometryReader { g in
+            ScrollView {
+                c.padding(16).frame(maxWidth: .infinity)
+                    .frame(minHeight: g.size.height, alignment: .center)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
     }
 
     private func scrim(_ tap: @escaping () -> Void) -> some View {
@@ -394,6 +479,8 @@ struct FirmwareOfferCard: View {
                 CardKey(title: "Not now") { centre.dismissedOffer = offer }
                 CardKey(title: "Install the update", primary: true) { centre.target = .skiff; centre.showPicker = true }
             }
+        case .fork(let from):
+            ForkOfferCard(from: from, centre: centre, session: session)
         case .unsupported(let found):
             FirmwareCard(title: "Lupe needs other firmware") {
                 if centre.seesNewStock {
@@ -411,15 +498,76 @@ struct FirmwareOfferCard: View {
     }
 }
 
-/// Skiff or SLOOP: the connection menu's way in (the phone's Developer submenu), and the offer's.
+/// The phone's offer of Skiff-Lupe 2.5.1 (decision 42, 2026-11-15): what this FM-1 runs, what Lupe can't do on it,
+/// then Not now (held off for this FM-1 for two weeks) or Install… (the picker, with the backup and the download).
+struct ForkOfferCard: View {
+    let from: FirmwareCentre.ForkFrom
+    let centre: FirmwareCentre
+    let session: DeviceSession
+
+    /// What the phone loses without Lupe's screen link (each one is a `session.screenLinked` gate in the phone's views).
+    static let withoutLink = "Without Lupe’s screen link, Lupe and the FM-1 don’t follow each other: a button on the FM-1 doesn’t open its page or sound panel here, a tab here doesn’t move the FM-1, and the Mix meters, the scope in the page pictures and MOD’s route stay still."
+
+    private var title: String {
+        switch from {
+        case .mvave: "Lupe needs Skiff-Lupe"
+        case .olderLupe: "An update for Skiff-Lupe"
+        default: "Get all of Lupe with Skiff-Lupe"
+        }
+    }
+
+    var body: some View {
+        FirmwareCard(title: title) {
+            switch from {
+            case .stockSkiff(let f):
+                Text("This FM-1 runs \(f). " + Self.withoutLink).bodyText(primary: true)
+                Text("Skiff-Lupe 2.5.1 is Skiff 2.5.1 with that link added; everything else stays as it is.").bodyText()
+            case .newerSkiff(let f):
+                Text("This FM-1 runs \(f). " + Self.withoutLink).bodyText(primary: true)
+                Text("Installing goes back to Skiff-Lupe 2.5.1: what \(f) added (CAST) goes away until Skiff-Lupe catches up.").bodyText(primary: true)
+            case .sloop(let f):
+                Text("This FM-1 runs \(f). Lupe on the iPhone is built for Skiff: songs and the Timeline need it, and the screen link keeps Lupe and the FM-1 on the same page.").bodyText(primary: true)
+                Text("Skiff can’t open SLOOP’s projects: they’re kept in the backup Lupe takes first.").bodyText()
+            case .olderLupe(let f):
+                Text("This FM-1 runs \(f). Skiff-Lupe 2.5.1 adds FX › DELAY and REVERB, the FILTR insert and chord strum, and the screen link’s newest build: the scope at 30 a second, MOD’s route and the Mix meters.").bodyText(primary: true)
+            case .mvave(let f):
+                Text("This FM-1 runs \(FirmwareOfferCard.name(f)). Lupe can’t connect to it at all. Skiff-Lupe 2.5.1 is Skiff, a firmware for the FM-1 with six tracks and songs, plus Lupe’s screen link.").bodyText(primary: true)
+            }
+            Text("Your projects are backed up to Files first when the firmware allows it. Installing takes about a minute; you can put stock V15 back any time from FM-1 firmware… in the song-name menu.")
+                .bodyText()
+        } actions: {
+            CardKey(title: "Not now") { centre.snooze(from) }
+                .accessibilityHint("Asks again in \(FirmwareCentre.snoozeDays) days. FM-1 firmware… in the song-name menu has it meanwhile")
+            CardKey(title: "Install…", primary: true) { centre.target = .skiff251; centre.pickerNote = nil; centre.showPicker = true }
+        }
+    }
+}
+
+/// Skiff or SLOOP: the connection menu's way in (the phone's song-name menu, FM-1 firmware…), and the offer's.
 struct FirmwarePicker: View {
     @Bindable var centre: FirmwareCentre
     let session: DeviceSession
 
+    /// The phone's choices: Skiff-Lupe 2.5.1, then stock V15 (decision 42). The iPad's: all of them.
+    private var choices: [LupeFirmware] { centre.phone ? [.skiff251] : LupeFirmware.allCases.filter { !$0.isStock } }
+
+    /// What the FM-1 runs, in a line (the phone's picker opens with it).
+    private var runs: String {
+        if case .connected = session.status, let i = session.info {
+            let v = i.version.replacingOccurrences(of: "FELUCCA ", with: "")
+            let name = session.dialect == .skiff ? "Skiff" : "SLOOP"
+            let lupe = session.screenLinked ? "\(name)-Lupe" : name
+            return session.isDemo ? "The demo FM-1 runs \(lupe) \(v.drop { !$0.isNumber })." : "This FM-1 runs \(lupe) \(v.drop { !$0.isNumber })."
+        }
+        if case .wrongFirmware(let found, _) = session.status { return "This FM-1 runs \(FirmwareOfferCard.name(found))." }
+        return "No FM-1 is connected. Plug it in to see what it runs; Lupe can still install, without a backup."
+    }
+
     var body: some View {
-        FirmwareCard(title: "Install firmware") {
+        FirmwareCard(title: centre.phone ? "FM-1 firmware" : "Install firmware") {
+            if centre.phone { Text(runs).bodyText(primary: true) }
             VStack(spacing: 8) {
-                ForEach(LupeFirmware.allCases.filter { !$0.isStock }) { f in row(f) }
+                ForEach(choices) { f in row(f) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Back to stock").font(.lupe(13, .semibold)).foregroundStyle(Theme.textSecondary)
@@ -484,6 +632,9 @@ struct FirmwarePicker: View {
 
     private var running: LupeFirmware? {
         guard case .connected = session.status, !centre.seesNewStock else { return nil }
+        if centre.phone {
+            return session.dialect == .skiff && session.screenLinked && session.skiffFirmware == .v2_5_1 ? .skiff251 : nil
+        }
         return session.dialect == .skiff ? .skiff : .sloop
     }
 

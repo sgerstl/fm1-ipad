@@ -2,7 +2,7 @@
 
 Simulator only so far (iPhone 17 Pro, `-demo -demo-skiff -demo-fw 2.5.1 -demo-link`). No step writes the FM-1's flash, so no backup is needed unless noted.
 
-1. **Header.** Open Lupe. You should see the song name with ⌄ at the left, Pads · Edit · Timeline, then the launch word (Bar ⌄), the readout and round Record and Play at the right. Tap the song name: Projects, Mix, Settings, Play through the iPhone, the demos, Developer.
+1. **Header.** Open Lupe. You should see the song name with ⌄ at the left, Pads · Edit · Timeline, then the launch word (Bar ⌄), the readout and round Record and Play at the right. Tap the song name: Projects, Patterns, Mix, FM-1 firmware…, Settings, Play through the iPhone, the demos (no Developer any more).
 2. **Tab change.** Tap Pads → Edit → Timeline and back. Pages slide in the tab's direction (about 380 ms) and the selected track's coloured outline travels from its row to the grid to its lane, then fades. Tune in Settings › Labs › Tab change.
 3. **Pads heads.** Tap a head: it selects only. Hold a head: the radial menu opens under the finger. Swipe down the MUTE column: every key you cross takes the first key's new state.
 4. **Pads slots.** All eight slots A–H fit beside the heads with no pan, and the selected row's colour runs under all of them. While playing, slots show ×N, the playing one n/N, the next one "next". Tap a pad while playing: its outline draws round as the launch point comes. Same on a MUTE key tapped while playing.
@@ -12,6 +12,10 @@ Simulator only so far (iPhone 17 Pro, `-demo -demo-skiff -demo-fw 2.5.1 -demo-li
 8. **Timeline.** Blocks across, − and + change the bars shown, tap a block picks it (white ring), hold opens its menu.
 9. **Sheets.** Song name › Mix…: tabs beside ✕, no title. Delay, Reverb, Chorus and Global show four dials two by two and the FM-1's own picture in grey; turn SIZE and DAMP and the reverb tail grows and darkens as on the FM-1's screen. Hold a head › Select sound: the Sounds sheet rises. SAVE on the FM-1: Projects with the four slots. Settings has Show graphics.
 10. **No FM-1.** Unplug: the card says Skiff 2.5.1.
+
+11. **Edge wells glow (2026-11-15).** Drag a pad toward an edge well: it starts glowing about 200 pt out, brightens steadily, and is hot at about 64 pt. On the iPhone the Island-side well still clears the Dynamic Island. Tune in Labs › Pad drag wells.
+12. **Fork offer (decision 42; no flash write unless you tap Install).** Plug in an FM-1 that isn't on Skiff-Lupe 2.5.1 (stock Skiff, Skiff 2.6, SLOOP, Skiff-Lupe 2.2, or stock V15/V16). A card says what it runs and what Lupe can't do without the screen link; on Skiff 2.6 it says CAST goes. Tap Not now: it goes, and stays away for that FM-1 on the next plug-in (two weeks). Tap outside instead: it comes back the next time you plug it in. On Skiff-Lupe 2.5.1 no card appears.
+13. **FM-1 firmware… (back up first: this writes the FM-1's flash).** Song name › FM-1 firmware…: the picker says what the FM-1 runs, offers Skiff-Lupe 2.5.1 and, under Back to stock, Stock V15. Install Skiff-Lupe 2.5.1: download (in a release build, from `lupe-firmware-2`), backup, check, write, restart, then "Skiff-Lupe 2.5.1 is installed" and the backup's place. Lock nothing; the screen stays on. Unplug mid-write once: replug and it carries on. Then put Stock V15 back the same way if you want to check the way home.
 
 VoiceOver: release pass.
 Not done: HOME knobs read from SloopKit (P1's 4529c31 needs the rest of P1's SloopKit move, formatValue and the sound-page tables, which arrives with the main session's merge; the phone no longer reads the Skiff 2.2 table, since only the iPad's track controls box does), Android's block drag/reps on the Timeline, slide-to-pick in the hold menu.
