@@ -55,7 +55,7 @@ The phone (landscape) splits Song into **Pads** and **Timeline** tabs: Pads · T
 | **Tool row** | The Timeline / Pads switch, Launch at (LOOP, BAR, BEAT, NOW), Cancel waiting (only while something waits). |
 | **Row heads** (left, one a track) | Number, name and colour, Mute (also the row's stop: PERFORM op 3, staged to the launch point while playing; the track keeps its place and comes back in time). The selected track is marked. **Tapping the number selects the track**, and with it the editor and the FM-1's knobs. |
 | **Pads** (6 rows × the entries) | One pad an entry. What a tap, hold and drag do, and what each state looks like: `design/components/pattern-pad.md`. |
-| **Scene row** (under the grid) | Store and the 16 scenes, as now. Held, the grid outlines each track's pad for that scene. The editor's Open key sits at its end (board 33). |
+| **Scene row** (under the grid) | Store and the 16 scenes, as now. Held, the grid outlines each track's pad for that scene. The editor's Open key sits at its end (board 33). **iPad (decision 50, 2026-11-15):** the selected track's four HOME knobs at the row's right (per engine, from SloopKit's table); the scenes scroll in the rest. |
 
 ### The three positions (the divider)
 

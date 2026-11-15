@@ -44,6 +44,7 @@ struct PadsPage: View {
     @State private var lastDouble: Int?
     /// The pad whose menu is open (or just closed by the touch now landing): tapped again, it only closes.
     @State private var menuPad: PadKey?
+    @State private var sceneClip = SceneClip()
     /// Shown where the user left them open, except over the largest editor (Max), where they close (Scott, 2026-11-09);
     /// the choice is kept and comes back on leaving Max.
     private var controlsShown: Bool { controlsOpen && layout != .row && layout != .phone }
@@ -1436,12 +1437,54 @@ struct PadsPage: View {
                 .frame(width: 88)               // (its word turns semibold when lit: a fixed width, not its own)
                 .accessibilityValue(storing ? "on: tap a scene to store into it" : "")
                 .accessibilityHint("Then tap a scene: it keeps the entry each track is on now, and its mute")
-            HStack(spacing: 4) {
-                ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf).geometryGroup() }
+            if phone {
+                HStack(spacing: 4) {
+                    ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf).geometryGroup() }
+                }
+            } else {
+                // the iPad (decision 50, 2026-11-15): the scenes scroll across what the HOME knobs leave, the last one
+                // scrolled into view, a fade at a clipped edge; the selected track's four HOME knobs at the right
+                sceneScroller(perf)
+                HomeKnobsStrip(session: session, ui: ui, height: sceneH)
             }
         }
         .frame(height: sceneH)
     }
+
+    /// The iPad's 16 scenes at a fixed width, scrolling across; faded only at an edge something is cut off at.
+    private func sceneScroller(_ perf: PerformState?) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 4) {
+                    ForEach(0..<PerformState.scenes, id: \.self) { s in
+                        sceneKey(s, perf).geometryGroup().frame(width: Self.sceneKeyWidth).id("scene\(s)")
+                    }
+                }
+                .padding(.horizontal, 4)            // (the keys' hit margin and press sink inside the clip)
+            }
+            .scrollIndicators(.hidden)
+            .onScrollGeometryChange(for: SceneClip.self) { g in
+                SceneClip(left: g.contentOffset.x > 1, right: g.contentOffset.x + g.containerSize.width < g.contentSize.width - 1)
+            } action: { _, c in sceneClip = c }
+            .mask {
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: sceneClip.left ? 24 : 0)
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: sceneClip.right ? 24 : 0)
+                }
+                .animation(.easeOut(duration: 0.15), value: sceneClip)
+            }
+            .onAppear { if let l = perf?.lastScene { proxy.scrollTo("scene\(l)", anchor: .center) } }
+            .onChange(of: perf?.lastScene) { _, l in
+                guard let l else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { proxy.scrollTo("scene\(l)", anchor: .center) }
+            }
+        }
+    }
+
+    /// Which ends of the iPad's scene scroller have keys cut off (each gets a fade).
+    struct SceneClip: Equatable { var left = false, right = false }
+    static let sceneKeyWidth: CGFloat = 52
 
     private func sceneKey(_ s: Int, _ perf: PerformState?) -> some View {
         let kept = perf?.kept[safe: s] == true
