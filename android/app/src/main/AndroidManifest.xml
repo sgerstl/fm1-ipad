@@ -37,11 +37,5 @@
             android:exported="true"
             android:label="Lupe link debug"
             android:screenOrientation="portrait" />
-        <!-- decision 45's spike, developer only: adb shell am start -n com.scottgerstl.lupe/.core.debug.SkiffDrawDebugActivity -->
-        <activity
-            android:name=".core.debug.SkiffDrawDebugActivity"
-            android:exported="true"
-            android:label="Lupe SkiffDraw spike"
-            android:screenOrientation="portrait" />
     </application>
 </manifest>

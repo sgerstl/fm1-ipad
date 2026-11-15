@@ -49,6 +49,23 @@ void skd_render_rgba(uint8_t *out);
 /* the same, raw RGB565 as the panel takes it (host order) */
 void skd_render_565(uint16_t *out);
 
+/* (decision 46) the colours: track t drawn in 0xRRGGBB instead of the theme's (-1: the theme's own again). GLO's pages
+ * give the selected track the panel's grey ink, so every blend toward the surface stays the FM-1's, in grey. */
+void skd_set_track_colour(int track, int rgb);
+/* the LFO as it runs (ui_graph.c graph_lfo reads trk[].lfo_t, lfo_ph): `seconds` since its retrigger (a note on TRIG
+ * NOTE, else since PLAY) */
+void skd_set_lfo_seconds(int track, double seconds);
+/* The picture panel alone (ui_graph.c draw_graph's cv_rrect(3, 0, 234, graph_h()) at screen y Y_GRAPH): 234 x 138 in
+ * Skiff's BLOCKS look. skd_render_panel_rgba draws the frame and copies the panel out, RGBA, its four rounded corners'
+ * outside transparent. Returns w * h. */
+/* a track's FM6 patch as FM6_GET sends it (128 bytes, eng_fm6.c fm6_pack), through the firmware's own fm6_unpack */
+void skd_set_fm6_patch(int track, const uint8_t *packed, int n);
+void skd_panel_rect(int *x, int *y, int *w, int *h);
+int skd_render_panel_rgba(uint8_t *out, int max_bytes);
+/* the build this library is (decision 46: SkiffDraw draws only for the unit running it): INFO's version string, the
+ * counts, and Skiff-Lupe's screen link builds whose drawing code is this one's */
+const char *skd_build_version(void);                /* "FELUCCA v2.5.1" */
+
 /* spike checks: SCOPE as the firmware would send it from a given ring (editor.c ed_osc_reply), for the round trip */
 int skd_scope_from_ring(const int16_t *ring, int n, uint8_t *out120);
 void skd_set_scope_ring(const int16_t *ring, int n); /* the raw ring, as audio.c fills it (the reference picture) */

@@ -138,7 +138,7 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
     }
 }
 
-private fun describe(g: PageGraph): String = when (g.kind) {
+internal fun describe(g: PageGraph): String = when (g.kind) {
     GraphKind.Env -> "Envelope shape. " + listOf("attack", "decay", "sustain", "release").mapIndexed { i, n -> "$n ${g.values.getOrElse(i) { 0 }}" }.joinToString(", ")
     GraphKind.Lfo -> "LFO wave"
     GraphKind.Chord -> chordSpoken(g)

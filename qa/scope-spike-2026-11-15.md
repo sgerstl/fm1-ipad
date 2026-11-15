@@ -116,3 +116,28 @@ Studio doesn't mirror state. It **replays inputs in lockstep**:
 
 - **Verified:** `skiffdraw-demo`, the same Swift and C cross-compiled for `aarch64-unknown-linux-android33` (Swift 6.4.2, NDK r30), ran on the arm64 emulator (Medium_Phone_API_36.1) through `adb shell`. Its GLO › DELAY frame matches the board render with **0 differing pixels** (`pixdiff.py`). It also drew 60 scope frames. Draw times on the emulator were 1–61 ms, but the host was at load average 20–30 at the time (another session's emulator and several simulators were running), so those numbers say nothing about a phone.
 - **Built, not run:** the APK with SkiffDraw linked into `libLupeNative.so` (`./gradlew :app:assembleDebug` passed) and `SkiffDrawDebugActivity`. The install on the emulator failed twice because the emulator's `system_server` kept dying under the host's load (`DeadSystemException`, "Can't find service: activity"). The in-app Android view is still to be seen. Next time, on a quieter machine: `adb -s emulator-NNNN install -r android/app/build/outputs/apk/debug/app-debug.apk`, then `adb -s emulator-NNNN shell am start -n com.scottgerstl.lupe/.core.debug.SkiffDrawDebugActivity --ei page 0`. Never on the Pixels.
+
+---
+
+## Decision 46: built for Android (2026-11-15, the same day)
+
+What Scott decided on this verdict, and how it was built on this branch:
+
+1. **SkiffDraw draws the Android sound panel's pictures**, in Scott's order: GLO's DELAY, REVERB, CHORUS and GLOBAL; FX › DELAY and REVERB; ENV and ENV 2; LFO and LFO 2 (the dot moves on Lupe's LFO clock); and EDIT. EDIT covers ANALOG's OSC and FLT, FM6's chart, OPERATOR, ALL OPS, OP ENV and OP LEVEL (FM6's patch from `skiffEdit`, loaded through Skiff's own `fm6_unpack`), and other engines' scope. EDIT pages of SAMPLE, SLICE, DRUM and DRUM-X keep the hand-drawn pictures (`SkiffPictures.ownEditEngines`). Everything else keeps them too. iOS keeps its hand-drawn pictures.
+   - Code: `ios/SkiffDraw/Sources/SkiffDrawLink/SkiffPictures.swift`, then `android/core/Sources/LupeNative/SkiffPictures.swift` (JNI `skiffPicture`), then `android/app/.../ui/page/SkiffPicture.kt`, then `ui/shell/Body.kt`'s SoundPanel. The picture is the FM-1's panel alone (234 × 138, `skd_render_panel_rgba`), drawn whole pixels at a time where it fits, nearest neighbour.
+   - It is asked for again on every change of the page's state, and about 30 times a second while an LFO or a sea shows (held still with Reduce Motion).
+2. **GLO in grey (decision 34).** On GLO's pages, Skiff's palette gives the selected track the panel's grey ink (`Tok.text2Raised`, #C4C4CC) before drawing (`skd_set_track_colour`). Every blend toward the surface is therefore the FM-1's own, in grey; white stays white. Track pages use the FM-1's track colours (its THEME's, CUSTOM's too, from `themeTrackColours`; otherwise SKIFF's).
+3. **The scope is the sea**, drawn by Skiff's `sk_sea` from METER. That is SKIFF's picture on an EDIT page with no chart of its own.
+4. **The version check.** `SkiffDrawBuild.accepts` requires INFO's version to be exactly `FELUCCA v2.5.1`, the screen link to be 6 or 7, and the parameter and global counts to match the library's (148 and 28). Link 7 (5e10a37, "take") differs from 737e3fb only in `editor.c` and the FREE TAKE picker's `ui_take.c`, which draw no page SkiffDraw shows. Anything else gets null, which means the hand-drawn picture: 2.2, upstream 2.5.1 (no screen link), link 4 or 5, any new build. `DeviceSession.screenLinkVersion` is new for this (the INFO `56 01` tag, exactly).
+5. **The debug screen is gone.** `SkiffDrawDebugActivity` and `skiffFrame` were removed. The iOS `-skiffdraw-spike` screen stays behind its launch argument.
+
+**Checks run.**
+- `swift test` in `ios/SkiffDraw`: 12 of 12 pass. That covers the panel crop against the frame; the GLO ink turning orange to grey with white unchanged and back again; the version check; the LFO moving with its time; and, against SloopKit's FakeSkiff on the 2.5.1 fixture, pictures for GLO › DELAY (no coloured pixel), ENV, FX › DELAY and LFO (animated). NOTES and MIXER get none, link 4 and no link get none, and the fake's `unanswered` is empty.
+- `pixdiff.py`: still 0 differing pixels on all 24 board renders.
+- Android: `./gradlew :app:testDebugUnitTest :app:assembleDebug` passes, including `SkiffPictureTest` (4 tests).
+- SloopKit's own tests (after the `screenLinkVersion` addition): 308 of 308 pass.
+- The pictures the phone gets from the fake's state are in `qa/skiffdraw-android-2026-11-15/panel-pictures-fake-2.5.1.png`.
+
+**Not checked.**
+- The Pixel with the real FM-1. Scott's run: `qa/device-checks/2026-11-15-skiffdraw-android.md`.
+- The emulator. Without an FM-1, the emulator's session isn't connected, so every page would show the hand-drawn fallback, and the emulator's system had crashed under this machine's load earlier today.

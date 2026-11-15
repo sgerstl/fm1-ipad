@@ -310,6 +310,9 @@ public final class DeviceSession {
     public private(set) var screenScope = false
     /// The build Lupe carries (`56 01 06`: the scope at 30 a second, before MASTER). False before: Lupe offers it.
     public private(set) var screenCurrent = false
+    /// The screen link's build exactly (INFO's `56 01 nn`), nil without one: SkiffDraw draws only on the builds it was
+    /// compiled from (decision 46).
+    public private(set) var screenLinkVersion: Int?
     /// The parameter last turned on the FM-1 itself (CHANGED), for the Sound tab to follow.
     public private(set) var lastTouched: (scope: Int, id: Int, at: Date)?
     /// Device changes in the last 250 ms, and when a sound last loaded: a burst of several parameters at once (a
@@ -438,6 +441,7 @@ public final class DeviceSession {
             screenScope = screenLinked && (c as? SkiffDriver)?.skiff.hasScope == true
             screenCurrent = screenLinked && (c as? SkiffDriver)?.skiff.isCurrentLink == true
             takeLinked = screenLinked && (c as? SkiffDriver)?.skiff.hasTakeLink == true
+            screenLinkVersion = screenLinked ? (c as? SkiffDriver)?.skiff.tags[0x56]?.first.map(Int.init) : nil
             try await c.watch(screenLink: screenLinked, scope: !scopeViewers.isEmpty)
             if takeLinked { await readTakePicker() }
             if let s = c as? SkiffDriver {

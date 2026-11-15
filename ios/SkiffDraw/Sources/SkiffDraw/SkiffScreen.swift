@@ -67,6 +67,27 @@ public final class SkiffScreen {
         out.withUnsafeMutableBufferPointer { skd_render_rgba($0.baseAddress) }
         return out
     }
+    // MARK: colours, the LFO, the panel (decision 46)
+    /// Track `t` drawn in 0xRRGGBB instead of the theme's colour; nil: the theme's own.
+    public func setTrackColour(_ t: Int, _ rgb: UInt32?) { skd_set_track_colour(Int32(t), rgb.map { Int32(bitPattern: $0 & 0xFFFFFF) } ?? -1) }
+    /// The LFO's time since its retrigger, for LFO's moving picture.
+    public func setLFO(track t: Int, seconds: Double) { skd_set_lfo_seconds(Int32(t), seconds) }
+    /// A track's FM6 patch as FM6_GET sends it (128 bytes).
+    public func setFM6Patch(track t: Int, _ packed: [UInt8]) { packed.withUnsafeBufferPointer { skd_set_fm6_patch(Int32(t), $0.baseAddress, Int32($0.count)) } }
+    /// The picture panel's size (234 × 138 in Skiff's BLOCKS look).
+    public var panelSize: (width: Int, height: Int) {
+        var x: Int32 = 0, y: Int32 = 0, w: Int32 = 0, h: Int32 = 0
+        skd_panel_rect(&x, &y, &w, &h)
+        return (Int(w), Int(h))
+    }
+    /// The picture panel alone, RGBA row by row, its rounded corners' outside transparent.
+    public func renderPanel() -> [UInt8] {
+        let (w, h) = panelSize
+        var out = [UInt8](repeating: 0, count: w * h * 4)
+        out.withUnsafeMutableBufferPointer { _ = skd_render_panel_rgba($0.baseAddress, Int32($0.count)) }
+        return out
+    }
+
     /// Microseconds the last frame took to draw.
     public var lastDrawMicroseconds: Int { Int(skd_draw_cost_us()) }
 }

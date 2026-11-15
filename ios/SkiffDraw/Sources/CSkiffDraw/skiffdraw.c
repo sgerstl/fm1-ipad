@@ -12,6 +12,7 @@
 #include "skiffdraw.h"
 
 static uint32_t skd_cost;
+static int skd_ovr[NTRK];                           /* 0: the theme's; else 0x1000000 | RGB */
 static int skd_ready;
 
 static void skd_need(void) { if (!skd_ready) skd_reset(); }
@@ -19,6 +20,7 @@ static void skd_need(void) { if (!skd_ready) skd_reset(); }
 void skd_reset(void)
 {
     ui_power_on();
+    memset(skd_ovr, 0, sizeof skd_ovr);
     memset(scope_buf, 0, sizeof scope_buf);
     scope_w = 0;
     memset(&scd, 0, sizeof scd);
@@ -138,11 +140,52 @@ void skd_set_meters(const uint8_t *lv, int n)
     }
 }
 
+void skd_set_track_colour(int t, int rgb)
+{
+    skd_need();
+    if (t >= 0 && t < (int)NTRK) skd_ovr[t] = rgb < 0 ? 0 : 0x1000000 | (rgb & 0xFFFFFF);
+    ui.force = 1;
+}
+static void skd_apply_colours(void)
+{
+    uint32_t k;
+    palette_set(settings.palette);                  /* (the theme's own first: an override taken away goes) */
+    for (k = 0; k < NTRK && k < UI_NTRK; k++)
+        if (skd_ovr[k]) {
+            uint32_t c = (uint32_t)skd_ovr[k];
+            ux.trk[k] = (uint16_t)(((c >> 19) & 31u) << 11 | ((c >> 10) & 63u) << 5 | ((c >> 3) & 31u));
+        }
+}
+void skd_set_lfo_seconds(int t, double sec)
+{
+    track_t *tr;
+    uint32_t n;
+    skd_need();
+    if (t < 0 || t >= (int)NTRK || sec < 0) return;
+    tr = &trk[t];
+    n = (uint32_t)(sec * (double)(FS / CTL));       /* (lfo_t counts control ticks: LFO_WIN is 2 s of them) */
+    tr->lfo_t = n;
+    tr->lfo_ph = ((uint32_t)tr->p[P_LPHASE] << 25) + n * lfo_inc(tr);   /* (from PHASE at the retrigger, as voice.c) */
+}
+void skd_set_fm6_patch(int t, const uint8_t *b, int n)
+{
+    uint8_t v[FP_SIZE + 1u];
+    skd_need();
+    if (t < 0 || t >= (int)NTRK || n < 128) return;
+    memset(v, 0, sizeof v);
+    fm6_unpack(b, v);
+    fm6_set_patch((uint32_t)t, v);
+    ui.force = 1;
+}
+void skd_panel_rect(int *x, int *y, int *w, int *h) { skd_need(); *x = 3; *y = Y_GRAPH; *w = 234; *h = (int)graph_h(); }
+const char *skd_build_version(void) { return "FELUCCA " FELUCCA_VERSION; }
+
 void skd_render_565(uint16_t *out)
 {
     struct timeval a, b;
     uint32_t i;
     skd_need();
+    skd_apply_colours();
     gettimeofday(&a, 0);
     memset(host_screen, 0, sizeof host_screen);
     ui.force = 1;
@@ -164,5 +207,22 @@ void skd_render_rgba(uint8_t *out)
         out[4u * i + 2u] = (uint8_t)((c & 31u) * 255u / 31u);
         out[4u * i + 3u] = 255u;
     }
+}
+int skd_render_panel_rgba(uint8_t *out, int max)
+{
+    static uint8_t full[240u * 240u * 4u];
+    int x0, y0, w, h, x, y, r = 5;
+    skd_render_rgba(full);
+    skd_panel_rect(&x0, &y0, &w, &h);
+    if (w * h * 4 > max) return 0;
+    for (y = 0; y < h; y++)
+        for (x = 0; x < w; x++) {
+            const uint8_t *p = full + 4 * ((y0 + y) * 240 + x0 + x);
+            uint8_t *q = out + 4 * (y * w + x);
+            int cx = x < r ? r - x : x >= w - r ? x - (w - 1 - r) : 0, cy = y < r ? r - y : y >= h - r ? y - (h - 1 - r) : 0;
+            memcpy(q, p, 4);
+            if (cx && cy && cx * cx + cy * cy > r * r) q[3] = 0;     /* (outside the rounded corner: the page shows) */
+        }
+    return w * h;
 }
 uint32_t skd_draw_cost_us(void) { return skd_cost; }

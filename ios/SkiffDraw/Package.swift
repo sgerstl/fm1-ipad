@@ -26,6 +26,6 @@ let package = Package(
         .target(name: "SkiffDrawLink", dependencies: ["SkiffDraw", "SloopKit"], swiftSettings: v5),
         // The renderer on its own (the Mac; Android through adb shell): GLO › DELAY and a scope to PPMs.
         .executableTarget(name: "skiffdraw-demo", dependencies: ["SkiffDraw"], swiftSettings: v5),
-        .testTarget(name: "SkiffDrawTests", dependencies: ["SkiffDraw"], resources: [.copy("Fixtures")], swiftSettings: v5),
+        .testTarget(name: "SkiffDrawTests", dependencies: ["SkiffDraw", "SkiffDrawLink", "SloopKit"], resources: [.copy("Fixtures")], swiftSettings: v5),
     ]
 )

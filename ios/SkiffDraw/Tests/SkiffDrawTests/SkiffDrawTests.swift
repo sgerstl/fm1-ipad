@@ -75,4 +75,60 @@ private func differing(_ rgba: [UInt8], _ rgb: [UInt8]) -> Int {
         for _ in 0..<20 { _ = s.render(); worst = max(worst, s.lastDrawMicroseconds) }
         #expect(worst < 5_000)                                // a 60 Hz frame is 16,667 µs
     }
+
+    // MARK: decision 46
+
+    @Test func panelIsTheFramesPictureArea() {
+        let s = SkiffScreen.shared
+        let full = frame(page: "DELAY", nth: 1, globals: [(G.dtime, 1), (G.dfdbk, 60), (G.dmix, 90)])
+        let (w, h) = s.panelSize
+        #expect(w == 234 && h == 138)                         // the FM-1's 936 : 552 at 4×
+        let p = s.renderPanel()
+        var off = 0
+        for y in 0..<h { for x in 0..<w {
+            let a = 4 * (y * w + x), b = 4 * ((76 + y) * 240 + 3 + x)
+            if p[a + 3] == 255, p[a] != full[b] || p[a + 1] != full[b + 1] || p[a + 2] != full[b + 2] { off += 1 }
+        } }
+        #expect(off == 0)
+        #expect(p[3] == 0 && p[4 * (w - 1) + 3] == 0)          // outside the rounded corners: transparent
+        #expect(p[4 * (h / 2 * w + w / 2) + 3] == 255)
+    }
+
+    @Test func gloInkReplacesTheTrackColourOnly() {
+        let s = SkiffScreen.shared
+        let colour = frame(page: "DELAY", nth: 1, globals: [(G.dtime, 1), (G.dfdbk, 60), (G.dmix, 90)])
+        s.setTrackColour(0, 0xC4C4CC)                         // the panel's grey ink (Tok.text2Raised)
+        let grey = s.render()
+        s.setTrackColour(0, nil)
+        let back = s.render()
+        #expect(back == colour)                               // taken away: the theme's own again
+        func px(_ f: [UInt8], _ x: Int, _ y: Int) -> [UInt8] { Array(f[(4 * (y * 240 + x))..<(4 * (y * 240 + x) + 3)]) }
+        // the dry hit (white, x 14..) stays white; echo 1 (orange on SKIFF) turns grey: no channel apart from the others
+        #expect(px(grey, 16, 190) == px(colour, 16, 190))
+        let e = px(grey, 70, 190), o = px(colour, 70, 190)
+        #expect(o[0] > o[2] + 60)                             // orange
+        #expect(abs(Int(e[0]) - Int(e[1])) < 16 && abs(Int(e[1]) - Int(e[2])) < 16)
+    }
+
+    @Test func buildCheckAcceptsOnlyThisBuild() {
+        #expect(SkiffDrawBuild.version == "FELUCCA v2.5.1")
+        #expect(SkiffDrawBuild.accepts(version: "FELUCCA v2.5.1", screenLink: 6, paramCount: 148, globalCount: 28))
+        #expect(SkiffDrawBuild.accepts(version: "FELUCCA v2.5.1", screenLink: 7, paramCount: 148, globalCount: 28))
+        #expect(!SkiffDrawBuild.accepts(version: "FELUCCA v2.5.1", screenLink: 4, paramCount: 148, globalCount: 28))   // an older link
+        #expect(!SkiffDrawBuild.accepts(version: "FELUCCA v2.5.1", screenLink: nil, paramCount: 148, globalCount: 28)) // upstream 2.5.1
+        #expect(!SkiffDrawBuild.accepts(version: "FELUCCA v2.2", screenLink: 6, paramCount: 140, globalCount: 27))
+        #expect(!SkiffDrawBuild.accepts(version: "FELUCCA v2.6", screenLink: 6, paramCount: 148, globalCount: 28))
+        #expect(!SkiffDrawBuild.accepts(version: "FELUCCA v2.5.1", screenLink: 8, paramCount: 148, globalCount: 28))
+    }
+
+    @Test func lfoMovesWithItsTime() {
+        let s = SkiffScreen.shared
+        s.reset()
+        s.show(page: s.page(named: "LFO")!)
+        s.setLFO(track: 0, seconds: 0.2)
+        let a = s.renderPanel()
+        s.setLFO(track: 0, seconds: 0.9)
+        #expect(s.renderPanel() != a)
+    }
 }
+

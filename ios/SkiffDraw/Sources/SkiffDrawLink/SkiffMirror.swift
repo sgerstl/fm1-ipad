@@ -23,7 +23,7 @@ public final class SkiffMirror {
     private var engines: [Int: Int] = [:]
     private let started = Date.now
 
-    public init(screen: SkiffScreen = .shared) { self.screen = screen }
+    public init(screen: SkiffScreen? = nil) { self.screen = screen ?? .shared }
 
     /// Copies the session's state into the mirror. Cheap (a few hundred stores); call it before each frame.
     public func fill(from s: DeviceSession, palette: Int? = nil) {
@@ -59,7 +59,7 @@ public final class SkiffMirror {
         screen.setClock(ms: UInt32(truncatingIfNeeded: Int(Date.now.timeIntervalSince(started) * 1000)))
         if let palette { screen.setPalette(palette) }
         if followDevice, let ui = s.deviceScreen {
-            if ui.home { screen.showHome(scope: (ui.flags ?? 0) & 1 != 0) } else { screen.show(page: ui.page) }
+            if ui.home { screen.showHome(scope: (ui.flags ?? 0) & 1 != 0) } else if let d = SkiffFirmware.v2_5_1.pageMap.device(ui.page) { screen.show(page: d) }   // (SCREEN speaks Lupe's numbers)
         }
         stats = st
     }
