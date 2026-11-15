@@ -115,7 +115,7 @@ class PadDragState {
         WellFeel(glowPx, hotPx, insetLeft, insetRight, if (playing) setOf(EdgeAction.Delete) else emptySet()).also { lastFeel = it }
     var lastFeel = WellFeel(0f, 0f)
     /** The slots on screen, kept by each pad as it is placed (plain, not observed: read at the drop). */
-    val slots = HashMap<Pair<Int, Int>, DropSlot>()
+    val slots = HashMap<Any, DropSlot>()
     var screen by mutableStateOf(Size.Zero)
     var origin by mutableStateOf(Offset.Zero)
 }

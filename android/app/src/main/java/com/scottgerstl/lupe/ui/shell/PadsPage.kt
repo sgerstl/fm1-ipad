@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,6 +100,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     var confirmScene by remember { mutableStateOf<Int?>(null) }
     var confirmAt by remember { mutableStateOf(0L) }
     val scroll = rememberScrollState()
+    val entryIds = remember { EntryIdTracker() }
     val haptic = LocalHapticFeedback.current
     val mix by core.mix.collectAsStateWithLifecycle()
     // the clock reference: the pass bars and the waiting outlines move on from it every frame (read inside the draw, so a new reference recomposes nothing)
@@ -142,8 +144,12 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                             Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
                                 rows.forEach { r ->
                                     Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
+                                        // each keeps its identity as the list is rewritten, and slides to its new place (nothing pops)
+                                        val ids = entryIds.update(r.track, r.entries)
                                         r.entries.forEachIndexed { i, e ->
-                                            Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads, clock = clock)
+                                            key(ids[i]) {
+                                                Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads, modifier = Modifier.slideToPlace(), clock = clock)
+                                            }
                                         }
                                         // past the core's last (empty) entry, to H (and to the row's end): outlined slots with their letter (decision 33).
                                         val onRow = animatedFloat(if (r.track == pads.selected.track) 1f else 0f, Dur.STATE)
@@ -387,7 +393,9 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         dragState?.sprout = PadSprout(track, idx, from, color, usedBefore = used)
     }
     // this slot, for a drop to find (window pixels; kept as it is placed, forgotten when it goes)
-    androidx.compose.runtime.DisposableEffect(row.track, idx) { onDispose { dragState?.slots?.remove(row.track to idx) } }
+    // (kept by this pad's own token: the pad keeps its identity when it slides to another place, so its slot follows)
+    val slotToken = remember { Any() }
+    androidx.compose.runtime.DisposableEffect(slotToken) { onDispose { dragState?.slots?.remove(slotToken) } }
     /**
      * The pad's hold menu (the iPad's rows, decision 31: the full set the core can do): Edit steps, Select sound, Set pattern, Play once more /
      * less, Duplicate after, Move earlier / later, Clear; an empty slot: New pattern, Rest, Pick a pattern. Not here because the core has no
@@ -536,7 +544,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val lifted = dragState?.drag?.let { it.track == row.track && it.from == at } == true
     Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (lifted) 0.35f else 1f }.onGloballyPositioned {
         padCoords = it
-        dragState?.slots?.set(row.track to idx, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
+        dragState?.slots?.set(slotToken, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
     }) {
         Box(
             Modifier.matchParentSize()
