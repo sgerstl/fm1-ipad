@@ -75,6 +75,7 @@ struct CoreStats {
     int64_t zeroRuns = 0;       // exact-zero runs inside a signal: the phone's USB path filled a gap
     int64_t repeatRuns = 0;     // exactly repeated frames inside a signal: likewise
     int64_t framesIn = 0, framesOut = 0;
+    bool blind = false;         // no non-zero input for 0.5 s: undithered silence, gaps can't be seen
     bool playing = false;       // primed and pulling (false while it fills up at the start or after an underrun)
 };
 
@@ -213,15 +214,25 @@ private:
     }
 
     void detect(float l, float r) {
-        // the FM-1 dithers: a run of exact zeros or exactly repeated frames right after real signal is a gap filled
-        // by the phone's USB path, not something the FM-1 sent
+        // The FM-1 dithers (Skiff 2.5, #110): even its silence is +-1 LSB noise, never a long run of exact zeros. So:
+        //  * right after real signal, 4 exact-zero frames are a gap the phone's USB path filled;
+        //  * in quiet (dither only), a run of 32 exact-zero frames is too (dither gives a zero frame on both sides
+        //    about half the time: 32 in a row by chance is ~1e-8, a few a day). A gap is usually a packet, 44-49 frames.
+        //  * input with no non-zero frame for half a second isn't dithered at all (not the FM-1, or muted upstream):
+        //    gaps can't be seen in it, and the stats say so (blind).
         const float loud = 1e-3f;   // about -60 dBFS (33 LSB at 16 bits): well above the dither
         bool zero = (l == 0.f && r == 0.f);
         bool same = (l == lastL_ && r == lastR_);
         if (zero) {
-            if (++zeroRun_ == 4 && lastLoud_) st_.zeroRuns++;
+            ++zeroRun_;
+            if (zeroRun_ == 4 && lastLoud_) st_.zeroRuns++;
+            else if (zeroRun_ == 32 && !lastLoud_) st_.zeroRuns++;
+            if (++sinceNonZero_ >= cfg_.inRate / 2) st_.blind = true;
         } else {
+            if (sinceNonZero_ >= cfg_.inRate / 2 && zeroRun_ >= 32 && !lastLoud_) st_.zeroRuns--;   // that long run was undithered silence, not a gap
             zeroRun_ = 0;
+            sinceNonZero_ = 0;
+            st_.blind = false;
         }
         if (same && !zero && (std::fabs(l) > loud || std::fabs(r) > loud)) {
             if (++repeatRun_ == 3) st_.repeatRuns++;
@@ -244,6 +255,7 @@ private:
     double mean_ = 0, jitter_ = 0, target_ = 0;
     double minTarget_ = 0, maxTarget_ = 0, safety_ = 0;
     int zeroRun_ = 0, repeatRun_ = 0;
+    int64_t sinceNonZero_ = 0;
     bool lastLoud_ = false;
     float lastL_ = 0, lastR_ = 0;
     CoreStats st_;

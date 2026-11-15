@@ -197,6 +197,7 @@ struct Scenario {
     bool paced = false;        // the FM-1's proposed pacing
     int burst = 240;           // the output callback's frames (5 ms at 48 kHz: the Pixel's)
     int inRate = 48000;
+    bool quiet = false;        // the FM-1 silent: only its dither (Skiff 2.5's uac_dith on zero: -1, 0 or +1 LSB)
 };
 
 struct SimResult { int64_t underruns, catchUps, zeroRuns; double meanLatencyMs, maxLatencyMs, ppm, targetMs; int64_t gapsInjected; };
@@ -241,7 +242,14 @@ static SimResult simulate(const Scenario &sc, double seconds, uint32_t seed = 1)
                 Pk p = handed.front(); handed.pop_front();
                 buf.resize(size_t(p.n) * 2);
                 for (int i = 0; i < p.n; i++) {
-                    float v = p.gap ? 0.f : float(0.3 * std::sin(2 * M_PI * 440.0 * double(p.first + i) / fmRate));
+                    if (p.gap) { buf[2 * i] = buf[2 * i + 1] = 0.f; continue; }
+                    if (sc.quiet) {
+                        // uac_dith(0): (64 + r1 + r2 - 127) >> 7 with r1, r2 uniform 0..127, per channel
+                        auto d = [&] { int r1 = int(uni(rng) * 128), r2 = int(uni(rng) * 128); return float(((64 + r1 + r2 - 127) >> 7) / 32768.0); };
+                        buf[2 * i] = d(); buf[2 * i + 1] = d();
+                        continue;
+                    }
+                    float v = float(0.3 * std::sin(2 * M_PI * 440.0 * double(p.first + i) / fmRate));
                     buf[2 * i] = v; buf[2 * i + 1] = v;
                 }
                 if (p.gap) gaps++;
@@ -297,6 +305,15 @@ static void testAdaptive() {
     Scenario clean{"no gaps: no false dropouts", 0, 4, 2};
     r = simulate(clean, 63);
     CHECK(r.zeroRuns == 0, "false dropouts: %lld", (long long)r.zeroRuns);
+    // the FM-1 silent (dither only): gaps still show, and the dither alone raises none
+    Scenario qg{"FM-1 silent (dither), 5 gaps a second", 0, 1, 0, 0, 0, 5}; qg.quiet = true;
+    r = simulate(qg, 63);
+    std::printf("  %-44s detected %lld of %lld injected gaps\n", qg.name.c_str(), (long long)r.zeroRuns, (long long)r.gapsInjected);
+    CHECK(r.zeroRuns >= r.gapsInjected * 9 / 10 && r.zeroRuns <= r.gapsInjected + 2, "quiet detector: %lld of %lld", (long long)r.zeroRuns, (long long)r.gapsInjected);
+    Scenario qc{"FM-1 silent (dither), no gaps", 0, 4, 2}; qc.quiet = true;
+    r = simulate(qc, 63);
+    std::printf("  %-44s false gaps %lld\n", qc.name.c_str(), (long long)r.zeroRuns);
+    CHECK(r.zeroRuns == 0, "false dropouts in dither: %lld", (long long)r.zeroRuns);
 }
 
 int main() {

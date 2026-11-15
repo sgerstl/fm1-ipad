@@ -45,6 +45,7 @@ enum Stat {
     S_TS_FLAGS,      // bit 0: the input gave a timestamp, bit 1: the output did (else the latency is from buffer fill)
     S_LAST_ERROR,    // the last error callback's AAudio code (0: none)
     S_LAST_ERROR_INPUT,  // 1: that error came from the input stream
+    S_BLIND,         // 1: the input has been exact digital silence for 0.5 s (gaps can't be detected in it)
     S_COUNT
 };
 
@@ -195,6 +196,7 @@ public:
         s[S_FRAMES_IN] = double(c.framesIn);
         s[S_FRAMES_OUT] = double(c.framesOut);
         s[S_PLAYING] = c.playing ? 1 : 0;
+        s[S_BLIND] = c.blind ? 1 : 0;
         s[S_CALLBACKS] = double(callbacks_.load());
         s[S_PEAK] = peak_.exchange(0.f);
     }

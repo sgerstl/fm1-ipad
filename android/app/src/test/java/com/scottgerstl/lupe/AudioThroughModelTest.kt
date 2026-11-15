@@ -51,7 +51,7 @@ class AudioThroughModelTest {
 
     @Test fun statsArrayInTheEnginesOrder() {
         val a = DoubleArray(ThroughStats.COUNT)
-        a[0] = 1.0; a[2] = 48000.0; a[3] = 48000.0; a[4] = 1.0; a[7] = 240.0; a[15] = 23.6; a[19] = 2.0; a[22] = 5.0; a[23] = 1.0; a[31] = 0.5; a[32] = 2.0; a[33] = -899.0; a[34] = 1.0
+        a[0] = 1.0; a[2] = 48000.0; a[3] = 48000.0; a[4] = 1.0; a[7] = 240.0; a[15] = 23.6; a[19] = 2.0; a[22] = 5.0; a[23] = 1.0; a[31] = 0.5; a[32] = 2.0; a[33] = -899.0; a[34] = 1.0; a[35] = 1.0
         val s = ThroughStats.from(a)
         assertTrue(s.running); assertTrue(s.inExclusive)
         assertEquals(48000, s.inRate); assertEquals(240, s.outBurst)
@@ -59,7 +59,7 @@ class AudioThroughModelTest {
         assertEquals(2L, s.underruns)
         assertEquals(6L, s.phoneDropouts)
         assertEquals(0.5, s.peak, 1e-9)
-        assertEquals(2, s.tsFlags); assertEquals(-899, s.lastError); assertTrue(s.lastErrorInput)
+        assertEquals(2, s.tsFlags); assertEquals(-899, s.lastError); assertTrue(s.lastErrorInput); assertTrue(s.blind)
         // a short array (an older engine) reads as zeros, not a crash
         assertEquals(0, ThroughStats.from(DoubleArray(3)).outBurst)
     }
@@ -90,6 +90,7 @@ class AudioThroughModelTest {
         assertTrue(d, d.contains("timestamps –/–"))
         assertTrue(d, !d.contains("restarts"))
         assertTrue(ThroughModel.details(s.copy(tsFlags = 3, restarts = 2)).contains("timestamps in/out · restarts 2"))
+        assertTrue(ThroughModel.details(s.copy(blind = true)).contains("phone gaps 3 (blind"))
         assertEquals("Stopped", ThroughModel.details(ThroughStats()))
     }
 }

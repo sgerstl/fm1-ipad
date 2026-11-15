@@ -16,11 +16,19 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). The main session
 cd ~/code/fm1-ipad/.claude/worktrees/audio-through-398a74/android && ./gradlew :app:installDebug
 ```
 
-Launch flags, for the comparisons (all optional; the defaults are rate 0 = the phone's USB rate, exclusive in and out):
+Launch flags, for the comparisons. All are optional. The defaults, since the first Pixel run (cea014e), are rate 0 (the phone's USB rate), **input shared** (the Pixel 10's exclusive/MMAP USB input inserted ~45 gaps a second, the crunch) and output exclusive. Add `--activity-single-top` to change them on a running app; without it Android only brings the app to the front and drops the extras. A cold start (`-S`) works as well.
 
 ```bash
-adb -s <pixel> shell am start -n com.scottgerstl.lupe/.MainActivity --ez intro false --ez through true --ei throughRate 0 --ez throughExclusiveIn true --ez throughExclusiveOut true
+adb -s <pixel> shell am start --activity-single-top -n com.scottgerstl.lupe/.MainActivity --ez through true --ei throughRate 0 --ez throughExclusiveIn false --ez throughExclusiveOut true
 ```
+
+Logcat (`adb -s <pixel> logcat -s LupeThrough`) shows:
+- each decision (`check: starting …`, `no FM-1 audio input listed; retrying`);
+- every restart, with its stream and AAudio error;
+- a `stats:` line 1 s after a start and then every 5 s, from its own thread;
+- `poll ran N ms after the last` when the main thread is busy.
+
+**phone gaps** now also counts in the FM-1's quiet. Its dither makes a 32-frame run of exact zeros a gap, not silence (host test: 266 of 269 found, no false ones). If the input is pure digital zero for 0.5 s, the line says `(blind: the input is digital silence)`.
 
 Count the HAL's dejitter lines while it plays: `android/scripts/count-dejitter.sh 10 -s <pixel>` (brought over from the spike). Or by hand:
 
@@ -36,7 +44,7 @@ adb -s <pixel> logcat -c; sleep 10; adb -s <pixel> logcat -d | grep -c "Dejitter
 | 2 | Settings › Audio. Read the Details line with the FM-1 playing for 30 s. | Write down: rates (expect `48 → 48 kHz`), in/out exclusive or shared, in + buffer + out ms, burst, ppm (expect about +400), Lupe gaps, phone gaps, xruns. | – | in __ out __ · in/out ms __/__/__ · ppm __ · Lupe gaps __ · phone gaps __ |
 | 3 | **Listen** (wired headphones). Hold one plain note (a sine-like patch) for 20 s, then play the pattern. | No crunch. If it still crunches: note whether **phone gaps** climb with it (then it's the phone's USB path, before Lupe) or **Lupe gaps** do (then it's ours). | – | ☐ clean ☐ crunch · phone gaps/10 s __ · Lupe gaps/10 s __ |
 | 4 | Count the HAL's `USB RX Dejitter underrun` lines for 10 s while it plays (command above). | The spike saw about 100 a second. Write the number. | – | lines/s __ |
-| 5 | Relaunch with `--ez throughExclusiveIn false`, then with `--ei throughRate 44100`. Repeat checks 2–4 each time. | Whether shared input or 44.1 kHz changes the HAL's lines or the phone gaps. (Exclusive input may take a different, MMAP, path through the HAL.) | – | shared: lines/s __ gaps __ · 44.1: lines/s __ gaps __ |
+| 5 | Relaunch with `--ez throughExclusiveIn true` (the old default), then with `--ei throughRate 44100`. Repeat checks 2–4 each time, **with the FM-1 playing** (peak above 0). | First run: exclusive input gave ~45 phone gaps a second (the crunch); shared gave none, but its run was silent, so check that again with sound. | – | shared: lines/s __ gaps __ · 44.1: lines/s __ gaps __ |
 | 6 | **Delay by ear.** Wired headphones on the phone, the FM-1's own jack on the other ear (or switch). Tap a key. | The Delay line's number, and a judgement: ☐ fine to play on ☐ listening only. The number covers the phone (USB in to the output). The FM-1's own ~4 ms before USB isn't in it. | – | delay __ ms · ☐ play ☐ listen |
 | 7 | **Bluetooth buds** connected while it plays. | It moves to the buds by itself within a second or two. The menu says "… + Bluetooth", and Settings shows the Bluetooth note (it adds its own delay, which the phone can't measure). Judge as in check 6. Codec from Developer options › Bluetooth audio codec. | – | ☐ pass · codec __ · ☐ play ☐ listen |
 | 8 | Unplug the wired headphones, then plug them in again (or disconnect and reconnect the buds). | It follows the output each time without a crash; the Output line changes. | – | ☐ pass ☐ fail: |

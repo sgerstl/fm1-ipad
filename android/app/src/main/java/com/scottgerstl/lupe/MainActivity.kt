@@ -70,15 +70,11 @@ class MainActivity : ComponentActivity() {
 
         val phone = PhoneSettings.from(this)
         // Play through the phone (the song-name menu and Settings). adb, for the device check and the emulator:
-        //   --ez through true|false · --ei throughRate 0|44100|48000 (0: the input's own) · --ez throughExclusiveIn/Out false
+        //   --ez through true|false · --ei throughRate 0|44100|48000 (0: the input's own) · --ez throughExclusiveIn true|false (default false) --ez throughExclusiveOut true|false (default true)
         //   --ez throughAnyInput true (the default input when no FM-1 is there: the emulator; never on a phone with its speaker on)
         val through = app.through
         through.requestPermission = { askMic.launch(android.Manifest.permission.RECORD_AUDIO) }
-        if (intent.hasExtra("throughRate")) through.testRate = intent.getIntExtra("throughRate", 0)
-        if (intent.hasExtra("throughExclusiveIn")) through.testExclusiveIn = intent.getBooleanExtra("throughExclusiveIn", true)
-        if (intent.hasExtra("throughExclusiveOut")) through.testExclusiveOut = intent.getBooleanExtra("throughExclusiveOut", true)
-        if (intent.hasExtra("throughAnyInput")) through.testAnyInput = intent.getBooleanExtra("throughAnyInput", false)
-        if (intent.hasExtra("through")) through.choose(intent.getBooleanExtra("through", false))
+        applyThroughExtras(intent, cold = true)
         // The launch intro (ui/intro): a cold start only (not a rotation or a restore), and not for adb launches that ask for a scenario, so screenshot scripts
         // don't wait for it. adb: --ez intro false skips it; --ef introAt 1.2 holds it at 1.2 s (to compare frames with the iPhone's -intro-at).
         val introWanted = savedInstanceState == null && !intent.hasExtra("scenario") && intent.getBooleanExtra("intro", true)
@@ -99,6 +95,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** Play through the phone's adb extras, on a cold start and on onNewIntent (a running app): see onCreate. */
+    private fun applyThroughExtras(i: android.content.Intent, cold: Boolean) {
+        val through = (application as LupeApp).through
+        var changed = false
+        if (i.hasExtra("throughRate")) { through.testRate = i.getIntExtra("throughRate", 0); changed = true }
+        if (i.hasExtra("throughExclusiveIn")) { through.testExclusiveIn = i.getBooleanExtra("throughExclusiveIn", false); changed = true }
+        if (i.hasExtra("throughExclusiveOut")) { through.testExclusiveOut = i.getBooleanExtra("throughExclusiveOut", true); changed = true }
+        if (i.hasExtra("throughAnyInput")) { through.testAnyInput = i.getBooleanExtra("throughAnyInput", false); changed = true }
+        if (i.hasExtra("through")) through.choose(i.getBooleanExtra("through", false))
+        if (changed && !cold) through.restartForSettings()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyThroughExtras(intent, cold = false)
     }
 
     override fun onStart() { super.onStart(); (application as LupeApp).through.foreground(true) }
