@@ -38,7 +38,9 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
     /** Test settings from adb (MainActivity's extras): the input's rate (0: its own), exclusive or shared streams, any input (an emulator has no FM-1). */
     var testRate = 0
     var testExclusiveIn = true
+        set(v) { field = v; exclusiveIn = v }
     var testExclusiveOut = true
+        set(v) { field = v; exclusiveOut = v }
     var testAnyInput = false
 
     /** Asks the Activity for RECORD_AUDIO; set by MainActivity. */
@@ -50,6 +52,11 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
     private var running = false
     private var restarts = 0
     private var polls = 0
+    private var totalRestarts = 0
+    private val errorTimes = ArrayDeque<Pair<Long, Boolean>>()
+    /** Exclusive (MMAP) per stream: the test setting, until a stream keeps failing in it (then shared, for this session). */
+    private var exclusiveIn = true
+    private var exclusiveOut = true
     /** Asked for the microphone since the switch went on (once: a "Don't allow" is respected until it's switched on again). */
     private var asked = false
 
@@ -97,7 +104,7 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
         val fm1 = fm1Input()
         if (fm1 == null && !testAnyInput) { stopEngine(); state = ThroughState.NoInput; return }
         if (running) return
-        val r = ThroughNative.start(fm1?.id ?: 0, testRate, testExclusiveIn, testExclusiveOut)
+        val r = ThroughNative.start(fm1?.id ?: 0, testRate, exclusiveIn, exclusiveOut)
         if (r != 0) {
             Log.w(TAG, "start failed: ${ThroughNative.error()}")
             state = ThroughState.Failed("The phone's audio couldn't start (${ThroughNative.error()})")
@@ -113,7 +120,8 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
             scheduleCheck(RETRY_MS)
             return
         }
-        stats = s
+        polls = 0
+        if (stats.restarts == 0) stats = s.copy(restarts = totalRestarts)   // (after a restart, the last full reading stays until the next poll)
         state = playingState(s)
         main.removeCallbacks(pollRunnable)
         main.postDelayed(pollRunnable, POLL_MS)
@@ -121,19 +129,37 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
 
     private fun poll() {
         if (!running) return
-        val s = ThroughNative.stats()
-        stats = s
+        val s = ThroughNative.stats().copy(restarts = totalRestarts)
         if (s.disconnected || !s.running) {
-            // a route change or the FM-1 gone: start again from scratch (a few times quickly, then slower)
-            stopEngine()
+            // a route change, a stream error or the FM-1 gone: start again from scratch (a few times quickly, then slower).
+            // Said in the log, so a loop of these can't hide (on the Pixel it once looked like "playing" with no figures).
+            val why = if (s.disconnected) "${if (s.lastErrorInput) "input" else "output"} stream error ${s.lastError}" else "engine not running"
+            Log.w(TAG, "restart ${totalRestarts + 1}: $why (in ${if (exclusiveIn) "exclusive" else "shared"}, out ${if (exclusiveOut) "exclusive" else "shared"})")
+            // exclusive (MMAP) is the usual suspect when a stream keeps failing: after three errors on the same stream
+            // within 10 s, that stream goes shared for the rest of the session (still low latency, through the mixer)
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (s.disconnected) {
+                errorTimes.addLast(now to s.lastErrorInput)
+                while (errorTimes.isNotEmpty() && now - errorTimes.first().first > 10_000) errorTimes.removeFirst()
+                val sameStream = errorTimes.count { it.second == s.lastErrorInput }
+                if (sameStream >= 3) {
+                    if (s.lastErrorInput && exclusiveIn) { exclusiveIn = false; Log.w(TAG, "input keeps failing in exclusive mode: shared from now on") }
+                    if (!s.lastErrorInput && exclusiveOut) { exclusiveOut = false; Log.w(TAG, "output keeps failing in exclusive mode: shared from now on") }
+                    errorTimes.clear()
+                }
+            }
+            stopEngine(keepStats = true)
             restarts++
+            totalRestarts++
             scheduleCheck(if (restarts < 5) 200 else RETRY_MS)
             return
         }
+        stats = s
         restarts = 0
         state = playingState(s)
-        // every 5 s, for the device check: adb logcat -s LupeThrough
-        if (++polls % 20 == 0) Log.i(TAG, "stats: total ${"%.1f".format(s.totalMs)} ms · ${ThroughModel.details(s)} · target ${"%.1f".format(s.targetMs)} ms · jitter ${"%.1f".format(s.jitterMs)} ms · catch-ups ${s.catchUps} · peak ${"%.3f".format(s.peak)}")
+        // for the device check (adb logcat -s LupeThrough): the first after a second, then every 5 s
+        polls++
+        if (polls == 4 || polls % 20 == 0) Log.i(TAG, "stats: total ${"%.1f".format(s.totalMs)} ms · ${ThroughModel.details(s)} · target ${"%.1f".format(s.targetMs)} ms · jitter ${"%.1f".format(s.jitterMs)} ms · catch-ups ${s.catchUps} · peak ${"%.3f".format(s.peak)}")
     }
 
     private fun playingState(s: ThroughStats): ThroughState {
@@ -142,10 +168,11 @@ class AudioThrough(private val ctx: Context, private val prefs: SharedPreference
         return ThroughState.Playing(ThroughModel.outputName(type, out?.productName?.toString().orEmpty()), ThroughModel.kind(type))
     }
 
-    private fun stopEngine() {
+    /** keepStats: a restart keeps showing the last reading (marked with the restart count) instead of blanking. */
+    private fun stopEngine(keepStats: Boolean = false) {
         main.removeCallbacks(pollRunnable)
         if (running) { ThroughNative.stop(); running = false }
-        stats = ThroughStats()
+        if (!keepStats) stats = ThroughStats()
     }
 
     private fun fm1Input(): AudioDev? = ThroughModel.pickFm1(

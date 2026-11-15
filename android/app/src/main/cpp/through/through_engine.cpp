@@ -42,6 +42,9 @@ enum Stat {
     S_OUT_BUFFER, S_IN_DEVICE, S_OUT_DEVICE, S_IN_LATENCY_MS, S_RING_MS, S_FILTER_MS, S_OUT_LATENCY_MS, S_TOTAL_MS,
     S_TARGET_MS, S_JITTER_MS, S_RATIO_PPM, S_UNDERRUNS, S_CATCHUPS, S_OVERFLOWS, S_ZERO_RUNS, S_REPEAT_RUNS,
     S_IN_XRUNS, S_OUT_XRUNS, S_FRAMES_IN, S_FRAMES_OUT, S_PLAYING, S_CALLBACKS, S_IN_CHANNELS, S_PEAK,
+    S_TS_FLAGS,      // bit 0: the input gave a timestamp, bit 1: the output did (else the latency is from buffer fill)
+    S_LAST_ERROR,    // the last error callback's AAudio code (0: none)
+    S_LAST_ERROR_INPUT,  // 1: that error came from the input stream
     S_COUNT
 };
 
@@ -54,6 +57,7 @@ public:
         std::lock_guard<std::mutex> g(lock_);
         closeLocked();
         disconnected_ = false;
+        lastErrorCode_ = 0;
         error_.clear();
 
         // the output first: its rate is the phone's native rate, and it drives everything
@@ -125,6 +129,8 @@ public:
         std::lock_guard<std::mutex> g(lock_);
         for (int i = 0; i < S_COUNT; i++) s[i] = 0;
         s[S_DISCONNECTED] = disconnected_.load() ? 1 : 0;
+        s[S_LAST_ERROR] = lastErrorCode_.load();
+        s[S_LAST_ERROR_INPUT] = lastErrorInput_.load() ? 1 : 0;
         if (!running_ || !in_ || !out_ || !core_) return;
         s[S_RUNNING] = 1;
         s[S_IN_RATE] = inRate_;
@@ -141,7 +147,9 @@ public:
         // input: how old the newest frame we've read is (a frame position at a time, from the stream's timestamp)
         int64_t pos = 0, t = 0;
         double inMs = -1, outMs = -1;
+        int tsFlags = 0;
         if (AAudioStream_getTimestamp(in_, CLOCK_MONOTONIC, &pos, &t) == AAUDIO_OK) {
+            tsFlags |= 1;
             // AAudio's own count, in the timestamp's frame base (ours would drift from it when the input drops frames)
             int64_t read = AAudioStream_getFramesRead(in_);
             inMs = (now - t) / 1e6 - double(read - pos) * 1000.0 / inRate_;
@@ -149,10 +157,22 @@ public:
         }
         // output: frames written but not yet heard
         if (AAudioStream_getTimestamp(out_, CLOCK_MONOTONIC, &pos, &t) == AAUDIO_OK) {
+            tsFlags |= 2;
             double played = pos + double(now - t) * outRate_ / 1e9;
             outMs = (double(AAudioStream_getFramesWritten(out_)) - played) * 1000.0 / outRate_;
             if (outMs < 0) outMs = 0;
         }
+        // no timestamp (some MMAP paths give none at first, or ever): what waits in the stream's buffer, plus one burst
+        if (inMs < 0) {
+            int64_t waiting = AAudioStream_getFramesWritten(in_) - AAudioStream_getFramesRead(in_);
+            inMs = double(std::max<int64_t>(0, waiting) + AAudioStream_getFramesPerBurst(in_)) * 1000.0 / inRate_;
+        }
+        if (outMs < 0) {
+            int64_t queued = AAudioStream_getFramesWritten(out_) - AAudioStream_getFramesRead(out_);
+            outMs = double(std::max<int64_t>(0, queued) + burst_) * 1000.0 / outRate_;
+        }
+        s[S_TS_FLAGS] = tsFlags;
+        s[S_LAST_ERROR] = lastErrorCode_.load();
         snapLock_.lock();
         through::CoreStats c = snap_;
         snapLock_.unlock();
@@ -161,7 +181,7 @@ public:
         s[S_RING_MS] = ringMs;
         s[S_FILTER_MS] = core_->filterDelayMs();
         s[S_OUT_LATENCY_MS] = outMs;
-        s[S_TOTAL_MS] = (inMs >= 0 && outMs >= 0) ? inMs + ringMs + core_->filterDelayMs() + outMs : -1;
+        s[S_TOTAL_MS] = inMs + ringMs + core_->filterDelayMs() + outMs;
         s[S_TARGET_MS] = c.target * 1000.0 / inRate_;
         s[S_JITTER_MS] = c.jitter * 1000.0 / inRate_;
         s[S_RATIO_PPM] = c.ratioPpm;
@@ -188,9 +208,12 @@ private:
     static aaudio_data_callback_result_t dataCb(AAudioStream *, void *user, void *audio, int32_t frames) {
         return static_cast<Engine *>(user)->onAudio(static_cast<float *>(audio), frames);
     }
-    static void errorCb(AAudioStream *, void *user, aaudio_result_t err) {
+    static void errorCb(AAudioStream *stream, void *user, aaudio_result_t err) {
         auto *e = static_cast<Engine *>(user);
-        LOGW("stream error %s: the Kotlin side restarts", AAudio_convertResultToText(err));
+        const char *which = stream == e->in_ ? "input" : stream == e->out_ ? "output" : "old";
+        LOGW("%s stream error %s: the Kotlin side restarts", which, AAudio_convertResultToText(err));
+        e->lastErrorCode_ = err;
+        e->lastErrorInput_ = stream == e->in_;
         e->disconnected_ = true;
     }
 
@@ -257,6 +280,8 @@ private:
     int32_t lastOutXruns_ = 0;
     bool running_ = false;
     std::atomic<bool> disconnected_{false};
+    std::atomic<int> lastErrorCode_{0};
+    std::atomic<bool> lastErrorInput_{false};
     std::atomic<int64_t> callbacks_{0}, framesRead_{0}, framesWritten_{0};
     std::atomic<float> peak_{0.f};
     // a spin-free try-lock copy of the core's stats for the reader

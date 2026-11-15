@@ -38,6 +38,12 @@ data class ThroughStats(
     val inXruns: Long = 0, val outXruns: Long = 0,
     val framesIn: Long = 0, val framesOut: Long = 0,
     val playing: Boolean = false, val callbacks: Long = 0, val peak: Double = 0.0,
+    /** Bit 0: the input gave a timestamp; bit 1: the output did. Without one, that side's latency is its buffer's fill plus a burst. */
+    val tsFlags: Int = 0,
+    /** The last stream error (an AAudio code, 0: none) and whether the input raised it. */
+    val lastError: Int = 0, val lastErrorInput: Boolean = false,
+    /** How many times the controller restarted the streams (route changes, errors); filled in by AudioThrough. */
+    val restarts: Int = 0,
 ) {
     /** Gaps the phone's own USB audio path filled before the sound reached Lupe (the FM-1 dithers, so it never sends these). */
     val phoneDropouts get() = zeroRuns + repeatRuns
@@ -55,10 +61,10 @@ data class ThroughStats(
                 inLatencyMs = d(11), ringMs = d(12), filterMs = d(13), outLatencyMs = d(14), totalMs = d(15), targetMs = d(16),
                 jitterMs = d(17), ratioPpm = d(18), underruns = l(19), catchUps = l(20), overflows = l(21), zeroRuns = l(22),
                 repeatRuns = l(23), inXruns = l(24), outXruns = l(25), framesIn = l(26), framesOut = l(27), playing = b(28),
-                callbacks = l(29), inChannels = n(30), peak = d(31),
+                callbacks = l(29), inChannels = n(30), peak = d(31), tsFlags = n(32), lastError = n(33), lastErrorInput = b(34),
             )
         }
-        const val COUNT = 32
+        const val COUNT = 35
     }
 }
 
@@ -148,6 +154,8 @@ object ThroughModel {
             (if (s.outLowLatency) "" else " (not low latency)") +
             " · in ${ms(s.inLatencyMs)} + buffer ${ms(s.ringMs + s.filterMs)} + out ${ms(s.outLatencyMs)} ms" +
             " · burst ${s.outBurst} · ${"%+.0f".format(s.ratioPpm)} ppm" +
-            " · Lupe gaps ${s.underruns} · phone gaps ${s.phoneDropouts} · xruns ${s.inXruns}/${s.outXruns}"
+            " · Lupe gaps ${s.underruns} · phone gaps ${s.phoneDropouts} · xruns ${s.inXruns}/${s.outXruns}" +
+            " · timestamps ${if (s.tsFlags and 1 != 0) "in" else "–"}/${if (s.tsFlags and 2 != 0) "out" else "–"}" +
+            (if (s.restarts > 0) " · restarts ${s.restarts}" else "")
     }
 }
