@@ -36,14 +36,14 @@ class HoldMenuTest {
     }
 
     @Test fun theRimRunsFromTheTopChoiceToTheBottomOneAndTheTrianglesSayThereIsMore() {
-        val w = wheel(9, y = 220f)        // (a height where the column fits without moving)
-        assertEquals(220f, w.mid, 0.01f)
-        assertEquals(136f, w.reachY, 0.01f)                                 // 2 × 56 + 24
-        assertEquals(Math.toDegrees(kotlin.math.asin(136.0 / 378.0)), w.rimHalfSweep.toDouble(), 0.01)
+        val w = wheel(9, y = 220f)        // a wheel spans the full usable height: the middle halfway between the header (56) and 8 above the foot, whatever the finger's height
+        assertEquals(230f, w.mid, 0.01f)
+        assertEquals(159f, w.reachY, 0.01f)                                 // (412 − 8 − 56) / 2 − (8 + 7)
+        assertEquals(Math.toDegrees(kotlin.math.asin(159.0 / 378.0)), w.rimHalfSweep.toDouble(), 0.01)
         // the triangles: on the rim's curve, 8 past its ends
         val (ux, uy) = w.triangle(up = true); val (dx, dy) = w.triangle(up = false)
-        assertEquals(220f - 144f, uy, 0.01f); assertEquals(220f + 144f, dy, 0.01f); assertEquals(ux, dx, 0.01f)
-        assertEquals(378f, hypot(ux - w.centreX, uy - 220f), 0.01f)
+        assertEquals(230f - 167f, uy, 0.01f); assertEquals(230f + 167f, dy, 0.01f); assertEquals(ux, dx, 0.01f)
+        assertEquals(378f, hypot(ux - w.centreX, uy - 230f), 0.01f)
         // opened on the first choice: nothing above, more below; at the end the other way round; each blends over half a choice
         assertEquals(0f, w.moreAbove(0f), 0f); assertEquals(1f, w.moreBelow(0f), 0f)
         assertEquals(0.5f, w.moreAbove(0.25f), 0.001f)
@@ -81,10 +81,10 @@ class HoldMenuTest {
     }
 
     @Test fun theMiddleMovesOnlyAsFarAsKeepsTheColumnOnTheScreen() {
-        // a wheel: half = 2 × 56 + 24 + 15 (the triangle and its gap) = 151; the header's line is at 56, the foot's margin 16
-        assertEquals(56f + 151f, HoldWheel(500f, 70f, 9, 915f, 412f).mid, 0.01f)
-        assertEquals(412f - 16f - 151f, HoldWheel(500f, 400f, 9, 915f, 412f).mid, 0.01f)
-        assertEquals(220f, HoldWheel(500f, 220f, 9, 915f, 412f).mid, 0.01f)
+        // a wheel spans the full usable height (iPhone 3205327): its middle is halfway between the header's line (56) and 8 above the foot, wherever the finger is
+        assertEquals(230f, HoldWheel(500f, 70f, 9, 915f, 412f).mid, 0.01f)
+        assertEquals(230f, HoldWheel(500f, 400f, 9, 915f, 412f).mid, 0.01f)
+        assertEquals(230f, HoldWheel(500f, 220f, 9, 915f, 412f).mid, 0.01f)
         // five choices, no triangles: 136
         assertEquals(56f + 136f, HoldWheel(500f, 70f, 5, 915f, 412f).mid, 0.01f)
         // one choice: only its own half height
@@ -131,7 +131,7 @@ class HoldMenuTest {
         assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 366.0)), five.fieldInnerSweep.toDouble(), 0.01)
         assertEquals(Math.toDegrees(kotlin.math.asin(150.0 / 612.0)), five.fieldOuterSweep.toDouble(), 0.01)
         val nine = HoldWheel(500f, 220f, 9, 915f, 412f)
-        assertEquals(136f + 15f + 14f, nine.fieldHalf, 0.01f)                          // a wheel adds the triangles' 15
+        assertEquals(159f + 15f + 14f, nine.fieldHalf, 0.01f)                          // a full-height wheel: its reach 159, the triangles' 15, 14
         assertTrue(nine.fieldInnerSweep > five.fieldInnerSweep)
         // it covers the rows: the outer arc reaches past the rows' far edge (the middle row ends at near + 200 from the finger)
         assertTrue(HoldWheel.FIELD_OUTER > HoldWheel.CURVE + HoldWheel.ROW_W)
@@ -179,5 +179,18 @@ class HoldMenuTest {
         val m = HoldMenuState()
         m.open(Offset.Zero, Color.Red, listOf(HoldItem("Set pattern…", enabled = false) { done = true }))
         m.pick(0); assertFalse(done); assertTrue(m.menu != null)
+    }
+
+    @Test fun aTallerScreenShowsMoreWholeChoicesAndAMenuThatFitsStaysLevelWithTheFinger() {
+        val tall = { n: Int, y: Float -> HoldWheel(500f, y, n, 915f, 700f, true) }
+        // 700 high: (700 − 8 − 56) / 2 − 15 = 303 half; floor((606 − 48) / 56) + 1 = 10 whole choices
+        assertEquals(10, tall(12, 300f).shown); assertTrue(tall(12, 300f).spans); assertEquals(2f, tall(12, 300f).maxTurn, 0f)
+        assertEquals(318f * 0 + 374f, tall(12, 100f).mid, 0.01f)             // (56 + 692) / 2, not the finger's
+        // nine fit: level with the finger (clamped under the header), no triangles
+        val fits = tall(9, 380f)
+        assertFalse(fits.spans); assertEquals(9, fits.shown); assertEquals(380f, fits.mid, 0.01f); assertEquals(0f, fits.moreBelow(0f), 0f)
+        assertEquals(56f + 4 * 56f + 24f, tall(9, 60f).mid, 0.01f)
+        // the phone's own height still shows five whole ones
+        assertEquals(5, HoldWheel(500f, 200f, 9, 915f, 412f, true).shown)
     }
 }

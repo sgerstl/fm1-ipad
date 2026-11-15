@@ -172,13 +172,21 @@ class WheelSpot(val rowX: Float, val rowY: Float, val nodeX: Float, val nodeY: F
  * Side: away from the playing hand (left for right-handed) wherever the press is, flipping only when there isn't room.
  */
 class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val screenH: Float, leftHanded: Boolean = false) {
-    val shown: Int = minOf(n, 5)
+    /**
+     * How many whole choices the column shows (iPhone 3205327): five, or more when the usable height (header to 8 above the foot, less the triangles' room) holds
+     * more at the 56 pitch. A menu with no more choices than that fits and stays level with the finger; one with more spans the full usable height and rolls.
+     */
+    private val fullHalf: Float = (screenH - 8f - HEADER) / 2f - (TRI_GAP + TRI_H)
+    private val cap: Int = maxOf(5, ((2f * fullHalf - ROW_H) / PITCH).toInt() + 1)
+    /** True when the column is the full height and the wheel rolls. */
+    val spans: Boolean = n > cap
+    val shown: Int = if (spans) cap else n
     /** From the curve's middle height to the outer edge of its top or bottom choice. */
-    val reachY: Float = (shown - 1) / 2f * PITCH + ROW_H / 2
+    val reachY: Float = if (spans) fullHalf else (shown - 1) / 2f * PITCH + ROW_H / 2
     /** …and, on a wheel, the triangle past it (an 8 gap and its 7 height). */
-    private val half = reachY + if (n > 5) TRI_GAP + TRI_H else 0f
-    /** The curve's middle height: the finger's, kept so the column stays on the screen. */
-    val mid: Float = if (HEADER + half <= screenH - 16f - half) y.coerceIn(HEADER + half, screenH - 16f - half) else y
+    private val half = reachY + if (spans) TRI_GAP + TRI_H else 0f
+    /** The curve's middle height: the finger's, kept so the column stays on the screen; a full-height column is centred between the header and 8 above the foot. */
+    val mid: Float = if (spans) (HEADER + screenH - 8f) / 2f else if (HEADER + half <= screenH - 16f - half) y.coerceIn(HEADER + half, screenH - 16f - half) else y
     /**
      * The room beside the finger on each side for a 200 wide row and an 8 margin, in the menu layer's own coordinates. The layer is the
      * whole screen, edge to edge (under the camera cutout and the system bars), so these are the physical edges: a menu may run into the
@@ -201,7 +209,7 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
     /** The curve's centre: far behind the finger, on the side the choices are not. */
     val centreX: Float = x + side * (near - CURVE)
     /** How far the wheel can turn, in choices; 0 for five or fewer. */
-    val maxTurn: Float = (n - 5).coerceAtLeast(0).toFloat()
+    val maxTurn: Float = (n - shown).coerceAtLeast(0).toFloat()
 
     /** Choice [k]'s position on the curve: 0 its middle, ±2 its ends, not whole while the wheel turns. */
     fun position(k: Int, turn: Float = 0f): Float = k - turn - (shown - 1) / 2f
@@ -212,7 +220,7 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
         val nodeX = if (left) (centreX - dx).coerceAtLeast(8f + ROW_W) else (centreX + dx).coerceAtMost(screenW - 8f - ROW_W)
         // the stalk: 22 dp back from the node toward the curve's centre, so its inner end is on the rim
         val ux = nodeX - centreX; val uy = cy - mid; val len = sqrt(ux * ux + uy * uy).coerceAtLeast(0.001f)
-        val alpha = if (n > 5) (1f - (kotlin.math.abs(p) - 2f) / 0.8f).coerceIn(0f, 1f) else 1f
+        val alpha = if (spans) (1f - (kotlin.math.abs(p) - (shown - 1) / 2f) / 0.8f).coerceIn(0f, 1f) else 1f
         return WheelSpot(if (left) nodeX - ROW_W else nodeX, cy - ROW_H / 2, nodeX, cy, nodeX - STALK * ux / len, cy - STALK * uy / len, alpha)
     }
     fun spot(k: Int, turn: Float): WheelSpot = spot(position(k, turn))
@@ -232,8 +240,8 @@ class HoldWheel(val x: Float, val y: Float, val n: Int, val screenW: Float, val 
         return (centreX + side * sqrt((RIM * RIM - dy * dy).coerceAtLeast(0f))) to (mid + if (up) -dy else dy)
     }
     /** How much of each triangle shows: the upper one once there are choices before the first in view, the lower while there are more after; none at five or fewer. */
-    fun moreAbove(turn: Float): Float = if (n > 5) (turn / 0.5f).coerceIn(0f, 1f) else 0f
-    fun moreBelow(turn: Float): Float = if (n > 5) ((n - 5 - turn) / 0.5f).coerceIn(0f, 1f) else 0f
+    fun moreAbove(turn: Float): Float = if (spans) (turn / 0.5f).coerceIn(0f, 1f) else 0f
+    fun moreBelow(turn: Float): Float = if (spans) ((n - shown - turn) / 0.5f).coerceIn(0f, 1f) else 0f
 
     /** Where a drag has the wheel: past either end it gives, at 0.35 of the finger's travel. */
     fun give(turn: Float): Float = when { turn < 0f -> turn * 0.35f; turn > maxTurn -> maxTurn + (turn - maxTurn) * 0.35f; else -> turn }
