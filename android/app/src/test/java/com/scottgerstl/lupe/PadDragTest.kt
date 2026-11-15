@@ -97,3 +97,19 @@ class PadMenuIdleTest {
         assertFalse(padMenuIdle(transportPlaying = false, timelinePlaying = true))
     }
 }
+
+class SideWellsGlowSoonerTest {
+    private val w = 874f; private val h = 402f
+    private val feel = WellFeel(glowPx = 180f, hotPx = 64f, sideGlowPx = 390f, sideHotPx = 96f)
+    @Test fun aSideWellGlowsFromFarAndIsHotEarlier() {
+        val e = EdgeWellsGeometry.rect(EdgeAction.Edit, w, h, 1f)
+        // 300 out: the side well already glows, the bottom would not at that distance
+        val at = Offset(e.left - 300f, 200f)
+        assertTrue(EdgeWellsGeometry.closeness(EdgeAction.Edit, at, w, h, 1f, feel) in 0.1f..0.5f)
+        assertNull(EdgeWellsGeometry.hot(at, w, h, 1f, feel))
+        assertEquals(EdgeAction.Edit, EdgeWellsGeometry.hot(Offset(e.left - 90f, 200f), w, h, 1f, feel))   // hot at 96
+        assertNull(EdgeWellsGeometry.hot(Offset(e.left - 100f, 200f), w, h, 1f, feel))
+        val c = EdgeWellsGeometry.rect(EdgeAction.Cancel, w, h, 1f)
+        assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, c.top - 200f), w, h, 1f, feel), 0.001f)   // beyond its 180
+    }
+}

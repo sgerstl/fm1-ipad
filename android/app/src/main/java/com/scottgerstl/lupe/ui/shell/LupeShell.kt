@@ -1,7 +1,5 @@
 package com.scottgerstl.lupe.ui.shell
 
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,24 +79,21 @@ fun LupeShell(core: LupeCore) {
     val soundsHost = remember { SoundsHost() }
     val holdMenu = remember { HoldMenuState() }
     val padDrag = remember { PadDragState() }
-    // the page recorded as it is drawn, and a blurred copy of it for the edge wells' glass (a 12 dp blur; recorded only while a pad is dragged)
-    val pageLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    val blurLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    val blurPx = 12f * androidx.compose.ui.platform.LocalDensity.current.density
-    androidx.compose.runtime.SideEffect {
-        padDrag.pageLayer = pageLayer; padDrag.blurLayer = blurLayer
-        blurLayer.renderEffect = androidx.compose.ui.graphics.BlurEffect(blurPx, blurPx, androidx.compose.ui.graphics.TileMode.Clamp)
+    // a debug build can be launched with a pad already held over the wells, to look at them without a finger:
+    // adb shell am start -n com.scottgerstl.lupe/.MainActivity --ez wellsDemo true --ef x 1000 --ef y 540  (the finger's place, px)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val i = (ctx as? android.app.Activity)?.intent
+        if (i != null && (ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && i.getBooleanExtra("wellsDemo", false)) {
+            padDrag.drag = PadDrag(2, 1, false, 7, Tok.track[1], androidx.compose.ui.geometry.Size(240f, 120f), androidx.compose.ui.geometry.Offset(120f, 60f),
+                androidx.compose.ui.geometry.Offset(i.getFloatExtra("x", 1000f), i.getFloatExtra("y", 540f)), "B")
+        }
     }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
       CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag) {
         Column(
             Modifier.fillMaxSize()
-                .drawWithContent {
-                    pageLayer.record(this, layoutDirection, androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())) { this@drawWithContent.drawContent() }
-                    drawLayer(pageLayer)
-                    if (padDrag.drag != null) blurLayer.record(this, layoutDirection, androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())) { drawLayer(pageLayer) }
-                }
                 .greyedBy { grey.value }
                 .then(if (mode != LinkMode.Normal || sheetOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {

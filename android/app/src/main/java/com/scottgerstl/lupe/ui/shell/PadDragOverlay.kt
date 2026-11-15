@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,15 +78,30 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
     // the last pad stays drawn while the wells leave
     var last by remember { mutableStateOf<PadDrag?>(null) }
     if (drag != null) last = drag
-    val feel = state.feel(labs.wellGlowDp * d, labs.wellHotDp * d, playing)
+    val feel = state.feel(labs.wellGlowDp * d, labs.wellHotDp * d, labs.wellSideGlowDp * d, labs.wellSideHotDp * d, playing)
     val w = state.screen.width; val h = state.screen.height
     val hot = if (drag != null && w > 0f) EdgeWellsGeometry.hot(drag.centre - state.origin, w, h, d, feel) else null
+    // the window as it is when the pad lifts, for the wells' glass (a snapshot: the glass is blurred, so the page moving under it doesn't show)
+    val act = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    LaunchedEffect(drag != null) {
+        if (drag != null && act != null) {
+            val v = act.window.decorView
+            if (v.width > 0 && v.height > 0) {
+                val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+                try {
+                    android.view.PixelCopy.request(act.window, bmp, { r -> if (r == android.view.PixelCopy.SUCCESS) state.backdrop = bmp.asImageBitmap() }, android.os.Handler(android.os.Looper.getMainLooper()))
+                } catch (e: Exception) { /* no glass: the plain dark fill stays */ }
+            }
+        } else { kotlinx.coroutines.delay(500); state.backdrop = null }
+    }
     LaunchedEffect(hot) { if (hot != null && labs.haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
 
     Box(modifier.fillMaxSize().onGloballyPositioned { state.screen = Size(it.size.width.toFloat(), it.size.height.toFloat()); state.origin = it.positionInWindow() }.clearAndSetSemantics { }) {
+        val progress = HashMap<EdgeAction, Float>()
         if (w > 0f) {
             for (a in EdgeAction.entries) {
                 val p = remember(a) { Animatable(0f) }
+                progress[a] = p.value
                 LaunchedEffect(drag != null, reduce, labs.wellSlideMs) {
                     unscaled {
                         if (drag != null) p.animateTo(1f, if (reduce) tween(150) else tween(labs.wellSlideMs, delayMillis = a.staggerMs, easing = SlideIn))
@@ -95,7 +113,7 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
                     // Cancel neutral (a soft white when hot), Delete red, the others the track's colour
                     val tint = when (a) { EdgeAction.Cancel -> Tok.text; EdgeAction.Delete -> Tok.rec; else -> on?.colour ?: Tok.text }
                     Well(a, Rect(0f, 0f, w, h), d, p.value, hot == a, a in feel.off, state,
-                        if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f, tint, reduce, feel)
+                        if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f, tint, reduce, feel, labels = false)
                 }
             }
         }
@@ -124,6 +142,11 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
                     }
                 }
             }
+        }
+        // the wells' labels, over the lifted pad (it would cover Cancel's otherwise)
+        if (w > 0f) for (a in EdgeAction.entries) {
+            val p = progress[a] ?: 0f
+            if (p > 0.001f) Well(a, Rect(0f, 0f, w, h), d, p, hot == a, a in feel.off, state, 0f, Tok.text, reduce, feel, labels = true)
         }
         // a duplicated pad sprouting into its slot
         state.sprout?.let { Sprout(state, it, reduce) }
@@ -175,7 +198,7 @@ private fun Sprout(state: PadDragState, s: PadSprout, reduce: Boolean) {
 
 /** One well: [full] is the screen, [p] 0…1 how far it has slid in, [glow] 0…1 how near the pad is, [off] it refuses a drop now (greyed, "Stop first"). */
 @Composable
-private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, state: PadDragState, glow: Float, tint: Color, reduce: Boolean, feel: WellFeel) {
+private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, state: PadDragState, glow: Float, tint: Color, reduce: Boolean, feel: WellFeel, labels: Boolean) {
     val r = EdgeWellsGeometry.rect(a, full.width, full.height, d)
     // the hot one grows by 8 dp into the screen
     val hotT = com.scottgerstl.lupe.ui.theme.animatedFloat(if (hot) 1f else 0f, 120).value
@@ -202,7 +225,28 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
             .size(with(dens) { grown.width.toDp() }, with(dens) { grown.height.toDp() })
             .graphicsLayer { alpha = (if (reduce) p else 1f) * (if (off) 0.45f else 1f) },
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        // dark glass: the window as it was, blurred (12 dp), behind the well; cut to the well's shape (square on the edge side, rounded 12 inside)
+        if (!labels && !hot) state.backdrop?.let { img ->
+            val r12 = 12.dp; val r0 = 0.dp
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                topStart = if (e == WellEdge.Bottom || e == WellEdge.Right) r12 else r0, topEnd = if (e == WellEdge.Bottom || e == WellEdge.Left) r12 else r0,
+                bottomEnd = if (e == WellEdge.Top || e == WellEdge.Left) r12 else r0, bottomStart = if (e == WellEdge.Top || e == WellEdge.Right) r12 else r0)
+            val m = (24f * d).roundToInt()          // a margin past the well, so the blur has real picture at the edges
+            val wpx = grown.width.roundToInt(); val hpx = grown.height.roundToInt()
+            val sx = (grown.left + state.origin.x).roundToInt() - m; val sy = (grown.top + state.origin.y).roundToInt() - m
+            Box(Modifier.fillMaxSize().clip(shape)) {
+                Canvas(
+                    Modifier.requiredSize(with(dens) { (wpx + 2 * m).toDp() }, with(dens) { (hpx + 2 * m).toDp() })
+                        .offset { IntOffset(-m, -m) }
+                        .graphicsLayer { renderEffect = androidx.compose.ui.graphics.BlurEffect(12f * d, 12f * d, androidx.compose.ui.graphics.TileMode.Clamp) },
+                ) {
+                    val x0 = sx.coerceIn(0, (img.width - 1).coerceAtLeast(0)); val y0 = sy.coerceIn(0, (img.height - 1).coerceAtLeast(0))
+                    val w0 = (wpx + 2 * m).coerceAtMost(img.width - x0); val h0 = (hpx + 2 * m).coerceAtMost(img.height - y0)
+                    if (w0 > 0 && h0 > 0) drawImage(img, srcOffset = IntOffset(x0, y0), srcSize = androidx.compose.ui.unit.IntSize(w0, h0), dstOffset = IntOffset((x0 - sx), (y0 - sy)), dstSize = androidx.compose.ui.unit.IntSize(w0, h0))
+                }
+            }
+        }
+        if (!labels) Canvas(Modifier.fillMaxSize()) {
             val rad = 12.dp.toPx()
             val z = CornerRadius.Zero; val c = CornerRadius(rad)
             // square on the edge side, rounded 12 inside
@@ -214,11 +258,7 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
             val path = Path().apply { addRoundRect(shape) }
             // the glow around it, building in its colour
             if (glowA > 0f) for (k in 3 downTo 1) drawPath(path, tint.copy(alpha = (if (hot) 0.5f else 0.4f * glowA) * 0.18f), style = Stroke(width = k * 5.dp.toPx() * glowA.coerceAtLeast(0.2f)))
-            if (!hot) {
-                // dark glass: a blurred copy of the page behind this well, then black 62 % (a plain dark fill if the page isn't recorded)
-                state.blurLayer?.let { bl -> clipPath(path) { translate(-(grown.left + slide.x), -(grown.top + slide.y)) { drawLayer(bl) } } }
-                drawPath(path, Color.Black.copy(alpha = 0.62f))
-            }
+            if (!hot) drawPath(path, Color.Black.copy(alpha = 0.62f))
             // (Cancel's a soft white, not a colour)
             drawPath(path, tint.copy(alpha = if (hot) (if (a == EdgeAction.Cancel) 0.85f else 1f) else (if (a == EdgeAction.Cancel) 0.18f else 0.35f) * glowA))
             // dashes on the three inner sides: the outline, pushed 4 dp past the edge it sits on so that side is off the screen
@@ -232,6 +272,7 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
             drawPath(dashed, if (hot) tint else Tok.text2.copy(alpha = 0.55f + 0.45f * glowA),
                 style = Stroke(1.5.dp.toPx(), pathEffect = if (hot) null else PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
         }
+        if (labels) {
         val ink = if (hot) Tok.onColour else Tok.text
         val icon = when (a) { EdgeAction.Cancel -> R.drawable.ms_close; EdgeAction.ClearSteps -> R.drawable.ms_delete_sweep; EdgeAction.Delete -> R.drawable.ms_delete; EdgeAction.Edit -> R.drawable.ms_edit; EdgeAction.Duplicate -> R.drawable.ms_library_add }
         val tintF = ColorFilter.tint(if (hot) Tok.onColour else Tok.text2)
@@ -249,6 +290,7 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
                 Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = tintF)
                 BasicText(a.title, Modifier.offset(y = 4.dp), style = LupeType.key.copy(fontSize = 13.sp, color = ink), maxLines = 1)
             }
+        }
         }
     }
 }

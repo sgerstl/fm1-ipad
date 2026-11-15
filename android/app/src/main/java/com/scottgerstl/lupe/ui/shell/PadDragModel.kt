@@ -34,7 +34,14 @@ enum class EdgeAction(val title: String, val edge: WellEdge, val staggerMs: Int)
  * [hotPx], where the well is hot; [off] the wells that refuse a drop now (Delete pattern while playing): greyed, never hot. (No camera-cutout inset on Android:
  * Scott, 2026-11-15, "not needed".)
  */
-data class WellFeel(val glowPx: Float, val hotPx: Float, val off: Set<EdgeAction> = emptySet())
+data class WellFeel(
+    val glowPx: Float, val hotPx: Float, val off: Set<EdgeAction> = emptySet(),
+    /** The side wells (Edit, Duplicate) light up sooner: the drag crosses much more width (Scott, 2026-11-15). */
+    val sideGlowPx: Float = glowPx, val sideHotPx: Float = hotPx,
+) {
+    fun glow(a: EdgeAction) = if (a.edge == WellEdge.Left || a.edge == WellEdge.Right) sideGlowPx else glowPx
+    fun hot(a: EdgeAction) = if (a.edge == WellEdge.Left || a.edge == WellEdge.Right) sideHotPx else hotPx
+}
 
 object EdgeWellsGeometry {
     /** Board 81.4 at the iPhone's 874 × 402: the bottom well 434 × 52 (half the width at most), the side wells 64 wide and 238 tall (a half of the height at most, a 0.6 of it at most), centred. [d] is the density. */
@@ -59,11 +66,11 @@ object EdgeWellsGeometry {
 
     /** 0…1: how near the pad's centre is to a well: 0 at the glow distance, rising steadily to 1 at the hot distance (so the target shows well before you reach it). */
     fun closeness(a: EdgeAction, centre: Offset, w: Float, h: Float, d: Float, feel: WellFeel): Float =
-        if (a in feel.off) 0f else ((feel.glowPx - distance(centre, rect(a, w, h, d))) / (feel.glowPx - feel.hotPx).coerceAtLeast(1f)).coerceIn(0f, 1f)
+        if (a in feel.off) 0f else ((feel.glow(a) - distance(centre, rect(a, w, h, d))) / (feel.glow(a) - feel.hot(a)).coerceAtLeast(1f)).coerceIn(0f, 1f)
 
     /** The well a drop at [centre] lands in: the nearest within the hot distance. */
     fun hot(centre: Offset, w: Float, h: Float, d: Float, feel: WellFeel): EdgeAction? =
-        EdgeAction.entries.filter { it !in feel.off }.map { it to distance(centre, rect(it, w, h, d)) }.filter { it.second <= feel.hotPx }.minByOrNull { it.second }?.first
+        EdgeAction.entries.filter { it !in feel.off }.map { it to distance(centre, rect(it, w, h, d)) }.filter { it.second <= feel.hot(it.first) }.minByOrNull { it.second }?.first
 }
 
 /** One pad slot on the screen, in window pixels: [idx] the slot drawn, [landing] the entry a touch on it acts on (an outlined slot past the list's end stands for the first free one). */
@@ -111,11 +118,11 @@ class PadDragState {
     var drag by mutableStateOf<PadDrag?>(null)
     var sprout by mutableStateOf<PadSprout?>(null)
     /** The wells' feel as drawn now (one place, so a drop decides on what was shown). */
-    fun feel(glowPx: Float, hotPx: Float, playing: Boolean) =
-        WellFeel(glowPx, hotPx, if (playing) setOf(EdgeAction.Delete) else emptySet()).also { lastFeel = it }
+    fun feel(glowPx: Float, hotPx: Float, sideGlowPx: Float, sideHotPx: Float, playing: Boolean) =
+        WellFeel(glowPx, hotPx, if (playing) setOf(EdgeAction.Delete) else emptySet(), sideGlowPx, sideHotPx).also { lastFeel = it }
     /** The page, recorded as it is drawn, and a blurred copy of it for the wells' glass (only while a pad is dragged). */
-    var pageLayer: androidx.compose.ui.graphics.layer.GraphicsLayer? = null
-    var blurLayer: androidx.compose.ui.graphics.layer.GraphicsLayer? = null
+    /** The window as it was when the pad lifted (a PixelCopy), for the wells' glass: blurred behind each of them. Null until it arrives. */
+    var backdrop by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
     var lastFeel = WellFeel(0f, 0f)
     /** The slots on screen, kept by each pad as it is placed (plain, not observed: read at the drop). */
     val slots = HashMap<Any, DropSlot>()
