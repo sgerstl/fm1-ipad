@@ -1,5 +1,9 @@
 package com.scottgerstl.lupe
 
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import android.database.ContentObserver
 import android.os.Bundle
 import android.os.Handler
@@ -61,13 +65,23 @@ class MainActivity : ComponentActivity() {
         if (intent.hasExtra("magnifier")) slide.chooseMagnifier(intent.getBooleanExtra("magnifier", true))
 
         val phone = PhoneSettings.from(this)
+        // The launch intro (ui/intro): a cold start only (not a rotation or a restore), and not for adb launches that ask for a scenario, so screenshot scripts
+        // don't wait for it. adb: --ez intro false skips it; --ef introAt 1.2 holds it at 1.2 s (to compare frames with the iPhone's -intro-at).
+        val introWanted = savedInstanceState == null && !intent.hasExtra("scenario") && intent.getBooleanExtra("intro", true)
+        val introAt = if (intent.hasExtra("introAt")) intent.getFloatExtra("introAt", 0f).toDouble() else null
+        // the system splash leaves at once: the intro's first frame is the same picture (the icon at the same size on the same colour)
+        splashScreen.setOnExitAnimationListener { it.remove() }
         setContent {
             LupeTheme(reduceMotion) {
                 // the core on screen: the one that looks for the FM-1, or the demo once the no-FM-1 card's button starts it (decision 33)
                 val shown = app.core
                 val demo = com.scottgerstl.lupe.ui.shell.DemoControl(canStart = shown !is FakeLupeCore, inDemo = app.inDemo, start = { app.useDemo() }, leave = { app.leaveDemo() })
                 CompositionLocalProvider(LocalSlideSettings provides slide, LocalPhoneSettings provides phone, com.scottgerstl.lupe.ui.page.LocalPictureCore provides shown, com.scottgerstl.lupe.ui.shell.LocalDemo provides demo) {
-                    GatedHaptics(phone) { androidx.compose.runtime.key(shown) { LupeShell(shown) } }
+                    var intro by rememberSaveable { mutableStateOf(introWanted) }
+                    Box(Modifier.fillMaxSize()) {
+                        GatedHaptics(phone) { androidx.compose.runtime.key(shown) { LupeShell(shown) } }
+                        if (intro) com.scottgerstl.lupe.ui.intro.LaunchIntro(reduceMotion, onDone = { intro = false }, frozenAt = introAt)
+                    }
                 }
             }
         }
