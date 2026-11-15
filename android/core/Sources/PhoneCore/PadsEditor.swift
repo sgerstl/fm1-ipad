@@ -33,7 +33,8 @@ extension PhoneCore {
                     // The entry the track is on: lit stopped too (where it starts); progress only while playing.
                     p.play = .playing
                     if marks.reps > 1 { p.passes = marks.reps; p.pass = marks.pass }
-                    if s.playing, let prog = s.passProgress(t) { p.progress = (prog * 100).rounded() / 100 }
+                    // (no `progress` any more: it changed 19 times a second and resent the whole area; the pass bar is
+                    // the row's passTicks and passStartTick run forward on the clock, ClockArea.swift)
                 } else if list?.staged == e {
                     if marks.queued != nil {
                         p.play = .waiting
@@ -148,11 +149,8 @@ extension PhoneCore {
             let base = t == s.selectedTrack ? s.cell(id).value : lo
             laneValues = (0..<count).map { k in ((m.value(of: id, at: k, base: base).value - lo) * 100 / (hi - lo)).clamped(0, 100) }
         }
-        var playhead = -1
-        if s.playing, let prog = s.passProgress(t) {
-            let i = Int(prog * Double(max(1, tr.length)))
-            if i < count { playhead = i }
-        }
+        // the playhead is the `playhead` area's (ClockArea.swift): this area doesn't change while a pattern plays
+        let playhead = -1
         let scaleName = Music.scales[safe: tr.scale]?.name.lowercased() ?? ""
         return EditorArea(
             track: t + 1, trackName: tr.displayName,

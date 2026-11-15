@@ -1,5 +1,6 @@
 package com.scottgerstl.lupe.ui.shell
 
+import com.scottgerstl.lupe.core.withPlayhead
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
@@ -86,7 +87,10 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     // a change the phone itself asks for is never held; its core says so before sending
     val askCore = remember(core) { AskingCore(core) { phoneAsks++ } }
     val pads by core.pads.collectAsStateWithLifecycle()
-    val editor by core.editor.collectAsStateWithLifecycle()
+    val editorArea by core.editor.collectAsStateWithLifecycle()
+    // the playhead comes in its own area now (P1, 2026-11-15): one small send per step, and the editor area changes only with its content
+    val playheadArea by core.playhead.collectAsStateWithLifecycle()
+    val editor = remember(editorArea, playheadArea) { editorArea.withPlayhead(playheadArea) }
     val automation by core.automation.collectAsStateWithLifecycle()
     val freeTake by core.freeTake.collectAsStateWithLifecycle()
     // the picked step (decision 21) and the Edit tab's own view state live here, so they survive a visit to another tab

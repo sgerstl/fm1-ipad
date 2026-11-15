@@ -95,6 +95,7 @@ class FakeLupeCore(
     override val homeKnobs: StateFlow<HomeKnobsState> = _home
     private val _mix = MutableStateFlow(MixState())
     private val _freeTake = MutableStateFlow(FreeTakeState())
+    private val _playhead = MutableStateFlow(PlayheadState())
     private val _sounds = MutableStateFlow(SoundsState())
     private val _projects = MutableStateFlow(ProjectsState())
     private val _meters = MutableStateFlow(MetersState())
@@ -106,6 +107,7 @@ class FakeLupeCore(
     private var autoLane = ""
     override val mix: StateFlow<MixState> = _mix
     override val freeTake: StateFlow<FreeTakeState> = _freeTake
+    override val playhead: StateFlow<PlayheadState> = _playhead
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
 
@@ -521,6 +523,7 @@ class FakeLupeCore(
         _top.update { it.copy(playing = on, bar = if (on) it.bar else 1, beat = if (on) it.beat else 1) }
         if (!on) {
             _editor.update { it.copy(playhead = -1) }
+            _playhead.update { it.copy(step = -1) }
             _meters.value = MetersState()
             _timeline.update { it.copy(playing = false, playheadBar = null) }
             _clock.value = ClockState()
@@ -570,7 +573,8 @@ class FakeLupeCore(
                             }
                         }) }) }
                 recount()
-                _editor.update { it.copy(playhead = stepCount % model.size) }
+                // as the real core sends it now: its own small area per step, the editor area's playhead stays -1
+                _playhead.value = PlayheadState(track = _editor.value.track, step = stepCount % model.size, steps = model.size)
                 // the meters move while it plays: each track near its level, never louder
                 _meters.value = MetersState(_mix.value.rows.mapIndexed { n, r -> if (r.mute) 0.0 else (r.level / 127.0) * (0.55 + 0.45 * kotlin.math.abs(kotlin.math.sin((stepCount + n * 3) * 0.7))) })
             }

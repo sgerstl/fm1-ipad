@@ -8,6 +8,24 @@
 import Foundation
 import SloopKit
 
+/// The editor's playhead, on its own (2026-11-15): it changes every step while the editor's steps don't, and the
+/// editor area is up to 15 KB. One small send a step. `step` is the step playing as the FM-1's sequencer walks it
+/// (direction, swing, a launch: all counted, SloopKit's CountedPlayhead), so a screen can draw it as it is. To move
+/// between sends: this step began on pulse `startTick` and the next begins on `nextTick` (the `clock` area's pulses:
+/// ticksNow = clock.ticks + (uptimeMillis − clock.atMs) × clock.ticksPerSecond / 1000).
+public struct PlayheadArea: Codable, Equatable, Sendable {
+    /// The editor's track, 1…6.
+    public var track: Int
+    /// The step playing, from 0; -1 stopped, with no clock, before the first step, or on a track whose DIR is RAND.
+    public var step: Int
+    /// The pattern's step count (the editor's patternSteps), and its DIR: 0 FWD, 1 RVRS, 2 PING, 3 RAND.
+    public var steps: Int
+    public var direction: Int
+    /// The clock pulse `step` began on and the pulse the next step begins on; absent when `step` is -1.
+    public var startTick: Double?
+    public var nextTick: Double?
+}
+
 public struct ClockArea: Codable, Equatable, Sendable {
     /// MIDI clock is counted (playing, and Start was seen). false: no clock, nothing to interpolate; the launch
     /// outlines are drawn dashed, as the iPad's.
@@ -76,6 +94,21 @@ extension PhoneCore {
         let s = session
         guard s.playing, s.clockTicks >= 0, let left = s.ticksToLaunch(t) else { return nil }
         return (Double(s.clockTicks) + left).rounded()
+    }
+
+    public func playheadArea() -> PlayheadArea {
+        let s = session, t = editorTrack()
+        guard s.tracks.indices.contains(t) else { return PlayheadArea(track: 1, step: -1, steps: 16, direction: 0) }
+        let tr = s.tracks[t]
+        var a = PlayheadArea(track: t + 1, step: -1, steps: max(1, min(s.stepCount, tr.length)), direction: max(0, min(3, tr.direction)))
+        // (the session's positions are what the watch follows: they change when a track moves to another step)
+        _ = s.positions.indices.contains(t) ? s.positions[t].step : 0
+        if s.playing, s.clockTicks >= 0, let w = s.countedStep(t), w.step >= 0, w.step < editorStepCount(t) {
+            a.step = w.step
+            a.startTick = (w.startedAt * 100).rounded() / 100
+            a.nextTick = (w.nextAt * 100).rounded() / 100
+        }
+        return a
     }
 
     /// A track's pass in pulses (its division × its length), and the pulse its current pass began on.

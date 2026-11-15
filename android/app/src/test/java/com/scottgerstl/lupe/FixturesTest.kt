@@ -50,6 +50,8 @@ class FixturesTest {
                 // P1's Patterns sheet data (Patterns.swift, board 79): no Kotlin classes yet (P2's to add), so only their shape is checked
                 "patterns" -> assertTrue("${f.name}: patterns", (fr.state as kotlinx.serialization.json.JsonObject).let { it.containsKey("patterns") && it.containsKey("free") })
                 "patternPictures" -> assertTrue("${f.name}: patternPictures", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("pictures"))
+                // P1's playhead on its own (ClockArea.swift): no Kotlin class yet, so only its shape is checked
+                "playhead" -> assertTrue("${f.name}: playhead", (fr.state as kotlinx.serialization.json.JsonObject).let { it.containsKey("step") && it.containsKey("steps") })
                 "notice" -> assertTrue("${f.name}: notice", (fr.state as kotlinx.serialization.json.JsonObject).containsKey("text"))
                 else -> error("${f.name}: unknown area ${fr.area}")
             }
