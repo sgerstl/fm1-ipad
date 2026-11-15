@@ -68,6 +68,8 @@ public struct PadsArea: Codable, Equatable, Sendable {
         public var launchTick: Double?
         /// REPS (nil when 1) and the pass playing.
         public var passes: Int?, pass: Int?
+        /// Always absent since 2026-11-15 (it made the whole area resend many times a second): the pass bar comes from
+        /// the row's passTicks and passStartTick on the clock.
         public var progress: Double?
         public var hasSound = false
     }
@@ -151,7 +153,9 @@ public struct EditorArea: Codable, Equatable, Sendable {
     /// Every step of the pattern in whole chunks of 16 (16, 32, 48 or 64 of them): `patternSteps` of them play.
     public var steps: [Step]
     public var selected: Int
-    public var playhead: Int             // -1 stopped
+    /// Always -1 since 2026-11-15: the playhead is the `playhead` area's, so this area is sent only when its content
+    /// changes. Kept so the schema stays as the screens have it until they drop it.
+    public var playhead: Int
     /// Always false: the phone has no Chord entry (the FM-1's keys never write from the phone; decision 5 revised,
     /// 2026-11-14). Kept so the schema stays as P3 has it until the field is dropped on both sides.
     public var chord: Bool
@@ -182,6 +186,7 @@ public struct DiagArea: Codable, Equatable, Sendable {
     /// The FM-1's screen as SCREEN reports it: page index, layer, menu, home (nil without the link).
     public var page: Int?, layer: Int?, menu: Int?, home: Bool?
     /// MIDI clock pulses since Start (-1: not running), and whether TRANSPORT says it's playing.
+    /// Pulses since Start at the last beat (not every pulse: that resent this area 19 times a second).
     public var clockTicks: Int
     public var playing: Bool
     /// Note-ons the FM-1 has sent since start (its keys; on Skiff with NOTES OUT ALL its sequencer too; none from a

@@ -5,7 +5,8 @@
     {"atMs": 0, "area": "link", "state": {"phase":"searching"}},
     {"atMs": 0, "area": "top", "state": {"bar":1,"beat":1,"launch":"loop","mode":"loop","playing":false,"project":"","rec":false,"tempo":120,"waiting":0}},
     {"atMs": 0, "area": "clock", "state": {"atMs":0,"running":false,"ticks":0,"ticksPerSecond":0}},
+    {"atMs": 0, "area": "playhead", "state": {"direction":0,"step":-1,"steps":16,"track":1}},
     {"atMs": 17, "area": "link", "state": {"phase":"connecting"}},
-    {"atMs": 223, "area": "link", "state": {"firmware":"FELUCCA SLOOP 2.9.0","phase":"wrongFirmware"}}
+    {"atMs": 222, "area": "link", "state": {"firmware":"FELUCCA SLOOP 2.9.0","phase":"wrongFirmware"}}
   ]
 }

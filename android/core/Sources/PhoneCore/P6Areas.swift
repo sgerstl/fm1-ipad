@@ -38,9 +38,11 @@ extension PhoneCore {
                                              blocks: out, endBar: ((blocks.last?.end ?? 0) / perBar * 1000).rounded() / 1000, entriesUsed: used))
         }
         let bars = tracks.map(\.endBar).max() ?? 0
-        let head: Double? = s.playing && s.clockTicks >= 0 ? (Double(s.clockTicks) / perBar * 100).rounded() / 100 : nil
+        // to the beat only (it was a hundredth of a bar: the whole area 19 times a second while playing). The smooth
+        // playhead is the clock's: ticksNow / ticksPerBar (ClockArea.swift)
+        let head: Double? = s.playing && s.clockTicks >= 0 ? Double(s.clockTicks / 24) * 24 / perBar : nil
         let kept = (0..<64).filter { (store?.pool?.patterns[safe: $0]?.length ?? 0) > 0 }.map { $0 + 1 }
-        return TimelineArea(mode: mode, tracks: tracks, bars: bars, playheadBar: head, playing: s.playing, kept: kept, patternsFree: store?.pool?.free, clearUndo: clearUndos())
+        return TimelineArea(mode: mode, tracks: tracks, bars: bars, playheadBar: head, ticksPerBar: perBar, playing: s.playing, kept: kept, patternsFree: store?.pool?.free, clearUndo: clearUndos())
     }
 
     // MARK: automation

@@ -249,6 +249,15 @@ public final class DeviceSession {
         let tr = tracks[t]
         counted.rebase(track: t, .init(length: tr.length, division: tr.division, direction: tr.direction, swing: tr.swing), globalSwing: swing)
     }
+    /// The counted playhead's step for track `t` (Skiff): the step playing as the FM-1's sequencer walks it (its
+    /// direction, swing and launches counted; -1 before the first step or on RAND), the clock pulse it began on and
+    /// the pulse the next step begins on. nil with no counted clock. For a screen that draws the playhead itself
+    /// between steps (the phones' `playhead` area).
+    public func countedStep(_ t: Int) -> (step: Int, startedAt: Double, nextAt: Double)? {
+        guard trackIndices.contains(t), counted.running, counted.ticks >= 0, counted.walks.indices.contains(t) else { return nil }
+        let w = counted.walks[t]
+        return (w.step, w.startedAt, w.nextAt)
+    }
     public func passProgress(_ t: Int) -> Double? {
         guard trackIndices.contains(t) else { return nil }
         return counted.passProgress(t, at: Double(counted.ticks), length: tracks[t].length)
