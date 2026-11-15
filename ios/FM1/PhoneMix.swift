@@ -148,7 +148,7 @@ private struct PhoneMixerRow: View, Equatable {
                 Fader(axis: .horizontal, spec: row.revSpec(session), tint: colour, touched: touched)
                     .frame(width: 84)
             }
-            Button { session.set(track: t, param: Param.mute, to: row.mute ? 0 : 1) } label: {
+            Button { session.set(track: t, param: session.ids.mute, to: row.mute ? 0 : 1) } label: {
                 Image(systemName: row.mute ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(row.mute ? Theme.onColour : Theme.text)
                     .frame(width: 40, height: 40)

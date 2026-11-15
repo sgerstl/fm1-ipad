@@ -255,6 +255,24 @@ struct PhoneSequence: View {
         return HStack(spacing: 8) {
             Text(detail).font(.lupe(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             Spacer(minLength: 8)
+            // STEPS, the pattern's LENGTH (batch item 9; decision 31 moved it here from the track controls box): slides as
+            // every value does, double tap back to 16
+            KnobControl(ui: ui, column: (0, Theme.track[t], false), face: { spec, dragging in
+                AnyView(HStack(spacing: 6) {
+                    Text("STEPS").font(.lupe(11, .medium)).foregroundStyle(Theme.textSecondaryRaised)
+                    Text(spec.shown).font(.lupeNumber(15, .semibold)).monospacedDigit().foregroundStyle(Theme.text)
+                }
+                .padding(.horizontal, 10).frame(height: 28)
+                .background(RoundedRectangle(cornerRadius: 8).fill(dragging ? Theme.tones[2] : Theme.control))
+                .overlay(alignment: .bottom) {
+                    // how far through its range, in the track's colour
+                    GeometryReader { g in
+                        Capsule().fill(Theme.track[t]).frame(width: g.size.width * CGFloat(spec.fraction), height: 2)
+                    }
+                    .frame(height: 2).padding(.horizontal, 8).padding(.bottom, 2)
+                })
+            }) { KnobSpec.all(session)[2] }
+            .fixedSize()
             Button { setPanel(!stepPanel) } label: {
                 HStack(spacing: 6) {
                     Text("Step \(i + 1)").font(.lupe(12, .semibold))

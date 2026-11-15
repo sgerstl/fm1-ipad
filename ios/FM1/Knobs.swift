@@ -28,6 +28,8 @@ struct KnobSpec {
     }
 
     @MainActor
+    /// (the firmware's own ids, by DESC label: SLOOP's fixed Param numbers wrote the wrong parameter on Skiff 2.5.1, where
+    /// LENGTH moved; batch item 9, 2026-11-15)
     static func all(_ session: DeviceSession) -> [KnobSpec] {
         let k = session.selectedTrack
         let t = session.tracks[k]
@@ -37,16 +39,16 @@ struct KnobSpec {
                      shown: "\(session.swing)", spoken: "\(session.swing)", bipolar: false, defaultValue: 0) { session.set(global: Global.swing, to: $0) },
             KnobSpec(id: "home1", colour: Theme.text, label: "LEVEL", value: t.mute ? 0 : t.level, range: 0...127, stepperStep: 8,
                      shown: t.mute ? "0" : "\(pct)", spoken: t.mute ? "muted" : "\(pct) percent", bipolar: false,
-                     defaultValue: session.trackDesc(Param.level)?.defaultValue) { v in
+                     defaultValue: session.trackDesc(session.ids.level)?.defaultValue) { v in
                 // as on the device, turning LEVEL unmutes the track
-                if t.mute { session.set(track: k, param: Param.mute, to: 0) }
-                session.set(track: k, param: Param.level, to: v)
+                if t.mute { session.set(track: k, param: session.ids.mute, to: 0) }
+                session.set(track: k, param: session.ids.level, to: v)
             },
             KnobSpec(id: "home2", colour: Theme.text, label: "STEPS", value: t.length, range: 1...session.stepCount, stepperStep: 1,
-                     shown: "\(t.length)", spoken: "\(t.length) steps", bipolar: false, defaultValue: 16) { session.set(track: k, param: Param.length, to: $0) },
+                     shown: "\(t.length)", spoken: "\(t.length) steps", bipolar: false, defaultValue: 16) { session.set(track: k, param: session.ids.length, to: $0) },
             KnobSpec(id: "home3", colour: Theme.text, label: "PAN", value: t.pan, range: -64...63, stepperStep: 4,
                      shown: "\(t.pan)", spoken: t.pan == 0 ? "centre" : t.pan < 0 ? "\(-t.pan) left" : "\(t.pan) right",
-                     bipolar: true, defaultValue: 0) { session.set(track: k, param: Param.pan, to: $0) },
+                     bipolar: true, defaultValue: 0) { session.set(track: k, param: session.ids.pan, to: $0) },
         ]
     }
 }
