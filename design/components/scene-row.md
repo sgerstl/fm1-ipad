@@ -39,9 +39,9 @@ It is not a column launcher: Skiff's scenes aren't columns (2026-11-09, `structu
 Names as in the code. Layout positions as in `pattern-pad.md`: **No grid** = `.full`, **Half** = `.compact`, **Max** = `.row`, iPhone landscape = `.phone`.
 
 - **Store** (`ToggleKey`): the latching key at the row's left, with its LED and the word "Store".
-- **scene key** (`sceneKey`): one of 16, numbered 1–16. On the phone they share the width; on the iPad they scroll across (decision 50).
-- **scenes scroller** (iPad, `SceneScroller`): the 16 keys at a fixed width, scrolling horizontally, faded at a clipped edge, scrolled so the last scene shows.
-- **HOME knobs** (iPad, `HomeKnobsStrip`): at the row's right, the selected track's four HOME controls (`session.homeKnobIDs`, per engine: on a NEON kit PITCH, TONE, DECAY, SNAP): each a small ring in the track's colour with its label and value (decision 50).
+- **scene key** (`sceneKey`): one of 16, numbered 1–16, scrolling across the row on the iPad and the phones (decision 50).
+- **scenes scroller** (`sceneScroller`): the 16 keys at a fixed width, scrolling horizontally, faded at a clipped edge, scrolled so the last scene shows.
+- **HOME knobs** (`HomeKnobsStrip`, iPad and phones): at the row's right, the selected track's four HOME controls (`session.homeKnobIDs`, per engine: on a NEON kit PITCH, TONE, DECAY, SNAP): each a small ring in the track's colour with its label and value (decision 50).
 - **number**: the scene's number on the key.
 - **word**: "last" or "empty" under the number, No grid only.
 - **recall trace** (`LaunchTrace` on the key): the line that draws round a recalled scene waiting for the launch point.
@@ -51,8 +51,8 @@ Names as in the code. Layout positions as in `pattern-pad.md`: **No grid** = `.f
 ### Requirements
 
 **Functional**
-- **F1** On the phone, all 16 scenes at once at 34 pt (Scott, 2026-11-08, vault `iphone-adaptation.md`, round 4). On the iPad the scenes scroll across the room left by the HOME knobs, every one reachable, the last recalled or stored scrolled into view, a fade at a clipped edge (decision 50, 2026-11-15; before, all 16 at once).
-- **F4** iPad: the selected track's four HOME controls at the row's right (decision 50: they went with the track controls box). Each turns by a slide (the app's knob gesture, Settings › Slide to turn) and the same knob's parameter on the FM-1; each follows the FM-1's own HOME knobs live and lights while the FM-1's knob turns. None on a track whose engine has no HOME table.
+- **F1** The scenes scroll across the room left by the HOME knobs (iPad, decision 50; the phones too, Scott 2026-11-15: "Phones too"; before, all 16 at once, on the phone at 34 pt), every one reachable, the last recalled or stored scrolled into view, a fade at a clipped edge (decision 50, 2026-11-15; before, all 16 at once).
+- **F4** The selected track's four HOME controls at the row's right, iPad and phones (decision 50: they went with the track controls box; the phones, Scott 2026-11-15). Each turns by a slide (the app's knob gesture, Settings › Slide to turn) and the same knob's parameter on the FM-1; each follows the FM-1's own HOME knobs live and lights while the FM-1's knob turns. None on a track whose engine has no HOME table.
 - **F2** No grid and Half show the row under the pads. Max has no scene row.
 - **F3** A scene's contents come only from what Lupe saw when it stored or recalled that scene (`scenesSeen`). PERFORM says which scenes are kept, not what's in them. What Lupe has seen is forgotten when the FM-1 reconnects.
 
@@ -136,7 +136,7 @@ Particular to the row:
 - 2026-11-08: Store as tall as the scene keys (batch list, 49f42cf).
 - 2026-11-09: the whole key and a margin take the touch (Scott: "hard to hit").
 - 2026-11-14: both phones take the iPhone's row (Scott, decision 33).
-- 2026-11-15: the iPad's row gives its right end to the selected track's four HOME knobs; the scenes scroll in the rest (Scott, decision 50).
+- 2026-11-15: the iPad's row gives its right end to the selected track's four HOME knobs; the scenes scroll in the rest (Scott, decision 50). The phones too, the same day (Scott: "Phones too").
 
 ## 3. Build notes
 

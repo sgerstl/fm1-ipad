@@ -5,17 +5,19 @@ import SwiftUI
 // with the track controls box, decision 31). Which four depends on the engine (ui.c home_param; on a NEON kit PITCH,
 // TONE, DECAY, SNAP), read from SloopKit's table (`DeviceSession.homeKnobIDs`, the phones' too). Each is a small ring in
 // the track's colour with its label and value; a slide turns it (the app's knob gesture, KnobControl), and the same
-// knob's parameter on the FM-1. They follow the FM-1's own HOME knobs live, and the one the FM-1 turns lights. iPad only.
+// knob's parameter on the FM-1. They follow the FM-1's own HOME knobs live, and the one the FM-1 turns lights. The iPad
+// and the phones (Scott, the same day: "Phones too").
 
 struct HomeKnobsStrip: View {
     let session: DeviceSession
     let ui: EditorUI
     let height: CGFloat
+    var knobWidth: CGFloat = HomeKnobsStrip.knobWidth
     @State private var marks = ShapeMarks()
 
-    static let knobWidth: CGFloat = 104, spacing: CGFloat = 4
+    /// The iPad's knob, and the phones' (decision 50: "Phones too", the 34 pt row).
+    static let knobWidth: CGFloat = 104, phoneKnobWidth: CGFloat = 84, spacing: CGFloat = 4
     /// The strip's width for `count` knobs (the scene row gives the scenes the rest).
-    static func width(_ count: Int) -> CGFloat { count == 0 ? 0 : CGFloat(count) * knobWidth + CGFloat(count - 1) * spacing }
 
     var body: some View {
         let t = session.selectedTrack
@@ -29,7 +31,7 @@ struct HomeKnobsStrip: View {
                             }) {
                     KnobSpec.param(session, scope: 0, id: id, slot: k)
                 }
-                .frame(width: Self.knobWidth, height: height)
+                .frame(width: knobWidth, height: height)
             }
         }
         // the FM-1's own knob turned: its parameter lights here, as on the sound cards

@@ -1437,27 +1437,22 @@ struct PadsPage: View {
                 .frame(width: 88)               // (its word turns semibold when lit: a fixed width, not its own)
                 .accessibilityValue(storing ? "on: tap a scene to store into it" : "")
                 .accessibilityHint("Then tap a scene: it keeps the entry each track is on now, and its mute")
-            if phone {
-                HStack(spacing: 4) {
-                    ForEach(0..<PerformState.scenes, id: \.self) { s in sceneKey(s, perf).geometryGroup() }
-                }
-            } else {
-                // the iPad (decision 50, 2026-11-15): the scenes scroll across what the HOME knobs leave, the last one
-                // scrolled into view, a fade at a clipped edge; the selected track's four HOME knobs at the right
-                sceneScroller(perf)
-                HomeKnobsStrip(session: session, ui: ui, height: sceneH)
-            }
+            // decision 50 (2026-11-15; the phones too, "Phones too"): the scenes scroll across what the HOME knobs leave, the
+            // last one scrolled into view, a fade at a clipped edge; the selected track's four HOME knobs at the right
+            sceneScroller(perf)
+            HomeKnobsStrip(session: session, ui: ui, height: sceneH, knobWidth: phone ? HomeKnobsStrip.phoneKnobWidth : HomeKnobsStrip.knobWidth)
         }
         .frame(height: sceneH)
     }
 
-    /// The iPad's 16 scenes at a fixed width, scrolling across; faded only at an edge something is cut off at.
+    /// The 16 scenes at a fixed width (52 on the iPad, 40 on the phones), scrolling across; faded only at an edge
+    /// something is cut off at.
     private func sceneScroller(_ perf: PerformState?) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 HStack(spacing: 4) {
                     ForEach(0..<PerformState.scenes, id: \.self) { s in
-                        sceneKey(s, perf).geometryGroup().frame(width: Self.sceneKeyWidth).id("scene\(s)")
+                        sceneKey(s, perf).geometryGroup().frame(width: phone ? Self.phoneSceneKeyWidth : Self.sceneKeyWidth).id("scene\(s)")
                     }
                 }
                 .padding(.horizontal, 4)            // (the keys' hit margin and press sink inside the clip)
@@ -1484,7 +1479,7 @@ struct PadsPage: View {
 
     /// Which ends of the iPad's scene scroller have keys cut off (each gets a fade).
     struct SceneClip: Equatable { var left = false, right = false }
-    static let sceneKeyWidth: CGFloat = 52
+    static let sceneKeyWidth: CGFloat = 52, phoneSceneKeyWidth: CGFloat = 40
 
     private func sceneKey(_ s: Int, _ perf: PerformState?) -> some View {
         let kept = perf?.kept[safe: s] == true

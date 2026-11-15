@@ -114,7 +114,7 @@ About 330 pt under the 44 pt top bar, inside the side safe areas (59 each side):
 |---|---|
 | **Row heads** | 72 wide: the number (tap: select the track; held: its menu) and Mute (34, the iPad's speaker key). No name; VoiceOver reads it. |
 | **Pads** | Six rows with 4 between: 40 at the least, up to 44 where the phone has the height (44 on a 6.3-inch iPhone 17). Pads 78 wide (the iPad's small face: letter and number); 8 columns in view (7 with the rail), the rest by a pan sideways, one finger or two as the grids since 2026-11-07. Same faces, states and hold menus as the iPad's (`PadsPage` `.phone`, reused, not a second grid). |
-| **Scenes** | Store (88, as the iPad's: narrower cut its word) and the 16 scenes at 34, under the rows and the heads. Held: the preview, as on the iPad. A refusal (an empty scene tapped) shows over the scenes until dismissed. |
+| **Scenes** | Store (88, as the iPad's: narrower cut its word) and the 16 scenes, under the rows and the heads; since decision 50 (2026-11-15, "Phones too") the selected track's four HOME knobs at the row's right and the scenes scrolling in the rest. Held: the preview, as on the iPad. A refusal (an empty scene tapped) shows over the scenes until dismissed. |
 | **Launch at, Cancel waiting** | Not on the tab (no room for the tool row). A **Launch key in the top bar**, beside REC, showing the launch point and the waiting count; tapped, Lupe's menu: Loop Bar Beat Now (the setting ticked), what waits, Cancel waiting (board 47 drew them as segments; built as a menu). |
 | **The selected pad's track controls** | The border only, as at Half. |
 | **The pattern editor** | On the Edit tab, not under the grid (no room). |
