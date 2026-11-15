@@ -243,3 +243,15 @@ So both phones insert gaps on both paths, and Lupe adds none. *Scott's ear; the 
 2. Check 19, another USB source on the Pixel.
 3. Check 17, the raw capture with the FM-1 playing.
 4. `dejitter-intervals.sh` again: it now also groups the lines into bursts and says whether the bursts are periodic. A cycle in the FM-1's fill shows up as periodic bursts.
+
+## Round 4: check 18 (the Mac) and the B1 plan
+
+**Check 18:** the FM-1 on the Mac, playing (peak 0.55): **0 zero gaps, 0 repeat gaps in 20 s**, its rate by the Mac's clock **48,020.3 Hz, +422 ppm** (+441 silent). The stream is clean for a host that follows it. On the Pixel, the concealer "seems a little better, but the FM6 pads still do it" (Scott). Check 19 can't be run (no other USB source).
+
+**The plan:** `firmware/proposals/2026-11-15-b1-steady-usb-audio.md`.
+- Every 48 kHz packet is exactly 48 frames.
+- The ring is held by a slip made in Skiff's own polyphase resampler: 148 phase steps instead of 147 for ~148 outputs. The host test measures 87.7–87.9 dB against the ideal at 1–15 kHz, the filter's own floor.
+- About 100–200 B of flash, no extra CPU.
+- Models: the phone gets 0 gaps at any render load up to 2.5 ms late, against today's 21 underruns and 41 drops a second.
+- B1 is also the FM6 fix: render timing no longer reaches the packets.
+- Host tests come first, in Skiff's `uac_test.c`. Then a device check (B1-1..6) after a backup, and only with Scott's go-ahead.

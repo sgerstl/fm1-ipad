@@ -14,6 +14,17 @@
 using through::ThroughCore;
 
 // the proposed pacing's constants (see SkiffSource): the fill filter's shift, the proportional gain, the integral's divider
+// B1's slip controller: slower than the pacing's (the packets stay 48 whatever it does; it only has to keep the
+// FM-1's ring off its ends, and every needless slip is a slip)
+#ifndef B1_SHIFT
+#define B1_SHIFT 7
+#endif
+#ifndef B1_KP
+#define B1_KP 1
+#endif
+#ifndef B1_KIDIV
+#define B1_KIDIV 64
+#endif
 #ifndef PACE_SHIFT
 #define PACE_SHIFT 5
 #endif
@@ -104,7 +115,13 @@ static void testResampler() {
 //    accumulator spreads the extra (or missing) frames evenly.
 struct SkiffSource {
     bool paced = false;
-    double i2sHz = 44117.6;
+    bool b1 = false;           // option B1: every packet exactly 48; the ring's drift taken by a crossfaded one-frame slip
+    double jitterMs = 0;       // renders start late by up to this (render load: FM6 pads); never early
+    double i2sHz = 44100.0 * (1 + 422e-6);   // the FM-1's rate by the Mac's clock (check 18: 48020.3 Hz at 48 kHz, +422 ppm)
+    std::mt19937 rng{7};
+    double late = 0;           // this render's lateness, s
+    int64_t slips = 0;
+    int64_t minRing = 1 << 30, maxRing = 0;   // B1: the ring's range just after packets (UA_N 512: room either side)
     double tRender = 0;        // next render start, s
     double resAcc = 0;         // 160/147 bookkeeping
     int64_t ring = 113;        // UA_PRIME48
@@ -117,15 +134,33 @@ struct SkiffSource {
 
     /** Advances to host time t (s) and returns the next packet's frame count. */
     int packet(double t) {
-        while (tRender <= t) {                       // renders that started before this packet
+        while (tRender + late <= t) {                // renders that started before this packet
             fillMin = ring;                          // uac_render_start: the low point of the saw tooth
             if (paced) fillQ8 += ((int32_t(fillMin) << 8) - fillQ8) >> PACE_SHIFT;
+            if (b1) fillQ8 += ((int32_t(fillMin) << 8) - fillQ8) >> B1_SHIFT;
             resAcc += 128.0 * 160.0 / 147.0;
             int add = int(resAcc); resAcc -= add;
             ring += add;
             tRender += 128.0 / i2sHz;
+            late = jitterMs > 0 ? std::uniform_real_distribution<double>(0, jitterMs / 1000.0)(rng) : 0;
         }
         int n = 48;
+        if (b1) {
+            // the packet is always 48; what the ring gives up is 48, 49 (drop a frame, the FM-1 fast) or 47 (repeat one),
+            // decided by the same PI and accumulator as the even pacing, so slips come evenly and never in runs
+            int32_t err = fillQ8 - 113 * 256;
+            integQ8 = std::clamp(integQ8 + err / 64, -(1 << 20), 1 << 20);
+            int32_t rateQ16 = std::clamp(err * B1_KP + integQ8 / B1_KIDIV, -(1 << 16), 1 << 16);
+            accQ16 += rateQ16;
+            int take = 48;
+            if (accQ16 >= (1 << 16)) { take = 49; accQ16 -= 1 << 16; slips++; }
+            else if (accQ16 <= -(1 << 16)) { take = 47; accQ16 += 1 << 16; slips++; }
+            if (ring < take) { underruns++; ring = take; }
+            ring -= take;
+            minRing = std::min(minRing, ring);
+            maxRing = std::max(maxRing, ring);
+            return 48;
+        }
         if (!paced) {
             if (fillMin > 139) n++; else if (fillMin < 87) n--;
         } else {
@@ -167,6 +202,139 @@ static PacingReport pacing(bool paced, double seconds) {
     }
     double secs = (nPk - from) / 1000.0;
     return {shortN / secs, longN / secs, hi - lo, worst, s.underruns, mean};
+}
+
+/**
+ * A phone that takes exactly 48 frames per USB millisecond from a 16-frame cushion, as the Pixels appear to (check 16:
+ * "Avail: 47 Had:1 Received 48 Size 16"; Lupe judged their gaps as replacing real frames): short of 48 it writes zeros
+ * (an underrun, a gap), over 48 + 16 it drops the excess (a gap too). A reading of the Pixel's log, not its source.
+ */
+struct PhoneModel { double underrunsPerS, dropsPerS, fm1UnderrunsPerS, slipsPerS, shortPerS, longPerS; int64_t minRing, maxRing; };
+
+static PhoneModel phoneModel(int mode, double jitterMs, double seconds) {   // mode 0 today, 1 even pacing (A), 2 B1
+    SkiffSource s; s.paced = mode == 1; s.b1 = mode == 2; s.jitterMs = jitterMs;
+    int64_t buf = 48 + 8, under = 0, drops = 0, shortN = 0, longN = 0, fm1u0 = 0, slips0 = 0;
+    int nPk = int(seconds * 1000), from = 1000;
+    for (int k = 0; k < nPk; k++) {
+        if (k == from) { fm1u0 = s.underruns; slips0 = s.slips; under = drops = shortN = longN = 0; s.minRing = 1 << 30; s.maxRing = 0; }
+        int n = s.packet(k * 0.001);
+        shortN += n < 48; longN += n > 48;
+        buf += n;
+        if (buf > 48 + 16) { drops++; buf = 48 + 16; }
+        if (buf < 48) { under++; buf = 0; } else buf -= 48;
+    }
+    double secs = (nPk - from) / 1000.0;
+    return {under / secs, drops / secs, (s.underruns - fm1u0) / secs, (s.slips - slips0) / secs, shortN / secs, longN / secs, s.minRing, s.maxRing};
+}
+
+static void testPhoneModel() {
+    std::printf("the FM-1 (+422 ppm) into a phone taking exactly 48 per ms with a 16-frame cushion, 30 s (a model):\n");
+    const char *names[] = {"today (band rule)", "A, even pacing", "B1, always 48 + slip"};
+    for (double j : {0.0, 1.0, 2.5}) {
+        for (int m = 0; m < 3; m++) {
+            auto r = phoneModel(m, j, 31);
+            std::printf("  renders up to %.1f ms late, %-22s 47s %5.1f/s, 49s %5.1f/s · phone underruns %5.1f/s, drops %5.1f/s · FM-1 ring empty %4.1f/s, slips %4.1f/s\n",
+                        j, names[m], r.shortPerS, r.longPerS, r.underrunsPerS, r.dropsPerS, r.fm1UnderrunsPerS, r.slipsPerS);
+            if (m == 2) std::printf("      B1's ring after packets: %lld..%lld frames of 512\n", (long long)r.minRing, (long long)r.maxRing);
+            if (m == 2) {
+                CHECK(r.underrunsPerS == 0 && r.dropsPerS == 0, "B1 must leave the phone nothing to fill or drop (jitter %.1f)", j);
+                CHECK(r.shortPerS == 0 && r.longPerS == 0, "B1 sends only 48s");
+                CHECK(std::fabs(r.slipsPerS - 20.3) < 2, "B1 slips at the clock offset (~20/s at +422 ppm), got %.1f", r.slipsPerS);
+                CHECK(r.fm1UnderrunsPerS == 0 && r.minRing > 16 && r.maxRing + 140 + 49 < 512, "B1's ring must stay off both ends (%lld..%lld)", (long long)r.minRing, (long long)r.maxRing);
+            }
+        }
+    }
+}
+
+/**
+ * B1's slip, as uac_packet would do it: 48 output frames from 49 ring frames (drop) or 47 (repeat), the extra or
+ * missing frame spread over a 16-frame ramp in the middle of the packet: the read position moves from j to j +- 1
+ * across the ramp, interpolated (linear, or 4-point cubic: Catmull-Rom), int16 in and out as the ring holds them.
+ * Measured against the ideal: the same sine at the same warped time, so only the interpolation's error counts.
+ */
+static double slipSnr(double hz, bool cubic, int slipsPerS, double *worstDb) {
+    const int rate = 48000, ramp = 16, every = rate / 1000 * (1000 / slipsPerS);   // a slip every N packets' worth of frames
+    std::vector<int16_t> src;   // the ring's frames (one channel), with room for the warp
+    for (int i = 0; i < rate * 3; i++) src.push_back(int16_t(std::lround(16000 * std::sin(2 * M_PI * hz * i / rate))));
+    double sig = 0, err = 0, worst = 0;
+    double pos = 64;            // read position in src
+    for (int n = 0; n < rate * 2; n++) {
+        int inPkt = n % every;
+        double step = (inPkt >= 16 && inPkt < 16 + ramp) ? 1.0 + 1.0 / ramp : 1.0;   // a drop: read 17 frames' worth over 16
+        int i = int(pos); double f = pos - i;
+        double y;
+        if (f == 0) y = src[size_t(i)];
+        else if (!cubic) y = src[size_t(i)] + (src[size_t(i) + 1] - src[size_t(i)]) * f;
+        else {
+            double p0 = src[size_t(i) - 1], p1 = src[size_t(i)], p2 = src[size_t(i) + 1], p3 = src[size_t(i) + 2];
+            y = p1 + 0.5 * f * (p2 - p0 + f * (2 * p0 - 5 * p1 + 4 * p2 - p3 + f * (3 * (p1 - p2) + p3 - p0)));
+        }
+        y = std::lround(std::clamp(y, -32768.0, 32767.0));
+        double ideal = 16000 * std::sin(2 * M_PI * hz * pos / rate);
+        sig += ideal * ideal; err += (y - ideal) * (y - ideal);
+        if (inPkt >= 16 && inPkt < 16 + ramp) worst = std::max(worst, std::fabs(y - ideal));
+        pos += step;
+    }
+    *worstDb = 20 * std::log10(std::max(worst, 1e-9) / 16000);
+    return 10 * std::log10(sig / err);
+}
+
+/**
+ * B1's slip done in the FM-1's own 44.1 -> 48 kHz polyphase resampler (usb.c uac_tap48: 160 phases, the phase
+ * stepping UAC_FIR_M = 147 per output frame): stepping 148 instead for ~148 outputs makes one output frame fewer
+ * (146: one more). Every output is still the filter at an exact phase, so the only change is the time map: 0.7 %
+ * faster for 3 ms. Measured against the ideal sine at the same warped times.
+ */
+static double polySlipSnr(double hz, int slipsPerS, int *framesLost) {
+    const double inRate = 44100.0;
+    const int L = 160, M = 147, half = 16;
+    std::vector<double> x;
+    for (int i = 0; i < int(inRate * 3); i++) x.push_back(std::lround(16000 * std::sin(2 * M_PI * hz * i / inRate)));
+    // the prototype: windowed sinc at the input's Nyquist (x0.91), 32 taps per phase, evaluated at the exact phase
+    auto tap = [&](double d) {
+        double fc = 0.5 * 0.91, s0 = d == 0 ? 2 * fc : std::sin(2 * M_PI * fc * d) / (M_PI * d), r = d / half;
+        if (std::fabs(r) >= 1) return 0.0;
+        auto i0 = [](double v) { double s = 1, t = 1; for (int k = 1; k < 30; k++) { t *= (v / (2 * k)) * (v / (2 * k)); s += t; } return s; };
+        return s0 * i0(9.0 * std::sqrt(1 - r * r)) / i0(9.0);
+    };
+    int64_t base = 64; int ph = 0;       // output time = base + ph / L input frames
+    int slipLeft = 0, nOut = 0, every = 48000 / slipsPerS;
+    double sig = 0, err = 0, tIdeal;
+    while (base + half + 2 < int64_t(x.size())) {
+        double frac = double(ph) / L, y = 0, norm = 0;
+        for (int j = -half + 1; j <= half; j++) { double w = tap(j - frac); y += w * x[size_t(base + j)]; norm += w; }
+        y = std::lround(y / norm);
+        tIdeal = double(base) + frac;
+        double ideal = 16000 * std::sin(2 * M_PI * hz * tIdeal / inRate);
+        if (nOut > 200) { sig += ideal * ideal; err += (y - ideal) * (y - ideal); }
+        if (nOut % every == 0) slipLeft = 148;          // a drop: 148 outputs at 148
+        int step = slipLeft > 0 ? M + 1 : M;
+        if (slipLeft > 0) slipLeft--;
+        ph += step;
+        base += ph / L; ph %= L;
+        nOut++;
+    }
+    // frames lost: the outputs a plain 147-step resampler would have made from the same input, minus these
+    *framesLost = int(std::lround((double(base - 64) * L / M) - nOut));
+    return 10 * std::log10(sig / err);
+}
+
+static void testSlip() {
+    std::printf("B1's slip in the FM-1's polyphase resampler (148 steps for ~148 outputs), 20 a second:\n");
+    for (double hz : {1000.0, 10000.0, 15000.0}) {
+        int lost = 0;
+        double snr = polySlipSnr(hz, 20, &lost);
+        std::printf("  %5.0f Hz: SNR %5.1f dB against the ideal warped sine · frames made fewer: %d (expect %d: 20 a second for 3 s)\n", hz, snr, lost, 20 * 3);
+        CHECK(std::abs(lost - 60) <= 1, "each slip must make exactly one frame fewer: %d", lost);
+        CHECK(snr > 80 || hz > 12000, "polyphase slip at %.0f Hz: %.1f dB", hz, snr);
+    }
+    std::printf("the alternative, a slip on the ring's frames: a 16-frame ramp, 20 slips a second, int16 (SNR against the ideal warped sine; worst error in a ramp):\n");
+    for (double hz : {1000.0, 5000.0, 10000.0, 15000.0}) {
+        double wl, wc;
+        double l = slipSnr(hz, false, 20, &wl), c = slipSnr(hz, true, 20, &wc);
+        std::printf("  %5.0f Hz: linear %5.1f dB (worst %5.1f dBFS-rel), cubic %5.1f dB (worst %5.1f)\n", hz, l, wl, c, wc);
+        // (recorded for the comparison: the ring-side slip needs interpolation, and 10 kHz shows it)
+    }
 }
 
 static void testPacing() {
@@ -354,6 +522,8 @@ static void testAdaptive() {
 int main() {
     testResampler();
     testPacing();
+    testPhoneModel();
+    testSlip();
     testAdaptive();
     std::printf(failures ? "\n%d FAILED\n" : "\nall passed\n", failures);
     return failures ? 1 : 0;
