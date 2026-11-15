@@ -39,6 +39,15 @@ public final class PhoneCore {
     var projectBusy = false
     /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
     var auditions: [Int: Task<Void, Never>] = [:]
+    /// The Patterns sheet is showing (Patterns.swift): the stored pictures may be read while stopped.
+    var patternsOpen = false
+    var patternsReading = false
+    /// The stored patterns' pictures (0…63) and the POOL entry each was read at.
+    var patternStored: [Int: PatternPicturesArea.Picture] = [:]
+    var patternSeen: [String] = []
+    /// Quiet time after a stop or a change before the stored patterns are read (the iPad's pads: 3 s).
+    static var picturesQuiet: TimeInterval = 3
+    private var picturesTask: Task<Void, Never>?
     /// When the read-only notice last went to the screen (Notice.swift).
     var readOnlySaidAt = Date.distantPast
     /// The page lag's timing (LagTrace.swift), opened by pickPage and goHome.
@@ -104,6 +113,8 @@ public final class PhoneCore {
             AreaWatch(name: "freetake", build: { [unowned self] in self.freeTakeArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "page", build: { [unowned self] in self.pageArea().map(AreaJSON.encode) }, publish: publish),
             // HOME's four knobs (decision 21): the selected track's engine's, as the FM-1 shows them
+            AreaWatch(name: "patterns", build: { [unowned self] in self.patternsArea().map(AreaJSON.encode) }, publish: publish),
+            AreaWatch(name: "patternPictures", build: { [unowned self] in self.patternPicturesArea().map(AreaJSON.encode) }, publish: publish),
             AreaWatch(name: "homeKnobs", build: { [unowned self] in self.homeKnobsArea().map(AreaJSON.encode) }, publish: publish),
             // the FM-1 key whose screen is up (decision 24: the phone's button block lights it)
             AreaWatch(name: "fm1Screen", build: { [unowned self] in self.fm1ScreenArea().map(AreaJSON.encode) }, publish: publish),
@@ -172,6 +183,14 @@ public final class PhoneCore {
         // A sheet showing (OPERATOR, ALL OPS, SOUND): its patch or sound read again every 300 ms. The FM-1 pushes
         // neither when its own knobs turn them (EDITOR_PROTOCOL.md "FM6 patches", "DRUM-X kit"), so this is how the
         // phone's four follow them; the store skips a read within a second of the phone's own edit
+        // The stored patterns' pictures while the Patterns sheet shows, stopped only (Patterns.swift)
+        picturesTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.pollPatternPictures()
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
         sheetTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -218,6 +237,7 @@ public final class PhoneCore {
         followTask?.cancel(); followTask = nil
         sendsTask?.cancel(); sendsTask = nil
         sheetTask?.cancel(); sheetTask = nil
+        picturesTask?.cancel(); picturesTask = nil
         stampTask?.cancel(); stampTask = nil
         areas.forEach { $0.stop() }; areas = []
     }
@@ -264,7 +284,7 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects
