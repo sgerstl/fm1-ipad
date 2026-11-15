@@ -33,6 +33,10 @@ interface LupeCore {
     /** The clock reference for per-frame movement (ClockState.kt). */
     val clock: StateFlow<ClockState> get() = ClockDefaults.clock
 
+    /** The pattern pool (PatternsState.kt, board 79) and its pictures. */
+    val patterns: StateFlow<PatternsState> get() = PatternsDefaults.patterns
+    val patternPictures: StateFlow<PatternPictures> get() = PatternsDefaults.pictures
+
     /** The last thing refused, to show on screen (Notice.kt). */
     val notice: StateFlow<CoreNotice> get() = NoticeDefaults.notice
 

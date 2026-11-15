@@ -368,6 +368,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val goes = if (at != idx) "Goes in ${'A' + at}" else null
     val empty = e.kind == PadKind.Empty
     val holdMenu = LocalHoldMenu.current
+    val sheetHost = com.scottgerstl.lupe.ui.sheet.LocalSheetHost.current
+    val pool by core.patterns.collectAsStateWithLifecycle()
     val soundsHost = LocalSoundsHost.current
     var padCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     /**
@@ -391,22 +393,27 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             add(HoldItem("Select sound", sub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
         }
         val kept0 = keptPatterns(pads)
+        val fullPool = empty && (pads.patternsFree == 0 || kept0.size >= 64)
         if (empty) {
-            // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap
-            val full = pads.patternsFree == 0 || kept0.size >= 64
+            // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap, and offers the ways on (board 79.4)
+            val full = fullPool
             add(HoldItem("New pattern", sub = if (full) com.scottgerstl.lupe.core.NO_PATTERN_FREE else goes, enabled = !full) { core.send(Intent.PadNew(row.track, at)) })
-            // …and offers the way out (Scott, 2026-11-14): erase the kept patterns nothing uses, asked once more in place with their numbers
-            if (pads.patternsFree == 0) {
-                if (pads.unused.isNotEmpty()) add(HoldItem(com.scottgerstl.lupe.core.clearUnusedTitle(pads.unused), sub = stopFirst, enabled = idle,
-                    confirm = com.scottgerstl.lupe.core.clearUnusedWords(pads.unused)) { core.send(com.scottgerstl.lupe.core.ClearUnusedPatterns(confirmed = true)) })
-                else add(HoldItem("No unused patterns", sub = "Other saved projects hold them", enabled = false))
+            if (full) {
+                // a fresh pattern without a free number: the lowest unused one onto this pad, then emptied (stopped only); it names the number
+                val recycle = pool.recycle ?: pads.unused.minOrNull()
+                add(HoldItem("Recycle an unused pattern", sub = if (recycle == null) "None unused: saved projects hold them" else stopFirst ?: "Takes ${"%02d".format(recycle)}", enabled = idle && recycle != null) {
+                    core.send(com.scottgerstl.lupe.core.RecyclePattern(row.track, at)) })
+                // the sheet in pick mode: the pad then plays the same pattern as its other users
+                add(HoldItem("Put a kept pattern here…", sub = "Edits are shared") { sheetHost.showPatterns(row.track to at) })
             }
             // (a REST added at the list's end is one LIST SET, which Skiff takes while playing; if it can't, its refusal shows on screen)
             add(HoldItem("Rest", sub = goes) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
         }
         val kept = keptPatterns(pads)
-        add(HoldItem(if (empty) "Pick a pattern…" else "Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else if (empty) goes else null, enabled = kept.isNotEmpty(),
+        // (with the pool full, "Put a kept pattern here…" above is the way to a kept one)
+        if (!fullPool)         add(HoldItem(if (empty) "Pick a pattern…" else "Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else if (empty) goes else null, enabled = kept.isNotEmpty(),
             children = { kept.map { p -> HoldItem("Pattern %02d".format(p), checked = e.pattern == p) { core.send(Intent.PadSet(row.track, at, p)) } } }))
+        if (empty) add(HoldItem("Patterns…", sub = if (pool.kept > 0) "${pool.kept} kept · ${pool.unused} unused" else null) { sheetHost.showPatterns() })
         if (!empty && block != null) {
             // how many passes it plays (the iPad's Play once more / less); a chain repeats whole, on its last entry's count
             val chained = block.last > block.first

@@ -68,10 +68,25 @@ class FakeLupeCore(
     override val clock: StateFlow<ClockState> = _clock
     private val _notice = MutableStateFlow(CoreNotice())
     override val notice: StateFlow<CoreNotice> = _notice
+    // the pattern pool (board 79): 52 of 64 kept, twelve unused; "FM-1: all 64 patterns taken" in the fake menu fills it
+    private var pool: List<PoolPattern> = FakePool.initial()
+    private var poolFull = false
+    private val _patterns = MutableStateFlow(FakePool.state(pool, false))
+    override val patterns: StateFlow<PatternsState> = _patterns
+    private val _patternPictures = MutableStateFlow(FakePool.pictures(pool, false))
+    override val patternPictures: StateFlow<PatternPictures> = _patternPictures
+    /** Say the pool again: the lists, the counts, the pictures (waiting for a stop while playing), and the pads' own free count and unused list. */
+    private fun publishPool() {
+        val shown = if (poolFull) pool + (1..64).filter { n -> pool.none { it.number == n } }.map { PoolPattern(it, 16, 1, listOf(PatternUse(1, 6)), listOf(1), false, false) } else pool
+        val playing = _top.value.playing
+        val st = FakePool.state(shown, playing)
+        _patterns.value = st; _patternPictures.value = FakePool.pictures(shown, playing)
+        _pads.value = _pads.value.copy(patternsFree = if (st.free == 0) 0 else st.free, unused = shown.filter { it.unused }.map { it.number })
+    }
     /** The FM-1 refusing something, as the real one does (its reason, for the screen). */
     fun refuse(reason: String) { _notice.value = CoreNotice(_notice.value.seq + 1, refusalWords(reason)) }
     /** For looking at the full-pool case: the fake says no pattern number is free, and refuses New pattern as Skiff does. */
-    fun fillPool(full: Boolean) { _pads.value = _pads.value.copy(patternsFree = if (full) 0 else null, unused = if (full) listOf(3, 17, 22, 40, 41, 58, 60) else emptyList()) }
+    fun fillPool(full: Boolean) { poolFull = full; publishPool() }
     private val _fm1Screen = MutableStateFlow(Fm1ScreenState(key = "HOME"))
     override val fm1Screen: StateFlow<Fm1ScreenState> = _fm1Screen
     private val _home = MutableStateFlow(FakeHome.seed())
@@ -96,7 +111,7 @@ class FakeLupeCore(
     private var ticker: Job? = null
 
     // the editor's working pattern, kept per (track, pattern) so edits stay when you come back
-    private val patterns = mutableMapOf<Pair<Int, Int>, MutableList<FStep>>()
+    private val stepPatterns = mutableMapOf<Pair<Int, Int>, MutableList<FStep>>()
     private var model: MutableList<FStep> = MutableList(16) { FStep() }
     private var clipboard: FStep? = null
     private val sceneSnaps = mutableMapOf<Int, List<Int?>>()
@@ -177,7 +192,7 @@ class FakeLupeCore(
             "editor" -> {
                 val e = lupeJson.decodeFromJsonElement(EditorState.serializer(), state)
                 model = e.steps.map { FStep.from(it, e.kind == EditorKind.Drum) }.toMutableList()
-                patterns[e.track to e.pattern] = model
+                stepPatterns[e.track to e.pattern] = model
                 _editor.value = e
                 emitEditor()   // the fake fills what the recording doesn't (maxLength, heldFrom)
             }
@@ -187,8 +202,23 @@ class FakeLupeCore(
     override fun send(intent: Intent) {
         when (intent) {
             Intent.Retry -> play("ready")
-            Intent.Play -> setPlaying(true)
-            Intent.Stop -> setPlaying(false)
+            Intent.Play -> { setPlaying(true); publishPool() }
+            Intent.Stop -> { setPlaying(false); publishPool() }
+            is PatternsOpen -> Unit
+            is ClearPatterns -> if (!intent.confirmed) Unit else if (_top.value.playing) refuse("Stop playback to clear patterns. The FM-1 only clears them while stopped.") else {
+                val gone = pool.filter { it.number in intent.numbers && it.unused }.map { it.number }
+                if (gone.isEmpty()) refuse("Left alone because they are in use or empty: " + intent.numbers.joinToString(", ") { "%02d".format(it) }) else {
+                    pool = pool.filter { it.number !in gone }; poolFull = false; publishPool()
+                    refuse("Cleared patterns ${gone.joinToString(" and ") { "%02d".format(it) }}. ${_patterns.value.free} pattern numbers are free.")
+                }
+            }
+            is RecyclePattern -> { val n = _patterns.value.recycle
+                if (_top.value.playing) refuse("Stop playback to recycle a pattern. The FM-1 only does it while stopped.")
+                else if (n == null) refuse("No pattern is unused, so there is nothing to recycle.")
+                else { pool = pool.map { if (it.number == n) it.copy(unused = false, uses = 1, here = listOf(PatternUse(intent.track, intent.entry)), on = listOf(intent.track)) else it }
+                    editEntry(intent.track, intent.entry) { PadEntry(PadKind.Pattern, n) }; publishPool()
+                    refuse("Pattern %02d was emptied and put on T${intent.track} pad ${intent.entry + 1}.".format(n)) } }
+            is CopyPattern -> refuse("Pattern %02d was copied to a free number and put on T${intent.track} pad ${intent.entry + 1}.".format(intent.number))
             Intent.Rec -> _top.update { it.copy(rec = !it.rec) }
             is Intent.SetTempo -> _top.update { it.copy(tempo = intent.bpm.coerceIn(20.0, 300.0)) }
             is Intent.SetLaunch -> _top.update { it.copy(launch = intent.quantize) }
@@ -353,7 +383,7 @@ class FakeLupeCore(
         val e = row.entries.getOrNull(entry) ?: return
         if (e.kind != PadKind.Pattern || e.pattern == null) return
         val drum = FakeData.isDrum(track)
-        model = patterns.getOrPut(track to e.pattern) { FStep.generate(track, e.pattern) }
+        model = stepPatterns.getOrPut(track to e.pattern) { FStep.generate(track, e.pattern) }
         val lanes = if (drum) FakeData.drumAutoLanes else FakeData.rollLanes
         _pads.update { it.copy(selected = PadRef(track, entry)) }
         _editor.value = EditorState(

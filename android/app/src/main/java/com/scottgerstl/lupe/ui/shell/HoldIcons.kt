@@ -12,7 +12,9 @@ import com.scottgerstl.lupe.R
  * |-------------------------------------|------------------|-----------------------------------|
  * | Edit steps, Edit pattern            | edit             | pencil                            |
  * | Select sound, Sounds                | graphic_eq       | waveform                          |
- * | Set pattern, Pick a pattern         | grid_view        | square.grid.2x2                   |
+ * | Set pattern, Pick a pattern, Patterns | grid_view      | square.grid.2x2 (.fill)           |
+ * | Recycle an unused pattern           | recycling        | arrow.triangle.2.circlepath       |
+ * | Put a kept pattern here             | content_paste    | doc.on.clipboard                  |
  * | Pattern NN (a list's choices)       | tag              | (a number chip)                   |
  * | New pattern                         | add_box          | plus.square                       |
  * | Rest, REST                          | pause            | pause                             |
@@ -39,7 +41,9 @@ fun holdIcon(title: String): Int? {
     return when {
         t.startsWith("Edit") -> R.drawable.ms_edit
         t.startsWith("Select sound") || t.startsWith("Sounds") -> R.drawable.ms_graphic_eq
-        t.startsWith("Set pattern") || t.startsWith("Pick a pattern") -> R.drawable.ms_grid_view
+        t.startsWith("Recycle") -> R.drawable.ms_recycling
+        t.startsWith("Put a kept pattern") -> R.drawable.ms_content_paste
+        t.startsWith("Set pattern") || t.startsWith("Pick a pattern") || t == "Patterns…" -> R.drawable.ms_grid_view
         t.startsWith("Pattern ") -> R.drawable.ms_tag
         t.startsWith("New pattern") -> R.drawable.ms_add_box
         t.equals("Rest", true) -> R.drawable.ms_pause

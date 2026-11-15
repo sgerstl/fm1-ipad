@@ -64,6 +64,11 @@ fun RefusalStrip(core: LupeCore, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(words, Modifier.weight(1f).padding(vertical = 6.dp), style = LupeType.small.copy(color = Tok.text), maxLines = 3)
+        // the full-pool notice offers the way out: the sheet where unused patterns are cleared or a kept one is put on a pad (board 79)
+        if (words.startsWith("All 64 patterns are taken")) {
+            val sheets = com.scottgerstl.lupe.ui.sheet.LocalSheetHost.current
+            Key({ model.dismissed = notice.seq; sheets.showPatterns() }, "Open Patterns", height = 32.dp, minTarget = 44.dp) { fg -> KeyLabel("Patterns", fg) }
+        }
         Key({ model.dismissed = notice.seq }, "Dismiss", width = 44.dp, height = 44.dp, minTarget = 44.dp) { fg -> BasicText("✕", style = LupeType.key.copy(color = fg)) }
     }
 }

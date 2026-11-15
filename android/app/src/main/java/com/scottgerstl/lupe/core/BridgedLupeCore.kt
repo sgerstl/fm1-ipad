@@ -51,6 +51,10 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val clock: StateFlow<ClockState> = _clock
     private val _notice = MutableStateFlow(CoreNotice())
     override val notice: StateFlow<CoreNotice> = _notice
+    private val _patterns = MutableStateFlow(PatternsState())
+    override val patterns: StateFlow<PatternsState> = _patterns
+    private val _patternPictures = MutableStateFlow(PatternPictures())
+    override val patternPictures: StateFlow<PatternPictures> = _patternPictures
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -99,6 +103,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "meters" -> _meters.value = lupeJson.decodeFromString(MetersState.serializer(), json)
                 "timeline" -> _timeline.value = lupeJson.decodeFromString(TimelineState.serializer(), json)
                 "automation" -> _automation.value = lupeJson.decodeFromString(AutomationState.serializer(), json)
+                "patterns" -> _patterns.value = lupeJson.decodeFromString(PatternsState.serializer(), json)
+                "patternPictures" -> _patternPictures.value = lupeJson.decodeFromString(PatternPictures.serializer(), json)
                 "homeKnobs" -> _homeKnobs.value = lupeJson.decodeFromString(HomeKnobsState.serializer(), json)
                 "fm1Screen" -> _fm1Screen.value = lupeJson.decodeFromString(Fm1ScreenState.serializer(), json)
                 "clock" -> {

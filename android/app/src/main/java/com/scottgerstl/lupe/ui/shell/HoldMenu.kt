@@ -475,7 +475,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
                             // a long title wraps to a second line when it has the pill to itself, or steps down; with a second line under it, it stays on one
                             val size = if (item.title.length > 20) 14.sp else 16.sp
                             BasicText(item.title, style = LupeType.body.copy(fontSize = size, lineHeight = 1.1.em, color = ink), maxLines = if (item.sub == null) 2 else 1, overflow = TextOverflow.Ellipsis,
-                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = size, stepSize = 1.sp))
+                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = if (item.sub == null) 12.sp else 11.sp, maxFontSize = size, stepSize = 1.sp))
                             if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 1.1.em), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 11.sp, stepSize = 1.sp))
                         }

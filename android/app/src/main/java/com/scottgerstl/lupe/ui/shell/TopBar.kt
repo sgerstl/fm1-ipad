@@ -56,9 +56,6 @@ private val PlaybackMode.word get() = name
 @Composable
 fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, onTab: (com.scottgerstl.lupe.core.Tab) -> Unit, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf<Menu?>(null) }
-    // when "Clear unused patterns" began asking to be confirmed (0: it isn't); closing the menu drops it
-    var clearArmedAt by remember { mutableStateOf(0L) }
-    if (menu != Menu.Fm1 && clearArmedAt != 0L) clearArmedAt = 0L
     Row(
         modifier.fillMaxWidth().height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -74,21 +71,9 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 MenuRow("Mix…", { menu = null; sheets.show(SheetKind.Mix) }, sub = "Levels, pan, the shared delay and reverb")
                 MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
                 MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
-                // Clear unused patterns (Scott, 2026-11-14): frees pattern numbers. It erases, so it asks once more in place, naming the numbers;
-                // red only on the confirm. The FM-1's answer shows in the strip at the foot.
-                val padsNow by core.pads.collectAsStateWithLifecycle()
-                if (padsNow.unused.isNotEmpty()) {
-                    MenuDivider()
-                    LupeCrossfade(clearArmedAt != 0L) { asking ->
-                        if (!asking) MenuRow(com.scottgerstl.lupe.core.clearUnusedTitle(padsNow.unused), { clearArmedAt = System.currentTimeMillis() }, enabled = !top.playing,
-                            sub = if (top.playing) "Stop first" else "Frees their numbers for new patterns")
-                        else androidx.compose.foundation.layout.Column {
-                            val words = com.scottgerstl.lupe.core.clearUnusedWords(padsNow.unused)
-                            ConfirmBox(words, "Confirm: $words", clearArmedAt) { core.send(com.scottgerstl.lupe.core.ClearUnusedPatterns(confirmed = true)); clearArmedAt = 0L; menu = null }
-                            MenuRow("Cancel", { clearArmedAt = 0L })
-                        }
-                    }
-                }
+                // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too
+                val poolNow by core.patterns.collectAsStateWithLifecycle()
+                MenuRow("Patterns…", { menu = null; sheets.showPatterns() }, sub = if (poolNow.kept > 0) "${poolNow.kept} kept · ${poolNow.unused} unused" else "The FM-1's 64 pattern numbers")
                 val demo = LocalDemo.current
                 if (demo.inDemo) { MenuDivider(); MenuRow("Leave the demo", { menu = null; demo.leave() }, sub = "Back to looking for your FM-1") }
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }

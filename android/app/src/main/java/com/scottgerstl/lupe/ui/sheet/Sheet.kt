@@ -66,7 +66,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 
-enum class SheetKind { Projects, Settings, Mix }
+enum class SheetKind { Projects, Settings, Mix, Patterns }
 
 /** Which sheet is up. The FM-1 key's menu sets it; [LupeSheetLayer] draws it. */
 @Stable
@@ -74,7 +74,10 @@ class SheetHost {
     var open by mutableStateOf<SheetKind?>(null)
     /** Settings opened from the FM-1 menu's Labs row: scroll to the Labs section. */
     var toLabs by mutableStateOf(false)
+    /** The Patterns sheet opened to put a kept pattern on this empty pad (track 1…6, entry from 0), or null to browse and manage. */
+    var patternsPick by mutableStateOf<Pair<Int, Int>?>(null)
     fun show(kind: SheetKind, labs: Boolean = false) { toLabs = labs; open = kind }
+    fun showPatterns(pick: Pair<Int, Int>? = null) { patternsPick = pick; open = SheetKind.Patterns }
     fun close() { open = null }
 }
 
