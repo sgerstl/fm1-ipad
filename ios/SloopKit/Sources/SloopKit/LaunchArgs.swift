@@ -3,9 +3,11 @@ import Foundation
 /// The launch arguments the app and its fakes read (-demo, -demo-skiff, -page, -slow-motion, … the table in ios/README.md):
 /// screenshot, recording and test hooks, so Debug builds only (Scott, 2026-11-09). A Release build sees none.
 public enum LaunchArgs {
+    /// Arguments set from code where a platform has no launch arguments to give (Android's debug demo core).
+    nonisolated(unsafe) public static var extra: [String] = []
     public static var all: [String] {
         #if DEBUG
-        ProcessInfo.processInfo.arguments
+        ProcessInfo.processInfo.arguments + extra
         #else
         []
         #endif

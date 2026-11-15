@@ -3,10 +3,13 @@
 // draw). See ios/SkiffDraw/Sources/SkiffDrawLink/SkiffPictures.swift.
 #if os(Android)
 import CAndroid
+import Foundation
 import SkiffDraw
 import SkiffDrawLink
 
 nonisolated(unsafe) private var skiffPictures: SkiffPictures?
+nonisolated(unsafe) private var skiffLogAt = Date.distantPast
+nonisolated(unsafe) private var skiffWorst = 0.0
 
 /// The FM-1's picture for `page` (Lupe's page number, as PageState.page), GLO's shared pages in `gloInk` (0xRRGGBB), the
 /// FM-1's panel surface drawn as `surface` (the picture box's own background: no second frame).
@@ -14,6 +17,7 @@ nonisolated(unsafe) private var skiffPictures: SkiffPictures?
 /// width × height × 4 bytes of RGBA.
 @_cdecl("Java_com_scottgerstl_lupe_core_LupeNative_skiffPicture")
 public func skiffPicture(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ page: jint, _ gloInk: jint, _ surface: jint) -> jbyteArray? {
+    let t0 = Date()
     let bytes: [UInt8]? = MainActor.assumeIsolated {
         guard let core else { return nil }
         let p = skiffPictures ?? SkiffPictures()
@@ -23,6 +27,13 @@ public func skiffPicture(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _
         let us = min(65535, p.mirror.screen.lastDrawMicroseconds)
         return [UInt8(pic.width & 255), UInt8(pic.width >> 8), UInt8(pic.height & 255), UInt8(pic.height >> 8),
                 pic.animated ? 1 : 0, UInt8(us & 255), UInt8(us >> 8), 0] + pic.rgba
+    }
+    // its cost on the main thread, at most every 2 s (the core's own updates wait while this runs)
+    let ms = Date().timeIntervalSince(t0) * 1000
+    skiffWorst = max(skiffWorst, ms)
+    if Date().timeIntervalSince(skiffLogAt) > 2 {
+        debug(String(format: "skiffPicture page %d: %.1f ms (worst %.1f ms since the last line)%@", Int(page), ms, skiffWorst, bytes == nil ? ", none" : ""))
+        skiffLogAt = Date(); skiffWorst = 0
     }
     guard let bytes else { return nil }
     let e = env.pointee!.pointee

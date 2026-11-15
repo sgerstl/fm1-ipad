@@ -21,8 +21,8 @@ class SkiffPictureTest {
     @Test fun theFm1sPanelDecodesAs234By138Argb() {
         val p = decodeSkiffPicture(bytes(234, 138, false, 410) { i -> if (i == 0) intArrayOf(0, 0, 0, 0) else intArrayOf(0xFF, 0x5A, 0x36, 0xFF) })!!
         assertEquals(234, p.width); assertEquals(138, p.height); assertFalse(p.animated); assertEquals(410, p.drawMicros)
-        assertEquals(0x00000000, p.argb[0])                                  // outside a rounded corner: transparent
-        assertEquals(0xFFFF5A36.toInt(), p.argb[1])                          // SKIFF's track 1, RGBA → ARGB
+        assertEquals(0x00000000, p.argb(0))                                  // outside a rounded corner: transparent
+        assertEquals(0xFFFF5A36.toInt(), p.argb(1))                          // SKIFF's track 1, RGBA → ARGB
     }
 
     @Test fun theSeaAndTheLfoSayTheyMove() {

@@ -36,7 +36,16 @@ android {
     defaultConfig { ndk { abiFilters += "arm64-v8a" } }   // the Pixel 10 Pro; the Swift build is arm64 only
     // Audio through (AAudio, C++): libLupeThrough.so, built by android/scripts/build-through.sh (app/src/main/cpp/through)
     sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("through/jniLibs"))
+    // Debug only: SloopKit's FakeSkiff fixtures for the demo core (prefs core = "demo"; the emulator has no FM-1). The APK has
+    // no SwiftPM resource bundle, so they ride as assets/demo/*.json and LupeStartup copies them into the app's files.
+    sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("demoAssets"))
 }
+
+val demoFixtures by tasks.registering(Copy::class) {
+    from(rootProject.file("../ios/SloopKit/Sources/SloopKit/Resources")) { include("*.json") }
+    into(layout.buildDirectory.dir("demoAssets/demo"))
+}
+tasks.matching { it.name == "mergeDebugAssets" || it.name == "generateDebugAssets" }.configureEach { dependsOn(demoFixtures) }
 
 // P1: builds the Swift core before Gradle packs native libraries. Swift's own build is incremental.
 val buildSwift by tasks.registering(Exec::class) {

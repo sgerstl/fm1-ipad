@@ -21,6 +21,10 @@ public final class SkiffMirror {
     public var followDevice = false
     public private(set) var stats = Stats()
     private var engines: [Int: Int] = [:]
+    // what was last copied in, so a frame copies only what changed (an animated picture asks ~20 times a second, on the
+    // main thread, where the core's own updates wait: the Pixel's rail went dead under the full copy, 2026-11-15)
+    private var lastVals: [Int: [Int]] = [:], lastSteps: [Int: [SynthStep]] = [:]
+    private var lastSel = -1, lastParams: [Int] = [], lastGlobals: [Int] = []
     private let started = Date.now
 
     public init(screen: SkiffScreen? = nil) { self.screen = screen ?? .shared }
@@ -32,7 +36,10 @@ public final class SkiffMirror {
         // engines first: set_engine_of resets a track's engine parameters, as a sound load does
         for t in s.trackIndices where t < screen.trackCount {
             let e = s.tracks[t].engine
-            if engines[t] != e { screen.setEngine(t, e); engines[t] = e; st.engines += 1 }
+            if engines[t] != e {
+                screen.setEngine(t, e); engines[t] = e; st.engines += 1
+                lastVals[t] = nil; lastParams = []           // (set_engine_of resets the track's values)
+            }
         }
         for t in s.trackIndices where t < screen.trackCount {
             let tr = s.tracks[t]
@@ -44,16 +51,24 @@ public final class SkiffMirror {
                                        (ids.arpMode, tr.arpMode)]
             vals += [(ids.direction, tr.direction), (ids.swing, tr.swing), (ids.slicer, tr.slicer), (ids.duck, tr.duck),
                      (ids.follow, tr.follow)]
-            for case let (id?, v) in vals { screen.setTrackParam(t, id, v); st.otherTrackParams += 1 }
-            // the steps (DUCK draws its source's hits; NOTES and FEEL the track's own)
-            for (i, step) in tr.steps.enumerated() { screen.setStep(track: t, index: i, step.encoded) }
+            let flat = vals.map { ($0.0 ?? -1) * 100000 + $0.1 }
+            if lastVals[t] != flat {
+                for case let (id?, v) in vals { screen.setTrackParam(t, id, v); st.otherTrackParams += 1 }
+                lastVals[t] = flat
+            }
+            // the steps (DUCK draws its source's hits; NOTES and FEEL the track's own): only those that changed
+            let old = lastSteps[t] ?? []
+            for (i, step) in tr.steps.enumerated() where i >= old.count || old[i] != step {
+                screen.setStep(track: t, index: i, step.encoded)
+            }
+            lastSteps[t] = tr.steps
             screen.setPlayhead(track: t, step: t < s.positions.count ? s.positions[t].step : 0)
         }
-        let sel = s.deviceScreen?.track ?? s.selectedTrack
-        screen.select(track: sel)
-        screen.setTrackParams(sel, s.params)
+        let sel = s.selectedTrack                         // (DUMP's parameters are its; the session adopts SCREEN's track)
+        if sel != lastSel { screen.select(track: sel); lastSel = sel; lastParams = [] }
+        if s.params != lastParams { screen.setTrackParams(sel, s.params); lastParams = s.params }
         st.selectedParams = min(s.params.count, screen.trackParamCount)
-        screen.setGlobals(s.globals)
+        if s.globals != lastGlobals { screen.setGlobals(s.globals); lastGlobals = s.globals }
         st.globals = min(s.globals.count, screen.globalCount)
         screen.setPlaying(s.playing)
         if s.clockTicks >= 0 { screen.setBarStep(s.clockTicks / 6 % 16) }

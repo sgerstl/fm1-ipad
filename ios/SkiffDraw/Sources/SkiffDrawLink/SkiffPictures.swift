@@ -56,7 +56,7 @@ public final class SkiffPictures {
         let sc = mirror.screen
         mirror.followDevice = false
         mirror.fill(from: s, palette: 0)                         // SKIFF (decision 46: the FM-1 on SKIFF)
-        let sel = s.deviceScreen?.track ?? s.selectedTrack
+        let sel = s.selectedTrack                         // (DUMP's parameters are its; the session adopts SCREEN's track)
         let theme = s.themeTrackColours                          // the FM-1's own (CUSTOM's too), else SKIFF's
         for t in 0..<sc.trackCount { sc.setTrackColour(t, theme.flatMap { t < $0.count ? $0[t] : nil }) }
         sc.setSurface(surface)                                   // the app's picture background: no second frame

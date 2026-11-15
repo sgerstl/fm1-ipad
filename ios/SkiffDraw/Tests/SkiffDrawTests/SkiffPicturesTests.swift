@@ -91,6 +91,25 @@ import Testing
         #expect(fake.unanswered.isEmpty, "\(fake.unanswered)")
     }
 
+    @Test func theDrumTracksEditIsTheSeaAfterAnotherTracksPicture() async throws {
+        // the emulator, 2026-11-15: SEL on track 1, then track 6 (DRUM) selected and EDIT 1: the mirror kept ANALOG
+        let (s, _, run) = try await connect(link: 6)
+        defer { run.cancel() }
+        let p = SkiffPictures()
+        _ = try #require(p.picture(s, lupePage: 11, gloInk: 0, surface: 0x111114))        // SEL › SCALE on track 1
+        let drum = try #require(s.trackIndices.first { s.tracks[$0].engine == 10 })
+        s.select(track: drum)
+        let t0 = Date()
+        while s.selectedTrack != drum || s.params.isEmpty {
+            guard Date().timeIntervalSince(t0) < 5 else { Issue.record("not selected"); break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try await Task.sleep(for: .milliseconds(300))                                     // (the DUMP of the new track)
+        let edit = try #require(p.picture(s, lupePage: 14, gloInk: 0, surface: 0x111114))
+        #expect(edit.animated, "EDIT 1 on DRUM is the sea")
+        #expect(p.mirror.screen.trackParam(drum, 0) == s.params.first)                    // the mirror has the drum track's own values
+    }
+
     @Test func anotherScreenLinkBuildGetsTheHandDrawnPicture() async throws {
         let (s, _, run) = try await connect(link: 4)
         defer { run.cancel() }

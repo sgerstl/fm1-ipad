@@ -292,7 +292,8 @@ int skd_render_panel_rgba(uint8_t *out, int max)
             uint8_t *q = out + 4 * (y * w + x);
             int cx = x < r ? r - x : x >= w - r ? x - (w - 1 - r) : 0, cy = y < r ? r - y : y >= h - r ? y - (h - 1 - r) : 0;
             memcpy(q, p, 4);
-            if (cx && cy && cx * cx + cy * cy > r * r) q[3] = 0;     /* (outside the rounded corner: the page shows) */
+            if (cx && cy && cx * cx + cy * cy > r * r) memset(q, 0, 4);   /* (outside the rounded corner: the page shows;
+                                                                           * all four 0, as a premultiplied bitmap takes it) */
         }
     return w * h;
 }
