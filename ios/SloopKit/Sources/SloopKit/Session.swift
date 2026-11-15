@@ -71,6 +71,8 @@ public enum ConnectionStatus: Equatable, Sendable {
 @MainActor @Observable
 public final class DeviceSession {
     public private(set) var status: ConnectionStatus = .searching
+    /// Between the firmware answering INFO and `.connected`: the whole read (the phone's link area shows "reading").
+    public private(set) var reading = false
     public var isConnected: Bool { if case .connected = status { true } else { false } }
     /// Recording anything: a loop's notes or knobs.
     public var isRecordingAnything: Bool { recording }
@@ -211,6 +213,15 @@ public final class DeviceSession {
         guard trackIndices.contains(t) else { return }
         let tr = tracks[t]
         counted.rebase(track: t, .init(length: tr.length, division: tr.division, direction: tr.direction, swing: tr.swing), globalSwing: swing)
+    }
+    /// The counted playhead's step for track `t` (Skiff): the step playing as the FM-1's sequencer walks it (its
+    /// direction, swing and launches counted; -1 before the first step or on RAND), the clock pulse it began on and
+    /// the pulse the next step begins on. nil with no counted clock. For a screen that draws the playhead itself
+    /// between steps (the phones' `playhead` area).
+    public func countedStep(_ t: Int) -> (step: Int, startedAt: Double, nextAt: Double)? {
+        guard trackIndices.contains(t), counted.running, counted.ticks >= 0, counted.walks.indices.contains(t) else { return nil }
+        let w = counted.walks[t]
+        return (w.step, w.startedAt, w.nextAt)
     }
     public func passProgress(_ t: Int) -> Double? {
         guard trackIndices.contains(t) else { return nil }
@@ -357,7 +368,12 @@ public final class DeviceSession {
     /// The demo FM-1 is a pretend Skiff (FakeSkiff); `demo` false: a real FM-1 over USB MIDI.
     public init(demo: Bool = false) {
         isDemo = demo
+        #if canImport(CoreMIDI)
         makeTransport = !demo ? { MIDITransport() } : { FakeSkiff(demo: true) }
+        #else
+        // Android has no CoreMIDI: the phone passes its own factory (init(transport:)) over AndroidTransport.
+        makeTransport = !demo ? { nil } : { FakeSkiff(demo: true) }
+        #endif
     }
 
     public init(transport: @escaping () -> SysExTransport?) {
@@ -401,6 +417,7 @@ public final class DeviceSession {
             return
         }
         driver = c
+        reading = true
         do {
             let i = c.info
             info = i
@@ -452,9 +469,11 @@ public final class DeviceSession {
                 skiffSong = nil
             }
             if let k = c as? SkiffDriver, k.firmware.hasDelayMode { Task { await self.readKeepSends(k) } }
+            reading = false
             status = .connected(version: i.version.replacingOccurrences(of: "FELUCCA ", with: ""))
             stats = Stats()
         } catch {
+            reading = false
             status = .lost("Lost the FM-1 while reading it")
             await c.close()
             driver = nil
@@ -1080,8 +1099,13 @@ public final class DeviceSession {
         return Music.laneNotes.firstIndex(of: n) ?? Music.laneNotes.enumerated().min { abs($0.element - n) < abs($1.element - n) }!.offset
     }
 
+    /// Every note the FM-1 sends (its keys, and on Skiff its sequencer's notes too, a channel a track), as it arrives.
+    /// The phone's step entry listens here (decision 5); the iPad doesn't use it.
+    @ObservationIgnored public var onDeviceNote: (@MainActor (NoteEvent) -> Void)?
+
     private func noteLoop(_ t: SysExTransport) async {
         for await e in t.notes {
+            onDeviceNote?(e)
             let n = Int(e.note)
             // Skiff sends every track's notes (NOTES OUT ALL, channels 1..6), the sequencer's included: only
             // the selected track's light the keys, and they don't move the keyboard's octave
@@ -1347,10 +1371,17 @@ public final class DeviceSession {
         guard let c = driver else { return }
         Task {
             // the FM-1 answers with what it loaded: a sound it kept is shown again, not the one asked for
-            guard let r = try? await c.preset(engine: e, index: i), r.engine != e, tracks[t].engine == e else { return }
-            tracks[t].engine = was.engine; tracks[t].preset = was.preset
-            tracks[t].engineName = was.engineName; tracks[t].presetName = was.presetName
-            refuseSound(track: t, engine: e)
+            guard let r = try? await c.preset(engine: e, index: i) else { return }
+            if r.engine != e, tracks[t].engine == e {
+                tracks[t].engine = was.engine; tracks[t].preset = was.preset
+                tracks[t].engineName = was.engineName; tracks[t].presetName = was.presetName
+                refuseSound(track: t, engine: e)
+                return
+            }
+            // Skiff pushes nothing for a PRESET the editor sent (editor.c ed_load_after takes the load into its watch's
+            // copy; SLOOP pushes RELOAD): the engine's descriptors and the loaded values are read here, or the EDIT
+            // pages kept the last engine's names until the track was selected again
+            if dialect == .skiff, selectedTrack == t { try? await readSoundParams(descs: false) }
         }
     }
 
@@ -1412,6 +1443,12 @@ public final class DeviceSession {
     /// SAVE AS into slot 0…3. rc 0: done.
     public func saveSkiffProject(slot: Int, name: String) async -> Int {
         guard let k = driver as? SkiffDriver, let rc = try? await k.projectSaveAs(slot: slot, name: name) else { return 2 }
+        await refreshSkiffProjects()
+        return rc
+    }
+    /// RENAME slot 0…3 (its name only). rc 0: done, 1: an empty slot.
+    public func renameSkiffProject(slot: Int, name: String) async -> Int {
+        guard let k = driver as? SkiffDriver, let rc = try? await k.projectRename(slot: slot, name: name) else { return 2 }
         await refreshSkiffProjects()
         return rc
     }

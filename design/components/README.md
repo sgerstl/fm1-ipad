@@ -13,7 +13,7 @@ A fact is written once, where it starts. Everything else points to it or is chec
 | Where the component sits, which tab and panel | `design/structure-map.md` | links |
 | Colours, sizes, radii | `tokens/tokens.json`, `Theme` | never repeats |
 | Motion numbers, type, corners, confirm-in-place: rules for every component | `design/DESIGN.md` | never repeats; states only what's particular to this one |
-| Feel values (springs, delays, thresholds) | Labs (`ios/FM1/Labs.swift`) | names the Labs key, never the number |
+| Feel values (springs, delays, thresholds) | Labs (`ios/FM1/Labs.swift`) while being tuned; once settled, a motion token in `tokens/tokens.json` | refers to the token (or the Labs key while still tuning), never the number (Scott, 2026-11-14) |
 | How it looks | boards and mockups on the canvas (`design/boards/`, `design/motion/`) | links the board |
 | Whether it passed on the iPad | `qa/device-checks/` | cites the check by file and number |
 | What changed when | git | no changelog |

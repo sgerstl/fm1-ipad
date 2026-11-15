@@ -115,4 +115,6 @@ Offline, `swift test` in `ios/SloopKit` (FirmwareInstallTests, FirmwareStockTest
 
 What the fake doesn't do: the chip-key check (it does play SLOOP 2.8.4's flash-chip refusal), and anything M-VAVE's loader may do beyond flash.bin.
 
+**Android (2026-11-15, decision 42).** The same SloopKit code runs on the phone (`android/core/Sources/PhoneCore/Firmware.swift`): it offers Skiff-Lupe 2.5.1 to a stock FM-1 or an older Skiff, and finishes an install that was cut off. The pin check there uses a plain Swift SHA-256 (`Digest.swift`), tested against CryptoKit, the standard's vectors and the pinned files. `swift test` in `android/core` (FirmwareFlowTests) plays it against the same fake: a stock V16 unit, a cut-off loader, a cable cut mid-write, the wrong file handed in, another firmware's update mode, and a connected FM-1 backed up first. Android has one MIDI client per device, so the installer's ports are the link's own and the editor lets go of the FM-1 while it writes. Not on the phone: stock V15.
+
 **Not tested: a real FM-1.** The first real install, and the first real restore of V15, need Scott with the device.

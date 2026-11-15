@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Board 80 · Edge action zones</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--page:#0D0D0F;--panel:#1A1A1E;--control:#26262B;--held:#3E3E46;--t1:#EDEDF0;--t2:#A1A1AA;--t3:#71717A;--on:#101012;--red:#FF4D4D}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;color:var(--t1);font:15px/1.4 Barlow,system-ui,sans-serif;padding:32px 24px 64px}
+h1{font-size:22px;font-weight:600;margin-bottom:6px}
+.lede{color:var(--t2);max-width:84ch;margin-bottom:28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(874px,1fr));gap:28px}
+figure{margin:0}figcaption{color:var(--t2);margin-top:10px;max-width:874px}figcaption b{color:var(--t1);font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--t2);border:1px solid var(--held);border-radius:4px;padding:1px 6px;margin-right:6px}
+svg{display:block;width:874px;height:402px;border-radius:54px;outline:6px solid #222226;background:var(--page)}
+.notes{color:var(--t2);max-width:84ch;margin-top:28px}.notes li{margin:6px 0}.notes b{color:var(--t1);font-weight:600}
+</style></head><body>
+<h1>Board 80 · Edge action zones: drag a pad to an edge to act on it</h1>
+<p class="lede">Batch item 12, Scott’s idea: once a held pad lifts, it can go to another slot (move, as now) or to one of the screen’s edges, each an action. Directions kept from the flick idea: <b>bottom = Clear</b>, <b>right = Edit</b>, <b>left = Duplicate</b>; the top edge is left free (the header lives there; a fourth action could go there later). iPhone landscape at 1:1, a right hand; track 3’s pad <b>A 08</b> mid-drag, hovering the right edge (Edit) in every tile, so you can compare the idle and the hot zone. Five styles.</p>
+<div class="grid" id="g"></div>
+<ul class="notes">
+<li><b>Behaviour, same for all five:</b> the zones arrive as the pad lifts (they slide or fade in from their edge, nothing pops) and leave on drop. A zone lights when the pad’s centre is within ~48 pt of its edge; the lifted pad tilts toward it. Dropping on Clear clears with the Undo strip (item 13), no confirm. Dropping anywhere else that isn’t a slot puts the pad back.</li>
+<li><b>Colour:</b> Edit and Duplicate use the track’s colour (they act on the track’s pad); Clear uses red only while hot, grey at rest, as the craft bar keeps red for destruction.</li>
+<li><b>Room:</b> the zones sit over the outer pads while dragging, so the left zone covers the track heads, which can’t be drop targets anyway; the bottom zone covers the scenes row.</li>
+<li>VoiceOver and keyboards keep the hold menu, which still has every action.</li>
+</ul>
+<script>
+const TRK='#FFBF00',C=['#FF5A36','#22C3B4','#FFBF00','#9580FF','#FF6FAE','#A3E635'];
+const mix=(hex,a,b=[13,13,15])=>{const n=parseInt(hex.slice(1),16),c=[n>>16,n>>8&255,n&255];return `rgb(${b.map((x,i)=>Math.round(x+(c[i]-x)*a)).join(',')})`};
+const W=874,H=402;
+const ICON={edit:'M3 13l8-8 2 2-8 8H3v-2z',dup:'M4 4h7v7H4zM6 13h7V6',trash:'M3 4h10M6 4V2.5h4V4M4.5 4l.8 9.5h5.4l.8-9.5'};
+function ic(n,x,y,col,s=1){return `<path d="${ICON[n]}" transform="translate(${x},${y}) scale(${s})" fill="none" stroke="${col}" stroke-width="${1.6/s}" stroke-linecap="round" stroke-linejoin="round"/>`}
+function base(){let s=`<text x="28" y="40" fill="#EDEDF0" font-size="17" font-family="Barlow" font-weight="600">SONG ONE ⌄</text><text x="150" y="40" fill="#EDEDF0" font-size="17" font-family="Barlow" font-weight="600">Pads</text><text x="210" y="40" fill="#71717A" font-size="17" font-family="Barlow" font-weight="600">Edit</text><text x="262" y="40" fill="#71717A" font-size="17" font-family="Barlow" font-weight="600">Timeline</text><line x1="0" y1="56" x2="${W}" y2="56" stroke="#2A2A30"/>`;
+  for(let r=0;r<6;r++){const y=64+r*46;s+=`<rect x="24" y="${y}" width="118" height="42" rx="8" fill="#26262B"/><rect x="24" y="${y}" width="24" height="42" rx="8" fill="${C[r]}"/>`;for(let c=0;c<8;c++){const x=170+c*86;const empty=c>3||(r==3&&c>2);if(r==2&&c==0){s+=`<rect x="${x+1}" y="${y+1}" width="80" height="40" rx="7" fill="none" stroke="#4A4A52" stroke-dasharray="3 3"/>`;continue}s+=empty?`<rect x="${x+.75}" y="${y+.75}" width="80.5" height="40.5" rx="7" fill="none" stroke="#2E2E34" stroke-width="1.5"/>`:`<rect x="${x}" y="${y}" width="82" height="42" rx="8" fill="#26262B"/><text x="${x+8}" y="${y+27}" fill="#A1A1AA" font-size="17" font-family="Barlow Condensed" font-weight="700">${'ABCDEFGH'[c]} ${String(r*8+c+2).padStart(2,'0')}</text>`}}
+  s+=`<rect x="24" y="346" width="96" height="40" rx="8" fill="#26262B"/>`;for(let i=0;i<16;i++)s+=`<rect x="${128+i*45}" y="346" width="41" height="40" rx="8" fill="${i<3?'#26262B':'none'}" stroke="${i<3?'none':'#2E2E34'}"/>`;
+  return s}
+function pad(x,y,tilt=0){return `<g transform="translate(${x},${y}) rotate(${tilt}) scale(1.08)"><rect x="-44" y="-24" width="88" height="48" rx="9" fill="#000" opacity=".45" transform="translate(0,8)"/><rect x="-44" y="-24" width="88" height="48" rx="9" fill="${TRK}"/><text x="-34" y="8" fill="#101012" font-size="19" font-family="Barlow Condensed" font-weight="700">A 08</text><circle cx="${-2}" cy="34" r="14" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2"/></g>`}
+const PX=760,PY=196; // the dragged pad near the right edge
+const T=[];
+// 1 Edge bands
+T.push(['1','Edge bands','thin bands lie along the three edges at rest (4 pt, the action’s colour at 40 %), with a small icon and word; the hot one swells to 56 pt and fills. Quietest at rest; the label grows with it.',()=>{let s='';
+  s+=`<rect x="0" y="${H-6}" width="${W}" height="6" fill="#71717A" opacity=".5"/>${ic('trash',W/2-40,H-30,'#A1A1AA')}<text x="${W/2-18}" y="${H-18}" fill="#A1A1AA" font-size="13" font-family="Barlow" font-weight="600">Clear</text>`;
+  s+=`<rect x="0" y="56" width="6" height="${H-56}" fill="${TRK}" opacity=".45"/>${ic('dup',14,214,TRK)}<text x="34" y="226" fill="${TRK}" font-size="13" font-family="Barlow" font-weight="600">Duplicate</text>`;
+  s+=`<rect x="${W-58}" y="56" width="58" height="${H-56}" fill="${mix(TRK,.5)}"/><rect x="${W-58}" y="56" width="3" height="${H-56}" fill="${TRK}"/>${ic('edit',W-38,180,'#101012',1.3)}<text x="${W-29}" y="222" text-anchor="middle" fill="#101012" font-size="14" font-family="Barlow" font-weight="600">Edit</text>`;
+  return s+pad(PX-30,PY,6)}]);
+// 2 Pockets
+T.push(['2','Pockets','a half-disc pocket at the middle of each edge, icon inside, like a slot to drop into; the hot pocket grows and takes the track colour, the pad shrinks toward it. Targets are small and exact.',()=>{let s='';
+  s+=`<path d="M${W/2-44} ${H} a44 44 0 0 1 88 0Z" fill="#26262B" stroke="#4A4A52"/>${ic('trash',W/2-9,H-30,'#A1A1AA',1.2)}`;
+  s+=`<path d="M0 ${229-44} a44 44 0 0 1 0 88Z" fill="${mix(TRK,.22,[26,26,30])}" stroke="${TRK}" stroke-opacity=".5"/>${ic('dup',8,220,TRK,1.2)}`;
+  s+=`<path d="M${W} ${229-64} a64 64 0 0 0 0 128Z" fill="${TRK}"/>${ic('edit',W-40,216,'#101012',1.6)}<text x="${W-58}" y="266" fill="#101012" font-size="13" font-family="Barlow" font-weight="600">Edit</text>`;
+  return s+pad(PX-20,PY+20,10)}]);
+// 3 Side panels
+T.push(['3','Side panels','solid 64 pt panels slide in from the three edges as the pad lifts, each a big labelled target on the panel surface; the hot one fills with the colour. Easiest to hit; covers the most.',()=>{let s='';
+  s+=`<rect x="0" y="${H-64}" width="${W}" height="64" fill="#1A1A1E"/>${ic('trash',W/2-46,H-40,'#A1A1AA',1.2)}<text x="${W/2-20}" y="${H-26}" fill="#EDEDF0" font-size="15" font-family="Barlow" font-weight="600">Clear</text>`;
+  s+=`<rect x="0" y="56" width="64" height="${H-120}" fill="#1A1A1E"/>${ic('dup',22,180,TRK,1.3)}<text x="32" y="222" text-anchor="middle" fill="#EDEDF0" font-size="13" font-family="Barlow" font-weight="600">Duplicate</text>`;
+  s+=`<rect x="${W-64}" y="56" width="64" height="${H-120}" fill="${TRK}"/>${ic('edit',W-42,180,'#101012',1.3)}<text x="${W-32}" y="222" text-anchor="middle" fill="#101012" font-size="14" font-family="Barlow" font-weight="600">Edit</text>`;
+  return s+pad(PX-46,PY-10,6)}]);
+// 4 Dashed wells
+T.push(['4','Dashed wells','drop targets drawn like empty slots (dashed outline, the app’s own “a pad can go here”), inset 12 pt from each edge with icon and word; the hot one goes solid in the colour. Reads as more places to put the pad.',()=>{let s='';
+  s+=`<rect x="300" y="${H-58}" width="274" height="46" rx="10" fill="none" stroke="#71717A" stroke-width="1.5" stroke-dasharray="5 4"/>${ic('trash',408,H-43,'#A1A1AA')}<text x="430" y="${H-30}" fill="#A1A1AA" font-size="14" font-family="Barlow" font-weight="600">Clear</text>`;
+  s+=`<rect x="12" y="120" width="54" height="186" rx="10" fill="rgba(0,0,0,.45)" stroke="${TRK}" stroke-opacity=".7" stroke-width="1.5" stroke-dasharray="5 4"/>${ic('dup',31,190,TRK)}<text x="39" y="226" text-anchor="middle" fill="${TRK}" font-size="12" font-family="Barlow" font-weight="600">Dup</text>`;
+  s+=`<rect x="${W-70}" y="110" width="58" height="206" rx="10" fill="${TRK}"/>${ic('edit',W-50,186,'#101012',1.3)}<text x="${W-41}" y="230" text-anchor="middle" fill="#101012" font-size="14" font-family="Barlow" font-weight="600">Edit</text>`;
+  return s+pad(PX-50,PY+8,5)}]);
+// 5 Glow and hint
+T.push(['5','Glow and hints','no shapes at rest: each edge carries a soft inner glow and an arrow by the pad points to it; the hot edge’s glow brightens and its word appears beside the pad. Least covered; least discoverable.',()=>{let s=`<defs><linearGradient id="gr" x1="1" x2="0"><stop offset="0" stop-color="${TRK}" stop-opacity=".75"/><stop offset="1" stop-color="${TRK}" stop-opacity="0"/></linearGradient><linearGradient id="gl" x1="0" x2="1"><stop offset="0" stop-color="${TRK}" stop-opacity=".22"/><stop offset="1" stop-color="${TRK}" stop-opacity="0"/></linearGradient><linearGradient id="gb" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#A1A1AA" stop-opacity=".22"/><stop offset="1" stop-color="#A1A1AA" stop-opacity="0"/></linearGradient></defs>`;
+  s+=`<rect x="0" y="${H-40}" width="${W}" height="40" fill="url(#gb)"/><rect x="0" y="56" width="40" height="${H-56}" fill="url(#gl)"/><rect x="${W-90}" y="56" width="90" height="${H-56}" fill="url(#gr)"/>`;
+  s+=`<path d="M${PX-60} ${PY+46} l0 10 m-5 -5 l5 5 l5 -5" stroke="#A1A1AA" stroke-width="1.6" fill="none"/><path d="M${PX-118} ${PY} l-10 0 m5 -5 l-5 5 l5 5" stroke="${TRK}" stroke-width="1.6" fill="none" opacity=".6"/>`;
+  s+=`<rect x="${PX-6}" y="${PY-50}" width="62" height="26" rx="13" fill="${TRK}"/><text x="${PX+25}" y="${PY-32}" text-anchor="middle" fill="#101012" font-size="14" font-family="Barlow" font-weight="600">Edit</text>`;
+  return s+pad(PX-60,PY,4)}]);
+document.getElementById('g').innerHTML=T.map(([n,t,d,f])=>`<figure><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Style ${n}: ${t}">${base()}<rect width="${W}" height="${H}" fill="#000" opacity=".18"/>${f()}</svg><figcaption><span class="tag">80.${n}</span><b>${t}.</b> ${d}</figcaption></figure>`).join('');
+</script></body></html>

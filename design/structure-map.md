@@ -149,7 +149,7 @@ The iPad's Mix holds six strips across the top and the four effect cards under t
 
 Nothing changes on the iPad's Mix.
 
-## The Android phone with a Skiff FM-1 (Pixel, portrait; decided 2026-11-12, boards 53–58)
+## The Android phone with a Skiff FM-1 (Pixel, portrait; decided 2026-11-12, boards 53–58; **retired 2026-11-14 by decision 28, see the landscape section below**)
 
 *Boards 53–58: `design/boards/phone-portrait.html` (screenshots in `phone-portrait/`). Board 53: **Select** at the end of the scenes row is the visible way to "Edit steps" (Scott, 2026-11-13); with it on, a pad tap picks the pad for the editor and launches nothing. Board 58 (time down) picked for the Timeline, 2026-11-13.*
 
@@ -173,6 +173,39 @@ Nothing changes on the iPad's Mix.
 **Labs, to try on the device:** following pauses after a phone touch; pin the bottom half's page; the phone piano under the grid; the Timeline with time across (board 57).
 
 **Android rules** (research, 2026-11-12): nothing draggable at the side edges (the back gesture); the bottom ~24 dp clear for the home gesture; edge-to-edge with insets; Back closes the newest layer (a menu, a sheet, the bottom half's page) and never stops the song; pads answer on the phone without waiting for the FM-1's echo.
+
+## The Android phone, landscape (decision 28, 2026-11-14, boards 73–74; replaces the portrait section above)
+
+*Scott, 2026-11-14: the phone sits on the table and does the horizontal jobs the FM-1 does clumsily; sound shaping stays on the FM-1. Locked to landscape, status bar hidden, the camera cutout and gesture bar kept clear by the window's insets. The portrait divider, split and top-only states are retired.*
+
+| Where | What |
+|---|---|
+| **Header, one line** | project ⌄ (Projects…, Mix…, Settings, Labs) · Loop ⌄ (launch quantize, what waits) · tabs **Pads · Edit · Timeline** as underlined words · readout (tempo, Loop · Song · Once) · Record · Play |
+| **Pads** (board 74) | six rows: a 132 dp track head (number, sound, engine ⌄; tap selects, hold or the engine line opens that track's Sounds), MUTE, the pads panning sideways; Store scene and all sixteen scenes across the foot |
+| **Edit** (board 73) | the ruler; sixteen steps across in fours (a kit: lanes by steps); under them the dials area (HOME's four sound knobs, the picked step's controls under "Step N ✕", or the FM-1's sound page as header and four dials) and beside it the keyboard strip that writes the picked step (Chord adds and takes notes), or the one-lane automation view (Lane), or a sound page's tiles |
+| **Timeline** | time across, as the FM-1 and the iPad (P4, `ui/timeline`) |
+| **Sheets** | Mix (the FM-1's GLO, or the project menu), Sounds (a track head, a pad's menu, the FM-1's SAVE › PRESETS and USER), Projects (the menu, SAVE › PROJECT), Settings and Labs |
+| **A sound page on the FM-1** | Edit: its header and four dials take the dials area. Pads and Timeline: a short panel rises over the foot. HOME on the FM-1, or the back gesture, lowers it |
+| **The FM-1's keys** | FX SEL ENV LFO EDIT ARP: the sound page as above. GLO: the Mix sheet. SAVE: Sounds or Projects. SEQ: the Edit tab (AUTOMATION its lane view, SONG the Timeline). HOME: back to where the phone was |
+
+### The combined phone design on Android (decisions 31–35, 2026-11-14; boards 76 and 77)
+
+What moves or changes place against the landscape table above. Edit and the docked sound panel (decisions 32, 35) are P4's and are not listed here.
+
+| What | Where it is now |
+|---|---|
+| **The selected track** | Its colour at 28 % over the page, under its whole row on Pads (head, MUTE, every slot) and the Timeline (head and lane). The 2 dp outline is the launch timer's only (pads, MUTE, solo, scenes). The band travels between tabs as the outline did |
+| **Pads** | Slots A to H always drawn: an empty one is an outline with its letter. Pass counts ×N and the next cue stay. A waiting pad no longer writes "bar N": the outline timer says it |
+| **Scenes** | A short Store key with a dot, then the sixteen: empty outlined, stored filled, the current white |
+| **LEVEL and PAN** | In the track head's hold menu (slid along their rows) and in Mix. The track controls box is gone for good |
+| **Hold menus** | The radial menu with the iPad's set where the core can do it. Pad: Edit steps, Select sound, Set pattern, Play once more / less, Duplicate after, Move earlier / later, Clear. Empty slot: New pattern, Rest, Pick a pattern. Track head: Sounds, LEVEL, PAN, Mute, Solo. Timeline block: adds Edit steps and Move earlier / later |
+| **Hold menu, its shape** (decision 36) | A wheel, the same on both phones: five choices in view in a nearly straight column beside the finger (a shallow curve, the middle one 76 dp out), each on a 22 dp stalk from a thin rim. A drag rolls the rest along the curve, fading at its ends; small triangles past the rim's ends say there is more. It opens on the first choice. A tap picks; a drag never does. No "More…" page. The look (board 78 tile 11): round pills on the dark panel, each choice's icon in a track-colour disc at its left, a dashed rim in the track colour, thin grey stalks with square nodes. It opens on the side away from the playing hand (Settings › Handedness), wherever the press is, coming in closer to the finger near an edge before it flips; a backing (53 % black, soft only at its edge) sits behind the arc and is the only darkening: the page is not dimmed |
+| **Patterns sheet** (decision 38, board 79) | A global sheet (white and grey; the track colour only on a pattern's uses), opened from the song-name menu ("Patterns…"), from the full-pool notice and from an empty slot's menu. Header: how many are kept, free, unused. Filters All / Unused / This project. Kept patterns as cards: number, length, a thumbnail in its first user's track colour, its uses ("T2 A · T4 C"), a dot when saved projects use it too; unused cards dashed. **Select** picks only unused cards (used ones dim, a tap says where they're used); **Clear N unused…** confirms once in place with the numbers, red only on the confirm key. While playing: length bars instead of thumbnails and a note that the pictures and clearing wait for a stop. An empty slot's menu when the pool is full: New pattern off with the reason, Recycle an unused pattern (stopped only), Put a kept pattern here… (the sheet in pick mode, with the note that edits are shared), Patterns… |
+| **Mix tab** (batch item 11; decision 44) | A fourth tab, Pads · Edit · Timeline · **Mix**: the six tracks' levels, mutes and meters. It is GLO 1/5 MIXER: the FM-1 on GLO's MIXER page takes the phone to this tab. **The Mix pop-up is gone** (decision 44, Scott 2026-11-15): GLO 2/5 DELAY, 3/5 REVERB, 4/5 CHORUS and 5/5 GLOBAL are pages of the docked sound panel like every other sound page: header "GLO 2/5 DELAY", four white round dials (turning them changes every track), DELAY MODE as tiles under them, the FM-1's own grey picture under that, the panel neutral grey rather than a track's colour, the same close, stay and step behaviour. The song-name menu's "Shared effects…" sends the FM-1 to GLO 2/5 |
+| **GLO key** (sound keys rail, after ARP) | Closed, it opens 2/5 DELAY; open, it steps 3/5 → 4/5 → 5/5 → 2/5 (MIXER is the Mix tab, reached from the FM-1's own GLO key). Lit while a GLO page is docked |
+| **Settings** | The grouped sheet: FM-1 · Touch (Slide to turn, Magnifier, Handedness, Haptics) · Sound pages (Show graphics, Sound keys) · Labs |
+| **Launch menu** | Loop Bar Beat Now, then a footer: Cancel waiting, or "Nothing waiting" |
+| **No FM-1** | The header stays, greyed; under it a card: what to do, the firmware (Skiff 2.5.1), that Lupe is looking, and "Use the demo FM-1". The demo is left from the song-name menu |
 
 ## The FM-1 disconnected (2026-11-09, board 42: pick before building)
 

@@ -1,3 +1,5 @@
+#if canImport(CryptoKit)
+// Apple-only: not built for Android (android/BRIDGE.md §3).
 import Foundation
 import Testing
 @testable import SloopKit
@@ -139,3 +141,5 @@ import Testing
         #expect(LupeFirmware.skiff.downloadURL?.absoluteString == "https://github.com/sgerstl/fm1-ipad/releases/download/lupe-firmware-1/Skiff-Lupe-2.2.fwsc")
     }
 }
+
+#endif

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Board 81 · Dashed wells, iterations</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--page:#0D0D0F;--control:#26262B;--held:#3E3E46;--t1:#EDEDF0;--t2:#A1A1AA;--t3:#71717A;--on:#101012;--trk:#FFBF00;--red:#FF4D4D}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;color:var(--t1);font:15px/1.4 Barlow,system-ui,sans-serif;padding:32px 24px 64px}
+h1{font-size:22px;font-weight:600;margin-bottom:6px}
+.lede{color:var(--t2);max-width:84ch;margin-bottom:28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(874px,1fr));gap:28px}
+figure{margin:0}figcaption{color:var(--t2);margin-top:10px;max-width:874px}figcaption b{color:var(--t1);font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--t2);border:1px solid var(--held);border-radius:4px;padding:1px 6px;margin-right:6px}
+.phone{position:relative;width:874px;height:402px;background:var(--page);border-radius:54px;overflow:hidden;outline:6px solid #222226;font-family:Barlow}
+.hd{position:absolute;left:28px;top:20px;display:flex;gap:22px;font-weight:600;font-size:17px}.hd span:nth-child(n+3){color:var(--t3)}
+.hair{position:absolute;left:0;right:0;top:56px;height:1px;background:#2A2A30}
+.row{position:absolute;left:24px;display:flex;gap:4px}
+.head{width:118px;height:42px;border-radius:8px;background:var(--control);overflow:hidden;display:flex}
+.head i{width:24px}
+.pad{width:82px;height:42px;border-radius:8px;background:var(--control);font:700 17px 'Barlow Condensed';color:var(--t2);padding:11px 8px}
+.pad.e{background:none;border:1.5px solid #2E2E34}
+.pad.src{background:none;border:1.5px dashed #4A4A52}
+.scenes{position:absolute;left:24px;top:346px;display:flex;gap:4px}.scenes b{width:41px;height:40px;border-radius:8px;background:var(--control)}.scenes b.e{background:none;border:1.5px solid #2E2E34}
+.lift{position:absolute;width:90px;height:50px;border-radius:9px;background:var(--trk);color:var(--on);font:700 19px 'Barlow Condensed';padding:13px 10px;box-shadow:0 10px 22px rgba(0,0,0,.55);transform:rotate(5deg);z-index:5}
+.well{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:13px;font-weight:600;color:var(--t1);border:1.5px dashed;z-index:4}
+.well svg{width:20px;height:20px}
+.well.h{flex-direction:row;gap:8px;font-size:14px}
+.notes{color:var(--t2);max-width:84ch;margin-top:28px}.notes li{margin:6px 0}.notes b{color:var(--t1);font-weight:600}
+</style></head><body>
+<h1>Board 81 · Dashed wells: placement and resting fills</h1>
+<p class="lede">Iterations on board 80’s style 4. Same scene in each: track 3’s pad <b>A 08</b> lifted and dragged over the right well (Edit), so the right well shows the hot state and the other two the resting one. Bottom Clear, right Edit, left Duplicate (actions open below). Two placements (inset 12 pt, or attached flush to the edge, square on the edge side, rounded inside) × resting fills (dark glass, the track’s muted colour as glass, grey frost). Glass = the fill at partial opacity with a 12 pt blur of the pads behind it.</p>
+<div class="grid" id="g"></div>
+<ul class="notes">
+<li><b>Hot state, all tiles:</b> the well goes solid track colour, its dashes turn solid, the label goes dark, and the lifted pad tilts toward it. Clear’s hot state is red (only while hot).</li>
+<li><b>Attached wells</b> read as part of the screen’s frame, so they look less like more slots; they also run into the rounded corners, so their ends stop short of them.</li>
+<li><b>Muted track colour at rest</b> ties the wells to the pad being dragged (it changes with the track), but puts colour on three edges at once; dark glass is calmer and lets the hot one stand out more.</li>
+</ul>
+<script>
+const TRK='#FFBF00',C=['#FF5A36','#22C3B4','#FFBF00','#9580FF','#FF6FAE','#A3E635'];
+const ICON={edit:'<path d="M4 16l10-10 3 3-10 10H4v-3z"/>',dup:'<path d="M5 5h9v9H5zM8 17h9V8"/>',trash:'<path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11"/>'};
+const ic=(n,col)=>`<svg viewBox="0 0 20 20" fill="none" stroke="${col}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICON[n]}</svg>`;
+function base(){let h=`<div class="hd"><span>SONG ONE ⌄</span><span>Pads</span><span>Edit</span><span>Timeline</span></div><div class="hair"></div>`;
+  for(let r=0;r<6;r++){h+=`<div class="row" style="top:${64+r*46}px"><div class="head"><i style="background:${C[r]}"></i></div>`;for(let c=0;c<8;c++){const e=c>3||(r==3&&c>2);h+=r==2&&c==0?'<div class="pad src"></div>':e?'<div class="pad e"></div>':`<div class="pad">${'ABCDEFGH'[c]} ${String(r*8+c+2).padStart(2,'0')}</div>`}h+='</div>'}
+  h+='<div class="scenes"><b style="width:96px"></b>'+Array.from({length:16},(_,i)=>`<b class="${i<3?'':'e'}"></b>`).join('')+'</div>';return h}
+const fills={dark:{bg:'rgba(8,8,10,.62)',bd:'rgba(161,161,170,.55)',tx:'#EDEDF0',ic:'#A1A1AA'},
+  track:{bg:'rgba(120,92,8,.55)',bd:'rgba(255,191,0,.7)',tx:'#FFE08A',ic:TRK},
+  frost:{bg:'rgba(62,62,70,.55)',bd:'rgba(196,196,204,.6)',tx:'#EDEDF0',ic:'#C4C4CC'}};
+function wells(place,fill){const f=fills[fill];const blur='backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);';
+  const rest=(n,label,pos,h)=>`<div class="well ${h?'h':''}" style="${pos};background:${f.bg};border-color:${f.bd};color:${f.tx};${blur}">${ic(n,f.ic)}<span>${label}</span></div>`;
+  const hot=(pos)=>`<div class="well" style="${pos};background:${TRK};border:1.5px solid ${TRK};color:#101012">${ic('edit','#101012')}<span>Edit</span></div>`;
+  if(place==='inset')return rest('trash','Clear','left:300px;bottom:12px;width:274px;height:46px;border-radius:10px',1)+rest('dup','Duplicate','left:12px;top:112px;width:58px;height:206px;border-radius:10px')+hot('right:12px;top:104px;width:64px;height:222px;border-radius:10px');
+  return rest('trash','Clear','left:220px;bottom:0;width:434px;height:52px;border-radius:12px 12px 0 0;border-bottom:none',1)+rest('dup','Duplicate','left:0;top:96px;width:64px;height:238px;border-radius:0 12px 12px 0;border-left:none')+hot('right:0;top:88px;width:72px;height:254px;border-radius:12px 0 0 12px;border-right:none');}
+const T=[['81.1','Inset, dark glass','the board 80 shape with the wells darkened: black at 62 % over a blur, grey dashes. Calmest; the hot yellow stands out most.','inset','dark'],
+ ['81.2','Inset, muted track colour','the resting wells in the dragged pad’s muted colour as glass, yellow dashes. Ties the wells to the pad; colour on three sides.','inset','track'],
+ ['81.3','Inset, grey frost','a lighter grey glass, so the wells read as surfaces over the pads rather than holes in them.','inset','frost'],
+ ['81.4','Attached, dark glass','the wells sit flush on the screen’s edges, square on the edge side and rounded inside, dashes only on the three inner sides.','attached','dark'],
+ ['81.5','Attached, muted track colour','flush wells in the muted track colour; reads like the edges themselves light up for the track.','attached','track'],
+ ['81.6','Attached, grey frost','flush grey glass; the most like system chrome, the least like slots.','attached','frost']];
+document.getElementById('g').innerHTML=T.map(([id,t,d,p,f])=>`<figure><div class="phone" role="img" aria-label="${t}">${base()}${wells(p,f)}<div class="lift" style="left:${p==='inset'?690:680}px;top:180px">A 08</div></div><figcaption><span class="tag">${id}</span><b>${t}.</b> ${d}</figcaption></figure>`).join('');
+</script></body></html>

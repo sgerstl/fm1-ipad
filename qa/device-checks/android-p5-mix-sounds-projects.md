@@ -1,0 +1,149 @@
+# Device check: android-p5-mix-sounds-projects (claude/android-p2-shell-02c86f), 2026-11-14
+
+Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on the Pixel 10 Pro; the branch merges to `main` only after it passes.
+
+**What this is:** P5's screens: the Mix tab (boards 64, 65), the Sounds browser in the bottom half (board 66), the Projects sheet (board 67), and Settings with Labs (board 67, plus the Slide to turn and Magnifier switches that replace the adb extras). They read P1's `mix`, `sounds` and `projects` areas (bbf9693) and send its intents. With the real FM-1 writes depend on P1's read-only guard: if the app is still in read-only mode, a change shows on the phone and the FM-1 refuses it; say so in the result.
+**Setup:** the Pixel on USB or Wi-Fi adb; `./gradlew :app:installDebug` from `android/` (the main session installs). **Without an FM-1** add `--es scenario ready` (the fake core, recordings from P1's core): everything below works there except the FM-1's own knobs and screen.
+**Back up first?** **Yes on the real FM-1 for checks 9, 10, 12 and 13** (Projects Load/Save, user-slot Save): they write the FM-1's flash. Take a project backup from the iPad first (Lupe › Projects), and don't run them with the only copy of a song on the FM-1.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 1 | Tap Mix. Compare with board 64 (`design/boards/phone-portrait-2/board-64.png`). | A page row (Mixer · Delay · Reverb · Chorus · Global, Mixer lit) and six track rows: number in the track's colour (the selected track ringed), the sound's name, "−4 dB · C", a fader in the track's colour with a white thumb, a labelled Mute key. | – | ☑ pass: matches board 64 (fake core): Mixer lit, six rows, number in track colour with 1 ringed, name, "−4 dB · C", coloured fader, white thumb, Mute key, over adb by Claude, 2026-11-13. Note: the fake's starting labels (−4 dB) don't match its own dB scale (thumb sits at ~+2 dB); fake-only |
+| 2 | Slide a track's fader. By default that is up and down; the Settings sheet (check 14) changes it. | The thumb follows; the dB changes; the Magnifier floats the value above your finger ("LEVEL · Acid", big digits); on the real FM-1 the track's level moves. A sideways drag does nothing (Settings › Slide to turn › Sideways turns that round). | RAM only | ☑ pass (fake): vertical slide moves thumb and dB (T2 up to 10 dB, T1 down to −12 dB); Magnifier floats "LEVEL · Acid / 0 dB" above the finger; sideways drag on T3 changed nothing, over adb by Claude, 2026-11-13. → Scott: on the real FM-1 confirm the track level moves |
+| 3 | Double-tap a fader. | It goes back to what it was when the tab opened. | – | ☑ pass (fake): double-tap on T1's fader returned the thumb to its position when the tab opened, over adb by Claude, 2026-11-13 |
+| 4 | Hold a track row (not the number). | A menu opens beside your finger with PAN and REVERB SEND (large values, each turned by sliding) and "Sounds…". There is no PAN on the row itself (decision 14). | – | ☑ pass (fake): hold on T2's name opened a menu at the finger: "2 PAD", Sounds…, PAN (C → L16 by sliding down), REVERB SEND (55% → 62% by sliding up); no PAN on the row, over adb by Claude, 2026-11-13 |
+| 5 | Tap Mute on a row, then again. | The key fills while muted, the row's fader greys; the Pads' M for that row follows. | – | ☑ pass (fake): Mute fills white, T2's fader greys; Pads' M for row 2 filled; second tap restores both, over adb by Claude, 2026-11-13 |
+| 6 | Drag the divider to top only. | The rows grow tall; each gains its "LEVEL · send REV n" line a thin send bar and a level meter that moves while the song plays (the core's `meters` area, about 20 a second; the fake moves it too). | – | ☑ pass (fake): at top only rows grow with "LEVEL · send REV n%", a send bar and a level meter; meter lengths changed between two shots 0.5 s apart (e.g. T1 350→457 px), over adb by Claude, 2026-11-13 |
+| 7 | Tap Delay, then Reverb, Chorus, Global. | A short picture and four white controls (not a track's colour), the corner words "Shared by every track". Sliding a control changes it (and on the FM-1 the effect). On the real FM-1 the FM-1's GLO button steps the page and the top half follows. | RAM only | ☑ pass (fake): Delay/Reverb/Chorus/Global each show a picture, white controls, "Shared by every track"; FEEDBACK slid 62→78 (Chorus has 3 knobs + an empty slot), over adb by Claude, 2026-11-13. → Scott: on the real FM-1, press GLO and check the top half steps along |
+| 7b | On Delay (Skiff 2.5.1) look under the four controls. | A DELAY MODE choice (a three-way switch); tapping a mode changes it (and the FM-1's). Pages without settings show none. | RAM only | ✗ fail (fake only): DELAY MODE shows STEREO · PING-PONG · MONO, but tapping PING-PONG twice changed nothing. Cause: FakeLupeCore.kt line ~209 doesn't route SetMixSetting to FakeP5.mix (FakeP5 handles it). Real-core path not tested yet (writes sheet check 6), over adb by Claude, 2026-11-13 |
+| 8 | On Pads, hold a track's **number**. Or hold a row in Mix › Sounds…. | The Sounds browser replaces the bottom half (the editor): "Choose a sound for track N", Save and Done, the engines down the left (ANALOG … DRUM, then USER), presets in two columns, a tick on what the track plays. At top only the divider glides to split. Back or Done brings the editor back. | – | ☑ pass (fake): hold on track 2's number at top only: divider went to split, "Choose a sound for track 2", Save, Done, engines down the left, presets in two columns; Done brought the editor back, over adb by Claude, 2026-11-13. Note: the tick sat on ACID (track 1's sound): the fake doesn't track per-track sounds, so check the tick on the real core. Look: the engine list's last visible row (DRUM) is cut by the hint line |
+| 9 | In the browser tap an engine, then a preset. | The presets change; the track takes the sound at once and the tick moves (on the real FM-1 you hear it). | **Yes** (changes the track's sound in RAM; don't Save) | ☑ pass (fake): PHASE showed PHASE 1–12; tapping PHASE 5 moved the tick there at once, over adb by Claude, 2026-11-13. → Scott: hear it on the real FM-1 |
+| 10 | Tap Save, then an **empty** user slot, then Save again and a **used** slot. | Empty: it stores at once. Used: a red-outlined row says "Replace user slot N (NAME) with this sound?" with Cancel under it; a tap in the first 0.4 s does nothing. | **Yes** (writes a user slot in flash) | ☑ pass with one ✗: empty slot 1 stored at once; Save + used slot 1 showed red-outlined "Replace user slot 1 (ANALOG ·) with this sound?" + Cancel; Cancel worked; a tap 0.15 s after it appeared was ignored; a later tap replaced, over adb by Claude, 2026-11-13. ✗ The saved name is "ANALOG ·": SoundsBrowser.kt line 143/166 names the slot trackName.take(8), and the core's trackName is "Engine · Sound" ("Analog · Acid"). Also the header said "Save Analog · Acid" after PHASE 5 was picked (fake doesn't update trackName) |
+| 10b | In the browser open USER and **hold a used slot**. (TalkBack: its actions menu has "Erase user slot N".) | A menu opens beside your finger: "Erase user slot N…". Tapping it turns into a red-outlined row naming the slot ("Erase user slot 3 (NAME)? It can't be undone.") with Cancel under it; a tap in the first 0.4 s does nothing, then it erases and the slot turns empty. An empty slot has no menu. | **Yes** (erases a user slot in flash) | ☑ pass (fake): USER (scrolled to it) → hold used slot 1: menu "Erase user slot 1…"; tap → red-outlined "Erase user slot 1 (ANALOG ·)? It can't be undone." + Cancel; confirm emptied the slot; hold on empty slot 2 gave no menu, over adb by Claude, 2026-11-13 |
+| 11 | On Pads hold a drum pad, Select sound. | The browser reads "Sound for pad B on track 4". A pick sets that pad's own sound (its corner is cut, as every pad with a sound); "Use the track's own sound" appears to take it off. The track's sound is untouched. (Decision 15.) | **Yes** (writes the pad's entry) | ☑ pass with notes (fake): hold T4 pad B → Edit steps / Select sound / Set pattern… / Clear; Select sound → "Sound for pad B on track 4"; PHASE 3 ticked; "Use the track's own sound" appeared and cleared it, over adb by Claude, 2026-11-13. Not shown on the fake: B's cut corner (fake doesn't feed pads). After Done the bottom half showed an ENV page with an empty card ("● 1") instead of the editor, because Select sound sends PadSelectSound. Check both on the real core |
+| 12 | FM-1 key menu › Projects…. Compare with board 67. | A sheet rises from the bottom (scrim fades in): "The FM-1 keeps four projects", four rows, the playing one with a dot and Save, the others Load, an empty one Save here, ⋯ for Rename. ✕, Back, the scrim or a drag down closes it. | – | ☑ pass (fake): menu › Projects… slides up with scrim; "The FM-1 keeps four projects. Playing now: 1 SONG ONE.", 4 rows, playing one with dot + Save, empty ones Save here, ⋯ on all; ✕, Back, scrim tap and drag-down each closed it, over adb by Claude, 2026-11-13. Fixture has 1 used slot, so no Load row until one is saved |
+| 13 | Load another project while the playing one has changes; try Cancel, then Save first, then Load again; Save on the playing one; Save here on an empty slot; Rename. | Load over changes asks in place, naming what goes ("… changes since its last save go"), Save first and Cancel under it, taps ignored for 0.4 s. Save on the playing project asks too ("It replaces what the slot held"). Save here stores at once. Rename is a text field with Done. | **Yes** (writes flash) | ✗ fail (layout), rest pass on fake: Save on the playing project asks "Save over 1 SONG ONE? It replaces what the slot held."; Cancel and confirm work; Save here stored at once; Load (no changes) loaded at once; Rename → text field, keyboard's ✓ committed "FAKE TEST", over adb by Claude, 2026-11-13. ✗ The Cancel key under every Projects confirm is truncated to "Can...". ✗ Rename: the keyboard covers the text field (the sheet doesn't rise above it); the field shows only after closing the keyboard. Rename has Cancel beside the field, Done is only the keyboard's ✓. Load over changes not reachable on the fake (fixture changed=false): do on the real core |
+| 13b | Projects › a used slot's ⋯ › "Save the playing project here". Then Cancel, then again and confirm. Then Save here on an empty slot. | The ⋯ menu offers it under Rename. It asks in place naming what goes ("Replace 2 Koto sketch with Night Drive? Koto sketch is gone."), Cancel under it, taps ignored for 0.4 s. An empty slot's Save here is one tap. | **Yes** (writes flash) | ☑ pass (fake): ⋯ on slot 2 offers "Save the playing project here / Replaces SONG ONE" under Rename; asks "Replace 2 SONG ONE with SONG ONE? SONG ONE is gone." (Cancel truncated, see 13); a tap 0.12 s after it appeared was ignored; Cancel worked; confirm made slot 2 the playing one; Save here on an empty slot was one tap, over adb by Claude, 2026-11-13 |
+| 14 | FM-1 key menu › Settings. | Slide to turn (Sideways · Up and down · Both), Magnifier and Haptics switches, then Labs: four switches each marked TRIAL and each off. Switching Slide to turn changes the next slide at once and is kept after you close the app. Magnifier off: no floating copy. Haptics off: no ticks anywhere. (The adb extras `--es slide` / `--ez magnifier` still work for testing.) | – | ☑ pass (fake), haptics for Scott: Slide to turn, Magnifier, Haptics, Labs with four TRIAL switches all off; Sideways + Magnifier off saved to lupe_settings.xml, kept after force-stop; then a sideways drag moved T3 (−4→−8 dB) with no floating copy, and a vertical drag did nothing; restored to Up and down + Magnifier on, over adb by Claude, 2026-11-13. → Scott: Haptics off = no ticks anywhere (can't feel over adb). Look: off switches are dark grey on dark, low contrast; Settings says "Skiff, connected over USB" on the fake core |
+| 15 | FM-1 key menu › Labs. | Settings opens already scrolled to Labs. | – | ✗ fail (fake): menu › Labs opened Settings at the top, not scrolled: the Timeline row's second line ("Arrives with the Timeline") was cut off until I scrolled 68 px by hand. bringIntoView in SettingsSheet.kt:75 didn't move it, over adb by Claude, 2026-11-13 |
+| 16 | Labs: switch on "Pin the bottom half's page". Press ENV on the FM-1 (or Play "page-env" in the fake menu). Switch it off. | Pinned, the bottom half stays on the editor (or the page it was on) while the FM-1 moves; off, it follows again. | – | ☑ pass (fake): Pin on, Play "page-env": bottom stayed on the editor; Pin off: it jumped to the ENV page, over adb by Claude, 2026-11-13 |
+| 17 | Labs: switch on "Pause following after a touch". Touch the editor, then press ENV on the FM-1 within 3 s. | The bottom half holds its page for about 3 s after your touch, then catches up to the FM-1's page. | – | ✗ fail? (fake, needs Scott's recheck): Pause on, touched the editor, then Play "page-env" about 1 s later: the editor was already crossfading to ENV in the first shot and ENV fully 1 s later, so no 3 s hold. Also, on a page→page move (ENV → LFO) the content follows anyway, because the held page reads the core's live `page` area, over adb by Claude, 2026-11-13. → Scott: try with ENV on the FM-1. NOTE: Pause following was left ON in Labs (the phone was taken); switch it off |
+| 18 | Labs: the piano and "time across" rows. | Both switch and are kept, and each says what it waits on ("Not built yet", "Arrives with the Timeline"). Nothing else changes. | – | ☐ not run (phone away). Seen in Settings: both switches marked TRIAL, "Not built yet" and "Arrives with the Timeline" present; switching not tested |
+| 19 | TalkBack on: the Mix fader, a row's menu, the browser's presets, a Projects row, a Settings switch. | Fader: "Level, Acid, −4 dB", adjustable (swipe up/down), Increase / Decrease / Put back. Presets read as buttons with "Playing on this track". A Settings switch reads its name and On/Off, the Labs ones "trial". A sheet reads as its own pane and the page behind it is skipped. | – | ⏭ deferred to the release pass (Scott) |
+| 20 | Remove animations on; repeat 8, 12 and 14. | The sheet and the browser fade instead of travelling; switches blend instead of sliding. | – | ⏭ deferred to the release pass (Scott) |
+
+**Calls I made without Scott:**
+- **A track's name on a Mix row** is the part after "·" ("Acid" from "Analog · Acid"), because the core names tracks "Engine · Sound" and the row has room for one. TalkBack still reads the whole name where it matters.
+- **Pan is in the hold menu only** (decision 14), as boards 64's note recommends; the row shows level and Mute.
+- **The meter** is read while drawing, so it redraws only its own line; at split the rows are too short for it.
+- **The Magnifier doesn't show inside menus** (the menu is a window above it); the value is large there instead.
+- **Slots show "kept on the FM-1"** for a used slot: the core sends no saved-at time, so the board's "saved today 22:40" is not drawn.
+- **Labs "Pause following" and "Pin"** are real (in `Body.kt`); "Piano" and "Timeline: time across" are switches that are kept and do nothing yet (the Timeline is phase 6, the piano isn't built).
+- **Select sound on a drum pad** decides "drum track" by its name (Drum, Kit, Perc) until the core says so; any other track's Select sound sets the track's sound.
+- **Save as over a used slot** is in the slot's ⋯ menu (not a key on the row): it saves the *playing* project there under its own name.
+- **Erase a user slot** is a hold on the slot in the browser's USER list (and a TalkBack action), then the in-place confirm.
+- **Haptics** is one gate over every haptic in the app (Settings › Haptics).
+
+**Not covered:** the iPad's Solo (the core has it; no key on the phone row), Sounds' "Samples (USR1–3)" (not in the core's areas), and anything about the FM-1 over Bluetooth.
+
+**After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device" (TalkBack: release pass).
+
+## Fixes since the run on build 641fba7 (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| 7b | DELAY MODE did nothing on the fake | The fake core forwards `SetMixSetting`. | Tap PING-PONG: it lights and the value changes. |
+| 13 | Cancel cut to "Can…"; Rename's keyboard covered the field, only the keyboard's ✓ finished it | Keys that sit under a confirm fill their row (they can't cut their label); the sheet lifts with the keyboard; Rename has a visible Done and Cancel. | Every confirm's Cancel reads in full; Rename shows its field above the keyboard with Done beside Cancel. |
+| 15 | Labs row opened Settings at the top; the last row's second line was cut | The sheet scrolls to the Labs heading when opened from the Labs row; room at the foot. | Labs row: Settings opens at Labs; scroll to the end: the last sentence is whole. |
+| 17 | Pause following: no 3 s hold, and a held page still changed content | The page is frozen as it was while held (pin or pause): if the FM-1 moves on, the old page stays, read-only, with "The FM-1 is on LFO · held here"; on the same page it stays live. | Touch the editor, press ENV then LFO on the FM-1 within 3 s: the page doesn't change until 3 s after your last touch, then it catches up. |
+| 10 | A saved user slot was named "ANALOG ·" | Named for the sound ("ACID", 8 characters). | Save a sound: the slot carries its name, not the engine's. |
+| 11 | After a pad's Select sound › Done an empty ENV card showed | The fake no longer sends the bottom half to a SEL page for it; Done returns to what was there. | Select sound › Done returns to the editor. |
+| – | FM-1 key cut ("SONG…"); DRUM cut by the hint; Off switches too faint; Settings said "connected over USB" on the fake | The key is wider (names to 12 characters show); the engine list has room at its foot; an Off switch has a 2 dp outline and a lighter thumb (about 6:1, the 3:1 rule); the fake says "A fake core: no FM-1 is connected". | Eyeball each. |
+
+## Re-run on build 40c8629, real FM-1 (Skiff 2.5.1), over adb by Claude, 2026-11-13 evening
+
+| # | Result |
+|---|---|
+| 7b | ✗ fail (real core): DELAY MODE reads "DLY MODE · STEREO" as plain text, no switch; taps and slides do nothing. Cause: the real core publishes the setting without `names` (and as "DLY MODE"), so `MixPage.kt:249` falls back to text. Raw is 1 for STEREO, so the fake's order (STEREO · PING-PONG · MONO) isn't the FM-1's. At split the setting sits below the fold. |
+| 13 | ✓ pass (real core): Load over changes asks in place ("Load 3 TESTBED? LUPE TEST's changes since its last save go.") with Save first and Cancel in full; Rename shows the field above the keyboard, Done beside Cancel. |
+| 15 | ✓ pass: menu › Labs shows the Labs heading and the last line whole (the sheet fits the screen, so no scroll was needed). |
+| 17 | ☐ for Scott (needs ENV then LFO pressed on the FM-1). Pause following is still ON. |
+| 18 | ✓ pass: piano and time-across switch and persist (`lupe_settings.xml`); set back off. Stale copy: "Arrives with the Timeline" though the Timeline is built (time across isn't). |
+
+New faults seen:
+- **Project button blank** at start on the real core (`top.project` is ""), though Projects knows TESTBED is playing. It fills only after a save or load.
+- **Mix level faders ignore a sideways drag** while Slide to turn is Up and down; they're drawn as horizontal faders, so they should follow the finger along the fader whatever the setting.
+- **No Solo control** anywhere (the `TrackSolo` intent exists, no UI). Blocks write check 4.
+- **Mix row name drops words**: "Drum · War Drums" shows as "War".
+- **Pad › Select sound on a melodic track changes the whole track**: on track 5 (Sample) the sheet said "Choose a sound for track 5" and FLUTE replaced the track's sound. On drum track 6 it opened "Sound for pad A on track 6" and worked. LupeLog says "padSelectSound not wired: the entry's sound picker is a later phase" on every use.
+- **User slot load names the wrong sound**: USER › FLUTE on track 3 left the track reading "Sample · Piano", and the slot wasn't ticked as current. Scott to listen.
+- **SAVE and Save here never ask for a name**: the user slot took "FLUTE", the project slot copied "TESTBED".
+- **The erase menu on a user slot opens over the finger**, not beside it.
+- **The playing project's dot** shows when the core says unchanged.
+
+## Fixes for the run on 40c8629 (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| 1 | DELAY MODE plain text on the real core | The screen says DELAY MODE (the core's "DLY MODE" is renamed) and, with no names from the core, offers **MONO · STEREO · PING-PONG** (raw 0, 1, 2; raw 1 is STEREO, from the run); the bus page scrolls so it's in reach at split; the fake matches. **The third name is a guess** from the iPad's wording (skiff-src is the 2.2 tree and has no DELAY MODE): the core should publish the DESC's own names, then this fallback goes. | Delay page: tap each mode; the FM-1's reply is the truth. |
+| 2 | No Solo | Solo is in a Mix row's hold menu (checked when on) and the row says SOLO. | Hold a row: Solo; the row shows SOLO. |
+| 3 | Pad › Select sound changed the whole track on a melodic track | Every track's pad Select sound opens that pad's own sound ("Sound for pad B on track 5"); the track's sound is untouched. | Track 5, hold a pad: Select sound. |
+| 4 | Mix faders ignored a sideways drag under Up and down | A fader follows the finger across whatever Slide to turn says. | Drag a fader sideways. |
+| 5 | Tempo popover had − / + steppers | A TEMPO slide value (double tap reverts to what it was when opened), no steppers. | Tap the readout, slide, double tap. |
+| 12 | The FM-1 key blank at start | It shows the project's name from the projects area until the core's `top.project` has one. | Start without a save or load. |
+| 13 | Mix row name dropped words ("War") | The name shrinks to fit (down to 10 sp). | A long track name reads whole. |
+| 14 | Save (user sound) and Save here (project) never asked a name | A name field in place, the current name filled in, Save and Cancel; over a used slot it then asks to replace. | Save a sound into an empty slot; Save here on an empty project slot. |
+| – | Readout never showed Once or Song | It reads "120 SONG" / "120 ONCE" when the mode isn't Loop. | Set Song, look at the readout. |
+| – | Labs time-across wording | "Not built yet: the Timeline runs time down". | – |
+| – | Erase menu opened over the finger | A menu with no room on either side opens above the finger. | Hold a used user slot in the right column. |
+
+**Not changed, and why:** the Magnifier doesn't show while sliding PASSES in a block menu (the menu is a window above it; the value is large there, as in the Mix row's menu); the project dot means "playing now", not "changed" (the "changed" word is in the Load confirm); **USER › FLUTE reading "Sample · Piano" and the slot not ticked** is the core's (PickUser sends the slot; check what the FM-1 does with it).
+
+## Recheck of the fixes on build fb7a661, real FM-1, over adb by Claude, 2026-11-13 evening
+
+- ✓ Project button names TESTBED from launch.
+- ✓ Mix faders follow a sideways drag (T6 −5.5 → −16.5 dB and back) with Slide to turn on Up and down.
+- ✓ Mix row names whole ("Deep Drums", "Glitch Kit").
+- ✓ Solo in the row's hold menu: the other five mute; Solo again restores the earlier mutes exactly. ✗ minor: the soloed row shows only a faint "·" after its pan text, easy to miss.
+- ✓ DELAY MODE is MONO · STEREO · PING-PONG; PING-PONG and back reach the FM-1 (raw 2, then 1). ✗ minor: at split the switch is cut off at the divider (needs top only).
+- ✗ **Tempo slide doesn't respond**: the TEMPO · BPM value in the readout popover stays at 82 for up, down, sideways and fast slides; nothing is sent.
+- ✓ Pad › Select sound on a melodic track (T3 Wheel, pad B): "Sound for pad B on track 3", the pad took its own sound with the cut corner, the track kept Gospel; "Use the track's own sound" cleared it.
+- ☐ Save names: not rechecked (Scott).
+
+## Fixes for the recheck on fb7a661 (to re-check; 2026-11-14)
+
+| # | Fault | Fixed | Re-check |
+|---|---|---|---|
+| – | Tempo slide doesn't respond | **The screen slides and sends; the core doesn't handle the intent.** On the fake (emulator) a 120 px swipe took 120 → 139 BPM and the readout followed. On the real core, `PhoneCore.handle(_ intent: PhoneIntent)` has cases for retry, play, stop, padSelect, stepSelect, setPlaybackMode and cancelWaiting only: `setTempo` (and `rec`, `setLaunch`) fall to `default: log("intent not handled yet")`, so nothing reaches the FM-1 and `top.tempo` never changes. P1 to wire them; nothing more to do in the UI. (The old − / + keys sent the same intent, so they could not have worked on the FM-1 either.) | After P1 wires setTempo: slide the readout's TEMPO; the FM-1's tempo moves and the readout follows. Rec and Launch at have the same gap. |
+| – | A soloed row showed only a faint "·" | A lit **SOLO** pill beside the row's name (a word on a light ground, not colour alone); TalkBack reads "solo". | Solo a row. |
+| – | At split the Delay card's DELAY MODE switch was cut off | The bus graph takes only what the four controls and the settings leave (it shrinks, or goes, at split), so MONO · STEREO · PING-PONG sits whole above the divider. Checked on the emulator at split. | Delay page at split. |
+
+## Recheck on the merge ff2d34c (P2 9f36c62 + P1 8b79d17), real FM-1, over adb by Claude, 2026-11-13 evening
+
+Core 68 tests in 8 suites pass, Kotlin tests pass.
+
+- ✓ Tempo reaches the FM-1 (P1's setTempo): a sideways slide in the readout popover set 176, then 86, then 81 (`top.tempo` read back).
+- ✗ **Up and down (the phone's default) does nothing on the tempo slide**: slow and fast vertical slides send nothing, so the popover seems to take the vertical drag (its menu scrolls). Only sideways reaches it.
+- ✗ **Tempo is far too touchy**: `stepDp = 1.5f` (TopBar.kt:127) means a 450 px sideways swipe moved 82 → 176 BPM. Something nearer one BPM per 8–10 dp, as the knobs feel, with the Magnifier.
+- ✗ Double tap didn't revert the tempo (176 stayed 176) when tapped by adb; recheck by hand.
+- ✓ DELAY MODE is whole above the divider at split.
+- ? Solo: on, then off, worked; once, after several toggles, track 4 came back unmuted when it had been muted before the solo. It may have been my taps landing while the menu was still open; Scott to watch for it. The hold menu stays open after tapping Solo, so the row's new SOLO pill is hidden until the menu closes.
+
+## Fixes for the tempo follow-up (to re-check; 2026-11-13)
+
+Built, unit tests pass, not run on a screen (no emulator of mine was up; the Pixel was left alone).
+
+| # | Do | See |
+|---|----|-----|
+| T1 | Tap the tempo readout, slide up or down on TEMPO · BPM | The value moves whichever way you slide (the row now takes both axes, whatever Slide-to-turn says) |
+| T2 | Slide 450 px sideways, or about 4 cm | About 1 BPM per 9 dp: roughly 20–25 BPM, not 94 |
+| T3 | While sliding | A bigger TEMPO · BPM plate floats above the finger and grows out of it |
+| T4 | Double tap the row | Back to the value it had when the popover opened. Check that the FM-1's tempo follows |
+| T5 | Hold a Mix row, tap Solo | The menu closes and the SOLO pill shows on the row |
+
+## Recheck on b6a7d6a, real FM-1, over adb by Claude, 2026-11-13 evening
+
+- ✓ Tempo slides up and down (the phone's default): 81 → 86 on a short slide, about 9 dp a BPM; the FM-1 reads back each value.
+- ✓ The Magnifier floats above the finger while the tempo slides. Minor: it overlaps the status bar, and the clock and icons show through its label.
+- ✓ Double tap puts the tempo back to its value when the menu opened (86 → 81).
+- ✓ Solo closes the hold menu; the row shows a SOLO pill; Solo off restores the earlier mutes exactly. Minor: the pill shortens the name ("Glitch Kit" → "Glitch").

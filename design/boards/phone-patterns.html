@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Board 79 · Managing patterns</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--page:#0D0D0F;--well:#111114;--panel:#1A1A1E;--control:#26262B;--lifted:#34343B;--held:#3E3E46;--t1:#EDEDF0;--t2:#A1A1AA;--t3:#71717A;--on:#101012;--red:#FF4D4D;--hair:#2A2A30}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;color:var(--t1);font:15px/1.4 Barlow,system-ui,sans-serif;padding:32px 24px 64px}
+h1{font-size:22px;font-weight:600;margin-bottom:6px}
+.lede{color:var(--t2);max-width:80ch;margin-bottom:28px}
+.row{display:flex;flex-wrap:wrap;gap:28px 32px;margin-bottom:36px}
+figure{width:874px;max-width:100%;margin:0}
+figcaption{color:var(--t2);margin-top:10px}figcaption b{color:var(--t1);font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--t2);border:1px solid var(--held);border-radius:4px;padding:1px 6px;margin-right:6px}
+.phone{position:relative;width:874px;height:402px;background:var(--page);border-radius:54px;overflow:hidden;outline:6px solid #222226}
+.under{position:absolute;inset:0;padding:18px 28px;font:600 17px Barlow;color:var(--t3);opacity:.35}
+.sheet{position:absolute;left:20px;right:16px;top:14px;bottom:12px;background:var(--panel);border-radius:18px;box-shadow:0 12px 28px rgba(0,0,0,.6);padding:8px 14px 12px;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:14px;height:44px}
+.top h2{font-size:17px;font-weight:600}
+.count{color:var(--t2);font-size:13px}
+.seg{display:flex;background:var(--well);border-radius:8px;padding:2px;margin-left:8px}
+.seg span{font-size:13px;font-weight:600;color:var(--t2);padding:4px 10px;border-radius:6px}
+.seg .on{background:var(--lifted);color:var(--t1)}
+.sp{flex:1}
+.key{height:32px;padding:0 12px;border-radius:8px;background:var(--control);display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600}
+.key.red{background:var(--red);color:var(--on)}
+.key.ghost{background:none;border:1.5px solid #3A3A42}
+.x{width:32px;height:32px;border-radius:50%;background:var(--control);display:grid;place-items:center}
+.grid{flex:1;display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:8px;overflow:hidden;align-content:start}
+.card{height:88px;border-radius:8px;background:var(--control);position:relative;padding:5px 6px;display:flex;flex-direction:column}
+.card .n{font:700 17px 'Barlow Condensed';line-height:1}
+.card .len{position:absolute;right:6px;top:6px;font-size:10px;color:var(--t3);font-weight:600}
+.card svg{flex:1;margin:3px 0}
+.card .use{font-size:10px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+.card.unused{background:none;border:1.5px dashed #4A4A52}
+.card.unused .use{color:var(--t3)}
+.card.sel{outline:2px solid var(--t1);outline-offset:1px}
+.card.dim{opacity:.38}
+.card .chk{position:absolute;right:5px;bottom:5px;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--t2)}
+.card.sel .chk{background:var(--t1);border-color:var(--t1)}
+.card.sel .chk:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid var(--on);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.saved{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--t2);margin-right:3px;vertical-align:1px}
+.bars{display:flex;gap:2px;align-items:flex-end;height:100%}
+.confirm{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--well)}
+.confirm p{flex:1;font-size:14px;color:var(--t1)}.confirm p span{color:var(--t2)}
+.note{margin-top:8px;padding:8px 12px;border-radius:10px;background:var(--well);font-size:14px;color:var(--t2)}
+.pads{position:absolute;left:24px;top:64px;right:16px;bottom:12px;display:grid;grid-template-columns:118px repeat(7,1fr);gap:4px;opacity:.5}
+.pads div{border-radius:8px;background:var(--control)}
+.fan{position:absolute;display:flex;flex-direction:column;gap:8px}
+.ch{width:290px;height:48px;border-radius:24px;background:#1A1A1E;display:flex;align-items:center;gap:10px;padding:0 12px 0 9px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+.ch i{width:30px;height:30px;border-radius:50%;background:#9580FF;flex:none}
+.ch b{font-weight:400;font-size:15px;line-height:1.1}.ch small{display:block;font-size:12px;color:var(--t2)}
+.ch.off{opacity:.45}
+.notes{color:var(--t2);max-width:84ch}.notes li{margin:6px 0}.notes b{color:var(--t1);font-weight:600}
+h2.s{font-size:17px;font-weight:600;margin:8px 0 10px}
+</style></head><body>
+<h1>Board 79 · Managing patterns: a Patterns sheet, clearing, and reuse when the pool is full</h1>
+<p class="lede">Decision 38. iPhone 17 Pro landscape, 874 × 402 pt at 1:1; the Pixel is the same layout. The pool is the FM-1’s 64 pattern numbers, shared by every saved project. The sheet opens from the song-name menu (“Patterns…”), from the full-pool notice, and from an empty slot’s hold menu when the pool is full. It lists kept patterns only (empty numbers are just the free count); white because the pool is global, each pattern’s uses tagged with their tracks’ colours.</p>
+<div class="row" id="r1"></div><div class="row" id="r2"></div>
+<h2 class="s">How it works (from P1’s read of the protocol)</h2>
+<ul class="notes">
+<li><b>Always live, even playing:</b> each number’s length, whether it’s kept, how many things use it, which pads of this project use it (“T2 A · T4 C”), and a dot when saved projects use it too.</li>
+<li><b>Only while stopped:</b> the thumbnails (the FM-1’s stored notes, read once when the sheet opens and cached, re-read only for patterns that changed) and which saved project holds a pattern. Reading them stops playback the first time, so while playing the sheet shows length bars and says “Stop to load pictures”.</li>
+<li><b>Clear</b> only patterns nothing uses (dashed cards); used ones can’t be picked, and tapping one says where it’s used. One confirm in place, red only on the confirm key; can’t be undone; stopped only. <b>Clear all unused</b> is the same with every dashed card picked.</li>
+<li><b>Reuse when full (75.4):</b> the empty slot’s menu offers <b>Recycle an unused pattern</b> (puts an unused number on the pad, then empties it: a fresh pattern without a free number; stopped only) and <b>Put a kept pattern here…</b> (opens the sheet to pick one; the pad then plays the same pattern as its other users, edits shared). “Copy a pattern” needs a free number, so it’s offered only when one is.</li>
+<li><b>Not possible on Skiff:</b> names, renumbering, choosing the number a new pattern gets, or which scene uses a pattern (scenes never hold one).</li>
+</ul>
+<script>
+const C=['#FF5A36','#22C3B4','#FFBF00','#9580FF','#FF6FAE','#A3E635'];
+// demo pool: [num, len, uses:[[track,letter]], saved, unused]
+const P=[];let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+for(let n=1;n<=64;n++){if([5,9,18,23,30,41,44,50,57,61,62,64].includes(n))continue;const t=Math.floor(rnd()*6);const unused=[3,12,15,27,33,38,46,52,55,58,60,63].includes(n);const uses=unused?[]:[[t,'ABCDEFGH'[Math.floor(rnd()*6)]]].concat(rnd()>.7?[[(t+2)%6,'ABCDEF'[Math.floor(rnd()*6)]]]:[]);P.push([n,[16,16,32,8,16,64][Math.floor(rnd()*6)],uses,!unused&&rnd()>.6||(unused&&rnd()>.75),unused])}
+function thumb(n,col,pictures){if(!pictures){return `<div class="bars">${Array.from({length:8},(_,i)=>`<i style="flex:1;height:30%;background:#3A3A42;border-radius:1px"></i>`).join('')}</div>`}
+  let s=`<svg viewBox="0 0 64 28" preserveAspectRatio="none">`;let r=n*13%17;for(let i=0;i<16;i++){r=(r*7+3)%17;if((n+i)%3==0)continue;s+=`<rect x="${i*4}" y="${(r%14)*1.6+2}" width="3" height="3" rx=".6" fill="${col}"/>`}return s+'</svg>'}
+function card(p,mode,pictures,sel){const [n,len,uses,saved,unused]=p;const col=uses.length?C[uses[0][0]]:'#71717A';
+  const cls=['card'];if(unused)cls.push('unused');if(mode==='select'&&!unused)cls.push('dim');if(sel)cls.push('sel');
+  const u=unused?'unused':uses.map(([t,l])=>`<span style="color:${C[t]}">T${t+1}</span> ${l}`).join(' · ');
+  return `<div class="${cls.join(' ')}"><span class="n">${String(n).padStart(2,'0')}</span><span class="len">${len}</span>${thumb(n,col,pictures)}<span class="use">${saved?'<span class="saved" title="also in saved projects"></span>':''}${u}</span>${mode==='select'&&unused?'<span class="chk"></span>':''}</div>`}
+function sheet(mode,{pictures=true,sel=[],confirm=false,playing=false,pick=false}={}){
+  const shown=P.slice(0,24);
+  let h=`<div class="under">SONG ONE ⌄  Pads  Edit  Timeline</div><div class="sheet"><div class="top"><h2>${pick?'Put a pattern on 1 · E':'Patterns'}</h2><span class="count">52 kept · 12 free · 12 unused</span>`;
+  if(!pick)h+=`<div class="seg"><span class="${mode==='browse'?'on':''}">All</span><span>Unused</span><span>This project</span></div>`;
+  h+=`<span class="sp"></span>`;
+  if(mode==='browse'&&!pick)h+=`<span class="key ghost">Select</span><span class="key">Clear 12 unused…</span>`;
+  if(mode==='select')h+=`<span class="key ghost">Done</span>`;
+  h+=`<span class="x" aria-label="Close">✕</span></div><div class="grid">${shown.map(p=>card(p,mode,pictures,sel.includes(p[0]))).join('')}</div>`;
+  if(confirm)h+=`<div class="confirm"><p>Clear ${sel.length} patterns? <span>${sel.map(n=>String(n).padStart(2,'0')).join(', ')} · nothing uses them · can’t be undone</span></p><span class="key ghost">Keep</span><span class="key red">Clear ${sel.length}</span></div>`;
+  else if(mode==='select')h+=`<div class="confirm"><p>${sel.length} picked <span>· only unused patterns can be cleared; tap a used one to see where it’s used</span></p><span class="key ghost">Pick all unused</span><span class="key">Clear ${sel.length}…</span></div>`;
+  if(playing)h+=`<div class="note">Playing: pictures and saved-project names load when you stop. Clearing needs the FM-1 stopped.</div>`;
+  if(pick)h+=`<div class="note">The pad will play the same pattern as its other uses; editing it changes them all.</div>`;
+  return h+'</div>'}
+function full(){let h=`<div class="under">SONG ONE ⌄  Pads  Edit  Timeline</div><div class="pads">${Array.from({length:48},()=>'<div></div>').join('')}</div>`;
+  h+=`<div style="position:absolute;left:560px;top:150px;width:64px;height:64px;border-radius:50%;background:#4b4380;border:2px solid #9580FF"></div>`;
+  h+=`<div class="fan" style="left:220px;top:72px">${[['New pattern','All 64 patterns are taken',1],['Recycle an unused pattern','Takes 03 and empties it · stopped only'],['Put a kept pattern here…','Plays the same pattern as its other uses'],['Patterns…','52 kept · 12 unused'],['Rest','']].map(([t,s,off])=>`<div class="ch ${off?'off':''}"><i></i><b>${t}${s?`<small>${s}</small>`:''}</b></div>`).join('')}</div>`;return h}
+const fig=(id,cap,html)=>`<figure><div class="phone" role="img" aria-label="${cap.replace(/<[^>]+>/g,'')}">${html}</div><figcaption><span class="tag">${id}</span>${cap}</figcaption></figure>`;
+document.getElementById('r1').innerHTML=fig('79.1','<b>The sheet, stopped.</b> Kept patterns as cards: number, length, a thumbnail of its notes in its first user’s colour, where it’s used here; dashed cards are unused; a dot means saved projects use it too. Filters: All, Unused, This project.',sheet('browse'))+fig('79.2','<b>Select to clear.</b> Only the dashed (unused) cards can be picked; the rest dim. Then one confirm in place listing the numbers, red only on the confirm key.',sheet('select',{sel:[3,12,15,27,33],confirm:true}));
+document.getElementById('r2').innerHTML=fig('79.3','<b>While playing.</b> Everything live still shows; the thumbnails wait for a stop (length bars instead), and clearing waits too.',sheet('browse',{pictures:false,playing:true}))+fig('79.4','<b>Full pool, empty slot held.</b> New pattern is off with the reason; Recycle an unused pattern makes a fresh one without a free number; Put a kept pattern here… opens the sheet to pick; Patterns… opens it to manage.',full());
+</script></body></html>

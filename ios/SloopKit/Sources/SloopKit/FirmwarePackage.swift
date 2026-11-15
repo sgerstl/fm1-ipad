@@ -1,6 +1,5 @@
 // FM-1 .fwsc packages: the identity, the logical image the device reads during an update, and the files' CRCs.
 // After Skiff's web/fm1pkg.js and tools/fm1_install.py, and SLOOP's package_damage (GPL-3.0, Leo Kuroshita).
-import CryptoKit
 import Foundation
 
 /// The firmware Lupe installs, each pinned by its SHA-256: a file that doesn't match is never installed (FIRMWARE.md).
@@ -168,7 +167,7 @@ public struct FirmwarePackage: Sendable {
     /// M-VAVE's loader instead, and its packer stores other CRCs in the extra entries: only flash.bin and the loader
     /// are checked there (Skiff's files_ok).
     public init(data: [UInt8], pinned: LupeFirmware? = nil) throws {
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let digest = LupeDigest.sha256Hex(Data(data))
         if let p = pinned, digest != p.sha256 { throw PackageError.hashMismatch(expected: p.sha256, found: digest) }
         let product = try Self.productOf(data)
         guard product.range(of: #"^FM-1_\d+$"#, options: .regularExpression) != nil else { throw PackageError.notFM1(product) }

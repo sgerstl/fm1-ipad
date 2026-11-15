@@ -39,31 +39,9 @@ struct TrackKnobBox: View {
     /// KnobSpec.all's LEVEL, STEPS, PAN (0 is SWING, global).
     static let knobs = 1..<4
 
-    /// What KNOB 1…4 turn on Skiff's HOME: the engine's four main parameters (Skiff 2.2, each eng_*.c's `.knob`).
-    /// 0…7 are the engine's own (P_E0…P_E7, from INFO's first engine parameter); ATK and REL are the shared envelope's.
-    enum HomeParam { case e(Int), atk, rel }
-    static let homeKnobs: [[HomeParam]] = [
-        [.e(4), .e(5), .atk, .rel],          // 0 ANALOG
-        [.e(4), .e(5), .e(6), .rel],         // 1 DIGITAL (retired)
-        [.e(2), .e(3), .e(4), .rel],         // 2 PHASE
-        [.e(1), .e(2), .e(3), .rel],         // 3 LOFI
-        [.e(0), .e(4), .atk, .rel],          // 4 SAMPLE
-        [.e(0), .e(4), .e(5), .e(2)],        // 5 VOICE
-        [.e(5), .e(6), .e(7), .e(1)],        // 6 TRIO
-        [.e(0), .e(4), .e(6), .e(7)],        // 7 WHEEL
-        [.e(1), .e(2), .e(3), .e(5)],        // 8 GRAIN
-        [.e(1), .e(2), .e(3), .e(4)],        // 9 PHYS
-        [.e(1), .e(2), .e(3), .e(4)],        // 10 DRUM
-        [.e(2), .e(3), .e(1), .rel],         // 11 NOISE
-        [.e(2), .e(3), .e(4), .e(7)],        // 12 FM6
-        [.e(0), .e(1), .e(3), .e(6)],        // 13 SLICE
-        [.e(0), .e(1), .e(2), .e(3)],        // 14 DRUM-X
-    ]
-    static func homeIDs(_ session: DeviceSession) -> [Int] {
-        guard session.dialect == .skiff, let e0 = session.info?.firstEngineParam,
-              let row = homeKnobs[safe: session.tracks[session.selectedTrack].engine] else { return [] }
-        return row.map { switch $0 { case .e(let n): e0 + n; case .atk: 1; case .rel: 4 } }
-    }
+    /// What KNOB 1…4 turn on Skiff's HOME: the engine's four main parameters, from SloopKit's table (SkiffHomeKnobs,
+    /// the phones' too, checked against Skiff's eng_*.c by android/core's PageParityTests). Empty off Skiff.
+    @MainActor static func homeIDs(_ session: DeviceSession) -> [Int] { session.homeKnobIDs ?? [] }
 
     var body: some View {
         let t = session.selectedTrack

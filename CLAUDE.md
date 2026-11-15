@@ -22,6 +22,8 @@ Any session that changes app or firmware behaviour, and every overnight session,
 
 When Scott comments on a timing, spring, delay, threshold, distance or offset ("a bit slower", "too easy to trigger"), add it to Labs (`ios/FM1/Labs.swift`, Settings › Labs) **before** a second round of tweaking: current value as the default, a sensible range, today's date, review in two weeks. Scott tunes it by hand on the iPad. Don't keep re-guessing the number through prompts.
 
+When Scott settles a value, it graduates: it becomes a motion token in `tokens/tokens.json` (the `motion` section), the code reads the token, the item leaves Labs, and the component's CRD refers to the token by name, never the number (Scott, 2026-11-14). Existing Labs items move over when each comes up for review.
+
 ## 4. Structure before screens
 
 Before designing a new tab, panel or screen, or moving where something lives, update the structure map: `design/structure-map.md` (create it on first use). It shows the tabs, the panels on each, and where each FM-1 button and page lands. Scott agrees the map first; the screen design and polish come after. Changing the layout after it's been polished cost the most rework so far (Shape, three sets of tab names).

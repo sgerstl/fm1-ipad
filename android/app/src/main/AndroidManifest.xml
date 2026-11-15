@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- BRIDGE.md §1: the FM-1 is a USB MIDI device; P1 uses android.media.midi. -->
+    <uses-feature android:name="android.software.midi" android:required="true" />
+    <!-- Only to download the firmware Lupe installs on the FM-1 (Skiff-Lupe, from Lupe's GitHub release), when the
+         person asks for an install. Nothing else in the app uses the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:name=".LupeApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Lupe"
+        android:theme="@style/Theme.Lupe">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustNothing">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- Sharing an FM-1 backup (firmware install, decision 42) from the done screen -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
+        <!-- P1 gate 3, developer only: adb shell am start -n com.scottgerstl.lupe/.core.debug.LinkDebugActivity -->
+        <activity
+            android:name=".core.debug.LinkDebugActivity"
+            android:exported="true"
+            android:label="Lupe link debug"
+            android:screenOrientation="portrait" />
+    </application>
+</manifest>

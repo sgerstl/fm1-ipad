@@ -1,24 +1,28 @@
-// The installer's MIDI ports on CoreMIDI, and the frame queue its links share with the fake FM-1.
+// The installer's MIDI ports on CoreMIDI (Apple only), and the frame queue its links share with the fake FM-1 and
+// with Android's link (android/core AndroidUpdatePorts).
+#if canImport(CoreMIDI)
 import CoreMIDI
+#endif
 import Foundation
 
 /// SysEx frames waiting to be read, with one reader at a time that may wait for the next.
-final class FrameQueue: @unchecked Sendable {
+public final class FrameQueue: @unchecked Sendable {
+    public init() {}
     private let lock = NSLock()
     private var frames: [[UInt8]] = []
     private var waiter: (id: Int, cont: CheckedContinuation<[UInt8]?, Never>)?
     private var nextID = 0
 
-    func put(_ f: [UInt8]) {
+    public func put(_ f: [UInt8]) {
         lock.lock()
         if let w = waiter { waiter = nil; lock.unlock(); w.cont.resume(returning: f); return }
         frames.append(f)
         lock.unlock()
     }
 
-    func drain() { lock.lock(); frames.removeAll(); lock.unlock() }
+    public func drain() { lock.lock(); frames.removeAll(); lock.unlock() }
 
-    func read(timeout: Duration) async -> [UInt8]? {
+    public func read(timeout: Duration) async -> [UInt8]? {
         if let f = lock.withLock({ frames.isEmpty ? nil : frames.removeFirst() }) { return f }
         let id = lock.withLock { nextID += 1; return nextID }
         return await withCheckedContinuation { (c: CheckedContinuation<[UInt8]?, Never>) in
@@ -44,6 +48,7 @@ final class FrameQueue: @unchecked Sendable {
     }
 }
 
+#if canImport(CoreMIDI)
 /// CoreMIDI: every source and destination by display name. Only names `FirmwareInstaller.mayBeFM1` accepts are
 /// ever opened (the installer checks).
 public final class CoreMIDIUpdatePorts: UpdatePorts, @unchecked Sendable {
@@ -144,3 +149,5 @@ final class CoreMIDIUpdateLink: UpdateLink, @unchecked Sendable {
         MIDIPortDispose(outPort)
     }
 }
+
+#endif
