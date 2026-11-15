@@ -148,7 +148,8 @@ public struct EditorArea: Codable, Equatable, Sendable {
     public var pattern: Int
     public var scale: String
     public var kind: Kind
-    public var steps: [Step]             // sixteen
+    /// Every step of the pattern in whole chunks of 16 (16, 32, 48 or 64 of them): `patternSteps` of them play.
+    public var steps: [Step]
     public var selected: Int
     public var playhead: Int             // -1 stopped
     /// Always false: the phone has no Chord entry (the FM-1's keys never write from the phone; decision 5 revised,
@@ -164,8 +165,7 @@ public struct EditorArea: Codable, Equatable, Sendable {
     /// note track.
     public var kitLanes: [String] = []
     public var kitNotes: [Int] = []
-    /// The pattern's step count (the FM-1's LENGTH, 1…`patternStepsMax`); setPatternSteps sets it. `steps` above
-    /// still carries the first sixteen only.
+    /// The pattern's step count (the FM-1's LENGTH, 1…`patternStepsMax`); setPatternSteps sets it.
     public var patternSteps = 16
     public var patternStepsMax = 64
 }

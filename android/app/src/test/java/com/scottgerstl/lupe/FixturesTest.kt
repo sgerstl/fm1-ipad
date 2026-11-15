@@ -34,7 +34,8 @@ class FixturesTest {
                 "shell" -> lupeJson.decodeFromJsonElement(ShellState.serializer(), fr.state)
                 "pads" -> assertEquals(6, lupeJson.decodeFromJsonElement(PadsState.serializer(), fr.state).rows.size)
                 "page" -> { val p = lupeJson.decodeFromJsonElement(PageState.serializer(), fr.state); assertEquals("${f.name}: four controls", 4, p.controls.size); assertTrue(p.pages.any { it.index == p.page }) }
-                "editor" -> assertEquals(16, lupeJson.decodeFromJsonElement(EditorState.serializer(), fr.state).steps.size)
+                // every step of the pattern in whole 16-step chunks (Scott, 2026-11-15: the Edit grid scrolls by chunk)
+                "editor" -> assertTrue("${f.name}: editor steps", lupeJson.decodeFromJsonElement(EditorState.serializer(), fr.state).steps.size in setOf(16, 32, 48, 64))
                 "mix" -> assertEquals(6, lupeJson.decodeFromJsonElement(MixState.serializer(), fr.state).rows.size)
                 "sounds" -> assertEquals(32, lupeJson.decodeFromJsonElement(SoundsState.serializer(), fr.state).user.size)
                 "meters" -> assertEquals(6, lupeJson.decodeFromJsonElement(com.scottgerstl.lupe.core.MetersState.serializer(), fr.state).levels.size)

@@ -33,8 +33,14 @@ import Testing
         try await wait("idle") { core.session.skiffSong?.busy == false }
     }
     func stop(_ core: PhoneCore, _ fake: FakeSkiff) async throws {
-        core.handle(json: #"{"intent":"stop"}"#)
-        try await wait("stopped") { !fake.playing && !core.session.playing }
+        // stopped, and still stopped a moment later (a PLAY still on its way would start it again)
+        for _ in 0..<5 {
+            core.handle(json: #"{"intent":"stop"}"#)
+            try await wait("stopped") { !fake.playing && !core.session.playing }
+            try await Task.sleep(for: .milliseconds(400))
+            if !fake.playing && !core.session.playing { return }
+        }
+        Issue.record("the fake FM-1 kept starting again")
     }
     /// An 888-byte stored record: LEN, and a note on each given step.
     func record(len: Int, notes: [Int: Int]) -> [UInt8] {
@@ -168,6 +174,9 @@ import Testing
         try await idle(core)
         core.handle(json: #"{"intent":"recyclePattern","track":2,"entry":\#(e)}"#)
         try await wait("recycled") { fake.lists[1][e].p == n && fake.emptiedPatterns == [n - 1] }
+        if fake.lists[1][e].p != n || fake.emptiedPatterns != [n - 1] {
+            Issue.record("recycle: entry \(e) holds \(fake.lists[1][e].p), wanted \(n); emptied \(fake.emptiedPatterns); notices \(box.notices.map(\.text)); log \(box.log.suffix(6))")
+        }
         try await wait("said") { box.notices.last?.text.contains("was emptied and put on T2 pad \(e + 1)") == true }
         #expect(core.patternsArea()?.patterns.first { $0.number == n }?.here == [PatternsArea.Use(track: 2, entry: e)])
         // copy: onto an empty entry, a new number
