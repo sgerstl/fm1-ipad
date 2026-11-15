@@ -214,37 +214,35 @@ private:
     /**
      * One input frame: gap detection and (optionally) concealment, then the ring.
      *
-     * The FM-1 dithers (Skiff 2.5, #110): even its silence is +-1 LSB noise, never a long run of exact zeros. So a run
-     * of exact-zero frames is held back until it ends, and judged then:
-     *  * 4+ right after real signal, or 32+ in quiet (dither alone gives 32 zero frames in a row ~1e-8 of the time),
-     *    is a gap the phone's USB path filled. With conceal on it is taken out of the stream, and the next 32 frames
-     *    fade from the last frame before it, so the join doesn't click. The adaptive buffer makes up the frames.
-     *    (If the phone *inserted* the zeros, nothing real is lost; if it *replaced* real frames, a 1 ms skip with a
-     *    crossfade is still far quieter than a 1 ms hole.)
-     *  * Shorter runs are real and go in as they were.
-     *  * A run that reaches kHoldCap (5 ms) isn't held any longer: it's silence (undithered: blind) or a long dropout,
-     *    written as it is; after real signal it still counts as a gap.
-     * Repeats: 8 identical loud frames. Dither makes a flat waveform top repeat by chance (a square wave's top, two or
-     * three frames often), so fewer than 8 isn't evidence. The FM-1 itself repeats its last frame when its ring runs
-     * dry (uac_packet), so repeats point at the FM-1, zeros at the phone.
+     * A gap is a run of 4 to 255 exact-zero stereo frames *inside a signal*: right after a loud frame (|x| > 1e-3,
+     * about -60 dBFS) and followed at once by one above 3e-4 (about -70 dBFS). Nothing else counts:
+     *  * Skiff dithers only a word with bits below it (usb.c uac_dith: "a word with nothing below it (USB LEVEL FIXED,
+     *    silence) stays as it is"), so silence, a decay's last bits and USB LEVEL FIXED come as exact zeros with a
+     *    stray +-1. A rule for gaps in quiet (32 zeros in a row, 2026-11-15) fired on exactly that; it's gone. Gaps
+     *    in quiet passages can't be told from the music, and aren't counted.
+     *  * A run of kHoldCap (5 ms) or more is silence (a note cut off, the music stopping), never a gap.
+     * A run is held back until it ends and judged then. A gap is concealed (Config::conceal): left out if the phone
+     * inserted it (extra frames: an underrun filled), filled with the frames before it if it replaced real ones,
+     * with crossfades (judgeGaps decides which). Shorter runs, longer runs and quiet ones go in as they came.
+     * Repeats: 8 identical loud frames (dither makes a flat top repeat a few frames by chance). The FM-1 itself
+     * repeats its last frame when its ring runs dry (uac_packet), so repeats point at the FM-1, zeros at the phone.
      */
     void take(float l, float r) {
-        const float loud = 1e-3f;   // about -60 dBFS (33 LSB at 16 bits): well above the dither
+        const float loud = 1e-3f;     // about -60 dBFS (33 LSB at 16 bits)
+        const float resume = 3e-4f;   // about -70 dBFS (10 LSB): the signal goes on after the run
         if (l == 0.f && r == 0.f) {
             if (++sinceNonZero_ >= cfg_.inRate / 2) st_.blind = true;
             if (passZeros_) { write(0.f, 0.f); return; }
-            if (++held_ >= kHoldCap) {
-                if (lastLoud_) st_.zeroRuns++;          // a long dropout after real signal
+            if (++held_ >= kHoldCap) {                  // silence, not a gap: let it through as it is
                 for (int k = 0; k < held_; k++) write(0.f, 0.f);
                 held_ = 0;
-                passZeros_ = true;                      // the rest of this run goes straight in
+                passZeros_ = true;
             }
             return;
         }
         if (held_ > 0) {
-            bool gap = lastLoud_ ? held_ >= 4 : held_ >= 32;
-            if (gap) st_.zeroRuns++;
-            if (gap) winGapFrames_ += held_;
+            bool gap = lastLoud_ && held_ >= 4 && (std::fabs(l) > resume || std::fabs(r) > resume);
+            if (gap) { st_.zeroRuns++; winGapFrames_ += held_; }
             if (gap && cfg_.conceal) {
                 st_.concealed++;
                 if (st_.gapMode != 1) {

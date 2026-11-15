@@ -365,7 +365,10 @@ struct Scenario {
     bool paced = false;        // the FM-1's proposed pacing
     int burst = 240;           // the output callback's frames (5 ms at 48 kHz: the Pixel's)
     int inRate = 48000;
-    bool quiet = false;        // the FM-1 silent: only its dither (Skiff 2.5's uac_dith on zero: -1, 0 or +1 LSB)
+    bool quiet = false;        // the FM-1 quiet with dither (uac_dith on a word with bits below it: -1, 0 or +1 LSB)
+    bool silence = false;      // the FM-1 silent: exact zeros (uac_dith leaves a word with nothing below it alone),
+                               // a stray +-1 LSB now and then (a decay's last bits, USB LEVEL FIXED)
+    double cutEveryS = 0;      // a loud note cut off to exact silence for 100 ms every this many seconds
     bool insertGaps = false;   // a gap is 48 zero frames *added* before the packet (an underrun filled), not the packet replaced
     bool conceal = true;       // ThroughCore::Config::conceal
 };
@@ -420,6 +423,15 @@ static SimResult simulate(const Scenario &sc, double seconds, uint32_t seed = 1)
                 buf.resize(size_t(p.n) * 2);
                 for (int i = 0; i < p.n; i++) {
                     if (p.gap) { buf[2 * i] = buf[2 * i + 1] = 0.f; continue; }
+                    if (sc.silence) {
+                        buf[2 * i] = uni(rng) < 0.002 ? float((uni(rng) < 0.5 ? -1 : 1) / 32768.0) : 0.f;
+                        buf[2 * i + 1] = uni(rng) < 0.002 ? float((uni(rng) < 0.5 ? -1 : 1) / 32768.0) : 0.f;
+                        continue;
+                    }
+                    if (sc.cutEveryS > 0 && std::fmod(double(p.first + i) / 48000.0, sc.cutEveryS) < 0.1) {
+                        buf[2 * i] = buf[2 * i + 1] = 0.f;      // the note cut off: exact silence
+                        continue;
+                    }
                     if (sc.quiet) {
                         // uac_dith(0): (64 + r1 + r2 - 127) >> 7 with r1, r2 uniform 0..127, per channel
                         auto d = [&] { int r1 = int(uni(rng) * 128), r2 = int(uni(rng) * 128); return float(((64 + r1 + r2 - 127) >> 7) / 32768.0); };
@@ -508,15 +520,19 @@ static void testAdaptive() {
             }
         }
     }
-    // the FM-1 silent (dither only): gaps still show, and the dither alone raises none
-    Scenario qg{"FM-1 silent (dither), 5 gaps a second", 0, 1, 0, 0, 0, 5}; qg.quiet = true;
+    // quiet and silence: nothing counts there (a gap can't be told from the music), and nothing false
+    Scenario qg{"FM-1 quiet (dither), 5 gaps a second", 0, 1, 0, 0, 0, 5}; qg.quiet = true;
     r = simulate(qg, 63);
-    std::printf("  %-44s detected %lld of %lld injected gaps\n", qg.name.c_str(), (long long)r.zeroRuns, (long long)r.gapsInjected);
-    CHECK(r.zeroRuns >= r.gapsInjected * 9 / 10 && r.zeroRuns <= r.gapsInjected + 2, "quiet detector: %lld of %lld", (long long)r.zeroRuns, (long long)r.gapsInjected);
-    Scenario qc{"FM-1 silent (dither), no gaps", 0, 4, 2}; qc.quiet = true;
-    r = simulate(qc, 63);
-    std::printf("  %-44s false gaps %lld\n", qc.name.c_str(), (long long)r.zeroRuns);
-    CHECK(r.zeroRuns == 0, "false dropouts in dither: %lld", (long long)r.zeroRuns);
+    std::printf("  %-44s counted %lld of %lld (gaps in quiet aren't counted)\n", qg.name.c_str(), (long long)r.zeroRuns, (long long)r.gapsInjected);
+    CHECK(r.zeroRuns == 0, "quiet: %lld counted", (long long)r.zeroRuns);
+    Scenario sl{"FM-1 silent: zeros, a stray +-1 (no dither)", 0, 4, 2}; sl.silence = true;
+    r = simulate(sl, 63);
+    std::printf("  %-44s false gaps %lld (the 2026-11-15 misfire)\n", sl.name.c_str(), (long long)r.zeroRuns);
+    CHECK(r.zeroRuns == 0, "false gaps in undithered silence: %lld", (long long)r.zeroRuns);
+    Scenario ct{"a note cut to silence every 0.5 s", 0, 4, 2}; ct.cutEveryS = 0.5;
+    r = simulate(ct, 33);
+    std::printf("  %-44s false gaps %lld\n", ct.name.c_str(), (long long)r.zeroRuns);
+    CHECK(r.zeroRuns == 0, "false gaps at note cuts: %lld", (long long)r.zeroRuns);
 }
 
 int main() {

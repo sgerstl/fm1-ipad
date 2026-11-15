@@ -15,10 +15,14 @@
 // The intervals tell more: evenly spaced gaps (a low CV) at about |clock offset| x 48,000 per second mean a host that
 // takes exactly 48 frames per USB millisecond from a source whose clock is off. Random spacing means something else.
 //
-// Rules (the FM-1 dithers, Skiff 2.5 #110, so even its silence is never a long run of exact zeros):
-//   zero gap: 4+ exact-zero stereo frames right after a loud frame (|x| > 1e-3), or 32+ in quiet.
+// Rules (the same as through_core.h ThroughCore::take):
+//   zero gap: 4..255 exact-zero stereo frames inside a signal: right after a loud frame (|x| > 1e-3, -60 dBFS) and
+//     followed at once by one above 3e-4 (-70 dBFS). Skiff dithers only a word with bits below it (usb.c uac_dith),
+//     so its silence, a decay's last bits and USB LEVEL FIXED are exact zeros with a stray +-1: gaps in quiet can't
+//     be told from the music and aren't counted (a 32-zero rule for quiet fired on silence, 2026-11-15). 256+ is
+//     silence (a note cut off), never a gap.
 //   repeat gap: 8+ identical loud frames (dither makes shorter repeats happen by chance on flat waveform tops).
-//   blind: half a second of pure digital zero (not dithered: not the FM-1's quiet; nothing can be seen).
+//   blind: half a second of pure digital zero: the FM-1 silent, nothing to see.
 // Play something on the FM-1 while it records: a held note is best; then the pattern.
 //
 // The Mac needs microphone access for the terminal app the first time (System Settings › Privacy › Microphone).
@@ -39,7 +43,7 @@ final class GapCounter {
     private var held = 0, sinceNonZero: Int64 = 0, repeatRun = 0
     private var lastLoud = false, passZeros = false
     private var lastL: Float = 0, lastR: Float = 0
-    private let loud: Float = 1e-3
+    private let loud: Float = 1e-3, resume: Float = 3e-4
 
     init(rate: Double) { self.rate = rate }
 
@@ -51,14 +55,11 @@ final class GapCounter {
             if sinceNonZero >= Int64(rate / 2) { blindFrames += 1 }
             if passZeros { return }
             held += 1
-            if held >= 256 {
-                if lastLoud { zeroGaps.append((frames - Int64(held), held)) }
-                held = 0; passZeros = true
-            }
+            if held >= 256 { held = 0; passZeros = true }      // silence, not a gap
             return
         }
         if held > 0 {
-            if lastLoud ? held >= 4 : held >= 32 { zeroGaps.append((frames - 1 - Int64(held), held)) }
+            if lastLoud, held >= 4, abs(l) > resume || abs(r) > resume { zeroGaps.append((frames - 1 - Int64(held), held)) }
             held = 0
         }
         passZeros = false
@@ -76,7 +77,7 @@ final class GapCounter {
 
     func report(title: String) {
         let secs = Double(frames) / rate
-        print("\n\(title): \(String(format: "%.1f", secs)) s at \(Int(rate)) Hz, peak \(String(format: "%.4f", peak))\(peak < 1e-3 ? "  (quiet: only zero gaps of 32+ can be seen; play something)" : "")")
+        print("\n\(title): \(String(format: "%.1f", secs)) s at \(Int(rate)) Hz, peak \(String(format: "%.4f", peak))\(peak < 1e-3 ? "  (quiet: gaps are only counted inside a signal; play something)" : "")")
         if blindFrames > Int64(rate) { print("  blind for \(String(format: "%.1f", Double(blindFrames) / rate)) s: pure digital zero, not the FM-1's dithered quiet") }
         line("zero gaps", zeroGaps, secs)
         line("repeat gaps", repeatGaps, secs)
@@ -176,21 +177,27 @@ func live(seconds: Double, part: String, wavOut: String?) throws -> (GapCounter,
     return (counter, name)
 }
 
-/** A made-up dithered stream with known gaps: the rules must find exactly them. */
+/** A made-up stream with known gaps: the rules must find the ones inside the signal, and nothing in quiet or silence. */
 func selftest() -> Bool {
     let c = GapCounter(rate: 48000)
     var rng = SystemRandomNumberGenerator()
     func dither() -> Float { let r = Int.random(in: 0..<128, using: &rng) + Int.random(in: 0..<128, using: &rng); return Float((64 + r - 127) >> 7) / 32768 }
+    func stray() -> Float { Double.random(in: 0..<1, using: &rng) < 0.002 ? (Bool.random(using: &rng) ? 1 : -1) / 32768 : 0 }
     var expected = 0
-    for i in 0..<(48000 * 10) {
-        let quiet = (i / 48000) % 2 == 1
-        if i % 3200 == 100 { for _ in 0..<48 { c.take(0, 0) }; expected += 1 }   // a 48-frame gap 15 times a second
-        let v = quiet ? dither() : Float(0.3 * sin(2 * Double.pi * 440 * Double(i) / 48000)) + dither()
-        c.take(v, quiet ? dither() : v)
+    for i in 0..<(48000 * 12) {
+        let sec = i / 48000
+        let kind = sec % 3            // 0 loud, 1 dithered quiet, 2 undithered silence (zeros, a stray +-1)
+        if i % 3200 == 100 { for _ in 0..<48 { c.take(0, 0) }; if kind == 0 { expected += 1 } }   // 15 gaps a second
+        switch kind {
+        case 0: let v = Float(0.3 * sin(2 * Double.pi * 440 * Double(i) / 48000)) + dither(); c.take(v, v)
+        case 1: c.take(dither(), dither())
+        default: c.take(stray(), stray())
+        }
     }
-    c.report(title: "selftest (15 gaps a second of 48 frames, loud and quiet seconds alternating)")
+    c.report(title: "selftest (15 gaps a second of 48 frames; loud, quiet and silent seconds in turn)")
     let ok = abs(c.zeroGaps.count - expected) <= 2 && c.repeatGaps.isEmpty
-    print(ok ? "  selftest passed (\(c.zeroGaps.count) of \(expected))" : "  selftest FAILED: \(c.zeroGaps.count) zero gaps, \(c.repeatGaps.count) repeat gaps, expected \(expected) and 0")
+    print(ok ? "  selftest passed (\(c.zeroGaps.count) of the \(expected) inside the signal; none in quiet or silence)"
+             : "  selftest FAILED: \(c.zeroGaps.count) zero gaps, \(c.repeatGaps.count) repeat gaps, expected \(expected) and 0")
     return ok
 }
 

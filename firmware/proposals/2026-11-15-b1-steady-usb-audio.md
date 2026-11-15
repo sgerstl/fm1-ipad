@@ -1,6 +1,30 @@
 # Proposal B1: steady USB audio packets from Skiff-Lupe (48 kHz)
 
-*Built and tested on the Mac only (Scott: "Yes, Mac only", 2026-11-15). Nothing has been flashed or installed, and nothing is to be until Scott says so, with a backup first.* Written 2026-11-15 by the audio-through session (branch `claude/audio-through-398a74`). The evidence is in `qa/device-checks/2026-11-15-audio-through.md` (rounds 1–4), and the models are in `android/app/src/main/cpp/through/tests/through_test.cpp`.
+*Built and host-tested on the Mac (Scott: "Yes, Mac only"), then installed on Scott's FM-1 with a backup first (Scott: "Yes, back up first", 2026-11-15). Results below.* Written 2026-11-15 by the audio-through session (branch `claude/audio-through-398a74`). The evidence is in `qa/device-checks/2026-11-15-audio-through.md` (rounds 1–4), and the models are in `android/app/src/main/cpp/through/tests/through_test.cpp`.
+
+## On the FM-1 (2026-11-15, Scott's go-ahead: "Yes, back up first")
+
+**The install:**
+- `tools/fm1fw` with the backup first: `2026-11-15 1901 v2.5.1.json`, 29 objects, every CRC checked. Then the dry run, then `--yes`.
+- The FM-1 restarted as FM-1_725 with screen link v6 (Skiff-Lupe 2.5.1, not the take build).
+
+| | before (2.5.1 release) | B1 |
+|---|---|---|
+| FM-1's rate by the Mac's clock | +422 ppm | **−26 ppm** (FM-1 silent) |
+| Pixel 7, FM6 pad playing (peak ~0.49), concealment off: dejitter lines | ~14 a second, in bursts | **0 in 20 s, twice** |
+| Pixel 7: phone gaps while playing | climbing | flat |
+| Pixel 7: FM-1 against the phone | ±400 ppm | −8..+49 ppm |
+| Pixel 7: Lupe gaps / xruns / total | – | 0 / 0 / 15–17 ms |
+| Scott, by ear, the FM6 pad crunch | "still do it" | **"Gone"** |
+
+- **Why the rate changed:** at 48 kHz the FM-1 now delivers exactly 48 frames per USB millisecond, so a host measures the USB clock, not the I2S clock. −26 ppm is the Mac's clock against the FM-1's USB frames.
+- **The phone-gap counter climbed during silence (15,996).** That was the detector misfiring on Skiff's undithered silence, not real gaps. Fixed in the app the same day: gaps count only inside a signal.
+
+**Still to run** (B1-1, B1-2, B1-3 on the Pixel 10, B1-5):
+- the Mac with sound;
+- 44.1 kHz on the Mac;
+- the Pixel 10;
+- the iPad (Play through the iPad, screen link, MIDI, a project load and save).
 
 ## Results (host only, 2026-11-15)
 

@@ -265,3 +265,31 @@ So both phones insert gaps on both paths, and Lupe adds none. *Scott's ear; the 
 - **Package:** `firmware/proposals/EXPERIMENTAL-Skiff-Lupe-2.5.1-b1.fwsc`, not for install.
 - **Details** and the identity decision: `firmware/proposals/2026-11-15-b1-steady-usb-audio.md`, Results.
 - **The device check (B1-1..6)** waits for Scott's go-ahead and a backup.
+
+## Round 6: B1 on the FM-1
+
+**Installed** with `tools/fm1fw` after a backup (29 objects, `2026-11-15 1901 v2.5.1.json`). The FM-1 restarted as FM-1_725, screen link v6.
+
+**Pixel 7** (concealment off, FM6 pad):
+- dejitter lines 0 in 20 s, twice (was ~14 a second);
+- Lupe gaps 0, xruns 0, 15–17 ms;
+- Scott: the crunch is "Gone".
+
+**Mac:** the FM-1's rate is −26 ppm (was +422): it now sends exactly 48 a millisecond.
+
+**Fixed: the phone-gap counter climbed during silence** (15,996).
+- Skiff doesn't dither silence (`uac_dith`), so the quiet rule (32 zeros in a row) fired on it.
+- A gap now counts only inside a signal: loud before, and resuming right after.
+- Host test: undithered silence 0 false gaps (the old rule: 5,930); notes cut to silence 0 (old: 61). Gaps inside a signal are still caught.
+- Gaps in quiet passages aren't counted any more, since they can't be told from the music.
+
+**Still to run, from B1-1..6:**
+
+| # | Do this | Pass |
+|---|---|---|
+| B1-1 | The FM-1 into the Mac, a held note then the pattern: `swift tools/gapcount.swift live 20 Felucca --wav /tmp/b1-mac.wav` | 0 zero gaps, 0 repeat gaps; rate near 0 ppm |
+| B1-2 | The same at 44.1 kHz (Audio MIDI Setup › Felucca › 44,100 Hz, then back to 48 kHz) | As before B1 (the 44.1 path is unchanged): no gaps; the rate ~+420 ppm again, since 44.1 keeps the band rule |
+| B1-3 | **Pixel 10**, Lupe with `--ez throughConceal false`, FM6 pad: `android/scripts/dejitter-intervals.sh 20 -s <pixel10>` | dejitter lines near 0; no crunch by ear |
+| B1-4 | FM6 for a minute on either Pixel: Details' `(Z zero, R repeat)` | R stays 0 (the FM-1's ring never ran dry) |
+| B1-5 | iPad: Play through the iPad; the screen link (pages follow); MIDI (keys, transport); load and save a project | All as on 2.5.1 |
+| B1-6 | Scott decides: keep B1, or roll back (`fm1fw install firmware/releases/Skiff-Lupe-2.5.1.fwsc --backup-dir …`, pinned, no `--experimental`) | – |
