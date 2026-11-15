@@ -254,9 +254,11 @@ class FakeLupeCore(
                     _pads.update { p -> p.copy(rows = p.rows.map { r ->
                         if (r.track != intent.track || intent.from !in r.entries.indices || r.entries[intent.from].kind == PadKind.Empty) r
                         else {
-                            val l = r.entries.toMutableList(); val x = l.removeAt(intent.from)
-                            val firstEmpty = l.indexOfFirst { it.kind == PadKind.Empty }.let { if (it < 0) l.size else it }
-                            l.add(intent.to.coerceIn(0, firstEmpty), x); r.copy(entries = l)
+                            // P1's rules (pattern-pad.md B15–B17): onto a filled pad the two swap; onto an empty one it moves there and leaves its old place empty
+                            val l = r.entries.toMutableList()
+                            val to = intent.to.coerceIn(0, l.size - 1).let { t -> if (l[t].kind == PadKind.Empty) minOf(t, l.indexOfFirst { it.kind == PadKind.Empty }.let { if (it < 0) t else it }) else t }
+                            val x = l[intent.from]; l[intent.from] = l[to]; l[to] = x
+                            r.copy(entries = l)
                         } }) }
                     recount()
                 }
