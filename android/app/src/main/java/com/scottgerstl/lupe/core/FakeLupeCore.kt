@@ -246,6 +246,16 @@ class FakeLupeCore(
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is ClearUnusedPatterns -> { val p = _pads.value; if (intent.confirmed && p.unused.isNotEmpty()) { val n = p.unused.size
                 _pads.value = p.copy(unused = emptyList(), kept = p.kept - p.unused.toSet(), patternsFree = (p.patternsFree ?: 0) + n); refuse("Cleared $n unused pattern${if (n == 1) "" else "s"}: their numbers are free") } }
+            is ClearSteps -> {
+                // the notes go and the pad stays; the fake keeps no notes to wipe, so it only records the ten-second Undo (the real core wipes and restores them)
+                val e = _pads.value.rows.firstOrNull { it.track == intent.track }?.entries?.getOrNull(intent.entry)
+                if (e == null || e.kind != PadKind.Pattern) refuse("T${intent.track} pad ${'A' + intent.entry} has no pattern to clear.")
+                else {
+                    val c = ClearedPad(intent.track, intent.entry, e.pattern, kind = "steps")
+                    _pads.update { it.copy(clearUndo = it.clearUndo + c) }
+                    scope.launch { kotlinx.coroutines.delay(10_000); _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
+                }
+            }
             is PadMove -> {
                 // the FM-1 rewrites a list only while stopped; a pad moves within its own track, the rest shifting along (P1's real one answers the same way)
                 if (_top.value.playing) refuse("Stop to rearrange: the FM-1 moves pads only while stopped")

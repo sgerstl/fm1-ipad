@@ -12,11 +12,11 @@ import kotlinx.serialization.Serializable
  * entries after it, but only while the track's list is exactly as the delete left it (P1's 4d2e44a).
  */
 @Serializable
-data class ClearedPad(val track: Int, val entry: Int, val pattern: Int? = null, val block: Boolean = false)
+data class ClearedPad(val track: Int, val entry: Int, val pattern: Int? = null, val block: Boolean = false, val kind: String = "pad")
 
 /** Undo the last clear, or (with a pad) that pad's: "Undo clear" in the pad's menu. A successful undo sends no notice; the pad coming back is the answer. */
 @Serializable @SerialName("undoClear") data class UndoClear(val track: Int? = null, val entry: Int? = null) : Intent
 
 /** "Cleared T2 pad F · pattern 07": what the Undo strip says. */
 fun clearedWords(c: ClearedPad): String =
-    (if (c.block) "Deleted T${c.track} block ${'A' + c.entry}" else "Cleared T${c.track} pad ${'A' + c.entry}") + (c.pattern?.let { " · pattern %02d".format(it) } ?: " · REST")
+    (if (c.block) "Deleted T${c.track} block ${'A' + c.entry}" else if (c.kind == "steps") "Cleared T${c.track} pad ${'A' + c.entry}'s notes" else "Cleared T${c.track} pad ${'A' + c.entry}") + (c.pattern?.let { " · pattern %02d".format(it) } ?: " · REST")

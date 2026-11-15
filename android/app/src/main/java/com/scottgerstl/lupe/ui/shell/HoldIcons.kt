@@ -54,6 +54,7 @@ fun holdIcon(title: String): Int? {
         t.startsWith("Duplicate") -> R.drawable.ms_library_add
         t.startsWith("Move earlier") -> R.drawable.ms_arrow_back
         t.startsWith("Move later") -> R.drawable.ms_arrow_forward
+        t.startsWith("Clear steps") -> R.drawable.ms_delete_sweep
         t.startsWith("Clear ") && t.contains("unused") || t.startsWith("No unused") -> R.drawable.ms_delete_sweep
         t.startsWith("Clear") || t.startsWith("Delete") || t.startsWith("Erase") -> R.drawable.ms_delete
         t.startsWith("Chain") -> R.drawable.ms_link

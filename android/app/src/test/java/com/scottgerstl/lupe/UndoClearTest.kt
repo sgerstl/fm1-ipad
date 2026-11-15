@@ -36,6 +36,7 @@ class BlockUndoTest {
         assertEquals(listOf(ClearedPad(2, 4, 7, true), ClearedPad(2, 5, null, false)), p.clearUndo)
         assertEquals("Deleted T2 block E · pattern 07", clearedWords(p.clearUndo[0]))
         assertEquals("Cleared T2 pad F · REST", clearedWords(p.clearUndo[1]))
+        assertEquals("Cleared T2 pad D's notes · pattern 07", clearedWords(ClearedPad(2, 3, 7, kind = "steps")))
     }
 
     @Test fun theUndoForABlockIsTheSameIntent() {

@@ -145,7 +145,7 @@ fun LupeShell(core: LupeCore) {
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
         ) { UndoStrip(core); RefusalStrip(core) }
         // a pad being dragged, with the Clear / Edit / Duplicate wells on the screen's edges (board 81.4)
-        PadDragOverlay(padDrag)
+        PadDragOverlay(padDrag, top.playing)
         // the hold menu: over the page and the sheets, under the finger that opened it
         HoldMenuHost(holdMenu)
         // the Magnifier floats over everything, above the finger

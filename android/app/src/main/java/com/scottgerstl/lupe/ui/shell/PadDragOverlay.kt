@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
@@ -56,22 +59,25 @@ private val SlideIn = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 /**
  * The wells for a dragged pad (board 81.4) and the lifted pad over them, in one layer over the whole screen. Three wells sit flush on the edges, square on the
  * edge side and rounded 12 inside, dashed on the three inner sides, resting as dark glass (black 62 %; the iPhone blurs what is behind, which this does not):
- * Clear at the bottom, Edit on the right, Duplicate on the left. They slide in from their edges as the pad lifts (Labs: slide, staggered 30 ms) and out in 72 %
+ * Decision 41: Cancel at the bottom, Clear steps and Delete pattern on the top, Edit on the right, Duplicate on the left. They slide in from their edges as the pad lifts (Labs: slide, staggered 30 ms) and out in 72 %
  * of that; a glow in the track colour (red for Clear) builds from the glow distance; hot, within the hot distance, the well fills solid with a dark label, ticks,
  * and the lifted pad tilts toward it. Reduce Motion: they fade, the pad doesn't tilt or grow. It takes no touches. TalkBack keeps the hold menu.
  */
 @Composable
-fun PadDragOverlay(state: PadDragState, modifier: Modifier = Modifier) {
+fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = Modifier) {
     val labs = LocalPhoneSettings.current
     val reduce = LocalReduceMotion.current
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     val d = density.density
     val drag = state.drag
+    // the camera cutout's margin on each side (landscape): the well on that side widens by it and insets its icon and label, staying on the edge
+    val cutL = WindowInsets.displayCutout.getLeft(density, androidx.compose.ui.unit.LayoutDirection.Ltr).toFloat()
+    val cutR = WindowInsets.displayCutout.getRight(density, androidx.compose.ui.unit.LayoutDirection.Ltr).toFloat()
     // the last pad stays drawn while the wells leave
     var last by remember { mutableStateOf<PadDrag?>(null) }
     if (drag != null) last = drag
-    val feel = WellFeel(labs.wellGlowDp * d, labs.wellHotDp * d)
+    val feel = state.feel(labs.wellGlowDp * d, labs.wellHotDp * d, cutL, cutR, playing)
     val w = state.screen.width; val h = state.screen.height
     val hot = if (drag != null && w > 0f) EdgeWellsGeometry.hot(drag.centre - state.origin, w, h, d, feel) else null
     LaunchedEffect(hot) { if (hot != null && labs.haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
@@ -88,8 +94,10 @@ fun PadDragOverlay(state: PadDragState, modifier: Modifier = Modifier) {
                 }
                 if (p.value > 0.001f) {
                     val on = (drag ?: last)
-                    Well(a, Rect(0f, 0f, w, h), d, p.value, hot == a, if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f,
-                        if (a == EdgeAction.Clear) Tok.rec else on?.colour ?: Tok.text, reduce)
+                    // Cancel neutral (a soft white when hot), Delete red, the others the track's colour
+                    val tint = when (a) { EdgeAction.Cancel -> Tok.text; EdgeAction.Delete -> Tok.rec; else -> on?.colour ?: Tok.text }
+                    Well(a, Rect(0f, 0f, w, h), d, p.value, hot == a, a in feel.off,
+                        if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f, tint, reduce, feel)
                 }
             }
         }
@@ -105,8 +113,7 @@ fun PadDragOverlay(state: PadDragState, modifier: Modifier = Modifier) {
                         cameraDistance = 12f * this.density
                         rotationY = tilt.first; rotationX = tilt.second
                     }
-                    .shadow(12.dp, androidx.compose.foundation.shape.RoundedCornerShape(8.dp), ambientColor = Color.Black, spotColor = Color.Black)
-                    .then(Modifier),
+                    .shadow(12.dp, androidx.compose.foundation.shape.RoundedCornerShape(8.dp), ambientColor = Color.Black, spotColor = Color.Black),
             ) {
                 Canvas(Modifier.fillMaxSize()) {
                     drawRoundRect(drag.colour, cornerRadius = CornerRadius(8.dp.toPx()))
@@ -120,59 +127,103 @@ fun PadDragOverlay(state: PadDragState, modifier: Modifier = Modifier) {
                 }
             }
         }
+        // a duplicated pad sprouting into its slot
+        state.sprout?.let { Sprout(state, it, reduce) }
     }
 }
 
 @Composable
 private fun animatedTilt(hot: EdgeAction?, reduce: Boolean): Pair<Float, Float> {
     val y = com.scottgerstl.lupe.ui.theme.animatedFloat(if (reduce) 0f else when (hot) { EdgeAction.Edit -> -14f; EdgeAction.Duplicate -> 14f; else -> 0f }, 150)
-    val x = com.scottgerstl.lupe.ui.theme.animatedFloat(if (reduce) 0f else if (hot == EdgeAction.Clear) -14f else 0f, 150)
+    val x = com.scottgerstl.lupe.ui.theme.animatedFloat(if (reduce) 0f else when (hot) { EdgeAction.Cancel -> -14f; EdgeAction.ClearSteps, EdgeAction.Delete -> 14f; else -> 0f }, 150)
     return y.value to x.value
 }
 
-/** One well: [full] is the screen, [p] 0…1 how far it has slid in, [glow] 0…1 how near the pad is. */
+/**
+ * A duplicate sprouting into its slot: the new pad grows out of the source pad, travels to its slot and settles with a small spring (0.32 s, damping 0.68),
+ * then one soft ring in the track colour grows and fades (0.6 s). Reduce Motion: a fade in place, then the ring. The real pad is there from the start.
+ */
 @Composable
-private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, glow: Float, tint: Color, reduce: Boolean) {
-    val r = EdgeWellsGeometry.rect(a, full.width, full.height, d)
-    // the hot one grows by 8 dp into the screen (the board's 64 → 72)
+private fun Sprout(state: PadDragState, s: PadSprout, reduce: Boolean) {
+    val to = s.to ?: return
+    val move = remember(s) { Animatable(0f) }
+    val ring = remember(s) { Animatable(0f) }
+    var flying by remember(s) { mutableStateOf(true) }
+    LaunchedEffect(s, reduce) {
+        unscaled {
+            if (reduce) move.animateTo(1f, tween(150))
+            else move.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.68f, stiffness = 280f))
+            flying = false
+            ring.animateTo(1f, tween(600))
+        }
+        state.sprout = null
+    }
+    val o = state.origin
+    val t = if (reduce) 1f else move.value
+    val l = s.from.left + (to.left - s.from.left) * t - o.x; val tp = s.from.top + (to.top - s.from.top) * t - o.y
+    val wd = s.from.width + (to.width - s.from.width) * t; val ht = s.from.height + (to.height - s.from.height) * t
+    val dens = LocalDensity.current
+    if (flying) Box(
+        Modifier.offset { IntOffset(l.roundToInt(), tp.roundToInt()) }.size(with(dens) { wd.toDp() }, with(dens) { ht.toDp() })
+            .graphicsLayer { alpha = if (reduce) move.value.coerceIn(0f, 1f) else 1f }
+            .shadow(6.dp, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
+    ) { Canvas(Modifier.fillMaxSize()) { drawRoundRect(s.colour, cornerRadius = CornerRadius(8.dp.toPx())) } }
+    // the ring around the settled pad: grows and fades
+    if (ring.value > 0f && ring.value < 1f) Canvas(Modifier.fillMaxSize()) {
+        val grow = 14.dp.toPx() * ring.value
+        drawRoundRect(s.colour.copy(alpha = 0.55f * (1f - ring.value)), Offset(to.left - o.x - grow, to.top - o.y - grow), Size(to.width + 2 * grow, to.height + 2 * grow), CornerRadius(8.dp.toPx() + grow), style = Stroke(2.dp.toPx()))
+    }
+}
+
+/** One well: [full] is the screen, [p] 0…1 how far it has slid in, [glow] 0…1 how near the pad is, [off] it refuses a drop now (greyed, "Stop first"). */
+@Composable
+private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, glow: Float, tint: Color, reduce: Boolean, feel: WellFeel) {
+    val r = EdgeWellsGeometry.rect(a, full.width, full.height, d, feel.insetLeft, feel.insetRight)
+    // the hot one grows by 8 dp into the screen
     val hotT = com.scottgerstl.lupe.ui.theme.animatedFloat(if (hot) 1f else 0f, 120).value
     val g = 8f * d * hotT
-    val grown = when (a) {
-        EdgeAction.Clear -> Rect(r.left - 4f * d * hotT, r.top - g, r.right + 4f * d * hotT, r.bottom)
-        EdgeAction.Edit -> Rect(r.left - g, r.top - g, r.right, r.bottom + g)
-        EdgeAction.Duplicate -> Rect(r.left, r.top - g, r.right + g, r.bottom + g)
+    val e = a.edge
+    val grown = when (e) {
+        WellEdge.Bottom -> Rect(r.left - 4f * d * hotT, r.top - g, r.right + 4f * d * hotT, r.bottom)
+        WellEdge.Top -> Rect(r.left - 4f * d * hotT, r.top, r.right + 4f * d * hotT, r.bottom + g)
+        WellEdge.Right -> Rect(r.left - g, r.top - g, r.right, r.bottom + g)
+        WellEdge.Left -> Rect(r.left, r.top - g, r.right + g, r.bottom + g)
     }
     // slides in from its own edge
-    val slide = if (reduce) Offset.Zero else when (a) {
-        EdgeAction.Clear -> Offset(0f, (1f - p) * (grown.height + 8f * d))
-        EdgeAction.Edit -> Offset((1f - p) * (grown.width + 8f * d), 0f)
-        EdgeAction.Duplicate -> Offset(-(1f - p) * (grown.width + 8f * d), 0f)
+    val travel = if (a.across) grown.height else grown.width
+    val slide = if (reduce) Offset.Zero else when (e) {
+        WellEdge.Bottom -> Offset(0f, (1f - p) * (travel + 8f * d))
+        WellEdge.Top -> Offset(0f, -(1f - p) * (travel + 8f * d))
+        WellEdge.Right -> Offset((1f - p) * (travel + 8f * d), 0f)
+        WellEdge.Left -> Offset(-(1f - p) * (travel + 8f * d), 0f)
     }
     val glowA = if (hot) 1f else glow
+    val dens = androidx.compose.ui.platform.LocalDensity.current
     Box(
         Modifier.offset { IntOffset((grown.left + slide.x).roundToInt(), (grown.top + slide.y).roundToInt()) }
-            .size(with(androidx.compose.ui.platform.LocalDensity.current) { grown.width.toDp() }, with(androidx.compose.ui.platform.LocalDensity.current) { grown.height.toDp() })
-            .graphicsLayer { alpha = if (reduce) p else 1f },
+            .size(with(dens) { grown.width.toDp() }, with(dens) { grown.height.toDp() })
+            .graphicsLayer { alpha = (if (reduce) p else 1f) * (if (off) 0.45f else 1f) },
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val rad = 12.dp.toPx()
             val z = CornerRadius.Zero; val c = CornerRadius(rad)
             // square on the edge side, rounded 12 inside
             val shape = RoundRect(Rect(Offset.Zero, size),
-                topLeft = if (a == EdgeAction.Duplicate) z else c,
-                bottomLeft = if (a == EdgeAction.Clear || a == EdgeAction.Duplicate) z else c,
-                bottomRight = if (a == EdgeAction.Clear || a == EdgeAction.Edit) z else c,
-                topRight = if (a == EdgeAction.Edit) z else c)
+                topLeft = if (e == WellEdge.Bottom || e == WellEdge.Right) c else z,
+                bottomLeft = if (e == WellEdge.Top || e == WellEdge.Right) c else z,
+                bottomRight = if (e == WellEdge.Top || e == WellEdge.Left) c else z,
+                topRight = if (e == WellEdge.Bottom || e == WellEdge.Left) c else z)
             val path = Path().apply { addRoundRect(shape) }
-            // the glow around it, building in the track colour
+            // the glow around it, building in its colour
             if (glowA > 0f) for (k in 3 downTo 1) drawPath(path, tint.copy(alpha = (if (hot) 0.5f else 0.4f * glowA) * 0.18f), style = Stroke(width = k * 5.dp.toPx() * glowA.coerceAtLeast(0.2f)))
             if (!hot) drawPath(path, Color.Black.copy(alpha = 0.62f))
-            drawPath(path, tint.copy(alpha = if (hot) 1f else 0.35f * glowA))
+            // (Cancel's a soft white, not a colour)
+            drawPath(path, tint.copy(alpha = if (hot) (if (a == EdgeAction.Cancel) 0.85f else 1f) else (if (a == EdgeAction.Cancel) 0.18f else 0.35f) * glowA))
             // dashes on the three inner sides: the outline, pushed 4 dp past the edge it sits on so that side is off the screen
             val pad = 4.dp.toPx()
             val out = Rect(
-                if (a == EdgeAction.Duplicate) -pad else 0f, 0f,
-                if (a == EdgeAction.Edit) size.width + pad else size.width, if (a == EdgeAction.Clear) size.height + pad else size.height)
+                if (e == WellEdge.Left) -pad else 0f, if (e == WellEdge.Top) -pad else 0f,
+                if (e == WellEdge.Right) size.width + pad else size.width, if (e == WellEdge.Bottom) size.height + pad else size.height)
             val dashed = Path().apply {
                 addRoundRect(RoundRect(out, topLeft = shape.topLeftCornerRadius, bottomLeft = shape.bottomLeftCornerRadius, bottomRight = shape.bottomRightCornerRadius, topRight = shape.topRightCornerRadius))
             }
@@ -180,15 +231,22 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, gl
                 style = Stroke(1.5.dp.toPx(), pathEffect = if (hot) null else PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
         }
         val ink = if (hot) Tok.onColour else Tok.text
-        val icon = if (a == EdgeAction.Clear) R.drawable.ms_delete else if (a == EdgeAction.Edit) R.drawable.ms_edit else R.drawable.ms_library_add
+        val icon = when (a) { EdgeAction.Cancel -> R.drawable.ms_close; EdgeAction.ClearSteps -> R.drawable.ms_delete_sweep; EdgeAction.Delete -> R.drawable.ms_delete; EdgeAction.Edit -> R.drawable.ms_edit; EdgeAction.Duplicate -> R.drawable.ms_library_add }
         val tintF = ColorFilter.tint(if (hot) Tok.onColour else Tok.text2)
-        if (a == EdgeAction.Clear) {
-            Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
+        // the side well by the camera cutout: its icon and label keep clear of the hole punch by the cutout's margin (the well stays on the edge)
+        val inL = if (a == EdgeAction.Duplicate) with(dens) { feel.insetLeft.toDp() } else 0.dp
+        val inR = if (a == EdgeAction.Edit) with(dens) { feel.insetRight.toDp() } else 0.dp
+        val labelBox = Modifier.align(Alignment.Center).padding(start = inL, end = inR)
+        if (a.across) {
+            Row(labelBox, verticalAlignment = Alignment.CenterVertically) {
                 Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = tintF)
-                BasicText("  Clear", style = LupeType.key.copy(fontSize = 14.sp, color = ink))
+                Column(Modifier.padding(start = 8.dp)) {
+                    BasicText(a.title, style = LupeType.key.copy(fontSize = 14.sp, color = ink), maxLines = 1)
+                    if (off) BasicText("Stop first", style = LupeType.small.copy(fontSize = 11.sp, color = Tok.text2))
+                }
             }
         } else {
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(labelBox, horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = tintF)
                 BasicText(a.title, Modifier.offset(y = 4.dp), style = LupeType.key.copy(fontSize = 13.sp, color = ink), maxLines = 1)
             }

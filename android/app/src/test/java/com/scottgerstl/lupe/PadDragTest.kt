@@ -20,22 +20,45 @@ class PadDragTest {
     private fun slot(t: Int, i: Int, empty: Boolean, x: Float, y: Float, landing: Int = i) = DropSlot(t, i, landing, empty, Rect(x, y, x + 80f, y + 40f))
 
     @Test fun theWellsAreTheBoards() {
-        val c = EdgeWellsGeometry.rect(EdgeAction.Clear, w, h, 1f)
+        val c = EdgeWellsGeometry.rect(EdgeAction.Cancel, w, h, 1f)
         assertEquals(434f, c.width, 0.01f); assertEquals(52f, c.height, 0.01f); assertEquals(h, c.bottom, 0.01f)
         val e = EdgeWellsGeometry.rect(EdgeAction.Edit, w, h, 1f); val dup = EdgeWellsGeometry.rect(EdgeAction.Duplicate, w, h, 1f)
         assertEquals(64f, e.width, 0.01f); assertEquals(w, e.right, 0.01f); assertEquals(238f, e.height, 0.01f)
         assertEquals(0f, dup.left, 0.01f); assertEquals(64f, dup.width, 0.01f); assertEquals((h - 238f) / 2, dup.top, 0.01f)
     }
 
+    @Test fun theTopHoldsClearStepsAndDeletePatternSideBySide() {
+        val a = EdgeWellsGeometry.rect(EdgeAction.ClearSteps, w, h, 1f); val b = EdgeWellsGeometry.rect(EdgeAction.Delete, w, h, 1f)
+        assertEquals(0f, a.top, 0.01f); assertEquals(52f, a.height, 0.01f); assertEquals(8f, b.left - a.right, 0.01f)
+        assertEquals(a.width, b.width, 0.01f); assertEquals(w / 2, (a.left + b.right) / 2, 0.01f)
+        assertEquals(EdgeAction.ClearSteps, EdgeWellsGeometry.hot(Offset(a.center.x, 60f), w, h, 1f, feel))
+        assertEquals(EdgeAction.Delete, EdgeWellsGeometry.hot(Offset(b.center.x, 60f), w, h, 1f, feel))
+    }
+
+    @Test fun deleteIsNeverHotWhilePlayingAndDoesNotGlow() {
+        val playing = feel.copy(off = setOf(EdgeAction.Delete))
+        val b = EdgeWellsGeometry.rect(EdgeAction.Delete, w, h, 1f)
+        assertNull(EdgeWellsGeometry.hot(Offset(b.center.x, 20f), w, h, 1f, playing))
+        assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Delete, Offset(b.center.x, 20f), w, h, 1f, playing), 0.001f)
+        assertEquals(EdgeAction.ClearSteps, EdgeWellsGeometry.hot(Offset(EdgeWellsGeometry.rect(EdgeAction.ClearSteps, w, h, 1f).center.x, 20f), w, h, 1f, playing))   // Clear steps works playing
+    }
+
+    @Test fun theSideWellByTheCameraCutoutWidensByItsMargin() {
+        val plain = EdgeWellsGeometry.rect(EdgeAction.Duplicate, w, h, 1f); val cut = EdgeWellsGeometry.rect(EdgeAction.Duplicate, w, h, 1f, insetLeft = 40f)
+        assertEquals(0f, cut.left, 0.01f); assertEquals(plain.width + 40f, cut.width, 0.01f)
+        val e = EdgeWellsGeometry.rect(EdgeAction.Edit, w, h, 1f, insetRight = 40f)
+        assertEquals(w, e.right, 0.01f); assertEquals(64f + 40f, e.width, 0.01f)
+    }
+
     @Test fun hotWithinTheHotDistanceGlowFromTheGlowDistance() {
         assertNull(EdgeWellsGeometry.hot(Offset(400f, 200f), w, h, 1f, feel))
-        assertEquals(EdgeAction.Clear, EdgeWellsGeometry.hot(Offset(437f, h - 52f - 40f), w, h, 1f, feel))
+        assertEquals(EdgeAction.Cancel, EdgeWellsGeometry.hot(Offset(437f, h - 52f - 40f), w, h, 1f, feel))
         assertNull(EdgeWellsGeometry.hot(Offset(437f, h - 52f - 60f), w, h, 1f, feel))
         assertEquals(EdgeAction.Edit, EdgeWellsGeometry.hot(Offset(w - 64f - 10f, 200f), w, h, 1f, feel))
         assertEquals(EdgeAction.Duplicate, EdgeWellsGeometry.hot(Offset(60f, 200f), w, h, 1f, feel))
-        assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Clear, Offset(437f, h - 52f - 96f), w, h, 1f, feel), 0.001f)
-        assertEquals(0.5f, EdgeWellsGeometry.closeness(EdgeAction.Clear, Offset(437f, h - 52f - 48f), w, h, 1f, feel), 0.001f)
-        assertEquals(1f, EdgeWellsGeometry.closeness(EdgeAction.Clear, Offset(437f, h - 10f), w, h, 1f, feel), 0.001f)
+        assertEquals(0f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 52f - 96f), w, h, 1f, feel), 0.001f)
+        assertEquals(0.5f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 52f - 48f), w, h, 1f, feel), 0.001f)
+        assertEquals(1f, EdgeWellsGeometry.closeness(EdgeAction.Cancel, Offset(437f, h - 10f), w, h, 1f, feel), 0.001f)
     }
 
     @Test fun aSlideBeforeTheDwellIsASwipeAfterItALift() {

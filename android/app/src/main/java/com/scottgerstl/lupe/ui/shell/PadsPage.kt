@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -406,7 +407,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         val fullPool = empty && (pads.patternsFree == 0 || kept0.size >= 64)
         // a pad cleared a moment ago: the way back, here as well as in the Undo strip
         val undo = pads.clearUndo.lastOrNull { !it.block && it.track == row.track && it.entry == at }
-        if (undo != null) add(HoldItem("Undo clear", sub = undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
+        if (undo != null) add(HoldItem(if (undo.kind == "steps") "Undo clear steps" else "Undo clear", sub = if (undo.kind == "steps") "The notes come back" else undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
         if (empty) {
             // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap, and offers the ways on (board 79.4)
             val full = fullPool
@@ -441,7 +442,10 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         if (!empty) {
             val erases = e.kind == PadKind.Pattern && others.isEmpty()
             // no confirm (batch item 13): it clears at once and an Undo strip, and "Undo clear" in this pad's menu, put it back for ten seconds
-            add(HoldItem("Clear", sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null) { core.send(Intent.PadClear(row.track, at)) })
+            // decision 41: Clear steps wipes the notes and keeps the pad (works while playing on the pattern the track is on; a pattern others use loses its notes there too);
+            // Delete pattern takes the pad (stopped only: the FM-1 rewrites a list only while stopped)
+            if (e.kind == PadKind.Pattern) add(HoldItem("Clear steps", sub = if (others.isNotEmpty()) "Pattern %02d is shared: its notes clear on ${others.first()} too".format(e.pattern) else "Keeps the pad and the pattern") { core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at)) })
+            add(HoldItem("Delete pattern", sub = if (!core.top.value.playing || e.kind != PadKind.Pattern) (if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null) else "Stop first", enabled = !core.top.value.playing || e.kind != PadKind.Pattern) { core.send(Intent.PadClear(row.track, at)) })
         }
     }
     val what = when (e.kind) { PadKind.Empty -> "empty"; PadKind.Rest -> "rest"; PadKind.Pattern -> "pattern ${e.pattern}" }
@@ -466,6 +470,19 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         core.send(Intent.PadSelect(row.track, at)); if (!selectMode && !empty) core.send(Intent.PadTap(row.track, at))
     }
 
+    // a copy into the track's next empty slot, sprouting out of this pad; with no empty slot or no free number the core says so in its refusal
+    fun duplicateIntoNext() {
+        val free = row.entries.indexOfFirst { it.kind == PadKind.Empty }
+        val blk = core.timeline.value.tracks.firstOrNull { it.track == row.track }?.blocks.orEmpty().firstOrNull { it.kind != "gap" && at in it.first..it.last }
+        val from = padCoords?.takeIf { it.isAttached }?.boundsInWindow()
+        when {
+            free < 0 || free >= 16 -> blk?.let { core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, it.id)) }
+            e.kind == PadKind.Rest -> core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, free, 65))
+            e.pattern != null -> core.send(com.scottgerstl.lupe.core.CopyPattern(e.pattern, row.track, free))
+            else -> return
+        }
+        if (free in 0..15 && from != null) dragState?.sprout = PadSprout(row.track, free, from, color)
+    }
     // dragging (the iPhone's rule): press then slide lifts the pad with no menu; a still hold opens the menu and moving off it lifts; the drop goes to a well, a slot or back
     val dragger = if (empty || dragState == null) null else object : PadDragger {
         override fun lift(finger: Offset, grabLocal: Offset) {
@@ -477,7 +494,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         override fun drop(finger: Offset) {
             val d = dragState.drag?.copy(finger = finger); dragState.drag = null
             if (d == null) return
-            val feel = WellFeel(labs.wellGlowDp * dens, labs.wellHotDp * dens)
+            val feel = dragState.lastFeel      // (what was drawn: the same hot well, the same refusals)
             // (the finger and the slots are both in window pixels; the wells are in the layer's own)
             val act = decideDrop(d.copy(finger = finger - dragState.origin), dragState.slots.values.map { it.copy(rect = it.rect.translate(-dragState.origin)) }, dragState.screen.width, dragState.screen.height, dens, feel) ?: return
             when (act) {
@@ -487,25 +504,30 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     HoldItem("A copy", sub = "Takes a free number") { core.send(com.scottgerstl.lupe.core.CopyPattern(act.pattern, act.toTrack, act.to)) },
                 ))
                 is DropAction.Well -> when (act.action) {
-                    // no confirm (batch item 13): it clears at once and the Undo strip puts it back
-                    EdgeAction.Clear -> core.send(Intent.PadClear(row.track, at))
+                    EdgeAction.Cancel -> Unit          // the pad goes back
+                    // wipes the notes, keeps the pad: works while playing on the pattern the track is on; the core says otherwise (and Undo brings them back)
+                    EdgeAction.ClearSteps -> core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at))
+                    // no confirm (batch item 13): the pad goes at once and the Undo strip puts it back; stopped only (the well is greyed while playing)
+                    EdgeAction.Delete -> core.send(Intent.PadClear(row.track, at))
                     EdgeAction.Edit -> { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) }
-                    EdgeAction.Duplicate -> {
-                        // into the track's next empty slot; with none, or no free number, the core says so in its refusal
-                        val free = row.entries.indexOfFirst { it.kind == PadKind.Empty }
-                        val blk = core.timeline.value.tracks.firstOrNull { it.track == row.track }?.blocks.orEmpty().firstOrNull { it.kind != "gap" && at in it.first..it.last }
-                        when {
-                            free < 0 || free >= 16 -> blk?.let { core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, it.id)) }
-                            e.kind == PadKind.Rest -> core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, free, 65))
-                            e.pattern != null -> core.send(com.scottgerstl.lupe.core.CopyPattern(e.pattern, row.track, free))
-                        }
-                    }
+                    EdgeAction.Duplicate -> duplicateIntoNext()
                 }
             }
         }
     }
+    // a duplicate that sprouted from another pad: its slot is this one, so the flight can aim here (the slot is scrolled into view first)
+    val bring = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    val sp = dragState?.sprout
+    androidx.compose.runtime.LaunchedEffect(sp, e.kind) {
+        if (sp != null && sp.to == null && sp.track == row.track && sp.idx == idx && e.kind != PadKind.Empty) {
+            bring.bringIntoView()
+            androidx.compose.runtime.withFrameNanos { }
+            val b = padCoords?.takeIf { it.isAttached }?.boundsInWindow() ?: return@LaunchedEffect
+            if (dragState.sprout == sp) dragState.sprout = sp.copy(to = b)
+        }
+    }
     val lifted = dragState?.drag?.let { it.track == row.track && it.from == at } == true
-    Box(modifier.width(PAD_W).height(h).graphicsLayer { alpha = if (lifted) 0.35f else 1f }.onGloballyPositioned {
+    Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (lifted) 0.35f else 1f }.onGloballyPositioned {
         padCoords = it
         dragState?.slots?.set(row.track to idx, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
     }) {
@@ -541,7 +563,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     customActions = buildList {
                         if (e.kind == PadKind.Pattern) { add(CustomAccessibilityAction("Edit steps") { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)); true }); add(CustomAccessibilityAction("Select sound") { core.send(Intent.PadSelectSound(row.track, at)); true }) }
                         if (empty && pads.patternsFree != 0) add(CustomAccessibilityAction("New pattern") { core.send(Intent.PadNew(row.track, at)); true })
-                        if (!empty) add(CustomAccessibilityAction("Clear pad") { core.send(Intent.PadClear(row.track, at)); true })
+                        if (e.kind == PadKind.Pattern) add(CustomAccessibilityAction("Clear steps") { core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at)); true })
+                        if (!empty) add(CustomAccessibilityAction("Delete pattern") { core.send(Intent.PadClear(row.track, at)); true })
                     }
                 }
                 .tapOrHoldMenu(Triple(row.track, at, e.kind), color, { padItems() }, onTap = { tap() }, pressed = { pressed = it }, dragger = dragger),
