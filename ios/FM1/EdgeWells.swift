@@ -76,12 +76,13 @@ struct PadDragShow: Equatable {
         return hypot(dx, dy)
     }
 
-    /// 0…1: how near the pad's centre is to the well, from the glow distance in.
+    /// 0…1: how near the pad's centre is to the well: 0 from the glow distance out, 1 at the hot distance.
     static func closeness(_ a: EdgeAction, centre: CGPoint, screen: CGSize, off: Set<EdgeAction> = []) -> Double {
         if off.contains(a) { return 0 }
+        // (Scott, 2026-11-15: earlier and steadier) 0 at the glow distance, rising evenly to full at the hot distance
         let d = distance(centre, rect(a, in: screen))
-        let glow = CGFloat(Labs.wellGlow.value)
-        return Double(max(0, min(1, 1 - d / glow)))
+        let glow = CGFloat(Labs.wellGlow.value), hot = CGFloat(Labs.wellHot.value)
+        return Double(max(0, min(1, (glow - d) / max(1, glow - hot))))
     }
 
     /// The well a drop at `centre` lands in: the nearest within the hot distance.
