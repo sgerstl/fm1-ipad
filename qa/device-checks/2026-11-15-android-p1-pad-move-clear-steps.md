@@ -25,6 +25,8 @@ FM-1 saves both). Scott, 2026-11-14: "nothing on the FM-1 matters now", so he ma
 | 7 | Playing: Clear steps on a pad the track is not playing. | A strip says only the playing pattern can be cleared while playing. Nothing changes. | – | ☐ pass ☐ fail: |
 | 8 | Stopped: Clear steps on a pad the track is not on. | The track goes to that pad, its notes are gone, and Undo brings them back. | Yes | ☐ pass ☐ fail: |
 
+| 9 | Watch the rows while you swap two pads, delete a block in the middle, undo it, and duplicate a block (needs P2's row animations). | Each pad slides to its new place as itself: nothing blinks out and back, the undone block returns into its gap, and only the copy fades in. | Yes | ☐ pass ☐ fail: |
+
 **Not covered here:**
 
 - Whether the gap a move leaves should close (pattern-pad.md B18, still open): this build keeps it, as the iPad does.

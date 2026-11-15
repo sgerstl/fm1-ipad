@@ -17,6 +17,7 @@ extension PhoneCore {
         for t in s.trackIndices {
             let list = song?.tracks[safe: t]
             let blocks = store?.blocks(t) ?? []
+            let blockKeys = entryKeys(t)
             let marks = store?.marks(t, launchIn: nil) ?? SongPlayback.Marks()
             let out = blocks.map { b -> TimelineArea.Block in
                 let pats = b.entries.compactMap { i -> Int? in
@@ -25,7 +26,7 @@ extension PhoneCore {
                 }
                 let kind: String = switch b.kind { case .pattern: "pattern"; case .rest: "rest"; case .gap: "gap" }
                 let hasSound = list?.entries[safe: b.entries.lowerBound]?.sound != nil
-                return TimelineArea.Block(id: b.id, first: b.entries.lowerBound, last: b.entries.upperBound, kind: kind,
+                return TimelineArea.Block(id: b.id, key: blockKeys[safe: b.entries.lowerBound] ?? 0, first: b.entries.lowerBound, last: b.entries.upperBound, kind: kind,
                                           pattern: pats.first, patterns: pats, reps: b.reps,
                                           startBar: (b.start / perBar * 1000).rounded() / 1000,
                                           lengthBars: (b.length / perBar * 1000).rounded() / 1000,

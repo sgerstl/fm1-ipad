@@ -72,6 +72,9 @@ public struct PadsArea: Codable, Equatable, Sendable {
         /// the row's passTicks and passStartTick on the clock.
         public var progress: Double?
         public var hasSound = false
+        /// The same for this pad through moves, swaps, deletes around it and an undo; a copy or a new pad gets a new
+        /// one. 0 on an empty pad. For animating a row's changes (EntryKeys.swift).
+        public var key = 0
     }
     public struct Row: Codable, Equatable, Sendable {
         public var track: Int            // 1-based

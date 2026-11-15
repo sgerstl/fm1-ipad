@@ -9,6 +9,9 @@ public struct TimelineArea: Codable, Equatable, Sendable {
     public struct Block: Codable, Equatable, Sendable {
         /// The block's first entry (0-based): what the intents name it by.
         public var id: Int
+        /// The same for this block through moves and deletes around it and an undo (its first entry's pad key,
+        /// EntryKeys.swift); 0 on a gap. `id` changes when blocks before it go; this doesn't.
+        public var key = 0
         public var first: Int
         public var last: Int
         /// "pattern", "rest", or "gap" (an empty entry inside the list: Skiff passes over it)
