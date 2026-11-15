@@ -254,7 +254,7 @@ data class EditorState(
     /** "C min", or "" for a drum kit. */
     val scale: String = "",
     val kind: EditorKind = EditorKind.Roll,
-    /** Sixteen. */
+    /** The pattern's steps (sixteen from the core until it carries more: see [patternSteps]). */
     val steps: List<Step> = emptyList(),
     val selected: Int = 0,
     /** -1 when stopped. */
@@ -270,4 +270,10 @@ data class EditorState(
     /** A kit's lanes in its own order ("BD", "SD"…) and the notes they play; both empty on a note track. */
     val kitLanes: List<String> = emptyList(),
     val kitNotes: List<Int> = emptyList(),
+    /**
+     * The pattern's step count (the FM-1's LENGTH, 1…[patternStepsMax]) and the most it can be (64). [steps] carries as many steps as the
+     * core sends, up to this many; a step the list doesn't reach is empty. Edit's grid scrolls through them in chunks of sixteen.
+     */
+    val patternSteps: Int = 16,
+    val patternStepsMax: Int = 64,
 )
