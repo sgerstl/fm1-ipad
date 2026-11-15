@@ -18,6 +18,9 @@ struct PhoneAppView: View {
     @ViewBuilder private func tabPage(_ t: PhoneTab) -> some View {
         switch t {
         case .edit: PhoneSequence(session: session, ui: ui)
+        case .mix:
+            // the six tracks' levels, pans, sends, mutes and meters (GLO's MIXER); the shared pages are the pop-up's
+            PhoneMixerRows(session: session, ui: ui).padding(.leading, 8)
         case .pads, .timeline:
             if session.capabilities.contains(.sloopSong) { SongPage(session: session, ui: ui, compact: true) }
             else if let store = session.skiffSong {
@@ -73,6 +76,11 @@ struct PhoneAppView: View {
         }
         // another tab closes the sound panel (the FM-1's key or the rail brings it back)
         .onChange(of: ui.phoneTab) { _, _ in if ui.songTab { ui.soundPanel = nil } }
+        // GLO on the FM-1: its MIXER page is the Mix tab; DELAY, REVERB, CHORUS and GLOBAL open the pop-up over it
+        .onChange(of: ui.mixerSection) { _, sec in
+            guard ui.pageFromDevice, ui.songTab else { return }
+            ui.mixPopup = sec != .mixer
+        }
         .padding(.horizontal, 8)
         .padding(.top, 0)
         // a held knob's full-size ring, over everything and kept on the screen, as on the iPad

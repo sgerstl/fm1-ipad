@@ -7,17 +7,19 @@ import SwiftUI
 // content, so words and rounds here, square keys stay the content's. 48 pt with a hairline under it. iPhone only.
 
 /// The phone's three tabs, laid over the app's pages: Pads and the Timeline are the Song page's two views, Edit is
-/// Sequence. Mix and Sounds are sheets on the phone now (decision 33).
+/// Sequence, Mix the GLO MIXER page (batch item 10, 2026-11-15: the tab is back; DELAY, REVERB, CHORUS and GLOBAL open
+/// the Mix pop-up). Sounds is a sheet (decision 33).
 enum PhoneTab: Int, CaseIterable, Identifiable {
-    case pads, edit, timeline
+    case pads, edit, timeline, mix
     var id: Int { rawValue }
-    var title: String { ["Pads", "Edit", "Timeline"][rawValue] }
+    var title: String { ["Pads", "Edit", "Timeline", "Mix"][rawValue] }
 }
 
 extension EditorUI {
     /// The tab showing, read from the page and the Song page's view.
     var phoneTab: PhoneTab {
         if page == .sequencer { return .edit }
+        if page == .mixer { return .mix }
         return songView == .timeline ? .timeline : .pads
     }
     func setPhoneTab(_ t: PhoneTab) {
@@ -25,6 +27,7 @@ extension EditorUI {
         case .pads: songView = .pads; page = .song
         case .edit: page = .sequencer
         case .timeline: songView = .timeline; page = .song
+        case .mix: page = .mixer          // (batch item 10: the Mix tab is back; GLO's shared pages still open the pop-up)
         }
     }
 }

@@ -91,7 +91,14 @@ struct PhoneMixerRows: View {
         let id = strips.revID
         VStack(spacing: 4) {
             ForEach(Array(session.trackIndices), id: \.self) { t in
-                PhoneMixerRow(session: session, row: strips.row(t, id), touched: touched).equatable()
+                let row = strips.row(t, id)
+                PhoneMixerRow(session: session, row: row, touched: touched).equatable()
+                    // the track's meter, as the iPad strip's (LevelLine): a live line in its colour along the row's leading edge
+                    .overlay(alignment: .leading) {
+                        LevelLine(meters: session.meters, track: t, muted: row.mute, tint: Theme.track[t])
+                            .frame(width: 3).padding(.vertical, 6).offset(x: -6)
+                            .accessibilityHidden(true)
+                    }
             }
             Spacer(minLength: 0)
         }

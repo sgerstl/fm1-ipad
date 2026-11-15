@@ -60,11 +60,7 @@ final class EditorUI {
             if shell, page == .sequencer, !phone { page = .song }
             // the iPad has no Sounds tab on Skiff: whatever asks for it (the FM-1's SAVE, a launch flag) gets the sounds
             // panel over the tab that was up
-            // the phone (decision 33): Mix is the GLO pop-up and Sounds a sheet, never tabs; whatever asks for them gets those
-            if shell, phone, page == .mixer {
-                page = oldValue == .mixer ? .song : oldValue
-                mixPopup = true
-            }
+            // the phone: Sounds is a sheet, never a tab (decision 33); Mix is a tab again (batch item 10, 2026-11-15)
             if shell, page == .library, Page.padHasNoSoundsTab || phone {
                 page = oldValue == .library ? .song : oldValue
                 presetsPanel = true
