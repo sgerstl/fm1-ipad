@@ -20,11 +20,25 @@
 - **Why the rate changed:** at 48 kHz the FM-1 now delivers exactly 48 frames per USB millisecond, so a host measures the USB clock, not the I2S clock. −26 ppm is the Mac's clock against the FM-1's USB frames.
 - **The phone-gap counter climbed during silence (15,996).** That was the detector misfiring on Skiff's undithered silence, not real gaps. Fixed in the app the same day: gaps count only inside a signal.
 
-**Still to run** (B1-1, B1-2, B1-3 on the Pixel 10, B1-5):
-- the Mac with sound;
-- 44.1 kHz on the Mac;
-- the Pixel 10;
-- the iPad (Play through the iPad, screen link, MIDI, a project load and save).
+**B1-3 and B1-4 pass on both phones** (Lupe 0ab0a96, concealment off, FM6 playing):
+
+| | Pixel 7 | Pixel 10 |
+|---|---|---|
+| FM6, peak | 0.5–0.66, a full minute | 0.665 |
+| dejitter lines | 0 | 0 in 20 s |
+| phone gaps (zero, repeat) | 0 (0, 0) | 0 |
+| Lupe gaps / xruns | 0 / 0 | 0 / 0 |
+| total delay | 16–17 ms | 16.4 ms |
+| Scott, by ear | "Gone" | "Clean" |
+
+Repeat gaps 0 means the FM-1's ring never ran dry under FM6's render load (B1-4).
+
+**Still to run:**
+- B1-1, the Mac with sound;
+- B1-2, 44.1 kHz on the Mac;
+- B1-5, the iPad (Play through the iPad, screen link, MIDI, a project load and save).
+
+**Release and upstream:** prepared, not done: `firmware/proposals/2026-11-15-b1-release-plan.md`.
 
 ## Results (host only, 2026-11-15)
 

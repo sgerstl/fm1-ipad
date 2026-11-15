@@ -293,3 +293,10 @@ So both phones insert gaps on both paths, and Lupe adds none. *Scott's ear; the 
 | B1-4 | FM6 for a minute on either Pixel: Details' `(Z zero, R repeat)` | R stays 0 (the FM-1's ring never ran dry) |
 | B1-5 | iPad: Play through the iPad; the screen link (pages follow); MIDI (keys, transport); load and save a project | All as on 2.5.1 |
 | B1-6 | Scott decides: keep B1, or roll back (`fm1fw install firmware/releases/Skiff-Lupe-2.5.1.fwsc --backup-dir …`, pinned, no `--experimental`) | – |
+
+**Round 6, continued:** B1-3 and B1-4 pass on both phones (Lupe 0ab0a96, concealment off, FM6):
+- dejitter 0, phone gaps 0, Lupe gaps 0, xruns 0;
+- Pixel 7 16–17 ms over a full minute, Pixel 10 16.4 ms;
+- Scott: "Gone" (Pixel 7), "Clean" (Pixel 10).
+
+Left: B1-1 (the Mac with sound), B1-2 (44.1 kHz), B1-5 (the iPad).
