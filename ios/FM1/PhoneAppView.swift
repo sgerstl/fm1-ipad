@@ -19,7 +19,7 @@ struct PhoneAppView: View {
         switch t {
         case .edit: PhoneSequence(session: session, ui: ui)
         case .mix:
-            // the six tracks' levels, pans, sends, mutes and meters (GLO's MIXER); the shared pages are the pop-up's
+            // the six tracks' levels, pans, sends, mutes and meters (GLO's MIXER); GLO's other pages are the sound panel's
             PhoneMixerRows(session: session, ui: ui).padding(.leading, 8)
         case .pads, .timeline:
             if let store = session.skiffSong {
@@ -54,6 +54,12 @@ struct PhoneAppView: View {
                 // a button pressed on the FM-1 brings up the tab that shows its screen, as on the iPad
                 .onChange(of: session.deviceScreen) { _, s in
                     if session.dialect == .skiff { SeqCursor.follow(s, session: session, ui: ui) }
+                    // GLO 2/5 to 5/5 come in on the sound panel over the tab that's up; MIXER (1/5) is the Mix tab and
+                    // closes a GLO panel (decision 44)
+                    if let s, !s.home, s.layer == 0, s.menu == 0,
+                       SoundPage.page(session, fw: s.page)?.family == .glo || s.page == SkiffButtonMap.MixerTab.mixer.page {
+                        if SoundPanelControl.follow(s, session: session, ui: ui) { return }
+                    }
                     guard ui.followDevice, let s, let tab = SoundPage.tab(for: s, session), tab != ui.page else { return }
                     ui.pageFromDevice = true
                     ui.page = tab
@@ -75,11 +81,6 @@ struct PhoneAppView: View {
         }
         // another tab closes the sound panel (the FM-1's key or the rail brings it back)
         .onChange(of: ui.phoneTab) { _, _ in if ui.songTab { ui.soundPanel = nil } }
-        // GLO on the FM-1: its MIXER page is the Mix tab; DELAY, REVERB, CHORUS and GLOBAL open the pop-up over it
-        .onChange(of: ui.mixerSection) { _, sec in
-            guard ui.pageFromDevice, ui.songTab else { return }
-            ui.mixPopup = sec != .mixer
-        }
         .padding(.horizontal, 8)
         .padding(.top, 0)
         // a held knob's full-size ring, over everything and kept on the screen, as on the iPad
@@ -89,11 +90,6 @@ struct PhoneAppView: View {
         .overlay {
             PhoneSheetFrame(open: ui.presetsPanel, height: 330, label: "Sounds", close: { ui.presetsPanel = false }) {
                 PhoneSoundsSheet(session: session, ui: ui)
-            }
-        }
-        .overlay {
-            PhoneSheetFrame(open: ui.mixPopup, height: 320, label: "Mix", close: { ui.mixPopup = false }) {
-                PhoneMixPopup(session: session, ui: ui)
             }
         }
         .overlay {

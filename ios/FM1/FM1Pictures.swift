@@ -5,7 +5,7 @@ import SwiftUI
 // `ui_pgraph.c`, formulas with file and line in `design/boards/fm1-screens/NOTES.md`): GLO › DELAY, REVERB, CHORUS and
 // GLOBAL in the FM-1's coordinates (x 0–240, canvas y 0–137, so its 1.7 : 1), square corners and whole-pixel stepped
 // tails, no gradients or fades it doesn't draw. Colour stays global: where the FM-1 uses the selected track's colour
-// these use a light grey, its darker mixes kept apart as greys (`mix`), white stays white. iPhone only (PhoneMixPopup).
+// these use a light grey, its darker mixes kept apart as greys (`mix`), white stays white. iPhone only (the sound panel’s GLO pages, decision 44).
 
 struct FM1Picture: View {
     let session: DeviceSession

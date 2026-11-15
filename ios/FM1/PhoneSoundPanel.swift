@@ -76,13 +76,15 @@ struct PhoneSoundPanel: View {
         let pages = SoundPage.shown(session, family)
         let current = (session.screenLinked ? pages.first { SoundCard.onDevice(session, $0) } : nil)
             ?? pages.first { $0.id == ui.focusedPage?.id } ?? pages.first
-        let n = current.flatMap { c in pages.firstIndex { $0.id == c.id } }.map { $0 + 1 } ?? 0
+        // GLO counts its MIXER, the Mix tab, as 1/5 (decision 44): its pages here are 2/5 to 5/5
+        let glo = family == .glo, offset = glo ? 1 : 0
+        let n = current.flatMap { c in pages.firstIndex { $0.id == c.id } }.map { $0 + 1 + offset } ?? 0
         VStack(alignment: .leading, spacing: 8) {
             // the dials' header, the only page label (decision 27): family, page n/count, page name; the close arrow
             HStack(spacing: 8) {
                 Text(family.rawValue).font(.lupe(17, .semibold)).accessibilityAddTraits(.isHeader)
                 if let c = current {
-                    Text("\(n)/\(pages.count) \(c.title(session))").font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised)
+                    Text("\(n)/\(pages.count + offset) \(c.title(session))").font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised)
                         .lineLimit(1).contentTransition(.opacity)
                 }
                 Spacer(minLength: 0)
@@ -102,7 +104,17 @@ struct PhoneSoundPanel: View {
                             HStack(spacing: 0) {
                                 ForEach(0..<4, id: \.self) { k in PageDial(session: session, ui: ui, page: c, slot: k, marks: marks).frame(maxWidth: .infinity) }
                             }
-                            if graphics, PageGraph.has(c, session) {
+                            // a setting that isn't a knob (GLO › DELAY's MODE): one row of pick tiles, 56 pt
+                            ForEach(c.settings, id: \.self) { id in PanelPick(session: session, scope: c.scope, id: id) }
+                            if graphics, FM1Picture.titles.contains(c.title) {
+                                // GLO's pages: the FM-1's own drawing in the global greys (board 77), the rest of the height at
+                                // the FM-1's 936 : 552, centred
+                                FM1Picture(session: session, page: c)
+                                    .aspectRatio(936.0 / 552.0, contentMode: .fit)
+                                    .padding(6)
+                                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else if graphics, PageGraph.has(c, session) {
                                 PageGraph(session: session, page: c, rows: [c], hot: hot(c), modRoute: .constant(0))
                                     .padding(6)
                                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
@@ -134,9 +146,10 @@ struct PhoneSoundPanel: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background {
             UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 0)
-                .fill(SelectionTint.fill(t, percent: 35))
-                // a line in the track's colour marks its leading edge
-                .overlay(alignment: .leading) { Rectangle().fill(Theme.track[t]).frame(width: 1.5).padding(.top, 12) }
+                // GLO's pages are every track's: the global grey, not the track's colour (decision 44)
+                .fill(SelectionTint.fill(colour: family == .glo ? Theme.textTertiary : Theme.track[t], percent: 35))
+                // a line in the track's colour (GLO: the grey) marks its leading edge
+                .overlay(alignment: .leading) { Rectangle().fill(family == .glo ? Theme.textTertiary : Theme.track[t]).frame(width: 1.5).padding(.top, 12) }
                 .shadow(color: .black.opacity(0.5), radius: 12, x: -4)
         }
         .background { TouchFollower(session: session) { if let k = session.lastTouched { marks.mark("s\(k.scope).\(k.id)") } } }
@@ -220,5 +233,28 @@ struct PageDial: View {
         let on = SoundCard.onDevice(session, page)
         if !on { ui.focus(page); if session.screenLinked, ui.followDevice { session.showOnDevice(page: page.fw) } }
         return !on
+    }
+}
+
+/// A setting that isn't a knob, as one row of pick tiles across the panel (decision 44: GLO › DELAY's MODE), 56 pt tall,
+/// its name said to VoiceOver. A tap sets it, every track's when it's global.
+struct PanelPick: View {
+    let session: DeviceSession
+    let scope: Int
+    let id: Int
+
+    var body: some View {
+        let d = scope == 0 ? session.trackDesc(id) : session.globalDescs[id]
+        let v = scope == 0 ? session.cell(id).value : session.globalCell(id).value
+        let names = d?.names ?? []
+        if !names.isEmpty {
+            SegmentedKeys(label: PageSetting.title(d?.label ?? ""), options: names, selected: v - (d?.min ?? 0)) { k in
+                let nv = k + (d?.min ?? 0)
+                if scope == 0 { session.set(track: session.selectedTrack, param: id, to: nv) } else { session.set(global: id, to: nv) }
+            }
+            .font(.lupe(13))
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+        }
     }
 }

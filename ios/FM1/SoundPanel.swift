@@ -16,7 +16,9 @@ struct SoundPanelState: Equatable {
 
 enum SoundPanelControl {
     /// The rail's order is the FM-1's, top to bottom (then SEQ, its own key: SeqKey).
-    static let families: [SoundFamily] = [.fx, .sel, .env, .lfo, .edit, .arp]
+    /// GLO after ARP (decision 44, 2026-11-15): its pages 2–5 (DELAY REVERB CHORUS GLOBAL) are sound pages; its MIXER
+    /// (1/5) is the Mix tab.
+    static let families: [SoundFamily] = [.fx, .sel, .env, .lfo, .edit, .arp, .glo]
 
     /// A button pressed (on the rail, the pads, or on the FM-1 while the Song or Mixer tab is up): its pages; pressed
     /// again, its next page (Scott, 2026-11-05: the same key steps and reveals, as the FM-1's does; it no longer
@@ -29,7 +31,15 @@ enum SoundPanelControl {
         }
         ui.soundPanel = SoundPanelState(family: f)
         ui.soundFamily = f
-        guard !fromDevice, let first = SoundPage.reached(session, f).first else { return }
+        guard !fromDevice else { return }
+        // the FM-1 already on one of the key's pages (the panel closed with a tab change, say): open on that page and
+        // leave the FM-1 where it is (2026-11-15; Android's panel didn't open at all here)
+        if session.screenLinked, ui.followDevice, let s = session.deviceScreen, !s.home, s.layer == 0,
+           let here = SoundPage.reached(session, f).first(where: { $0.fw == s.page }) {
+            ui.focus(here)
+            return
+        }
+        guard let first = SoundPage.reached(session, f).first else { return }
         ui.focus(first)
         if session.screenLinked, ui.followDevice { session.showOnDevice(page: first.fw) }
     }
@@ -56,6 +66,8 @@ enum SoundPanelControl {
            SoundPage.shown(session, page.family).isEmpty { return true }
         guard ui.followDevice, session.screenLinked, ui.shell else { return false }
         if s.home { ui.soundPanel = nil; return false }
+        // GLO 1/5, MIXER: the Mix tab, so a GLO page's panel goes (decision 44)
+        if s.layer == 0, s.menu == 0, s.page == SkiffButtonMap.MixerTab.mixer.page, ui.soundPanel?.family == .glo { ui.soundPanel = nil; return false }
         guard s.layer == 0, s.menu == 0, let page = SoundPage.page(session, fw: s.page), families.contains(page.family) else { return false }
         press(page.family, session: session, ui: ui, fromDevice: true)
         return true

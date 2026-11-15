@@ -17,3 +17,10 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 **Not covered here:** VoiceOver on the changed cards (release pass); the simulator-only firmware demos (`-demo -demo-firmware fork-sloop` shows check 6's phone card without a device).
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device".
+
+## GLO's pages in the sound panel (decision 44) and the rail key
+
+1. **GLO on the FM-1 (no flash write).** Press GLO on the FM-1: MIXER (GLO 1/5) shows the Mix tab. Press again: the sound panel slides in over the Mix tab with "GLO 2/5 DELAY", four white dials, MODE as three tiles and the grey picture under them, the panel grey, not the track's colour. Again: 3/5 REVERB, 4/5 CHORUS, 5/5 GLOBAL; again: MIXER, and the panel goes.
+2. **GLO on the rail (Settings › Sound buttons on).** Tap GLO: 2/5 DELAY opens; tap again: 3/5, 4/5, 5/5, then 2/5. GLO is lit while a GLO page is docked. Song name › Shared effects… opens 2/5 too; the Mix pop-up is gone.
+3. **Rail key on the FM-1's page.** Press FX on the FM-1 and step to FX 3/7, change tab in Lupe (the panel closes), then tap FX on the rail: the panel opens on FX 3/7 and the FM-1 stays on it.
+4. **iPad.** Tap GLO on the iPad's rail: its sound panel opens with DELAY, REVERB, CHORUS and GLOBAL; MIXER stays in the Mix tab.

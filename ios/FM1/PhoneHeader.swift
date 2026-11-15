@@ -96,7 +96,7 @@ struct PhoneHeader: View {
         HeaderWord(text: songName, size: 17, primary: true, maxWidth: 130) { openMenu() }
             .globalFrame($nameFrame)
             .accessibilityLabel("Lupe menu, \(songName)")
-            .accessibilityHint("Projects, Mix, the FM-1's firmware, Settings, the iPhone's audio and the demo")
+            .accessibilityHint("Projects, Patterns, shared effects, the FM-1's firmware, Settings, the iPhone's audio and the demo")
     }
 
     /// Android's song-name menu, carrying what the iPhone's ⋯ held (decision 33): Projects, Mix, Settings, then the
@@ -111,7 +111,10 @@ struct PhoneHeader: View {
             }
             if session.isConnected, ui.songTab {
                 main.append(MenuItem(title: "Patterns…", icon: "square.grid.2x2") { ui.patternsSheet = .manage })
-                main.append(MenuItem(title: "Mix…", icon: "slider.vertical.3") { ui.mixPopup = true })
+                // GLO 2/5, DELAY, on the sound panel (decision 44: the Mix pop-up is gone; MIXER is the Mix tab)
+                main.append(MenuItem(title: "Shared effects…", icon: "slider.vertical.3") {
+                    if ui.soundPanel?.family != .glo { SoundPanelControl.press(.glo, session: session, ui: ui) }
+                })
             }
             // decision 42: what the FM-1 runs, Skiff-Lupe, and stock V15 back (it was Developer › Install firmware…, debug only)
             main.append(MenuItem(title: "FM-1 firmware…", icon: "arrow.down.circle") {

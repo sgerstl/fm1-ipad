@@ -203,7 +203,6 @@ final class EditorUI {
     @ObservationIgnored var padDragFace: AnyView?
     var padDragSize: CGSize = .zero
     /// The phone's Mix pop-up (GLO's pages, board 77), and its Settings sheet (from the song-name menu).
-    var mixPopup = LaunchArgs.all.contains("-mix-popup")      // (-mix-popup: open on it, for captures)
     var phoneSettingsOpen = LaunchArgs.all.contains("-settings")
     /// The phone's Patterns sheet (board 79): to manage the pool, or to pick a kept pattern for a pad. (-patterns opens it)
     var patternsSheet: PatternsSheetMode? = LaunchArgs.all.contains("-patterns") ? .manage : nil

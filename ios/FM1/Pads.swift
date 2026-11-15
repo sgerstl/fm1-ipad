@@ -88,7 +88,7 @@ struct FunctionPads: View {
         case .rec: return session.recording
         case .home: return ui.shell ? ui.soundPanel == nil && session.deviceScreen?.home == true : ui.page == .sequencer
         case .save: return ui.presetsPanel || ui.projectsOpen || ui.page == .library || (ui.page == .song && (!ui.shell || ui.poolOpen))
-        case .glo where session.dialect == .skiff || ui.shell: return ui.page == .mixer
+        case .glo where session.dialect == .skiff || ui.shell: return ui.page == .mixer || ui.soundPanel?.family == .glo
         case .seq:
             if session.screenLinked, let s = session.deviceScreen { return !s.home && [ScreenMap.of(session).notes, ScreenMap.of(session).pattern].contains(s.page) && ui.page != .library }
             return ui.page == .sound && ui.soundFamily == .seq
@@ -135,10 +135,22 @@ struct FunctionPads: View {
                 if session.screenLinked, ui.followDevice { session.showOnDevice(page: ScreenMap.of(session).presets) }
             }
         case .glo where session.dialect == .skiff:
-            // the Mixer tab; pressed again, its next section, as GLO steps the FM-1's pages (MIXER … GLOBAL)
-            ui.mixerSection = ui.page == .mixer ? SkiffButtonMap.MixerTab(rawValue: (ui.mixerSection.rawValue + 1) % SkiffButtonMap.MixerTab.allCases.count)! : .mixer
+            // as GLO steps the FM-1's pages (decision 44): MIXER is the Mix tab; pressed again, DELAY on the sound panel,
+            // then REVERB, CHORUS, GLOBAL; past GLOBAL, MIXER again
+            let pages = SoundPage.reached(session, .glo)
+            if ui.soundPanel?.family == .glo {
+                let linked = session.screenLinked && ui.followDevice
+                let at = linked ? session.deviceScreen.flatMap { s in pages.firstIndex { $0.fw == s.page } }
+                                : ui.focusedPage.flatMap { fp in pages.firstIndex { $0.id == fp.id } }
+                if let at, at + 1 < pages.count { SoundPanelControl.step(.glo, session: session, ui: ui); return }
+                ui.soundPanel = nil
+            } else if ui.page == .mixer, !pages.isEmpty {
+                SoundPanelControl.press(.glo, session: session, ui: ui)
+                return
+            }
+            ui.mixerSection = .mixer
             ui.page = .mixer
-            if session.screenLinked, ui.followDevice { session.showOnDevice(page: ui.mixerSection.page) }
+            if session.screenLinked, ui.followDevice { session.showOnDevice(page: SkiffButtonMap.MixerTab.mixer.page) }
         case .seq where ui.songTab:
             // as the rail's SEQ: the Song tab's places, NOTES first (from Mix or Sounds, the Song tab)
             ui.soundPanel = nil

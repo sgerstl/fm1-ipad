@@ -298,9 +298,11 @@ enum SelectionTint {
     /// A Timeline block at rest (Scott, 2026-11-10, board 48 A): a stronger step of the same tint, so it reads on its
     /// own lane's 24%.
     static let restingBlock: CGFloat = 32
-    static func fill(_ t: Int, percent pc: CGFloat = percent) -> Color {
+    static func fill(_ t: Int, percent pc: CGFloat = percent) -> Color { fill(colour: Theme.track[t], percent: pc) }
+    /// Any colour over the page by `pc` % (decision 44: GLO's pages tint the sound panel in the global grey).
+    static func fill(colour: Color, percent pc: CGFloat = percent) -> Color {
         var a = (r: CGFloat(0), g: CGFloat(0), b: CGFloat(0), x: CGFloat(0)), p = a
-        UIColor(Theme.track[t]).getRed(&a.r, green: &a.g, blue: &a.b, alpha: &a.x)
+        UIColor(colour).getRed(&a.r, green: &a.g, blue: &a.b, alpha: &a.x)
         UIColor(Theme.page).getRed(&p.r, green: &p.g, blue: &p.b, alpha: &p.x)
         let k = pc / 100
         return Color(red: p.r + (a.r - p.r) * k, green: p.g + (a.g - p.g) * k, blue: p.b + (a.b - p.b) * k)
