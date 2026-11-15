@@ -442,7 +442,16 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
 
     // a tap selects the pad and its track (the editor follows) and still launches it (decision 29)
     // …an empty slot is only selected: the FM-1 refuses to play one, and selecting it is the way in that isn't a hold
-    fun tap() { core.send(Intent.PadSelect(row.track, at)); if (!selectMode && !empty) core.send(Intent.PadTap(row.track, at)) }
+    // …and a second tap on the pad that is already selected opens its menu, but only while stopped (batch item 10): while the song plays a tap
+    // keeps queuing launches, and the hold opens the menu
+    fun tap() {
+        val already = pads.selected.track == row.track && pads.selected.entry == at
+        if (secondTapOpensMenu(already, core.top.value.playing, selectMode)) {
+            padCoords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), color, padItems()) }
+            return
+        }
+        core.send(Intent.PadSelect(row.track, at)); if (!selectMode && !empty) core.send(Intent.PadTap(row.track, at))
+    }
 
     Box(modifier.width(PAD_W).height(h).onGloballyPositioned { padCoords = it }) {
         Box(
@@ -510,6 +519,9 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
 }
 
 private fun Color.Companion.lerp(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/** A tap on the pad that is already selected opens its menu: only while stopped, and not in a select mode. While playing a tap keeps queuing a launch. */
+internal fun secondTapOpensMenu(alreadySelected: Boolean, transportPlaying: Boolean, selectMode: Boolean) = alreadySelected && !transportPlaying && !selectMode
 
 /** Where else a pattern is used: "T2 B". Skiff erases a pattern only when no other entry names it (P1, 2026-11-14). */
 private fun otherUsers(pads: PadsState, track: Int, idx: Int, pattern: Int): List<String> =
