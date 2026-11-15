@@ -595,7 +595,13 @@ struct PadsPage: View {
                 menuPad = key
                 return
             }
-            if !session.playing, t == session.selectedTrack, framedPad(t) == i { if !row { controlsOpen.toggle() }; return }
+            // the selected pad tapped again while stopped: its menu, at the pad (batch item 11, Scott 2026-11-15; it used to
+            // toggle the track controls, which the head's double tap and the controls' tab still do). Playing, taps keep
+            // queuing and the hold opens the menu.
+            if !session.playing, t == session.selectedTrack, framedPad(t) == i {
+                openMenu(t, i, at: padFrames[key].map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero)
+                return
+            }
             launched += 1
             // a waiting pad tapped again takes its launch back: the entry playing is relaunched in its place, the
             // FM-1 having no per-track cancel (Scott, 2026-11-09, question 5)
