@@ -103,8 +103,11 @@ struct PadDragShow: Equatable {
             .min { $0.1 < $1.1 }?.0
     }
 
+    /// The window's size (the drag's points are the window's): the whole screen on a phone, the app's window on an iPad
+    /// in Split View or Stage Manager.
     @MainActor static var screen: CGSize {
-        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size ?? .zero
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return .zero }
+        return (scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first)?.bounds.size ?? scene.screen.bounds.size
     }
 }
 
@@ -119,8 +122,13 @@ struct EdgeWells: View {
 
     var body: some View {
         GeometryReader { g in
-            let screen = g.size
-            let origin = g.frame(in: .global).origin
+            // one space for the wells, the lifted pad and the drop (PadsPage.dropAt): the window's, where the drag's
+            // points are. This layer may sit inside the iPad's scaled canvas, so it's drawn in window points and the
+            // canvas's scale and offset are undone for it (Scott, 2026-11-15: on the iPad the lifted pad sat off to the
+            // side of the finger). The phone: scale 1 at the window's origin, as before.
+            let f = g.frame(in: .global)
+            let k = max(0.01, f.width / max(1, g.size.width))
+            let screen = EdgeWellsGeometry.screen == .zero ? f.size : EdgeWellsGeometry.screen
             let drag = ui.padDrag
             let off = offWells(session)
             let hot = drag.flatMap { EdgeWellsGeometry.hot(centre: $0.centre, screen: screen, off: off) }
@@ -140,13 +148,18 @@ struct EdgeWells: View {
                     }
                     face
                         .frame(width: size.width, height: size.height)
+                        .scaleEffect(k)                 // (its face is drawn at the canvas's size: window points here)
+                        .frame(width: size.width * k, height: size.height * k)
                         .rotation3DEffect(.degrees(reduceMotion ? 0 : tilt.0), axis: tilt.1, perspective: 0.6)
                         .scaleEffect(reduceMotion ? 1 : 1.06)
                         .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
                         .animation(.easeOut(duration: 0.15), value: hot)
-                        .position(x: d.centre.x - origin.x, y: d.centre.y - origin.y)
+                        .position(x: d.centre.x, y: d.centre.y)
                 }
             }
+            .frame(width: screen.width, height: screen.height, alignment: .topLeading)
+            .scaleEffect(1 / k, anchor: .topLeading)
+            .offset(x: -f.minX / k, y: -f.minY / k)
             .animation(animation(drag != nil), value: drag != nil)
             .animation(.easeOut(duration: 0.12), value: hot)
             .sensoryFeedback(.impact(weight: .light), trigger: hot) { _, new in new != nil }

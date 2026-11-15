@@ -176,6 +176,8 @@ struct PlacedMenu: View {
             Color.clear.allowsHitTesting(false)
             MenuPanel(title: title, groups: groups, close: close, maxHeight: layer.height - 2 * margin)
                 .fixedSize()
+                // a press menu (at the finger, not a key's): the soft black field behind it (Scott, 2026-11-15)
+                .background { if !fromKey { PressMenuBacking(radius: 12) } }
                 .closesOnOutsideTouch(close)
                 .alignmentGuide(.leading) { d in
                     -(fromKey ? min(max(margin, at.x), layer.width - d.width - margin)
@@ -356,6 +358,7 @@ struct MenuPanel: View {
 /// (Settings › Menus open), the first level with it, a gap between each whose half belongs to the button either side,
 /// so the targets are bigger than they look (Scott, 2026-11-09). They come out of the finger one after another.
 struct FanMenu: View {
+    static var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
     let title: String
     let items: [MenuItem]
     /// The finger, in the layer's space.
@@ -413,6 +416,15 @@ struct FanMenu: View {
         let y = MenuSide.menuY(touch: at.y, menuHeight: total, in: layer.height)
         ZStack(alignment: .topLeading) {
             Color.clear.allowsHitTesting(false)
+            // the iPad's press menus: the soft black field behind the fan, 16 pt past it each side (Scott, 2026-11-15: "less
+            // visually busy"); the phones' wheel has its own arced backing
+            if !Self.phone {
+                PressMenuBacking(radius: 14)
+                    .frame(width: w, height: total + Self.gap)
+                    .offset(x: x, y: y - Self.gap / 2)
+                    .opacity(out ? 1 : 0)
+                    .animation(.easeOut(duration: reduceMotion ? 0.15 : Labs.menuOpen.value), value: out)
+            }
             VStack(alignment: .leading, spacing: 0) {
                 if let caption {
                     Text(caption).font(.lupe(13)).foregroundStyle(Theme.text)
@@ -596,5 +608,21 @@ struct CheckBox: ToggleStyle {
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: c.$isOn) { c.label } }
+    }
+}
+
+/// Behind a press menu on the iPad (Scott, 2026-11-15: "on press menus, a 30 % opacity black rectangle behind them, so
+/// they're less visually busy"): black at 30 %, 16 pt past the menu each side, its corners the menu's plus 16 (nested
+/// radii). Not a page dim; it takes no touches (a touch there is outside the menu and closes it). Drawn in the menu's
+/// own frame, so it fades and scales with the menu.
+struct PressMenuBacking: View {
+    let radius: CGFloat
+    static let margin: CGFloat = 16
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius + Self.margin)
+            .fill(Color.black.opacity(0.3))
+            .padding(-Self.margin)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }

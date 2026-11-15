@@ -37,3 +37,5 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it wi
 ## The iPad's track heads (Scott, after 63db236)
 
 14. **A tap selects, a hold picks the sound (no flash write).** On Pads, tap a track head anywhere, the name included: the track selects and nothing opens. Hold a head: the track menu opens beside the finger with Select sound first; it opens the sounds panel. Same on the Timeline's lane heads and the Mix strips. The heads' names have no ⌄ now. MUTE and S keep their own taps.
+15. **Press menus have a soft backing (iPad).** Hold a pad, tap the selected pad, hold a track head: behind each menu a soft black field (30 %), about 16 pt past it on every side, fades in and out with it. The page itself doesn't dim. The iPhone's wheel keeps its own arced backing.
+16. **The lifted pad stays under the finger (iPad).** Stopped, hold a pad and drag it about: it stays under your finger where you grabbed it, all the way to the edge wells, and a drop lands in the well it looks to be in.
