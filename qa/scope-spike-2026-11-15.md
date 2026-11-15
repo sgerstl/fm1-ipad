@@ -108,10 +108,11 @@ Studio doesn't mirror state. It **replays inputs in lockstep**:
 ## Not done or not verified
 
 - **Not checked on an FM-1.** No real unit was used (the constraints said read-only, only if arranged). The link-load numbers come from skiff-sim, and the live scope came from the demo fake.
-- **Android:** the arm64 cross-compile of the library and of `libLupeNative.so` with SkiffDraw linked succeeded, and the APK built. For what ran on the emulator, see "Android emulator" below.
+- **Android in-app view:** the APK builds with SkiffDraw linked, but it wasn't installed, because the emulator's system kept crashing under the host's load. The renderer itself ran on the emulator and matched (see "Android emulator" below).
 - **iPad layout:** only the iPhone simulator was used. The library doesn't care, but the demo screen wasn't checked on the iPad.
 - **Accessibility:** the demo screen is a developer tool behind a launch argument. Its frame has a VoiceOver label; nothing else was checked.
 
 ## Android emulator
 
-(Filled in below once the emulator run finished.)
+- **Verified:** `skiffdraw-demo`, the same Swift and C cross-compiled for `aarch64-unknown-linux-android33` (Swift 6.4.2, NDK r30), ran on the arm64 emulator (Medium_Phone_API_36.1) through `adb shell`. Its GLO › DELAY frame matches the board render with **0 differing pixels** (`pixdiff.py`). It also drew 60 scope frames. Draw times on the emulator were 1–61 ms, but the host was at load average 20–30 at the time (another session's emulator and several simulators were running), so those numbers say nothing about a phone.
+- **Built, not run:** the APK with SkiffDraw linked into `libLupeNative.so` (`./gradlew :app:assembleDebug` passed) and `SkiffDrawDebugActivity`. The install on the emulator failed twice because the emulator's `system_server` kept dying under the host's load (`DeadSystemException`, "Can't find service: activity"). The in-app Android view is still to be seen. Next time, on a quieter machine: `adb -s emulator-NNNN install -r android/app/build/outputs/apk/debug/app-debug.apk`, then `adb -s emulator-NNNN shell am start -n com.scottgerstl.lupe/.core.debug.SkiffDrawDebugActivity --ei page 0`. Never on the Pixels.
