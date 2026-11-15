@@ -285,4 +285,67 @@ extension PatternsTests {
         }
         #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
+
+    /// A stable key on every pad and block (EntryKeys.swift): it travels with a move or swap, the others keep theirs
+    /// when a block goes, an undo gives the old ones back, and a copy or a new pad gets a new one.
+    @Test func padKeysSurviveRewrites() async throws {
+        let box = Box()
+        PhoneCore.undoClearWindow = 30
+        let (core, fake) = try await connected(box)
+        defer { core.stop() }
+        // track 3 set up plain: four pads in a row, four patterns of their own, none chained
+        let T = 2
+        let nums = Array((1...64).filter { fake.poolLen[$0 - 1] == 0 }.prefix(4))
+        for p in nums { fake.poolLen[p - 1] = 16 }
+        for i in 0..<16 { fake.lists[T][i] = FakeEntry(p: i < 4 ? nums[i] : 0) }
+        let n = 4
+        func keys() -> [Int] { let k = core.padsArea().rows[T].entries.map(\.key); return k + Array(repeating: 0, count: max(0, 16 - k.count)) }
+        func pats() -> [Int] { fake.lists[T].map(\.p) }
+        try await wait("the list read") { core.session.skiffSong?.song?.tracks[T].entries.prefix(4).map(\.pattern) == nums
+            && core.session.skiffSong?.song?.tracks[T].entries.dropFirst(4).allSatisfy(\.isEmpty) == true
+            && nums.allSatisfy { (core.session.skiffSong?.pool?.patterns[$0 - 1].length ?? 0) > 0 } }
+        try await idle(core)
+        try await wait("pads keyed") { keys().prefix(n).allSatisfy { $0 != 0 } }
+        let k0 = Array(keys().prefix(n)), p0 = Array(pats().prefix(n))
+        #expect(Set(k0).count == n && keys().dropFirst(n).allSatisfy { $0 == 0 }, "\(keys())")
+        // the Timeline's blocks carry the same keys
+        #expect(core.timelineArea().tracks[T].blocks.filter { $0.kind != "gap" }.map(\.key) == k0)
+        // a swap: the keys travel
+        core.handle(json: #"{"intent":"padMove","track":3,"from":0,"to":1}"#)
+        try await wait("swapped") { Array(pats().prefix(2)) == [p0[1], p0[0]] }
+        try await wait("keys swapped") { Array(keys().prefix(n)) == [k0[1], k0[0]] + k0[2...] }
+        try await idle(core)
+        core.handle(json: #"{"intent":"padMove","track":3,"from":0,"to":1}"#)
+        try await wait("back") { Array(pats().prefix(n)) == p0 && Array(keys().prefix(n)) == k0 }
+        // a block deleted in the middle: the ones after it move up with their keys
+        try await idle(core)
+        core.handle(json: #"{"intent":"blockDelete","track":3,"block":1}"#)
+        try await wait("deleted") { Array(pats().prefix(n)) == [p0[0]] + p0[2...] + [0] }
+        try await wait("keys moved up") { Array(keys().prefix(n)) == [k0[0]] + k0[2...] + [0] }
+        // undo: the old key back in its place
+        try await idle(core)
+        core.handle(json: #"{"intent":"undoClear"}"#)
+        try await wait("undone") { Array(pats().prefix(n)) == p0 }
+        try await wait("its key back") { Array(keys().prefix(n)) == k0 }
+        // a pad cleared and put back: the same key
+        try await idle(core)
+        core.handle(json: #"{"intent":"padClear","track":3,"entry":\#(n - 1)}"#)
+        try await wait("cleared") { pats()[n - 1] == 0 && keys()[n - 1] == 0 }
+        try await idle(core)
+        core.handle(json: #"{"intent":"undoClear","track":3,"entry":\#(n - 1)}"#)
+        try await wait("back with its key") { pats()[n - 1] == p0[n - 1] && keys()[n - 1] == k0[n - 1] }
+        // a duplicate: the copy gets a key of its own, the others keep theirs
+        try await idle(core)
+        core.handle(json: #"{"intent":"blockDuplicate","track":3,"block":0}"#)
+        try await wait("duplicated") { Array(pats().prefix(n + 1)) == [p0[0]] + p0 }
+        try await wait("keyed") { keys()[n] != 0 }
+        let k1 = Array(keys().prefix(n + 1))
+        #expect(k1[0] == k0[0] && Array(k1[2...]) == Array(k0[1...]) && !k0.contains(k1[1]) && k1[1] != 0, "\(k1) from \(k0)")
+        // a new pattern: a new key
+        try await idle(core)
+        core.handle(json: #"{"intent":"blockNew","track":3}"#)
+        try await wait("new pad") { pats()[n + 1] != 0 && keys()[n + 1] != 0 }
+        #expect(!k1.contains(keys()[n + 1]) && Array(keys().prefix(n + 1)) == k1)
+        #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
+    }
 }

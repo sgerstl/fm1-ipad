@@ -38,6 +38,8 @@ struct ClearedPad {
     /// clearSteps: the track's steps as they were, and the pattern (0…63) they belong to.
     var steps: [SynthStep]?
     var stepsPattern: Int?
+    /// The track's pad keys before it (EntryKeys.swift): an undo gives them back.
+    var keys: [Int] = []
     var at: Date
     var undoable = true
 }
@@ -65,13 +67,14 @@ extension PhoneCore {
         var emptied = list.entries
         emptied[e] = .empty
         let erases = !was.isRest && !store.erased([t: emptied]).isEmpty
+        let keysBefore = entryKeys(t)
         Task {
             // where the FM-1 would erase the pattern: a REST first, so the pattern stays kept for the undo
             if erases, !(await store.send(.set(track: t, entry: e, pattern: SongEntry.rest))) { self.reportRefusal(store); return }
             guard await store.send(.clear(track: t, entry: e)) else { self.reportRefusal(store); return }
             self.clearedPads.removeAll { $0.track == t && $0.entry == e }
             self.clearedPads.append(ClearedPad(track: t, entry: e, before: list.entries, after: store.song?.tracks[safe: t]?.entries ?? emptied,
-                                               parked: erases ? [was.pattern] : [], at: Date()))
+                                               parked: erases ? [was.pattern] : [], keys: keysBefore, at: Date()))
             self.pokeAreas(["pads", "timeline", "patterns", "editor"])
         }
     }
@@ -79,9 +82,14 @@ extension PhoneCore {
     /// blockDelete: no confirm either. The track's list rewritten without the block; the patterns that would be left
     /// with nothing naming them are kept for the undo (an entry the rewrite would CLEAR, erasing its pattern, is set
     /// to a REST first), and cleared when the undo's time is up.
-    func deleteBlock(track t: Int, to es: [SongEntry], block id: Int) {
+    func deleteBlock(track t: Int, to es: [SongEntry], block id: Int, removing: [Int]) {
         guard let store = session.skiffSong, let list = store.song?.tracks[safe: t] else { return }
         if let why = store.blocked(track: t, to: es) { refuse("Delete: \(why)", track: t + 1, entry: id); return }
+        // the pads after the block keep their keys as they move up
+        let keysBefore = entryKeys(t)
+        var moved = keysBefore.indices.filter { !removing.contains($0) }.map { keysBefore[$0] }
+        moved += Array(repeating: 0, count: max(0, keysBefore.count - moved.count))
+        hintKeys(track: t, to: es, keys: moved)
         let gone = store.erased([t: es])
         let rests = list.entries.indices.filter { i in es[i].isEmpty && (list.entries[i].poolIndex.map { gone.contains($0) } ?? false) }
         Task {
@@ -99,7 +107,7 @@ extension PhoneCore {
             }
             self.clearedPads.removeAll { $0.track == t }             // (the list moved: an older undo on it no longer fits)
             self.clearedPads.append(ClearedPad(track: t, entry: id, before: list.entries, after: store.song?.tracks[safe: t]?.entries ?? es,
-                                               parked: gone.map { $0 + 1 }, block: true, at: Date()))
+                                               parked: gone.map { $0 + 1 }, block: true, keys: keysBefore, at: Date()))
             self.pokeAreas(["pads", "timeline", "patterns", "editor"])
         }
     }
@@ -126,6 +134,10 @@ extension PhoneCore {
         guard let r = PadMove.apply(list.entries, from: from, to: to) else { log("padMove: nothing to move"); return }
         if let why = store.blocked(track: t, to: r.entries) { refuse(why, track: t + 1, entry: from); return }
         clearedPads.removeAll { $0.track == t && $0.steps == nil }      // (the list moved: an undo of an older clear no longer fits)
+        // the keys travel with their pads: a swap, or the one pad to where it lands
+        var k = entryKeys(t)
+        if list.entries[to].isEmpty { k[r.landed] = k[from]; if r.landed != from { k[from] = 0 } } else { k.swapAt(from, to) }
+        hintKeys(track: t, to: r.entries, keys: k)
         Task {
             guard await store.rewrite(track: t, to: r.entries, focus: r.landed, confirmed: true) else { self.reportRefusal(store); return }
             // the editor's pad goes with it
@@ -238,6 +250,10 @@ extension PhoneCore {
             refuse("T\(t1) changed after the delete, so it can't be undone.", track: t1, entry: e); return true
         }
         clearedPads.remove(at: k)
+        // the old keys back: all of them when the whole list goes back, else this pad's
+        var keysBack = entryKeys(t)
+        if back == c.before, c.keys.count == keysBack.count { keysBack = c.keys } else if c.keys.indices.contains(e) { keysBack[e] = c.keys[e] }
+        hintKeys(track: t, to: back, keys: keysBack)
         pokeAreas(["pads"])
         Task {
             if !(await store.rewrite(track: t, to: back, focus: e, confirmed: true)) { self.reportRefusal(store) }

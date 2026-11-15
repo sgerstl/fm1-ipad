@@ -23,8 +23,10 @@ extension PhoneCore {
             let list = song?.tracks[safe: t]
             let marks = store?.marks(t, launchIn: s.ticksToLaunch(t)) ?? SongPlayback.Marks()
             var entries: [PadsArea.Entry] = []
+            let padKeys = entryKeys(t)
             for e in 0..<columns {
                 var p = PadsArea.Entry()
+                p.key = padKeys[safe: e] ?? 0
                 let se = list?.entries[safe: e] ?? .empty
                 p.kind = se.isEmpty ? .empty : se.isRest ? .rest : .pattern
                 if p.kind == .pattern { p.pattern = se.pattern }

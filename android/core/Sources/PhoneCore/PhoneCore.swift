@@ -39,6 +39,11 @@ public final class PhoneCore {
     var projectBusy = false
     /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
     var auditions: [Int: Task<Void, Never>] = [:]
+    /// Each track's entry keys, the list they were made for, and where the core's next rewrite puts them (EntryKeys.swift).
+    var keys: [Int: [Int]] = [:]
+    var keySeen: [Int: [Int]] = [:]
+    var keyHints: [Int: (patterns: [Int], keys: [Int])] = [:]
+    var nextKey = 0
     /// Pads cleared lately, for undoClear (PadClearUndo.swift).
     var clearedPads: [ClearedPad] = []
     /// The Patterns sheet is showing (Patterns.swift): the stored pictures may be read while stopped.
