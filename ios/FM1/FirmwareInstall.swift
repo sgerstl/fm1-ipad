@@ -2,9 +2,9 @@ import SloopKit
 import SwiftUI
 import UIKit
 
-/// Installing the firmware Lupe offers (Skiff-Lupe 2.2, SLOOP-Lupe 2.8.4: Skiff and SLOOP with the screen link) over
-/// USB-MIDI, 2026-11-05, and putting M-VAVE's stock V15 back (its own update loader writes it). Since 2026-11-08 the two
-/// GPL builds aren't in the app: the chosen one is downloaded from Lupe's GitHub release first (FirmwareStore), checked
+/// Installing the firmware Lupe offers (Skiff-Lupe: Skiff with the screen link) over USB-MIDI, 2026-11-05, and putting
+/// M-VAVE's stock V15 back (its own update loader writes it). SLOOP-Lupe left with SLOOP (decision 43, 2026-11-15); an
+/// FM-1 on SLOOP is offered Skiff-Lupe. Since 2026-11-08 the GPL builds aren't in the app: the chosen one is downloaded from Lupe's GitHub release first (FirmwareStore), checked
 /// against its pin, and kept for next time. Stock V15 stays in the app.
 /// Offers it when the FM-1 runs something else or waits in an update loader; picks it from the connection menu (the phone: the song-name menu, FM-1 firmware…).
 /// The phone offers Skiff-Lupe 2.5.1 over anything else, once per connection (decision 42, 2026-11-15).
@@ -24,7 +24,7 @@ final class FirmwareCentre {
     enum ForkFrom: Equatable {
         case stockSkiff(String)             // Skiff 2.5.1 or earlier, without the link
         case newerSkiff(String)             // Skiff 2.6 or later, without the link: going to 2.5.1 loses what it added
-        case sloop(String)                  // SLOOP or SLOOP-Lupe: no songs, no Timeline
+        case sloop(String)                  // SLOOP or SLOOP-Lupe: Lupe no longer connects to it (decision 43)
         case olderLupe(String)              // Skiff-Lupe 2.2, or 2.5.1 with an earlier link
         case mvave(String)                  // M-VAVE's own firmware: Lupe can't connect at all
 
@@ -50,7 +50,7 @@ final class FirmwareCentre {
     var target: LupeFirmware = .skiff
     /// The phone: Skiff-Lupe 2.5.1 is the firmware it offers, from the song-name menu and the fork offer (decision 42).
     let phone = UIDevice.current.userInterfaceIdiom == .phone
-    /// Skiff-Lupe and SLOOP-Lupe, downloaded when chosen and kept (Application Support).
+    /// Skiff-Lupe, downloaded when chosen and kept (Application Support).
     #if DEBUG
     // a Debug build carries firmware/releases/ (the "Bundle release firmware (Debug)" build phase): no GitHub release needed
     let store = FirmwareStore(localReleases: Bundle.main.url(forResource: "DebugFirmware", withExtension: nil))
@@ -84,21 +84,20 @@ final class FirmwareCentre {
         demo = a.firstIndex(of: "-demo-firmware").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
         if phone { target = .skiff251 }
         if let demo {
-            let sloop = try? LupeFirmware.sloop.load(), skiff = try? LupeFirmware.skiff.load()
-            let stock = try? LupeFirmware.stock.load()
+            let skiff = try? LupeFirmware.skiff.load(), stock = try? LupeFirmware.stock.load()
             let fake: FakeFM1
             switch demo {
-            case "loader": fake = FakeFM1(inLoaderOf: skiff!, was: sloop)
+            case "loader": fake = FakeFM1(inLoaderOf: skiff!, was: skiff)
             case "stock": fake = FakeFM1(running: nil)
             case "foreign": fake = FakeFM1(running: nil, stockIdentity: "ota-FM-1_301")
-            case "stock-loader": fake = FakeFM1(inLoaderOf: stock!, was: sloop)
-            case "v16": fake = FakeFM1(running: sloop, startedOn: 16)
+            case "stock-loader": fake = FakeFM1(inLoaderOf: stock!, was: skiff)
+            case "v16": fake = FakeFM1(running: skiff, startedOn: 16)
             case "v16-new", "v16-picker":
                 fake = FakeFM1(running: nil, stockIdentity: "FM-1_016", startedOn: 16)
                 fake.newFlashChip = true
-            default: fake = FakeFM1(running: sloop)
+            default: fake = FakeFM1(running: skiff)
             }
-            fake.knows(skiff!, sloop!, stock!)
+            fake.knows(skiff!, stock!)
             if let s251 = try? LupeFirmware.skiff251.load() { fake.knows(s251) }
             if demo == "failed" { fake.faults = [.unplug(stage: 2, after: 900, replugAfter: nil)] }
             ports = fake
@@ -146,6 +145,7 @@ final class FirmwareCentre {
                 if phone, connected, !wasConnected { dismissedOffer = nil }
                 wasConnected = connected
                 switch session.status {
+                // (SLOOP connects no more: its INFO lands here, and both offers name Skiff-Lupe for it)
                 case .wrongFirmware(let found, _): offer = phone ? Self.phoneOffer(unsupported: found) : .unsupported(found)
                 case .searching, .lost: await probe()
                 // stock Skiff 2.2 (no screen link tag in INFO), or an earlier screen-link build (56 01 01 no cursor,
@@ -178,9 +178,18 @@ final class FirmwareCentre {
         }
     }
 
-    /// The phone's offer for firmware Lupe can't connect to: M-VAVE's own as the fork offer, anything else as before.
+    /// The phone's offer for firmware Lupe can't connect to: M-VAVE's own and SLOOP (its INFO, "FELUCCA SLOOP 2.8.4") as
+    /// the fork offer, anything else as before.
     static func phoneOffer(unsupported found: String) -> Offer {
-        found.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil ? .fork(.mvave(found)) : .unsupported(found)
+        if found.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil { return .fork(.mvave(found)) }
+        if FirmwareDialect.isSLOOP(found) { return .fork(.sloop(sloopName(found))) }
+        return .unsupported(found)
+    }
+
+    /// SLOOP's INFO as the offers say it: "FELUCCA SLOOP 2.8.4" → "SLOOP 2.8.4".
+    static func sloopName(_ found: String) -> String {
+        let v = found.replacingOccurrences(of: "FELUCCA ", with: "")
+        return "SLOOP \(v.drop { !$0.isNumber })"
     }
 
     /// Why a connected FM-1 isn't on Skiff-Lupe 2.5.1 with the current link, or nil when it is (decision 42).
@@ -227,7 +236,6 @@ final class FirmwareCentre {
     /// Why `f` can't go on the FM-1 Lupe last saw, in a line for the picker, or nil.
     func refusal(_ f: LupeFirmware) -> String? {
         switch FirmwareInstaller.refusal(for: f, running: seen)?.code {
-        case .flashChip?: "Not on this FM-1. It runs V16, so it most likely has the newer flash chip, which SLOOP 2.8.4 can’t install on."
         case .otherStock?: "Not on this FM-1. It started out on a newer official version, so V15 can’t go back on."
         default: nil
         }
@@ -463,7 +471,7 @@ struct FirmwareOfferCard: View {
             }
         case .foreignLoader(let id):
             FirmwareCard(title: "The FM-1 is in another update mode") {
-                Text("It reports \(id), another firmware’s update mode. Lupe only finishes installs of Skiff, SLOOP and stock V15. Finish this one with the updater that started it, then plug the FM-1 in again.")
+                Text("It reports \(id), another firmware’s update mode. Lupe only finishes installs of Skiff and stock V15. Finish this one with the updater that started it, then plug the FM-1 in again.")
                     .bodyText()
             } actions: {
                 CardKey(title: "OK", primary: true) { centre.dismissedOffer = offer }
@@ -481,12 +489,14 @@ struct FirmwareOfferCard: View {
         case .fork(let from):
             ForkOfferCard(from: from, centre: centre, session: session)
         case .unsupported(let found):
-            FirmwareCard(title: "Lupe needs other firmware") {
-                if centre.seesNewStock {
-                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and on this FM-1 it can install Skiff-Lupe 2.2 (Skiff with Lupe’s screen link). SLOOP 2.8.4 can’t install on the flash chip that FM-1s with V16 most likely have. Installing takes about a minute.")
+            FirmwareCard(title: FirmwareDialect.isSLOOP(found) ? "Lupe needs Skiff-Lupe" : "Lupe needs other firmware") {
+                if FirmwareDialect.isSLOOP(found) {
+                    // (decision 43: SLOOP no longer connects; the iPad's card offers Skiff-Lupe for it, as the phone's does)
+                    Text("This FM-1 runs \(FirmwareCentre.sloopName(found)). Lupe works with Skiff now, and can install Skiff-Lupe: Skiff with Lupe’s screen link, downloaded when you choose it. Installing takes about a minute.")
                         .bodyText()
+                    Text(ForkOfferCard.sloopProjects).bodyText()
                 } else {
-                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or SLOOP 2.8.4, and can install either with its screen link added (Skiff-Lupe or SLOOP-Lupe, downloaded when you choose one). Installing takes about a minute; your projects are backed up first when the firmware allows it.")
+                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or 2.5.1, and can install Skiff-Lupe (Skiff with Lupe’s screen link, downloaded when you choose it). Installing takes about a minute; your projects are backed up first when the firmware allows it.")
                         .bodyText()
                 }
             } actions: {
@@ -503,6 +513,11 @@ struct ForkOfferCard: View {
     let from: FirmwareCentre.ForkFrom
     let centre: FirmwareCentre
     let session: DeviceSession
+
+    /// What becomes of SLOOP's projects (from Skiff's sources, 2026-11-15: 2.x keeps a project of an earlier format in its
+    /// slot as OLD FORMAT, project.c proj_old; its web editor's Restore converts it, README "Updating to 2.0"). Lupe
+    /// can't read SLOOP any more, so it takes no backup first.
+    static let sloopProjects = "Installing leaves SLOOP’s projects in the FM-1’s memory, but Skiff doesn’t open them: it keeps each one as OLD FORMAT. Lupe can’t back up SLOOP, so save a backup in SLOOP’s own web editor first. Once Skiff is on, Skiff’s web editor can convert old projects: take a backup there and restore it."
 
     /// What the phone loses without Lupe's screen link (each one is a `session.screenLinked` gate in the phone's views).
     static let withoutLink = "Without Lupe’s screen link, Lupe and the FM-1 don’t follow each other: a button on the FM-1 doesn’t open its page or sound panel here, a tab here doesn’t move the FM-1, and the Mix meters, the scope in the page pictures and MOD’s route stay still."
@@ -525,8 +540,8 @@ struct ForkOfferCard: View {
                 Text("This FM-1 runs \(f). " + Self.withoutLink).bodyText(primary: true)
                 Text("Installing goes back to Skiff-Lupe 2.5.1: what \(f) added (CAST) goes away until Skiff-Lupe catches up.").bodyText(primary: true)
             case .sloop(let f):
-                Text("This FM-1 runs \(f). Lupe on the iPhone is built for Skiff: songs and the Timeline need it, and the screen link keeps Lupe and the FM-1 on the same page.").bodyText(primary: true)
-                Text("Skiff can’t open SLOOP’s projects: they’re kept in the backup Lupe takes first.").bodyText()
+                Text("This FM-1 runs \(f). Lupe works with Skiff now: songs, the Timeline and the screen link, which keeps Lupe and the FM-1 on the same page.").bodyText(primary: true)
+                Text(Self.sloopProjects).bodyText()
             case .olderLupe(let f):
                 Text("This FM-1 runs \(f). Skiff-Lupe 2.5.1 adds FX › DELAY and REVERB, the FILTR insert and chord strum, and the screen link’s newest build: the scope at 30 a second, MOD’s route and the Mix meters.").bodyText(primary: true)
             case .mvave(let f):
@@ -542,7 +557,7 @@ struct ForkOfferCard: View {
     }
 }
 
-/// Skiff or SLOOP: the connection menu's way in (the phone's song-name menu, FM-1 firmware…), and the offer's.
+/// Skiff-Lupe or stock V15: the connection menu's way in (the phone's song-name menu, FM-1 firmware…), and the offer's.
 struct FirmwarePicker: View {
     @Bindable var centre: FirmwareCentre
     let session: DeviceSession
@@ -554,8 +569,7 @@ struct FirmwarePicker: View {
     private var runs: String {
         if case .connected = session.status, let i = session.info {
             let v = i.version.replacingOccurrences(of: "FELUCCA ", with: "")
-            let name = session.dialect == .skiff ? "Skiff" : "SLOOP"
-            let lupe = session.screenLinked ? "\(name)-Lupe" : name
+            let lupe = session.screenLinked ? "Skiff-Lupe" : "Skiff"
             return session.isDemo ? "The demo FM-1 runs \(lupe) \(v.drop { !$0.isNumber })." : "This FM-1 runs \(lupe) \(v.drop { !$0.isNumber })."
         }
         if case .wrongFirmware(let found, _) = session.status { return "This FM-1 runs \(FirmwareOfferCard.name(found))." }
@@ -639,10 +653,10 @@ struct FirmwarePicker: View {
 
     private var backupLine: String {
         let stock = centre.target.isStock
-            ? " Stock V15 can’t read Skiff’s or SLOOP’s projects, and installing over it later can write over some of them: the backup is how they come back."
+            ? " Stock V15 can’t read Skiff’s projects, and installing over it later can write over some of them: the backup is how they come back."
             : ""
         if case .connected = session.status {
-            return "Lupe backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Lupe › \(session.dialect == .skiff ? "Skiff" : "SLOOP") › Backups), then writes. Keep the FM-1 plugged in for about a minute." + stock
+            return "Lupe backs up the projects, settings, presets and samples to Files first (On My \(deviceWord) › Lupe › Skiff › Backups), then writes. Keep the FM-1 plugged in for about a minute." + stock
         }
         return "There’s no backup this time: the FM-1 isn’t connected to Lupe. Keep it plugged in for about a minute." + stock
     }
@@ -790,7 +804,7 @@ struct FirmwareInstallCover: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("The FM-1 restarted and reports \(id), as it should.").bodyText(primary: true)
                 if centre.target.isStock {
-                    Text("Lupe can’t connect to the stock firmware. When you want Lupe back, plug the FM-1 in and choose Skiff-Lupe or SLOOP-Lupe.").bodyText(primary: true)
+                    Text("Lupe can’t connect to the stock firmware. When you want Lupe back, plug the FM-1 in and choose Skiff-Lupe.").bodyText(primary: true)
                 }
                 if let backup {
                     Text("The backup is in Files: On My \(deviceWord) › Lupe › \(backup)." + (centre.target.isStock ? " Restore it with that firmware’s editor once it’s back on." : "")).bodyText()
@@ -831,7 +845,7 @@ struct FirmwareInstallCover: View {
                                   ? "Still stuck? M-VAVE’s own updater, M-UPGRADE (m-vave.com › Downloads), puts the stock firmware back from a computer."
                                   : "Still stuck? Skiff’s README, “If the FM-1 does not start”, has the ways back, from a computer.")
                 } else if refused {
-                    Text("The FM-1 still runs its firmware, and Skiff and SLOOP still install as usual.").bodyText()
+                    Text("The FM-1 still runs its firmware, and Skiff-Lupe still installs as usual.").bodyText()
                 } else {
                     Text("Nothing was written: the FM-1 still runs its firmware. Check the cable and try again.").bodyText()
                 }

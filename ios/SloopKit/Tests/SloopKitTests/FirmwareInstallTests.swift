@@ -6,7 +6,7 @@ import Testing
 /// ldr_core.c do: the bundled packages, full installs, cut-offs at many points and the resume, refusals. Offline.
 @Suite(.serialized) struct FirmwareInstallTests {
     static let skiff = try! LupeFirmware.skiff.load()
-    static let sloop = try! LupeFirmware.sloop.load()
+    static let sloop = try! SloopPackage.load()
 
     /// fm1_install.py's test delays, about. `patient`: for a test that counts drops, idle limits no busy moment
     /// reaches. With 400 ms, a pause in the test process (other work on the Mac) read as the loader gone: a second
@@ -68,7 +68,7 @@ import Testing
     }
 
     @Test func theWrongFileIsRefused() throws {
-        let sloopRaw = [UInt8](try Data(contentsOf: LupeFirmware.sloop.localCopy!))
+        let sloopRaw = [UInt8](try Data(contentsOf: SloopPackage.url))
         // SLOOP's file offered as Skiff's: its hash isn't Skiff's
         #expect(throws: PackageError.self) { try FirmwarePackage(data: sloopRaw, pinned: .skiff) }
         // not a package at all

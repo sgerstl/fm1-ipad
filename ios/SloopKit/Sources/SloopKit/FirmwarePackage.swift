@@ -4,8 +4,7 @@ import CryptoKit
 import Foundation
 
 /// The firmware Lupe installs, each pinned by its SHA-256: a file that doesn't match is never installed (FIRMWARE.md).
-/// Since 2026-11-08 the two GPL builds with Lupe's screen link are named Skiff-Lupe and SLOOP-Lupe and aren't in the
-/// app: they're downloaded from Lupe's GitHub releases when chosen (FirmwareStore), so an App Store or TestFlight build
+/// Since 2026-11-08 the GPL builds with Lupe's screen link (Skiff-Lupe) aren't in the app: they're downloaded from Lupe's GitHub releases when chosen (FirmwareStore), so an App Store or TestFlight build
 /// carries no GPL firmware. M-VAVE's stock V15 (Apache-2.0) stays in the app, the way back that needs no internet.
 public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
     /// Skiff 2.5.1 with Lupe's screen link, rebased (skiff-src branch lupe-skiff-2.5.1-screen-link, 737e3fb). Staged
@@ -16,8 +15,7 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
     case skiff251Take = "Skiff-Lupe-2.5.1-take"
     /// Skiff 2.2 with Lupe's screen link patch (skiff/README.md).
     case skiff = "Skiff-Lupe-2.2"
-    /// SLOOP 2.8.4 with Lupe's screen link patch (sloop/README.md).
-    case sloop = "SLOOP-Lupe-2.8.4"
+    // SLOOP-Lupe 2.8.4 left with SLOOP (decision 43, 2026-11-15): the tag sloop-archive-2026-11-15 has it.
     /// M-VAVE's own V15, unmodified: the way back to stock. Installed by M-VAVE's update loader, which it carries.
     case stock = "FM-1_015"
 
@@ -28,7 +26,6 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
         case .skiff251: "Skiff-Lupe 2.5.1"
         case .skiff251Take: "Skiff-Lupe 2.5.1 take"
         case .skiff: "Skiff-Lupe 2.2"
-        case .sloop: "SLOOP-Lupe 2.8.4"
         case .stock: "Stock V15"
         }
     }
@@ -37,7 +34,6 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
         case .skiff251: "Skiff 2.5.1 with Lupe's screen link: FX › DELAY and REVERB, the FILTR insert, chord strum, FREE TAKE."
         case .skiff251Take: "Skiff-Lupe 2.5.1 plus FREE TAKE from the iPad: Lupe's own picker, Keep that, and Undo."
         case .skiff: "Skiff 2.2 with Lupe's screen link: six tracks, songs and Arrange. Skiff v2.2 plus a 73-line patch."
-        case .sloop: "SLOOP 2.8.4 with Lupe's screen link: three tracks and drums. SLOOP 2.8.4 plus a 47-line patch."
         case .stock: "M-VAVE's own firmware, as the FM-1 shipped. Lupe can't read or show it."
         }
     }
@@ -45,7 +41,6 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
     public var credit: String {
         switch self {
         case .skiff, .skiff251, .skiff251Take: "Skiff is by illuminus5, a fork of Felucca by Leo Kuroshita (Hügelton Instruments). Lupe adds only the screen link."
-        case .sloop: "SLOOP is by isod89, a fork of Felucca by Leo Kuroshita (Hügelton Instruments). Lupe adds only the screen link."
         case .stock: "M-VAVE's firmware, unchanged."
         }
     }
@@ -55,7 +50,6 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .skiff251, .skiff251Take: "FM-1_725"
         case .skiff: "FM-1_722"
-        case .sloop: "FM-1_900"
         case .stock: "FM-1_015"
         }
     }
@@ -64,7 +58,6 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
         case .skiff251: "80b21b33d05ccaa384636261e229eb94efdac847c93cc1f534d69082ff71302c"
         case .skiff251Take: "3266e2b6247f8452b209a1ed4b1d8f08b8b31db9b37de838d1c885a2727aa689"
         case .skiff: "77d4bdff4b4452b4891b4a4fcbfd918e5b1c623a79c6cb399511fdb05d1c06e6"
-        case .sloop: "97ee40fcd18de2c39e175fa825af05b787a6ea06e846ea260db2eeede74f9110"
         case .stock: "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a"
         }
     }
@@ -72,7 +65,6 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .skiff251, .skiff251Take: 610_429
         case .skiff: 610_429
-        case .sloop: 610_052
         case .stock: 699_956
         }
     }
@@ -82,7 +74,6 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
         case .skiff251: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-screen-link (Skiff v2.5.1 plus the screen link; tag lupe-skiff-2.5.1-screen-link.1 once accepted)"
         case .skiff251Take: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-freetake (Skiff v2.5.1 plus the screen link v7; not pushed yet)"
         case .skiff: "github.com/sgerstl/skiff, tag lupe-skiff-2.2-screen-link.6 (Skiff v2.2 plus skiff/0001-screen-link.patch in Lupe's repository)"
-        case .sloop: "github.com/isod89/sloop-fm1, tag v2.8.4, plus sloop/0001-screen-link.patch in Lupe's repository"
         case .stock: "github.com/m-vave/fm1_open, sdk/firmware/FM-1_015.fwsc (Apache-2.0)"
         }
     }

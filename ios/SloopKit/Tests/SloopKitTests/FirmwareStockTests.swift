@@ -185,12 +185,10 @@ import Testing
     @Test func theRules() {
         let v16 = DeviceIdentity("FM-1_016")!, v15 = DeviceIdentity("FM-1_015")!, skiffOn = DeviceIdentity("FM-1_722")!
         #expect(FirmwareInstaller.refusal(for: .skiff, running: v16) == nil)
-        #expect(FirmwareInstaller.refusal(for: .sloop, running: v16)?.code == .flashChip)
         #expect(FirmwareInstaller.refusal(for: .stock, running: v16)?.code == .otherStock)
-        #expect(FirmwareInstaller.refusal(for: .sloop, running: v15) == nil)
         #expect(FirmwareInstaller.refusal(for: .stock, running: v15) == nil)
-        #expect(FirmwareInstaller.refusal(for: .sloop, running: skiffOn) == nil)
-        #expect(FirmwareInstaller.refusal(for: .sloop, running: nil) == nil)
+        #expect(FirmwareInstaller.refusal(for: .skiff, running: skiffOn) == nil)
+        #expect(FirmwareInstaller.refusal(for: .stock, running: nil) == nil)
     }
 
     @Test func stockV16ToSkiff() async throws {
@@ -200,20 +198,19 @@ import Testing
         #expect(dev.badAnswers == 0)
     }
 
-    @Test(arguments: ["sloop", "stock"])
-    func stockV16RefusesUpFront(_ what: String) async throws {
+    @Test func stockV16RefusesV15UpFront() async throws {
         let dev = Self.newUnit()
-        do { try await Self.installer(dev).install(what == "sloop" ? Self.sloop : Self.stock); Issue.record("no error") }
+        do { try await Self.installer(dev).install(Self.stock); Issue.record("no error") }
         catch let e as InstallError {
-            #expect(e.code == (what == "sloop" ? .flashChip : .otherStock) && !e.inUpdateMode)
-            if what == "sloop" { #expect(e.message.contains("Install Skiff-Lupe 2.2")) }
+            #expect(e.code == .otherStock && !e.inUpdateMode)
         }
         #expect(dev.received.allSatisfy { $0.frame == FirmwareInstaller.hsQuery })
         #expect(dev.identity == "FM-1_016")
     }
 
-    /// A new unit that already runs Skiff (so nothing says V16 any more): SLOOP 2.8.4's loader turns it down, the FM-1
-    /// comes back on Skiff, and Lupe says so at once instead of waiting for a loader that won't return.
+    /// A new unit that already runs Skiff (so nothing says V16 any more): a loader that doesn't know its chip (SLOOP
+    /// 2.8.4's, the package now only a test fixture) turns it down, the FM-1 comes back on Skiff, and Lupe says so at once
+    /// instead of waiting for a loader that won't return.
     @Test func sloopsLoaderTurnsTheNewChipDown() async throws {
         let dev = Self.newUnit(running: Self.skiff)
         let start = ContinuousClock.now

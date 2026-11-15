@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SloopKit
 
-/// Downloading Skiff-Lupe and SLOOP-Lupe (FirmwareStore.swift) against a strict fake transport: every request it isn't
+/// Downloading Skiff-Lupe (FirmwareStore.swift) against a strict fake transport: every request it isn't
 /// scripted for is recorded in `unanswered` and fails, and each test expects that list empty.
 @Suite struct FirmwareStoreTests {
     /// Answers only the URLs it's given; anything else is recorded and refused.
@@ -78,10 +78,10 @@ import Testing
 
     @Test func theCachedFileIsUsedWithoutAnotherRequest() async throws {
         let t = FakeTransport(), store = Self.tempStore(t)
-        t.answer(LupeFirmware.sloop.downloadURL!, .data(try Self.real(.sloop)))
-        try await store.fetch(.sloop)
-        try await store.fetch(.sloop)
-        _ = try store.package(.sloop)
+        t.answer(LupeFirmware.skiff.downloadURL!, .data(try Self.real(.skiff)))
+        try await store.fetch(.skiff)
+        try await store.fetch(.skiff)
+        _ = try store.package(.skiff)
         #expect(t.requested.count == 1)
         #expect(t.unanswered.isEmpty)
     }
@@ -110,8 +110,8 @@ import Testing
 
     @Test func aServerErrorSaysSo() async throws {
         let t = FakeTransport(), store = Self.tempStore(t)
-        t.answer(LupeFirmware.sloop.downloadURL!, .error(FirmwareDownloadError.server(404)))
-        await #expect(throws: FirmwareDownloadError.server(404)) { try await store.fetch(.sloop) }
+        t.answer(LupeFirmware.skiff.downloadURL!, .error(FirmwareDownloadError.server(404)))
+        await #expect(throws: FirmwareDownloadError.server(404)) { try await store.fetch(.skiff) }
         #expect(t.unanswered.isEmpty)
     }
 
@@ -137,6 +137,5 @@ import Testing
 
     @Test func downloadsAreLupesReleaseAssets() {
         #expect(LupeFirmware.skiff.downloadURL?.absoluteString == "https://github.com/sgerstl/fm1-ipad/releases/download/lupe-firmware-1/Skiff-Lupe-2.2.fwsc")
-        #expect(LupeFirmware.sloop.downloadURL?.absoluteString == "https://github.com/sgerstl/fm1-ipad/releases/download/lupe-firmware-1/SLOOP-Lupe-2.8.4.fwsc")
     }
 }

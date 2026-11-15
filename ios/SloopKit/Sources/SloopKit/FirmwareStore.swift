@@ -1,4 +1,4 @@
-// Downloading Skiff-Lupe and SLOOP-Lupe when they're chosen (2026-11-08): the app carries no GPL firmware, so an App
+// Downloading Skiff-Lupe when it's chosen (2026-11-08): the app carries no GPL firmware, so an App
 // Store or TestFlight build is only Lupe's own code. The file comes from Lupe's GitHub release (LupeFirmware.downloadURL),
 // is checked against its pinned SHA-256 before anything else sees it, and is kept in Application Support so the next
 // install, or a resumed one, needs no internet.

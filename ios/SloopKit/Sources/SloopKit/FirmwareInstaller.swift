@@ -1,4 +1,4 @@
-// Installs a Felucca-family package (Skiff, SLOOP), or M-VAVE's own V15, on an FM-1 over USB-MIDI: a port of Skiff's
+// Installs a Felucca-family package (Skiff-Lupe), or M-VAVE's own V15, on an FM-1 over USB-MIDI: a port of Skiff's
 // tools/fm1_install.py and web/fm1ota.js (GPL-3.0, Leo Kuroshita), with SLOOP's narrower port filter and loader rule.
 //
 // Step 1: the running firmware (Skiff, SLOOP, Felucca or M-VAVE's) gets UPGRADE, reads parts of the package
@@ -337,21 +337,19 @@ public final class FirmwareInstaller: @unchecked Sendable {
     }
 
     static let otherStockMessage = "Nothing was written. This FM-1 started out on a different official version (V16, probably), so V15 can't go on it. Its way back is that version, with M-VAVE's own updater."
-    static let v16SloopMessage = "This FM-1 runs M-VAVE's V16, so it's most likely a newer unit with the UC25HQ80 flash chip, which SLOOP 2.8.4's update loader doesn't know: it would stop before writing anything. Install Skiff-Lupe 2.2: Skiff knows both chips. (SLOOP 2.8.5 knows it too; Lupe doesn't offer it yet.)"
+    /// A loader's chip check refused the unit (the header's reads and the app's head come first, ldr_core.c): Skiff 2.2
+    /// and later know both chips, so for the firmware Lupe offers this isn't expected. (SLOOP 2.8.4's loader refused the
+    /// UC25HQ80; FakeLoader keeps that, as an FM-1 can still be in it.)
     static func loaderRefusedMessage(_ pkg: FirmwarePackage, running: String) -> String {
-        let sloop = pkg.product == LupeFirmware.sloop.product
-        return "Nothing was written. \(sloop ? "SLOOP 2.8.4's" : "The") update loader turned this FM-1 down after 3 reads and it restarted on its own firmware (\(running))."
-            + (sloop ? " The likely cause is the newer UC25HQ80 flash chip, which that loader doesn't know. Install Skiff-Lupe 2.2: Skiff knows both chips." : "")
+        "Nothing was written. The update loader turned this FM-1 down after 3 reads and it restarted on its own firmware (\(running)). The likely cause is a flash chip that loader doesn't know."
     }
 
     /// What can't go on this FM-1, from what it runs, before anything is sent beyond the handshake (nil: go ahead).
-    /// Stock V15 needs a unit that never ran a newer stock version (its 16 KiB head); SLOOP 2.8.4's loader knows only
-    /// the older flash chip, and a unit on stock V16 is most likely a newer one with the UC25HQ80 (SLOOP #239, #228).
-    /// Skiff 2.2 knows both chips and installs over V16 (Skiff #64).
+    /// Stock V15 needs a unit that never ran a newer stock version (its 16 KiB head). Skiff 2.2 knows both flash chips
+    /// and installs over V16 (Skiff #64).
     public static func refusal(for firmware: LupeFirmware, running id: DeviceIdentity?) -> InstallError? {
         guard let id, !id.isLoader, id.text.range(of: #"^FM-1_0\d\d$"#, options: .regularExpression) != nil else { return nil }
         if firmware.isStock, id.version > 15 { return InstallError(code: .otherStock, message: otherStockMessage) }
-        if firmware == .sloop, id.version >= 16 { return InstallError(code: .flashChip, message: v16SloopMessage) }
         return nil
     }
 

@@ -441,6 +441,8 @@ struct ConnectionState: View {
         case .connecting:
             "Reading every track. This takes about a second."
         case .connected: ""
+        case .wrongFirmware(let found, _) where FirmwareDialect.isSLOOP(found):
+            "It runs \(FirmwareCentre.sloopName(found)), which Lupe no longer works with. Lupe works with \(FirmwareDialect.known): install Skiff-Lupe, which Lupe offers, then plug the FM-1 in again."
         case .wrongFirmware(let found, let proto):
             "It reports “\(found)”, editor protocol \(proto). Lupe works with \(FirmwareDialect.known). Install one of those, then plug the FM-1 in again."
         case .lost(let why):
