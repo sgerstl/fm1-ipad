@@ -7,7 +7,7 @@ import SwiftUI
 // up to five choices, each on its own 22 pt stalk from the rim, so every stalk is the same short length. More than five,
 // a small triangle past either end says there are more that way, and a drag turns the wheel and the others roll into the arc along the curve, fading as they near
 // its ends; it opens with the first choice at the arc's top and settles on a choice when the finger lifts. Five or fewer
-// are just the arc. The arc stays on screen under the header and flips side near an edge (Settings › Handedness). The
+// are just the arc. The arc stays on screen under the header and flips side near an edge (Settings › Menus open). The
 // page dims and a tap outside closes. A choice that loses work asks once more in place (red outline, its words naming
 // what goes; taps ignored for 0.4 s). A tap picks, never a drag. Reduce Motion: fades, and the wheel turns without
 // travelling. iPhone only (FanMenu routes).
@@ -22,7 +22,7 @@ struct RadialMenu: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown: [MenuItem] = []
     @State private var start = Date()
-    @AppStorage(Handedness.key) private var hand = Handedness.right
+    @AppStorage(MenuSide.key) private var hand = MenuSide.left
     @State private var confirming: Int?
     @State private var confirmAt = Date.distantPast
     @AccessibilityFocusState private var confirmFocused: Bool
@@ -72,10 +72,10 @@ struct RadialMenu: View {
     static func room(_ x: CGFloat, _ edges: ClosedRange<CGFloat>, left: Bool) -> CGFloat {
         left ? x - edges.lowerBound - 8 - itemW : edges.upperBound - 8 - itemW - x
     }
-    /// Which side the arc opens on (Scott, 2026-11-14): always away from the playing hand (Settings › Handedness), left
+    /// Which side the arc opens on (Scott, 2026-11-14): always away from the playing hand (Settings › Menus open), left
     /// of the finger for the right hand, wherever the press is; the other side only when the choices can't fit there.
-    static func opensLeft(_ x: CGFloat, _ edges: ClosedRange<CGFloat>, hand: Handedness) -> Bool {
-        let away = hand == .right
+    static func opensLeft(_ x: CGFloat, _ edges: ClosedRange<CGFloat>, hand: MenuSide) -> Bool {
+        let away = hand == .left
         if room(x, edges, left: away) >= minNear { return away }
         if room(x, edges, left: !away) >= minNear { return !away }
         return room(x, edges, left: true) >= room(x, edges, left: false)

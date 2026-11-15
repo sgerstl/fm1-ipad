@@ -17,7 +17,8 @@ struct SettingsSheet: View {
     @AppStorage(PadPreviews.key) private var padPreviews = true
     @AppStorage(ThemeColours.key) private var themeColours = true
     @AppStorage(SoundButtons.key) private var soundButtons = SoundButtons.standard
-    @AppStorage(Handedness.key) private var handedness = Handedness.right
+    @AppStorage(RailSide.key) private var railSide = RailSide.right
+    @AppStorage(MenuSide.key) private var menuSide = MenuSide.left
     @AppStorage(ShowGraphics.key) private var showGraphics = ShowGraphics.standard
     private var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
@@ -38,17 +39,26 @@ struct SettingsSheet: View {
                          : "With Up and down or Both, a slide on a column turns it, so panels scroll from the gaps between columns.")
                 }
 
+                // (Scott, 2026-11-15: two settings where Handedness was one)
                 Section {
-                    Picker("Handedness", selection: $handedness) {
-                        ForEach(Handedness.allCases) { Text($0.title).tag($0) }
+                    LabeledContent("Menus open") {
+                        Picker("Menus open", selection: $menuSide) {
+                            ForEach(MenuSide.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 160)
                     }
-                    .pickerStyle(.segmented)
+                    LabeledContent("Sound buttons side") {
+                        Picker("Sound buttons side", selection: $railSide) {
+                            ForEach(RailSide.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 160)
+                    }
                 } header: {
-                    Text("Handedness")
+                    Text("Sides")
                 } footer: {
-                    Text(handedness == .right
-                         ? "Menus open to the left of your finger, so your hand doesn't cover them. The sound buttons sit on the right."
-                         : "Menus open to the right of your finger, so your hand doesn't cover them. The sound buttons sit on the left.")
+                    Text("Menus open: which side of your finger hold menus and pop-outs open on (the other side where there isn't room). Sound buttons side: where the FX to SEQ buttons sit when Sound buttons is on.")
                 }
 
                 // Touch (Scott, 2026-11-10): what you set once to suit your hands, out of Labs for good

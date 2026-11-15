@@ -63,7 +63,7 @@ struct AppMenu: Identifiable {
     var groups: () -> [[MenuItem]]
     var at: CGPoint
     /// Opened from a key (a ⋯, a header, the connection readout): `at` is the menu's top-left, below the key. Otherwise
-    /// `at` is the finger, and the menu opens beside it on the side away from the playing hand (Settings › Handedness).
+    /// `at` is the finger, and the menu opens beside it on the side away from the playing hand (Settings › Menus open).
     var fromKey = false
     /// Its choices as separate floating buttons fanning out of the finger, the first by it (Scott, 2026-11-09: an empty
     /// pad's "New pattern" nine times in ten). A submenu among them opens as an ordinary menu in their place.
@@ -157,7 +157,7 @@ struct AppMenuLayer: View {
 }
 
 /// A menu panel placed in its layer (a ZStack aligned top-leading, `layer` its size): beside the finger on the side away
-/// from the playing hand (Settings › Handedness), or from a key, under it (above where it wouldn't fit); kept `margin`
+/// from the playing hand (Settings › Menus open), or from a key, under it (above where it wouldn't fit); kept `margin`
 /// inside the layer. Closed by a touch anywhere else, which still reaches the page (OutsideTouch).
 struct PlacedMenu: View {
     let title: String
@@ -168,7 +168,7 @@ struct PlacedMenu: View {
     let layer: CGSize
     var margin: CGFloat = 12
     let close: () -> Void
-    @AppStorage(Handedness.key) private var hand = Handedness.right
+    @AppStorage(MenuSide.key) private var hand = MenuSide.left
 
     var body: some View {
         // the panel inside a layer-sized frame, so the open and close scale can centre on the finger itself
@@ -183,7 +183,7 @@ struct PlacedMenu: View {
                 }
                 .alignmentGuide(.top) { d in
                     -(fromKey ? (at.y + 8 + d.height <= layer.height ? at.y + 8 : max(margin, at.y - 8 - d.height))
-                              : Handedness.menuY(touch: at.y, menuHeight: d.height, in: layer.height, margin: margin))
+                              : MenuSide.menuY(touch: at.y, menuHeight: d.height, in: layer.height, margin: margin))
                 }
         }
         .frame(width: layer.width, height: layer.height, alignment: .topLeading)
@@ -353,7 +353,7 @@ struct MenuPanel: View {
 
 
 /// A menu as separate floating buttons fanned out of the finger: beside it on the side away from the playing hand
-/// (Settings › Handedness), the first level with it, a gap between each whose half belongs to the button either side,
+/// (Settings › Menus open), the first level with it, a gap between each whose half belongs to the button either side,
 /// so the targets are bigger than they look (Scott, 2026-11-09). They come out of the finger one after another.
 struct FanMenu: View {
     let title: String
@@ -371,7 +371,7 @@ struct FanMenu: View {
     /// A submenu chosen: it opens as an ordinary menu.
     @State private var optedOut = false
     let open: (MenuItem) -> Void
-    @AppStorage(Handedness.key) private var hand = Handedness.right
+    @AppStorage(MenuSide.key) private var hand = MenuSide.left
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var out = false
     /// The destructive item asking to be confirmed (its row turns into the confirm, the next into Cancel).
@@ -410,7 +410,7 @@ struct FanMenu: View {
         let w = CGFloat(cols) * Self.width + CGFloat(cols - 1) * Self.gap
         let total = capTop + CGFloat(rows) * Self.height + CGFloat(max(0, rows - 1)) * Self.gap + boxH
         let x = hand.menuX(touch: at.x, menuWidth: w, in: layer.width)
-        let y = Handedness.menuY(touch: at.y, menuHeight: total, in: layer.height)
+        let y = MenuSide.menuY(touch: at.y, menuHeight: total, in: layer.height)
         ZStack(alignment: .topLeading) {
             Color.clear.allowsHitTesting(false)
             VStack(alignment: .leading, spacing: 0) {

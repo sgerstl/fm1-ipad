@@ -261,7 +261,7 @@ extension AppView {
         // (read here, not as @AppStorage: this is an extension of AppView; Settings changes them only between uses)
         let d = UserDefaults.standard
         let showRail = d.object(forKey: SoundButtons.key) as? Bool ?? SoundButtons.standard
-        let hand = d.string(forKey: Handedness.key).flatMap(Handedness.init(rawValue:)) ?? .right
+        let hand = d.string(forKey: RailSide.key).flatMap(RailSide.init(rawValue:)) ?? .right
         let rail = showRail && hand == .right ? SoundRail.width + 12 : 0
         // a flush panel runs over the page margin to the screen edge, so it takes that much less room
         let flush = !showRail || hand == .left

@@ -13,10 +13,13 @@ struct PhoneSoundHost<Content: View>: View {
     let ui: EditorUI
     @ViewBuilder let content: () -> Content
     @AppStorage(SoundButtons.key) private var showRail = SoundButtons.standard
+    @AppStorage(RailSide.key) private var railSide = RailSide.right
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
+            // the rail on the side Settings › Sound buttons side says; the panel still comes in from the right
+            if showRail, railSide == .left { SoundRail(session: session, ui: ui) }
             content()
                 // Edit: the grid scrolls on past its width by the panel's, so no step is out of reach under it
                 .environment(\.soundPanelRoom, ui.soundPanel != nil && ui.phoneTab == .edit ? PhoneSoundPanel.width : 0)
@@ -28,14 +31,14 @@ struct PhoneSoundHost<Content: View>: View {
                         }
                     }
                     // flush with the screen's edge when no rail sits beside it (over the page's 8 pt margin)
-                    .padding(.trailing, showRail ? 0 : -8)
+                    .padding(.trailing, showRail && railSide == .right ? 0 : -8)
                     .padding(.bottom, -8)
                     // in 300 ms ease-out, out in 200 ms ease-in (DESIGN.md: exits quicker)
                     .animation(reduceMotion ? .easeOut(duration: 0.15)
                                : ui.soundPanel != nil ? .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.3) : .easeIn(duration: 0.2),
                                value: ui.soundPanel != nil)
                 }
-            if showRail { SoundRail(session: session, ui: ui) }
+            if showRail, railSide == .right { SoundRail(session: session, ui: ui) }
         }
         // another track whose engine has none of the open key's pages: closed, never an empty panel
         .onChange(of: session.selectedTrack) { _, _ in

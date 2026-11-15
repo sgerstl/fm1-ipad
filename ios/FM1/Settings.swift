@@ -26,24 +26,47 @@ enum SlideToTurn: String, CaseIterable, Identifiable {
 
 /// Which hand plays (Scott, 2026-11-08): menus open beside the touch on the side away from it, so the hand doesn't
 /// cover them, and the sound buttons' rail sits on its side. Right by default.
-enum Handedness: String, CaseIterable, Identifiable {
-    case right, left
-    static let key = "handedness"
+/// Settings › Menus open (Scott, 2026-11-15: handedness split in two): which side of the finger hold menus and other
+/// pop-outs open on, flipping only where there isn't room. Default left, today's right-handed layout.
+enum MenuSide: String, CaseIterable, Identifiable {
+    case left, right
+    static let key = "menuSide"
     var id: String { rawValue }
-    var title: String { self == .right ? "Right-handed" : "Left-handed" }
+    var title: String { self == .left ? "Left" : "Right" }
 
-    /// A menu's left edge beside a touch at `x` (both in the layer's space `width` wide): on the side away from the
-    /// hand, the other side where it wouldn't fit, then kept on screen.
+    /// A menu's left edge beside a touch at `x` (both in the layer's space `width` wide): on this side of the finger, the
+    /// other side where it wouldn't fit, then kept on screen.
     func menuX(touch x: CGFloat, menuWidth w: CGFloat, in width: CGFloat, margin: CGFloat = 12, gap: CGFloat = 16) -> CGFloat {
         let left = x - gap - w, right = x + gap
         let fitsLeft = left >= margin, fitsRight = right + w <= width - margin
-        let pick = self == .right ? (fitsLeft || !fitsRight ? left : right) : (fitsRight || !fitsLeft ? right : left)
+        let pick = self == .left ? (fitsLeft || !fitsRight ? left : right) : (fitsRight || !fitsLeft ? right : left)
         return min(max(margin, pick), max(margin, width - w - margin))
     }
 
     /// Its top: level with the touch, its first rows by the finger, kept on screen.
     static func menuY(touch y: CGFloat, menuHeight h: CGFloat, in height: CGFloat, margin: CGFloat = 12) -> CGFloat {
         min(max(margin, y - 28), max(margin, height - h - margin))
+    }
+}
+
+/// Settings › Sound buttons side: where the sound-key rail sits. Default right.
+enum RailSide: String, CaseIterable, Identifiable {
+    case left, right
+    static let key = "soundButtonsSide"
+    var id: String { rawValue }
+    var title: String { self == .left ? "Left" : "Right" }
+}
+
+/// The old single Handedness setting, split once into the two (right-handed: rail right, menus left; left-handed: rail
+/// left, menus right), so nobody's layout jumps.
+enum HandednessMigration {
+    static let oldKey = "handedness"
+    static func run() {
+        let d = UserDefaults.standard
+        guard let old = d.string(forKey: oldKey) else { return }
+        if d.object(forKey: RailSide.key) == nil { d.set(old == "left" ? RailSide.left.rawValue : RailSide.right.rawValue, forKey: RailSide.key) }
+        if d.object(forKey: MenuSide.key) == nil { d.set(old == "left" ? MenuSide.right.rawValue : MenuSide.left.rawValue, forKey: MenuSide.key) }
+        d.removeObject(forKey: oldKey)
     }
 }
 

@@ -292,7 +292,7 @@ struct SoundPanelHost<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.grid) private var grid
     @AppStorage(SoundButtons.key) private var showRail = SoundButtons.standard
-    @AppStorage(Handedness.key) private var hand = Handedness.right
+    @AppStorage(RailSide.key) private var hand = RailSide.right
 
     /// The app's margin round the pages (AppView's padding): a flush panel runs over it to the screen's edge.
     static var pageMargin: CGFloat { UIDevice.current.userInterfaceIdiom == .phone ? 8 : 24 }
@@ -313,7 +313,7 @@ struct SoundPanelHost<Content: View>: View {
         // nothing under the panel is out of reach.
         let room: CGFloat = 0
         return HStack(alignment: .top, spacing: 12) {
-            // the rail on the playing hand's side (Settings › Handedness); the panel still comes in from the right
+            // the rail on the playing hand's side (Settings › Sound buttons side); the panel still comes in from the right
             if showRail, hand == .left { SoundRail(session: session, ui: ui) }
             content()
                 .environment(\.grid, narrowed)
