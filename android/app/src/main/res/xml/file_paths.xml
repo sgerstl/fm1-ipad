@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The FM-1 backups Lupe takes before an install (filesDir/Backups), shared from the done screen. -->
+<paths>
+    <files-path name="backups" path="Backups/" />
+</paths>

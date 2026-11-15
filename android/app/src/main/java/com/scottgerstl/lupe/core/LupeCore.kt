@@ -39,6 +39,9 @@ interface LupeCore {
     val patterns: StateFlow<PatternsState> get() = PatternsDefaults.patterns
     val patternPictures: StateFlow<PatternPictures> get() = PatternsDefaults.pictures
 
+    /** The firmware the FM-1 runs, what the phone offers, and the install's progress (FirmwareState.kt; P1's fe3faaf). */
+    val firmware: StateFlow<FirmwareState> get() = FirmwareDefaults.state
+
     /** The last thing refused, to show on screen (Notice.kt). */
     val notice: StateFlow<CoreNotice> get() = NoticeDefaults.notice
 

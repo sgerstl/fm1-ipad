@@ -70,6 +70,9 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
                 // the mixer is the Mix tab now; this is the pop-up: the shared delay, reverb, chorus and global (batch item 11)
                 MenuRow("Shared effects…", { menu = null; core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", com.scottgerstl.lupe.core.ScreenPages.GLO[1].first)) }, sub = "Delay, reverb, chorus, global")
+                val firmwareHost = com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost.current
+                val fw by core.firmware.collectAsStateWithLifecycle()
+                MenuRow("FM-1 firmware…", { menu = null; firmwareHost?.info = true }, sub = fw.running ?: "What the FM-1 runs, and Skiff-Lupe")
                 MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
                 MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
                 // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too
@@ -160,6 +163,12 @@ private fun FakeMenu(core: FakeLupeCore, close: () -> Unit) {
     core.scenarioNames.forEach { MenuRow("Play “$it”", { core.play(it); close() }) }
     MenuRow("FM-1 knob 1 up (locks CUTOFF)", { core.fm1Knob(1, 1); close() })
     MenuRow("FM-1 knob 2 up (locks DECAY)", { core.fm1Knob(2, 1); close() })
+    MenuRow("Firmware: stock Skiff 2.6 offer", { core.showFirmwareOffer("install"); close() })
+    MenuRow("Firmware: SLOOP offer", { core.showFirmwareOffer("sloop"); close() })
+    MenuRow("Firmware: update offer", { core.showFirmwareOffer("update"); close() })
+    MenuRow("Firmware: finish offer", { core.showFirmwareOffer("finish"); close() })
+    MenuRow("Firmware: foreign loader", { core.showFirmwareOffer("foreign"); close() })
+    MenuRow("Firmware: no offer", { core.showFirmwareOffer(null); close() })
     MenuRow("Bottom: editor", { core.showBottom(com.scottgerstl.lupe.core.BottomPage()); close() })
     listOf("ENV" to "ENV", "LFO" to "LFO", "FX" to "REVERB").forEach { (fam, page) ->
         MenuRow("Bottom: $fam page", { core.showBottom(com.scottgerstl.lupe.core.BottomPage(com.scottgerstl.lupe.core.BottomKind.Page, fam, page)); close() })

@@ -24,6 +24,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _page = MutableStateFlow(PageState())
     private val _mix = MutableStateFlow(MixState())
     private val _freeTake = MutableStateFlow(FreeTakeState())
+    private val _firmware = MutableStateFlow(FirmwareState())
     private val _sounds = MutableStateFlow(SoundsState())
     private val _projects = MutableStateFlow(ProjectsState())
     private val _meters = MutableStateFlow(MetersState())
@@ -42,6 +43,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val page: StateFlow<PageState> = _page
     override val mix: StateFlow<MixState> = _mix
     override val freeTake: StateFlow<FreeTakeState> = _freeTake
+    override val firmware: StateFlow<FirmwareState> = _firmware
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
     override val meters: StateFlow<MetersState> = _meters
@@ -99,6 +101,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "editor" -> _editor.value = lupeJson.decodeFromString(EditorState.serializer(), json)
                 "page" -> _page.value = lupeJson.decodeFromString(PageState.serializer(), json)
                 "freetake" -> _freeTake.value = lupeJson.decodeFromString(FreeTakeState.serializer(), json)
+                "firmware" -> _firmware.value = lupeJson.decodeFromString(FirmwareState.serializer(), json)
                 "mix" -> _mix.value = lupeJson.decodeFromString(MixState.serializer(), json)
                 "sounds" -> _sounds.value = lupeJson.decodeFromString(SoundsState.serializer(), json)
                 "projects" -> _projects.value = lupeJson.decodeFromString(ProjectsState.serializer(), json)

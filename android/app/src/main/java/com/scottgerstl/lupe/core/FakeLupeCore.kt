@@ -95,6 +95,7 @@ class FakeLupeCore(
     override val homeKnobs: StateFlow<HomeKnobsState> = _home
     private val _mix = MutableStateFlow(MixState())
     private val _freeTake = MutableStateFlow(FreeTakeState())
+    private val _firmware = MutableStateFlow(FirmwareState(running = "Skiff-Lupe 2.5.1", identity = "FELUCCA v2.5.1"))
     private val _playhead = MutableStateFlow(PlayheadState())
     private val _sounds = MutableStateFlow(SoundsState())
     private val _projects = MutableStateFlow(ProjectsState())
@@ -107,6 +108,7 @@ class FakeLupeCore(
     private var autoLane = ""
     override val mix: StateFlow<MixState> = _mix
     override val freeTake: StateFlow<FreeTakeState> = _freeTake
+    override val firmware: StateFlow<FirmwareState> = _firmware
     override val playhead: StateFlow<PlayheadState> = _playhead
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
@@ -229,6 +231,16 @@ class FakeLupeCore(
             Intent.CancelWaiting -> { _pads.update { p -> p.copy(rows = p.rows.map { r -> r.copy(entries = r.entries.map { if (it.play == PadPlay.Waiting) it.copy(play = PadPlay.Idle, bar = null) else it }) }) }; recount() }
             is Intent.SetTab -> _shell.update { it.copy(tab = intent.tab) }
             is SetHomeKnob -> _home.update { FakeHome.set(it, intent.slot, intent.value) }
+            // installing Skiff-Lupe (decision 42): a scripted fake loader, never a real FM-1. Not behind the read-only gate: the confirm on the screen is the gate.
+            is FirmwareInstall -> when {
+                !intent.confirmed -> refuse("The install needs your confirmation first.")
+                intent.battery != null && intent.battery < 30 && intent.charging != true -> refuse("Charge the phone first: it's at ${intent.battery}%. The phone powers the FM-1 while it writes, so Lupe installs below 30% only while charging.")
+                _top.value.playing -> refuse("Stop playing before installing firmware.")
+                _firmware.value.active && _firmware.value.state != "failed" -> Unit
+                else -> runFakeInstall(intent)
+            }
+            FirmwareCancelOffer -> _firmware.update { it.copy(offer = null) }
+            FirmwareClose -> _firmware.update { it.copy(state = "idle", progress = 0.0, message = "", installing = null, inUpdateMode = false) }
             is ScreenGoto -> {
                 val pages = ScreenPages.of(intent.screen)
                 val (n, title) = pages.firstOrNull { it.first == intent.page } ?: pages.firstOrNull() ?: return
@@ -466,6 +478,43 @@ class FakeLupeCore(
     }
 
     // ---- pads
+
+    /** The demo's firmware states, for looking at the screens: what the FM-1 runs and what is offered (kind install / update / finish / foreign), or nothing. */
+    fun showFirmwareOffer(kind: String?) {
+        _firmware.update {
+            when (kind) {
+                "install" -> it.copy(running = "Skiff 2.6", identity = "FELUCCA v2.6.0", offer = FirmwareOffer("install", "stockSkiff", "stockSkiff|2.6", "Skiff-Lupe-2.5.1", "Lupe needs other firmware",
+                    "This FM-1 runs Skiff 2.6. Lupe works with Skiff-Lupe 2.5.1: Skiff with Lupe's screen link. Installing it takes the FM-1 back to 2.5.1, so it loses CAST. Your projects stay."))
+                "sloop" -> it.copy(running = "SLOOP 2.8.4", identity = "FELUCCA v2.8.4", offer = FirmwareOffer("install", "sloop", "sloop|2.8.4", "Skiff-Lupe-2.5.1", "Lupe needs other firmware",
+                    "This FM-1 runs SLOOP 2.8.4. Lupe works with Skiff-Lupe 2.5.1. Skiff converts SLOOP's projects when it opens them."))
+                "update" -> it.copy(running = "Skiff-Lupe 2.4", identity = "FELUCCA v2.4.0", offer = FirmwareOffer("update", "olderLupe", "olderLupe|2.4", "Skiff-Lupe-2.5.1", "An update for Skiff-Lupe 2.4",
+                    "Lupe can install Skiff-Lupe 2.5.1, the newer build of the screen link."))
+                "finish" -> it.copy(running = null, identity = "FELUCCA UPDATE", offer = FirmwareOffer("finish", "loader", "loader|update", "Skiff-Lupe-2.5.1", "Finish the firmware install",
+                    "The FM-1 is waiting in update mode: an install was cut off. Nothing is lost. Lupe can finish it now with Skiff-Lupe 2.5.1."))
+                "foreign" -> it.copy(running = null, identity = "ota-FM-1_301", offer = FirmwareOffer("foreign", "unknown", "unknown|ota", null, "The FM-1 is in another update mode",
+                    "It reports ota-FM-1_301, another firmware's update mode. Finish it with the updater that started it, then plug the FM-1 in again."))
+                else -> it.copy(running = "Skiff-Lupe 2.5.1", identity = "FELUCCA v2.5.1", offer = null)
+            }
+        }
+    }
+
+    /** A scripted install: download, backup, staging, writing, restarting, done (or a cut when the offer is "finish"'s opposite: tests drive failures by [failAt]). */
+    var failAt: String? = null
+    private fun runFakeInstall(i: FirmwareInstall) {
+        val name = firmwareWords(i.which ?: _firmware.value.offer?.firmware)
+        scope.launch {
+            fun set(state: String, p: Double, msg: String, backup: String? = _firmware.value.backup) = _firmware.update { it.copy(state = state, progress = maxOf(it.progress, p), message = msg, installing = name, backup = backup, inUpdateMode = false) }
+            _firmware.update { it.copy(progress = 0.0, backup = null) }
+            set("downloading", 0.02, "Downloading $name from GitHub"); kotlinx.coroutines.delay(700); set("downloading", 0.06, "Downloading $name from GitHub")
+            if (failAt == "backingUp") { _firmware.update { it.copy(state = "failed", message = "The backup couldn't be taken.", installing = name) }; return@launch }
+            if (!i.skipBackup) { set("backingUp", 0.1, "Backing up the projects"); kotlinx.coroutines.delay(700); set("backingUp", 0.25, "Backing up the projects", "/data/user/0/com.scottgerstl.lupe/files/Backups/2026-11-15-skiff-2.4.bak") }
+            set("staging", 0.3, "Checking the firmware file"); kotlinx.coroutines.delay(600)
+            for (p in listOf(0.4, 0.55, 0.7, 0.85, 0.95)) { set("writing", p, "Writing the firmware"); kotlinx.coroutines.delay(500)
+                if (failAt == "writing" && p >= 0.7) { _firmware.update { it.copy(state = "failed", message = "The FM-1 dropped off USB.", inUpdateMode = true) }; return@launch } }
+            set("restarting", 0.98, "Restarting the FM-1"); kotlinx.coroutines.delay(700)
+            _firmware.update { it.copy(state = "done", progress = 1.0, message = "The FM-1 restarted and reports Skiff-Lupe 2.5.1.", offer = null, running = "Skiff-Lupe 2.5.1") }
+        }
+    }
 
     private fun editEntry(track: Int, entry: Int, f: (PadEntry) -> PadEntry) {
         _pads.update { p ->

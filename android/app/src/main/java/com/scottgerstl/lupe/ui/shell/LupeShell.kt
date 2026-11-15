@@ -79,6 +79,7 @@ fun LupeShell(core: LupeCore) {
     val soundsHost = remember { SoundsHost() }
     val holdMenu = remember { HoldMenuState() }
     val padDrag = remember { PadDragState() }
+    val firmwareHost = remember { com.scottgerstl.lupe.ui.firmware.FirmwareHost() }
     // a debug build can be launched with a pad already held over the wells, to look at them without a finger:
     // adb shell am start -n com.scottgerstl.lupe/.MainActivity --ez wellsDemo true --ef x 1000 --ef y 540  (the finger's place, px)
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -91,7 +92,7 @@ fun LupeShell(core: LupeCore) {
     }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost provides firmwareHost) {
         Column(
             Modifier.fillMaxSize()
                 .greyedBy { grey.value }
@@ -152,6 +153,8 @@ fun LupeShell(core: LupeCore) {
         PadDragOverlay(padDrag, top.playing)
         // the hold menu: over the page and the sheets, under the finger that opened it
         HoldMenuHost(holdMenu)
+        // installing Skiff-Lupe (decision 42): the offer, the confirm and, while it runs, the cover over everything
+        com.scottgerstl.lupe.ui.firmware.FirmwareLayer(core, firmwareHost)
         // the Magnifier floats over everything, above the finger
         MagnifierHost(magnifier)
     }
