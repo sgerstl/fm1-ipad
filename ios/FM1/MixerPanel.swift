@@ -45,6 +45,11 @@ struct MixerPage: View {
     private func show(_ t: SkiffButtonMap.MixerTab) {
         if ui.mixerSection != t { ui.mixerSection = t }
         guard session.dialect == .skiff else { return }
+        // a sound panel docked beside the strips (decision 48): turning a strip leaves the FM-1 on the panel's page.
+        // Sending it to MIXER brought MIXER back, which closes a GLO panel (decision 44), and the strips' two rows went
+        // with it (Scott, 2026-11-15). A touch on the page is the page's own; only HOME, the close key or another tab
+        // close the panel.
+        guard ui.soundPanel == nil else { return }
         if session.screenLinked, ui.followDevice, !onDevice(t.page) { session.showOnDevice(page: t.page) }
     }
 }
