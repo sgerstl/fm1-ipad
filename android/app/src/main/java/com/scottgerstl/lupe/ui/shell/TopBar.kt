@@ -72,7 +72,7 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 MenuRow("Shared effects…", { menu = null; core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", com.scottgerstl.lupe.core.ScreenPages.GLO[1].first)) }, sub = "Delay, reverb, chorus, global")
                 val firmwareHost = com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost.current
                 val fw by core.firmware.collectAsStateWithLifecycle()
-                MenuRow("FM-1 firmware…", { menu = null; firmwareHost?.info = true }, sub = fw.running ?: "What the FM-1 runs, and Skiff-Lupe")
+                MenuRow("FM-1 firmware…", { menu = null; firmwareHost?.info = true }, sub = com.scottgerstl.lupe.ui.firmware.firmwareLine(fw))
                 MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
                 MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
                 // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too

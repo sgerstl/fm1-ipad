@@ -107,6 +107,38 @@ fun batteryRefusal(level: Int?, charging: Boolean): String? =
     if (level != null && !charging && level < 30)
         "Charge the phone first: it's at $level%. The phone powers the FM-1 while it writes, so Lupe installs below 30% only while charging." else null
 
+private val VERSION = Regex("""\d+(?:\.\d+)+""")
+
+/**
+ * The firmware the FM-1 runs, by name: "Skiff-Lupe 2.5.1", "Skiff 2.6", "SLOOP 2.8.4", M-VAVE's own. The core's [FirmwareState.running] may give only a version
+ * ("v2.5.1") when the FM-1 is on Skiff-Lupe, so the offer's origin (and no offer at all, on a connected FM-1) names it. Null when no FM-1 is known.
+ */
+fun firmwareName(fw: FirmwareState): String? {
+    val running = fw.running?.trim()?.takeIf { it.isNotEmpty() } ?: fw.identity?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val version = VERSION.find(running)?.value
+    val named = running.contains("skiff", true) || running.contains("sloop", true) || running.contains("vave", true) || running.contains("update", true)
+    if (named) return running
+    return when (fw.offer?.from) {
+        "stockSkiff", "newerSkiff" -> "Skiff" + (version?.let { " $it" } ?: "")
+        "olderLupe" -> "Skiff-Lupe" + (version?.let { " $it" } ?: "")
+        "sloop" -> "SLOOP" + (version?.let { " $it" } ?: "")
+        null -> if (version != null && fw.running != null) "Skiff-Lupe $version" else running      // a connected FM-1 with nothing on offer runs Skiff-Lupe
+        else -> running
+    }
+}
+
+/** The menu's second line and the sheet's first: the name, and what can be done about it ("Skiff-Lupe 2.5.1 · up to date", "Skiff 2.6 · Skiff-Lupe available"). */
+fun firmwareLine(fw: FirmwareState): String {
+    val name = firmwareName(fw) ?: return "What the FM-1 runs, and Skiff-Lupe"
+    val offer = fw.offer
+    return when (offer?.kind) {
+        null -> if (fw.running != null) "$name · up to date" else name
+        "install", "update" -> "$name · Skiff-Lupe available"
+        "finish" -> "$name · waiting to finish an install"
+        else -> name
+    }
+}
+
 /** The word on the offer's main key. */
 fun offerKeyTitle(kind: String): String = when (kind) { "update" -> "Install the update"; "finish" -> "Finish installing"; else -> "Install Skiff-Lupe" }
 
@@ -209,7 +241,7 @@ private fun InfoCard(fw: FirmwareState, host: FirmwareHost) {
         CardKey("Close") { host.info = false }
         if (offer != null && offer.firmware != null) CardKey(offerKeyTitle(offer.kind), primary = true) { host.confirm(offer.firmware) }
     }) {
-        Body(if (fw.running != null) "This FM-1 runs ${fw.running}." else if (fw.identity != null) "The FM-1 reports ${fw.identity}." else "No FM-1 is connected.", primary = true)
+        Body(firmwareLine(fw).takeIf { firmwareName(fw) != null } ?: "No FM-1 is connected.", primary = true)
         if (offer != null) Body(offer.text)
         else if (fw.running != null) Body("Lupe works with this firmware: there is nothing to install.")
     }

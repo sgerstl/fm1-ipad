@@ -75,3 +75,16 @@ class FirmwareTest {
         assertEquals("failed", core.firmware.value.state); assertTrue(core.firmware.value.inUpdateMode)
     }
 }
+
+class FirmwareNameTest {
+    private fun fw(running: String?, kind: String? = null, from: String = "") = FirmwareState(running = running, offer = kind?.let { FirmwareOffer(it, from) })
+    @Test fun theMenuNamesTheFirmwareAndWhatCanBeDone() {
+        assertEquals("Skiff-Lupe 2.5.1 · up to date", firmwareLine(fw("v2.5.1")))                                  // the core gave only a version, nothing on offer
+        assertEquals("Skiff-Lupe 2.5.1 · up to date", firmwareLine(fw("Skiff-Lupe 2.5.1")))
+        assertEquals("Skiff 2.6 · Skiff-Lupe available", firmwareLine(fw("v2.6.0".replace(".0", ""), "install", "stockSkiff")))
+        assertEquals("SLOOP 2.8.4 · Skiff-Lupe available", firmwareLine(fw("2.8.4", "install", "sloop")))
+        assertEquals("Skiff-Lupe 2.4 · Skiff-Lupe available", firmwareLine(fw("2.4", "update", "olderLupe")))
+        assertEquals("M-VAVE's own firmware, V16 · Skiff-Lupe available", firmwareLine(fw("M-VAVE's own firmware, V16", "install", "mvave")))
+        assertEquals("What the FM-1 runs, and Skiff-Lupe", firmwareLine(FirmwareState()))
+    }
+}
