@@ -101,6 +101,10 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     var confirmAt by remember { mutableStateOf(0L) }
     val scroll = rememberScrollState()
     val entryIds = remember { EntryIdTracker() }
+    val padDrag = LocalPadDrag.current
+    var ghostSeq by remember { mutableStateOf(0L) }
+    // what is on the screen when the page opens doesn't grow in; what comes later does
+    androidx.compose.runtime.LaunchedEffect(Unit) { entryIds.settled = true }
     val haptic = LocalHapticFeedback.current
     val mix by core.mix.collectAsStateWithLifecycle()
     // the clock reference: the pass bars and the waiting outlines move on from it every frame (read inside the draw, so a new reference recomposes nothing)
@@ -143,12 +147,20 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                         Box(Modifier.fillMaxSize().horizontalScroll(scroll)) {
                             Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
                                 rows.forEach { r ->
+                                    val ghosts = remember(r.track) { androidx.compose.runtime.mutableStateListOf<PadGhost>() }
+                                    Box {
                                     Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
                                         // each keeps its identity as the list is rewritten, and slides to its new place (nothing pops)
                                         val ids = entryIds.update(r.track, r.entries)
                                         r.entries.forEachIndexed { i, e ->
                                             key(ids[i]) {
-                                                Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads, modifier = Modifier.slideToPlace(), clock = clock)
+                                                // a pad that goes shrinks and fades where it stood while the others close up; one that comes (an Undo) grows in
+                                                val memo = remember { PadMemo() }
+                                                memo.entry = e; memo.idx = i
+                                                val growing = remember { entryIds.settled && padDrag?.sprout?.track != r.track }
+                                                androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (memo.size.width > 0) ghosts.add(PadGhost(ghostSeq++, memo.pos, memo.size, memo.entry, memo.idx)) } }
+                                                Pad(r, i, e, rh, selected = pads.selected.track == r.track && pads.selected.entry == i, core = core, selectMode = false, pads = pads,
+                                                    modifier = Modifier.slideToPlace { p, sz -> memo.pos = p; memo.size = sz }.growIn(growing), clock = clock)
                                             }
                                         }
                                         // past the core's last (empty) entry, to H (and to the row's end): outlined slots with their letter (decision 33).
@@ -161,6 +173,9 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                             if (free >= 0 && k < 16) Pad(r, k, r.entries[free], rh, selected = false, core = core, selectMode = false, pads = pads, target = free, clock = clock)
                                             else EmptySlot(k, rh, { emptyOutline(trackCol, onRow.value) })
                                         }
+                                    }
+                                    // the pads that were just deleted, going
+                                    ghosts.forEach { g -> key(g.id) { GhostPad(g) { ghosts.remove(g) } } }
                                     }
                                 }
                             }

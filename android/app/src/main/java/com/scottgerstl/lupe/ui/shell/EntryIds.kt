@@ -17,6 +17,13 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.round
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.FastOutSlowInEasing
 import com.scottgerstl.lupe.core.PadEntry
@@ -28,8 +35,8 @@ import kotlinx.coroutines.launch
 // that are still there slide to their new places. The core gives entries no identity, so the screen follows them: an entry that keeps its kind, pattern and passes
 // is the same entry, matched against the list before it (the longest run in order first, then the ones that moved).
 
-/** What makes an entry the same entry from one list to the next: not its play state, which changes every beat. */
-fun entryKey(e: PadEntry): String = "${e.kind}:${e.pattern}:${e.passes}"
+/** What makes an entry the same entry from one list to the next: its kind and pattern (not its play state, which changes every beat, nor its passes, which Play once more changes). */
+fun entryKey(e: PadEntry): String = "${e.kind}:${e.pattern}"
 
 /** The ids for [newKeys], reusing those of [oldKeys]/[oldIds] where an entry is still there ([fresh] makes a new one). */
 fun matchIds(oldKeys: List<String>, oldIds: List<Long>, newKeys: List<String>, fresh: () -> Long): List<Long> {
@@ -55,6 +62,8 @@ fun matchIds(oldKeys: List<String>, oldIds: List<Long>, newKeys: List<String>, f
 /** Keeps each track's last list and ids between recompositions. */
 class EntryIdTracker {
     private var next = 1L
+    /** Set once the page has opened: pads that come after that grow in. */
+    var settled = false
     private val last = HashMap<Int, Pair<List<String>, List<Long>>>()
     fun update(track: Int, entries: List<PadEntry>): List<Long> {
         val keys = entries.map(::entryKey)
@@ -70,13 +79,13 @@ class EntryIdTracker {
  * Slides to a new place in its parent instead of jumping (about a quarter of a second, ease out); with Reduce Motion it stays where the layout puts it and
  * cross-fades in. A thing that has only just come into being doesn't slide from anywhere.
  */
-fun Modifier.slideToPlace(): Modifier = composed {
+fun Modifier.slideToPlace(onPlace: ((IntOffset, androidx.compose.ui.unit.IntSize) -> Unit)? = null): Modifier = composed {
     val reduce = LocalReduceMotion.current
     val scope = rememberCoroutineScope()
     var target by remember { mutableStateOf(IntOffset.Zero) }
     var anim by remember { mutableStateOf<Animatable<IntOffset, AnimationVector2D>?>(null) }
     val fade = remember { Animatable(1f) }
-    this.onPlaced { target = it.positionInParent().round() }
+    this.onPlaced { target = it.positionInParent().round(); onPlace?.invoke(target, it.size) }
         .alpha(fade.value)
         .offset {
             val a = anim ?: Animatable(target, IntOffset.VectorConverter).also { anim = it }
@@ -88,3 +97,39 @@ fun Modifier.slideToPlace(): Modifier = composed {
             a.value - target
         }
 }
+
+/** A pad that came into being after the page settled grows in (about 200 ms: from 60 % and clear); with Reduce Motion it only fades. An Undo grows its pad back this way. */
+fun Modifier.growIn(animate: Boolean): Modifier = composed {
+    val reduce = LocalReduceMotion.current
+    val t = remember { Animatable(if (animate) 0f else 1f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (animate) unscaled { t.animateTo(1f, tween(200)) } }
+    this.graphicsLayer { val s = if (reduce) 1f else 0.6f + 0.4f * t.value; scaleX = s; scaleY = s; alpha = t.value }
+}
+
+/** What a pad that is going keeps for its goodbye: where it stood in its row, how big it was, what it said. */
+class PadMemo { var pos = IntOffset.Zero; var size = androidx.compose.ui.unit.IntSize.Zero; var entry = PadEntry(); var idx = 0 }
+
+/** A deleted pad, still on the screen while it shrinks and fades (about 200 ms) and the others close up behind it. */
+class PadGhost(val id: Long, val pos: IntOffset, val size: androidx.compose.ui.unit.IntSize, val entry: PadEntry, val idx: Int)
+
+@androidx.compose.runtime.Composable
+fun GhostPad(g: PadGhost, onDone: () -> Unit) {
+    val reduce = LocalReduceMotion.current
+    val t = remember { Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { unscaled { t.animateTo(1f, tween(200)) }; onDone() }
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.foundation.layout.Box(
+        Modifier.offset { g.pos }.size(with(dens) { g.size.width.toDp() }, with(dens) { g.size.height.toDp() })
+            .graphicsLayer { val s = if (reduce) 1f else 1f - 0.4f * t.value; scaleX = s; scaleY = s; alpha = 1f - t.value }
+            .androidx_clearSemantics(),
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawRoundRect(com.scottgerstl.lupe.ui.theme.Tok.control, cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())) }
+        androidx.compose.foundation.text.BasicText(
+            ('A' + g.idx).toString() + if (g.entry.pattern != null) "  %02d".format(g.entry.pattern) else if (g.entry.kind == com.scottgerstl.lupe.core.PadKind.Rest) "  REST" else "",
+            Modifier.align(androidx.compose.ui.Alignment.CenterStart).padding(start = 8.dp),
+            style = com.scottgerstl.lupe.ui.theme.LupeType.label.copy(color = com.scottgerstl.lupe.ui.theme.Tok.text),
+        )
+    }
+}
+
+private fun Modifier.androidx_clearSemantics(): Modifier = this.then(Modifier.semantics { invisibleToUser() })
