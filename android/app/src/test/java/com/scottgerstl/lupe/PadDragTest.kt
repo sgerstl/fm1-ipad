@@ -68,3 +68,13 @@ class PadDragTest {
         assertEquals("""{"intent":"padMove","track":2,"from":1,"toTrack":2,"to":3}""", lupeJson.encodeToString(Intent.serializer(), PadMove(2, 1, 2, 3)))
     }
 }
+
+class PadMenuIdleTest {
+    @Test fun aCurrentEntryDoesNotMeanPlaying() {
+        // stopped transport: every track's current entry still reads "playing" in its pad, and the menu's stopped-only items stay enabled
+        assertTrue(padMenuIdle(transportPlaying = false, timelinePlaying = false))
+        assertFalse(padMenuIdle(transportPlaying = true, timelinePlaying = true))
+        assertFalse(padMenuIdle(transportPlaying = true, timelinePlaying = false))
+        assertFalse(padMenuIdle(transportPlaying = false, timelinePlaying = true))
+    }
+}

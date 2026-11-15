@@ -347,6 +347,9 @@ private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore, clock: androi
     }
 }
 
+/** Whether the song is stopped, for the choices the FM-1 takes only then: the transport and the timeline area's say, never a pad's own play state. */
+fun padMenuIdle(transportPlaying: Boolean, timelinePlaying: Boolean): Boolean = !transportPlaying && !timelinePlaying
+
 /** One entry of one track: its faces are the board's (playing, muted, waiting, next, selected, empty, REST). */
 @Composable
 fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: LupeCore, selectMode: Boolean, pads: PadsState, modifier: Modifier = Modifier, target: Int = idx, clock: androidx.compose.runtime.State<com.scottgerstl.lupe.core.ClockState> = remember { mutableStateOf(com.scottgerstl.lupe.core.ClockState()) }) {
@@ -391,7 +394,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         val tl = core.timeline.value
         val blocks = tl.tracks.firstOrNull { it.track == row.track }?.blocks.orEmpty().filter { it.kind != "gap" }
         val block = blocks.firstOrNull { idx in it.first..it.last }
-        val idle = !tl.playing && !playing
+        // the transport's word, never this pad's own: each track's current entry reads "playing" even when stopped (Scott, Pixel, 2026-11-15)
+        val idle = padMenuIdle(core.top.value.playing, tl.playing)
         val stopFirst = if (idle) null else "Stop first"
         if (e.kind == PadKind.Pattern) {
             add(HoldItem("Edit steps") { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
