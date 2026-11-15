@@ -14,6 +14,8 @@ struct MenuItem {
     var checked = false
     /// A line that says something (a status, a reason), not a choice: smaller, wraps, never focused.
     var note = false
+    /// A small second line under the title (the phone's hold menu shows it: "Takes 03 and empties it · stopped only").
+    var sub: String? = nil
     var action: (() -> Void)?
     var children: (() -> [[MenuItem]])?
     /// A destructive choice's second step: tapped, the fan turns this row into a red-outlined button with these words

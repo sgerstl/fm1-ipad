@@ -107,6 +107,7 @@ struct PhoneHeader: View {
                 main.append(MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true })
             }
             if session.isConnected, ui.songTab {
+                main.append(MenuItem(title: "Patterns…", icon: "square.grid.2x2") { ui.patternsSheet = .manage })
                 main.append(MenuItem(title: "Mix…", icon: "slider.vertical.3") { ui.mixPopup = true })
             }
             main.append(MenuItem(title: "Settings…", icon: "gearshape") { ui.phoneSettingsOpen = true })

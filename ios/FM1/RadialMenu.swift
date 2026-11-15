@@ -43,7 +43,8 @@ struct RadialMenu: View {
 
     /// Under the header line (48 pt and its hairline), so no choice sits over the tabs.
     static let headerClear: CGFloat = 56
-    static let itemW: CGFloat = 200, itemH: CGFloat = 48, step: CGFloat = 56, hub: CGFloat = 32
+    static let itemW: CGFloat = 240, itemH: CGFloat = 48,   // (240: board 79's longer choices and their second lines fit)
+    step: CGFloat = 56, hub: CGFloat = 32
     /// The stalks (decision 36): every one 22 pt, from the rim to the choice's near edge.
     static let stalk: CGFloat = 22
     /// The choices' curve (Scott, 2026-11-14, after cbdc2ad: shallower, nearly vertical with a gentle bow): their near
@@ -309,9 +310,15 @@ struct RadialMenu: View {
                         }
                     }
                     .frame(width: 30, height: 30)
-                    Text(item.title).font(.lupe(item.title.count > 20 ? 14 : 16)).lineLimit(2).minimumScaleFactor(0.85)
-                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(item.enabled ? Theme.text : Theme.textTertiary)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(item.title).font(.lupe(item.sub != nil || item.title.count > 20 ? 14 : 16)).lineLimit(item.sub == nil ? 2 : 1)
+                            .minimumScaleFactor(0.75)
+                            .multilineTextAlignment(.leading)
+                            .foregroundStyle(item.enabled ? Theme.text : Theme.textTertiary)
+                        if let sub = item.sub {
+                            Text(sub).font(.lupe(11)).foregroundStyle(Theme.textSecondary).lineLimit(1).minimumScaleFactor(0.75)
+                        }
+                    }
                 }
                 Spacer(minLength: 0)
                 if item.checked { Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)) }
@@ -330,7 +337,7 @@ struct RadialMenu: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { pick(k, item) }
-        .accessibilityLabel(asking ? "Confirm: \(item.confirm ?? item.title)" : item.title)
+        .accessibilityLabel(asking ? "Confirm: \(item.confirm ?? item.title)" : item.title + (item.sub.map { ", \($0)" } ?? ""))
         .accessibilityAddTraits(item.checked ? .isSelected : [])
         .accessibilityFocused($confirmFocused, equals: true)
         .accessibilityHint(asking ? "Can't be undone. Tap away to keep everything" : "")

@@ -211,6 +211,8 @@ final class EditorUI {
     /// The phone's Mix pop-up (GLO's pages, board 77), and its Settings sheet (from the song-name menu).
     var mixPopup = LaunchArgs.all.contains("-mix-popup")      // (-mix-popup: open on it, for captures)
     var phoneSettingsOpen = LaunchArgs.all.contains("-settings")
+    /// The phone's Patterns sheet (board 79): to manage the pool, or to pick a kept pattern for a pad. (-patterns opens it)
+    var patternsSheet: PatternsSheetMode? = LaunchArgs.all.contains("-patterns") ? .manage : nil
     /// When a swipe up from the foot of the Song tab last moved the divider: the pad or scene key the swipe began on
     /// drops the tap its lift makes (Scott, 2026-11-07: the zone is the scene row's own keys).
     var pulledAt = Date.distantPast
