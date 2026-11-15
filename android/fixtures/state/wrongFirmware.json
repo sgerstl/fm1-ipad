@@ -7,6 +7,6 @@
     {"atMs": 0, "area": "clock", "state": {"atMs":0,"running":false,"ticks":0,"ticksPerSecond":0}},
     {"atMs": 0, "area": "playhead", "state": {"direction":0,"step":-1,"steps":16,"track":1}},
     {"atMs": 17, "area": "link", "state": {"phase":"connecting"}},
-    {"atMs": 222, "area": "link", "state": {"firmware":"FELUCCA SLOOP 2.9.0","phase":"wrongFirmware"}}
+    {"atMs": 221, "area": "link", "state": {"firmware":"FELUCCA SLOOP 2.9.0","phase":"wrongFirmware"}}
   ]
 }
