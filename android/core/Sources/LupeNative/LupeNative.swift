@@ -127,7 +127,7 @@ let gate = LinkGate(send: { javaSend($0) }, onBlocked: { debug("read-only: block
 /// How the app runs the link: `session` (PhoneCore over DeviceSession, the real app) or `raw` (gate 3's debug
 /// mode: no Session; Swift reads the frames itself and prints them).
 nonisolated(unsafe) private var rawMode = false
-nonisolated(unsafe) private var core: PhoneCore?
+nonisolated(unsafe) var core: PhoneCore?          // (internal: SkiffDrawSpike.swift reads the session)
 
 /// Gate 3's debug mode: Swift reads the frames itself and prints them (no Session yet).
 nonisolated(unsafe) private var rawReader: Task<Void, Never>?

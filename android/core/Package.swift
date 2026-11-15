@@ -13,7 +13,8 @@ let package = Package(
         // libLupeNative.so: what the APK loads (System.loadLibrary("LupeNative")).
         .library(name: "LupeNative", type: .dynamic, targets: ["LupeNative"]),
     ],
-    dependencies: [.package(path: "../../ios/SloopKit")],
+    dependencies: [.package(path: "../../ios/SloopKit"),
+                  .package(path: "../../ios/SkiffDraw")],          // decision 45's spike (2026-11-15)
     targets: [
         // jni.h, ALooper and the log, from the NDK's sysroot. Empty on the Mac.
         .target(name: "CAndroid",
@@ -26,7 +27,9 @@ let package = Package(
         // The façade the Compose screens read (ViewState areas as JSON) and drive (intents). Pure Swift.
         .target(name: "PhoneCore", dependencies: ["SloopKit"], swiftSettings: v5),
         // The JNI surface: six-ish functions, written by hand (BRIDGE.md §3 open question: settled for hand-written).
-        .target(name: "LupeNative", dependencies: ["CAndroid", "MainLooper", "AndroidLink", "PhoneCore", "SloopKit"],
+        .target(name: "LupeNative", dependencies: ["CAndroid", "MainLooper", "AndroidLink", "PhoneCore", "SloopKit",
+                                                    .product(name: "SkiffDraw", package: "SkiffDraw"),
+                                                    .product(name: "SkiffDrawLink", package: "SkiffDraw")],
                 swiftSettings: v5),
         // Gate 2's proof outside the app: hops between a background thread and the main actor on a native ALooper.
         .executableTarget(name: "looper-probe", dependencies: ["CAndroid", "MainLooper"], swiftSettings: v5),

@@ -290,7 +290,9 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
     val tiles = last.tiles
     val compactTiles = tiles != null && tiles.kind == "pick" && tiles.labels.size <= 4
     val picture = com.scottgerstl.lupe.ui.page.pictureOf(last)
-    val pictured = graphics && com.scottgerstl.lupe.ui.page.hasPicture(picture)
+    // decision 46: the FM-1's own picture, drawn by Skiff's code, where SkiffDraw can (its build, its pages); else the hand-drawn one
+    val skiff = com.scottgerstl.lupe.ui.page.rememberSkiffPicture(last, glo, enabled = graphics)
+    val pictured = graphics && (skiff != null || com.scottgerstl.lupe.ui.page.hasPicture(picture))
     // It stands out from the page: the track's colour muted, 35 % over the page. Computed for all six track colours (2026-11-14): white text is
     // 6.7:1 or better on it, the raised grey of the labels 4.5:1 or better (lime is the least, 4.52), the track's own colour (the dials' arcs)
     // 3.6:1 or better. At 40 % the labels fall under 4.5:1 on yellow and lime, so 35 it is. A line in the track's colour marks its left edge.
@@ -328,7 +330,9 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
             Spacer(Modifier.height(8.dp))
             LupeCrossfade(picture.kind to last.page, Modifier.fillMaxWidth().weight(1f), Dur.STATE) { _ ->
                 val turned = if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1
-                if (tiles == null) com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                val said = "${last.title}: " + if (com.scottgerstl.lupe.ui.page.hasPicture(picture)) com.scottgerstl.lupe.ui.page.describe(picture) else "the FM-1's picture"
+                if (skiff != null) com.scottgerstl.lupe.ui.page.SkiffPictureImage(skiff, said, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                else if (tiles == null) com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
                 else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     // under a row of tiles the picture takes all the height that is left, at the FM-1's 936 : 552 where the width allows, centred
                     val ratio = 936f / 552f
