@@ -42,7 +42,7 @@ final class AudioThrough {
 
     /// (A new key: the frozen first version may have left the old one on.)
     private static let key = "playThroughIPad.v2"
-    @ObservationIgnored private let core = AudioCore()
+    @ObservationIgnored private let core = AudioCore(isPhone: UIDevice.current.userInterfaceIdiom == .phone)
 
     init() {
         enabled = UserDefaults.standard.bool(forKey: Self.key)
@@ -86,6 +86,8 @@ final class AudioCore: @unchecked Sendable {
     var onRoute: (@Sendable (String) -> Void)?
 
     private let queue = DispatchQueue(label: "fm1.audio-through", qos: .userInitiated)
+    /// An iPhone (read on the main actor when the app starts): it has a receiver, so the speaker must be asked for.
+    private let isPhone: Bool
     /// Rebuilt for each start: an engine left over from another output keeps that output's format, and
     /// played nothing on Bluetooth headphones (2026-11-02).
     private var engine = AVAudioEngine()
@@ -102,7 +104,8 @@ final class AudioCore: @unchecked Sendable {
     private let meter = InputMeter()
     private var observers: [NSObjectProtocol] = []
 
-    init() {
+    init(isPhone: Bool) {
+        self.isPhone = isPhone
         let nc = NotificationCenter.default
         let session = AVAudioSession.sharedInstance()
         observers.append(nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: session, queue: nil) { [weak self] _ in
@@ -184,10 +187,14 @@ final class AudioCore: @unchecked Sendable {
         }
         do {
             if !sessionReady {
-                // Bluetooth headphones as an output (A2DP), the input staying USB. No .defaultToSpeaker: the
-                // iPad has no receiver to avoid, and that option kept the sound on the speaker with
-                // headphones connected (2026-11-02); not .allowBluetooth either, which is the phone-call profile
-                try s.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
+                // Bluetooth headphones as an output (A2DP), the input staying USB. No .defaultToSpeaker on the
+                // iPad: it has no receiver to avoid, and that option kept the sound on the speaker with
+                // headphones connected (2026-11-02); not .allowBluetooth either, which is the phone-call profile.
+                // The iPhone needs it: without it .playAndRecord plays to the earpiece (the receiver) when no
+                // headphones are on (2026-11-15, audio-through check). Headphones still win over the speaker.
+                var options: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP]
+                if isPhone { options.insert(.defaultToSpeaker) }
+                try s.setCategory(.playAndRecord, mode: .default, options: options)
                 // 20 ms, not 5: this is for listening, never for playing live (the round trip already
                 // lags), and a quarter as many audio wake-ups a second saves battery (2026-11-02)
                 try s.setPreferredIOBufferDuration(0.02)
@@ -237,7 +244,7 @@ final class AudioCore: @unchecked Sendable {
             watchSignal()
         } catch {
             stopEngine()
-            publish(.failed("iPad audio couldn't start"))
+            publish(.failed(isPhone ? "iPhone audio couldn't start" : "iPad audio couldn't start"))
             retry()
         }
     }

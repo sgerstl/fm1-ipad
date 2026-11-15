@@ -34,6 +34,8 @@ android {
     // P1: libLupeNative.so and the Swift runtime it needs, built by android/scripts/build-native.sh (BRIDGE.md §3).
     sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("swift/jniLibs"))
     defaultConfig { ndk { abiFilters += "arm64-v8a" } }   // the Pixel 10 Pro; the Swift build is arm64 only
+    // Audio through (AAudio, C++): libLupeThrough.so, built by android/scripts/build-through.sh (app/src/main/cpp/through)
+    sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("through/jniLibs"))
 }
 
 // P1: builds the Swift core before Gradle packs native libraries. Swift's own build is incremental.
@@ -44,7 +46,15 @@ val buildSwift by tasks.registering(Exec::class) {
     outputs.dir(out)
     outputs.upToDateWhen { false }
 }
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach { dependsOn(buildSwift) }
+// Audio through: the AAudio engine, one C++ file and its header, compiled with the NDK's clang (no CMake needed)
+val buildThrough by tasks.registering(Exec::class) {
+    description = "Builds app/src/main/cpp/through (libLupeThrough.so) for arm64 Android"
+    val out = layout.buildDirectory.dir("through/jniLibs").get().asFile
+    commandLine(rootProject.file("scripts/build-through.sh").path, out.path, "debug")
+    inputs.dir(file("src/main/cpp/through"))
+    outputs.dir(out)
+}
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach { dependsOn(buildSwift, buildThrough) }
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))

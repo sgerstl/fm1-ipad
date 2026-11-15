@@ -6,6 +6,10 @@
     <!-- Only to download the firmware Lupe installs on the FM-1 (Skiff-Lupe, from Lupe's GitHub release), when the
          person asks for an install. Nothing else in the app uses the network. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Audio through (Settings › Play through the phone): Android counts the FM-1's USB audio input as a microphone.
+         Only the FM-1's input is ever played, never the phone's own microphone. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:name=".LupeApp"
