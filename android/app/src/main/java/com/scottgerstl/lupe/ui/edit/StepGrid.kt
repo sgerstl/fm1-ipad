@@ -105,6 +105,11 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
     Row(modifier.fillMaxSize()) {
         var scrollY by remember(ed.track, ed.pattern) { mutableFloatStateOf(-1f) }
         var scrollX by remember { mutableFloatStateOf(0f) }
+        // when a finger last moved the steps: while it plays the grid pages along with the playhead, unless it was touched a moment ago
+        var touchedAt by remember { mutableStateOf(0L) }
+        // the pattern's steps: its count, or what the core sends if that is more (sixteen until the core carries more)
+        val total = maxOf(ed.patternSteps, ed.steps.size, 1).coerceAtMost(64)
+        val totalNow by rememberUpdatedState(total)
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val viewH = with(density) { maxHeight.toPx() }
             val rowPx = viewH / Roll.ROWS
@@ -115,11 +120,20 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
             val geo by rememberUpdatedState(floatArrayOf(rowPx, viewH, stepPx, viewPx, dockPx))
             // the window opens on the pattern's notes; after that it is where the finger left it
             val sy = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(ed.steps.flatMap { stepNotes(it) }), rowPx) else Roll.clampScrollY(scrollY, rowPx, viewH)
-            fun sx() = Roll.clampScrollX(scrollX, geo[4])
-            // a panel docking: the picked step comes clear of it; undocking: the grid goes back to its place. Eased, nothing pops.
-            LaunchedEffect(dockPx > 0f, picked) {
-                val to = if (dockPx <= 0f) 0f else picked?.let { Roll.reveal(it, sx(), stepPx, viewPx, dockPx) } ?: sx()
-                if (to != scrollX) animate(scrollX, to, animationSpec = tween(if (reduce) 0 else Dur.PANEL, easing = EaseOut)) { v, _ -> scrollX = v }
+            fun maxScroll() = Roll.maxScroll(totalNow, geo[3], geo[4])
+            fun sx() = Roll.clampScrollX(scrollX, maxScroll())
+            /** Eases the steps to [to] (a place the grid settles; at once with Reduce Motion): nothing pops. */
+            suspend fun glide(to: Float) {
+                val target = Roll.clampScrollX(to, maxScroll())
+                if (kotlin.math.abs(target - scrollX) > 0.5f) animate(scrollX, target, animationSpec = tween(if (reduce) 0 else Dur.PANEL, easing = EaseOut)) { v, _ -> scrollX = v }
+            }
+            // a panel docking or leaving, the pattern's length changing, or a step picked: the picked step comes into view (clear of the panel),
+            // else the grid settles on its nearest chunk
+            LaunchedEffect(dockPx > 0f, picked, total) { glide(picked?.let { Roll.reveal(it, sx(), stepPx, viewPx, dockPx, total) } ?: Roll.snap(sx(), total, viewPx, dockPx)) }
+            // playing: the playhead's chunk (batch item 9), unless a finger moved the steps in the last two and a half seconds
+            LaunchedEffect(ed.playhead, total) {
+                if (ed.playhead < 0 || System.currentTimeMillis() - touchedAt < 2500L) return@LaunchedEffect
+                Roll.follow(ed.playhead, sx(), stepPx, viewPx, dockPx, total)?.let { glide(it) }
             }
 
             fun play(midi: Int) { if (canPlay()) { core.send(PlayNote(note = midi, on = true)); scope.launch { delay(160); core.send(PlayNote(note = midi, on = false)) } } }
@@ -142,20 +156,26 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
                     Modifier.width(gridW).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Tok.well)
                         // one finger: up and down scrolls the pitches, sideways scrolls the steps under a docked panel
                         .pointerInput(Unit) {
-                            detectDragGestures { change, d ->
-                                change.consume()
+                            detectDragGestures(
+                                onDragStart = { touchedAt = System.currentTimeMillis() },
+                                // let go: the steps settle on a chunk (or, a panel docked, on the place its last steps come clear)
+                                onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4])) } },
+                                onDragCancel = { scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4])) } },
+                            ) { change, d ->
+                                change.consume(); touchedAt = System.currentTimeMillis()
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), geo[0]) else scrollY
                                 scrollY = Roll.clampScrollY(base - d.y, geo[0], geo[1])
-                                scrollX = Roll.clampScrollX(scrollX - d.x, geo[4])
+                                scrollX = Roll.clampScrollX(scrollX - d.x, Roll.maxScroll(totalNow, geo[3], geo[4]))
                             }
                         }
                         // a tap writes or picks; a hold is lock mode for as long as the finger stays down (the FM-1's own gesture)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
+                                touchedAt = System.currentTimeMillis()
                                 val g = geo
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), g[0]) else Roll.clampScrollY(scrollY, g[0], g[1])
-                                val i = Roll.stepAt(down.position.x, Roll.clampScrollX(scrollX, g[4]), g[2]); val pitch = Roll.pitchAt(down.position.y, base, g[0])
+                                val i = Roll.stepAt(down.position.x, Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4])), g[2], totalNow); val pitch = Roll.pitchAt(down.position.y, base, g[0])
                                 var cancelled = false
                                 val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
                                 if (cancelled) return@awaitEachGesture
@@ -176,13 +196,14 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
                             val y = (127 - p) * rowPx - sy
                             if (Roll.isBlack(p)) drawRect(lerp(Tok.well, Tok.page, 0.6f), Offset(0f, y), Size(size.width, rowPx))
                         }
-                        for (i in 0 until Roll.STEPS) {
+                        for (i in 0 until total) {
                             val x = x0 + i * stepPx
                             if (i % 4 == 0) drawRect(Tok.text.copy(alpha = 0.03f), Offset(x, 0f), Size(stepPx, size.height))
                             if (picked == i) drawRect(Tok.stepEmpty, Offset(x, 0f), Size(stepPx, size.height))
                         }
                         for (p in pitches) { val y = (127 - p) * rowPx - sy; drawLine(line, Offset(0f, y), Offset(size.width, y), 1.dp.toPx()) }
-                        for (i in 0..Roll.STEPS) { val x = x0 + i * stepPx; drawLine(if (i % 4 == 0) Tok.control else line, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx()) }
+                        // bar lines between the chunks of sixteen, the beats a shade stronger than the steps
+                        for (i in 0..total) { val x = x0 + i * stepPx; if (i % Roll.STEPS == 0 && i > 0 && i < total) drawLine(Tok.text3, Offset(x, 0f), Offset(x, size.height), 2.dp.toPx()) else drawLine(if (i % 4 == 0) Tok.control else line, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx()) }
                         // the notes: as long as they hold, stronger the harder they are played; the picked step's ringed white; ◆ for a lock
                         ed.steps.forEachIndexed { i, s ->
                             for (n in stepNotes(s)) {
@@ -201,19 +222,19 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
                             if (ns.any { it < pitches.first }) drawCircle(track, 2.5.dp.toPx(), Offset(x, size.height - 5.dp.toPx()))
                         }
                         // the playhead: a bar along the top of the playing step
-                        if (ed.playhead in 0 until Roll.STEPS) drawRect(Tok.text, Offset(x0 + ed.playhead * stepPx, 0f), Size(stepPx, 3.dp.toPx()))
+                        if (ed.playhead in 0 until total) drawRect(Tok.text, Offset(x0 + ed.playhead * stepPx, 0f), Size(stepPx, 3.dp.toPx()))
                         // the held step (lock mode): its column outlined in the track's colour
-                        if (ed.lock == LockMode.Held && ed.selected in 0 until Roll.STEPS) drawRect(track, Offset(x0 + ed.selected * stepPx + 1.dp.toPx(), 1.dp.toPx()), Size(stepPx - 2.dp.toPx(), size.height - 2.dp.toPx()), style = Stroke(2.dp.toPx()))
+                        if (ed.lock == LockMode.Held && ed.selected in 0 until total) drawRect(track, Offset(x0 + ed.selected * stepPx + 1.dp.toPx(), 1.dp.toPx()), Size(stepPx - 2.dp.toPx(), size.height - 2.dp.toPx()), style = Stroke(2.dp.toPx()))
                         // the scroll indicator, while a panel covers part of the grid: what is in view beside it, along the foot
-                        if (dockPx > 0.5f) {
-                            val (a, b) = Roll.indicator(sx(), stepPx, viewPx, dockPx); val wv = size.width - dockPx - 8.dp.toPx()
+                        if (dockPx > 0.5f || total > Roll.STEPS) {
+                            val (a, b) = Roll.indicator(sx(), stepPx, viewPx, dockPx, total); val wv = size.width - dockPx - 8.dp.toPx()
                             drawRoundRect(Tok.control, Offset(4.dp.toPx(), size.height - 4.dp.toPx()), Size(wv, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
                             drawRoundRect(Tok.text2Raised, Offset(4.dp.toPx() + a * wv, size.height - 4.dp.toPx()), Size((b - a) * wv, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
                         }
                     }
                     // TalkBack: a step is one thing to land on, with what it holds and the ways to change it (the cells themselves aren't nodes)
                     val window = Roll.visiblePitches(sy, rowPx, viewH)
-                    for (i in 0 until Roll.STEPS) {
+                    for (i in 0 until total) {
                         val s = ed.steps.getOrNull(i) ?: Step(); val ns = stepNotes(s)
                         Box(
                             Modifier.offset { IntOffset((i * stepPx - sx()).toInt(), 0) }.width(with(density) { stepPx.toDp() }).fillMaxHeight()

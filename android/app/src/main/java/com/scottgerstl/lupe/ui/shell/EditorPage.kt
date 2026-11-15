@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.scottgerstl.lupe.core.SetPatternSteps
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -109,6 +111,7 @@ import com.scottgerstl.lupe.ui.theme.LupeCrossfade
 import com.scottgerstl.lupe.ui.theme.LupeType
 import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 private enum class PanelTab(val label: String) { Notes("NOTES"), Feel("FEEL"), Sound("SOUND") }
@@ -168,6 +171,8 @@ fun EditTab(
                 LaneKey(ui)
                 Spacer(Modifier.width(6.dp))
             }
+            StepsKey(ed, track, core)
+            Spacer(Modifier.width(6.dp))
             // "Step 6": latches the step panel. With nothing picked it picks the core's selected step (a kit: hold a cell first).
             val n = (if (drum) hit?.second else pick.step) ?: ed.selected
             Key({
@@ -206,6 +211,29 @@ fun EditTab(
             ) {
                 if (drum) HitPanel(ed, track, core, hit, narrow = true) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
             }
+        }
+    }
+}
+
+/**
+ * STEPS (batch item 9): the pattern's step count, the FM-1's LENGTH knob, 1 to 64. The key shows it ("32 steps") and follows the FM-1's
+ * knob (the editor area's patternSteps). A tap opens the hold menu at the key: one more or fewer, and the usual lengths. It is a write:
+ * PhoneCore drops it while read-only. The grid scrolls through the steps in chunks of sixteen.
+ */
+@Composable
+private fun StepsKey(ed: EditorState, track: Color, core: LupeCore) {
+    val menu = LocalHoldMenu.current
+    var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val n = ed.patternSteps; val max = ed.patternStepsMax
+    fun items(): List<HoldItem> = buildList {
+        add(HoldItem("One more step", sub = if (n >= max) "The most is $max" else null, enabled = n < max) { core.send(SetPatternSteps(n + 1)) })
+        add(HoldItem("One fewer step", sub = if (n <= 1) "The least is 1" else null, enabled = n > 1) { core.send(SetPatternSteps(n - 1)) })
+        for (v in listOf(4, 8, 12, 16, 24, 32, 48, 64)) if (v <= max) add(HoldItem("$v steps", checked = v == n) { core.send(SetPatternSteps(v)) })
+    }
+    Box(Modifier.onGloballyPositioned { coords = it }) {
+        Key({ coords?.takeIf { it.isAttached }?.let { c -> menu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), track, items()) } },
+            "Pattern length: $n steps", width = 76.dp, height = 28.dp, minTarget = 32.dp, state = "Opens the choices: one more, one fewer, 4 to 64") { fg ->
+            KeyLabel("$n steps", fg, style = LupeType.key.copy(fontSize = 13.sp))
         }
     }
 }
@@ -359,6 +387,10 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
     val density = LocalDensity.current
     // a docked panel covers the right side: the steps keep their width and scroll under it (decision 35, B); the names stay
     var scrollX by remember { mutableFloatStateOf(0f) }
+    var touchedAt by remember { mutableStateOf(0L) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val total = maxOf(ed.patternSteps, ed.steps.size, 1).coerceAtMost(64)
+    val totalNow by rememberUpdatedState(total)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val gap = 3.dp
         val rh = ((maxHeight - gap * (lanes.size - 1)) / lanes.size)
@@ -366,18 +398,32 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
         val gw = maxWidth - labelW
         val viewPx = with(density) { gw.toPx() }; val stepPx = viewPx / 16
         val dockPx by rememberUpdatedState(with(density) { dock.toPx() }.coerceAtMost(viewPx - stepPx * 4))
-        fun sx() = com.scottgerstl.lupe.ui.edit.Roll.clampScrollX(scrollX, dockPx)
-        LaunchedEffect(dockPx > 0f, hit?.second) {
-            val to = if (dockPx <= 0f) 0f else hit?.second?.let { com.scottgerstl.lupe.ui.edit.Roll.reveal(it, sx(), stepPx, viewPx, dockPx) } ?: sx()
-            if (to != scrollX) androidx.compose.animation.core.animate(scrollX, to, animationSpec = androidx.compose.animation.core.tween(if (reduce) 0 else Dur.PANEL, easing = com.scottgerstl.lupe.ui.theme.EaseOut)) { v, _ -> scrollX = v }
+        val roll = com.scottgerstl.lupe.ui.edit.Roll
+        fun sx() = roll.clampScrollX(scrollX, roll.maxScroll(totalNow, viewPx, dockPx))
+        suspend fun glide(to: Float) {
+            val target = roll.clampScrollX(to, roll.maxScroll(totalNow, viewPx, dockPx))
+            if (kotlin.math.abs(target - scrollX) > 0.5f) androidx.compose.animation.core.animate(scrollX, target, animationSpec = androidx.compose.animation.core.tween(if (reduce) 0 else Dur.PANEL, easing = com.scottgerstl.lupe.ui.theme.EaseOut)) { v, _ -> scrollX = v }
+        }
+        // a panel docking or leaving, the length changing or a hit picked: it comes into view (clear of the panel), else the grid settles on a chunk
+        LaunchedEffect(dockPx > 0f, hit?.second, total) { glide(hit?.second?.let { roll.reveal(it, sx(), stepPx, viewPx, dockPx, total) } ?: roll.snap(sx(), total, viewPx, dockPx)) }
+        // playing: the playhead's chunk, unless a finger moved the steps in the last two and a half seconds
+        LaunchedEffect(ed.playhead, total) {
+            if (ed.playhead < 0 || System.currentTimeMillis() - touchedAt < 2500L) return@LaunchedEffect
+            roll.follow(ed.playhead, sx(), stepPx, viewPx, dockPx, total)?.let { glide(it) }
         }
         Column(
-            Modifier.pointerInput(Unit) { detectHorizontalDragGestures { change, dx -> if (dockPx > 0f) { change.consume(); scrollX = com.scottgerstl.lupe.ui.edit.Roll.clampScrollX(scrollX - dx, dockPx) } } }
+            Modifier.pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { touchedAt = System.currentTimeMillis() },
+                    onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx)) } },
+                    onDragCancel = { scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx)) } },
+                ) { change, dx -> if (totalNow > 16 || dockPx > 0f) { change.consume(); touchedAt = System.currentTimeMillis(); scrollX = roll.clampScrollX(scrollX - dx, roll.maxScroll(totalNow, viewPx, dockPx)) } }
+            }
                 .drawWithContent {
                     drawContent()
                     // the scroll indicator, while a panel covers part of the steps
-                    if (dockPx > 0.5f) {
-                        val (a, b) = com.scottgerstl.lupe.ui.edit.Roll.indicator(sx(), stepPx, viewPx, dockPx); val x0 = labelW.toPx() + 4.dp.toPx(); val wv = viewPx - dockPx - 8.dp.toPx()
+                    if (dockPx > 0.5f || total > 16) {
+                        val (a, b) = roll.indicator(sx(), stepPx, viewPx, dockPx, total); val x0 = labelW.toPx() + 4.dp.toPx(); val wv = viewPx - dockPx - 8.dp.toPx()
                         drawRoundRect(Tok.control, Offset(x0, size.height - 3.dp.toPx()), Size(wv, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
                         drawRoundRect(Tok.text2Raised, Offset(x0 + a * wv, size.height - 3.dp.toPx()), Size((b - a) * wv, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
                     }
@@ -386,11 +432,11 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
         ) {
             lanes.forEachIndexed { k, lane ->
                 Box(Modifier.fillMaxWidth().height(rh).clipToBounds()) {
-                    for (i in 0 until 16) {
+                    for (i in 0 until total) {
                         val s = ed.steps.getOrNull(i) ?: Step()
                         val on = s.on && (if (s.hits.isNotEmpty()) s.hits.any { it.lane == k } else lane in s.note.split(" "))
                         val picked = hit?.first == lane && hit.second == i
-                        val (x, cw) = colX(i, gw)
+                        val (x0, cw) = colX(i % 16, gw); val x = x0 + gw * (i / 16)
                         val onF = animatedFloat(if (on) 1f else 0f, Dur.STATE)
                         val sel = animatedFloat(if (picked) 1f else 0f, Dur.STATE)
                         val fill = lerp(Tok.page, track, (30 + s.velocity / 127f * 60) / 100f)

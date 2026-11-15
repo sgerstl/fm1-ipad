@@ -1,5 +1,8 @@
 package com.scottgerstl.lupe.ui.edit
 
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
@@ -29,8 +32,8 @@ object Roll {
         return (hi + spare / 2).coerceIn(rows - 1, 127)
     }
 
-    /** The step under [x] (grid pixels) with the grid scrolled [scroll] to the left. */
-    fun stepAt(x: Float, scroll: Float, stepPx: Float): Int = ((x + scroll) / stepPx).toInt().coerceIn(0, STEPS - 1)
+    /** The step under [x] (grid pixels) with the grid scrolled [scroll] to the left; [total] steps in the pattern. */
+    fun stepAt(x: Float, scroll: Float, stepPx: Float, total: Int = STEPS): Int = ((x + scroll) / stepPx).toInt().coerceIn(0, max(1, total) - 1)
 
     /** The pitch under [y] with the rows scrolled [scrollY] (row 0 is MIDI 127). */
     fun pitchAt(y: Float, scrollY: Float, rowPx: Float): Int = (127 - ((y + scrollY) / rowPx).toInt()).coerceIn(0, 127)
@@ -39,21 +42,57 @@ object Roll {
     fun scrollYFor(top: Int, rowPx: Float): Float = (127 - top) * rowPx
     fun clampScrollY(scrollY: Float, rowPx: Float, viewPx: Float): Float = scrollY.coerceIn(0f, max(0f, 128 * rowPx - viewPx))
 
-    /** A panel docked over the grid's right [dockPx]: the grid keeps its step width and can scroll left by that much (decision 35, B). */
-    fun clampScrollX(scroll: Float, dockPx: Float): Float = scroll.coerceIn(0f, max(0f, dockPx))
+    // ---- across the pattern: up to 64 steps in chunks of sixteen (batch item 9; Scott: it snaps to 16-step chunks, bar lines between them)
 
-    /** The scroll that brings step [i] clear of the dock (and of the left edge), moving as little as possible. */
-    fun reveal(i: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float): Float {
-        val left = i * stepPx; val right = left + stepPx; val clear = viewPx - dockPx
-        val s = when { right - scroll > clear -> right - clear; left - scroll < 0f -> left; else -> scroll }
-        return clampScrollX(s, dockPx)
+    /** How many chunks of sixteen a pattern of [total] steps is (the last may be shorter). */
+    fun chunks(total: Int): Int = max(1, (total + STEPS - 1) / STEPS)
+
+    /**
+     * How far the grid can scroll: to the last chunk's start, and, with a panel docked over the right [dockPx], that much more so its last
+     * step comes clear of it (decision 35, B: the steps keep their width and scroll under the panel).
+     */
+    fun maxScroll(total: Int, chunkPx: Float, dockPx: Float): Float = (chunks(total) - 1) * chunkPx + max(0f, dockPx)
+    fun clampScrollX(scroll: Float, maxScroll: Float): Float = scroll.coerceIn(0f, max(0f, maxScroll))
+
+    /**
+     * Where a scroll settles: the nearest chunk start, or (a panel docked) the nearest chunk start or that start plus the dock, which is
+     * where its last steps come clear of the panel.
+     */
+    fun snap(scroll: Float, total: Int, chunkPx: Float, dockPx: Float): Float {
+        var best = 0f; var bestD = Float.MAX_VALUE
+        for (c in 0 until chunks(total)) for (o in if (dockPx > 0.5f) listOf(0f, dockPx) else listOf(0f)) {
+            val stop = c * chunkPx + o; val d = kotlin.math.abs(stop - scroll)
+            if (d < bestD) { best = stop; bestD = d }
+        }
+        return best
     }
 
-    /** How much of the steps is in view beside the dock, as the scroll indicator draws it: start and end, 0…1. */
-    fun indicator(scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float): Pair<Float, Float> {
-        val total = STEPS * stepPx
-        if (total <= 0f) return 0f to 1f
-        return (scroll / total).coerceIn(0f, 1f) to ((scroll + viewPx - dockPx) / total).coerceIn(0f, 1f)
+    /** The steps wholly in view beside a panel docked over the right [dockPx], with the grid scrolled [scroll]. */
+    fun inView(scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int): IntRange {
+        val first = ceil((scroll - 0.5f) / stepPx).toInt().coerceAtLeast(0)
+        val last = floor((scroll + viewPx - max(0f, dockPx) + 0.5f) / stepPx).toInt() - 1
+        return first..min(total - 1, last)
+    }
+
+    /**
+     * The scroll that brings step [i] into view beside the dock: where it is if it already is, else the start of its chunk, else that start
+     * plus the dock (its last steps). Always one of the places the grid settles.
+     */
+    fun reveal(i: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int = STEPS): Float {
+        if (i in inView(scroll, stepPx, viewPx, dockPx, total)) return scroll
+        val chunk = (i / STEPS) * STEPS * stepPx
+        return if (i in inView(chunk, stepPx, viewPx, dockPx, total)) chunk else chunk + max(0f, dockPx)
+    }
+
+    /** While playing: null while the playhead's step is in view, else where to settle so it is (a page turn, not a crawl). */
+    fun follow(head: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int): Float? =
+        if (head < 0 || head >= total) null else reveal(head, scroll, stepPx, viewPx, dockPx, total).takeIf { abs(it - scroll) > 0.5f }
+
+    /** What is in view along the whole pattern, as the scroll indicator draws it: start and end, 0…1. */
+    fun indicator(scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int): Pair<Float, Float> {
+        val all = max(1, total) * stepPx
+        if (all <= 0f) return 0f to 1f
+        return (scroll / all).coerceIn(0f, 1f) to ((scroll + viewPx - max(0f, dockPx)) / all).coerceIn(0f, 1f)
     }
 
     /** What a tap on a cell does. */

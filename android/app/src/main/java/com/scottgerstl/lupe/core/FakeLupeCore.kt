@@ -275,7 +275,7 @@ class FakeLupeCore(
                 else { _mix.update { FakeP5.mix(it, intent) }; _pads.update { p -> p.copy(rows = p.rows.map { if (it.track == intent.track) it.copy(muted = !it.muted) else it }) } }
             is Intent.SceneRecall -> { recall(intent.scene); if (_top.value.playing) _pads.update { p -> p.copy(scenes = p.scenes.mapIndexed { i, sc -> sc.copy(waiting = i == intent.scene, launchTick = nextBarTick()) }) } }
             is Intent.SceneStore -> if (_pads.value.scenes.getOrNull(intent.scene)?.stored == true && !intent.confirmed) Unit /* the core refuses: must confirm */ else store(intent.scene)
-            is Intent.StepSelect -> emitEditor { it.copy(selected = intent.step.coerceIn(0, 15)) }
+            is Intent.StepSelect -> emitEditor { it.copy(selected = intent.step.coerceIn(0, model.size - 1)) }
             is Intent.StepHold -> emitEditor {
                 when {
                     intent.down -> it.copy(selected = intent.step, lock = LockMode.Held)
@@ -286,14 +286,14 @@ class FakeLupeCore(
             is Intent.StepAdjust -> adjust(intent.field, intent.delta)
             is PlayNote -> {}   // it would sound; the fake has no voice
             is SetStepNotes -> if (_editor.value.kind != EditorKind.Drum && intent.notes.distinct().size <= 4) {   // more than four is refused whole
-                val st = model[intent.step.coerceIn(0, 15)]
+                val st = model[intent.step.coerceIn(0, model.size - 1)]
                 val notes = intent.notes.distinct()
                 if (notes.isEmpty()) { st.on = false; st.more.clear(); st.extra = 0 }
                 else { if (!st.on) st.velocity = 100; st.on = true; st.midi = notes[0]; st.more = notes.drop(1).toMutableList(); st.extra = st.more.size }
-                emitEditor { it.copy(selected = intent.step.coerceIn(0, 15)) }
+                emitEditor { it.copy(selected = intent.step.coerceIn(0, model.size - 1)) }
             }
             is ToggleStepNote -> if (_editor.value.kind != EditorKind.Drum) {
-                val st = model[intent.step.coerceIn(0, 15)]
+                val st = model[intent.step.coerceIn(0, model.size - 1)]
                 val notes = st.notes().toMutableList()
                 if (intent.note in notes) notes.remove(intent.note) else if (notes.size < 4) notes.add(intent.note)   // a full step is left alone
                 if (notes.isEmpty()) { st.on = false; st.more.clear(); st.extra = 0 }
@@ -301,10 +301,19 @@ class FakeLupeCore(
                 emitEditor()
             }
             is ToggleHit -> if (_editor.value.kind == EditorKind.Drum && intent.lane in FakeData.drumLanes.indices) {
-                val st = model[intent.step.coerceIn(0, 15)]
+                val st = model[intent.step.coerceIn(0, model.size - 1)]
                 if (!st.on) st.velocity = 100
                 if (!st.lanes.remove(intent.lane)) st.lanes.add(intent.lane)
                 st.on = st.lanes.isNotEmpty(); emitEditor()
+            }
+            // LENGTH: the pattern's step count. Shorter drops the tail; longer repeats the pattern's steps (a demo, so there is something past 16)
+            is SetPatternSteps -> {
+                val n = intent.steps.coerceIn(1, 64); val old = model.size
+                if (n != old) {
+                    model = if (n < old) model.subList(0, n).toMutableList() else MutableList(n) { i -> if (i < old) model[i] else model[i % old].copyOf().also { it.values.clear() } }
+                    stepPatterns[_editor.value.track to _editor.value.pattern] = model
+                    emitEditor { it.copy(selected = it.selected.coerceIn(0, n - 1)) }
+                }
             }
             Intent.ChordToggle -> emitEditor { it.copy(chord = !it.chord) }
             Intent.LockToggle -> emitEditor { it.copy(lock = if (it.lock == LockMode.Latched) LockMode.Off else LockMode.Latched) }
@@ -354,7 +363,7 @@ class FakeLupeCore(
                 if (!(hasRecorded && !intent.confirmed)) {          // drawing over recorded changes is refused unless confirmed
                     intent.values.forEachIndexed { n, v ->
                         val k = intent.from + n
-                        if (k in 0..15) { model[k].values.removeAll { it.param == p }; model[k].values.add(StepValue(p, v.coerceIn(0, 127), locked = intent.lock)) }
+                        if (k in model.indices) { model[k].values.removeAll { it.param == p }; model[k].values.add(StepValue(p, v.coerceIn(0, 127), locked = intent.lock)) }
                     }
                     emitEditor()
                 }
@@ -377,12 +386,12 @@ class FakeLupeCore(
         val lv = model.map { st -> ((st.values.firstOrNull { it.param == lane }?.value ?: (FakeData.baseValue(lane) + if (lane.isEmpty()) 0 else (model.indexOf(st) * 7) % 22 - 8)) * 100 / 127).coerceIn(0, 100) }
         // how far each step can grow: up to the next note (or the pattern's end)
         val steps = model.mapIndexed { i, st ->
-            val next = (i + 1 until 16).firstOrNull { model[it].on } ?: 16
+            val next = (i + 1 until model.size).firstOrNull { model[it].on } ?: model.size
             // a step inside the previous note's length holds it (a TIE): heldFrom is that note's step
             val owner = (i - 1 downTo 0).firstOrNull { model[it].on && it + model[it].length > i && (it + 1..i).none { k -> k != i && model[k].on } }
             st.toStep(drum).copy(maxLength = next - i, heldFrom = if (!st.on && owner != null) owner else -1)
         }
-        _editor.value = e.copy(steps = steps, laneValues = lv, maxNotes = if (drum) 0 else 4, kitLanes = if (drum) FakeData.drumLanes else emptyList())
+        _editor.value = e.copy(steps = steps, laneValues = lv, maxNotes = if (drum) 0 else 4, kitLanes = if (drum) FakeData.drumLanes else emptyList(), patternSteps = model.size, patternStepsMax = 64)
         // the automation area follows the pattern (unless a recording supplied its own, which the next frame replaces)
         if (e.lanes.isNotEmpty()) _automation.value = FakeP6.automation(_editor.value, autoLane.ifEmpty { e.lane })
     }
@@ -397,11 +406,11 @@ class FakeLupeCore(
                 st.lanes = (if (st.lanes.isEmpty()) setOf(0) else st.lanes).map { Math.floorMod(it + delta, FakeData.drumLanes.size) }.toMutableSet()
             } else { st.on = true; st.midi = (st.midi + delta).coerceIn(24, 96) }
             StepField.Move -> {
-                val to = Math.floorMod(ed.selected + delta, 16)
+                val to = Math.floorMod(ed.selected + delta, model.size)
                 val tmp = model[to]; model[to] = model[ed.selected]; model[ed.selected] = tmp
                 emitEditor { it.copy(selected = to) }; return
             }
-            StepField.Length -> { val next = (ed.selected + 1 until 16).firstOrNull { model[it].on } ?: 16; st.length = (st.length + delta).coerceIn(1, next - ed.selected) }
+            StepField.Length -> { val next = (ed.selected + 1 until model.size).firstOrNull { model[it].on } ?: model.size; st.length = (st.length + delta).coerceIn(1, next - ed.selected) }
             StepField.Velocity -> st.velocity = (st.velocity + delta * 4).coerceIn(1, 127)
             StepField.Chance -> st.chance = (st.chance + delta * 5).coerceIn(0, 100)
             StepField.Ratchet -> st.ratchet = (st.ratchet + delta).coerceIn(1, 4)
@@ -546,7 +555,7 @@ class FakeLupeCore(
                             }
                         }) }) }
                 recount()
-                _editor.update { it.copy(playhead = stepCount % 16) }
+                _editor.update { it.copy(playhead = stepCount % model.size) }
                 // the meters move while it plays: each track near its level, never louder
                 _meters.value = MetersState(_mix.value.rows.mapIndexed { n, r -> if (r.mute) 0.0 else (r.level / 127.0) * (0.55 + 0.45 * kotlin.math.abs(kotlin.math.sin((stepCount + n * 3) * 0.7))) })
             }
