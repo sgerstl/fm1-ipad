@@ -263,5 +263,7 @@ struct PadClear: Equatable {
     var what: String           // "pattern 02", "REST"
     var depth: Int             // the store's undo stack right after the clear
     var stripGone = false      // the strip has left (8 s); Undo clear stays in the pad's menu until the next change
+    var before: [SongEntry] = []   // the track's list as it was (undo puts it back: the entry, its REPS, chain, sound)
+    var kept: Int? = nil           // a pattern kept on the FM-1 for the undo (P1's route); cleared when the undo ends
     var id = UUID()
 }

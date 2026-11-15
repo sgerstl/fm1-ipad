@@ -157,6 +157,10 @@ struct PadsPage: View {
             ui.padDrag = d.flatMap { d in d.refused ? nil : PadDragShow(centre: CGPoint(x: d.at.x - d.grab.width, y: d.at.y - d.grab.height), track: d.track) }
         }
         .onDisappear { ui.padDrag = nil }
+        // anything else changing the song ends the clear's undo: its kept pattern goes
+        .onChange(of: store.undoStack.count) { _, n in
+            if let c = ui.padClear, c.depth != n { ui.padClear = nil; finishClear(c) }
+        }
         .onAppear { shownAt = Date() }
         // another pad, or another track: its controls back
         .task(id: store.offline) { if !store.offline { await store.follow() } }
@@ -1214,10 +1218,36 @@ struct PadsPage: View {
     /// Clear entry: no confirm any more (batch item 13, Scott 2026-11-15); an Undo strip under the pads instead, and Undo
     /// clear in the pad's menu until the next change. The clear goes through the store, which keeps it for undo.
     private func clear(_ t: Int, _ i: Int, _ e: SongEntry) {
+        guard let list = store.song?.tracks[safe: t] else { return }
         let what = e.isRest ? "REST" : "pattern \(e.label)"
+        // a pattern's pad: stopped only (the FM-1 refuses CLEAR while playing); a REST any time
+        if !e.isRest, session.playing {
+            store.refuse(track: t, entry: i, "Stop to clear: the FM-1 clears pads only while stopped", needsStop: true); return
+        }
+        let before = list.entries
+        var after = before
+        if after.indices.contains(i) { after[i] = .empty }
+        // P1's route (2026-11-15): LIST CLEAR erases a pattern nothing else names, for good; LIST SET doesn't. So where the
+        // clear would erase it, the pad goes to REST first and then clears: the pad is empty, the pattern still kept, and
+        // Undo can bring it back. The kept pattern is cleared when the undo ends.
+        let erases = !e.isRest && !store.erased([t: after]).isEmpty
         Task {
+            if erases { guard await store.send(.set(track: t, entry: i, pattern: SongEntry.rest)) else { return } }
             guard await store.send(.clear(track: t, entry: i)) else { return }
-            ui.padClear = PadClear(track: t, entry: i, what: what, depth: store.undoStack.count)
+            if let old = ui.padClear { finishClear(old) }
+            ui.padClear = PadClear(track: t, entry: i, what: what, depth: store.undoStack.count, before: before, kept: erases ? e.poolIndex : nil)
+        }
+    }
+
+    /// The undo ended (the next change): a pattern kept only for it is cleared as the FM-1's own CLEAR would have, when
+    /// it's still unused and the FM-1 stopped; the store takes one change at a time, so after it's quiet.
+    private func finishClear(_ c: PadClear) {
+        guard let p = c.kept else { return }
+        Task {
+            while store.busy || Date().timeIntervalSince(store.lastChange) < 1 { try? await Task.sleep(for: .milliseconds(250)) }
+            let onTrack = store.song?.tracks.contains { $0.patternOn == p } ?? false
+            guard !session.playing, !onTrack, (store.pool?.patterns[safe: p]?.uses ?? 1) == 0 else { return }
+            _ = await store.poolOp(1, pattern: p)
         }
     }
 
@@ -1225,9 +1255,10 @@ struct PadsPage: View {
     private var clearUndoable: Bool { ui.padClear.map { $0.depth == store.undoStack.count && $0.depth > 0 } ?? false }
 
     private func undoClear() {
-        guard clearUndoable else { return }
+        guard clearUndoable, let c = ui.padClear else { return }
         ui.padClear = nil
-        Task { await store.undo() }
+        // the track's whole list as it was (nothing else has changed since): the pattern, REPS, chain and sound come back
+        Task { _ = await store.rewrite(track: c.track, to: c.before, focus: c.entry, confirmed: true) }
     }
 
     /// The Undo strip: what was cleared, and Undo; it leaves after 8 s (Undo clear stays in the pad's menu), or as soon
