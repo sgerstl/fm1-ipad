@@ -43,7 +43,9 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if compact {
+            if LaunchArgs.all.contains("-skiffdraw-spike") {
+                SkiffDrawSpike(session: session)        // decision 45's spike, under its launch argument only
+            } else if compact {
                 PhoneAppView(session: session, ui: ui, useDemo: $useDemo)
                     .environment(\.grid, .phone)
                     .environment(through)

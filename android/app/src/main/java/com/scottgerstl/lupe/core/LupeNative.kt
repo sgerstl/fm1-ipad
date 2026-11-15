@@ -43,6 +43,8 @@ object LupeNative {
     @JvmStatic external fun requestVersion()
     /** Debug: gate 2's main-actor hop, inside the app; the result arrives in [LinkLog]. */
     @JvmStatic external fun mainActorCheck()
+    /** Decision 45's spike: one frame of the FM-1's screen by Skiff's own code, RGBA 240×240, then the draw µs (4 bytes). */
+    @JvmStatic external fun skiffFrame(page: Int, palette: Int): ByteArray
 
     // Swift → Kotlin (looked up by name in JNI_OnLoad; keep the signatures)
     @JvmStatic fun send(frame: ByteArray) { link?.send(frame) }
