@@ -17,6 +17,14 @@ adb "$@" logcat -d -v epoch | grep "USB RX Dejitter underrun" | awk -v secs="$se
       mean = s / m; sd = sqrt(ss / m - mean * mean); cv = sd / mean
       printf "intervals: mean %.1f ms, sd %.1f ms, CV %.2f -> %s\n", mean, sd, cv, (cv < 0.3 ? "evenly spaced: a clock-rate mismatch" : (cv < 0.7 ? "partly regular" : "irregular"))
       printf "as a clock offset at one frame per line: ~%d ppm\n", (1000 / mean) / 48000 * 1e6
+      # bursts: lines within 10 ms of the one before belong together. Periodic bursts point at a cycle in the FM-1
+      # (its fill wandering in and out of its band); random ones at load or the bus.
+      nb = 1; bs = 1; for (i = 1; i <= m; i++) { if (iv[i] < 10) bs++; else { size[nb] = bs; nb++; bs = 1 } } size[nb] = bs
+      tot = 0; big = 0; for (j = 1; j <= nb; j++) { tot += size[j]; if (size[j] > big) big = size[j] }
+      bi = 0; bsum = 0; bss = 0; acc = 0
+      for (i = 1; i <= m; i++) { acc += iv[i]; if (iv[i] >= 10) { bi++; bsum += acc; bss += acc * acc; acc = 0 } }
+      printf "bursts (lines within 10 ms): %d, mean %.1f lines, largest %d\n", nb, tot / nb, big
+      if (bi >= 2) { bm = bsum / bi; bsd = sqrt(bss / bi - bm * bm); printf "between bursts: mean %.0f ms, sd %.0f ms, CV %.2f -> %s\n", bm, bsd, bsd / bm, (bsd / bm < 0.3 ? "periodic bursts" : "irregular bursts") }
       print "the numbers in the lines, and how often:"
       for (k in sig) print "  " sig[k] "x  " k
     }'

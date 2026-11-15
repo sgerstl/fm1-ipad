@@ -215,3 +215,31 @@ So both phones insert gaps on both paths, and Lupe adds none. *Scott's ear; the 
 | # | Do this | You should see | Result |
 |---|---|---|---|
 | 21 | Pixel 10, shared input, the FM-1 playing. Launch with `--ez throughConceal false`, then `true` (cold start `-S`, or `--activity-single-top`). | By ear: the crunch with it off; with it on, gone or much less. Details: `phone gaps N (Z zero, R repeat) · concealed C · gaps inserted/replace (x.xx)`. | ☐ gone ☐ less ☐ same · Z __ R __ · inserted/replace __ |
+
+## Round 3: check 16 on the Pixel 7 (74cb7e8 defaults)
+
+**What came back.**
+- **Dejitter:** 285 lines in 20 s (14.2 a second), intervals mean 70 ms, sd 118 ms, CV 1.67: **bursty, not evenly spaced.**
+- **The lines:** 206× `Avail: 47 Had:1 Received 48`, 35× `Avail: 47 Had:1 Received 47`, 27× `Avail: 47 Had:2 Received 47`, 17× `Avail: 46 Had:1 Received 47`.
+- **Lupe:** 17.2 ms, Lupe gaps 1, phone gaps all zeros (no repeats), all concealed, judged **gaps replace (0.00)**. The FM-1 was near silent (peak 0.0001), so the count is in quiet; the 32-frame rule applies.
+- **Also:** the Pixel 7 dropped `USB-Audio - Felucca` (UsbAlsaDevice: DEVICE_STATE_UNAVAILABLE) at 17:35:25 while MIDI stayed, until a replug.
+
+**What it means.**
+- **H, the pure form, is out.** A steady clock mismatch would space the lines evenly, and they come in bursts.
+- **The FM-1 does send short packets.** 79 of the 285 lines show "Received 47". The model in the host test, with renders always on time, sent none.
+- **The working hypothesis is now H2:** Skiff's band rule (±1 on `fill_min` outside 87..139) is a bang-bang control on a noisy measure. The ring's saw tooth from 2.9 ms renders against 1 ms packets swings `fill_min` by about 48 frames inside a 52-frame band. Render timing jitter under load (usb.c's own note: a render seen 29 frames under the floor) tips it out of the band, and the result is *runs* of 47s, and of 49s.
+- **The phone forces the stream onto its own clock.** "Replace (0.00)" means no surplus in the raw input: when the FM-1 is short, the phone writes zeros; when it's long, the phone drops frames. Its 16-frame cushion can't ride out a run of 47s.
+- **The DEVICE_STATE_UNAVAILABLE is an open question.** It may be Android giving up on the input after sustained errors, or Skiff stopping its feed: `uac.flowing` drops if a packet waits over 20 ms, and the ring re-primes with silence. Look for Lupe `restart` lines just before 17:35:25, and whether it happens with another recording app.
+- *The `Avail/Had/Received` fields aren't documented. "The HAL wants 48 and has 47" is a reading, not a fact.*
+
+**For the firmware.**
+- **B1 (always exactly 48 per packet, the FM-1's ring absorbing its clock with a crossfaded one-sample slip) holds under H2 as under H.** It removes all packet-size variation, clustered or steady, so there's nothing for the phone's cushion to absorb. Still ~150–300 B.
+- **A (even pacing) helps under H2,** since it removes the clusters and the 47s. But it keeps ~19 long packets a second, which a phone forcing its own clock would drop: a glitch each, unless the phone keeps a surplus.
+- **B1 is the recommendation, with one condition:** the phone must take its frames on the USB frame clock (48 per USB ms). If it takes them on an audio clock of its own, unrelated to the USB frames, no FM-1 change can match it exactly, and every asynchronous USB source would glitch at its own offset. **Check 19 decides this:** another class-compliant USB source on the Pixel. Few or no dejitter lines means the phone follows the USB clock and B1 will work. As many as with the FM-1 means the phone's own clock.
+- **Check 18 (the FM-1 on the Mac) says whether the stream is fine for a host that follows it.** The rate it measures by the Mac's clock gives the FM-1's real offset.
+
+**Next, in order:**
+1. Check 18, the Mac.
+2. Check 19, another USB source on the Pixel.
+3. Check 17, the raw capture with the FM-1 playing.
+4. `dejitter-intervals.sh` again: it now also groups the lines into bursts and says whether the bursts are periodic. A cycle in the FM-1's fill shows up as periodic bursts.
