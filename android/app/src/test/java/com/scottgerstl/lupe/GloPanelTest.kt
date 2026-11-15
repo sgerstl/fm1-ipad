@@ -54,3 +54,13 @@ class RailKeyActionTest {
         assertEquals(RailKeyAction.Goto, railKeyAction("ENV", null, null))       // shut, the FM-1 on none (HOME)
     }
 }
+
+class MixRowSpecTest {
+    @org.junit.Test fun sixRowsFitAtTheIPhonesHeightWhenThereIsRoomAndShrinkWhenNot() {
+        val spec = com.scottgerstl.lupe.ui.mix.MixRowSpec
+        assertEquals(48f, spec.rowHeight(330f, 6), 0.001f)          // 6 × 48 + 5 × 4 = 308 fits in 330
+        assertEquals((290f - 20f) / 6, spec.rowHeight(290f, 6), 0.001f)   // fewer: they share it
+        assertEquals(36f, spec.rowHeight(100f, 6), 0f)             // never under 36
+        assertEquals(92f, spec.HEAD, 0f); assertEquals(84f, spec.PAN, 0f); assertEquals(84f, spec.SEND, 0f); assertEquals(120f, spec.LEVEL_MIN, 0f)
+    }
+}

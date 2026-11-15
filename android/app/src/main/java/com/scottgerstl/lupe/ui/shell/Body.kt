@@ -171,7 +171,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                             }
                             Tab.Timeline -> TimelineSlot(core)
                             Tab.Mix -> { val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core); val meters = core.meters.collectAsStateWithLifecycle()
-                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters) }
+                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value) }
                         }
                     }
                 }
