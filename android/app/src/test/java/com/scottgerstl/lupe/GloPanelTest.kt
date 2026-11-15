@@ -41,3 +41,16 @@ class GloPanelTest {
         assertEquals(listOf(com.scottgerstl.lupe.core.SetMixParam(1, 50), ScreenGoto("GLO", 33), com.scottgerstl.lupe.core.SetMixSetting(0, 2)), sent)
     }
 }
+
+class RailKeyActionTest {
+    @org.junit.Test fun aShutPanelWithTheFm1AlreadyOnThatFamilyJustShowsIt() {
+        assertEquals(RailKeyAction.Show, railKeyAction("GLO", openFamily = null, fm1Family = "GLO"))      // closed with ×, the FM-1 still on GLO 2/5
+        assertEquals(RailKeyAction.Show, railKeyAction("FX", null, "FX"))
+    }
+    @org.junit.Test fun anOpenPanelOnThatFamilyStepsAndOtherwiseTheFm1IsSent() {
+        assertEquals(RailKeyAction.Step, railKeyAction("FX", "FX", "FX"))
+        assertEquals(RailKeyAction.Goto, railKeyAction("ENV", "FX", "FX"))       // another family's panel is open
+        assertEquals(RailKeyAction.Goto, railKeyAction("ENV", null, "FX"))       // shut, the FM-1 on another family
+        assertEquals(RailKeyAction.Goto, railKeyAction("ENV", null, null))       // shut, the FM-1 on none (HOME)
+    }
+}

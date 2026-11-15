@@ -148,6 +148,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
         val railNode: @Composable () -> Unit = {
             SoundKeysRail(open = if (docked) soundPage.family else null, onKey = { family ->
                 // the open family's key again steps its pages, as on the FM-1; another opens that family (the FM-1 goes there and the panel follows)
+                val fm1Family = if (glo) "GLO" else if (soundUp) soundPage0.family else null
+                // a shut panel with the FM-1 already on that family's page: the FM-1 won't change, so the panel is simply shown
+                if (railKeyAction(family, if (docked) soundPage.family else null, fm1Family) == RailKeyAction.Show) { panel.show(); return@SoundKeysRail }
                 if (family == "GLO") { askCore.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", gloKeyTarget(docked && soundPage.family == "GLO", soundPage.page))); return@SoundKeysRail }
                 askCore.send(com.scottgerstl.lupe.core.PickPage(family, railTarget(family, if (docked) soundPage.family else null, soundPage.pages.map { it.index }, soundPage.page)))
             })

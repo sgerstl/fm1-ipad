@@ -35,8 +35,21 @@ class SoundPanelModel {
         if (last != null) up = true
     }
 
+    /** A rail key tapped while the FM-1 already sits on that family's page: the panel comes up showing it (the FM-1 doesn't change, so nothing else would open it). */
+    fun show() { up = true }
+
     /** Its close key, or another tab chosen. The FM-1 stays where it is; its next page change or knob turn opens the panel again. */
     fun dismiss() { up = false }
+}
+
+/** What a tap on a sound key on the rail does. */
+enum class RailKeyAction { /** The panel is open on this family: step to its next page. */ Step, /** The panel is shut and the FM-1 is already on this family: just show its page. */ Show, /** Send the FM-1 to this family (its first page, or the page it is on). */ Goto }
+
+/** [openFamily] is the family the open panel shows (null: shut); [fm1Family] the family the FM-1 is on now (null: none). */
+fun railKeyAction(family: String, openFamily: String?, fm1Family: String?): RailKeyAction = when {
+    openFamily == family -> RailKeyAction.Step
+    openFamily == null && fm1Family == family -> RailKeyAction.Show
+    else -> RailKeyAction.Goto
 }
 
 /** The phone's sound keys, in the iPad's order (decision 32). */
