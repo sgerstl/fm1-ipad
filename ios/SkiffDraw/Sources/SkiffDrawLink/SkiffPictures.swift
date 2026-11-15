@@ -16,14 +16,18 @@ public final class SkiffPictures {
         public var animated: Bool
     }
 
-    /// Scott's order (decision 46): GLO's four and FX › DELAY, REVERB first, then ENV, LFO, OSC / EDIT, FILTER, FM6.
-    /// Firmware page titles (params.c PAGES).
-    public static let pages: Set<String> = ["DELAY", "REVERB", "CHORUS", "GLOBAL", "ENV", "ENV 2", "LFO", "LFO 2",
-                                            "EDIT 1", "EDIT 2", "OPERATOR", "ALL OPS", "OP1 ENV", "OP2 ENV", "OP3 ENV",
-                                            "OP4 ENV", "OP LEVEL"]
+    /// The FM-1 button families whose pages the sound panel shows (params.c FAM_*): ENV 1, LFO 2, FX 3, SEL 4, EDIT 5,
+    /// GLO 6, ARP 8. Every page of theirs is SkiffDraw's (Scott, 2026-11-15: "every page it can draw"), except these.
+    public static let families: Set<Int> = [1, 2, 3, 4, 5, 6, 8]
+    /// Pages that draw what Lupe can't mirror: a sample's waveform and its slice markers, read from the FM-1's flash.
+    public static let ownPages: Set<String> = ["SAMPLES", "SLICES"]
     /// Engines whose EDIT pages draw what the mirror doesn't hold: SAMPLE's waveform, read from the FM-1's flash
     /// (ui_graph.c graph_sample). DRUM, DRUM-X and SLICE draw the scope there (the sea), so they're SkiffDraw's.
     public static let ownEditEngines: Set<Int> = [4]
+    /// What these pages draw that comes from the moment, not from a value, and so may differ from the FM-1's screen
+    /// while it happens: CHORD (the last chord played), FOLLOW (the followed track's chord), VOICE 2 (the voices
+    /// sounding), ARP and ARP 2 (the keys held). Between notes they match.
+    public static let livePages: Set<String> = ["CHORD", "FOLLOW", "VOICE 2", "ARP", "ARP 2"]
 
     public let mirror: SkiffMirror
     public init(mirror: SkiffMirror? = nil) { self.mirror = mirror ?? SkiffMirror() }
@@ -39,8 +43,8 @@ public final class SkiffPictures {
     public func devicePage(_ s: DeviceSession, lupePage: Int) -> Int? {
         guard let d = SkiffFirmware.v2_5_1.pageMap.device(lupePage), d >= 0, d < mirror.screen.pageCount else { return nil }
         let title = mirror.screen.pageName(d)
-        guard Self.pages.contains(title) else { return nil }
         let fam = mirror.screen.pageFamily(d)
+        guard Self.families.contains(fam), !Self.ownPages.contains(title) else { return nil }
         if fam == 5, Self.ownEditEngines.contains(s.tracks[s.selectedTrack].engine) { return nil }   // FAM_EDIT
         return d
     }
@@ -59,10 +63,13 @@ public final class SkiffPictures {
         let glo = sc.pageFamily(d) == 6                          // FAM_GLO
         if glo { sc.setTrackColour(sel, gloInk) }
         if let p = s.skiffEdit?.patches[sel] { sc.setFM6Patch(track: sel, p.bytes) }
+        for lane in (s.skiffEdit?.kit ?? [:]).values { sc.setDXLane(lane.bytes) }   // DRUM-X's SOUND
         let title = sc.pageName(d)
         let lfo = title == "LFO" || title == "LFO 2"
         if lfo { sc.setLFO(track: sel, seconds: Self.lfoSeconds(s, track: sel)) }
         sc.show(page: d)
+        // the FM-1's cursor and window on this page (MOD's route, the lane, the sound, the operator): SCREEN's
+        if let ui = s.deviceScreen, !ui.home, SkiffFirmware.v2_5_1.pageMap.device(ui.page) == d { sc.setCursor(ui.cursor, ui.cursor2) }
         let (w, h) = sc.panelSize
         let scope = sc.pageFamily(d) == 5 && !Self.hasOwnChart(engine: s.tracks[sel].engine, title: title)
         return Picture(width: w, height: h, rgba: sc.renderPanel(), animated: lfo || scope)

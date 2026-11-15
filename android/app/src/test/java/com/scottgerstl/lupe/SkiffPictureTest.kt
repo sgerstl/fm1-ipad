@@ -3,6 +3,7 @@ package com.scottgerstl.lupe
 import com.scottgerstl.lupe.ui.page.SKIFF_GLO_INK
 import com.scottgerstl.lupe.ui.page.decodeSkiffPicture
 import com.scottgerstl.lupe.ui.page.skiffFit
+import com.scottgerstl.lupe.ui.page.skiffBesideTiles
 import com.scottgerstl.lupe.ui.page.SKIFF_SURFACE
 import org.junit.Assert.*
 import org.junit.Test
@@ -57,6 +58,12 @@ class SkiffPictureTest {
 
     @Test fun thePictureSitsOnTheBoxsOwnBackground() {
         assertEquals(com.scottgerstl.lupe.ui.theme.Tok.well.value, androidx.compose.ui.graphics.Color(0xFF000000.toInt() or SKIFF_SURFACE).value)
+    }
+
+    @Test fun aListOfTilesKeepsItsSpaceUnlessThePictureGets2x() {
+        assertTrue(skiffBesideTiles(600f))                                   // the Pixel 10's panel under the dials: about 600 px, 300 each
+        assertFalse(skiffBesideTiles(500f))                                  // 250 each: under 2×, the tiles alone
+        assertTrue(skiffBesideTiles(552f))                                   // exactly 2× (276 each)
     }
 }
 

@@ -319,26 +319,35 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
                 androidx.compose.foundation.Canvas(Modifier.size(9.dp)) { val w = 1.5.dp.toPx(); drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round); drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round) }
             }
         })
-        if (tiles != null) {
-            Spacer(Modifier.height(8.dp))
-            // a single row of choices (MONO / STEREO / PING-PONG) is only as tall as a row; the picture under it takes the rest. A long list (MOD's routes, SOUND's tiles) shares the height.
-            PageTilesContent(tiles, inkColour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) },
-                (if (compactTiles) Modifier.fillMaxWidth().height(56.dp) else Modifier.fillMaxWidth().weight(1f)).clip(RoundedCornerShape(8.dp)))
-        }
-        // Show graphics: the page's picture, under the dials, in what height is left
-        if (pictured) {
-            Spacer(Modifier.height(8.dp))
-            LupeCrossfade(picture.kind to last.page, Modifier.fillMaxWidth().weight(1f), Dur.STATE) { _ ->
-                val turned = if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1
-                val said = "${last.title}: " + if (com.scottgerstl.lupe.ui.page.hasPicture(picture)) com.scottgerstl.lupe.ui.page.describe(picture) else "the FM-1's picture"
-                if (skiff != null) com.scottgerstl.lupe.ui.page.SkiffPictureImage(skiff, said, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
-                else if (tiles == null) com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
-                else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    // under a row of tiles the picture takes all the height that is left, at the FM-1's 936 : 552 where the width allows, centred
-                    val ratio = 936f / 552f
-                    val w = minOf(maxWidth.value, maxHeight.value * ratio).dp
-                    com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.width(w).height(w / ratio).background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+        // the tiles and the picture share what height is left. A page whose knob picks from a list of names (MOD's routes, LANES, SOUND,
+        // OPERATOR's six) keeps Lupe's tappable tiles; the FM-1's own picture (decision 46) goes under them only while it gets at least 2×
+        // the FM-1's pixels (276 px) in its half, otherwise the tiles have the space alone: they're the controls, the picture repeats them
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            val roomy = com.scottgerstl.lupe.ui.page.skiffBesideTiles(with(androidx.compose.ui.platform.LocalDensity.current) { (maxHeight - 16.dp).toPx() })
+            val showPicture = pictured && (skiff == null || tiles == null || compactTiles || roomy)
+            androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+            if (tiles != null) {
+                Spacer(Modifier.height(8.dp))
+                // a single row of choices (MONO / STEREO / PING-PONG) is only as tall as a row; the picture under it takes the rest. A long list (MOD's routes, SOUND's tiles) shares the height.
+                PageTilesContent(tiles, inkColour, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) },
+                    (if (compactTiles) Modifier.fillMaxWidth().height(56.dp) else Modifier.fillMaxWidth().weight(1f)).clip(RoundedCornerShape(8.dp)))
+            }
+            // Show graphics: the page's picture, under the dials, in what height is left
+            if (showPicture) {
+                Spacer(Modifier.height(8.dp))
+                LupeCrossfade(picture.kind to last.page, Modifier.fillMaxWidth().weight(1f), Dur.STATE) { _ ->
+                    val turned = if (last.turned >= 0 && last.turnSeq > 0) last.turned else -1
+                    val said = "${last.title}: " + if (com.scottgerstl.lupe.ui.page.hasPicture(picture)) com.scottgerstl.lupe.ui.page.describe(picture) else "the FM-1's picture"
+                    if (skiff != null) com.scottgerstl.lupe.ui.page.SkiffPictureImage(skiff, said, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                    else if (tiles == null) com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.fillMaxSize().background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                    else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        // under a row of tiles the picture takes all the height that is left, at the FM-1's 936 : 552 where the width allows, centred
+                        val ratio = 936f / 552f
+                        val w = minOf(maxWidth.value, maxHeight.value * ratio).dp
+                        com.scottgerstl.lupe.ui.page.GraphContent(picture, inkColour, turned, Modifier.width(w).height(w / ratio).background(Tok.well, RoundedCornerShape(8.dp)).padding(4.dp))
+                    }
                 }
+            }
             }
         }
     }

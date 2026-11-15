@@ -79,6 +79,10 @@ fun rememberSkiffPicture(page: PageState, glo: Boolean, enabled: Boolean): Skiff
     return live ?: first
 }
 
+/** Whether the FM-1's picture goes under a page's list of tiles (MOD's routes, LANES, SOUND, OPERATOR) in [heightPx] shared half and half:
+ *  only while its half gives it at least 2× the FM-1's 138 px; otherwise the tiles, Lupe's controls, have the space alone. */
+fun skiffBesideTiles(heightPx: Float): Boolean = heightPx / 2f >= 2f * 138f
+
 /** How [p] is scaled into a box of [boxW] × [boxH] pixels: as large as fits at its own 234 : 138 (1.7 : 1). [whole] is the whole-number
  *  factor it is first enlarged by, nearest neighbour, so each FM-1 pixel is a crisp block; when the fit itself is whole (or nearly) that is all,
  *  otherwise the enlarged copy is brought down to the fit with one smoothing step, which softens only the blocks' edges (Pixel 10's box: 2.75×,

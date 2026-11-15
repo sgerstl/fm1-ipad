@@ -76,6 +76,12 @@ public final class SkiffScreen {
     public func setLFO(track t: Int, seconds: Double) { skd_set_lfo_seconds(Int32(t), seconds) }
     /// A track's FM6 patch as FM6_GET sends it (128 bytes).
     public func setFM6Patch(track t: Int, _ packed: [UInt8]) { packed.withUnsafeBufferPointer { skd_set_fm6_patch(Int32(t), $0.baseAddress, Int32($0.count)) } }
+    /// A track's step as TRACK_STEP sends it (SloopKit's `SynthStep.encoded`).
+    public func setStep(track t: Int, index i: Int, _ bytes: [UInt8]) { bytes.withUnsafeBufferPointer { skd_set_step(Int32(t), Int32(i), $0.baseAddress, Int32($0.count)) } }
+    /// The page's cursor and second cursor as SCREEN reports them (nil: none); after `show(page:)`.
+    public func setCursor(_ c: Int?, _ c2: Int?) { skd_set_cursor(Int32(c ?? -1), Int32(c2 ?? -1)) }
+    /// A DRUM-X kit lane as KIT_GET sends it (SloopKit's `DXLane.bytes`).
+    public func setDXLane(_ bytes: [UInt8]) { bytes.withUnsafeBufferPointer { skd_set_dx_lane($0.baseAddress, Int32($0.count)) } }
     /// The picture panel's size (234 × 138 in Skiff's BLOCKS look).
     public var panelSize: (width: Int, height: Int) {
         var x: Int32 = 0, y: Int32 = 0, w: Int32 = 0, h: Int32 = 0

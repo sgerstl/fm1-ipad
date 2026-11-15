@@ -36,10 +36,17 @@ public final class SkiffMirror {
         }
         for t in s.trackIndices where t < screen.trackCount {
             let tr = s.tracks[t]
-            screen.setTrackParam(t, ids.level, tr.level)
-            screen.setTrackParam(t, ids.pan, tr.pan)
-            screen.setTrackParam(t, ids.mute, tr.mute ? 1 : 0)
-            st.otherTrackParams += 3
+            // every track's values the session reads for every track (ParamIDs.trackReads): SCALE, CHORD and FOLLOW
+            // read the followed track's, DUCK its source's, the MIXER all of them
+            var vals: [(Int?, Int)] = [(ids.level, tr.level), (ids.pan, tr.pan), (ids.mute, tr.mute ? 1 : 0), (ids.root, tr.root),
+                                       (ids.scale, tr.scale), (ids.quant, tr.quant), (ids.transpose, tr.transpose),
+                                       (ids.length, tr.length), (ids.division, tr.division), (ids.chord, tr.chord),
+                                       (ids.arpMode, tr.arpMode)]
+            vals += [(ids.direction, tr.direction), (ids.swing, tr.swing), (ids.slicer, tr.slicer), (ids.duck, tr.duck),
+                     (ids.follow, tr.follow)]
+            for case let (id?, v) in vals { screen.setTrackParam(t, id, v); st.otherTrackParams += 1 }
+            // the steps (DUCK draws its source's hits; NOTES and FEEL the track's own)
+            for (i, step) in tr.steps.enumerated() { screen.setStep(track: t, index: i, step.encoded) }
             screen.setPlayhead(track: t, step: t < s.positions.count ? s.positions[t].step : 0)
         }
         let sel = s.deviceScreen?.track ?? s.selectedTrack
