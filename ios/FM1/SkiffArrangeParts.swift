@@ -401,7 +401,15 @@ struct PatternBin: View {
             }
             .buttonStyle(PressSink())
             .disabled((pool?.free ?? 0) == 0 || store.busy || store.offline)
-            if (pool?.free ?? 0) == 0 { Text("All 64 patterns are taken. Clear unused ones to make one.").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
+            if (pool?.free ?? 0) == 0 { Text("All 64 patterns are taken. Clear unused ones, or recycle one onto an empty pad.").font(.lupe(12)).foregroundStyle(Theme.textSecondary) }
+            if let ui {
+                Button { ui.poolOpen = false; ui.dragPattern = nil; ui.patternsSheet = .manage } label: {
+                    Text("Manage patterns…").font(.lupe(15, .semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
+                }
+                .buttonStyle(PressSink())
+                .disabled(pool == nil)
+            }
             Button { askClearUnused(pool?.unused ?? 0) } label: {
                 Text("Clear \(pool?.unused ?? 0) unused…").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, minHeight: 44)

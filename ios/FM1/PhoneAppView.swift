@@ -94,7 +94,7 @@ struct PhoneAppView: View {
         }
         .overlay {
             PhoneSheetFrame(open: ui.patternsSheet != nil && session.skiffSong != nil, height: 376, label: "Patterns", close: { ui.patternsSheet = nil }) {
-                if let store = session.skiffSong { PhonePatternsSheet(session: session, store: store, ui: ui, mode: ui.patternsSheet ?? .manage) }
+                if let store = session.skiffSong { PatternsSheet(session: session, store: store, ui: ui, mode: ui.patternsSheet ?? .manage) }
             }
         }
         .overlay {

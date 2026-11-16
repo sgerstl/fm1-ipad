@@ -106,6 +106,15 @@ struct AppView: View {
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { KnobPanelLayer(ui: ui) }
         .overlay { ValueLoupeLayer(loupe: ui.loupe) }
+        // the Patterns sheet (board 79), from the FM-1 menu, the drawer, a full pool's empty pad or lane end
+        .sheet(isPresented: Binding(get: { ui.patternsSheet != nil && session.skiffSong != nil }, set: { if !$0 { ui.patternsSheet = nil } })) {
+            if let store = session.skiffSong {
+                PatternsSheet(session: session, store: store, ui: ui, mode: ui.patternsSheet ?? .manage)
+                    .padding(24)
+                    .presentationSizing(.page)
+                    .presentationBackground(Theme.panel)
+            }
+        }
         .coordinateSpace(name: Self.space)
         .foregroundStyle(Theme.text)
         .font(.lupe(15))

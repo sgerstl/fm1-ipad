@@ -1,20 +1,22 @@
 import SloopKit
 import SwiftUI
 
-// The phone's Patterns sheet (board 79, decision 38; Scott approved 2026-11-15): the FM-1's pool of 64 pattern numbers,
+// The Patterns sheet (board 79, decision 38; Scott approved 2026-11-15): the FM-1's pool of 64 pattern numbers,
 // shared by every saved project. It lists the kept patterns as cards (number, length, a sketch of its notes in its first
 // user's colour, where this project uses it, a dot when saved projects use it too); unused ones are dashed. White,
 // because the pool is global. Filters All · Unused · This project. Select clears unused patterns with one confirm in
 // place (red only on its key; can't be undone; stopped only). While playing everything live still shows; the sketches
 // wait for a stop (reading them stops playback, so length bars stand in) and so does clearing. Opened in pick mode
-// from a full pool's empty pad ("Put a kept pattern here…"), a tap puts that pattern on the pad. iPhone only.
+// from a full pool's empty pad ("Put a kept pattern here…"), a tap puts that pattern on the pad. The iPhone shows it in
+// its own sheet frame; the iPad as a page sheet over the app (2026-11-17, Scott: "I keep bumping up against the patterns
+// being full"; the iPad had only the drawer's Clear unused and one-at-a-time Clear).
 
 enum PatternsSheetMode: Equatable {
     case manage
     case pick(track: Int, entry: Int)
 }
 
-struct PhonePatternsSheet: View {
+struct PatternsSheet: View {
     let session: DeviceSession
     let store: SkiffSongStore
     let ui: EditorUI
@@ -38,6 +40,8 @@ struct PhonePatternsSheet: View {
         return song.tracks.enumerated().flatMap { t, l in l.entries.enumerated().compactMap { i, e in e.poolIndex == p ? (t, i) : nil } }
     }
     private var playing: Bool { session.playing }
+    /// The iPad's page sheet: room for the filter and counts at their full width.
+    private var wide: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var picking: (track: Int, entry: Int)? { if case .pick(let t, let e) = mode { (t, e) } else { nil } }
 
     var body: some View {
@@ -74,9 +78,12 @@ struct PhonePatternsSheet: View {
                 .font(.lupe(17, .semibold)).accessibilityAddTraits(.isHeader)
             let free = store.pool?.free ?? 0, unusedN = store.pool?.unused ?? 0
             Text("\(kept.count) kept · \(free) free · \(unusedN) unused").font(.lupe(13)).foregroundStyle(Theme.textSecondary)
+                .lineLimit(wide ? 1 : nil).fixedSize(horizontal: wide, vertical: false)
             if picking == nil {
                 Picker("Show", selection: $filter) { ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
-                    .pickerStyle(.segmented).frame(width: 230)
+                    .pickerStyle(.segmented)
+                    // the iPad sizes it to its words (at 230 "This project" was cut, 2026-11-17); the phone's header has no room for that
+                    .frame(width: wide ? nil : 230).fixedSize(horizontal: wide, vertical: false)
             }
             Spacer(minLength: 0)
             if picking == nil {
