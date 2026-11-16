@@ -90,7 +90,7 @@ class LinkDebugActivity : ComponentActivity() {
         intent.getStringExtra("core")?.let { if (it != prefs.getString("core", "real")) { edit.putString("core", it); changed = true } }
         if (intent.hasExtra("allowWrites")) {
             val w = intent.getBooleanExtra("allowWrites", false)
-            if (w != prefs.getBoolean("allowWrites", false)) { edit.putBoolean("allowWrites", w); changed = true }
+            if (w != prefs.getBoolean("allowWrites", true)) { edit.putBoolean("allowWrites", w); changed = true }
         }
         if (!changed) return false
         edit.commit()

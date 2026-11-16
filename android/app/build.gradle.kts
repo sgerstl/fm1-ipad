@@ -47,11 +47,14 @@ val demoFixtures by tasks.registering(Copy::class) {
 }
 tasks.matching { it.name == "mergeDebugAssets" || it.name == "generateDebugAssets" }.configureEach { dependsOn(demoFixtures) }
 
+// The native code's build: debug unless `-PnativeConfig=release` (the public APK: Swift in release mode, stripped).
+val nativeConfig = (findProperty("nativeConfig") as String?) ?: "debug"
+
 // P1: builds the Swift core before Gradle packs native libraries. Swift's own build is incremental.
 val buildSwift by tasks.registering(Exec::class) {
     description = "Builds android/core (LupeNative) for arm64 Android"
     val out = layout.buildDirectory.dir("swift/jniLibs").get().asFile
-    commandLine(rootProject.file("scripts/build-native.sh").path, out.path, "debug")
+    commandLine(rootProject.file("scripts/build-native.sh").path, out.path, nativeConfig)
     outputs.dir(out)
     outputs.upToDateWhen { false }
 }
@@ -59,7 +62,7 @@ val buildSwift by tasks.registering(Exec::class) {
 val buildThrough by tasks.registering(Exec::class) {
     description = "Builds app/src/main/cpp/through (libLupeThrough.so) for arm64 Android"
     val out = layout.buildDirectory.dir("through/jniLibs").get().asFile
-    commandLine(rootProject.file("scripts/build-through.sh").path, out.path, "debug")
+    commandLine(rootProject.file("scripts/build-through.sh").path, out.path, nativeConfig)
     inputs.dir(file("src/main/cpp/through"))
     outputs.dir(out)
 }

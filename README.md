@@ -13,7 +13,7 @@ Lupe began on [SLOOP](https://github.com/isod89/sloop-fm1) and spoke both firmwa
 - **iPad:** iPadOS 18 or later. The layout is drawn for a 13-inch iPad in landscape and scaled to fit smaller ones
 - **iPhone:** iOS 18 or later, used in landscape. An iPhone 15 or later plugs straight into the FM-1; an older one needs Apple's Lightning to USB camera adapter
 
-**Which Skiff.** Stock Skiff 2.5.1 is enough to edit everything. For the app to follow the FM-1's screen (open the page you're on, show the step cursor, the levels and the scope), the FM-1 needs **Skiff-Lupe 2.5.1**. That's Skiff 2.5.1 with a small screen link added, plus a fix for crackle when the FM-1's USB audio plays through an Android phone. The iPad and iPhone app can install it for you. Details and fingerprints are in [FIRMWARE.md](FIRMWARE.md).
+**Which Skiff.** Stock Skiff 2.5.1 is enough to edit everything. For the app to follow the FM-1's screen (open the page you're on, show the step cursor, the levels and the scope), the FM-1 needs **Skiff-Lupe 2.5.1**. That's Skiff 2.5.1 with a small screen link added, plus a fix for crackle when the FM-1's USB audio plays through an Android phone. The app can install it for you. Details and fingerprints are in [FIRMWARE.md](FIRMWARE.md).
 
 ## Install on Android
 
@@ -23,7 +23,7 @@ Lupe began on [SLOOP](https://github.com/isod89/sloop-fm1) and spoke both firmwa
 
 No FM-1 to hand? The first screen offers a demo FM-1 so you can look around.
 
-The phone can't install firmware yet. To put Skiff-Lupe 2.5.1 on the FM-1 from a computer, use Skiff's own installer with Python 3:
+When the FM-1 runs stock Skiff or M-VAVE's firmware, Lupe offers to install Skiff-Lupe 2.5.1 over the same cable. It backs up the FM-1 first, downloads the file from this repo's releases and checks its fingerprint before writing. This has been tested against a simulated FM-1, but not yet run from a phone on a real one. If you'd rather use a computer, Skiff's own installer works with Python 3:
 
 1. Download `Skiff-Lupe-2.5.1.fwsc` from the [`lupe-firmware-2` release](https://github.com/sgerstl/fm1-ipad/releases/tag/lupe-firmware-2).
 2. Get Skiff's `tools/` folder by downloading or cloning [illuminus5/skiff](https://github.com/illuminus5/skiff).
