@@ -49,6 +49,42 @@ rows fade. The confirm ignores taps for 0.4 s, so a double tap can't go through 
 two-finger scrub cancels; VoiceOver focuses the confirm and announces its words. Where the change can be undone instead
 (a step clear, kept for Undo), Undo wins over a confirm.
 
+## Messages: one component, two homes (Scott, 2026-11-17, option C)
+
+Lupe had 24 kinds of passing message, each placed, timed and styled on its own (the audit:
+`qa/messages-audit-2026-11-17.md`). Scott: "toast messaging coming up from everywhere... settle on a pattern". This is it,
+for all three apps.
+
+**Two homes.**
+- **The app strip**, bottom centre over the page, for anything about the app or the song: refusals, Undo, confirmations
+  and the ongoing states (knob recording, a FREE TAKE to keep, a scene not seen yet). iPad: 24 pt above the page's foot,
+  over the keyboard when it shows. iPhone and Android: 12 above the foot.
+- **A panel's own home**, under the panel's header, for a message about that panel only (the sound panel's refusal, the
+  motion lanes', a text prompt's). Same component.
+- Not messages, so they stay where they are: the disconnect card (its own rules, connection-states.md), a control's own
+  state (lock banners, the drag hint, the sound header's "held here", the ruler's Stop), the confirm in place.
+
+**What a home holds.** At most two rows: one **message** (refusal, Undo or confirmation; a new one replaces the old) over
+one **ongoing state**. Never two messages; never the same message in two homes.
+
+**How long.**
+- **Refusal:** until ✕, or until what it was about is fixed. Never a timer. It says why and what to do, and may carry the
+  one action that fixes it (Stop, Patterns).
+- **Undo:** until the next edit or ✕. Nothing with an action leaves on a timer. Undo also stays in the thing's own menu.
+- **Confirmation:** only when the result isn't already on screen; 4 s, no action.
+- **Ongoing state:** while it's true.
+
+**Look.** `Elevation.held` (#3E3E46), radius 12, held shadow; max 560 wide, 44 high or more, 12 inside. One line of
+Barlow 14 (a second line 13 in `textSecondary`). An icon at the left, 16, white: refusal `exclamationmark.circle`, Undo
+`arrow.uturn.backward`, confirmation `checkmark`, ongoing state none (its own dot, as REC's). Keys 32 tall in 44 of touch,
+`Theme.control`, radius 8; ✕ last, "Dismiss".
+
+**Motion.** In 200 ms ease-out, rising 16 with a fade; out 150 ms ease-in. A replacement cross-fades in place (150 ms).
+Reduce Motion: fades only, 150 ms.
+
+**Accessibility.** Every message is announced once when it comes (polite; a live region on Android); its keys are
+buttons with their words; ✕ is "Dismiss".
+
 ## The header is chrome, not content (Scott, 2026-11-13, board 71: A with C's tabs)
 
 The square key is the content's shape: pads, steps, values, the keys inside panels. The header never uses it, so the
