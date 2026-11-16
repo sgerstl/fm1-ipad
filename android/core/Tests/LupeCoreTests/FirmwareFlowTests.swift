@@ -222,7 +222,8 @@ import Testing
         try await wait("Skiff-Lupe offered") { c.firmwareArea().offer?.kind == "install" }
         let o = try #require(c.firmwareArea().offer)
         #expect(o.from == "newerSkiff")
-        #expect(o.text.contains("goes back to 2.5.1"), "\(o.text)")
+        #expect(o.text.contains("goes back from 2.6") && o.text.contains("screen link"), "\(o.text)")
+        #expect(o.title == "Get all of Lupe with Skiff-Lupe")
     }
 
     // MARK: the link gate

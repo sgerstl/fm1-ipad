@@ -145,8 +145,8 @@ extension PhoneCore {
                 let newer = (nums.count >= 2 && (nums[0], nums[1], nums.count > 2 ? nums[2] : 0) > (2, 5, 1))
                 if !s.screenLinked {
                     offer = newer
-                        ? make("install", "newerSkiff", version, target, "Skiff-Lupe for this FM-1",
-                               "This FM-1 runs Skiff \(shortVersion), which is newer than the Skiff that Lupe is built on. \(target.title) is Skiff 2.5.1 with Lupe's screen link: installing it goes back to 2.5.1, so what the newer version added (CAST) goes. \(keeps)")
+                        ? make("install", "newerSkiff", version, target, "Get all of Lupe with Skiff-Lupe",
+                               "This FM-1 runs Skiff \(shortVersion). Lupe works with it, but Skiff-Lupe, a custom build of Skiff, turns on all of Lupe's features. The most important is the screen link, which keeps the FM-1 and Lupe fully linked in what they show and in their controls. Press a button or turn a knob on either one, and the other follows.\n\nSkiff-Lupe is built on Skiff 2.5.1, so installing it goes back from \(shortVersion), and CAST goes. Your projects stay, and Lupe backs them up first. It takes about a minute.")
                         : make("install", "stockSkiff", version, target, "Skiff-Lupe for this FM-1",
                                "This FM-1 runs \(version). \(target.title) is the same Skiff with Lupe's screen link: press a button on the FM-1 and the phone shows that page, and the other way round. \(keeps)")
                 } else if !newer, !(s.skiffFirmware == .v2_5_1 && s.screenCurrent) {
