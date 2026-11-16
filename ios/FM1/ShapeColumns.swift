@@ -134,7 +134,7 @@ struct RollingText: View {
                 let right = chars.indices.map { i in chars[(i + 1)...].filter(\.isNumber).count }
                 ForEach(chars.indices, id: \.self) { i in
                     if rolling, chars[i] != old[i] {
-                        RollDigit(old: old[i], new: chars[i], dir: dir, offset: Self.offset(e: e, places: right[i]), font: font, size: size)
+                        RollDigit(old: old[i], new: chars[i], dir: dir, offset: Self.offset(e: e, places: right[i]), font: font)
                     } else {
                         Text(String(chars[i])).font(font)
                     }
@@ -182,19 +182,26 @@ struct RollingText: View {
     }
 }
 
-/// One rolling digit: the old one leaving and the new one coming, clipped to the line.
+/// One rolling digit: the old one leaving and the new one coming, clipped to the line. It takes exactly the room (and the baseline)
+/// the still digit takes, so nothing beside or under it moves while it rolls (Scott, 2026-11-17: values "jump or shift slightly while
+/// changing"; the strip had been a fixed 1.2 × size high, taller than the line, so the row grew for 135 ms on every change).
 private struct RollDigit: View {
     let old: Character, new: Character
     let dir: Int, offset: Double
-    let font: Font, size: CGFloat
+    let font: Font
 
     var body: some View {
-        let h = size * 1.2
-        ZStack {
-            Text(String(old)).font(font).offset(y: -CGFloat(dir) * offset * h)
-            Text(String(new)).font(font).offset(y: CGFloat(dir) * (1 - offset) * h)
-        }
-        .frame(height: h)
-        .clipped()
+        Text(String(new)).font(font).hidden()
+            .overlay {
+                GeometryReader { g in
+                    let h = g.size.height
+                    ZStack {
+                        Text(String(old)).font(font).offset(y: -CGFloat(dir) * offset * h)
+                        Text(String(new)).font(font).offset(y: CGFloat(dir) * (1 - offset) * h)
+                    }
+                    .frame(width: g.size.width, height: h)
+                }
+                .clipped()
+            }
     }
 }
