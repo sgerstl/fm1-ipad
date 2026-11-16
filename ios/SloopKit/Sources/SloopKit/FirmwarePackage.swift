@@ -72,8 +72,8 @@ public enum LupeFirmware: String, CaseIterable, Identifiable, Sendable {
     /// Where its source is offered (GPL-3.0), or where the file comes from (V15: Apache-2.0, no source).
     public var source: String {
         switch self {
-        case .skiff251: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-screen-link at 72d4170 (Skiff v2.5.1 plus the screen link and steady USB audio; tag lupe-skiff-2.5.1-screen-link.1 once accepted; not pushed yet)"
-        case .skiff251Take: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-freetake at 6926117 (Skiff v2.5.1 plus the screen link v7 and steady USB audio; not pushed yet)"
+        case .skiff251: "github.com/sgerstl/skiff, tag lupe-skiff-2.5.1-screen-link.1 (Skiff v2.5.1 plus the screen link and steady USB audio)"
+        case .skiff251Take: "github.com/sgerstl/skiff, branch lupe-skiff-2.5.1-freetake at 6926117 (Skiff v2.5.1 plus the screen link v7 and steady USB audio; not published yet, nor is its release)"
         case .skiff: "github.com/sgerstl/skiff, tag lupe-skiff-2.2-screen-link.6 (Skiff v2.2 plus skiff/0001-screen-link.patch in Lupe's repository)"
         case .stock: "github.com/m-vave/fm1_open, sdk/firmware/FM-1_015.fwsc (Apache-2.0)"
         }
