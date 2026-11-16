@@ -15,8 +15,9 @@ android {
         applicationId = "com.scottgerstl.lupe"
         minSdk = 33
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.2.1"
+        versionCode = 4
+        // Lupe's version, the same on every device: VERSION at the repo root (Scott, 2026-11-17; tools/set-version.sh)
+        versionName = rootProject.file("../VERSION").readText().trim()
     }
 
     buildTypes {
