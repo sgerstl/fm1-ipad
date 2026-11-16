@@ -80,6 +80,8 @@ public final class PhoneCore {
     /// Quiet time after a stop or a change before the stored patterns are read (the iPad's pads: 3 s).
     static var picturesQuiet: TimeInterval = 3
     private var picturesTask: Task<Void, Never>?
+    /// How many refusals have gone to the screen: an edit refused on the spot doesn't end an undo (PadClearUndo.swift).
+    var refusalsSaid = 0
     /// When the read-only notice last went to the screen (Notice.swift).
     var readOnlySaidAt = Date.distantPast
     /// The page lag's timing (LagTrace.swift), opened by pickPage and goHome.
@@ -268,7 +270,10 @@ public final class PhoneCore {
     func pokeAreas(_ names: [String]) { poke(names) }
     /// The named areas built and published at once (AreaWatch.now).
     /// An event, not a watched state: sent as it happens (Notice.swift).
-    func publishNotice(_ n: NoticeArea) { publish("notice", AreaJSON.encode(n)) }
+    func publishNotice(_ n: NoticeArea) {
+        if n.kind == .refusal { refusalsSaid += 1 }
+        publish("notice", AreaJSON.encode(n))
+    }
     func publishNow(_ names: [String]) { for n in names { areas.first { $0.name == n }?.now() } }
 
     public func stop() {
@@ -328,6 +333,17 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
+        // the next change to the song ends an open undo, unless it was refused on the spot (PadClearUndo.swift)
+        if let edit = songEdit(json) {
+            let said = refusalsSaid
+            defer { endUndos(after: edit, refusedNow: refusalsSaid != said) }
+            dispatch(json)
+        } else {
+            dispatch(json)
+        }
+    }
+
+    private func dispatch(_ json: String) {
         if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) || handleFirmwareJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor

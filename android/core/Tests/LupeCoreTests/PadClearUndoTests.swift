@@ -23,7 +23,6 @@ extension PatternsTests {
 
     @Test func aClearedPadComesBackWithItsPattern() async throws {
         let box = Box()
-        PhoneCore.undoClearWindow = 30
         let (core, fake) = try await connected(box)
         defer { core.stop() }
         let pad = try soloPad(core, fake)
@@ -52,10 +51,10 @@ extension PatternsTests {
         #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
 
-    @Test func whenTheUndoTimeIsUpThePatternGoesAsTheFM1WouldHaveClearedIt() async throws {
+    /// Scott, 2026-11-17, messages rule: Undo lasts until the next edit, never a timer. Waiting ends nothing; the next
+    /// change to the song ends it, and then the pattern goes as the FM-1's own CLEAR would have taken it.
+    @Test func theNextEditEndsTheUndoAndThePatternGoesAsTheFM1WouldHaveClearedIt() async throws {
         let box = Box()
-        PhoneCore.undoClearWindow = 1
-        defer { PhoneCore.undoClearWindow = 30 }
         let (core, fake) = try await connected(box)
         defer { core.stop() }
         let pad = try soloPad(core, fake)
@@ -63,11 +62,29 @@ extension PatternsTests {
         try await wait("its use read") { core.session.skiffSong?.pool?.patterns[pad.p - 1].uses == 1 }
         core.handle(json: #"{"intent":"padClear","track":\#(pad.t + 1),"entry":\#(pad.e)}"#)
         try await wait("cleared") { fake.lists[pad.t][pad.e].p == 0 }
-        try await wait("undo gone") { core.padsArea().clearUndo.isEmpty && fake.poolLen[pad.p - 1] == 0 }
+        try await wait("undo offered") { core.padsArea().clearUndo.count == 1 }
+        // time alone ends nothing (the old window was ten seconds; three is past the half-second loop several times)
+        try await Task.sleep(for: .seconds(3))
+        #expect(core.padsArea().clearUndo.count == 1 && fake.poolLen[pad.p - 1] > 0, "an undo has no timer")
+        // nor do selecting, muting or copying a step: they don't change the song
+        core.handle(json: #"{"intent":"trackSelect","track":1}"#)
+        core.handle(json: #"{"intent":"trackMute","track":1}"#)
+        core.handle(json: #"{"intent":"trackMute","track":1}"#)
+        core.handle(json: #"{"intent":"stepAction","step":0,"action":"copy"}"#)
+        #expect(core.padsArea().clearUndo.count == 1)
+        // read-only: a refused edit changed nothing, so the undo stays
+        box.writes = false
+        core.handle(json: #"{"intent":"blockNew","track":3}"#)
+        #expect(core.padsArea().clearUndo.count == 1)
+        box.writes = true
+        // the next edit (a new pattern on another track) ends it, and the kept pattern is cleared
+        try await idle(core)
+        core.handle(json: #"{"intent":"blockNew","track":\#(pad.t == 2 ? 4 : 3)}"#)
+        #expect(core.padsArea().clearUndo.isEmpty && core.timelineArea().clearUndo.isEmpty, "the menus' Undo goes with it")
+        try await wait("its pattern cleared") { fake.poolLen[pad.p - 1] == 0 }
         core.handle(json: #"{"intent":"undoClear","track":\#(pad.t + 1),"entry":\#(pad.e)}"#)
         #expect(box.notices.last?.text.hasPrefix("That clear can't be undone") == true && fake.lists[pad.t][pad.e].p == 0)
         // a pattern another pad also names: cleared the FM-1's own way, the pattern stays, and it comes back too
-        PhoneCore.undoClearWindow = 30
         let song = try #require(core.session.skiffSong?.song)
         let src = try #require(song.tracks[0].entries.firstIndex { $0.poolIndex != nil })
         let p = song.tracks[0].entries[src].pattern
@@ -147,7 +164,6 @@ extension PatternsTests {
 
     @Test func aDeletedBlockComesBack() async throws {
         let box = Box()
-        PhoneCore.undoClearWindow = 30
         let (core, fake) = try await connected(box)
         defer { core.stop() }
         // track 2: two new patterns at the end, so a block in the middle and one at the end can go
@@ -187,13 +203,15 @@ extension PatternsTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(fake.lists[1].map(\.p) == before && box.notices.last?.text.hasPrefix("Delete: Stop") == true, "\(box.notices.last?.text ?? "")")
         try await stop(core, fake)
-        // the undo's time over: the pattern goes
-        PhoneCore.undoClearWindow = 1
-        defer { PhoneCore.undoClearWindow = 30 }
+        // the next edit ends the undo (Scott, 2026-11-17, messages rule): then the pattern goes
         try await idle(core)
         core.handle(json: #"{"intent":"blockDelete","track":2,"block":\#(last.id)}"#)
         try await wait("deleted") { fake.lists[1][last.id].p == 0 }
-        try await wait("its pattern cleared") { fake.poolLen[lastP - 1] == 0 && core.timelineArea().clearUndo.isEmpty }
+        try await wait("undo offered") { !core.timelineArea().clearUndo.isEmpty }
+        try await idle(core)
+        core.handle(json: #"{"intent":"blockNew","track":3}"#)
+        #expect(core.timelineArea().clearUndo.isEmpty)
+        try await wait("its pattern cleared") { fake.poolLen[lastP - 1] == 0 }
         #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
 
@@ -245,7 +263,6 @@ extension PatternsTests {
     /// clearSteps: the notes wiped step by step while it plays, the pad and its pattern kept, and back with undoClear.
     @Test func clearStepsWipesTheNotesAndPutsThemBack() async throws {
         let box = Box()
-        PhoneCore.undoClearWindow = 30
         let (core, fake) = try await connected(box)
         defer { core.stop() }
         let s = core.session
@@ -290,7 +307,6 @@ extension PatternsTests {
     /// when a block goes, an undo gives the old ones back, and a copy or a new pad gets a new one.
     @Test func padKeysSurviveRewrites() async throws {
         let box = Box()
-        PhoneCore.undoClearWindow = 30
         let (core, fake) = try await connected(box)
         defer { core.stop() }
         // track 3 set up plain: four pads in a row, four patterns of their own, none chained

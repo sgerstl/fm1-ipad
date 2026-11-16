@@ -79,6 +79,8 @@ fun LupeShell(core: LupeCore) {
     val soundsHost = remember { SoundsHost() }
     val holdMenu = remember { HoldMenuState() }
     val padDrag = remember { PadDragState() }
+    // the app strip's one message (MessageStrip.kt; Scott, 2026-11-17, messages rule): what was there when the screen opened is not news
+    val messages = remember(core) { MessageModel(core.notice.value.seq, core.pads.value.clearUndo.lastOrNull()) }
     val firmwareHost = remember { com.scottgerstl.lupe.ui.firmware.FirmwareHost() }
     // a debug build can be launched with a pad already held over the wells, to look at them without a finger:
     // adb shell am start -n com.scottgerstl.lupe/.MainActivity --ez wellsDemo true --ef x 1000 --ef y 540  (the finger's place, px)
@@ -92,7 +94,7 @@ fun LupeShell(core: LupeCore) {
     }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost provides firmwareHost) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost provides firmwareHost, LocalMessages provides messages) {
         Column(
             Modifier.fillMaxSize()
                 .greyedBy { grey.value }
@@ -143,12 +145,12 @@ fun LupeShell(core: LupeCore) {
                 lastRequest?.let { com.scottgerstl.lupe.ui.sounds.SoundsBrowser(core, it, { soundsHost.close() }) }
             }
         }
-        // what the FM-1 refused: at the foot of the page (or the sheet) where the action was taken, until it is dismissed
-        // …and, above it, the Undo strip after a pad was cleared (batch item 13)
-        androidx.compose.foundation.layout.Column(
-            Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 4.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
-        ) { UndoStrip(core); RefusalStrip(core) }
+        // the app strip (Scott, 2026-11-17, messages rule): every refusal, Undo and confirmation, one at a time, bottom centre 12 dp above the
+        // foot, over the page and over a sheet when one is up
+        CompositionLocalProvider(LocalSheetHost provides sheets) {
+            MessageStrip(core, messages,
+                Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 12.dp))
+        }
         // a pad being dragged, with the Clear / Edit / Duplicate wells on the screen's edges (board 81.4)
         PadDragOverlay(padDrag, top.playing)
         // the hold menu: over the page and the sheets, under the finger that opened it

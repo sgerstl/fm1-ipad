@@ -213,7 +213,8 @@ extension PhoneCore {
                 }
                 if !used.isEmpty { text += " Left alone because they are in use or empty: \(Self.list(used))." }
                 self.log("clearPatterns: \(text)")
-                self.publishNotice(NoticeArea(text: text))
+                // all asked for went: a confirmation; anything not cleared makes it a refusal (it says what to do)
+                self.publishNotice(NoticeArea(text: text, kind: failed.isEmpty && !done.isEmpty ? .confirmation : .refusal))
                 self.pokeAreas(["patterns", "patternPictures", "pads", "timeline"])
             }
         case "recyclePattern":
@@ -233,7 +234,7 @@ extension PhoneCore {
                 guard await store.send(.set(track: t1 - 1, entry: e, pattern: n)) else { self.reportRefusal(store); return }
                 let rc = await store.poolOp(2, pattern: n - 1)
                 if rc.isDone {
-                    self.publishNotice(NoticeArea(text: "Pattern \(Self.list([n])) was emptied and put on T\(t1) pad \(e + 1).", track: t1, entry: e))
+                    self.publishNotice(NoticeArea(text: "Pattern \(Self.list([n])) was emptied and put on T\(t1) pad \(e + 1).", track: t1, entry: e, kind: .confirmation))
                     self.log("recyclePattern: \(n) emptied onto T\(t1) entry \(e)")
                 } else {
                     self.refuse("Pattern \(Self.list([n])) is on T\(t1) pad \(e + 1), but the FM-1 didn't empty it"
@@ -259,7 +260,7 @@ extension PhoneCore {
                 guard await store.send(.copy(track: t1 - 1, entry: e)) else { self.reportRefusal(store); return }
                 let made = store.song?.tracks[safe: t1 - 1]?.entries[safe: e]?.poolIndex.map { $0 + 1 }
                 self.publishNotice(NoticeArea(text: "Pattern \(Self.list([n])) was copied to \(made.map { Self.list([$0]) } ?? "a new number") on T\(t1) pad \(e + 1).",
-                                              track: t1, entry: e))
+                                              track: t1, entry: e, kind: .confirmation))
                 self.pokeAreas(["patterns", "patternPictures", "pads", "timeline"])
             }
         }

@@ -122,7 +122,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                     if (c.running && !clockChecked) { clockChecked = true; LinkLog.add("clock: atMs ${c.atMs}, uptimeMillis $now, apart $skew ms" + if (kotlin.math.abs(skew) > 1000) " (too far: using the arrival time)" else "") }
                     _clock.value = if (c.running && kotlin.math.abs(skew) > 1000) c.copy(atMs = now) else c
                 }
-                "notice" -> { val n = lupeJson.decodeFromString(CoreNotice.serializer(), json); if (n.text.isNotEmpty()) _notice.value = n.copy(seq = _notice.value.seq + 1, text = refusalWords(n.text)) }
+                "notice" -> { val n = lupeJson.decodeFromString(CoreNotice.serializer(), json); if (n.text.isNotEmpty()) _notice.value = n.copy(seq = _notice.value.seq + 1, text = if (n.kind == NoticeKind.Refusal) refusalWords(n.text) else n.text) }
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {

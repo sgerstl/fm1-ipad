@@ -262,8 +262,9 @@ extension PhoneCore {
         // (the phone carries no stock V15 file: the way back to stock is the iPad's, or M-VAVE's updater)
         guard !f.isStock else { refuse("Stock V15 can't be installed from the phone. Use Lupe on an iPad, or M-VAVE's own updater."); return }
         if let e = FirmwareInstaller.refusal(for: f, running: fwSeen) { refuse(e.message); return }
-        // never while a change from the editor is still going in
-        if session.skiffSong?.busy == true || !clearedPads.isEmpty && clearedPads.contains(where: { !$0.parked.isEmpty }) {
+        // never while a change from the editor is still going in. An undo still open doesn't count: it has no timer now
+        // (Scott, 2026-11-17, messages rule), and its kept pattern simply stays unused; only one being cleared does.
+        if session.skiffSong?.busy == true || clearedPads.contains(where: { !$0.undoable && !$0.parked.isEmpty }) {
             refuse("A change is still going to the FM-1. Wait a few seconds, then install."); return
         }
         if session.playing { refuse("Stop playback before installing firmware."); return }

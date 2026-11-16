@@ -28,7 +28,7 @@ extension PhoneCore {
             switch rc {
             case .done:
                 let left = store.pool?.unused ?? 0, n = unused.count - left
-                self.publishNotice(NoticeArea(text: "Cleared \(n) unused \(n == 1 ? "pattern" : "patterns"). \(store.pool?.free ?? 0) pattern numbers are free."))
+                self.publishNotice(NoticeArea(text: "Cleared \(n) unused \(n == 1 ? "pattern" : "patterns"). \(store.pool?.free ?? 0) pattern numbers are free.", kind: .confirmation))
                 self.log("cleared \(n) unused patterns: \(unused.map(String.init).joined(separator: ", "))")
             case .empty: self.refuse("No pattern is unused, so there is nothing to clear.")
             case .playing: self.refuse("Stop playback to clear unused patterns. The FM-1 only clears them while stopped.")

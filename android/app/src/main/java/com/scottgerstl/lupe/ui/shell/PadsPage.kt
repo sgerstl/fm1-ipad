@@ -102,7 +102,12 @@ private val SCENE_PAD = 4.dp
 @Composable
 fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     var store by rememberSaveable { mutableStateOf(false) }
-    var notice by remember { mutableStateOf<String?>(null) }
+    // a refusal goes to the app strip, never over the scene row (Scott, 2026-11-17, messages rule): the scene row stays the scene row
+    val messages = LocalMessages.current
+    // fixed: Store is on (the way to keep one), or that scene now holds something; then the refusal leaves without ✕
+    LaunchedEffect(store, pads.scenes) {
+        messages.fixed { f -> f.startsWith("scene:") && (store || pads.scenes.getOrNull(f.removePrefix("scene:").toIntOrNull() ?: -1)?.stored == true) }
+    }
     // Store over a kept scene asks once more, in place (Scott, 2026-11-14): the scene, and when it was asked
     var confirmScene by remember { mutableStateOf<Int?>(null) }
     var confirmAt by remember { mutableStateOf(0L) }
@@ -245,10 +250,10 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                 .pointerInput(i, store, s.stored) {
                                     detectTapGestures {
                                         when {
-                                            store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis(); notice = null }   // a kept scene: ask first
+                                            store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis() }   // a kept scene: ask first
                                             store -> { core.send(Intent.SceneStore(i)); store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) }
                                             s.stored -> core.send(Intent.SceneRecall(i))
-                                            else -> notice = "Scene ${i + 1} is empty. Tap Store scene, then a scene, to keep what plays now."
+                                            else -> messages.refuse("Scene ${i + 1} is empty. Tap Store scene, then a scene, to keep what plays now.", fix = "scene:$i")
                                         }
                                     }
                                 },
@@ -278,16 +283,6 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                             contentAlignment = Alignment.CenterStart,
                         ) { BasicText(words, style = LupeType.key, maxLines = 1) }
                         Key({ confirmScene = null }, "Cancel", width = 88.dp, height = scenesH, minTarget = scenesH) { fg -> KeyLabel("Cancel", fg) }
-                    }
-                }
-                // a refusal shows over the scenes until dismissed
-                LupeCrossfade(notice, Modifier.fillMaxSize()) { n ->
-                    if (n != null) Row(
-                        Modifier.fillMaxSize().background(Tok.held, RoundedCornerShape(8.dp)).padding(start = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        BasicText(n, Modifier.weight(1f), style = LupeType.small.copy(color = Tok.text), maxLines = 2)
-                        Key({ notice = null }, "Dismiss", width = 44.dp, height = scenesH, minTarget = scenesH) { fg -> BasicText("✕", style = LupeType.key.copy(color = fg)) }
                     }
                 }
             }
@@ -468,7 +463,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         }
         val kept0 = keptPatterns(pads)
         val fullPool = empty && (pads.patternsFree == 0 || kept0.size >= 64)
-        // a pad cleared a moment ago: the way back, here as well as in the Undo strip
+        // a pad cleared a moment ago: the way back, here as well as in the app strip
         val undo = pads.clearUndo.lastOrNull { !it.block && it.track == row.track && it.entry == at }
         if (undo != null) add(HoldItem(if (undo.kind == "steps") "Undo clear steps" else "Undo clear", sub = if (undo.kind == "steps") "The notes come back" else undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
         if (empty) {
@@ -504,7 +499,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         }
         if (!empty) {
             val erases = e.kind == PadKind.Pattern && others.isEmpty()
-            // no confirm (batch item 13): it clears at once and an Undo strip, and "Undo clear" in this pad's menu, put it back for ten seconds
+            // no confirm (batch item 13): it clears at once and the app strip's Undo, and "Undo clear" in this pad's menu, put it back until the next edit (Scott, 2026-11-17, messages rule)
             // decision 41: Clear steps wipes the notes and keeps the pad (works while playing on the pattern the track is on; a pattern others use loses its notes there too);
             // Delete pattern takes the pad (stopped only: the FM-1 rewrites a list only while stopped)
             if (e.kind == PadKind.Pattern) add(HoldItem("Clear steps", sub = if (others.isNotEmpty()) "Pattern %02d is shared: its notes clear on ${others.first()} too".format(e.pattern) else "Keeps the pad and the pattern") { core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at)) })
@@ -570,7 +565,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     EdgeAction.Cancel -> Unit          // the pad goes back
                     // wipes the notes, keeps the pad: works while playing on the pattern the track is on; the core says otherwise (and Undo brings them back)
                     EdgeAction.ClearSteps -> core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at))
-                    // no confirm (batch item 13): the pad goes at once and the Undo strip puts it back; stopped only (the well is greyed while playing)
+                    // no confirm (batch item 13): the pad goes at once and the app strip puts it back; stopped only (the well is greyed while playing)
                     EdgeAction.Delete -> core.send(Intent.PadClear(row.track, at))
                     EdgeAction.Edit -> { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) }
                     EdgeAction.Duplicate -> duplicateIntoNext()

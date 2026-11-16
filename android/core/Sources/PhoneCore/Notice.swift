@@ -3,6 +3,10 @@
 // published at once, even when the words repeat: it isn't a watched state but an event. The screen numbers them
 // itself (android/app/.../core/Notice.kt, CoreNotice). The log gets the same words, as before.
 //
+// Each carries a kind (Scott, 2026-11-17, messages rule): a refusal (everything refuse() sends) or a confirmation (a
+// result the screen doesn't already show, such as "Cleared 5 unused patterns"). The screen keeps a refusal until ✕ and
+// lets a confirmation go after 4 s.
+//
 // What goes here: something the person asked for that didn't happen, with the reason and what to do. What doesn't:
 // a malformed intent or one the screen should have confirmed first (the screen's own faults stay in the log).
 import Foundation
@@ -14,6 +18,15 @@ public struct NoticeArea: Codable, Equatable, Sendable {
     /// Where, when the core knows: the track 1…6 and the entry from 0.
     public var track: Int?
     public var entry: Int?
+    /// A refusal stays until ✕ or until it's fixed; a confirmation leaves after 4 s (Scott, 2026-11-17, messages rule).
+    /// The screen times it by this, never by the words.
+    public var kind: Kind = .refusal
+
+    public enum Kind: String, Codable, Sendable { case refusal, confirmation }
+
+    public init(text: String, track: Int? = nil, entry: Int? = nil, kind: Kind = .refusal) {
+        self.text = text; self.track = track; self.entry = entry; self.kind = kind
+    }
 }
 
 extension PhoneCore {
