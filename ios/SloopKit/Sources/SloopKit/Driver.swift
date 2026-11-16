@@ -8,7 +8,7 @@ import Foundation
 
 /// A firmware Lupe knows how to talk to, found from INFO.
 public enum FirmwareDialect: Equatable, Sendable {
-    /// Skiff 2.2 or 2.5.1 (github.com/illuminus5/skiff): Felucca's command numbers, six tracks, INFO's tags.
+    /// Skiff 2.2, 2.5.1 or 2.6 (github.com/illuminus5/skiff): Felucca's command numbers, six tracks, INFO's tags.
     case skiff
 
     /// The dialect INFO reports, or nil for firmware Lupe doesn't know (it refuses to connect). `body` is
@@ -19,7 +19,7 @@ public enum FirmwareDialect: Equatable, Sendable {
     }
 
     /// Every firmware and version Lupe speaks, for the "other firmware" message.
-    public static let known = "Skiff 2.2 (FELUCCA v2.2) or Skiff 2.5.1 (FELUCCA v2.5.1)"
+    public static let known = "Skiff 2.2 (FELUCCA v2.2), Skiff 2.5.1 (FELUCCA v2.5.1) or Skiff 2.6 (FELUCCA v2.6)"
 
     /// SLOOP's INFO (FELUCCA SLOOP 2.x): Lupe no longer speaks it, but knows it, to offer Skiff-Lupe in its place.
     public static func isSLOOP(_ version: String) -> Bool { version.uppercased().contains("SLOOP") }

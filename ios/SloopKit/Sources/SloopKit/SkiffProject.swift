@@ -152,7 +152,7 @@ public struct SkiffProjectData: Codable, Equatable, Sendable {
     public static let blank251 = SkiffProjectData(record: Array(Data(base64Encoded: blank251Base64, options: .ignoreUnknownCharacters)!),
                                                   patterns: [:], firmware: SkiffFirmware.v2_5_1.rawValue)
     /// The fresh start for the FM-1's release: a 2.2 record on 2.5 would load with the delay MONO.
-    public static func blank(for firmware: SkiffFirmware?) -> SkiffProjectData { firmware == .v2_5_1 ? blank251 : blank }
+    public static func blank(for firmware: SkiffFirmware?) -> SkiffProjectData { firmware != nil && firmware != .v2_2 ? blank251 : blank }
 
     public var project: SKF4? { SKF4(Array(record)) }
     /// How many patterns its tracks play.

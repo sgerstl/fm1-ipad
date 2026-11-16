@@ -53,6 +53,9 @@ public final class PhoneCore {
     var fwRunning: String?
     var fwIdentity: String?
     var fwSeen: DeviceIdentity?
+    /// Watch rounds in a row a waiting update loader didn't answer: its "finish" offer holds until 3 (one missed
+    /// handshake made the card vanish while the FM-1 still waited, on the Pixel 7, 2026-11-16).
+    var fwLoaderMisses = 0
     var fwBackup: String?
     var fwInUpdateMode = false
     var fwDownloads = false

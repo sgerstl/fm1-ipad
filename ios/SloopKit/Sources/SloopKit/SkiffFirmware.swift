@@ -10,6 +10,10 @@ import Foundation
 public enum SkiffFirmware: String, CaseIterable, Sendable {
     case v2_2 = "FELUCCA v2.2"
     case v2_5_1 = "FELUCCA v2.5.1"
+    /// Skiff 2.6 (2026-11-12): 2.5.1 plus CAST (editor cmd 83, INFO 59 01). Nothing Lupe uses changed (pages, params,
+    /// engines, the project format), so Lupe speaks it as 2.5.1. Stock only: Skiff-Lupe stays on 2.5.1, so installing it
+    /// on a 2.6 unit goes back a version (the phones say so).
+    case v2_6 = "FELUCCA v2.6"
 
     public init?(version: String) { self.init(rawValue: version) }
 
@@ -22,7 +26,9 @@ public enum SkiffFirmware: String, CaseIterable, Sendable {
     /// FREE TAKE (2.5): a take kept on the FM-1 (SHIFT + SAVE after playing while stopped) replaces a track's pattern.
     public var hasFreeTake: Bool { self != .v2_2 }
     public var pageMap: SkiffPageMap { self == .v2_2 ? .identity : .v2_5 }
-    /// "2.2", "2.5.1"
+    /// Newer than the Skiff that Skiff-Lupe is built on (2.5.1): installing Skiff-Lupe goes back a version.
+    public var isNewerThanLupe: Bool { self == .v2_6 }
+    /// "2.2", "2.5.1", "2.6"
     public var short: String { String(rawValue.dropFirst("FELUCCA v".count)) }
 }
 

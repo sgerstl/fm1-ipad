@@ -15,8 +15,8 @@ android {
         applicationId = "com.scottgerstl.lupe"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1-p2-shell"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     buildTypes {

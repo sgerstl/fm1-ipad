@@ -86,5 +86,6 @@ class FirmwareNameTest {
         assertEquals("Skiff-Lupe 2.4 · Skiff-Lupe available", firmwareLine(fw("2.4", "update", "olderLupe")))
         assertEquals("M-VAVE's own firmware, V16 · Skiff-Lupe available", firmwareLine(fw("M-VAVE's own firmware, V16", "install", "mvave")))
         assertEquals("What the FM-1 runs, and Skiff-Lupe", firmwareLine(FirmwareState()))
+        assertEquals("Skiff 2.6", firmwareLine(fw("Skiff 2.6")))                 // stock 2.6, its offer put off: not "up to date"
     }
 }

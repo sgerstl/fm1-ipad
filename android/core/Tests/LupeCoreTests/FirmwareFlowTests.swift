@@ -193,6 +193,38 @@ import Testing
         #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
 
+    /// Stock Skiff 2.6 (2.5.1 plus CAST): it connects as 2.5.1, and Skiff-Lupe is offered as a step back, saying so.
+    @Test func aStock26UnitIsOfferedSkiffLupeAsAStepBack() async throws {
+        let box = Box(), dir = try storage()
+        var fx = try SkiffFixture.load(.v2_5_1)
+        let old = Array("FELUCCA v2.5.1".utf8), new = Array("FELUCCA v2.6".utf8)   // (null-terminated)
+        let at = try #require(fx.info.indices.first { fx.info[$0...].starts(with: old) })
+        fx.info.replaceSubrange(at..<(at + old.count), with: new)
+        let fake = FakeSkiff(fx)
+        fake.screenLink = false
+        var once = false
+        let c = PhoneCore(session: DeviceSession(transport: { if once { return nil }; once = true; return fake }),
+                          publish: { area, json in
+                              if area == "firmware", let a = try? JSONDecoder().decode(FirmwareArea.self, from: Data(json.utf8)) { box.areas.append(a) }
+                          }, log: { box.log.append($0) }, canWrite: { true })
+        let dev = FakeFM1(running: Self.skiff251)
+        var d = FirmwareInstaller.Delays()
+        d.start = .milliseconds(5); d.reply = .zero; d.handshake = .milliseconds(300); d.poll = .milliseconds(20)
+        dev.timeScale = 0.2
+        c.firmwareLink = FirmwareLink(ports: dev, hold: { _ in }, delays: d)
+        c.firmwareWatchEvery = .milliseconds(100)
+        c.appStorage = dir
+        c.firmwareLocalReleases = Self.releases
+        c.start()
+        defer { c.stop() }
+        try await wait("connected") { c.session.isConnected }
+        #expect(c.session.skiffFirmware == .v2_6)
+        try await wait("Skiff-Lupe offered") { c.firmwareArea().offer?.kind == "install" }
+        let o = try #require(c.firmwareArea().offer)
+        #expect(o.from == "newerSkiff")
+        #expect(o.text.contains("goes back to 2.5.1"), "\(o.text)")
+    }
+
     // MARK: the link gate
 
     @Test func theGateGivesTheDeviceToTheEditorOrTheInstallerByItsName() async throws {

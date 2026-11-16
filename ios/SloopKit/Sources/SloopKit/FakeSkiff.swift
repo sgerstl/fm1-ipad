@@ -40,7 +40,7 @@ struct SkiffEngineTable: Decodable, Sendable {
     var engines: [Engine]
 
     static func load(_ firmware: SkiffFirmware) -> SkiffEngineTable? {
-        guard firmware == .v2_5_1, let url = SkiffFixture.url("skiff-2.5.1-engines"),
+        guard firmware != .v2_2, let url = SkiffFixture.url("skiff-2.5.1-engines"),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(SkiffEngineTable.self, from: data)
     }
