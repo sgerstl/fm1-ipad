@@ -147,6 +147,10 @@ struct SettingsSheet: View {
                     Text("Plays the FM-1's sound on the \(phone ? "iPhone" : "iPad")'s speakers or headphones.")
                 }
                 LabsSection()
+                // the version, the same number on every device (VERSION at the repo root; Scott, 2026-11-17)
+                Section {
+                    LabeledContent("Lupe", value: Self.version)
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -154,6 +158,12 @@ struct SettingsSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
+    }
+
+    /// "0.3.0 (build 2)": Lupe's version, shared with Android, and this app's own build.
+    static var version: String {
+        let i = Bundle.main.infoDictionary
+        return "\(i?["CFBundleShortVersionString"] as? String ?? "?") (build \(i?["CFBundleVersion"] as? String ?? "?"))"
     }
 
     /// The one line under "Play through the iPad", only when the user has something to do (2026-11-06): nil when all
