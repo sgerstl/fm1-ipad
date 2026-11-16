@@ -67,13 +67,10 @@ struct SkiffArrangePage: View {
                     SectionBar(range: s, songBars: max(songBars, 1), plans: sectionPlans(.duplicateAfter),
                                leftOut: $leftOut, busy: store.busy || store.offline,
                                set: { section = $0 }, apply: { applySection($0) }, cancel: { section = nil; leftOut = [] })
-                    if let r = store.refusal, r.entry == nil { RefusalLine(refusal: r, session: session, store: store) }
                 } else if let line = dropAt?.text ?? moveAt?.text {
                     Text(line).font(.lupe(13)).padding(.horizontal, 12).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
                         .padding(.leading, headW)
-                } else if let r = store.refusal, r.entry == nil || selection == nil {
-                    RefusalLine(refusal: r, session: session, store: store)
                 }
                 if !compact { inspector }
             }

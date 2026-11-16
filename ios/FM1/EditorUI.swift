@@ -195,6 +195,8 @@ final class EditorUI {
     /// The pad last cleared (batch item 13: no confirm, an Undo strip instead), offered for undo until the next change:
     /// valid while the song store's undo stack is as deep as it was right after the clear.
     var padClear: PadClear?
+    /// A confirmation on the app strip (Messages.swift), 4 s.
+    var confirmation: AppConfirmation?
     /// The pad being dragged (Pads), for the edge wells (EdgeWells): its centre and track; nil when none is.
     var padDrag: PadDragShow?
     /// A duplicated Timeline block sprouting into its place (TimelineSprout).
@@ -251,7 +253,7 @@ struct PadClear: Equatable {
     var entry: Int
     var what: String           // "pattern 02", "REST"
     var depth: Int             // the store's undo stack right after the clear
-    var stripGone = false      // the strip has left (8 s); Undo clear stays in the pad's menu until the next change
+    var stripGone = false      // the app strip's Undo was dismissed or replaced; Undo clear stays in the pad's menu until the next change
     var before: [SongEntry] = []   // the track's list as it was (undo puts it back: the entry, its REPS, chain, sound)
     var kept: Int? = nil           // a pattern kept on the FM-1 for the undo (P1's route); cleared when the undo ends
     var keptAll: [Int] = []        // every pattern kept (a Timeline delete can keep several)

@@ -114,24 +114,11 @@ struct MotionLanes: View {
                 .padding(.leading, 88)
             }
             if let said = Self.refusal(session, track: track) {
-                HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle").accessibilityHidden(true)
-                    Text(said).font(.lupe(13)).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Button { session.dismissMotionRefusal() } label: {
-                        Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss")
-                }
-                .padding(.leading, 12).frame(minHeight: 44)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
-                .padding(.leading, 88)
-                .task(id: session.motionRefusal?.at) {
-                    try? await Task.sleep(for: .seconds(6))
-                    if session.motionRefusal.map({ Date.now.timeIntervalSince($0.at) >= 6 }) == true { session.dismissMotionRefusal() }
-                }
-                .accessibilityElement(children: .combine)
+                // the lanes' own home, until ✕ (the messages rule, 2026-11-17: no timer)
+                MessageRow(kind: .refusal, text: said, dismiss: { session.dismissMotionRefusal() })
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 88)
+                    .task(id: session.motionRefusal?.at) { MessageMotion.announce(said) }
             }
             if !ids.isEmpty {
                 ScrollViewReader { proxy in

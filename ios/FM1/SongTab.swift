@@ -105,16 +105,7 @@ struct SkiffSongPage: View {
                 // both halves pinned to the page's width: left loose, swapping the panel's contents (the sampler for
                 // the editor) re-centred the top half 12 pt to the left (Scott, 2026-11-09)
                 .frame(width: g.size.width, height: top)
-                // a phrase played while stopped, offered as a take (FREE TAKE): at the foot of the lanes or pads, right of
-                // the panel's tab, where the landing strip will say what it became (the top row's toasts keep the top)
-                .overlay(alignment: .bottomTrailing) {
-                    if let o = session.takeOffer, !session.playing, session.takePicker == nil {
-                        TakeOfferLine(offer: o, session: session)
-                            .padding(.bottom, PadsPage.tabHeight + 12).padding(.trailing, 16)
-                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                .animation(reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.2), value: session.takeOffer)
+                // (a phrase offered as a take is the app strip's ongoing row since the messages rule, 2026-11-17)
                 // (Timeline / Pads: the switch is in the top bar since 2026-11-10, board 47, still while they slide)
                 // clipped at the foot only: a key on the top row (Cancel waiting) draws its raised edge a point
                 // above the page and was cut (Scott, 2026-11-08). At Max on Pads the selected pad's track controls

@@ -35,11 +35,6 @@ struct TopBar: View {
                     }
                     skiffTransport
                 }
-                // under the row: a refusal, an unseen scene, lanes ending apart, until it's dealt with
-                .overlay(alignment: .top) {
-                    SongStrip(session: session, store: store, ui: ui)
-                        .padding(.top, 64 + 4)
-                }
             } else {
                 // the tabs sit in the middle of the bar whatever the two sides hold
                 ZStack {
@@ -359,19 +354,6 @@ struct TopBar: View {
         .disabled(!session.isConnected)
         .opacity(session.isConnected ? 1 : 0.4)
         .sensoryFeedback(.impact(weight: .medium), trigger: fromStartCount)
-        .overlay(alignment: .top) {
-            if fromStartShown {
-                Text("Playing from the start")
-                    .font(.lupe(13, .semibold)).foregroundStyle(Theme.text)
-                    .fixedSize()
-                    .padding(.horizontal, 12).frame(height: 32)
-                    .elevated(.held, radius: 8)
-                    .offset(y: 52)
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -4)))
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)              // VoiceOver hears it as an announcement
-            }
-        }
         .background {
             Button("Play from the start", action: playFromStart)
                 .keyboardShortcut(.space, modifiers: .shift)
@@ -393,22 +375,13 @@ struct TopBar: View {
     @State private var playDown = false
     @State private var holdFired = false
     @State private var holdTimer: Task<Void, Never>?
-    @State private var fromStartShown = false
     @State private var fromStartCount = 0
-    @State private var fromStartHide: Task<Void, Never>?
 
     private func playFromStart() {
         guard session.canPlayFromStart, session.isConnected else { return }
         session.playFromStart()
         fromStartCount += 1
-        AccessibilityNotification.Announcement("Playing from the start").post()
-        withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .easeOut(duration: 0.15)) { fromStartShown = true }
-        fromStartHide?.cancel()
-        fromStartHide = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.6))
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeIn(duration: 0.12)) { fromStartShown = false }
-        }
+        ui.confirm("Playing from the start")       // the app strip, 4 s (messages rule, 2026-11-17)
     }
 
     /// Position over tempo; a tap opens the tempo. In song mode the tempo line says SONG (PLAY plays the

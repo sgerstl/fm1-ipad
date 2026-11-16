@@ -237,18 +237,7 @@ struct PadsPage: View {
                 .accessibilitySortPriority(Self.rowOrder(tracks.count))
             Spacer(minLength: 0)
         }
-        // a refusal (an empty scene tapped, a change the FM-1 turned down): over the scenes until dismissed; the iPad's
-        // tool row has it, which the phone hasn't
-        .overlay(alignment: .bottom) {
-            if let rf = store.refusal {
-                RefusalLine(refusal: rf, session: session, store: store)
-                    .transition(.opacity)
-            } else if let s = previewScene, store.scenesSeen[s] == nil {
-                Text("Scene \(s + 1): not seen yet. Recall it once and holding it shows what it does")
-                    .font(.lupe(13)).padding(.horizontal, 12).frame(minHeight: 44)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
-            }
-        }
+        // (a refusal and an unseen scene are the app strip's since the messages rule, 2026-11-17)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pads")
     }

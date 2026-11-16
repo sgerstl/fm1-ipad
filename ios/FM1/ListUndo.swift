@@ -6,8 +6,8 @@ import SwiftUI
 // So an entry whose pattern would be erased is set to REST first, and then removed: the pattern stays kept on the FM-1
 // for the undo. Undo rewrites the track's list as it was (patterns, REPS, chains, sounds). When the undo ends (anything
 // else changes the song), each kept pattern still unused is cleared with POOL op 1, stopped, as the FM-1's own CLEAR
-// would have left it. One strip for the app (ListUndoStrip, at the root): what went, and Undo, for 8 s; the pad's or
-// block's menu keeps Undo until the next change. iPhone and iPad.
+// would have left it. The app strip (Messages.swift) says what went, with Undo, until the next change or ✕ (the
+// messages rule, 2026-11-17: no Undo on a timer); the pad's or block's menu keeps Undo until the next change.
 
 @MainActor
 enum ListUndo {
@@ -59,49 +59,6 @@ enum ListUndo {
             if let old = ui.padClear { finish(old, store, session) }
             ui.padClear = PadClear(track: t, entry: range.lowerBound, what: what, depth: store.undoStack.count, before: before,
                                    kept: nil, keptAll: Array(gone))
-        }
-    }
-}
-
-/// The Undo strip, at the foot of the screen over every tab: what went, and Undo, for 8 s (or until anything else
-/// changes the song); then the pad's or block's menu keeps Undo until the next change.
-struct ListUndoStrip: View {
-    let session: DeviceSession
-    let ui: EditorUI
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            if let store = session.skiffSong, let c = ui.padClear, ListUndo.undoable(ui, store), !c.stripGone {
-                HStack(spacing: 10) {
-                    Text(c.title).font(.lupe(14)).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Button { ListUndo.undo(ui, store, session) } label: {
-                        Text("Undo").font(.lupe(14, .semibold)).padding(.horizontal, 14).frame(height: 32)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.control))
-                            .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(PressSink())
-                    .accessibilityHint("Puts it back")
-                }
-                .padding(.leading, 14).padding(.trailing, 6)
-                .frame(maxWidth: 520)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held))
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                .id(c.id)
-                .task(id: c.id) {
-                    try? await Task.sleep(for: .seconds(8))
-                    if ui.padClear?.id == c.id { ui.padClear?.stripGone = true }
-                }
-                .onAppear { UIAccessibility.post(notification: .announcement, argument: c.title + ". Undo is available") }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.bottom, ui.phone ? 44 : 72)
-        .animation(reduceMotion ? .easeOut(duration: 0.15) : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.3), value: ui.padClear?.id)
-        // anything else changing the song ends the undo: its kept patterns go
-        .onChange(of: session.skiffSong?.undoStack.count) { _, n in
-            if let c = ui.padClear, let store = session.skiffSong, c.depth != n { ui.padClear = nil; ListUndo.finish(c, store, session) }
         }
     }
 }

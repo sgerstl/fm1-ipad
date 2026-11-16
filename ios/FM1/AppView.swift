@@ -98,10 +98,13 @@ struct AppView: View {
             }
         }
         .padding(24)
-        .overlay(alignment: .bottom) { keyboard }
-        .overlay(alignment: .bottom) { undoToast }
-        .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 32) }
-        .overlay { ListUndoStrip(session: session, ui: ui) }   // (a pad cleared or blocks deleted: Undo)
+        // the app strip (messages rule, Scott 2026-11-17): one message over one ongoing state, 24 above the foot, over the keyboard when it shows
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 12) {
+                if session.isConnected { AppStrip(session: session, ui: ui).padding(.bottom, ui.keyboardOpen ? 0 : 12) }
+                keyboard
+            }
+        }
         .overlay { EdgeWells(session: session, ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { KnobPanelLayer(ui: ui) }
@@ -254,36 +257,6 @@ extension AppView {
             Spacer(minLength: 0)
         }
         .frame(width: Overview.boxWidth)
-    }
-
-    /// After Clear all: what happened and a way back, for 8 seconds.
-    @ViewBuilder var undoToast: some View {
-        ZStack {
-            if let c = ui.lastClear {
-                HStack(spacing: 16) {
-                    TrackChip(track: c.track)
-                    Text("Cleared track \(c.track + 1)").font(.lupe(15, .semibold))
-                    Button {
-                        StepClear.undo(session, c)
-                        ui.lastClear = nil
-                    } label: {
-                        Text("Undo clear").fontWeight(.semibold).padding(.horizontal, 16).frame(height: 44).raisedKey()
-                    }
-                    .buttonStyle(PressSink())
-                }
-                .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
-                .background { Color.clear.elevated(.panel) }
-                .padding(.bottom, 132)
-                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                .task(id: c) {
-                    try? await Task.sleep(for: .seconds(8))
-                    if ui.lastClear == c { ui.lastClear = nil }
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Cleared track \(c.track + 1)")
-            }
-        }
-        .animation(pageAnimation, value: ui.lastClear)
     }
 
     /// Matches the track strip's accordion, so the page and the strip move as one.
@@ -521,33 +494,5 @@ struct LookingForFM1: View {
             Text("Looking for the FM-1…").font(.lupe(15)).foregroundStyle(Theme.textSecondary)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Skiff records every knob move on the selected track, the iPad's included, while it's armed and playing
-/// (EDITOR_PROTOCOL.md "Motion"): Scott recorded edits without knowing (2026-11-05). Said plainly while it
-/// happens, with a way to stop. Floats at the foot of the screen, so nothing moves when it comes and goes.
-struct RecordingKnobsBar: View {
-    let session: DeviceSession
-
-    var body: some View {
-        if session.recordingKnobs {
-            HStack(spacing: 12) {
-                Image(systemName: "record.circle").foregroundStyle(Theme.rec).accessibilityHidden(true)
-                Text("Recording knob moves on T\(session.selectedTrack + 1): every change, here or on the FM-1, goes into its steps.")
-                    .font(.lupe(13)).fixedSize(horizontal: false, vertical: true)
-                Button { session.toggleRec() } label: {
-                    Text("Stop recording").font(.lupe(13, .semibold))
-                        .padding(.horizontal, 12).frame(minHeight: 44).raisedKey()
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressSink())
-            }
-            .foregroundStyle(Theme.text)
-            .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 4)
-            .frame(maxWidth: 640)
-            .elevated(.held, radius: 12)
-            .accessibilityElement(children: .contain)
-        }
     }
 }

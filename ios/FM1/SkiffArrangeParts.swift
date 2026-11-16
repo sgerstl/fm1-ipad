@@ -170,9 +170,6 @@ struct EntryInspector: View {
                     Text("Sound on entry").font(.lupe(12)).foregroundStyle(Theme.textSecondary)
                     Text(first.sound.map { Entries.soundName($0, session: session) } ?? "None: keeps the track's sound")
                 }
-                if let r = store.refusal, r.track == track, let e = r.entry, block.entries.contains(e) {
-                    RefusalLine(refusal: r, session: session, store: store)
-                }
             }
             Spacer(minLength: 0)
             // the actions two by two, Delete last and apart under them: short enough that a move's line above
@@ -278,39 +275,6 @@ struct EntryInspector: View {
             session.select(track: track)
             ui.page = .sequencer
         }
-    }
-}
-
-/// Why a change didn't take, said where it was tried; "Stop to rearrange" comes with Stop.
-struct RefusalLine: View {
-    let refusal: SkiffSongStore.Refusal
-    let session: DeviceSession
-    let store: SkiffSongStore
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.circle").font(.system(size: 17, weight: .semibold)).accessibilityHidden(true)
-            Text(refusal.text).font(.lupe(15)).fixedSize(horizontal: false, vertical: true)
-            if refusal.needsStop, session.playing {
-                Button { session.setPlaying(false); store.dismissRefusal() } label: {
-                    Label("Stop", systemImage: "stop.fill").font(.lupe(13, .semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 8).frame(minHeight: 44).raisedKey()
-                }
-                .buttonStyle(PressSink())
-            }
-            Button { store.dismissRefusal() } label: {
-                Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss")
-        }
-        .foregroundStyle(Theme.text)
-        // on a lifted box, not bare on the page: white text on black was easy to miss (Scott, 2026-11-09); the
-        // neutral lift, not a track tint, which already means "selected"
-        .padding(.leading, 14)
-        .frame(minHeight: 44)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.tones[2]))
-        .accessibilityElement(children: .contain)
     }
 }
 
@@ -820,9 +784,10 @@ struct FreeTakeLine: View {
             .accessibilityLabel("Dismiss")
         }
         .foregroundStyle(Theme.text)
-        .padding(.leading, 14)
+        .padding(.leading, 12)
         .frame(minHeight: 44)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.tones[2]))
+        // the Timeline's own home: the message row's surface (the messages rule, 2026-11-17)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Elevation.held.surface).elevationShadow(.held))
         .fixedSize(horizontal: false, vertical: true)    // its own height: the lanes above don't squeeze it
         .accessibilityElement(children: .contain)
     }

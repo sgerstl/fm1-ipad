@@ -10,6 +10,7 @@ struct PhoneAppView: View {
     @Binding var useDemo: Bool
     @State private var size = CGSize(width: 852, height: 393)
     @State private var padsReturn: Page?
+    @State private var everConnected = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AudioThrough.self) private var through
     @Environment(ProjectStore.self) private var projects
@@ -118,14 +119,20 @@ struct PhoneAppView: View {
         .sheet(isPresented: Binding(get: { ui.projectsOpen && session.dialect != .skiff }, set: { ui.projectsOpen = $0 })) {
             ProjectsSheet(store: projects, session: session)
         }
-        .overlay { ListUndoStrip(session: session, ui: ui) }   // (a pad cleared or blocks deleted: Undo)
         .overlay { EdgeWells(session: session, ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)
         .overlay { TrackMenuLayer(session: session, ui: ui) }
         .overlay { TrackPickerLayer(session: session, ui: ui) }
         .overlay { KnobPanelLayer(ui: ui) }
-        .overlay(alignment: .bottom) { RecordingKnobsBar(session: session).padding(.bottom, 12).padding(.horizontal, 12) }
+        // the app strip (messages rule, Scott 2026-11-17): one message over one ongoing state, 12 above the foot
+        .overlay(alignment: .bottom) { if session.isConnected { AppStrip(session: session, ui: ui).padding(.bottom, 12) } }
         .coordinateSpace(name: AppView.space)
         .sessionUpkeep(session)        // the same upkeep as the iPad's AppView
+        // the loss and the return said once each, as the iPad's (connection-states.md A2; the iPhone had neither, 2026-11-17)
+        .onChange(of: session.isConnected, initial: true) { was, now in
+            if now, everConnected, !was { MessageMotion.announce("FM-1 back") }
+            if was, !now { MessageMotion.announce("FM-1 disconnected. Plug it back in; nothing is lost.") }
+            if now { everConnected = true }
+        }
         .foregroundStyle(Theme.text)
         .font(.lupe(15))
         .monospacedDigit()
