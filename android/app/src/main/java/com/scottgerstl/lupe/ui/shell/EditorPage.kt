@@ -1,5 +1,11 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.gestures.drag
+
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+
 import androidx.compose.ui.layout.onGloballyPositioned
 import com.scottgerstl.lupe.core.SetPatternSteps
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -164,6 +170,32 @@ fun EditTab(
     val panelOpen = ui.stepPanel && stepPicked
     val panelT = animatedFloat(if (panelOpen) 1f else 0f, if (panelOpen) Dur.PANEL else Dur.FINGER)
     val dock = maxOf(DOCK_W * panelT.value, soundDock)
+    // the FM-1's knobs drive the picked step (Edit redesign, Scott 2026-11-17; the iPad's SeqCursor, both ways). Skiff 2.5.1: on SEQ › NOTES knobs
+    // 1–4 are PITCH START LENGTH VELOCITY of the step under the FM-1's cursor, on FEEL CHANCE RATCHET NUDGE TYPE; its PRESETS encoder moves the cursor.
+    val screen by core.fm1Screen.collectAsStateWithLifecycle()
+    val screenNow by rememberUpdatedState(screen)
+    val linkState by core.link.collectAsStateWithLifecycle()
+    val linked = linkState.phase == com.scottgerstl.lupe.core.LinkPhase.Ready
+    // the FM-1 to the phone: its cursor is the picked step; the step panel opens on the matching tab; the grid pages to it (the reveal does that)
+    LaunchedEffect(screen.key, screen.page, screen.cursor) {
+        if (drum || screen.key != "SEQ" || (screen.page != 41 && screen.page != 42)) return@LaunchedEffect
+        val c = screen.cursor ?: return@LaunchedEffect
+        val want = if (screen.page == 42) PanelTab.Feel else PanelTab.Notes
+        if (tab != want && tab != PanelTab.Sound) tab = want
+        if (!ui.stepPanel) ui.stepPanel = true
+        if (pick.step != c) { pick.step = c; core.send(Intent.StepSelect(c)) }
+    }
+    // the phone to the FM-1: a step picked with the panel open on Notes or Feel puts the FM-1 on that page with its cursor there (screenGoto's cursor,
+    // the core's showOnDevice(page:cursor:)); nothing is sent when it is already there, so the two don't echo. Knob turns are the FM-1's own: no StepAdjust.
+    LaunchedEffect(panelOpen, pick.step, tab, linked) {
+        if (drum || !panelOpen || !linked || tab == PanelTab.Sound) return@LaunchedEffect
+        val st = pick.step ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(120)
+        val pg = if (tab == PanelTab.Feel) 42 else 41
+        val now = screenNow
+        if (now.key == "SEQ" && now.page == pg && now.cursor == st) return@LaunchedEffect
+        core.send(com.scottgerstl.lupe.core.ScreenGoto("SEQ", pg, cursor = st))
+    }
     // a panel docked: a melodic grid shows 8 steps a page beside it (hybrid UI, Scott 2026-11-17), and the pattern bar spans the width left of it.
     // A kit's lanes keep scrolling under it (decision 35, B) until the drum grid gets pages too.
     // round 5: a kit pages by 8 too (`build-gaps-2026-11-17/1-drum-edit-docked.png`)
@@ -172,29 +204,29 @@ fun EditTab(
     Box(modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().padding(end = beside)) {
         Ruler(ed, track, core, stepPicked) {
+            // the pattern bar (Edit redesign, Scott 2026-11-17): keys 40 tall; the step menu moved into the step panel's header (⋯)
             if (!drum) {
-                Key({ core.send(Intent.ChordToggle) }, "Chord", width = 64.dp, height = 28.dp, minTarget = 32.dp, on = ed.chord, role = Role.Switch,
-                    state = if (ed.chord) "On: a tap adds a note to the step, up to ${ed.maxNotes}" else "Off: a tap replaces the step's note") { fg -> KeyLabel("Chord", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                ToggleKey("Chord", ed.chord, "Chord", if (ed.chord) "On: a tap adds a note to the step, up to ${ed.maxNotes}" else "Off: a tap replaces the step's note") { core.send(Intent.ChordToggle) }
                 Spacer(Modifier.width(6.dp))
-                LaneKey(ui)
+                ToggleKey("Lane", ui.lane, "Automation lane", if (ui.lane) "On: the lane is under the grid" else "Off") { ui.lane = !ui.lane }
                 Spacer(Modifier.width(6.dp))
             }
             StepsKey(ed, track, core)
             Spacer(Modifier.width(6.dp))
             // Follow: only where the grid pages by 8 (a 16-step grid follows as built); on, it is the white key
             if (paged) {
-                Key({ ui.follow = !ui.follow }, "Follow the playhead", width = 72.dp, height = 28.dp, minTarget = 32.dp, on = ui.follow, role = Role.Switch,
-                    state = if (ui.follow) "On: the page turns with the playhead" else "Off: turn pages by hand; the minimap shows the playhead") { fg -> KeyLabel("Follow", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                ToggleKey("Follow", ui.follow, "Follow the playhead", if (ui.follow) "On: the page turns with the playhead" else "Off: turn pages by hand; the minimap shows the playhead") { ui.follow = !ui.follow }
                 Spacer(Modifier.width(6.dp))
             }
-            // "Step 6": latches the step panel. With nothing picked it picks the core's selected step (a kit: hold a cell first).
+            // "Step 6 ⌄": opens and closes the step panel. With nothing picked it picks the core's selected step (a kit: hold a cell first).
             val n = (if (drum) hit?.second else pick.step) ?: ed.selected
             Key({
                 if (panelOpen) ui.stepPanel = false
                 else { if (!drum && pick.step == null) { pick.step = ed.selected; core.send(Intent.StepSelect(ed.selected)) }; ui.stepPanel = true }
-            }, "Step ${n + 1} panel", width = 72.dp, height = 28.dp, minTarget = 32.dp, on = panelOpen, role = Role.Switch, enabled = !drum || hit != null,
-                state = when { panelOpen -> "Open"; drum && hit == null -> "Hold a cell to pick a hit first"; else -> "Closed" }) { fg -> KeyLabel("Step ${n + 1}", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
-            Spacer(Modifier.width(6.dp))
+            }, "Step ${n + 1} panel", width = 96.dp, height = 40.dp, minTarget = 44.dp, on = panelOpen, role = Role.Switch, enabled = !drum || hit != null,
+                state = when { panelOpen -> "Open"; drum && hit == null -> "Hold a cell to pick a hit first"; else -> "Closed" }) { fg ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel("Step ${n + 1}", fg, style = LupeType.key.copy(fontSize = 15.sp)); Chevron(fg) }
+            }
         }
         Spacer(Modifier.height(4.dp))
         // the track thread rests round the pattern (the tab-thread mockup): the selected track's outline in its colour; while the tabs slide the
@@ -254,8 +286,8 @@ private fun StepsKey(ed: EditorState, track: Color, core: LupeCore) {
     }
     Box(Modifier.onGloballyPositioned { coords = it }) {
         Key({ coords?.takeIf { it.isAttached }?.let { c -> menu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), track, items()) } },
-            "Pattern length: $n steps", width = 76.dp, height = 28.dp, minTarget = 32.dp, state = "Opens the choices: one more, one fewer, 4 to 64") { fg ->
-            KeyLabel("$n steps", fg, style = LupeType.key.copy(fontSize = 13.sp))
+            "Pattern length: $n steps", width = 112.dp, height = 40.dp, minTarget = 44.dp, state = "Opens the choices: one more, one fewer, 4 to 64") { fg ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel("$n steps", fg, style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal)); Chevron(fg) }
         }
     }
 }
@@ -271,16 +303,49 @@ private fun LaneKey(ui: EditUi) =
 @Composable
 private fun Ruler(ed: EditorState, track: Color, core: LupeCore, stepPicked: Boolean, keys: @Composable RowScope.() -> Unit = {}) {
     val locking = ed.lock != LockMode.Off
-    LupeCrossfade(locking, Modifier.fillMaxWidth().height(32.dp)) { l ->
+    LupeCrossfade(locking, Modifier.fillMaxWidth().height(44.dp)) { l ->
         if (l) LockBanner(ed, track) else Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = "Editing track ${ed.track} ${ed.trackName}, entry ${ed.entry}, pattern ${ed.pattern}${if (ed.scale.isNotEmpty()) ", ${ed.scale}" else ""}"; heading() },
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(10.dp).background(track, RoundedCornerShape(5.dp)))
-                BasicText("${ed.track} ${ed.trackName}", style = LupeType.key, maxLines = 1)
-                BasicText("· ${ed.entry} · pattern ${"%02d".format(ed.pattern)}" + if (ed.scale.isNotEmpty()) " · ${ed.scale}" else "", style = LupeType.body.copy(fontSize = 14.sp), maxLines = 1)
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                com.scottgerstl.lupe.ui.mix.TrackBadge(ed.track, track, true, 30.dp, 18)
+                Column {
+                    BasicText("${ed.trackName.substringAfter(" · ")} · ${ed.entry} ${"%02d".format(ed.pattern)}", style = LupeType.key.copy(fontSize = 16.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1,
+                        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 16.sp, stepSize = 0.5.sp))
+                    BasicText(ed.scale.ifEmpty { if (ed.kind == EditorKind.Drum) "Drum" else "" } + " · ${ed.patternSteps} steps", style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp, color = Tok.text2Raised), maxLines = 1)
+                }
             }
             keys()
-            StepMenuKey(ed, core, stepPicked)
+        }
+    }
+}
+
+/**
+ * A toggle in the pattern bar (Edit redesign): 40 tall, hugging its word; off it's outlined (1.5 dp `primaryEdge`) with a grey dot, on it's the
+ * white key with a dark dot. Shape carries the state too: the fill grows from the middle on the spring (Reduce Motion: it fades in).
+ */
+@Composable
+private fun ToggleKey(label: String, on: Boolean, description: String, state: String, onClick: () -> Unit) {
+    val reduce = LocalReduceMotion.current
+    val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE).value
+    val grow by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Box(
+        Modifier.defaultMinSize(minHeight = 44.dp)
+            .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = description; stateDescription = state }
+            .clickable(source, null, role = Role.Switch, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier.height(40.dp).drawBehind {
+                val r = CornerRadius(size.height / 2)
+                if (lit < 1f) drawRoundRect(Tok.primaryEdge.copy(alpha = 1f - lit), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(size.height / 2 - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                if (lit > 0f) { val g = if (reduce) 1f else (0.6f + 0.4f * grow).coerceAtMost(1.04f); val w = size.width * g; val h = size.height * g
+                    drawRoundRect(Tok.text.copy(alpha = lit), Offset((size.width - w) / 2, (size.height - h) / 2), Size(w, h), CornerRadius(h / 2)) }
+            }.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Canvas(Modifier.size(8.dp)) { drawCircle(lerp(Tok.text2, Tok.onColour, lit)) }
+            BasicText(label, style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = lerp(Tok.text, Tok.onColour, lit)), maxLines = 1)
         }
     }
 }
@@ -324,11 +389,9 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore, enabled: Boolean) {
         "$verb here shortens step ${from + 1} (${owner.pitchText.ifEmpty { owner.note }}) to $left step${if (left == 1) "" else "s"}."
     }
     Box {
-        Key({ open = true; mode = StepMenuMode.Root }, "Step menu", width = 64.dp, height = 28.dp, minTarget = 32.dp, enabled = enabled, state = if (enabled) null else "Pick a step first") { fg ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                KeyLabel("Step", fg)
-                Canvas(Modifier.size(14.dp, 4.dp)) { for (i in 0..2) drawCircle(fg, 1.5.dp.toPx(), Offset(2.dp.toPx() + i * 5.dp.toPx(), 2.dp.toPx())) }
-            }
+        // ⋯ in the step panel's header (Edit redesign): Copy, Paste, Clear step, with their confirms as before
+        Key({ open = true; mode = StepMenuMode.Root }, "Step menu: copy, paste, clear", width = 40.dp, height = 40.dp, minTarget = 44.dp, enabled = enabled, state = if (enabled) null else "Pick a step first") { fg ->
+            Canvas(Modifier.size(18.dp, 4.dp)) { for (i in 0..2) drawCircle(fg, 2.dp.toPx(), Offset(2.dp.toPx() + i * 7.dp.toPx(), 2.dp.toPx())) }
         }
         LupeMenu(open, { open = false }, alignEnd = true, width = 232.dp) {
             LupeCrossfade(mode) { m ->
@@ -425,6 +488,9 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
     val pickedLane = hit?.first ?: lanes.first()
     // the smooth playhead and the hits' bounce, by the FM-1's clock (Scott, 2026-11-17)
     val pc = com.scottgerstl.lupe.ui.edit.rememberPlayheadClock(core)
+    // a hit being dragged along its lane (Edit redesign): lane, from step, to step; [hitLift] on the spatial spring
+    var hitDrag by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    val hitLift = remember { androidx.compose.animation.core.Animatable(0f) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // rows touch (no gap): the pitch is the touch target; what's drawn sits inside it
         val gap = 0.dp
@@ -523,6 +589,24 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                 Box(
                                     Modifier.offset { IntOffset((i * stepPx - sx()).roundToInt(), 0) }.width(with(density) { stepPx.toDp() }).fillMaxHeight()
                                         .drawBehind {
+                                            val hd = hitDrag
+                                            // carried away from here: a dashed ghost; carried to here: the hit, lifted (1.08, a shadow)
+                                            if (hd != null && hd.first == k && hd.second == i && hd.third != i) {
+                                                val gw = minOf(41.dp.toPx(), size.width - 8.dp.toPx()); val gh = minOf(23.dp.toPx(), size.height - 9.dp.toPx())
+                                                drawRoundRect(Tok.text2Raised.copy(alpha = 0.7f), Offset((size.width - gw) / 2, (size.height - gh) / 2), Size(gw, gh), CornerRadius(6.dp.toPx()),
+                                                    style = Stroke(1.5.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
+                                                return@drawBehind
+                                            }
+                                            if (hd != null && hd.first == k && hd.third == i) {
+                                                val lk = 1f + 0.08f * hitLift.value.coerceIn(0f, 1.2f)
+                                                val gw = minOf(41.dp.toPx(), size.width - 8.dp.toPx()) * lk; val gh = minOf(23.dp.toPx(), size.height - 9.dp.toPx()) * lk
+                                                val l = (size.width - gw) / 2; val tp = (size.height - gh) / 2
+                                                drawRect(Tok.text.copy(alpha = 0.06f), Offset.Zero, size)
+                                                drawRoundRect(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), Offset(l, tp + 3.dp.toPx()), Size(gw, gh), CornerRadius(6.dp.toPx()))
+                                                drawRoundRect(track, Offset(l, tp), Size(gw, gh), CornerRadius(6.dp.toPx()))
+                                                drawRoundRect(Tok.text, Offset(l - 1.dp.toPx(), tp - 1.dp.toPx()), Size(gw + 2.dp.toPx(), gh + 2.dp.toPx()), CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
+                                                return@drawBehind
+                                            }
                                             if (onF.value <= 0.001f && sel.value <= 0f) return@drawBehind
                                             // the hit: a rounded square, inset; it grows in on the spring when placed
                                             // 41 × 23 centred in the row (smaller only where the step or the row is narrower)
@@ -546,11 +630,42 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                             onClick { core.send(ToggleHit(k, i)); true }
                                             customActions = listOf(CustomAccessibilityAction("Pick this hit without changing it") { onPick(lane to i); core.send(Intent.StepSelect(i)); true })
                                         }
-                                        .pointerInput(k, i) {
-                                            detectTapGestures(
-                                                onTap = { core.send(ToggleHit(k, i)) },
-                                                onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i)) },
-                                            )
+                                        .pointerInput(k, i, on) {
+                                            val hold = viewConfiguration.longPressTimeoutMillis
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown()
+                                                var dragging = false; var cancelled = false
+                                                // a hit moved past touch slop before the hold fires is carried along its lane (Edit redesign); a still hold picks it
+                                                val up = withTimeoutOrNull(hold) {
+                                                    while (true) {
+                                                        val ev = awaitPointerEvent()
+                                                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                                                        if (ch == null || ch.isConsumed) { cancelled = true; return@withTimeoutOrNull null }
+                                                        if (!ch.pressed) return@withTimeoutOrNull ch
+                                                        if (on && kotlin.math.abs(ch.position.x - down.position.x) > viewConfiguration.touchSlop) { ch.consume(); dragging = true; return@withTimeoutOrNull null }
+                                                    }
+                                                    @Suppress("UNREACHABLE_CODE") null
+                                                }
+                                                when {
+                                                    dragging -> {
+                                                        hitDrag = Triple(k, i, i)
+                                                        scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { hitLift.animateTo(1f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) } }
+                                                        var to = i
+                                                        drag(down.id) { ch ->
+                                                            ch.consume()
+                                                            val j = (i + kotlin.math.round((ch.position.x - down.position.x) / stepPx).toInt()).coerceIn(0, totalNow - 1)
+                                                            if (j != to) { to = j; hitDrag = Triple(k, i, j); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                                                        }
+                                                        val target = edStepsHit(ed, to, k)
+                                                        if (to != i && !target) { core.send(ToggleHit(k, i)); core.send(ToggleHit(k, to)); onPick(lane to to); core.send(Intent.StepSelect(to)) }
+                                                        else if (to != i) haptic.performHapticFeedback(HapticFeedbackType.Reject)
+                                                        scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { hitLift.animateTo(0f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) }; hitDrag = null }
+                                                    }
+                                                    cancelled -> Unit
+                                                    up != null -> core.send(ToggleHit(k, i))
+                                                    else -> { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i)); waitForUpOrCancellation() }
+                                                }
+                                            }
                                         },
                                 )
                             }
@@ -667,77 +782,199 @@ private fun ValueBox(
 private fun StepControls(ed: EditorState, track: Color, core: LupeCore, tab: PanelTab, setTab: (PanelTab) -> Unit, pick: StepPick, narrow: Boolean = false) {
     val s = ed.steps.getOrNull(ed.selected) ?: Step()
     val n = ed.selected + 1
+    val total = maxOf(ed.patternSteps, 1)
     var confirm by remember { mutableStateOf(false) }
     var armedAt by remember { mutableStateOf(0L) }
     val lockedCount = s.values.count { it.locked }
-    // leaving the SOUND tab, or the step, closes a pending confirm
-    if (confirm && (tab != PanelTab.Sound || lockedCount == 0)) confirm = false
+    if (confirm && lockedCount == 0) confirm = false
+    val notes = stepNotes(s)
+    val pitch = if (s.on) s.pitchText.substringBefore(' ').ifEmpty { s.note } else "—"
+    val link by core.link.collectAsStateWithLifecycle()
+    val linked = link.phase == com.scottgerstl.lupe.core.LinkPhase.Ready
+    fun go(to: Int) { val t = Math.floorMod(to, total); pick.step = t; core.send(Intent.StepSelect(t)) }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
-            // "Step 6 ✕": the way back to the sound knobs (also: tap the step again)
-            Key({ if (ed.lock == LockMode.Latched) core.send(Intent.LockToggle); pick.step = null }, "Step $n: close and show the sound knobs", width = 72.dp, height = 28.dp, minTarget = 32.dp) { fg ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel("Step $n", fg, style = LupeType.key.copy(fontSize = 13.sp)); Cross(fg) }
+        // the header (Edit redesign, Scott 2026-11-17): STEP N, what it holds, a connected ‹ › pager, and ⋯ (Copy, Paste, Clear step)
+        Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) { heading() }) {
+                BasicText("STEP $n", style = LupeType.title.copy(fontSize = 19.sp, lineHeight = 21.sp))
+                BasicText(if (notes.isEmpty()) "empty" else "$pitch · ${notes.size} note${if (notes.size == 1) "" else "s"}", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
             }
-            Spacer(Modifier.width(6.dp))
-            Key({ val to = Math.floorMod(ed.selected - 1, 16); pick.step = to; core.send(Intent.StepSelect(to)) }, "Previous step", width = 28.dp, height = 28.dp, minTarget = 32.dp) { fg -> Chevron90(fg, true) }
+            PagerHalf("‹", "Previous step", first = true) { go(ed.selected - 1) }
             Spacer(Modifier.width(2.dp))
-            Key({ val to = Math.floorMod(ed.selected + 1, 16); pick.step = to; core.send(Intent.StepSelect(to)) }, "Next step", width = 28.dp, height = 28.dp, minTarget = 32.dp) { fg -> Chevron90(fg, false) }
-            if (!narrow) { Spacer(Modifier.width(6.dp)); PanelTabs(tab, setTab) }
-            Spacer(Modifier.weight(1f))
-            if (tab == PanelTab.Sound) {
-                Key({ if (lockedCount > 0) { confirm = true; armedAt = System.currentTimeMillis() } }, "Clear all locks on step $n", width = 72.dp, height = 28.dp, minTarget = 32.dp,
-                    enabled = lockedCount > 0 && !confirm) { fg -> KeyLabel("Clear all", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
-            } else {
-                val latched = ed.lock == LockMode.Latched
-                Key({ core.send(Intent.LockToggle) }, "Lock", width = 72.dp, height = 28.dp, minTarget = 32.dp, on = latched, role = Role.Switch,
-                    state = if (latched) "On: knob turns lock to step $n" else "Off") { fg ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Canvas(Modifier.size(10.dp)) { if (latched) diamond(fg, size.width / 2, size.height / 2, 4.dp.toPx()) else
-                            drawPath(Path().apply { moveTo(size.width / 2, 0f); lineTo(size.width, size.height / 2); lineTo(size.width / 2, size.height); lineTo(0f, size.height / 2); close() }, fg, style = Stroke(1.5.dp.toPx())) }
-                        KeyLabel("Lock", fg, style = LupeType.key.copy(fontSize = 13.sp))
+            PagerHalf("›", "Next step", first = false) { go(ed.selected + 1) }
+            Spacer(Modifier.width(8.dp))
+            StepMenuKey(ed, core, true)
+        }
+        Spacer(Modifier.height(8.dp))
+        // Notes · Feel · Sound: a connected group the panel's width
+        SegmentGroup(PanelTab.entries.map { it.label.lowercase().replaceFirstChar { c -> c.uppercase() } }, tab.ordinal, { setTab(PanelTab.entries[it]) }, Modifier.fillMaxWidth(),
+            height = 40.dp, padH = 8.dp, role = Role.Tab, fontSize = 15, fill = true)
+        Spacer(Modifier.height(8.dp))
+        LupeCrossfade(Pair(tab, confirm), Modifier.fillMaxSize()) { (t, c) ->
+            val send = { f: StepField, d: Int -> core.send(Intent.StepAdjust(f, d)) }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                when (t) {
+                    PanelTab.Notes -> {
+                        // the FM-1's knobs 1–4 edit this step on SEQ › NOTES (Skiff 2.5.1 step_edit: PITCH START LENGTH VELOCITY); the ‹ › stand for its PRESETS cursor
+                        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Canvas(Modifier.size(12.dp)) { drawCircle(Tok.text2Raised, size.width / 2 - 1.dp.toPx(), style = Stroke(1.5.dp.toPx())) }
+                            BasicText(if (linked) "FM-1 knobs 1–4 → step $n" else "FM-1 knobs 1–4 drive the step once the FM-1 is linked", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
+                        }
+                        val chord = notes.size > 1
+                        val cap = s.maxLength.coerceIn(1, 16)
+                        val nextNote = ed.selected + 1 + cap
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.scottgerstl.lupe.ui.page.ParamTile(if (chord) "ROOT" else "PITCH", 1, pitch, "Pitch", track, "pitch" to ed.selected, Modifier.weight(1f), dpPerStep = 16f, locked = s.isLocked("PITCH")) { send(StepField.Pitch, it) }
+                            // START moves the note along the pattern, a step a turn (the FM-1's knob 2); the panel follows it
+                            com.scottgerstl.lupe.ui.page.ParamTile("START", 2, "$n", "Start step", track, "move" to ed.pattern, Modifier.weight(1f), num = n, min = 1, max = total, dpPerStep = 22f, tick = true) { d ->
+                                pick.step = Math.floorMod(ed.selected + d, total); send(StepField.Move, d) }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.scottgerstl.lupe.ui.page.ParamTile("LENGTH", 3, "${s.length}", "Length", track, "length" to ed.selected, Modifier.weight(1f), unit = if (s.length == 1) "step" else "steps",
+                                num = s.length, min = 1, max = cap, dpPerStep = 16f, locked = s.isLocked("LENGTH"),
+                                limitWord = if (s.length >= cap) (if (nextNote > 16) "pattern ends" else "note at step $nextNote") else null) { send(StepField.Length, it) }
+                            com.scottgerstl.lupe.ui.page.ParamTile("VELOCITY", 4, "${s.velocity}", "Velocity", track, "velocity" to ed.selected, Modifier.weight(1f), num = s.velocity, min = 1, max = 127, dpPerStep = 3f, locked = s.isLocked("VELOCITY")) { send(StepField.Velocity, it) }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        if (c) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            val names = s.values.filter { it.locked }.joinToString(", ") { it.param }
+                            ConfirmBox("Clear ${if (lockedCount == 1) "the lock" else "all $lockedCount locks"} on step $n ($names)", "Confirm: clear $lockedCount lock${if (lockedCount == 1) "" else "s"} on step $n: $names", armedAt, Modifier.weight(1f)) {
+                                core.send(Intent.LocksClearAll(ed.selected)); confirm = false }
+                            Key({ confirm = false }, "Cancel", width = 80.dp, height = 40.dp, minTarget = 44.dp) { fg -> KeyLabel("Cancel", fg) }
+                        } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val latched = ed.lock == LockMode.Latched
+                            Key({ core.send(Intent.LockToggle) }, "Lock", height = 40.dp, minTarget = 44.dp, on = latched, role = Role.Switch, fill = true, modifier = Modifier.weight(1f),
+                                state = if (latched) "On: knob turns lock to step $n" else "Off") { fg ->
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Canvas(Modifier.size(10.dp)) { if (latched) diamond(fg, size.width / 2, size.height / 2, 4.dp.toPx()) else
+                                        drawPath(Path().apply { moveTo(size.width / 2, 0f); lineTo(size.width, size.height / 2); lineTo(size.width / 2, size.height); lineTo(0f, size.height / 2); close() }, fg, style = Stroke(1.5.dp.toPx())) }
+                                    KeyLabel("Lock", fg)
+                                }
+                            }
+                            Key({ if (lockedCount > 0) { confirm = true; armedAt = System.currentTimeMillis() } }, "Clear all locks on step $n", height = 40.dp, minTarget = 44.dp, fill = true, modifier = Modifier.weight(1f),
+                                enabled = lockedCount > 0) { fg -> KeyLabel("Clear all", fg) }
+                        }
+                    }
+                    PanelTab.Feel -> {
+                        // touch controls (the FM-1's FEEL knobs are CHANCE RATCHET NUDGE TYPE: Skiff 2.5.1 feel_turn)
+                        FeelSlider("CHANCE", "${s.chance}%", s.chance, 0, 100, track, false, "chance" to ed.selected) { send(StepField.Chance, it) }
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            BasicText("RATCHET", Modifier.width(88.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
+                            // the core writes 1–4 (it keeps 0–3); the firmware's FEEL knob turns to 5 (feel_turn): noted in the build notes
+                            SegmentGroup(listOf("1", "2", "3", "4"), (s.ratchet - 1).coerceIn(0, 3), { send(StepField.Ratchet, it + 1 - s.ratchet) }, Modifier.weight(1f),
+                                height = 40.dp, padH = 4.dp, role = Role.RadioButton, descriptions = (1..4).map { "Ratchet $it" }, fontSize = 15, fill = true)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        CondPicker(s.cond) { idx -> val now = CONDITIONS.indexOf(s.cond).coerceAtLeast(0); send(StepField.Cond, idx - now) }
+                        Spacer(Modifier.height(8.dp))
+                        // NUDGE: −32…31 (the core's and the firmware's range; Android showed ±12 before)
+                        FeelSlider("NUDGE", if (s.nudge > 0) "+${s.nudge}" else "${s.nudge}", s.nudge, -32, 31, track, true, "nudge" to ed.selected) { send(StepField.Nudge, it) }
+                    }
+                    PanelTab.Sound -> {
+                        if (s.values.isEmpty()) BasicText("No locks on this step. Hold it and turn a knob on the FM-1, or latch Lock.", Modifier.padding(top = 6.dp), style = LupeType.body.copy(fontSize = 14.sp))
+                        s.values.forEach { v -> LockRow(v.param, v.value, v.locked, track) { core.send(Intent.LockClear(ed.selected, v.param)) } }
                     }
                 }
             }
         }
-        // docked (narrow): NOTES · FEEL · SOUND on a row of their own
-        if (narrow) { Spacer(Modifier.height(4.dp)); Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) { PanelTabs(tab, setTab) } }
-        Spacer(Modifier.height(if (narrow) 8.dp else 4.dp))
-        LupeCrossfade(Pair(tab, confirm), Modifier.fillMaxSize()) { (t, c) ->
-            val send = { f: StepField, d: Int -> core.send(Intent.StepAdjust(f, d)) }
-            val chord = stepNotes(s).size > 1
-            when {
-                t == PanelTab.Notes -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    // a chord step's first dial is its ROOT; the keys beside it add and take notes
-                    com.scottgerstl.lupe.ui.page.DeltaDial(if (chord) "ROOT" else "PITCH", if (s.on) s.pitchText.substringBefore(' ').ifEmpty { s.note } else "—", "Pitch", track, key = "pitch" to ed.selected,
-                        dpPerStep = 16f, tick = false, locked = s.isLocked("PITCH")) { send(StepField.Pitch, it) }
-                    // MOVE follows the step, so its undo spans the selection changing
-                    com.scottgerstl.lupe.ui.page.DeltaDial("MOVE", "$n", "Move", track, key = "move" to ed.pattern, num = n, min = 1, max = 16, dpPerStep = 22f, tick = true, locked = false) { d ->
-                        pick.step = Math.floorMod(ed.selected + d, 16); send(StepField.Move, d) }
-                    // LENGTH grows only up to the next note (the core's maxLength): at the limit the slide stops
-                    val cap = s.maxLength.coerceIn(1, 16)
-                    val nextNote = ed.selected + 1 + cap
-                    com.scottgerstl.lupe.ui.page.DeltaDial("LENGTH", "${s.length}", "Length", track, key = "length" to ed.selected, num = s.length, min = 1, max = cap, dpPerStep = 16f, tick = false, locked = s.isLocked("LENGTH"),
-                        limitWord = if (s.length >= cap) (if (nextNote > 16) "pattern ends" else "note at step $nextNote") else null) { send(StepField.Length, it) }
-                    com.scottgerstl.lupe.ui.page.DeltaDial("VELOCITY", "${s.velocity}", "Velocity", track, key = "velocity" to ed.selected, num = s.velocity, min = 1, max = 127, unit = 4, dpPerStep = 3f, tick = false, locked = s.isLocked("VELOCITY")) { send(StepField.Velocity, it) }
-                }
-                t == PanelTab.Feel -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    com.scottgerstl.lupe.ui.page.DeltaDial("CHANCE", "${s.chance}%", "Chance", track, key = "chance" to ed.selected, num = s.chance, min = 0, max = 100, unit = 5, dpPerStep = 4f, tick = false, locked = s.isLocked("CHANCE")) { send(StepField.Chance, it) }
-                    com.scottgerstl.lupe.ui.page.DeltaDial("RATCHET", "${s.ratchet}", "Ratchet", track, key = "ratchet" to ed.selected, num = s.ratchet, min = 1, max = 4, dpPerStep = 28f, tick = true, locked = s.isLocked("RATCHET")) { send(StepField.Ratchet, it) }
-                    // COND is a list: each step through it ticks
-                    com.scottgerstl.lupe.ui.page.DeltaDial("COND", s.cond, "Condition", track, key = "cond" to ed.selected, dpPerStep = 26f, tick = true, locked = s.isLocked("COND")) { send(StepField.Cond, it) }
-                    com.scottgerstl.lupe.ui.page.DeltaDial("NUDGE", "${s.nudge}", "Nudge", track, key = "nudge" to ed.selected, num = s.nudge, min = -12, max = 12, bipolar = true, dpPerStep = 12f, tick = false, locked = s.isLocked("NUDGE")) { send(StepField.Nudge, it) }
-                }
-                c -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val names = s.values.filter { it.locked }.joinToString(", ") { it.param }
-                    ConfirmBox("Clear ${if (lockedCount == 1) "the lock" else "both locks".takeIf { lockedCount == 2 } ?: "all $lockedCount locks"} on step $n ($names)",
-                        "Confirm: clear $lockedCount lock${if (lockedCount == 1) "" else "s"} on step $n: $names", armedAt, Modifier.weight(1f)) { core.send(Intent.LocksClearAll(ed.selected)); confirm = false }
-                    Key({ confirm = false }, "Cancel", width = 72.dp, height = 36.dp, minTarget = 40.dp) { fg -> KeyLabel("Cancel", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
-                }
-                else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    if (s.values.isEmpty()) BasicText("No locks on this step. Hold it and turn a knob on the FM-1, or latch Lock.", Modifier.padding(top = 6.dp), style = LupeType.body.copy(fontSize = 14.sp))
-                    s.values.forEach { v -> LockRow(v.param, v.value, v.locked, track) { core.send(Intent.LockClear(ed.selected, v.param)) } }
+    }
+}
+
+/** The trig conditions by COND number (the core's table: PadsEditor.swift, the iPad's StepInspector). */
+internal val CONDITIONS = listOf("ALWAYS", "FILL", "!FILL", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4")
+
+/** A condition's words for the picker ("1:4" → "Every 1st of 4"). */
+internal fun condWords(c: String): String {
+    val m = Regex("^(\\d):(\\d)$").find(c) ?: return when (c) { "ALWAYS" -> "Always"; "FILL" -> "Fill"; "!FILL" -> "Not fill"; else -> c }
+    val (a, b) = m.destructured
+    val nth = when (a) { "1" -> "1st"; "2" -> "2nd"; "3" -> "3rd"; else -> "${a}th" }
+    return "Every $nth of $b"
+}
+
+/** Half of the step pager (spec 3.4): 44 × 40 on `control`, outer end round, inner corner 8. */
+@Composable
+private fun PagerHalf(label: String, description: String, first: Boolean, onClick: () -> Unit) {
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100).value
+    Box(
+        Modifier.size(44.dp, 40.dp)
+            .drawBehind {
+                val pill = size.height / 2; val inner = 8.dp.toPx()
+                with(SegmentDraw) { segment(lerp(Tok.control, Tok.lifted, press), if (first) pill else inner, if (first) inner else pill) }
+            }
+            .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = description }
+            .clickable(source, null, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { BasicText(label, style = LupeType.key.copy(fontSize = 20.sp)) }
+}
+
+/**
+ * A Feel slider (Edit redesign): its label and value over a 44-tall touch lane with an 8-tall track, the fill in the track colour (from the centre
+ * when [bipolar]) and a 4 × 20 handle. A sideways slide across the whole lane spans the range; it takes the drag only once it's clearly sideways.
+ * Double tap puts back what it changed. TalkBack: range, Increase, Decrease.
+ */
+@Composable
+private fun FeelSlider(label: String, text: String, value: Int, min: Int, max: Int, tint: Color, bipolar: Boolean, key: Any, onSteps: (Int) -> Unit) {
+    val send by rememberUpdatedState(onSteps)
+    var net by remember(key) { mutableStateOf(0) }
+    var last by remember { mutableStateOf(0) }
+    val latest by rememberUpdatedState(value)
+    fun step(d: Int) { if (d == 0) return; net += d; send(d) }
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth()) {
+            BasicText(label, Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
+            BasicText(text, style = LupeType.number.copy(fontSize = 18.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().height(44.dp)) {
+            val widthDp = maxWidth.value
+            Box(
+                Modifier.fillMaxSize()
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = label.lowercase().replaceFirstChar { it.uppercase() }; stateDescription = text; role = Role.Button
+                        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), min.toFloat()..max.toFloat(), max - min - 1)
+                        setProgress { v -> step(kotlin.math.round(v).toInt() - latest); true }
+                        customActions = listOf(CustomAccessibilityAction("Increase") { step(1); true }, CustomAccessibilityAction("Decrease") { step(-1); true })
+                    }
+                    .pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) send(b) }) }
+                    .slideToTurn(enabled = true, stepDp = (widthDp / (max - min).coerceAtLeast(1)).coerceAtLeast(1.5f), face = null,
+                        onStart = { last = 0 }, onSlide = { total -> step(total - last); last = total },
+                        bounds = { (min - latest)..(max - latest) }, forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways, strictAxis = true),
+            ) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val th = 8.dp.toPx(); val y = (size.height - th) / 2; val hw = 4.dp.toPx()
+                    val f = if (max > min) (value - min).toFloat() / (max - min) else 0f
+                    val x = hw / 2 + (size.width - hw) * f
+                    drawRoundRect(Tok.control, Offset(0f, y), Size(size.width, th), CornerRadius(th / 2))
+                    val from = if (bipolar) hw / 2 + (size.width - hw) * ((0 - min).toFloat() / (max - min)) else 0f
+                    drawRoundRect(tint, Offset(minOf(from, x), y), Size(kotlin.math.abs(x - from).coerceAtLeast(if (bipolar) 2.dp.toPx() else 0f), th), CornerRadius(th / 2))
+                    if (bipolar) drawRect(Tok.text2, Offset(from - 0.75.dp.toPx(), y - 3.dp.toPx()), Size(1.5.dp.toPx(), th + 6.dp.toPx()))
+                    drawRoundRect(Tok.text, Offset(x - hw / 2, (size.height - 20.dp.toPx()) / 2), Size(hw, 20.dp.toPx()), CornerRadius(2.dp.toPx()))
                 }
             }
+        }
+    }
+}
+
+/** COND as a picker row (Edit redesign): `control` at radius 12, 52 tall, "COND" and the condition in words with ⌄; it opens the list. */
+@Composable
+private fun CondPicker(cond: String, onPick: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(12.dp)).background(Tok.control)
+                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Condition, ${condWords(cond)}. Opens the list" }
+                .clickable { open = true }.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicText("COND", Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
+            BasicText(condWords(cond), style = LupeType.key.copy(fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal))
+            Spacer(Modifier.width(8.dp)); Chevron(Tok.text2Raised)
+        }
+        LupeMenu(open, { open = false }, alignEnd = true, width = 220.dp) {
+            CONDITIONS.forEachIndexed { i, c -> MenuRow(condWords(c), { onPick(i); open = false }, checked = c == cond) }
         }
     }
 }
@@ -771,16 +1008,22 @@ private fun PanelTabs(tab: PanelTab, setTab: (PanelTab) -> Unit) {
 
 @Composable
 private fun LockRow(param: String, value: Int, locked: Boolean, track: Color, onClear: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (locked) Diamond(track, 6.dp) else BasicText("—", Modifier.width(12.dp), style = LupeType.body.copy(textAlign = TextAlign.Center))
         BasicText(param, style = LupeType.key)
         BasicText("$value", style = LupeType.number.copy(fontSize = 18.sp, lineHeight = 18.sp))
         BasicText(if (locked) "locked on this step" else "recorded", style = LupeType.small, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (locked) Key(onClear, "Clear the $param lock", width = 44.dp, height = 28.dp, minTarget = 30.dp) { fg ->
+        if (locked) Key(onClear, "Clear the $param lock", width = 44.dp, height = 40.dp, minTarget = 44.dp) { fg ->
             Canvas(Modifier.size(10.dp)) { val st = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round); drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), st.width, StrokeCap.Round); drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), st.width, StrokeCap.Round) }
         }
     }
 }
 
 private fun Step.isLocked(param: String) = values.any { it.locked && it.param == param }
+
+/** Whether step [i] already has a hit on lane [k] (a carried hit lands only on an empty cell; an accent isn't carried). */
+private fun edStepsHit(ed: EditorState, i: Int, k: Int): Boolean {
+    val s = ed.steps.getOrNull(i) ?: return false
+    return s.on && (if (s.hits.isNotEmpty()) s.hits.any { it.lane == k } else (ed.kitLanes.getOrNull(k) ?: "") in s.note.split(" "))
+}

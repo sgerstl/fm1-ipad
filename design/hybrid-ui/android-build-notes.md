@@ -37,3 +37,14 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 
 - **Timeline built as mocked** (spec 4.4). The selected track keeps decision 31's band under its row as well as the new edges (the thread's place is still open). The chip says "×N" when stopped and "n/N" while playing; the mock draws "2/4" on every block.
 - Recorded, not built: Mix effects direction C (effect cards, the picked one grows; vault `assets/mix-effects-2026-11-17/C-effect-cards-picked-grows.png`), after the Edit redesign; the step panel driven by the FM-1's knobs (SEQ › NOTES), being mocked.
+
+## Round 9: the Edit redesign (2026-11-17)
+
+- **The knob answer came from Skiff v2.5.1's source in the repo, not a live probe** (the FM-1 wasn't plugged into the Mac): NOTES knobs PITCH START LENGTH VELOCITY (a kit: LANE HIT ACC VELOCITY); FEEL knobs CHANCE RATCHET NUDGE TYPE; the PRESETS encoder moves the cursor. The iPad's SeqCursor comment ("KNOB 1 moves the cursor") describes pre-2.0. Device check 72 confirms it on the real FM-1.
+- **RATCHET is 1–4** because the core keeps 0–3, but the firmware's FEEL knob turns it 1–5 (`feel_turn`). That's a core follow-up, to be checked against a probe first.
+- **CHANCE and COND:** on the FM-1, CHANCE's knob runs past 100 into the trig conditions. Lupe keeps them apart (the core's separate COND), as before.
+- **The panel's header follows a dragged note when it drops,** not during the drag (the core's selected step drives it, and following live would send the FM-1 a cursor change for every row crossed).
+- **A carried drum hit loses its accent.** It's moved as a hit off and a hit on, since the core has no move for one hit; it lands only on an empty cell.
+- **Kits aren't knob-linked yet.** They need the LANE knob mapped to the picked lane.
+- **The core changed (Swift):** `Fm1ScreenArea` carries `cursor`/`cursor2` on SEQ › NOTES and FEEL, and `screenGoto` takes a `cursor`.
+- **Build quirk, again:** `:app:buildSwift` failed once more with "No Android NDK is installed at any of the standard locations" when the Swift core had changed, then built clean on the next run. It looks like a transient lookup in the Swift Android SDK, since the NDK and its sysroot links are intact.

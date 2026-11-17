@@ -285,7 +285,9 @@ class FakeLupeCore(
             is ScreenGoto -> {
                 val pages = ScreenPages.of(intent.screen)
                 val (n, title) = pages.firstOrNull { it.first == intent.page } ?: pages.firstOrNull() ?: return
-                _fm1Screen.value = Fm1ScreenState(key = intent.screen, page = n, title = title)
+                // as the real core: on SEQ › NOTES and FEEL the screen carries the step cursor (screenGoto's own, else where it was)
+                val cur = if (intent.screen == "SEQ" && (n == 41 || n == 42)) intent.cursor ?: _fm1Screen.value.cursor ?: _editor.value.selected else null
+                _fm1Screen.value = Fm1ScreenState(key = intent.screen, page = n, title = title, cursor = cur)
                 // as the real core: the mix area's section follows the FM-1's GLO page by itself
                 if (intent.screen == "GLO") listOf("mixer", "delay", "reverb", "chorus", "global").getOrNull(n - 30)?.let { sec -> _mix.update { FakeP5.mix(it, MixSectionPick(sec)) } }
                 if (intent.screen == "SEQ") _shell.update { it.copy(bottom = BottomPage()) }

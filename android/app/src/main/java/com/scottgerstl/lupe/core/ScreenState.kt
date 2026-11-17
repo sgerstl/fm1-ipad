@@ -19,6 +19,9 @@ data class Fm1ScreenState(
     val menu: Boolean = false,
     /** A layer held on the FM-1: 0 none, 3 SCL's keys (shown as SEL › SCALE), 7 ARP's PERFORM. */
     val layer: Int = 0,
+    /** SEQ › NOTES and FEEL only: the FM-1's step cursor (0-based) and a selection's last step; the PRESETS encoder moves it. */
+    val cursor: Int? = null,
+    val cursor2: Int? = null,
 )
 
 object ScreenDefaults {

@@ -141,6 +141,21 @@ Install rounds 7 and 8 together.
 | 69 | While playing, look at the foot of the screen; tap Stop there. Play again and tap ✕; play again and switch to Pads. | "Stop to change the song" sits in the app strip with Stop and ✕ (not on the ruler). Stop stops the song and the strip goes. ✕ dismisses it. Leaving the Timeline takes it away. | – | ☐ pass ☐ fail: |
 | 70 | Stopped: tap −/+, pinch, pan, select a block and drag it along, drag its grip, long-press a block and an empty lane. | All as before: zoom, pan, reorder, passes, and the tile menus. | – | ☐ pass ☐ fail: |
 
+## Round 9: the Edit redesign (Scott, 2026-11-17: "Build it"; `edit-redesign-2026-11-17/`)
+
+Install rounds 7, 8 and 9 together. **Check 72 is the one only the real FM-1 can answer.**
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 71 | Edit a melodic pattern. Look at the bar over the grid; open the step panel (Step N ⌄). Compare with `1-notes-knobs-drive-step.png`. | Bar: badge and "Acid · A 01" over the scale; Chord and Lane outlined (white when on), "16 steps ⌄", Follow on 8-step pages, "Step N ⌄". Panel: "STEP N" over "F#3 · 1 note", a joined ‹ ›, ⋯; Notes · Feel · Sound joined; four tiles numbered 1–4 (PITCH, START, LENGTH, VELOCITY); "FM-1 knobs 1–4 → step N"; Lock and Clear all. | – | ☐ pass ☐ fail: |
+| 72 | **The knob link, real FM-1.** With the panel on Notes, pick step 5 on the phone. Turn the FM-1's knobs 1–4. Then turn the FM-1's PRESETS encoder. Then press SEQ again for FEEL and turn its knobs. | Picking step 5 puts the FM-1 on SEQ › NOTES with its cursor on step 5. Knob 1 changes PITCH, 2 moves the note (START), 3 LENGTH, 4 VELOCITY, each showing in the matching tile. PRESETS moves the cursor, and the phone's picked step and panel follow it (the grid pages if it leaves the page). On FEEL the panel switches to Feel: 1 CHANCE, 2 RATCHET, 3 NUDGE, 4 TYPE. **If the knobs don't match those numbers, say which do what.** | – | ☐ pass ☐ fail: |
+| 73 | Slide a tile sideways; scroll the panel up and down starting on a tile; tap ‹ ›; open ⋯ and Copy, then Paste on another step. | Sideways changes the value; up and down scrolls the panel and doesn't change it. ‹ › step the picked step (and the FM-1's cursor). ⋯ has Copy, Paste and Clear step with their confirms. | – | ☐ pass ☐ fail: |
+| 74 | Feel tab: slide CHANCE, tap RATCHET 3, pick a COND, slide NUDGE right to the end. | CHANCE moves 0–100 %; RATCHET's 3 turns white; COND opens the list ("Every 2nd of 4"…), and the pick shows; NUDGE goes to +31 (and −32 the other way), centred at 0. | – | ☐ pass ☐ fail: |
+| 75 | Sound tab with a locked step: clear one lock. | Lock rows with 40-tall ✕ keys; clearing one removes it. | – | ☐ pass ☐ fail: |
+| 76 | **Drag a note:** press a note and move it at once (before the hold fires) up two rows and over one step; let go. Then drag one to the grid's right edge and hold. | It lifts (a touch bigger, a shadow), a dashed ghost stays behind, a faint cell shows where it'll land and a chip reads "G#3 · step 6". Let go: it settles into place (no jump), its length and velocity kept; the panel shows that step. At the edge the 8-step grid turns its page. | – | ☐ pass ☐ fail: |
+| 77 | Press a note and hold it still. | Lock mode, as before (no drag). | – | ☐ pass ☐ fail: |
+| 78 | Kit: drag a hit along its lane onto an empty step, then onto a step with a hit. | Onto empty: it moves (an accent isn't carried). Onto a hit: refused with a buzz, nothing changes. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

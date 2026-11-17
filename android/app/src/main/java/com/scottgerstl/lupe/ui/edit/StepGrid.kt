@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.edit
 
+import androidx.compose.foundation.gestures.drag
+
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
@@ -111,6 +113,9 @@ fun StepGrid(
     val paged = pageSteps == Roll.PAGE_DOCKED
     // the smooth playhead and the hits' bounce, by the FM-1's clock (Scott, 2026-11-17)
     val pc = rememberPlayheadClock(core)
+    // a note being dragged (Edit redesign, Scott 2026-11-17): where it came from and where it would land; [lift] 0…1 on the spatial spring
+    var noteDrag by remember { mutableStateOf<NoteDrag?>(null) }
+    val lift = remember { androidx.compose.animation.core.Animatable(0f) }
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val reduce = LocalReduceMotion.current
@@ -204,7 +209,52 @@ fun StepGrid(
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), g[0]) else Roll.clampScrollY(scrollY, g[0], g[1])
                                 val i = Roll.stepAt(down.position.x, Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4], pageNow)), g[2], totalNow); val pitch = Roll.pitchAt(down.position.y, base, g[0])
                                 var cancelled = false
-                                val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
+                                // on a note, movement past touch slop before the hold fires lifts it (a still hold stays lock: decision 9a)
+                                val onNote = pitch in stepNotes(edNow.steps.getOrNull(i) ?: Step())
+                                var dragging = false
+                                val up = withTimeoutOrNull(longPress) {
+                                    if (!onNote) return@withTimeoutOrNull waitForUpOrCancellation().also { if (it == null) cancelled = true }
+                                    while (true) {
+                                        val ev = awaitPointerEvent()
+                                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                                        if (ch == null || ch.isConsumed) { cancelled = true; return@withTimeoutOrNull null }
+                                        if (!ch.pressed) return@withTimeoutOrNull ch
+                                        if ((ch.position - down.position).getDistance() > viewConfiguration.touchSlop) { ch.consume(); dragging = true; return@withTimeoutOrNull null }
+                                    }
+                                    @Suppress("UNREACHABLE_CODE") null
+                                }
+                                if (dragging) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                                    var d = NoteDrag(i, pitch, i, pitch)
+                                    noteDrag = d
+                                    scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { lift.animateTo(1f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) } }
+                                    var pagedAt = 0L
+                                    var ok = true
+                                    try {
+                                        drag(down.id) { ch ->
+                                            ch.consume()
+                                            val gg = geo
+                                            val sc = Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, gg[3], gg[4], pageNow))
+                                            val bs = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), gg[0]) else Roll.clampScrollY(scrollY, gg[0], gg[1])
+                                            val j = Roll.stepAt(ch.position.x.coerceIn(0f, size.width - 1f), sc, gg[2], totalNow)
+                                            val q = Roll.pitchAt(ch.position.y.coerceIn(0f, size.height - 1f), bs, gg[0])
+                                            if (j != d.toStep || q != d.toPitch) { d = d.copy(toStep = j, toPitch = q); noteDrag = d; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                                            // at the grid's edge the 8-step grid turns its page (once a second while held there)
+                                            val edge = 24.dp.toPx(); val now = System.currentTimeMillis()
+                                            if (now - pagedAt > 900) {
+                                                val pagePx = pageNow * gg[2]
+                                                if (ch.position.x > size.width - edge) { pagedAt = now; scope.launch { glide(sc + pagePx) } }
+                                                else if (ch.position.x < edge && sc > 0f) { pagedAt = now; scope.launch { glide(sc - pagePx) } }
+                                            }
+                                        }
+                                    } catch (e: kotlinx.coroutines.CancellationException) { ok = false; throw e }
+                                    finally {
+                                        val fin = d
+                                        if (ok && (fin.toStep != fin.fromStep || fin.toPitch != fin.fromPitch)) moveNote(edNow, fin, core) { onPick(it); core.send(Intent.StepSelect(it)) }
+                                        scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { lift.animateTo(0f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) }; if (noteDrag == fin) noteDrag = null }
+                                    }
+                                    return@awaitEachGesture
+                                }
                                 if (cancelled) return@awaitEachGesture
                                 if (up != null) tapCell(i, pitch)
                                 else {
@@ -237,6 +287,14 @@ fun StepGrid(
                             val bz = if (stepNotes(s).isEmpty()) 1f else pc.bounce(i, ed.track)
                             for (n in stepNotes(s)) {
                                 if (n !in pitches) continue
+                                val nd = noteDrag
+                                if (nd != null && nd.fromStep == i && nd.fromPitch == n) {
+                                    // where it came from: a dashed ghost while it's carried
+                                    val gw = (s.length.coerceAtLeast(1) * stepPx - 4.dp.toPx()).coerceAtLeast(6.dp.toPx()); val gh = (rowPx - 4.dp.toPx()).coerceAtLeast(4.dp.toPx())
+                                    drawRoundRect(Tok.text2Raised.copy(alpha = 0.7f * lift.value.coerceIn(0f, 1f)), Offset(x0 + i * stepPx + 2.dp.toPx(), (127 - n) * rowPx - sy + 2.dp.toPx()), Size(gw, gh), CornerRadius(gh / 2),
+                                        style = Stroke(1.5.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
+                                    if (lift.value > 0.02f || nd.toStep != i || nd.toPitch != n) continue
+                                }
                                 val w0 = (s.length.coerceAtLeast(1) * stepPx - 4.dp.toPx()).coerceAtLeast(6.dp.toPx()); val h0 = (rowPx - 4.dp.toPx()).coerceAtLeast(4.dp.toPx())
                                 val cx = x0 + i * stepPx + 2.dp.toPx() + w0 / 2; val cy = (127 - n) * rowPx - sy + 2.dp.toPx() + h0 / 2
                                 val w = w0 * bz; val h = h0 * bz
@@ -251,6 +309,27 @@ fun StepGrid(
                             val ns = stepNotes(s); val x = x0 + i * stepPx + stepPx / 2
                             if (ns.any { it > pitches.last }) drawCircle(track, 2.5.dp.toPx(), Offset(x, 5.dp.toPx()))
                             if (ns.any { it < pitches.first }) drawCircle(track, 2.5.dp.toPx(), Offset(x, size.height - 5.dp.toPx()))
+                        }
+                        // a carried note: the faint drop cell, the note lifted (1.08, a shadow) where it would land, and a readout over it
+                        noteDrag?.let { nd ->
+                            val src = ed.steps.getOrNull(nd.fromStep) ?: Step()
+                            val k = lift.value.coerceIn(0f, 1.2f)
+                            val cx0 = x0 + nd.toStep * stepPx; val cy0 = (127 - nd.toPitch) * rowPx - sy
+                            drawRect(Tok.text.copy(alpha = 0.06f * k.coerceAtMost(1f)), Offset(cx0, cy0), Size(stepPx, rowPx))
+                            val w0 = (src.length.coerceAtLeast(1) * stepPx - 4.dp.toPx()).coerceAtLeast(6.dp.toPx()); val h0 = (rowPx - 4.dp.toPx()).coerceAtLeast(4.dp.toPx())
+                            val sc = 1f + 0.08f * k
+                            val w = w0 * sc; val h = h0 * sc
+                            val nx = cx0 + 2.dp.toPx() + w0 / 2 - w / 2; val ny = cy0 + 2.dp.toPx() + h0 / 2 - h / 2
+                            drawRoundRect(Color.Black.copy(alpha = 0.35f * k.coerceAtMost(1f)), Offset(nx, ny + 4.dp.toPx()), Size(w, h), CornerRadius(h / 2))
+                            drawRoundRect(track, Offset(nx, ny), Size(w, h), CornerRadius(h / 2))
+                            drawRoundRect(Tok.text, Offset(nx - 1.dp.toPx(), ny - 1.dp.toPx()), Size(w + 2.dp.toPx(), h + 2.dp.toPx()), CornerRadius(h / 2 + 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+                            if (k > 0.05f) {
+                                val label = tm.measure("${FakeData.noteName(nd.toPitch)} · step ${nd.toStep + 1}", com.scottgerstl.lupe.ui.theme.LupeType.key.copy(fontSize = 14.sp, color = Tok.text))
+                                val lw = label.size.width + 20.dp.toPx(); val lh = label.size.height + 10.dp.toPx()
+                                val lx = (nx + w / 2 - lw / 2).coerceIn(0f, size.width - lw); val ly = (ny - lh - 8.dp.toPx()).coerceAtLeast(0f)
+                                drawRoundRect(Tok.held.copy(alpha = k.coerceAtMost(1f)), Offset(lx, ly), Size(lw, lh), CornerRadius(lh / 2))
+                                drawText(label, topLeft = Offset(lx + 10.dp.toPx(), ly + 5.dp.toPx()), alpha = k.coerceAtMost(1f))
+                            }
                         }
                         // the playhead: a band (`text` at 12 %) with a 4 dp cap, sweeping continuously by the FM-1's clock (spec §5, amended 2026-11-17);
                         // with Reduce Motion it sits on the playing step and jumps
@@ -379,4 +458,23 @@ private fun PianoEdge(scrollY: Float, rowPx: Float, core: LupeCore, canPlay: () 
             }
         }
     }
+}
+
+/** A note carried across the grid: from its step and pitch to where it would land. */
+data class NoteDrag(val fromStep: Int, val fromPitch: Int, val toStep: Int, val toPitch: Int)
+
+/**
+ * Drops a carried note (Edit redesign): its pitch first (the step's notes with that one replaced), then the step moved to its new place
+ * (MOVE, which keeps its length, velocity and locks). If the FM-1 refuses the move, the note has only changed pitch where it was, and
+ * nothing at the target is overwritten. [onLanded] picks the step it lands on (the panel follows).
+ */
+internal fun moveNote(ed: EditorState, d: NoteDrag, core: LupeCore, onLanded: (Int) -> Unit) {
+    val s = ed.steps.getOrNull(d.fromStep) ?: return
+    val notes = stepNotes(s)
+    if (d.toPitch != d.fromPitch && d.toPitch !in notes) core.send(SetStepNotes(d.fromStep, notes.map { if (it == d.fromPitch) d.toPitch else it }))
+    if (d.toStep != d.fromStep) {
+        core.send(Intent.StepSelect(d.fromStep))
+        core.send(com.scottgerstl.lupe.core.Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Move, d.toStep - d.fromStep))
+    }
+    onLanded(d.toStep)
 }
