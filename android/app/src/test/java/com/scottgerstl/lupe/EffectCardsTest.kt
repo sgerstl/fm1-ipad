@@ -19,4 +19,10 @@ class EffectCardsTest {
         assertEquals(listOf("TIME" to "3/16", "MIX" to "30 %"), collapsedPair("delay", delay))
         assertEquals(listOf("TYPE" to "—", "MIX" to "—"), collapsedPair("reverb", null))    // not seen yet
     }
+
+    // the tiles never shrink below the height that shows their value in full (Scott, 2026-11-17)
+    @Test fun tilesKeepTheirValueHeight() {
+        assertEquals(96f, com.scottgerstl.lupe.ui.mix.tileHeight(200f), 0f)
+        assertEquals(com.scottgerstl.lupe.ui.mix.TILE_MIN_H, com.scottgerstl.lupe.ui.mix.tileHeight(120f), 0f)
+    }
 }

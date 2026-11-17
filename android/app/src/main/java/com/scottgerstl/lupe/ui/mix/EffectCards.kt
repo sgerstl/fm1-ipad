@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -72,6 +74,13 @@ internal const val CARD_GAP = 6f
 internal const val COLLAPSED_INSET = 14f
 internal const val PICTURE_TOP = 46f
 internal const val PICTURE_H = 62f
+
+/** A knob tile's least height: the hybrid tile's padding, label row, value and gauge, so its value always shows in full (Scott, 2026-11-17). */
+internal const val TILE_MIN_H = 80f
+/** The picked card's picture when Delay's modes or Reverb's sends sit under it. */
+internal const val PICTURE_SHORT_H = 64f
+/** A 2 × 2 tile's height in a body [availH] tall (8 between the rows): its share, never below [TILE_MIN_H] (the tiles scroll instead). */
+internal fun tileHeight(availH: Float): Float = maxOf(TILE_MIN_H, (availH - 8f) / 2f)
 
 /** The picked card's width in a body [bodyW] wide: what the three collapsed cards and the gaps leave. */
 internal fun pickedCardWidth(bodyW: Float): Float = (bodyW - 3 * CARD_NARROW - 3 * CARD_GAP).coerceAtLeast(CARD_NARROW)
@@ -178,10 +187,15 @@ private fun EffectFull(i: Int, key: String, card: MixCard?, ui: MixUi, actions: 
         BasicText(EFFECT_TITLES[i], Modifier.semantics { heading() }, style = LupeType.title.copy(fontSize = 19.sp, lineHeight = 21.sp))
         BasicText(if (key == "global") "Every track · the FM-1's GLOBAL page" else "Shared effect · all tracks", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // the tiles take the card's full height and never shrink below [TILE_MIN_H], where the value shows in full (Scott, 2026-11-17: the
+        // sends row squeezed them and cut the values off); Delay's modes and Reverb's sends sit under the picture in the right column
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            val tileH = tileHeight(maxHeight.value).dp
+            val short = tileH * 2 + 8.dp > maxHeight
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // the four knob tiles, 2 × 2, numbered to the FM-1's knobs on this GLO page (the device's card); an empty slot is an empty well
-            Column(Modifier.weight(1.15f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (row in 0..1) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1.15f).fillMaxHeight().then(if (short) Modifier.verticalScroll(rememberScrollState()) else Modifier), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (row in 0..1) Row(Modifier.fillMaxWidth().height(tileH), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (col in 0..1) {
                         val k = row * 2 + col
                         val c: PageControl? = card?.controls?.getOrNull(k)
@@ -195,21 +209,24 @@ private fun EffectFull(i: Int, key: String, card: MixCard?, ui: MixUi, actions: 
                     }
                 }
             }
-            // the FM-1's picture, greys and white (decision 34)
+            // the right column: the FM-1's picture, greys and white (decision 34); with Delay's modes or Reverb's sends under it, the picture is 64 tall
             val g = busGraphOf(key, card)
-            if (graphics && g != null) Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(16.dp)).background(Tok.well).padding(10.dp)) {
-                com.scottgerstl.lupe.ui.page.GraphContent(g, Tok.text, -1, Modifier.fillMaxSize())
+            val modes = if (key == "delay") card?.settings?.firstOrNull()?.takeIf { it.names.size in 2..6 } else null
+            val under = modes != null || key == "reverb"
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (graphics && g != null) Box((if (under) Modifier.fillMaxWidth().height(PICTURE_SHORT_H.dp) else Modifier.fillMaxWidth().weight(1f))
+                    .clip(RoundedCornerShape(16.dp)).background(Tok.well).padding(10.dp)) {
+                    com.scottgerstl.lupe.ui.page.GraphContent(g, Tok.text, -1, Modifier.fillMaxSize())
+                }
+                if (modes != null) {
+                    BasicText("MODE", style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
+                    com.scottgerstl.lupe.ui.shell.SegmentGroup(modes.names.map { n -> n.lowercase().replaceFirstChar { it.uppercase() } }, modes.raw.coerceIn(0, modes.names.lastIndex), { actions.setSetting(0, it) },
+                        Modifier.fillMaxWidth(), height = 40.dp, padH = 8.dp, role = Role.RadioButton, fontSize = 14, fill = true,
+                        descriptions = modes.names.map { n -> "Delay mode " + n.lowercase() })
+                }
+                if (key == "reverb") ReverbSends(ui, actions)
             }
         }
-        Spacer(Modifier.height(12.dp))
-        when (key) {
-            "delay" -> card?.settings?.firstOrNull()?.let { s -> if (s.names.size in 2..6) Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicText("DELAY MODE", Modifier.width(110.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
-                com.scottgerstl.lupe.ui.shell.SegmentGroup(s.names.map { n -> n.lowercase().replaceFirstChar { it.uppercase() } }, s.raw.coerceIn(0, s.names.lastIndex), { actions.setSetting(0, it) },
-                    height = 40.dp, padH = 18.dp, role = Role.RadioButton, fontSize = 15)
-            } }
-            "reverb" -> ReverbSends(ui, actions)
-            else -> Unit
         }
     }
 }
@@ -219,13 +236,14 @@ private fun EffectFull(i: Int, key: String, card: MixCard?, ui: MixUi, actions: 
 private fun ReverbSends(ui: MixUi, actions: MixActions) {
     val menu = com.scottgerstl.lupe.ui.shell.LocalHoldMenu.current
     val latest by rememberUpdatedState(ui.tracks)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        BasicText("SENDS", Modifier.width(64.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
-        ui.tracks.forEach { t ->
+    // a 3 × 2 grid under Reverb's picture: a track-colour dot and the send, each chip 40 tall (the touch target)
+    Column(Modifier.fillMaxWidth().semantics { contentDescription = "Reverb sends" }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      ui.tracks.chunked(3).forEach { rowTracks -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        rowTracks.forEach { t ->
             val colour = Tok.track[(t.number - 1) % Tok.track.size]
             var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
             Row(
-                Modifier.height(40.dp).clip(RoundedCornerShape(50)).background(Tok.control)
+                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(50)).background(Tok.control)
                     .onGloballyPositioned { coords = it }
                     .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Reverb send, track ${t.number} ${t.name}: ${t.sendText}. Opens its slide" }
                     .clickable {
@@ -235,12 +253,15 @@ private fun ReverbSends(ui: MixUi, actions: MixActions) {
                                 { latest.firstOrNull { it.number == t.number }?.send ?: 0 }, { latest.firstOrNull { it.number == t.number }?.sendText.orEmpty() }, 0, 127) { actions.send(t.number, it) }),
                         ))
                     }
-                    .padding(start = 8.dp, end = 12.dp),
+                    .padding(start = 8.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Box(Modifier.size(18.dp).background(colour, CircleShape))
-                BasicText(t.sendText.removeSuffix("%").ifEmpty { "–" }, style = LupeType.number.copy(fontSize = 15.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold))
+                Box(Modifier.size(14.dp).background(colour, CircleShape))
+                BasicText(t.sendText.removeSuffix("%").ifEmpty { "–" }, style = LupeType.number.copy(fontSize = 15.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold), maxLines = 1)
             }
         }
+        // a short last row keeps the chips' width
+        repeat(3 - rowTracks.size) { Spacer(Modifier.weight(1f)) }
+      } }
     }
 }

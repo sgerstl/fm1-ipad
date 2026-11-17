@@ -202,6 +202,14 @@ Open the step panel or a sound page first so the grid pages by 8.
 | 101 | Press a hit (or a note), hold still a moment (about a sixth of a second), then slide. | It lifts and drags as before (round 9); let go and it lands; the page doesn't turn under it. A plain tap still toggles; a longer still hold still locks (melodic) or picks (drum). | – | ☐ pass ☐ fail: |
 | 102 | Tap a cell quickly several times while the pattern plays. | Each tap toggles once, on lift. A tap that slides a little (within a fingertip) still counts as a tap. | – | ☐ pass ☐ fail: |
 
+## Round 13b: effect cards keep the tiles whole (Scott: "it squeezed the controls down so the values get cut off")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 103 | Mix › Effects with the real FM-1: pick Reverb. | The four tiles fill the card's height; every value and label shows in full. The right column: the picture (shorter), then the six send chips in two rows of three (dot and value). A tap on a chip opens that track's send slide. | – | ☐ pass ☐ fail: |
+| 104 | Pick Delay. | Tiles whole. Under the picture: MODE with Mono · Stereo · Ping pills, all three readable; a tap changes the FM-1's mode. | – | ☐ pass ☐ fail: |
+| 105 | Pick Chorus and Global. Then turn the font size up in Android settings and look again at all four. | Tiles whole, the picture fills the right column. At a large font, the tiles keep their height and scroll if they must; nothing is cut off. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.
