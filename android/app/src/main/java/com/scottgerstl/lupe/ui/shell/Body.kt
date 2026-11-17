@@ -67,6 +67,7 @@ import com.scottgerstl.lupe.ui.theme.LupeCrossfade
 import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Under the header line (decision 28): one tab at a time, Pads · Edit · Timeline. The FM-1 drives what else shows: a sound page puts its
@@ -206,54 +207,98 @@ private fun SoundKeysRail(open: String?, onKey: (String) -> Unit) {
 }
 
 /**
- * The tabs' pages slide in the tab's direction, and the track thread travels with them (the tab-thread mockup, Scott 2026-11-14): going right
- * (Pads → Edit → Timeline) the old page leaves to the left and the new one comes in from the right, and back the other way; ease-out over
- * [ms] (Labs, default 380), the outgoing page done at 85 % of the time. The selected track's band (its colour muted, decision 31) never leaves the
- * screen: it eases from its rectangle on the old tab (Pads: the track's row; Edit: the step row; Timeline: the lane) to the one on the new tab,
- * on the same curve, landing with the incoming page. No scale, no overshoot. With Reduce Motion the pages cross-fade (150 ms) and the outline
- * cross-fades between its two places.
+ * The tab change (Scott, 2026-11-17: tab motion "b and c"). **B, fade-through:** the outgoing page fades out in 90 ms (ease-in) while the
+ * incoming one fades in over 210 ms (ease-out) and settles from 98 % to full size on the spatial spring. **C, Edit grows out of the pad:** when
+ * Edit was opened from a pad's or a Timeline block's "Edit steps" ([LocalEditGrow] holds its bounds), a surface grows from that pad to the page
+ * (panel fill, a 2 dp edge in its colour, the pad's colour over it fading in the first ~120 ms; spatial spring, bounce 0.15, ~420 ms; the corner
+ * from the pad's to the page's), Edit's content fading in over the last ~200 ms and Pads fading out under it. The selected track's band
+ * (decision 29) still travels between its places on both tabs, over the fade. Reduce Motion: a plain 150 ms cross-fade.
  */
 @Composable
 private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: Int, content: @Composable (Tab) -> Unit) {
     val reduce = LocalReduceMotion.current
     val anchors = remember { TrackAnchors() }
+    val grow = LocalEditGrow.current
     var shown by remember { mutableStateOf(tab) }
     var from by remember { mutableStateOf<Tab?>(null) }
     var fromRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    val t = remember { androidx.compose.animation.core.Animatable(1f) }
+    var origin by remember { mutableStateOf<EditOrigin?>(null) }
+    var pagerBox by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val t = remember { androidx.compose.animation.core.Animatable(1f) }       // the band's travel, 0…1
+    val outA = remember { androidx.compose.animation.core.Animatable(1f) }    // the outgoing page
+    val inA = remember { androidx.compose.animation.core.Animatable(1f) }     // the incoming page
+    val inS = remember { androidx.compose.animation.core.Animatable(1f) }     // the incoming page's scale (B)
+    val g = remember { androidx.compose.animation.core.Animatable(1f) }       // the grow (C), 0 pad … 1 page
+    val m = com.scottgerstl.lupe.ui.theme.hybridMotion
     LaunchedEffect(tab, reduce) {
         if (tab == shown) return@LaunchedEffect
         from = shown; fromRect = anchors.rects[shown]; shown = tab
-        t.snapTo(0f)
-        com.scottgerstl.lupe.ui.theme.unscaled { t.animateTo(1f, androidx.compose.animation.core.tween(if (reduce) Dur.STATE else ms, easing = EaseOut)) }
-        from = null
-    }
-    val dir = if ((from?.ordinal ?: shown.ordinal) <= shown.ordinal) 1f else -1f
-    Box(Modifier.fillMaxSize().clipToBounds()) {
-        // the thread while the pages move: the selected track's band easing from the old place to the new, behind both pages (their own
-        // bands are hidden while they slide); with Reduce Motion, the two places cross-fading
-        val a = fromRect; val b = anchors.rects[shown]
-        if (from != null && (a != null || b != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
-            val p = t.value; val band = trackBand(colour)
-            fun fill(r: androidx.compose.ui.geometry.Rect, alpha: Float) = drawRoundRect(band.copy(alpha = alpha), Offset(r.left, r.top),
-                androidx.compose.ui.geometry.Size(r.width, r.height), androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()))
-            when {
-                reduce || a == null || b == null -> { a?.let { fill(it, 1f - p) }; b?.let { fill(it, p) } }   // nothing travels: each fades where it stands
-                else -> fill(androidx.compose.ui.geometry.Rect(a.left + (b.left - a.left) * p, a.top + (b.top - a.top) * p, a.right + (b.right - a.right) * p, a.bottom + (b.bottom - a.bottom) * p), 1f)
+        origin = if (tab == Tab.Edit && !reduce) grow.take() else { grow.take(); null }
+        t.snapTo(0f); outA.snapTo(1f); inA.snapTo(0f); inS.snapTo(if (reduce || origin != null) 1f else 0.98f); g.snapTo(0f)
+        com.scottgerstl.lupe.ui.theme.unscaled {
+            kotlinx.coroutines.coroutineScope {
+                when {
+                    reduce -> {
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(Dur.STATE)) }
+                        launch { inA.animateTo(1f, androidx.compose.animation.core.tween(Dur.STATE)) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(Dur.STATE)) }
+                    }
+                    origin != null -> {
+                        launch { g.animateTo(1f, com.scottgerstl.lupe.ui.theme.lupeSpring(420, 0.15f)) }
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(300, easing = EaseIn)) }
+                        launch { kotlinx.coroutines.delay(220); inA.animateTo(1f, androidx.compose.animation.core.tween(200, easing = EaseOut)) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(420, easing = EaseOut)) }
+                    }
+                    else -> {
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(90, easing = EaseIn)) }
+                        launch { inA.animateTo(1f, androidx.compose.animation.core.tween(210, easing = EaseOut)) }
+                        launch { inS.animateTo(1f, m.spatial()) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(maxOf(210, minOf(ms, 380)), easing = EaseOut)) }
+                    }
+                }
             }
         }
+        from = null; origin = null
+    }
+    Box(Modifier.fillMaxSize().clipToBounds().onGloballyPositioned { pagerBox = it }) {
         from?.let { old ->
             androidx.compose.runtime.key(old) {
                 val page = remember { TabPage(old, anchors) }
-                Box(Modifier.fillMaxSize().graphicsLayer { val out = (t.value / 0.85f).coerceAtMost(1f); if (reduce) alpha = 1f - t.value else { translationX = -dir * size.width * out; alpha = 1f - 0.4f * out } }
-                    .onGloballyPositioned { page.box = it }.clearAndSetSemantics { }) {
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = outA.value }.onGloballyPositioned { page.box = it }.clearAndSetSemantics { }) {
                     CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides true) { content(old) }
                 }
             }
         }
+        // C: the surface growing out of the pad, under the incoming page
+        val o = origin
+        if (o != null && from != null) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+            val box = pagerBox?.takeIf { it.isAttached } ?: return@Canvas
+            val tl = box.windowToLocal(o.rect.topLeft); val br = box.windowToLocal(o.rect.bottomRight)
+            val k = g.value
+            val l = tl.x + (0f - tl.x) * k; val tp = tl.y + (0f - tl.y) * k
+            val r = br.x + (size.width - br.x) * k; val b = br.y + (size.height - br.y) * k
+            val rad = (o.radiusDp + (20f - o.radiusDp) * k.coerceIn(0f, 1f)).dp.toPx()
+            val shape = androidx.compose.ui.geometry.CornerRadius(rad)
+            val sz = androidx.compose.ui.geometry.Size((r - l).coerceAtLeast(1f), (b - tp).coerceAtLeast(1f))
+            val fade = (1f - inA.value)   // the surface hands over to Edit's own content as it fades in
+            drawRoundRect(Tok.panel.copy(alpha = fade), Offset(l, tp), sz, shape)
+            drawRoundRect(o.colour.copy(alpha = fade * (1f - (k / 0.3f).coerceIn(0f, 1f))), Offset(l, tp), sz, shape)
+            drawRoundRect(o.colour.copy(alpha = fade), Offset(l + 1.dp.toPx(), tp + 1.dp.toPx()), androidx.compose.ui.geometry.Size(sz.width - 2.dp.toPx(), sz.height - 2.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(rad - 1.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+        }
+        // the band, travelling between its places over the fade (both pages hide their own while it does)
+        val a = fromRect; val bb = anchors.rects[shown]
+        if (from != null && (a != null || bb != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+            val p = t.value; val band = trackBand(colour)
+            fun fill(rr: androidx.compose.ui.geometry.Rect, alpha: Float) = drawRoundRect(band.copy(alpha = alpha), Offset(rr.left, rr.top),
+                androidx.compose.ui.geometry.Size(rr.width, rr.height), androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()))
+            when {
+                reduce || a == null || bb == null -> { a?.let { fill(it, 1f - p) }; bb?.let { fill(it, p) } }
+                else -> fill(androidx.compose.ui.geometry.Rect(a.left + (bb.left - a.left) * p, a.top + (bb.top - a.top) * p, a.right + (bb.right - a.right) * p, a.bottom + (bb.bottom - a.bottom) * p), 1f)
+            }
+        }
         androidx.compose.runtime.key(shown) {
             val page = remember { TabPage(shown, anchors) }
-            Box(Modifier.fillMaxSize().graphicsLayer { if (from != null) { if (reduce) alpha = t.value else translationX = dir * size.width * (1f - t.value) } }.onGloballyPositioned { page.box = it }) {
+            Box(Modifier.fillMaxSize().graphicsLayer { if (from != null) { alpha = inA.value; scaleX = inS.value; scaleY = inS.value } }.onGloballyPositioned { page.box = it }) {
                 CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides (from != null)) { content(shown) }
             }
         }

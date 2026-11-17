@@ -123,6 +123,9 @@ fun HeaderPill(onClick: () -> Unit, description: String, text: String, modifier:
     val pressed by source.collectIsPressedAsState()
     val focused by source.collectIsFocusedAsState()
     val wash = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else Dur.STATE)
+    // the Song menu and the Bar pill press like the tabs (Scott, 2026-11-17): in to 0.92 at once, out on an elastic spring
+    val reduce = com.scottgerstl.lupe.ui.theme.LocalReduceMotion.current
+    val press = com.scottgerstl.lupe.ui.theme.pressScale(pressed, reduce)
     Box(
         modifier.defaultMinSize(minHeight = 48.dp)
             .semantics(mergeDescendants = true) { contentDescription = description; role = Role.Button }
@@ -130,7 +133,7 @@ fun HeaderPill(onClick: () -> Unit, description: String, text: String, modifier:
         contentAlignment = Alignment.Center,
     ) {
         Row(
-            Modifier.defaultMinSize(minHeight = 40.dp)
+            Modifier.graphicsLayer { val k = press.value; scaleX = k; scaleY = k }.defaultMinSize(minHeight = 40.dp)
                 .drawBehind {
                     val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2)
                     if (outlined) { val w = 1.dp.toPx(); drawRoundRect(Tok.primaryEdge, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), androidx.compose.ui.geometry.CornerRadius(size.height / 2 - w / 2), style = Stroke(w)) }

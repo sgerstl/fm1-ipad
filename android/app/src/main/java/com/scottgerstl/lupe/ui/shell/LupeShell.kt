@@ -79,6 +79,7 @@ fun LupeShell(core: LupeCore) {
     val soundsHost = remember { SoundsHost() }
     val holdMenu = remember { HoldMenuState() }
     val padDrag = remember { PadDragState() }
+    val editGrow = remember { EditGrow() }
     // the app strip's one message (MessageStrip.kt; Scott, 2026-11-17, messages rule): what was there when the screen opened is not news
     val messages = remember(core) { MessageModel(core.notice.value.seq, core.pads.value.clearUndo.lastOrNull()) }
     val firmwareHost = remember { com.scottgerstl.lupe.ui.firmware.FirmwareHost() }
@@ -94,7 +95,7 @@ fun LupeShell(core: LupeCore) {
     }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost provides firmwareHost, LocalMessages provides messages) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost provides firmwareHost, LocalMessages provides messages, LocalEditGrow provides editGrow) {
         Column(
             Modifier.fillMaxSize()
                 .greyedBy { grey.value }

@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.timeline
 
+import androidx.compose.ui.layout.boundsInWindow
+
 import androidx.compose.ui.semantics.disabled
 
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -342,6 +344,7 @@ private fun BlockView(
     val reduce = LocalReduceMotion.current
     val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
     val holdMenu = LocalHoldMenu.current
+    val editGrow = com.scottgerstl.lupe.ui.shell.LocalEditGrow.current
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var tickKey by remember { mutableIntStateOf(0) }
     val mine = ui.blocks.filter { it.track == b.track && !it.gap }.sortedBy { it.start }
@@ -381,7 +384,8 @@ private fun BlockView(
         val old = "%02d".format(b.pattern ?: 0)
         // the iPad's block menu opens with Edit pattern (decision 31: the full set): the Edit tab, on this block's pattern
         // priority tiles (Scott, 2026-11-17, "C"): Edit steps, Pattern, Sound. The menu opens only while stopped (editable), so nothing folds
-        if (!b.rest) add(HoldItem("Edit steps", tile = true) { actions.selectTrack(b.track); actions.select(b.key); actions.edit(b) })
+        if (!b.rest) add(HoldItem("Edit steps", tile = true) { coords?.takeIf { it.isAttached }?.let { editGrow.from(it.boundsInWindow(), colour, 12f) }
+            actions.selectTrack(b.track); actions.select(b.key); actions.edit(b) })
         add(HoldItem("Set pattern…", sub = if (b.rest) "REST" else "Pattern $old", tile = true, short = "Pattern", tileSub = if (b.rest) "REST" else old, children = {
             ui.kept.map { p ->
                 val n = "%02d".format(p)

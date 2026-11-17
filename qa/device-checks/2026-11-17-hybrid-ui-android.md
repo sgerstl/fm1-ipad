@@ -168,6 +168,16 @@ Install rounds 7, 8 and 9 together. **Check 72 is the one only the real FM-1 can
 | 84 | Delay: tap Stereo, then Ping-pong. Reverb: tap a track's send chip and slide. | The mode pills move the white pill and the FM-1's DELAY MODE. The send chip opens a small menu with REVERB SEND as a slide row; the chip's number and the Mix strip's values line follow. | – | ☐ pass ☐ fail: |
 | 85 | Remove animations on; pick another card. | The cards cross-fade; widths change without travelling. | – | ☐ pass ☐ fail: |
 
+## Round 11: tab motion and press (Scott, 2026-11-17: "b and c")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 86 | Tap between the four tabs. | No sideways slide: the old page fades out quickly and the new one fades in, settling from a touch smaller; the white pill springs across; the selected track's band glides between its places. | – | ☐ pass ☐ fail: |
+| 87 | Press a tab and hold, then let go; press another and slide off before letting go. | Pressed, the tab shrinks at once (before the pill moves); let go, it springs back with a little overshoot as the pill lands under it. Slid off: it springs back and nothing changes. Same feel on Mixer · Effects, Notes · Feel · Sound, the Song menu, the Bar pill and the effect cards. | – | ☐ pass ☐ fail: |
+| 88 | Hold a filled pad › Edit steps. Then on the Timeline, hold a block › Edit steps. | A surface grows out of the pad (or the block): its colour fading, a coloured edge, corners rounding out to the page, while Pads fades under it; Edit's content fades in as it lands. A tap on the Edit tab itself fades through instead. | – | ☐ pass ☐ fail: |
+| 90 | Mix › Effects with the real FM-1 (long names): look at the three collapsed cards and the picked card's tiles. | Every collapsed card: name, picture and values on one left edge; the pictures all at the same height (Global's bars no higher than the others); the value rows lined up along the bottom across the cards; long names cut with "…", nothing running past an edge. Tile labels too are cut inside the tile, never wrapped. | – | ☐ pass ☐ fail: |
+| 89 | Remove animations on; repeat 86–88. | Tabs and Edit cross-fade; a press only brightens the key (no shrink). | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

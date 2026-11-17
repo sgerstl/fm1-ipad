@@ -68,6 +68,10 @@ private val EFFECT_TITLES = listOf("DELAY", "REVERB", "CHORUS", "GLOBAL")
 /** A collapsed card's width, and the gap between cards (dp). */
 internal const val CARD_NARROW = 112f
 internal const val CARD_GAP = 6f
+/** A collapsed card's one inset, and its picture box: [PICTURE_H] tall, [PICTURE_TOP] from the card's top, the inner width (Scott, 2026-11-17). */
+internal const val COLLAPSED_INSET = 14f
+internal const val PICTURE_TOP = 46f
+internal const val PICTURE_H = 62f
 
 /** The picked card's width in a body [bodyW] wide: what the three collapsed cards and the gaps leave. */
 internal fun pickedCardWidth(bodyW: Float): Float = (bodyW - 3 * CARD_NARROW - 3 * CARD_GAP).coerceAtLeast(CARD_NARROW)
@@ -131,7 +135,7 @@ private fun EffectCard(i: Int, key: String, isPicked: Boolean, wideDp: Float, ca
     val pick = com.scottgerstl.lupe.ui.theme.animatedFloat(if (isPicked) 1f else 0f, 150).value
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val squash by com.scottgerstl.lupe.ui.theme.spatialFloat(if (pressed && !isPicked) 0.95f else 1f, reduce, fast = true)
+    val squash by com.scottgerstl.lupe.ui.theme.pressScale(pressed && !isPicked, reduce)
     Box(
         Modifier.width(width.value.dp).fillMaxHeight()
             .graphicsLayer { scaleX = squash; scaleY = squash }
@@ -143,16 +147,22 @@ private fun EffectCard(i: Int, key: String, isPicked: Boolean, wideDp: Float, ca
             }
             .then(if (isPicked) Modifier else Modifier.clickable(source, null, role = Role.Tab) { actions.page(i + 1) }),
     ) {
-        // collapsed: name, a small picture, two values
-        if (small.value > 0.001f) Column(Modifier.width(CARD_NARROW.dp).fillMaxHeight().graphicsLayer { alpha = small.value }.padding(18.dp)) {
-            BasicText(EFFECT_TITLES[i], style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 1)
-            Spacer(Modifier.height(16.dp))
+        // collapsed (Scott, 2026-11-17: "truncated and left aligned with all the rest of the card content… This sure goes for all of these cards"):
+        // one 14 dp left inset for everything; every line single and clipped to the inner width with an ellipsis; the picture in one fixed box
+        // (inner width × 62, 46 from the top) in every card, so they line up; the two value pairs pinned to the bottom inset
+        if (small.value > 0.001f) Box(Modifier.width(CARD_NARROW.dp).fillMaxHeight().graphicsLayer { alpha = small.value }.padding(horizontal = COLLAPSED_INSET.dp, vertical = COLLAPSED_INSET.dp)) {
+            val inner = (CARD_NARROW - 2 * COLLAPSED_INSET).dp
+            BasicText(EFFECT_TITLES[i], Modifier.width(inner).align(Alignment.TopStart), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             val g = busGraphOf(key, card)
-            if (graphics && g != null) com.scottgerstl.lupe.ui.page.GraphContent(g, Tok.text2Raised, -1, Modifier.fillMaxWidth().height(64.dp).clearAndSetSemantics { })
-            Spacer(Modifier.weight(1f))
-            collapsedPair(key, card).forEach { (label, value) ->
-                BasicText(label, style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
-                BasicText(value, Modifier.padding(bottom = 10.dp), style = LupeType.number.copy(fontSize = 22.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+            if (graphics && g != null) Box(Modifier.align(Alignment.TopStart).padding(top = (PICTURE_TOP - COLLAPSED_INSET).dp).width(inner).height(PICTURE_H.dp), contentAlignment = Alignment.CenterStart) {
+                com.scottgerstl.lupe.ui.page.GraphContent(g, Tok.text2Raised, -1, Modifier.fillMaxSize().clearAndSetSemantics { })
+            }
+            Column(Modifier.align(Alignment.BottomStart).width(inner)) {
+                collapsedPair(key, card).forEachIndexed { n, (label, value) ->
+                    BasicText(label, Modifier.width(inner), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    BasicText(value, Modifier.width(inner).padding(bottom = if (n == 0) 10.dp else 0.dp), style = LupeType.number.copy(fontSize = 22.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
             }
         }
         // picked: its full content, laid out at the wide width and clipped while the card grows, so nothing reflows

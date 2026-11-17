@@ -95,3 +95,27 @@ fun rememberSquash(state: Boolean, reduce: Boolean): () -> Pair<Float, Float> {
     }
     return { val v = k.value; (1f + m.squash * v) to (1f - m.squash * 0.67f * v) }
 }
+
+/**
+ * Press feedback for navigation (Scott, 2026-11-17: "the immediate reaction to your touch, how the card shrinks, pushes down, and then pops out…
+ * With elasticity"). Touch-down: the key shrinks to 0.92 in 100 ms, at once. Release (or a cancel): back to 1 on an elastic spring (bounce 0.35,
+ * a small overshoot to about 1.03, settled in about 350 ms). Reduce Motion: no scale ([pressedLight] gives a 150 ms brightness press instead).
+ * Returns the scale to read while drawing.
+ */
+@Composable
+fun pressScale(pressed: Boolean, reduce: Boolean): androidx.compose.runtime.State<Float> {
+    val anim = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(1f) }
+    androidx.compose.runtime.LaunchedEffect(pressed, reduce) {
+        if (reduce) { anim.snapTo(1f); return@LaunchedEffect }
+        unscaled {
+            if (pressed) anim.animateTo(0.92f, androidx.compose.animation.core.tween(100, easing = EaseOut))
+            else anim.animateTo(1f, lupeSpring(350, 0.35f))
+        }
+    }
+    return androidx.compose.runtime.remember { object : androidx.compose.runtime.State<Float> { override val value: Float get() = anim.value } }
+}
+
+/** Reduce Motion's press: a 150 ms brightness (0…1, how much light to lay over the key). */
+@Composable
+fun pressedLight(pressed: Boolean, reduce: Boolean): androidx.compose.runtime.State<Float> =
+    animatedFloat(if (pressed && reduce) 1f else 0f, Dur.STATE)

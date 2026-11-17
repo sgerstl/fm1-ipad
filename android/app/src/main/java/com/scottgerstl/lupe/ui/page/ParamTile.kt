@@ -115,14 +115,15 @@ fun ParamTile(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (locked) { Canvas(Modifier.size(8.dp)) { val r = size.width / 2; drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(r, 0f); lineTo(size.width, r); lineTo(r, size.height); lineTo(0f, r); close() }, tint) }; Spacer(Modifier.width(6.dp)) }
-            BasicText(label.uppercase(), Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp), maxLines = 1)
+            // a long real FM-1 name is cut with an ellipsis inside the tile, never wrapped or run past it
+            BasicText(label.uppercase(), Modifier.weight(1f).padding(end = 4.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (knob != null) Box(Modifier.size(18.dp).background(Tok.panel, CircleShape), contentAlignment = Alignment.Center) {
                 BasicText("$knob", style = LupeType.number.copy(fontSize = 11.sp, lineHeight = 11.sp, fontWeight = FontWeight.Bold, color = Tok.text2Raised))
             }
         }
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            BasicText(value, style = LupeType.number.copy(fontSize = 24.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+            BasicText(value, Modifier.weight(1f, fill = false), style = LupeType.number.copy(fontSize = 24.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (unit != null) { Spacer(Modifier.width(4.dp)); BasicText(unit, Modifier.padding(bottom = 2.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised), maxLines = 1) }
         }
         Spacer(Modifier.height(8.dp))

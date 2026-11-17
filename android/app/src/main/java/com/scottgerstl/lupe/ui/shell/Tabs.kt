@@ -1,5 +1,9 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -106,6 +110,9 @@ fun SegmentGroup(
         if (!reduce) { fromSel = selected; return@LaunchedEffect }
         fade.snapTo(0f); com.scottgerstl.lupe.ui.theme.unscaled { fade.animateTo(1f, androidx.compose.animation.core.tween(Dur.STATE, easing = com.scottgerstl.lupe.ui.theme.EaseOut)) }; fromSel = selected
     }
+    // each segment's press (Scott, 2026-11-17: the tap's own reaction, with elasticity): read while drawing, so a press redraws only the row
+    val presses = remember(labels.size) { arrayOfNulls<androidx.compose.runtime.State<Float>>(labels.size) }
+    fun sc(i: Int) = presses.getOrNull(i)?.value ?: 1f
     Row(
         modifier.selectableGroup().drawBehind {
             val h = height.toPx(); val top = (size.height - h) / 2
@@ -115,7 +122,9 @@ fun SegmentGroup(
                 if (widths[i] <= 0f) continue
                 val outerL = i == 0; val outerR = i == labels.lastIndex
                 val lr = CornerRadius(if (outerL) pill else inner); val rr = CornerRadius(if (outerR) pill else inner)
-                drawPath(Path().apply { addRoundRect(RoundRect(lefts[i], top, lefts[i] + widths[i], top + h, lr, rr, rr, lr)) }, idleFill)
+                val k = sc(i); val w = widths[i] * k; val hh = h * k; val x = lefts[i] + (widths[i] - w) / 2; val y = top + (h - hh) / 2
+                val lr2 = CornerRadius(lr.x * k); val rr2 = CornerRadius(rr.x * k)
+                drawPath(Path().apply { addRoundRect(RoundRect(x, y, x + w, y + hh, lr2, rr2, rr2, lr2)) }, idleFill)
             }
             // the selection
             fun pillAt(a: Float, b: Float, alpha: Float) { if (b > a && alpha > 0f) drawRoundRect(selectedFill.copy(alpha = selectedFill.alpha * alpha), Offset(a, top), Size(b - a, h), CornerRadius(pill)) }
@@ -128,7 +137,11 @@ fun SegmentGroup(
                 val natural = (targetR - targetL).coerceAtLeast(1f)
                 val stretch = ((r.value - l.value) / natural - 1f).coerceIn(0f, 1f)
                 val thin = h * m.squash * 1.2f * stretch
-                if (r.value > l.value) drawRoundRect(selectedFill, Offset(l.value, top + thin / 2), Size(r.value - l.value, h - thin), CornerRadius((h - thin) / 2))
+                // the pill takes the press of the segment it sits on
+                val cx = (l.value + r.value) / 2
+                val under = labels.indices.minByOrNull { kotlin.math.abs(lefts[it] + widths[it] / 2 - cx) } ?: 0
+                val k = sc(under); val w = (r.value - l.value) * k; val hh = (h - thin) * k
+                if (r.value > l.value) drawRoundRect(selectedFill, Offset(cx - w / 2, top + (h - hh) / 2), Size(w, hh), CornerRadius(hh / 2))
             }
         },
         horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically,
@@ -138,13 +151,22 @@ fun SegmentGroup(
             val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
             val source = remember { MutableInteractionSource() }
             val focused by source.collectIsFocusedAsState()
+            val pressed by source.collectIsPressedAsState()
+            val press = com.scottgerstl.lupe.ui.theme.pressScale(pressed, reduce)
+            val light = com.scottgerstl.lupe.ui.theme.pressedLight(pressed, reduce)
+            presses[i] = press
             Box(
                 (if (fill) Modifier.weight(1f) else Modifier)
                     .defaultMinSize(minHeight = 48.dp, minWidth = minWidth)
                     .onGloballyPositioned { c -> val x = c.positionInParent().x; val w = c.size.width.toFloat(); if (lefts.getOrNull(i) != x) lefts[i] = x; if (widths.getOrNull(i) != w) widths[i] = w }
                     .semantics(mergeDescendants = true) { this.role = role; this.selected = on; contentDescription = descriptions[i] }
                     .clickable(interactionSource = source, indication = null, role = role) { onPick(i) }
-                    .drawBehind { if (focused) { val h = height.toPx(); drawRoundRect(Tok.text, Offset(-3.dp.toPx(), (size.height - h) / 2 - 3.dp.toPx()), Size(size.width + 6.dp.toPx(), h + 6.dp.toPx()), CornerRadius(h / 2 + 3.dp.toPx()), style = Stroke(2.dp.toPx())) } }
+                    .drawBehind {
+                        val h = height.toPx()
+                        if (light.value > 0f) drawRoundRect(Tok.text.copy(alpha = 0.12f * light.value), Offset(0f, (size.height - h) / 2), Size(size.width, h), CornerRadius(h / 2))   // Reduce Motion's press
+                        if (focused) drawRoundRect(Tok.text, Offset(-3.dp.toPx(), (size.height - h) / 2 - 3.dp.toPx()), Size(size.width + 6.dp.toPx(), h + 6.dp.toPx()), CornerRadius(h / 2 + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
+                    }
+                    .graphicsLayer { val k = press.value; scaleX = k; scaleY = k }
                     .padding(horizontal = padH),
                 contentAlignment = Alignment.Center,
             ) {

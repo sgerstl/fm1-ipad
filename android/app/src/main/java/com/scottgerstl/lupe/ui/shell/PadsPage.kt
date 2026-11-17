@@ -451,6 +451,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     // the colour eases (spec §5). A press morphs a playing pad back toward the card. With Reduce Motion the shape lands at once.
     val reduceMotion = LocalReduceMotion.current
     val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val editGrow = LocalEditGrow.current
     // round 3 (Scott: "it should be clear that there is a shape transformation happening"): the shape rides M3 Expressive's default spatial
     // spring (slower, so the change reads) and the pad squashes and stretches as it starts or stops (wider and shorter going into play, the
     // reverse coming out). Reduce Motion: the two shapes cross-fade, no squash.
@@ -499,7 +500,9 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         val stopFirst = if (idle) null else "Stop first"
         if (e.kind == PadKind.Pattern) {
             // priority tiles (Scott, 2026-11-17, "C"): Edit steps, Sound, Pattern
-            add(HoldItem("Edit steps", tile = true) { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
+            // Edit grows out of this pad (tab motion C, Scott 2026-11-17)
+            add(HoldItem("Edit steps", tile = true) { padCoords?.takeIf { it.isAttached }?.let { editGrow.from(it.boundsInWindow(), color, 10f) }
+                core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
             // the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
             add(HoldItem("Select sound", sub = row.name.substringAfter(" · "), tile = true, short = "Sound", tileSub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
         }
