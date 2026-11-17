@@ -10,13 +10,14 @@ It came out of one design session on 2026-11-17: an M3 Expressive study, then a 
 |---|---|---|
 | Phone Edit with the sound panel docked uses **8-step pages** with a 16-cell minimap | **Decided** (Scott, 2026-11-17) | `design/components/pattern-editor.md` decision log; answers that file's `[open]` on board 75 |
 | **Mix returns as a phone tab** (Pads · Edit · Timeline · Mix); the Mix pop-up goes | **Decided** (Scott, 2026-11-17: "most people want it more accessible") | `design/components/mix.md` decision log; reverses decision 28 |
-| The hybrid look as a whole (shape-as-state pads, pill keys, connected tabs, sheet and menu styling, motion vocabulary) | **Proposal.** Scott hasn't approved it for the app | This folder |
+| The hybrid look as a whole (shape-as-state pads, pill keys, connected tabs, sheet and menu styling, motion vocabulary) | **Approved as the direction, Android first** (Scott, 2026-11-17: "I like the direction") | This folder |
 | Phone header: **pill tabs and a Bar pill; round Record (48) and Play/Stop (56)** | **Decided** (Scott, 2026-11-17); replaces decision 29's word tabs and launch word, keeps decision 23's round keys | `design/components/phone-header.md` decision log |
 | Mix strip: **pan and reverb send in the strip's long-press menu**, values shown on the strip | **Decided** (Scott, 2026-11-17) | `design/components/mix.md` decision log |
 | 8-step Edit **follows the playhead only when Follow is on** | **Decided** (Scott, 2026-11-17) | `design/components/pattern-editor.md` decision log |
-| Structure changes (the phone's tabs) | **Needs the structure map agreed first** (repo `CLAUDE.md` rule 4) | `structure-map-proposal.md` |
+| Structure changes (the phone's tabs, Sounds as a sheet, GLO → Mix tab, Timeline as a real tab) | **Agreed** (Scott, 2026-11-17) | `design/structure-map.md`, phone section |
+| **Order of work: Android first.** Build on the Android app, test on the Pixel with the FM-1, then decide the iPhone and iPad | **Decided** (Scott, 2026-11-17) | This README |
 
-**Before building anything from this:** get Scott's OK on `structure-map-proposal.md`. The conflicts are settled (`spec.md` §7). Any line in a component's CRD marked `[open]` still means stop and ask.
+**Ready to build on Android:** the structure map is agreed and the conflicts are settled (`spec.md` §7). The hybrid look itself is approved as the direction for Android to try; the iPhone and iPad wait for that trial. Any line in a component's CRD marked `[open]` still means stop and ask.
 
 ## What's here
 
