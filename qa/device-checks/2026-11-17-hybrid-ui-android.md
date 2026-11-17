@@ -130,9 +130,20 @@ The bounce is fixed at 112 %, 50 ms up, 200 ms back (the Labs sliders were remov
 | 65 | Edit with the panel docked: swipe the grid a little (about a fifth of its width) and let go; then flick it quickly a short way. | Either turns the page, and it springs the rest of the way. A tiny nudge springs back. It never skips more than one page. | – | ☐ pass ☐ fail: |
 | 66 | Edit: open the step panel (Step N), then swipe it to the right. | It slides away, the same gesture as the sound panel; the grid takes the width back. | – | ☐ pass ☐ fail: |
 
+## Round 8: the Timeline as mocked (Scott, 2026-11-17: "Let's build the timeline as mocked"; `phone-05`)
+
+Install rounds 7 and 8 together.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 67 | Stopped, open the Timeline. Compare with `phone-05-timeline-refusal.png`. | Zoom is a joined − + pair at the top left. Heads are wider pills (badge and name); the selected track's is tinted with an edge in its colour, its badge squarer, and its lane wears the same edge. Lanes are dark rounded wells; blocks are rounded, tinted with a coloured edge; rests are dashed boxes; blocks with repeats show "×4" in a dark chip. | – | ☐ pass ☐ fail: |
+| 68 | Play. Watch a block start and another stop. | The playing block **fills with its colour** (dark number), with a small squash and settle; the one that stops goes back to tinted with an edge. Its chip counts "1/4, 2/4…". The playhead is a thin line with a round knob on the ruler. | – | ☐ pass ☐ fail: |
+| 69 | While playing, look at the foot of the screen; tap Stop there. Play again and tap ✕; play again and switch to Pads. | "Stop to change the song" sits in the app strip with Stop and ✕ (not on the ruler). Stop stops the song and the strip goes. ✕ dismisses it. Leaving the Timeline takes it away. | – | ☐ pass ☐ fail: |
+| 70 | Stopped: tap −/+, pinch, pan, select a block and drag it along, drag its grip, long-press a block and an empty lane. | All as before: zoom, pan, reorder, passes, and the tile menus. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
-- The Timeline's own hybrid changes (pill heads, connected zoom group, pass-count chips) and the Sounds and Projects sheets' row styling aren't built; they pick up only the shared keys, menus and sheet.
+- The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.
 - The narrow-width give-way (spec 4.1) never triggers on the Pixel (it starts below 790 dp); its order is unit-tested only.
 - Still open, untouched: the track thread's place, the slider's unfilled track contrast, the empty pad's edge (A11), a playing pad on a muted row (S14).
 

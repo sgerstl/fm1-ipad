@@ -196,6 +196,8 @@ Motion follows `DESIGN.md`. Particular to the Timeline:
 
 ## 3. Build notes
 
+- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; Scott: "Let's build the timeline as mocked"; spec 4.4, `phone-05-timeline-refusal`): zoom is a connected − + pair (50 × 40); track heads are 104-wide pills (badge and name), the selected one tinted with a 2 dp edge in its colour, its badge squaring off, and its lane wears the same edge; lanes are `well` at radius 14; blocks radius 12, playing ones filled in the track colour (dark ink), others tinted with a 1.5 dp edge, rests dashed `primaryEdge`; the pass count in a dark chip ("×4", "2/4" while playing, from the playhead); the playhead 2 wide with a 14 round handle on the ruler. A block starting or stopping playing blends its fill and squashes and settles, as the pads. While playing, "Stop to change the song" shows in the app strip with Stop and ✕ (it leaves when the song stops or the tab is left), not on the ruler. Everything else is as before: pan, pinch, drag to reorder, the grip for passes, the tile menus.
+
 - `SkiffArrangePage` serves both the Song tab (`compact`) and the old Arrange page; changes for the Song tab are gated on `compact` / `toned`.
 - Block drag uses a UIKit long press (`HoldRecognizer`) so it can share a touch with the lanes' scroll view; the grip uses a high-priority drag from touch-down so the scroll doesn't win.
 - The track controls draw outside the lanes' scroll so they can hang over the editor; they follow the scroll by offset and stop taking touches where they pass under the heads (device check `2026-11-09-perform-grid-map.md` 60).

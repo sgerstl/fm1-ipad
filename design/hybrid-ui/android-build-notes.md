@@ -19,7 +19,6 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 
 ## Not built yet (in scope, left for the next round)
 
-- Timeline's own changes (4.4): pill heads, the connected zoom group, the "2/4" chips, the playhead's round handle.
 - Sounds and Projects rows (4.6): the selected preset pill with a check, slot rows, the Primary Done.
 - Settings' two-column landscape layout and the list-and-detail rail (3.8).
 - The loading indicator (3.12) and the app strip's restyle (3.10).
@@ -33,3 +32,8 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 
 - **Live menu switch:** the menu's choices rebuild when the transport starts or stops (`HoldMenuState.refresh`, fed by `top.playing`), and every piece travels by key. The mock's Clear steps grows from 206 to 296 wide. Here both columns are 296, so it moves and changes height, but its width is already 296.
 - **Build quirk:** one Gradle run failed in `:app:buildSwift` with "No Android NDK is installed at any of the standard locations"; the same script ran clean by hand and the retry passed. If it recurs, check the Gradle daemon's environment (`ANDROID_NDK_HOME`).
+
+## Round 8 (2026-11-17)
+
+- **Timeline built as mocked** (spec 4.4). The selected track keeps decision 31's band under its row as well as the new edges (the thread's place is still open). The chip says "×N" when stopped and "n/N" while playing; the mock draws "2/4" on every block.
+- Recorded, not built: Mix effects direction C (effect cards, the picked one grows; vault `assets/mix-effects-2026-11-17/C-effect-cards-picked-grows.png`), after the Edit redesign; the step panel driven by the FM-1's knobs (SEQ › NOTES), being mocked.

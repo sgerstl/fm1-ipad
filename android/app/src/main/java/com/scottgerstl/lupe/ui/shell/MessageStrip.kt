@@ -85,6 +85,8 @@ data class StripMessage(val id: Long, val kind: MessageKind, val text: String, v
     }
     /** The one action it carries: Undo for an Undo, Patterns on the all-64-taken refusal (board 79). */
     val opensPatterns: Boolean get() = kind == MessageKind.Refusal && text.startsWith(NO_PATTERN_FREE)
+    /** The Timeline's "Stop to change the song" (hybrid UI, spec 4.4): it carries Stop, and leaves by itself when the song stops. */
+    val offersStop: Boolean get() = kind == MessageKind.Refusal && fix == STOP_FIX
 }
 
 /**
@@ -136,6 +138,9 @@ class MessageModel(noticeSeen: Int = -1, undoSeen: ClearedPad? = null) {
 
 /** The shell's strip, for a screen with a refusal of its own (the scene row). */
 val LocalMessages = staticCompositionLocalOf { MessageModel() }
+
+/** The fix that names a stop: the strip offers Stop, and the message leaves when the song stops. */
+const val STOP_FIX = "stop"
 
 /**
  * The app strip: Tok.held, radius 12, the held shadow, up to 560 dp wide, 12 dp above the foot. An icon by kind, the message (14 sp, a second
@@ -195,6 +200,9 @@ fun MessageStrip(core: LupeCore, model: MessageModel, modifier: Modifier = Modif
                     }
                     if (x.opensPatterns) {
                         Key({ model.dismiss(x.id); sheets.showPatterns() }, "Patterns", width = 88.dp, height = 32.dp, minTarget = 44.dp) { fg -> KeyLabel("Patterns", fg) }
+                    }
+                    if (x.offersStop) {
+                        Key({ model.dismiss(x.id); core.send(com.scottgerstl.lupe.core.Intent.Stop) }, "Stop the song", width = 72.dp, height = 32.dp, minTarget = 44.dp) { fg -> KeyLabel("Stop", fg) }
                     }
                     Key({ model.dismiss(x.id) }, "Dismiss", width = 32.dp, height = 32.dp, minTarget = 44.dp) { fg -> CrossIcon(fg) }
                 }
