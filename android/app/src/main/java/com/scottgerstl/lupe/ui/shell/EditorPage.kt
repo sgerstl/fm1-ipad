@@ -282,9 +282,10 @@ private fun StepsKey(ed: EditorState, track: Color, core: LupeCore) {
     var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     val n = ed.patternSteps; val max = ed.patternStepsMax
     fun items(): List<HoldItem> = buildList {
-        add(HoldItem("One more step", sub = if (n >= max) "The most is $max" else null, enabled = n < max) { core.send(SetPatternSteps(n + 1)) })
-        add(HoldItem("One fewer step", sub = if (n <= 1) "The least is 1" else null, enabled = n > 1) { core.send(SetPatternSteps(n - 1)) })
-        for (v in listOf(4, 8, 12, 16, 24, 32, 48, 64)) if (v <= max) add(HoldItem("$v steps", checked = v == n) { core.send(SetPatternSteps(v)) })
+        // two tiles, then the lengths as a 4 × 2 grid of pills, the current one white (Scott, 2026-11-17: as a list it ran off the screen at 48)
+        add(HoldItem("One fewer step", tile = true, short = "One fewer", tileSub = if (n <= 1) "The least is 1" else "${n - 1} steps", enabled = n > 1) { core.send(SetPatternSteps(n - 1)) })
+        add(HoldItem("One more step", tile = true, short = "One more", tileSub = if (n >= max) "The most is $max" else "${n + 1} steps", enabled = n < max) { core.send(SetPatternSteps(n + 1)) })
+        for (v in listOf(4, 8, 12, 16, 24, 32, 48, 64)) if (v <= max) add(HoldItem("$v steps", short = "$v", checked = v == n, pill = true, group = "Length") { core.send(SetPatternSteps(v)) })
     }
     Box(Modifier.onGloballyPositioned { coords = it }) {
         Key({ coords?.takeIf { it.isAttached }?.let { c -> menu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), track, items()) } },

@@ -221,6 +221,7 @@ Motion follows `DESIGN.md`. Particular to the editor:
 ### Decision log
 
 - 2026-11-11: following rereads a track once per entry-and-pattern change, not twice.
+- 2026-11-17: **the steps menu** is two tiles (One fewer · One more, each saying the length it makes) over the lengths as a 4 × 2 grid of pills, 4 8 12 16 / 24 32 48 64, the current one selected. Same values as before (only lengths up to the core's `patternStepsMax`). Device checks 119–121.
 
 ## 4. Usage
 

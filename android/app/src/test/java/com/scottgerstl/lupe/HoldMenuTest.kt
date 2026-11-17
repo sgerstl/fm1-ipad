@@ -270,3 +270,31 @@ class PriorityTilesMenuTest {
         org.junit.Assert.assertEquals(296f * 2 + 8f, stopped.w, 0f)
     }
 }
+
+/** No hold menu runs off the bottom (Scott, 2026-11-17: the steps menu stopped at 48 on the Pixel). */
+class MenuFitsTest {
+    private val pixelH = 410f - 2 * com.scottgerstl.lupe.ui.shell.MENU_MARGIN
+
+    @Test fun stepsMenuIsTwoTilesOverAFourByTwoPillGrid() {
+        val items = listOf(HoldItem("One fewer step", tile = true), HoldItem("One more step", tile = true)) +
+            listOf(4, 8, 12, 16, 24, 32, 48, 64).map { HoldItem("$it steps", short = "$it", checked = it == 16, pill = true, group = "Length") }
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(items, pixelH)
+        val geom = com.scottgerstl.lupe.ui.shell.menuGeometry(items, lay, false)
+        assertEquals(1, lay.columns.size)
+        val pills = geom.els.filter { it.kind == com.scottgerstl.lupe.ui.shell.ElKind.Pill }
+        assertEquals(8, pills.size)
+        assertEquals(2, pills.map { it.y }.distinct().size)                  // two rows of four
+        assertTrue(pills.all { it.w >= 44f && it.h >= 40f })
+        assertTrue(geom.h <= pixelH)
+        assertEquals("64 steps", pills.last().item.title)
+    }
+
+    @Test fun aLongListWithNoGroupsTakesASecondColumn() {
+        val items = (1..12).map { HoldItem("Choice $it") }
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(items, pixelH)
+        val geom = com.scottgerstl.lupe.ui.shell.menuGeometry(items, lay, false)
+        assertEquals(2, lay.columns.size)
+        assertTrue(geom.h <= pixelH)
+        assertEquals(12, geom.els.count { it.kind == com.scottgerstl.lupe.ui.shell.ElKind.Row })
+    }
+}

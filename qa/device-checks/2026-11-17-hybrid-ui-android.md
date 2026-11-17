@@ -240,6 +240,14 @@ Press HOME on the FM-1 itself.
 | 117 | On Pads, tap Edit; press HOME. Then press HOME again on Pads, and on Timeline. | Edit → back to Pads (shrinking into the selected pad). HOME on Pads or Timeline: the tab stays. | – | ☐ pass ☐ fail: |
 | 118 | On Edit with a sound page open (ENV on the FM-1), tap the panel's handle. Then open it again and press HOME on the FM-1. | Handle: the panel closes and you stay on Edit. FM-1 HOME: the panel closes and the phone goes back to the last of Pads and Timeline. | – | ☐ pass ☐ fail: |
 
+## Round 13f: the steps menu fits (Scott: "Shouldn't I get up to 64?")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 119 | Edit: tap "16 steps ⌄". | Two tiles on top, One fewer ("15 steps") and One more ("17 steps"); under them two rows of pills, 4 8 12 16 and 24 32 48 64, with 16 white and squarer. All on screen, beside the finger. | – | ☐ pass ☐ fail: |
+| 120 | Tap 64; open the menu again; tap One fewer. | The pattern goes to 64 steps (64 now the white pill); then 63, with no pill selected. Pills shrink a little under the finger and spring back. | – | ☐ pass ☐ fail: |
+| 121 | Open the step panel's Conditions list and the readout's menu. | Both fit or scroll inside the screen; nothing is cut off at the bottom. (Conditions has 12 rows: it scrolls, see the note.) | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

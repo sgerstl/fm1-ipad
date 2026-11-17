@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.text.font.FontWeight
+
 import androidx.compose.foundation.layout.Arrangement
 
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -123,6 +125,8 @@ class HoldItem(
     val group: String? = null,
     /** It waits for Stop right now (Skiff rewrites a list only while stopped): folded into the one "N more after Stop" row while playing. */
     val afterStop: Boolean = false,
+    /** One of a set of short values (the pattern's lengths): drawn as a pill in a grid of [PILLS_ACROSS] inside its group, [checked] is the current one. */
+    val pill: Boolean = false,
     val action: () -> Unit = {},
 )
 
@@ -418,6 +422,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier, playing: B
                         }
                         ElKind.Tile -> MenuTile(el.item, el.index, state, usable, 1f, a.r.value)
                         ElKind.Row -> MenuRowItem(el.item, el.index, state, usable, 1f, dimmed = el.dim, colour = m.colour)
+                        ElKind.Pill -> MenuPill(el.item, el.index, state, usable)
                     }
                 }
             }
@@ -499,7 +504,7 @@ private suspend fun animateMenu(anims: MutableMap<String, MenuElAnim>, targets: 
     }
 }
 
-enum class ElKind { Tile, Group, Row, After }
+enum class ElKind { Tile, Group, Row, After, Pill }
 
 /** A piece of the menu: [key] stays the same across layouts, so it can travel. [x], [y] in dp from the menu's corner (screen dp once placed). */
 data class MenuEl(val key: String, val kind: ElKind, val item: HoldItem, val index: Int, val x: Float, val y: Float, val w: Float, val h: Float, val radius: Float, val order: Int, val dim: Boolean = false)
@@ -533,7 +538,11 @@ fun menuGeometry(items: List<HoldItem>, lay: MenuLayout, expanded: Boolean): Men
             } else {
                 els += MenuEl("g:" + (g.name ?: items[g.rows.first()].title), ElKind.Group, items[g.rows.first()], -1, cx, y, MENU_W, gh, 16f, order++)
                 var ry = y + 4f
-                for (r in g.rows) { val rh = rowH(items[r]); els += MenuEl("r:" + items[r].title, ElKind.Row, items[r], r, cx + 4f, ry, MENU_W - 8f, rh, 12f, order++); ry += rh }
+                for (r in g.rows.filter { !items[it].pill }) { val rh = rowH(items[r]); els += MenuEl("r:" + items[r].title, ElKind.Row, items[r], r, cx + 4f, ry, MENU_W - 8f, rh, 12f, order++); ry += rh }
+                // the short values as pills, four across (each 69 × 40)
+                g.rows.filter { items[it].pill }.forEachIndexed { j, r ->
+                    els += MenuEl("p:" + items[r].title, ElKind.Pill, items[r], r, cx + 4f + (j % PILLS_ACROSS) * (PILL_W + PILL_GAP), ry + (j / PILLS_ACROSS) * (PILL_H + PILL_GAP), PILL_W, PILL_H, PILL_H / 2, order++)
+                }
             }
             y += gh + GROUP_GAP
         }
@@ -630,6 +639,31 @@ private fun MenuRowItem(item: HoldItem, k: Int, state: HoldMenuState, takes: Boo
     }
 }
 
+/** A value pill (the pattern's lengths): `control`, round; the current one white with dark ink, its corners squaring to 12 on the spring. */
+@Composable
+private fun MenuPill(item: HoldItem, k: Int, state: HoldMenuState, takes: Boolean) {
+    val reduce = LocalReduceMotion.current
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val press by com.scottgerstl.lupe.ui.theme.pressScale(pressed, reduce)
+    val lit = com.scottgerstl.lupe.ui.theme.animatedFloat(if (item.checked) 1f else 0f, com.scottgerstl.lupe.ui.theme.Dur.STATE).value
+    val square by com.scottgerstl.lupe.ui.theme.spatialFloat(if (item.checked) 1f else 0f, reduce)
+    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(item.checked, reduce)
+    Box(
+        Modifier.fillMaxSize()
+            .graphicsLayer { val (qx, qy) = squash(); scaleX = press * qx; scaleY = press * qy; alpha = if (item.enabled) 1f else 0.4f }
+            .drawBehind { val r = size.height / 2 + (12.dp.toPx() - size.height / 2) * square.coerceIn(0f, 1.2f); drawRoundRect(lerp(Tok.control, Tok.text, lit), cornerRadius = CornerRadius(r.coerceAtLeast(4f))) }
+            .then(if (!takes) Modifier.clearAndSetSemantics { } else Modifier.semantics(mergeDescendants = true) {
+                role = Role.RadioButton; contentDescription = item.title; selected = item.checked
+                if (!item.enabled) disabled()
+            })
+            .clickable(source, null, enabled = takes && item.enabled) { state.pick(k) },
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicText(item.short ?: item.title, style = LupeType.number.copy(fontSize = 17.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold, color = lerp(Tok.text, Tok.onColour, lit)), maxLines = 1)
+    }
+}
+
 /** The after-Stop card's header row: ⏸, "N more after Stop", what they are, a ⌄ that turns as it unfolds. */
 @Composable
 private fun AfterStopHeader(items: List<HoldItem>, rows: List<Int>, expanded: Boolean, toggle: () -> Unit, takes: Boolean, reduce: Boolean) {
@@ -687,8 +721,18 @@ data class MenuGroup(val name: String?, val rows: List<Int>, val waiting: Boolea
 data class MenuLayout(val tiles: List<Int>, val columns: List<List<MenuGroup>>)
 
 internal fun rowH(i: HoldItem) = if (i.sub != null || i.slide != null) 52f else 44f
-internal fun groupH(items: List<HoldItem>, g: MenuGroup, expanded: Boolean) =
-    8f + if (g.waiting) 52f + (if (expanded) g.rows.size * 44f else 0f) else g.rows.sumOf { rowH(items[it]).toDouble() }.toFloat()
+internal fun groupH(items: List<HoldItem>, g: MenuGroup, expanded: Boolean): Float {
+    if (g.waiting) return 8f + 52f + (if (expanded) g.rows.size * 44f else 0f)
+    val pills = g.rows.count { items[it].pill }
+    val pillRows = (pills + PILLS_ACROSS - 1) / PILLS_ACROSS
+    return 8f + g.rows.filter { !items[it].pill }.sumOf { rowH(items[it]).toDouble() }.toFloat() + (if (pillRows > 0) pillRows * PILL_H + (pillRows - 1) * PILL_GAP else 0f)
+}
+
+/** Value pills in a group: four across the column, 40 tall (Scott, 2026-11-17: the steps menu ran off the screen as a list). */
+const val PILLS_ACROSS = 4
+const val PILL_GAP = 4f
+const val PILL_H = 40f
+const val PILL_W = (MENU_W - 8f - (PILLS_ACROSS - 1) * PILL_GAP) / PILLS_ACROSS
 
 /**
  * Lays out a hold menu (pure, tested): up to three [HoldItem.tile]s; the rest grouped by [HoldItem.group] in order, with every
@@ -705,6 +749,12 @@ fun layoutHoldMenu(items: List<HoldItem>, maxH: Float, expanded: Boolean = false
     val waiting = rest.filter { items[it].afterStop }
     if (waiting.isNotEmpty()) groups += MenuGroup("after-stop", waiting, waiting = true)
     val tilesH = if (tiles.isEmpty()) 0f else TILE_H + GROUP_GAP
+    // one group taller than the screen (a long list with no groups) is cut in two, so it can take a second column instead of running off the
+    // bottom: hold menus don't scroll (Scott, 2026-11-17: the steps menu stopped at 48)
+    if (groups.size == 1 && !groups[0].waiting && groups[0].rows.size > 1 && tilesH + groupH(items, groups[0], expanded) > maxH) {
+        val g = groups[0]; val half = (g.rows.size + 1) / 2
+        groups[0] = g.copy(rows = g.rows.take(half)); groups += MenuGroup(g.name?.let { "$it ·2" } ?: "·2", g.rows.drop(half))
+    }
     val heights = groups.map { groupH(items, it, expanded) + GROUP_GAP }
     if (tilesH + heights.sum() - GROUP_GAP <= maxH || groups.size < 2) return MenuLayout(tiles, listOf(groups))
     // two columns: the left takes groups while it stays at or under half the total (and always the first), the rest go right
