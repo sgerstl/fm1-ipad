@@ -114,7 +114,6 @@ struct TopBar: View {
              MenuItem(title: "Demo", icon: "play.rectangle", checked: demo) { useDemo = true }],
             // Skiff: what's set once moved here from the top bar (Scott, 2026-11-10, board 47): Projects, the iPad's audio
             ui.shell ? [MenuItem(title: "Projects…", icon: "folder") { ui.projectsOpen = true },
-                          MenuItem(title: "Patterns…", icon: "square.grid.3x3", enabled: session.skiffSong?.pool != nil) { ui.patternsSheet = .manage },
                           MenuItem(title: "Play through the iPad", icon: through.enabled ? "speaker.wave.2.fill" : "speaker.wave.2",
                                    checked: through.enabled) { through.enabled.toggle() }] : [],
             [MenuItem(title: "Install firmware…", icon: "arrow.down.circle") { firmware.pickerNote = nil; firmware.showPicker = true },
