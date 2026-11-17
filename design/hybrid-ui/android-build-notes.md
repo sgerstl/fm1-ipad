@@ -73,3 +73,11 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 - **A second possible flicker, not changed:** SloopKit's `readTrackList` (shared with the iPad) sets `selectedTrack` from the FM-1's poll without honouring the recent `select` write. A poll in flight while you pick a pad on another track can bounce the selection back for one publish (the core's `selectedPad()` then falls back to that track's current entry). It's iPad code, so it's left for Scott's word.
 - **Traces now take the shape's own corners** (`traceOutline` with four radii, `LaunchTrace(corners = …)` read each frame): Mix Mute and Solo, the scene keys (they used a fixed 8 on a round key), and waiting pads. The Pads Mute and the head's solo trace were already right (pills).
 - **Direction:** every trace runs counter-clockwise from the top left corner (the iPad's). Round 13c's request said "from the top, clockwise"; that isn't built, and check 106 now describes what is.
+
+## Round 13g (2026-11-17)
+
+- **Notes now draw grip marks** (two short lines at the right end, on notes wider than 28 dp). The grid had none before, though the request assumed it did.
+- **The resize writes on release, not live.** It sends StepSelect and then one StepAdjust(Length, Δ), so the panel tile updates when you let go, not while you drag.
+- **The handle starts resizing on any movement**, quick or slow, so a swipe begun on a grip end resizes instead of paging.
+- **A touch on the tail of a long note** (a later step it covers) still counts as an empty cell for tap and move; only its right edge is reachable there. As before.
+- **Not checked with the FM-1:** whether MOVE and LENGTH land on the real FM-1 as they do on the demo core. Device checks 122–127.

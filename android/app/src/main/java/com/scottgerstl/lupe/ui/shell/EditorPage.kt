@@ -655,6 +655,19 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                                     }
                                                     @Suppress("UNREACHABLE_CODE") null
                                                 }
+                                                // a still hold picks the hit; on a hit, a finger that then moves past slop carries it along its lane, however long
+                                                // the hold was (Scott, 2026-11-17: "long press and move"). Lifting keeps it picked
+                                                if (!dragging && !cancelled && up == null) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i))
+                                                    if (!on) waitForUpOrCancellation()
+                                                    else while (true) {
+                                                        val ev = awaitPointerEvent()
+                                                        val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                                                        if (!ch.pressed || ch.isConsumed) break
+                                                        if ((ch.position - down.position).getDistance() > viewConfiguration.touchSlop) { ch.consume(); dragging = true; break }
+                                                    }
+                                                    if (!dragging) return@awaitEachGesture
+                                                }
                                                 when {
                                                     dragging -> {
                                                         hitDrag = Triple(k, i, i)

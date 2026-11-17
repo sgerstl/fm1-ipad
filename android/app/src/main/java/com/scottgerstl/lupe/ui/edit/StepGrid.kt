@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.edit
 
+import androidx.compose.ui.graphics.StrokeCap
+
 import androidx.compose.foundation.gestures.drag
 
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -115,6 +117,9 @@ fun StepGrid(
     val pc = rememberPlayheadClock(core)
     // a note being dragged (Edit redesign, Scott 2026-11-17): where it came from and where it would land; [lift] 0…1 on the spatial spring
     var noteDrag by remember { mutableStateOf<NoteDrag?>(null) }
+    // a note being resized by its right edge (Scott, 2026-11-17): its start step, its pitch and the length it would get; [resizeLen] eases to it
+    var noteResize by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    val resizeLen = remember { androidx.compose.animation.core.Animatable(1f) }
     val lift = remember { androidx.compose.animation.core.Animatable(0f) }
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
@@ -215,12 +220,17 @@ fun StepGrid(
                                 // a still hold stays lock (decision 9a)
                                 val onNote = pitch in stepNotes(edNow.steps.getOrNull(i) ?: Step())
                                 var dragging = false
+                                // on a note's right edge (its grips): moving past slop resizes it, at once, no dwell (Scott, 2026-11-17)
+                                val sc0 = Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4], pageNow))
+                                val edge = Roll.edgeAt(edNow.steps.map { stepNotes(it) }, edNow.steps.map { it.length }, pitch, down.position.x + sc0, g[2], 2.dp.toPx(), 18.dp.toPx(), 10.dp.toPx())
+                                var resizing = false
                                 val up = withTimeoutOrNull(longPress) {
                                     while (true) {
                                         val ev = awaitPointerEvent()
                                         val ch = ev.changes.firstOrNull { it.id == down.id }
                                         if (ch == null || ch.isConsumed) { cancelled = true; return@withTimeoutOrNull null }
                                         if (!ch.pressed) return@withTimeoutOrNull ch
+                                        if (edge != null && (ch.position - down.position).getDistance() > viewConfiguration.touchSlop) { ch.consume(); resizing = true; return@withTimeoutOrNull null }
                                         when (Roll.move((ch.position - down.position).getDistance(), viewConfiguration.touchSlop, ch.uptimeMillis - down.uptimeMillis, dwellMs, onNote)) {
                                             // consumed here first (this handler sees each move before the page drag), so the page stays put
                                             Roll.Move.Drag -> { ch.consume(); dragging = true; return@withTimeoutOrNull null }
@@ -230,6 +240,54 @@ fun StepGrid(
                                         }
                                     }
                                     @Suppress("UNREACHABLE_CODE") null
+                                }
+                                if (resizing && edge != null) {
+                                    val s0 = edNow.steps.getOrNull(edge) ?: Step()
+                                    val from = s0.length.coerceAtLeast(1); val maxLen = s0.maxLength.coerceAtLeast(1)
+                                    var len = from
+                                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                                    scope.launch { resizeLen.snapTo(from.toFloat()) }
+                                    noteResize = Triple(edge, pitch, len)
+                                    var pagedAt = 0L
+                                    var ok = true
+                                    try {
+                                        drag(down.id) { ch ->
+                                            ch.consume()
+                                            val gg = geo
+                                            val sc = Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, gg[3], gg[4], pageNow))
+                                            val n = Roll.resizeLength(edge, ch.position.x.coerceIn(0f, size.width.toFloat()) + sc, gg[2], maxLen)
+                                            if (n != len) { len = n; noteResize = Triple(edge, pitch, n); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                                scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { if (reduce) resizeLen.snapTo(n.toFloat()) else resizeLen.animateTo(n.toFloat(), motion.spatial()) } } }
+                                            // at the grid's edge the 8-step grid pages, as a drag does
+                                            val edgePx = 24.dp.toPx(); val now = System.currentTimeMillis()
+                                            if (now - pagedAt > 900) {
+                                                val pagePx = pageNow * gg[2]
+                                                if (ch.position.x > size.width - edgePx) { pagedAt = now; scope.launch { glide(sc + pagePx) } }
+                                                else if (ch.position.x < edgePx && sc > 0f) { pagedAt = now; scope.launch { glide(sc - pagePx) } }
+                                            }
+                                        }
+                                    } catch (e: kotlinx.coroutines.CancellationException) { ok = false; throw e }
+                                    finally {
+                                        // let go: the same LENGTH the step panel's knob 3 writes, on that step
+                                        if (ok && len != from) { onPick(edge); core.send(Intent.StepSelect(edge)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Length, len - from)) }
+                                        noteResize = null
+                                    }
+                                    return@awaitEachGesture
+                                }
+                                // a still hold: lock for as long as the finger stays (decision 9a). On a note, a finger that then moves past slop ends the
+                                // lock with nothing written and lifts the note (Scott, 2026-11-17: "long press and move the note"); lifting keeps today's lock
+                                if (!dragging && !cancelled && up == null) {
+                                    onPick(i); haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    core.send(Intent.StepHold(i, true))
+                                    if (!onNote) waitForUpOrCancellation()
+                                    else while (true) {
+                                        val ev = awaitPointerEvent()
+                                        val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!ch.pressed || ch.isConsumed) break
+                                        if ((ch.position - down.position).getDistance() > viewConfiguration.touchSlop) { ch.consume(); dragging = true; break }
+                                    }
+                                    core.send(Intent.StepHold(i, false))
+                                    if (!dragging) return@awaitEachGesture
                                 }
                                 if (dragging) {
                                     haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
@@ -265,10 +323,6 @@ fun StepGrid(
                                 }
                                 if (cancelled) return@awaitEachGesture
                                 if (up != null) tapCell(i, pitch)
-                                else {
-                                    onPick(i); haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    core.send(Intent.StepHold(i, true)); waitForUpOrCancellation(); core.send(Intent.StepHold(i, false))
-                                }
                             }
                         },
                 ) {
@@ -303,12 +357,23 @@ fun StepGrid(
                                         style = Stroke(1.5.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
                                     if (lift.value > 0.02f || nd.toStep != i || nd.toPitch != n) continue
                                 }
-                                val w0 = (s.length.coerceAtLeast(1) * stepPx - 4.dp.toPx()).coerceAtLeast(6.dp.toPx()); val h0 = (rowPx - 4.dp.toPx()).coerceAtLeast(4.dp.toPx())
+                                val rz = noteResize?.takeIf { it.first == i && it.second == n }
+                                val lenShown = if (rz != null) resizeLen.value.coerceAtLeast(0.5f) else s.length.coerceAtLeast(1).toFloat()
+                                val w0 = (lenShown * stepPx - 4.dp.toPx()).coerceAtLeast(6.dp.toPx()); val h0 = (rowPx - 4.dp.toPx()).coerceAtLeast(4.dp.toPx())
                                 val cx = x0 + i * stepPx + 2.dp.toPx() + w0 / 2; val cy = (127 - n) * rowPx - sy + 2.dp.toPx() + h0 / 2
                                 val w = w0 * bz; val h = h0 * bz
                                 val x = cx - w / 2; val y = cy - h / 2
                                 drawRoundRect(lerp(Tok.page, track, 0.55f + 0.45f * (s.velocity / 127f)), Offset(x, y), Size(w, h), CornerRadius(5.dp.toPx()))
                                 if (picked == i) drawRoundRect(Tok.text, Offset(x - 1.dp.toPx(), y - 1.dp.toPx()), Size(w + 2.dp.toPx(), h + 2.dp.toPx()), CornerRadius(6.dp.toPx()), style = Stroke(2.dp.toPx()))
+                                // the grips: two short marks at the right end, the resize handle (only where the note is long enough to show them)
+                                if (w > 28.dp.toPx() && h > 10.dp.toPx() && !s.locked) { val gh = (h * 0.45f).coerceAtMost(10.dp.toPx()); for (k in 0..1) { val gx = x + w - 6.dp.toPx() - k * 4.dp.toPx(); drawLine(Tok.onColour.copy(alpha = 0.55f), Offset(gx, cy - gh / 2), Offset(gx, cy + gh / 2), 1.5.dp.toPx(), StrokeCap.Round) } }
+                                if (rz != null) {
+                                    drawRoundRect(Tok.text, Offset(x - 1.dp.toPx(), y - 1.dp.toPx()), Size(w + 2.dp.toPx(), h + 2.dp.toPx()), CornerRadius(6.dp.toPx()), style = Stroke(2.dp.toPx()))
+                                    val label = tm.measure("${rz.third} step" + (if (rz.third == 1) "" else "s"), com.scottgerstl.lupe.ui.theme.LupeType.key.copy(fontSize = 14.sp, color = Tok.text))
+                                    val lw = label.size.width + 20.dp.toPx(); val lh = label.size.height + 10.dp.toPx()
+                                    val lx = (x + w - lw / 2).coerceIn(0f, size.width - lw); val ly = (y - lh - 8.dp.toPx()).coerceAtLeast(0f)
+                                    drawRoundRect(Tok.held, Offset(lx, ly), Size(lw, lh), CornerRadius(lh / 2)); drawText(label, topLeft = Offset(lx + 10.dp.toPx(), ly + 5.dp.toPx()))
+                                }
                                 if (s.locked) { val cx = x + w - 7.dp.toPx(); val cy = y + h / 2; val r = 3.5.dp.toPx(); drawPath(Path().apply { moveTo(cx, cy - r); lineTo(cx + r, cy); lineTo(cx, cy + r); lineTo(cx - r, cy); close() }, Tok.onColour) }
                             }
                         }

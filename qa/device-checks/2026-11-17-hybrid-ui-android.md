@@ -248,6 +248,19 @@ Press HOME on the FM-1 itself.
 | 120 | Tap 64; open the menu again; tap One fewer. | The pattern goes to 64 steps (64 now the white pill); then 63, with no pill selected. Pills shrink a little under the finger and spring back. | – | ☐ pass ☐ fail: |
 | 121 | Open the step panel's Conditions list and the readout's menu. | Both fit or scroll inside the screen; nothing is cut off at the bottom. (Conditions has 12 rows: it scrolls, see the note.) | – | ☐ pass ☐ fail: |
 
+## Round 13g: resize and long-press move (Scott, 2026-11-17)
+
+Melodic track unless it says drum. The step panel open, so the grid pages by 8.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 122 | Press a 1-step note's right end (the two grip marks) and drag right two steps, then let go. Then drag a long note's end left. | The end follows by whole steps with a tick each, "3 steps" above it; let go and the step panel's LENGTH reads 3. Dragged left it shortens, never below 1 or past the next note. | – | ☐ pass ☐ fail: |
+| 123 | Resize a note near the page's right edge, holding the finger at the grid's edge. | The grid pages on and the note keeps growing onto the next page. | – | ☐ pass ☐ fail: |
+| 124 | Press a note, hold still well past a second (lock on), then move the finger. | The lock ends with nothing changed, and the note lifts and follows; let go and it lands. | – | ☐ pass ☐ fail: |
+| 125 | Press a note, hold for about a quarter of a second, then move. | It lifts and drags (as before). | – | ☐ pass ☐ fail: |
+| 126 | Swipe quickly sideways from a note's body and from its grip end. | From the body, the page turns and the note is untouched. From the grip end, it resizes (the handle has no delay). | – | ☐ pass ☐ fail: |
+| 127 | Hold a note still and lift without moving; turn an FM-1 knob while holding. Then drum: hold a hit, then slide along the lane. | Melodic: lock as before (the knob writes a lock on that step). Drum: the hit is picked on the hold, then carried along its lane and dropped on an empty cell. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

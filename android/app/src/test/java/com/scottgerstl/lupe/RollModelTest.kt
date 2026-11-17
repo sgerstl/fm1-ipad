@@ -128,4 +128,20 @@ class RollModelTest {
         assertEquals(Roll.Move.Drag, Roll.move(40f, slop, 150L, dwell, onItem = true))   // pressed on a note, held still, then moved
         assertEquals(Roll.Move.Drag, Roll.move(40f, slop, 300L, dwell, onItem = true))
     }
+
+    // a note's right edge resizes it (Scott, 2026-11-17)
+    @Test fun noteEdgeAndResize() {
+        val step = 60f; val inset = 2f
+        val notes = listOf(listOf(60), emptyList(), emptyList(), listOf(60), listOf(60))
+        val lens = listOf(2, 1, 1, 1, 1)
+        assertEquals(0, Roll.edgeAt(notes, lens, 60, 2 * step - inset - 10f, step, inset, 18f, 10f))   // inside the 2-step note's end
+        assertEquals(0, Roll.edgeAt(notes, lens, 60, 2 * step - inset + 8f, step, inset, 18f, 10f))    // a little past it (the next cell is empty)
+        assertEquals(null, Roll.edgeAt(notes, lens, 60, 30f, step, inset, 18f, 10f))                    // the note's body: move and tap
+        assertEquals(null, Roll.edgeAt(notes, lens, 61, 2 * step - inset, step, inset, 18f, 10f))       // another row
+        // step 3's note: its end at 4·60 − 2; the cell after it is taken by step 4's note, so the handle doesn't reach past
+        assertEquals(null, Roll.edgeAt(notes, lens, 60, 4 * step - inset + 6f, step, inset, 18f, 10f))
+        assertEquals(3, Roll.resizeLength(0, 170f, step, 16))
+        assertEquals(1, Roll.resizeLength(0, 5f, step, 16))       // never under one step
+        assertEquals(4, Roll.resizeLength(0, 900f, step, 4))      // never past the core's most
+    }
 }

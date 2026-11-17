@@ -127,6 +127,25 @@ object Roll {
         else -> Move.Swipe
     }
 
+    /**
+     * A note's right edge under a finger at content x [cx] (the grid's x plus its scroll) on [pitch]: the step the note starts on, or null.
+     * [notes] gives each step's pitches and [lengths] its length. The handle reaches [inPx] into the note and [outPx] past its end (only when
+     * the cell after it on that row is empty), so a one-step note keeps most of itself for moving and tapping (Scott, 2026-11-17).
+     */
+    fun edgeAt(notes: List<List<Int>>, lengths: List<Int>, pitch: Int, cx: Float, stepPx: Float, insetPx: Float, inPx: Float, outPx: Float): Int? {
+        for (s0 in notes.indices) {
+            if (pitch !in notes[s0]) continue
+            val len = lengths.getOrElse(s0) { 1 }.coerceAtLeast(1)
+            val right = (s0 + len) * stepPx - insetPx
+            val nextTaken = notes.getOrNull(s0 + len)?.contains(pitch) == true
+            if (cx >= right - inPx && cx <= right + (if (nextTaken) 0f else outPx)) return s0
+        }
+        return null
+    }
+
+    /** The length a resize gives: the note's end at the step boundary nearest content x [cx], from [start], within 1…[maxLen]. */
+    fun resizeLength(start: Int, cx: Float, stepPx: Float, maxLen: Int): Int = (kotlin.math.round(cx / stepPx).toInt() - start).coerceIn(1, max(1, maxLen))
+
     /** The first and last visible rows' pitches for a scroll, a row more each way so partial rows draw. */
     fun visiblePitches(scrollY: Float, rowPx: Float, viewPx: Float): IntRange {
         val first = (scrollY / rowPx).toInt(); val last = ((scrollY + viewPx) / rowPx).toInt()
