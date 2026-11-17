@@ -297,7 +297,7 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
-| 140 | Pads, then the Timeline: look closely at the selected track's band round its head. Pick track 1, then track 6; then switch tabs. | The band's left end is fully round, running parallel to the head pill with an even gap (about 2 dp) top, bottom and left; its right end is rounded a little more than the last pad, with nothing cut flat at either edge. Between tabs the travelling band keeps those corners and lands without changing shape. | – | ☐ pass ☐ fail: |
+| 140 | Pads, then the Timeline: pick track 1, then track 6, and look closely at the selected head and its band; then switch tabs. With a solo waiting, look at the head's trace. | The selected head morphs from a pill to a rounded rectangle (12 dp corners), with a small squash; its number badge stays a circle. The band's corners run parallel to the head's, with an even ~2 dp gap top, bottom and left; its right end is a little rounder than the last pad, nothing cut flat. Between tabs the travelling band keeps those corners. A waiting solo's trace runs on the squared outline. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).

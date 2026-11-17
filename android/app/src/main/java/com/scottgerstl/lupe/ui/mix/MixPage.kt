@@ -212,8 +212,9 @@ fun TrackBadge(number: Int, colour: Color, selected: Boolean, size: Dp, fontSize
     val reduce = LocalReduceMotion.current
     val m = hybridMotion
     // round 3: M3 Expressive's spatial spring and a squash as it squares off; Reduce Motion: the circle and the square cross-fade
-    val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (selected) 1f else 0f, reduce)
-    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(selected, reduce)
+    // the badge stays a circle in every state (Scott, 2026-11-18: "Square the outline": the head's outline squares instead)
+    val sq = 0f
+    val squash = { 1f to 1f }
     Box(
         Modifier.size(size).graphicsLayer { val (sx, sy) = squash(); scaleX = sx; scaleY = sy }.drawBehind {
             val half = this.size.minDimension / 2; val square = this.size.minDimension * 0.3f

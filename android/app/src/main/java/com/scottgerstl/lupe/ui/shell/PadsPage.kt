@@ -140,15 +140,15 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                     val y = animatedFloat(at.toFloat(), Dur.STATE)
                     val travelling = LocalTabTravelling.current
                     val band = trackBand(Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size])
-                    // an even inset round the row (BAND_INSET, half the row gap, so it never reaches the next row); the left end wraps the round head
-                    // pill, so it is fully round; the right end wraps the last pad: its radius plus the inset (nested corners, Scott 2026-11-18)
+                    // an even inset round the row (BAND_INSET, half the row gap, so it never reaches the next row); the left end wraps the selected head
+                    // (12 dp) and the right end the last pad (10): each its radius plus the inset (nested corners, Scott 2026-11-18)
                     val bandR = com.scottgerstl.lupe.ui.theme.Shape.pad + BAND_INSET
                     Box(
                         Modifier.fillMaxWidth().padding(horizontal = 0.dp).height(rh + BAND_INSET * 2)
                             .offset { IntOffset(-BAND_INSET.roundToPx(), ((rh + GAP).toPx() * y.value - BAND_INSET.toPx()).roundToInt()) }
                             .layout { m, c -> val extra = (BAND_INSET * 2).roundToPx(); val p = m.measure(c.copy(minWidth = c.minWidth + extra, maxWidth = c.maxWidth + extra)); layout(c.maxWidth, p.height) { p.place(0, 0) } }
-                            .selectedTrackAnchor(leftR = (-1).dp, rightR = bandR)
-                            .drawBehind { if (!travelling) drawBand(band, Offset.Zero, size, -1f, bandR.toPx()) }
+                            .selectedTrackAnchor(leftR = HEAD_SELECTED_R + BAND_INSET, rightR = bandR)
+                            .drawBehind { if (!travelling) drawBand(band, Offset.Zero, size, (HEAD_SELECTED_R + BAND_INSET).toPx(), bandR.toPx()) }
                             .clearAndSetSemantics { },
                     )
                 }
@@ -355,14 +355,21 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
         HoldItem("LEVEL", group = "Mix", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.level ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.levelText.orEmpty() }, 0, 127) { core.send(com.scottgerstl.lupe.core.SetLevel(r.track, it)) }),
         HoldItem("PAN", group = "Mix", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.pan ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.panText.orEmpty() }, -64, 63, bipolarAt = 0) { core.send(com.scottgerstl.lupe.core.SetPan(r.track, it)) }),
     )
+    // selected, the head's outline squares off to 12 on the shape spring, with a squash (Scott, 2026-11-18: "Square the outline"); the badge stays a circle
+    val reduceHead = LocalReduceMotion.current
+    val headSq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (selected) 1f else 0f, reduceHead)
+    val headSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(selected, reduceHead)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val headPx = with(density) { h.toPx() }; val selPx = with(density) { HEAD_SELECTED_R.toPx() }
+    val headR = { headRadius(headPx, selPx, headSq.coerceIn(0f, 1.15f)) }
     Box(Modifier.width(HEAD_W).height(h).onGloballyPositioned { headCoords = it }) {
-        // the head (spec 3.2): a pill on `control`; selected, the track's tint with a 2 dp edge in its colour, and its badge squares off
+        // the head (spec 3.2): a pill on `control`; selected, the track's tint with a 2 dp edge in its colour on the squared shape
         Row(
-            Modifier.fillMaxSize().clip(RoundedCornerShape(50))
+            Modifier.fillMaxSize().graphicsLayer { val (qx, qy) = headSquash(); scaleX = qx; scaleY = qy }.clip(headShape(headR))
                 .drawBehind {
-                    val pillR = CornerRadius(size.height / 2)
+                    val pillR = CornerRadius(headR())
                     drawRoundRect(lerp(Tok.control, lerp(Tok.page, color, 0.30f), sel.value), cornerRadius = pillR)
-                    if (sel.value > 0f) drawRoundRect(color.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(size.height / 2 - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+                    if (sel.value > 0f) drawRoundRect(color.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((headR() - 1.dp.toPx()).coerceAtLeast(1f)), style = Stroke(2.dp.toPx()))
                     if (press.value > 0f) drawRoundRect(Color.Black.copy(alpha = 0.25f * press.value), cornerRadius = pillR)
                 }
                 .semantics(mergeDescendants = true) {
@@ -379,7 +386,7 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.width(((h - 30.dp) / 2).coerceAtLeast(4.dp)))
-            com.scottgerstl.lupe.ui.mix.TrackBadge(r.track, color, selected, minOf(30.dp, h - 8.dp), 18)
+            com.scottgerstl.lupe.ui.mix.TrackBadge(r.track, color, false, minOf(30.dp, h - 8.dp), 18)
             Column(Modifier.padding(start = 8.dp, end = 12.dp), verticalArrangement = Arrangement.Center) {
                 BasicText(sound, style = LupeType.key.copy(fontSize = 14.5.sp, lineHeight = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1, softWrap = false,
                     autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 15.sp, stepSize = 1.sp))
@@ -391,7 +398,8 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
             }
         }
         // a solo that waits for the launch point: the head's outline drawn as it comes, in the track's colour
-        if (r.soloPending) LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) }, color, h / 2, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+        if (r.soloPending) LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) }, color, h / 2, 2.dp, Modifier.matchParentSize(), base = 0.6f,
+            corners = { val k = headR(); floatArrayOf(k, k, k, k) })
     }
 }
 

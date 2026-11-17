@@ -1,6 +1,7 @@
 package com.scottgerstl.lupe.ui.timeline
 
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import com.scottgerstl.lupe.ui.shell.drawBand
 
 import androidx.compose.ui.layout.boundsInWindow
@@ -245,8 +246,8 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                         Modifier.fillMaxWidth().height(rh + bandIn * 2)
                             .offset { IntOffset(-bandIn.roundToPx(), ((rh + GAP).toPx() * at.value - bandIn.toPx()).toInt()) }
                             .layout { m, c -> val extra = (bandIn * 2).roundToPx(); val p = m.measure(c.copy(minWidth = c.minWidth + extra, maxWidth = c.maxWidth + extra)); layout(c.maxWidth, p.height) { p.place(0, 0) } }
-                            .selectedTrackAnchor(leftR = (-1).dp, rightR = bandR)
-                            .drawBehind { if (!travelling) drawBand(band, Offset.Zero, size, -1f, bandR.toPx()) }
+                            .selectedTrackAnchor(leftR = com.scottgerstl.lupe.ui.shell.HEAD_SELECTED_R + bandIn, rightR = bandR)
+                            .drawBehind { if (!travelling) drawBand(band, Offset.Zero, size, (com.scottgerstl.lupe.ui.shell.HEAD_SELECTED_R + bandIn).toPx(), bandR.toPx()) }
                             .clearAndSetSemantics { },
                     )
                 }
@@ -302,18 +303,25 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
 @Composable
 private fun TrackHead(track: Int, name: String, colour: Color, selected: Boolean, onTap: () -> Unit) {
     val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE).value
+    // selected, the outline squares off to 12 on the shape spring (Scott, 2026-11-18); the badge stays a circle
+    val reduce = LocalReduceMotion.current
+    val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (selected) 1f else 0f, reduce)
+    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(selected, reduce)
+    var hPx by remember { mutableStateOf(0f) }
+    val selPx = with(LocalDensity.current) { com.scottgerstl.lupe.ui.shell.HEAD_SELECTED_R.toPx() }
+    val r = { com.scottgerstl.lupe.ui.shell.headRadius(hPx, selPx, sq.coerceIn(0f, 1.15f)) }
     Row(
-        Modifier.width(HEAD).fillMaxHeight().clip(RoundedCornerShape(50))
+        Modifier.width(HEAD).fillMaxHeight().onSizeChanged { hPx = it.height.toFloat() }.graphicsLayer { val (qx, qy) = squash(); scaleX = qx; scaleY = qy }.clip(com.scottgerstl.lupe.ui.shell.headShape(r))
             .drawBehind {
-                drawRoundRect(lerp(Tok.control, lerp(Tok.page, colour, 0.30f), sel), cornerRadius = CornerRadius(size.height / 2))
-                if (sel > 0f) drawRoundRect(colour.copy(alpha = sel), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(size.height / 2 - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+                drawRoundRect(lerp(Tok.control, lerp(Tok.page, colour, 0.30f), sel), cornerRadius = CornerRadius(r()))
+                if (sel > 0f) drawRoundRect(colour.copy(alpha = sel), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((r() - 1.dp.toPx()).coerceAtLeast(1f)), style = Stroke(2.dp.toPx()))
             }
             .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Track $track, $name"; stateDescription = if (selected) "Selected" else "" }
             .pointerInput(track) { detectTapGestures { onTap() } }
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        com.scottgerstl.lupe.ui.mix.TrackBadge(track, colour, selected, 24.dp, 15)
+        com.scottgerstl.lupe.ui.mix.TrackBadge(track, colour, false, 24.dp, 15)
         BasicText(name, Modifier.weight(1f).clearAndSetSemantics { }, style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp, color = Tok.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis,
             autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 0.5.sp))
     }

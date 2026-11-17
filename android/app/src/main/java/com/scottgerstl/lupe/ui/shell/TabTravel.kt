@@ -61,3 +61,13 @@ const val ROW_TINT = 0.28f
 
 /** The selected track's band: its colour muted over the page, running under the whole row on Pads and the Timeline. The 2 dp outline is the launch timer's alone now. */
 fun trackBand(colour: androidx.compose.ui.graphics.Color): androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.lerp(com.scottgerstl.lupe.ui.theme.Tok.page, colour, ROW_TINT)
+
+
+/** A selected track head's corner radius (Scott, 2026-11-18: "Square the outline"): the hybrid selectable rule, a pill unselected, 12 dp selected. */
+val HEAD_SELECTED_R = androidx.compose.ui.unit.Dp(12f)
+/** The head's radius (px) at shape spring [s] (0 a pill, 1 selected) for its [height]. */
+fun headRadius(height: Float, selectedPx: Float, s: Float): Float = (height / 2f + (selectedPx - height / 2f) * s).coerceIn(2f, height / 2f)
+/** The head's shape at its current radius, for clipping (the edge and the band are drawn on the same numbers). */
+fun headShape(radius: () -> Float) = androidx.compose.foundation.shape.GenericShape { size, _ ->
+    addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, 0f, size.width, size.height, androidx.compose.ui.geometry.CornerRadius(radius())))
+}

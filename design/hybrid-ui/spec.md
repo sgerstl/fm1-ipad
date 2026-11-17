@@ -84,7 +84,7 @@ Paddings: 12 left (10 on the playing pad), 8–10 right, 3–4 between letter, v
 
 ### 3.2 Track head
 
-Phone: 118 × 43, radius pill, `control` (selected: track tint plus a 2 pt track colour edge). Badge 30 round in track colour; selected, it squares to radius 9 (shape as state). Name in Barlow Medium 14.5, engine in Barlow Medium 12 `textSecondary`. Mute beside it, 56 × 43 pill `control`, labelled "Mute" (`textSecondaryRaised`, 13). Keep the word: dropping labels cost usability in Google's own study.
+Phone: 118 × 43, radius pill, `control` (selected: track tint plus a 2 pt track colour edge, and the outline squares to radius 12, shape as state; amended 2026-11-18, Scott: "Square the outline"). Badge 30 round in track colour in every state (it no longer squares to 9). Name in Barlow Medium 14.5, engine in Barlow Medium 12 `textSecondary`. Mute beside it, 56 × 43 pill `control`, labelled "Mute" (`textSecondaryRaised`, 13). Keep the word: dropping labels cost usability in Google's own study.
 iPad: 276 × 44 with the entry ("A · 01"), Mute (speaker) and Solo (S) as 34 round keys.
 
 ### 3.3 Scenes toolbar
