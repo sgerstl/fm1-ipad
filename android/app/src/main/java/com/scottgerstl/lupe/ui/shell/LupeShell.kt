@@ -132,10 +132,9 @@ fun LupeShell(core: LupeCore) {
             )
         }
         // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
-        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag) {
+        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, LocalMessages provides messages) {
             SettingsSheet(link, fake = core is com.scottgerstl.lupe.core.FakeLupeCore)
-            val projects = rememberProjects(core)
-            ProjectsSheet(projects.first, projects.second)
+            ProjectsSheet(rememberProjects(core))
             // Patterns (decision 38, board 79): the song-name menu, the full-pool notice and an empty slot's menu open it
             com.scottgerstl.lupe.ui.patterns.PatternsSheet(core)
             // Sounds: for a track (its head on Pads, or SAVE on the FM-1) or one pad's own sound. The browser has its own heading and Done.

@@ -9,6 +9,10 @@ sets it. Each app keeps its own build number. Before 0.3.0 only the Android app 
 - Messages follow one rule (`design/DESIGN.md` › Messages). One strip at the foot holds one message over one ongoing
   state. Refusals and Undo stay until dealt with, with no timers. Confirmations stay 4 s. Every message is announced.
 - Values in the sound panel hold still while they change.
+- Projects say where the music lives and where a save goes. Playing now has Save (back where it came from) and Save
+  to… (this device, or one of the FM-1's four slots). Each slot can be copied to the device. A line shows how full the
+  pattern pool is and how much of it only the slots hold.
+- The iPhone and Android keep their own project files, as the iPad does.
 
 **iPad**
 - The Patterns sheet: every kept pattern, where it's used, and clearing several at once. When all 64 are taken, an empty

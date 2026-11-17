@@ -37,6 +37,9 @@ public final class PhoneCore {
     var soundsEntry: Int?
     var soundsViewing: Int?
     var projectBusy = false
+    /// Phone projects (PhoneProjects.swift): whether the music changed since it was last read for or written from a phone
+    /// project file. nil until one was, this run (the screen then can't tell, so it counts as changed).
+    var phoneEdited: Bool? { didSet { if phoneEdited != oldValue { pokeAreas(["projects"]) } } }
     /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
     var auditions: [Int: Task<Void, Never>] = [:]
     /// The firmware install (Firmware.swift): the link's ports and hold, where the app keeps files, and its state.
@@ -117,6 +120,8 @@ public final class PhoneCore {
             guard let self, e.on else { return }
             self.notesIn += 1; self.pokeAreas(["diag"])
         }
+        // Any edit, here or on the FM-1, since a phone project was read or written (the iPad's ProjectStore.noteEdit)
+        s.onEdit = { [weak self] in if self?.phoneEdited == false { self?.phoneEdited = true } }
         areas = [
             // marks the screen's changes in an open lag trace (the optimistic one, then the FM-1's reply or push)
             AreaWatch(name: "screenTrace", build: { [unowned self] in
@@ -274,10 +279,13 @@ public final class PhoneCore {
         if n.kind == .refusal { refusalsSaid += 1 }
         publish("notice", AreaJSON.encode(n))
     }
+    /// An event area (`transfer`): sent as it happens, never compared with the last one.
+    func publishEvent(_ area: String, _ json: String) { publish(area, json) }
     func publishNow(_ names: [String]) { for n in names { areas.first { $0.name == n }?.now() } }
 
     public func stop() {
         session.onDeviceNote = nil
+        session.onEdit = nil
         runTask?.cancel(); runTask = nil
         clockTask?.cancel(); clockTask = nil
         projectTask?.cancel(); projectTask = nil
@@ -344,7 +352,7 @@ public final class PhoneCore {
     }
 
     private func dispatch(_ json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) || handleFirmwareJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handleProjectTransferJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) || handleFirmwareJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects

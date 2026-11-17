@@ -114,6 +114,27 @@ class FakeLupeCore(
     override val playhead: StateFlow<PlayheadState> = _playhead
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
+    private val _transfers = kotlinx.coroutines.flow.MutableSharedFlow<TransferEvent>(extraBufferCapacity = 64)
+    override val transfers: kotlinx.coroutines.flow.SharedFlow<TransferEvent> = _transfers
+
+    /** Phone projects without an FM-1: a read gives a small stand-in project, a write steps through its progress, a slot op lands as FakeP5's. */
+    private fun fakeTransfer(t: ProjectTransfer) {
+        scope.launch {
+            kotlinx.coroutines.delay(300)
+            when (t.op) {
+                "read" -> _transfers.emit(TransferEvent(t.id, "done", fingerprint = "fake", skiff = lupeJson.parseToJsonElement(
+                    """{"record":"","patterns":[{"id":1,"data":""},{"id":2,"data":""}],"firmware":"2.5.1"}""")))
+                "write" -> {
+                    for (k in 1..4) { _transfers.emit(TransferEvent(t.id, "progress", progress = k / 4.0)); kotlinx.coroutines.delay(200) }
+                    _projects.update { p -> p.copy(name = t.name.orEmpty().uppercase().take(12), changed = false, slots = p.slots.map { it.copy(current = false) }, phoneEdited = false) }
+                    _transfers.emit(TransferEvent(t.id, "done", fingerprint = "fake"))
+                }
+                "loadSlot" -> { _projects.update { FakeP5.projects(it, ProjectLoad(t.slot ?: 0, confirmed = true)) }; _transfers.emit(TransferEvent(t.id, "done")) }
+                "saveSlot" -> { _projects.update { FakeP5.projects(it, ProjectSaveAs(t.slot ?: 0, t.name ?: it.name, confirmed = true)) }; _transfers.emit(TransferEvent(t.id, "done")) }
+                else -> _transfers.emit(TransferEvent(t.id, "failed", error = "refused"))
+            }
+        }
+    }
 
     private var replay: Job? = null
     private var ticker: Job? = null
@@ -431,6 +452,7 @@ class FakeLupeCore(
             is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam, is SetMixSetting -> _mix.update { FakeP5.mix(it, intent) }
             is SoundsTargetPick, is SoundsView, is PickPreset, is PickUser, ClearEntrySound, is SaveSound, is EraseUser -> _sounds.update { FakeP5.sounds(it, intent) }
             is ProjectLoad, is ProjectSave, is ProjectSaveAs, is ProjectRename -> _projects.update { FakeP5.projects(it, intent) }
+            is ProjectTransfer -> fakeTransfer(intent)
             else -> {}
         }
     }

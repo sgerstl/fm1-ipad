@@ -126,6 +126,8 @@ public struct ProjectsArea: Codable, Equatable, Sendable {
     public var changed: Bool
     /// Load, save or rename going on (the FM-1 stops the transport for a load or a save).
     public var busy: Bool
+    /// Changed since a phone project was last read or written (PhoneProjects.swift); nil: none was, this run.
+    public var phoneEdited: Bool? = nil
 }
 
 // MARK: intents

@@ -59,6 +59,9 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val patterns: StateFlow<PatternsState> = _patterns
     private val _patternPictures = MutableStateFlow(PatternPictures())
     override val patternPictures: StateFlow<PatternPictures> = _patternPictures
+    /** Phone projects' transfers (ProjectTransfer.kt): events, not state. Buffered so a burst of progress never blocks the UI thread. */
+    private val _transfers = kotlinx.coroutines.flow.MutableSharedFlow<TransferEvent>(extraBufferCapacity = 64)
+    override val transfers: kotlinx.coroutines.flow.SharedFlow<TransferEvent> = _transfers
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -80,7 +83,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     /** Swift calls this on the UI thread (the main actor). */
     fun receive(area: String, json: String) {
         val t = if (lagSince != 0L && (area == "page" || area == "shell")) SystemClock.uptimeMillis() else 0L
-        LinkLog.area(area, json)
+        LinkLog.area(area, if (json.length > 4000) json.take(4000) + "…" else json)   // (a transfer's read carries the whole project)
         if (t != 0L) {
             val doneAt = { lagMark("$area decoded in ${SystemClock.uptimeMillis() - t} ms (${json.length} bytes)") }
             receiveArea(area, json); doneAt()
@@ -122,6 +125,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                     if (c.running && !clockChecked) { clockChecked = true; LinkLog.add("clock: atMs ${c.atMs}, uptimeMillis $now, apart $skew ms" + if (kotlin.math.abs(skew) > 1000) " (too far: using the arrival time)" else "") }
                     _clock.value = if (c.running && kotlin.math.abs(skew) > 1000) c.copy(atMs = now) else c
                 }
+                "transfer" -> _transfers.tryEmit(lupeJson.decodeFromString(TransferEvent.serializer(), json))
                 "notice" -> { val n = lupeJson.decodeFromString(CoreNotice.serializer(), json); if (n.text.isNotEmpty()) _notice.value = n.copy(seq = _notice.value.seq + 1, text = if (n.kind == NoticeKind.Refusal) refusalWords(n.text) else n.text) }
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
