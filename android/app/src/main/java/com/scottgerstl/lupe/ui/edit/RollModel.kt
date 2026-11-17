@@ -45,22 +45,25 @@ object Roll {
     // ---- across the pattern: up to 64 steps in chunks of sixteen (batch item 9; Scott: it snaps to 16-step chunks, bar lines between them)
 
     /** How many chunks of sixteen a pattern of [total] steps is (the last may be shorter). */
-    fun chunks(total: Int): Int = max(1, (total + STEPS - 1) / STEPS)
+    fun chunks(total: Int, page: Int = STEPS): Int = max(1, (total + page - 1) / page)
+
+    /** The 8-step page (or chunk of [page]) holding step [i]. */
+    fun pageOf(i: Int, page: Int = STEPS): Int = max(0, i) / page
 
     /**
      * How far the grid can scroll: to the last chunk's start, and, with a panel docked over the right [dockPx], that much more so its last
      * step comes clear of it (decision 35, B: the steps keep their width and scroll under the panel).
      */
-    fun maxScroll(total: Int, chunkPx: Float, dockPx: Float): Float = (chunks(total) - 1) * chunkPx + max(0f, dockPx)
+    fun maxScroll(total: Int, chunkPx: Float, dockPx: Float, page: Int = STEPS): Float = (chunks(total, page) - 1) * chunkPx + max(0f, dockPx)
     fun clampScrollX(scroll: Float, maxScroll: Float): Float = scroll.coerceIn(0f, max(0f, maxScroll))
 
     /**
      * Where a scroll settles: the nearest chunk start, or (a panel docked) the nearest chunk start or that start plus the dock, which is
      * where its last steps come clear of the panel.
      */
-    fun snap(scroll: Float, total: Int, chunkPx: Float, dockPx: Float): Float {
+    fun snap(scroll: Float, total: Int, chunkPx: Float, dockPx: Float, page: Int = STEPS): Float {
         var best = 0f; var bestD = Float.MAX_VALUE
-        for (c in 0 until chunks(total)) for (o in if (dockPx > 0.5f) listOf(0f, dockPx) else listOf(0f)) {
+        for (c in 0 until chunks(total, page)) for (o in if (dockPx > 0.5f) listOf(0f, dockPx) else listOf(0f)) {
             val stop = c * chunkPx + o; val d = kotlin.math.abs(stop - scroll)
             if (d < bestD) { best = stop; bestD = d }
         }
@@ -78,15 +81,15 @@ object Roll {
      * The scroll that brings step [i] into view beside the dock: where it is if it already is, else the start of its chunk, else that start
      * plus the dock (its last steps). Always one of the places the grid settles.
      */
-    fun reveal(i: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int = STEPS): Float {
+    fun reveal(i: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int = STEPS, page: Int = STEPS): Float {
         if (i in inView(scroll, stepPx, viewPx, dockPx, total)) return scroll
-        val chunk = (i / STEPS) * STEPS * stepPx
+        val chunk = (i / page) * page * stepPx
         return if (i in inView(chunk, stepPx, viewPx, dockPx, total)) chunk else chunk + max(0f, dockPx)
     }
 
     /** While playing: null while the playhead's step is in view, else where to settle so it is (a page turn, not a crawl). */
-    fun follow(head: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int): Float? =
-        if (head < 0 || head >= total) null else reveal(head, scroll, stepPx, viewPx, dockPx, total).takeIf { abs(it - scroll) > 0.5f }
+    fun follow(head: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int, page: Int = STEPS): Float? =
+        if (head < 0 || head >= total) null else reveal(head, scroll, stepPx, viewPx, dockPx, total, page).takeIf { abs(it - scroll) > 0.5f }
 
     /** What is in view along the whole pattern, as the scroll indicator draws it: start and end, 0…1. */
     fun indicator(scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int): Pair<Float, Float> {
@@ -114,5 +117,25 @@ object Roll {
     fun visiblePitches(scrollY: Float, rowPx: Float, viewPx: Float): IntRange {
         val first = (scrollY / rowPx).toInt(); val last = ((scrollY + viewPx) / rowPx).toInt()
         return max(0, 127 - last)..min(127, 127 - first)
+    }
+
+    // ---- 8-step pages (hybrid UI, Scott 2026-11-17): with the sound panel docked the grid shows 8 steps a page beside it, not 16 under it
+
+    /** Steps a page: 8 while a panel is docked, else 16. */
+    const val PAGE_DOCKED = 8
+
+    /**
+     * Whether the grid turns its page for the playhead: with 8-step pages only when Follow is on (Scott, 2026-11-17); 16-step chunks keep
+     * following as built (batch item 9), unless a finger moved the steps a moment ago ([recentlyTouched]).
+     */
+    fun pagesFollow(page: Int, follow: Boolean, recentlyTouched: Boolean): Boolean = if (page == PAGE_DOCKED) follow else !recentlyTouched
+
+    /** The minimap's sixteen cells: the bar of 16 that holds [page] of [pageSteps] (its first step), so a 32-step pattern shows its second bar there. */
+    fun minimapStart(pageIndex: Int, pageSteps: Int): Int = (pageIndex * pageSteps / STEPS) * STEPS
+
+    /** The label at the minimap's left: "1–8", "9–16", "17–24"… (an en dash), clipped to the pattern's [total]. */
+    fun pageLabel(pageIndex: Int, pageSteps: Int, total: Int): String {
+        val a = pageIndex * pageSteps + 1; val b = min(total, (pageIndex + 1) * pageSteps)
+        return "$a\u2013$b"
     }
 }

@@ -128,6 +128,8 @@ class EditUi {
     var octave by mutableStateOf(4)
     /** The step panel is latched open (the Step key): it docks at the grid's right while a step is picked. */
     var stepPanel by mutableStateOf(false)
+    /** 8-step pages turn with the playhead (Scott, 2026-11-17: "follows only when Follow is on"). On by default, as `phone-01` draws it. */
+    var follow by mutableStateOf(true)
 }
 
 private val PANEL_H = 110.dp      // the step panel: a 32 dp header row, 4, the dials (74)
@@ -162,7 +164,12 @@ fun EditTab(
     val panelOpen = ui.stepPanel && stepPicked
     val panelT = animatedFloat(if (panelOpen) 1f else 0f, if (panelOpen) Dur.PANEL else Dur.FINGER)
     val dock = maxOf(DOCK_W * panelT.value, soundDock)
-    Column(modifier.fillMaxSize()) {
+    // a panel docked: a melodic grid shows 8 steps a page beside it (hybrid UI, Scott 2026-11-17), and the pattern bar spans the width left of it.
+    // A kit's lanes keep scrolling under it (decision 35, B) until the drum grid gets pages too.
+    val paged = !drum && (panelOpen || soundDock > 0.dp)
+    val beside = if (paged) dock + 8.dp * (dock / DOCK_W).coerceIn(0f, 1f) else 0.dp
+    Box(modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().padding(end = beside)) {
         Ruler(ed, track, core, stepPicked) {
             if (!drum) {
                 Key({ core.send(Intent.ChordToggle) }, "Chord", width = 64.dp, height = 28.dp, minTarget = 32.dp, on = ed.chord, role = Role.Switch,
@@ -173,6 +180,12 @@ fun EditTab(
             }
             StepsKey(ed, track, core)
             Spacer(Modifier.width(6.dp))
+            // Follow: only where the grid pages by 8 (a 16-step grid follows as built); on, it is the white key
+            if (paged) {
+                Key({ ui.follow = !ui.follow }, "Follow the playhead", width = 72.dp, height = 28.dp, minTarget = 32.dp, on = ui.follow, role = Role.Switch,
+                    state = if (ui.follow) "On: the page turns with the playhead" else "Off: turn pages by hand; the minimap shows the playhead") { fg -> KeyLabel("Follow", fg, style = LupeType.key.copy(fontSize = 13.sp)) }
+                Spacer(Modifier.width(6.dp))
+            }
             // "Step 6": latches the step panel. With nothing picked it picks the core's selected step (a kit: hold a cell first).
             val n = (if (drum) hit?.second else pick.step) ?: ed.selected
             Key({
@@ -192,7 +205,8 @@ fun EditTab(
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (drum) DrumGrid(ed, track, core, hit, dock) { hit = it }
-                    else com.scottgerstl.lupe.ui.edit.StepGrid(ed, track, core, pick.step, { pick.step = it }, dock, canPlay = { !(top.rec && top.playing) })
+                    else com.scottgerstl.lupe.ui.edit.StepGrid(ed, track, core, pick.step, { pick.step = it }, if (paged) 0.dp else dock, canPlay = { !(top.rec && top.playing) },
+                        pageSteps = if (paged) com.scottgerstl.lupe.ui.edit.Roll.PAGE_DOCKED else com.scottgerstl.lupe.ui.edit.Roll.STEPS, follow = ui.follow)
                 }
                 // the one-lane view (decision 7), under the grid while Lane is on
                 if (ui.lane && !drum) {
@@ -200,17 +214,18 @@ fun EditTab(
                     com.scottgerstl.lupe.ui.automation.LaneView(ed, auto, core, track, Modifier.fillMaxWidth().height(96.dp))
                 }
             }
-            // the step panel, docked: it slides in from the right over the grid (with Reduce Motion it only fades)
-            if (panelT.value > 0.001f) Box(
-                Modifier.align(Alignment.TopEnd).width(DOCK_W).fillMaxHeight()
-                    .graphicsLayer { if (reduce) alpha = panelT.value else translationX = (1f - panelT.value) * size.width; shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(12.dp); clip = true }
-                    .background(Tok.panel)
-                    .pointerInput(Unit) { detectTapGestures { } }      // a touch on the panel doesn't reach the grid under it
-                    .semantics { paneTitle = "Step panel"; isTraversalGroup = true }
-                    .padding(12.dp),
-            ) {
-                if (drum) HitPanel(ed, track, core, hit, narrow = true) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
-            }
+        }
+    }
+    // the step panel, docked at the tab's right: `panel`, its left corners at the sheet radius (spec 4.3); it slides in from the right (with Reduce Motion it only fades)
+    if (panelT.value > 0.001f) Box(
+            Modifier.align(Alignment.TopEnd).width(DOCK_W).fillMaxHeight()
+                .graphicsLayer { if (reduce) alpha = panelT.value else translationX = (1f - panelT.value) * size.width; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
+                .background(Tok.panel)
+                .pointerInput(Unit) { detectTapGestures { } }      // a touch on the panel doesn't reach the grid under it
+                .semantics { paneTitle = "Step panel"; isTraversalGroup = true }
+                .padding(12.dp),
+        ) {
+            if (drum) HitPanel(ed, track, core, hit, narrow = true) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
         }
     }
 }

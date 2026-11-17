@@ -303,12 +303,11 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
     // It stands out from the page: the track's colour muted, 35 % over the page. Computed for all six track colours (2026-11-14): white text is
     // 6.7:1 or better on it, the raised grey of the labels 4.5:1 or better (lime is the least, 4.52), the track's own colour (the dials' arcs)
     // 3.6:1 or better. At 40 % the labels fall under 4.5:1 on yellow and lime, so 35 it is. A line in the track's colour marks its left edge.
-    val surface = androidx.compose.ui.graphics.lerp(Tok.page, colour, PANEL_TINT)
     androidx.compose.foundation.layout.Column(
         modifier.width(DOCK_W).fillMaxHeight()
-            .graphicsLayer { alpha = if (reduce) t else 1f; if (!reduce) translationX = (1f - t) * size.width; shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(12.dp.toPx()); clip = true }
-            .background(surface)
-            .drawBehind { drawRect(colour, size = androidx.compose.ui.geometry.Size(1.5.dp.toPx(), size.height)) }
+            // hybrid UI (spec 4.3): `panel`, its left corners at the sheet radius, beside the grid rather than over it; no border, no track tint
+            .graphicsLayer { alpha = if (reduce) t else 1f; if (!reduce) translationX = (1f - t) * size.width; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
+            .background(Tok.panel)
             // a swipe to the right that no dial took shuts it; taps on the panel don't reach what is under it
             .pointerInput(Unit) {
                 var total = 0f
@@ -319,7 +318,7 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
                 paneTitle = "Sound page ${last.family}"; isTraversalGroup = true
                 customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the sound panel") { onDismiss(); true })
             }
-            .padding(12.dp),
+            .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
     ) {
         SoundDials(last, core, Modifier.fillMaxWidth().height(110.dp), notice, trailing = {
             Key(onDismiss, "Close the sound panel", width = 32.dp, height = 28.dp, minTarget = 32.dp) { fg ->

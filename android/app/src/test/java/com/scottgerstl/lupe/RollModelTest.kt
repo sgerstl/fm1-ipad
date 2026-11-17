@@ -86,4 +86,24 @@ class RollModelTest {
         val r = Roll.visiblePitches(Roll.scrollYFor(71, 24f), 24f, 288f)
         assertTrue(71 in r && 60 in r); assertTrue(r.first >= 59 && r.last <= 72)
     }
+
+    /** Hybrid UI (Scott, 2026-11-17): with a panel docked a melodic grid pages by 8, and follows the playhead only with Follow on. */
+    @Test fun eightStepPagesBesideADockedPanel() {
+        val view = 480f; val step = view / Roll.PAGE_DOCKED
+        assertEquals(2, Roll.chunks(16, Roll.PAGE_DOCKED)); assertEquals(8, Roll.chunks(64, Roll.PAGE_DOCKED))
+        assertEquals(480f, Roll.maxScroll(16, view, 0f, Roll.PAGE_DOCKED), 0f)        // one page to the right
+        assertEquals(0f, Roll.snap(200f, 16, view, 0f, Roll.PAGE_DOCKED), 0f)          // under half a page: back
+        assertEquals(480f, Roll.snap(260f, 16, view, 0f, Roll.PAGE_DOCKED), 0f)        // over: on to 9–16
+        assertEquals(480f, Roll.follow(8, 0f, step, view, 0f, 16, Roll.PAGE_DOCKED)!!, 0f)   // step 9 plays: page 2
+        assertEquals(null, Roll.follow(3, 0f, step, view, 0f, 16, Roll.PAGE_DOCKED))  // step 4 is in view: nothing moves
+        assertEquals(1, Roll.pageOf(9, Roll.PAGE_DOCKED))
+        // Follow gates 8-step pages; 16-step chunks follow unless a finger moved them a moment ago (as built)
+        assertTrue(Roll.pagesFollow(8, follow = true, recentlyTouched = true))
+        assertFalse(Roll.pagesFollow(8, follow = false, recentlyTouched = false))
+        assertTrue(Roll.pagesFollow(16, follow = false, recentlyTouched = false))
+        assertFalse(Roll.pagesFollow(16, follow = true, recentlyTouched = true))
+        // the minimap shows the bar of 16 holding the page, and its label
+        assertEquals(0, Roll.minimapStart(1, 8)); assertEquals(16, Roll.minimapStart(2, 8)); assertEquals(16, Roll.minimapStart(3, 8))
+        assertEquals("1\u20138", Roll.pageLabel(0, 8, 16)); assertEquals("9\u201312", Roll.pageLabel(1, 8, 12))
+    }
 }

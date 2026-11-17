@@ -199,6 +199,8 @@ Motion follows `DESIGN.md`. Particular to the editor:
 
 ## 3. Build notes
 
+- `.android` hybrid build (branch `hybrid-ui-android`, 2026-11-17): with the sound panel or the step panel docked, a **melodic** grid shows 8 steps a page beside it (`StepGrid` `pageSteps = Roll.PAGE_DOCKED`), the ruler and grid giving up the panel's width plus 8; under the grid the 16-cell minimap (`MiniMap`: the page's cells on `control`, the other page's on `panel`, a sliding `lifted` window, note dots, "1–8" / "9–16"). A tap on a cell turns the page (TalkBack: "Show steps 9–16"). Pages flip on the spring (Labs › Hybrid · Edit page flip). The **Follow** key (on by default, as `phone-01`) appears only while the grid pages by 8; off, the page stays where the hand put it and the minimap marks the playhead's cell. The 16-step grid (panel shut) still follows as built (batch item 9). Paging rules are pure in `RollModel.kt` (`pagesFollow`, `minimapStart`, `pageLabel`) and tested. **Not done:** a kit's lanes still scroll under the panel (decision 35, B); the panel stays 360 wide, not the spec's 280, because the sound panel's four dials need it (the spec's 2 × 2 tiles aren't built); the ruler keeps its own keys (Chord, Lane, steps, Step N, the step menu), so the spec's pattern bar (badge, two lines, Step ⌄, Velocity) isn't built and the track name truncates beside the panel.
+
 - `PatternPane` is shared by Pads and Timeline; the grids live in UIHostingControllers (`TwoFingerScrollView`), so grid metrics are passed in, not read from the environment.
 - The editor's least height is set so the step inspector's short layout fits whole without scrolling (2026-11-06).
 - The selection bar is inline in the Song tab's header and floats over the grid's foot elsewhere (`inline`).

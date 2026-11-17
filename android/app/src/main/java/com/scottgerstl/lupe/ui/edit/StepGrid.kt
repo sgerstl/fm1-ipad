@@ -1,5 +1,12 @@
 package com.scottgerstl.lupe.ui.edit
 
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.unit.sp
+
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -93,7 +100,15 @@ fun stepNotes(s: Step): List<Int> = if (!s.on) emptyList() else s.notes.ifEmpty 
  * playing (a note played then would be recorded).
  */
 @Composable
-fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick: (Int?) -> Unit, dock: Dp, canPlay: () -> Boolean, modifier: Modifier = Modifier) {
+fun StepGrid(
+    ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick: (Int?) -> Unit, dock: Dp, canPlay: () -> Boolean, modifier: Modifier = Modifier,
+    /** Steps a page: 16, or [Roll.PAGE_DOCKED] beside a docked panel (the caller then gives the grid only the room left of it, and [dock] is 0). */
+    pageSteps: Int = Roll.STEPS,
+    /** 8-step pages turn with the playhead only while Follow is on (Scott, 2026-11-17). */
+    follow: Boolean = true,
+) {
+    val motion = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val paged = pageSteps == Roll.PAGE_DOCKED
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val reduce = LocalReduceMotion.current
@@ -111,29 +126,34 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
         val total = maxOf(ed.patternSteps, ed.steps.size, 1).coerceAtMost(64)
         val totalNow by rememberUpdatedState(total)
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val viewH = with(density) { maxHeight.toPx() }
+            // 8-step pages: the minimap (spec 3.14) takes 28 dp and a 6 dp gap at the foot
+            val mapH = if (paged) MINIMAP_H + 6.dp else 0.dp
+            val viewH = with(density) { (maxHeight - mapH).toPx() }
             val rowPx = viewH / Roll.ROWS
             val gridW = maxWidth - PIANO_EDGE - 4.dp
             val viewPx = with(density) { gridW.toPx() }
-            val stepPx = viewPx / Roll.STEPS
+            val stepPx = viewPx / pageSteps
             val dockPx = with(density) { dock.toPx() }.coerceAtMost(viewPx - stepPx * 4)
             val geo by rememberUpdatedState(floatArrayOf(rowPx, viewH, stepPx, viewPx, dockPx))
+            val pageNow by rememberUpdatedState(pageSteps)
             // the window opens on the pattern's notes; after that it is where the finger left it
             val sy = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(ed.steps.flatMap { stepNotes(it) }), rowPx) else Roll.clampScrollY(scrollY, rowPx, viewH)
-            fun maxScroll() = Roll.maxScroll(totalNow, geo[3], geo[4])
+            fun maxScroll() = Roll.maxScroll(totalNow, geo[3], geo[4], pageNow)
             fun sx() = Roll.clampScrollX(scrollX, maxScroll())
             /** Eases the steps to [to] (a place the grid settles; at once with Reduce Motion): nothing pops. */
             suspend fun glide(to: Float) {
                 val target = Roll.clampScrollX(to, maxScroll())
-                if (kotlin.math.abs(target - scrollX) > 0.5f) animate(scrollX, target, animationSpec = tween(if (reduce) 0 else Dur.PANEL, easing = EaseOut)) { v, _ -> scrollX = v }
+                // 8-step pages flip on the spring (spec §5, Labs: Edit page flip); with Reduce Motion the page cuts and its label cross-fades
+                if (kotlin.math.abs(target - scrollX) > 0.5f) animate(scrollX, target,
+                    animationSpec = if (reduce) tween(0) else if (paged) com.scottgerstl.lupe.ui.theme.lupeSpring(motion.pageFlipMs, motion.bounce) else tween(Dur.PANEL, easing = EaseOut)) { v, _ -> scrollX = v }
             }
             // a panel docking or leaving, the pattern's length changing, or a step picked: the picked step comes into view (clear of the panel),
             // else the grid settles on its nearest chunk
-            LaunchedEffect(dockPx > 0f, picked, total) { glide(picked?.let { Roll.reveal(it, sx(), stepPx, viewPx, dockPx, total) } ?: Roll.snap(sx(), total, viewPx, dockPx)) }
+            LaunchedEffect(dockPx > 0f, picked, total, pageSteps) { glide(picked?.let { Roll.reveal(it, sx(), stepPx, viewPx, dockPx, total, pageSteps) } ?: Roll.snap(sx(), total, viewPx, dockPx, pageSteps)) }
             // playing: the playhead's chunk (batch item 9), unless a finger moved the steps in the last two and a half seconds
             LaunchedEffect(ed.playhead, total) {
-                if (ed.playhead < 0 || System.currentTimeMillis() - touchedAt < 2500L) return@LaunchedEffect
-                Roll.follow(ed.playhead, sx(), stepPx, viewPx, dockPx, total)?.let { glide(it) }
+                if (ed.playhead < 0 || !Roll.pagesFollow(pageSteps, follow, System.currentTimeMillis() - touchedAt < 2500L)) return@LaunchedEffect
+                Roll.follow(ed.playhead, sx(), stepPx, viewPx, dockPx, total, pageSteps)?.let { glide(it) }
             }
 
             fun play(midi: Int) { if (canPlay()) { core.send(PlayNote(note = midi, on = true)); scope.launch { delay(160); core.send(PlayNote(note = midi, on = false)) } } }
@@ -149,7 +169,8 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
                 }
             }
 
-            Row(Modifier.fillMaxSize()) {
+            androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().height(with(density) { viewH.toDp() })) {
                 PianoEdge(sy, rowPx, core, canPlay, Modifier.width(PIANO_EDGE).fillMaxHeight())
                 Spacer(Modifier.width(4.dp))
                 Box(
@@ -159,13 +180,13 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
                             detectDragGestures(
                                 onDragStart = { touchedAt = System.currentTimeMillis() },
                                 // let go: the steps settle on a chunk (or, a panel docked, on the place its last steps come clear)
-                                onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4])) } },
-                                onDragCancel = { scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4])) } },
+                                onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4], pageNow)) } },
+                                onDragCancel = { scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4], pageNow)) } },
                             ) { change, d ->
                                 change.consume(); touchedAt = System.currentTimeMillis()
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), geo[0]) else scrollY
                                 scrollY = Roll.clampScrollY(base - d.y, geo[0], geo[1])
-                                scrollX = Roll.clampScrollX(scrollX - d.x, Roll.maxScroll(totalNow, geo[3], geo[4]))
+                                scrollX = Roll.clampScrollX(scrollX - d.x, Roll.maxScroll(totalNow, geo[3], geo[4], pageNow))
                             }
                         }
                         // a tap writes or picks; a hold is lock mode for as long as the finger stays down (the FM-1's own gesture)
@@ -175,7 +196,7 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
                                 touchedAt = System.currentTimeMillis()
                                 val g = geo
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), g[0]) else Roll.clampScrollY(scrollY, g[0], g[1])
-                                val i = Roll.stepAt(down.position.x, Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4])), g[2], totalNow); val pitch = Roll.pitchAt(down.position.y, base, g[0])
+                                val i = Roll.stepAt(down.position.x, Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4], pageNow)), g[2], totalNow); val pitch = Roll.pitchAt(down.position.y, base, g[0])
                                 var cancelled = false
                                 val up = withTimeoutOrNull(longPress) { waitForUpOrCancellation().also { if (it == null) cancelled = true } }
                                 if (cancelled) return@awaitEachGesture
@@ -253,6 +274,61 @@ fun StepGrid(ed: EditorState, track: Color, core: LupeCore, picked: Int?, onPick
                                 },
                         )
                     }
+                }
+            }
+            // 8-step pages: the minimap (spec 3.14) under the grid; its label sits under the piano edge
+            if (paged) {
+                Spacer(Modifier.height(6.dp))
+                val pagePx = pageSteps * stepPx
+                MiniMap(ed, track, total, pageSteps, sx() / pagePx.coerceAtLeast(1f), follow, gridW, reduce) { p -> touchedAt = System.currentTimeMillis(); scope.launch { glide(p * pagePx) } }
+            }
+            }
+        }
+    }
+}
+
+private val MINIMAP_H = 28.dp
+
+/**
+ * The 8-step pages' minimap (spec 3.14): sixteen cells as wide as the grid, the current page's on `control`, the other page's on `panel`, a `lifted`
+ * window at radius 10 behind the page showing that slides with the grid, the notes as dots in the track's colour. With Follow off it marks the
+ * playhead's cell, so you can see where the song is. A tap on a cell turns to its page (the non-drag way in, WCAG 2.5.7); the label at the left
+ * reads "1–8" or "9–16", cross-fading as the page turns.
+ */
+@Composable
+private fun MiniMap(ed: EditorState, track: Color, total: Int, pageSteps: Int, pageAt: Float, follow: Boolean, gridW: Dp, reduce: Boolean, onPage: (Int) -> Unit) {
+    val page = kotlin.math.round(pageAt).toInt().coerceAtLeast(0)
+    val start = Roll.minimapStart(page, pageSteps)
+    val cells = Roll.STEPS
+    Row(Modifier.fillMaxWidth().height(MINIMAP_H), verticalAlignment = Alignment.CenterVertically) {
+        com.scottgerstl.lupe.ui.theme.LupeCrossfade(Roll.pageLabel(page, pageSteps, total), Modifier.width(PIANO_EDGE + 4.dp)) { label ->
+            BasicText(label, Modifier.semantics { contentDescription = "Steps $label" },
+                style = com.scottgerstl.lupe.ui.theme.LupeType.number.copy(fontSize = 13.sp, lineHeight = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Tok.text2Raised))
+        }
+        Box(
+            Modifier.width(gridW).fillMaxHeight()
+                .pointerInput(start, pageSteps) { detectTapGestures { o -> val c = (o.x / (size.width / cells.toFloat())).toInt().coerceIn(0, cells - 1); val step = start + c; if (step < total) onPage(step / pageSteps) } }
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    contentDescription = "Page ${Roll.pageLabel(page, pageSteps, total)} of $total steps"
+                    customActions = (0 until Roll.chunks(total, pageSteps)).filter { it != page }.map { p -> CustomAccessibilityAction("Show steps ${Roll.pageLabel(p, pageSteps, total)}") { onPage(p); true } }
+                },
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val gap = 2.dp.toPx(); val cw = size.width / cells
+                // the window behind the page showing: slides with the grid (the fraction of a page it has scrolled)
+                val wx = ((pageAt * pageSteps) - start) * cw
+                drawRoundRect(Tok.lifted, Offset(wx, 0f), Size(pageSteps * cw, size.height), CornerRadius(10.dp.toPx()))
+                for (c in 0 until cells) {
+                    val step = start + c
+                    if (step >= total) break
+                    val onPage = step / pageSteps == page
+                    val x = c * cw + gap; val inset = 4.dp.toPx()
+                    val cell = Size(cw - 2 * gap, size.height - 2 * inset)
+                    drawRoundRect(if (onPage) Tok.control else Tok.panel, Offset(x, inset), cell, CornerRadius(4.dp.toPx()))
+                    if (!follow && step == ed.playhead) drawRoundRect(Tok.text.copy(alpha = 0.35f), Offset(x, inset), cell, CornerRadius(4.dp.toPx()))
+                    val s = ed.steps.getOrNull(step)
+                    if (s != null && stepNotes(s).isNotEmpty()) drawCircle(track, 3.dp.toPx(), Offset(x + cell.width / 2, size.height / 2))
                 }
             }
         }
