@@ -153,8 +153,8 @@ fun DrawScope.playTriangle(color: Color) {
 
 /** ▶ and ■, crossfading by [stop] (0 = play, 1 = stop). The shape carries the state, not only the key's colour. */
 @Composable
-fun PlayStopIcon(stop: Float, color: Color) =
-    Canvas(Modifier.size(16.dp)) {
+fun PlayStopIcon(stop: Float, color: Color, iconSize: Dp = 16.dp) =
+    Canvas(Modifier.size(iconSize)) {
         if (stop < 1f) { drawContext.canvas.save(); playTriangle(color.copy(alpha = 1f - stop)); drawContext.canvas.restore() }
         if (stop > 0f) drawRoundRect(color.copy(alpha = stop), Offset(size.width * 0.1f, size.height * 0.1f), Size(size.width * 0.8f, size.height * 0.8f), CornerRadius(2.dp.toPx()))
     }

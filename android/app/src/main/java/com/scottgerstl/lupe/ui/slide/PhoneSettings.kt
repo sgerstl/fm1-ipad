@@ -56,6 +56,26 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     fun chooseMenuSpeed(v: Int) { menuSpeed = v.coerceIn(50, 200); prefs?.edit()?.putInt(MENU_SPEED, menuSpeed)?.apply() }
 
     /**
+     * Hybrid motion (design/hybrid-ui/spec.md §5; CLAUDE.md rule 3: added 2026-11-17, review 2026-12-01). The spatial spring's bounce in percent (25),
+     * the at-the-finger length (200 ms), sheets and docked panels (300 ms), the 8-step page flip (280 ms), and how far a press squashes (92 %).
+     */
+    var motionBounce by mutableStateOf(prefs?.getInt(M_BOUNCE, 25) ?: 25)
+        private set
+    fun chooseMotionBounce(v: Int) { motionBounce = v.coerceIn(0, 50); prefs?.edit()?.putInt(M_BOUNCE, motionBounce)?.apply() }
+    var motionFingerMs by mutableStateOf(prefs?.getInt(M_FINGER, 200) ?: 200)
+        private set
+    fun chooseMotionFinger(v: Int) { motionFingerMs = v.coerceIn(100, 400); prefs?.edit()?.putInt(M_FINGER, motionFingerMs)?.apply() }
+    var motionPanelMs by mutableStateOf(prefs?.getInt(M_PANEL, 300) ?: 300)
+        private set
+    fun chooseMotionPanel(v: Int) { motionPanelMs = v.coerceIn(150, 480); prefs?.edit()?.putInt(M_PANEL, motionPanelMs)?.apply() }
+    var motionPageFlipMs by mutableStateOf(prefs?.getInt(M_FLIP, 280) ?: 280)
+        private set
+    fun chooseMotionPageFlip(v: Int) { motionPageFlipMs = v.coerceIn(150, 480); prefs?.edit()?.putInt(M_FLIP, motionPageFlipMs)?.apply() }
+    var motionPressScale by mutableStateOf(prefs?.getInt(M_PRESS, 92) ?: 92)
+        private set
+    fun chooseMotionPress(v: Int) { motionPressScale = v.coerceIn(80, 100); prefs?.edit()?.putInt(M_PRESS, motionPressScale)?.apply() }
+
+    /**
      * Pad drag and the edge wells (CLAUDE.md rule 3; added 2026-11-15, review 2026-11-29; the iPhone's numbers, 373dadb): how far a pad is slid before it lifts (dp, 8),
      * how long a press must be before a slide counts as a drag, not a swipe (ms, 150), how long the wells take to slide in (ms, 220; out takes 72 % of it),
      * how far out a well starts to glow (dp, 200; the glow rises steadily to full at the hot point) and how near before it is hot, so a drop there acts (dp, 64).
@@ -130,6 +150,11 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val WELL_GLOW = "labs_well_glow_pct"      // (new keys with the new defaults, 2026-11-15)
         const val WELL_HOT = "labs_well_hot2"
         const val GRAPHICS = "show_graphics"
+        const val M_BOUNCE = "labs_motion_bounce"
+        const val M_FINGER = "labs_motion_finger_ms"
+        const val M_PANEL = "labs_motion_panel_ms"
+        const val M_FLIP = "labs_motion_page_flip_ms"
+        const val M_PRESS = "labs_motion_press_scale"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"

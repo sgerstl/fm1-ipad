@@ -164,6 +164,8 @@ Particular to the header:
 
 ## 3. Build notes
 
+- `.android` hybrid build (branch `hybrid-ui-android`, 2026-11-17): `TopBar.kt` (Song pill, `Tabs`, Bar pill, readout, `TransportKey`), `Tabs.kt` (`SegmentGroup`: connected pills, the selected one's corners on the spring), `Header.kt` (`HeaderPill`, `TransportKey`). 56 tall; the hairline under the header is gone (containment by surface steps, spec 1.3). The waiting count sits on the Bar pill as a small white disc, since a second line can't live inside a pill. Give-way (`headerGiveWay`) runs at 790 / 750 / 720 / 700 dp; the Pixel 10 Pro's landscape width needs none of it. Play/Stop's corner inset is computed for the 56 circle (`headerCornerInset(keyR = 28)`). The readout keeps Android's menu (I6 is still open), so the tempo popup isn't built. The track thread's place is untouched (`[open]` in spec 7).
+
 - Android's header is on `claude/android-p2-shell-02c86f` (and P1's branch), not the trunk. The trunk's `android/` holds only `BRIDGE.md`.
 - `DESIGN.md`'s header rule (decision 23 says it was written into the repo) exists only on the Android branch; the trunk's `DESIGN.md` doesn't have it yet.
 - Android already shows Cancel waiting in its launch menu, but only while something waits; the iPhone's always shows it, disabled when nothing waits, with a note above it. The keeper is the iPhone's (decision 33).

@@ -22,19 +22,19 @@ class PlaceFollowerTest {
         assertTrue(f.follow(s("SAVE", 35, "PRESETS"), PlaceNow(Tab.Pads)).isEmpty())
     }
 
-    /** Decision 44: GLO's DELAY, REVERB, CHORUS and GLOBAL are the docked sound panel's pages (it opens by itself); the follower opens nothing for them. */
-    @Test fun gloBusPagesOpenNothingHereTheSoundPanelTakesThem() {
+    /** Hybrid UI (2026-11-17, superseding decision 44): GLO's DELAY, REVERB, CHORUS and GLOBAL are the Mix tab's sub-pages; the follower takes the phone there. */
+    @Test fun gloBusPagesTakeThePhoneToTheMixTab() {
         val f = primed()
-        assertTrue(f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Timeline)).isEmpty())
-        assertTrue(f.follow(s("GLO", 33, "CHORUS"), PlaceNow(Tab.Timeline)).isEmpty())
-        assertTrue(f.follow(s("HOME"), PlaceNow(Tab.Timeline)).isEmpty())
+        assertEquals(listOf(PlaceAction.Tab(Tab.Mix)), f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Timeline)))
+        assertTrue(f.follow(s("GLO", 33, "CHORUS"), PlaceNow(Tab.Mix)).isEmpty())
+        assertEquals(listOf(PlaceAction.Tab(Tab.Timeline)), f.follow(s("HOME"), PlaceNow(Tab.Mix)))
     }
 
     /** GLO 1/5 MIXER is the Mix tab. */
     @Test fun gloOnItsMixerPageTakesThePhoneToTheMixTab() {
         val f = primed()
         assertEquals(listOf(PlaceAction.Tab(Tab.Mix)), f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Pads)))
-        // on to DELAY: the tab stays, the panel docks over its right side (not the follower's)
+        // on to DELAY: the tab stays; its sub-page follows the core's mix area
         assertTrue(f.follow(s("GLO", 31, "DELAY"), PlaceNow(Tab.Mix)).isEmpty())
         // HOME puts the phone back on the tab it was on
         assertEquals(listOf(PlaceAction.Tab(Tab.Pads)), f.follow(s("HOME"), PlaceNow(Tab.Mix)))

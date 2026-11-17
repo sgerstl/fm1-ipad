@@ -94,7 +94,8 @@ fun rememberMix(core: LupeCore): Pair<MixUi, MixActions> {
     val keys = remember(state.sections) { state.sections.map { it.key }.ifEmpty { listOf("mixer", "delay", "reverb", "chorus", "global") } }
     val actions = remember(core, keys) {
         MixActions(
-            page = { core.send(MixSectionPick(keys.getOrElse(it) { "mixer" })) },
+            // a sub-page sends the FM-1 to that GLO page; the core's `mix` area follows it, as it follows GLO pressed on the FM-1 (hybrid UI, 2026-11-17)
+            page = { i -> com.scottgerstl.lupe.core.ScreenPages.GLO.getOrNull(i)?.let { core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", it.first)) } ?: core.send(MixSectionPick(keys.getOrElse(i) { "mixer" })) },
             level = { t, v -> core.send(SetLevel(t, v)) },
             pan = { t, v -> core.send(SetPan(t, v - 64)) },
             send = { t, v -> core.send(SetReverb(t, v)) },

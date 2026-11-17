@@ -143,6 +143,8 @@ Motion follows `DESIGN.md`. Particular to Mix: the strips move between one row a
 
 ## 3. Build notes
 
+- `.android` hybrid build (branch `hybrid-ui-android`, 2026-11-17): `MixPage.kt` is now the strips (spec 4.5): sub-pages Mixer · Delay · Reverb · Chorus · Global, six strips with the level fader drawn up, its meter, dB, the values line, Mute and Solo joined, and the strip's long-press menu (Pan, Reverb send, Select sound…) at the finger. The shared pages render the bus card in the tab (`BusPage` in `Body.kt`, made by `busPageState` in `GloPage.kt`) instead of the docked sound panel: the agreed map (GLO opens the Mix tab and steps its pages) supersedes decision 44 for the phone. A sub-page tap sends the FM-1 to that GLO page (`ScreenGoto`) and the tab follows the core's `mix` area. The rail's GLO key opens the tab, then steps. The level fader slides up and down whatever Slide to turn says. This answers this file's level-and-send `[open]` for the Android phone (pan and send in the menu, Scott's decision 4); the Global set question stays open, and Android's dials are what show.
+
 - Fixed sizes for strips and cards: with flexible stacks a value turning on a card re-measured the whole tab every frame, up to 233 ms hitches on the iPad Air (Instruments, 2026-11-06).
 - All four cards are built at once, not lazily: lazy building cost 70–85 ms per swipe (Instruments, 2026-11-06).
 - Each strip redraws only when its own row changes (`MixRow`, `MixerStrip` is `Equatable`).

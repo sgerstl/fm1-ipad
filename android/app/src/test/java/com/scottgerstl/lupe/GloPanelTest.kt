@@ -55,12 +55,29 @@ class RailKeyActionTest {
     }
 }
 
-class MixRowSpecTest {
-    @org.junit.Test fun sixRowsFitAtTheIPhonesHeightWhenThereIsRoomAndShrinkWhenNot() {
-        val spec = com.scottgerstl.lupe.ui.mix.MixRowSpec
-        assertEquals(48f, spec.rowHeight(330f, 6), 0.001f)          // 6 × 48 + 5 × 4 = 308 fits in 330
-        assertEquals((290f - 20f) / 6, spec.rowHeight(290f, 6), 0.001f)   // fewer: they share it
-        assertEquals(36f, spec.rowHeight(100f, 6), 0f)             // never under 36
-        assertEquals(92f, spec.HEAD, 0f); assertEquals(84f, spec.PAN, 0f); assertEquals(84f, spec.SEND, 0f); assertEquals(120f, spec.LEVEL_MIN, 0f)
+/** Hybrid UI (2026-11-17): the Mix tab's strips, the header's give-way order and the GLO key. */
+class HybridMixHeaderTest {
+    @org.junit.Test fun theValuesLineShortensCentreToC() {
+        assertEquals("C", com.scottgerstl.lupe.ui.mix.panShort("CENTER"))
+        assertEquals("C", com.scottgerstl.lupe.ui.mix.panShort("0"))
+        assertEquals("L12", com.scottgerstl.lupe.ui.mix.panShort(" L12 "))
+    }
+
+    @org.junit.Test fun theHeaderGivesWayInTheSpecsOrderAsItNarrows() {
+        fun g(w: Float) = com.scottgerstl.lupe.ui.shell.headerGiveWay(w)
+        assertEquals(0, g(914f))        // the Pixel's landscape width: nothing gives
+        assertEquals(1, g(760f))        // the song name truncates first
+        assertEquals(2, g(734f))        // the iPhone inside its safe areas: tabs tighten too
+        assertEquals(4, g(600f))
+        for (w in 500..1000) assertTrue(g(w.toFloat()) >= g(w + 1f))   // never gives back as it narrows
+    }
+
+    @org.junit.Test fun gloOpensTheMixTabThenStepsItsPages() {
+        val pages = com.scottgerstl.lupe.core.ScreenPages.GLO.map { it.first }
+        fun screen(key: String, page: Int) = com.scottgerstl.lupe.core.Fm1ScreenState(key = key, page = page)
+        assertEquals(pages[0], com.scottgerstl.lupe.ui.shell.gloStep(false, screen("HOME", 0)))      // off the tab, FM-1 elsewhere: MIXER
+        assertEquals(pages[2], com.scottgerstl.lupe.ui.shell.gloStep(false, screen("GLO", pages[2])))  // off the tab: where the FM-1 is
+        assertEquals(pages[3], com.scottgerstl.lupe.ui.shell.gloStep(true, screen("GLO", pages[2])))   // on it: the next page
+        assertEquals(pages[0], com.scottgerstl.lupe.ui.shell.gloStep(true, screen("GLO", pages.last())))  // and round
     }
 }

@@ -68,7 +68,8 @@ class PlaceFollower {
             // by itself (P1), so the phone sends nothing for it (a send could pull the FM-1 back a page)
             // the MIXER page is the Mix tab now (batch item 11); DELAY, REVERB, CHORUS and GLOBAL are the pop-up
             // decision 44: MIXER is the Mix tab; DELAY, REVERB, CHORUS and GLOBAL are the docked sound panel's pages (it opens by itself on the page change), so nothing opens here
-            "GLO" -> { sounds(false); projects(false); lane(false); mix(false); if (screen.title == "MIXER") goTab(Tab.Mix) }
+            // hybrid UI (2026-11-17): every GLO page is the Mix tab, its sub-page following the core's `mix` area
+            "GLO" -> { sounds(false); projects(false); lane(false); mix(false); goTab(Tab.Mix) }
             "SAVE" -> { mix(false); lane(false); when (screen.title) {
                 "PRESETS", "USER" -> { projects(false); sounds(true); out += PlaceAction.SoundsView(user = screen.title == "USER") }
                 "PROJECT" -> { sounds(false); projects(true) }

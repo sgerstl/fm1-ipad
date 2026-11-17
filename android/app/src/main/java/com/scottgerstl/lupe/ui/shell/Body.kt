@@ -104,7 +104,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     // GLO's shared pages (DELAY, REVERB, CHORUS, GLOBAL) are sound pages too (decision 44): the panel's page is made from the core's `mix` area
     val mixNow by core.mix.collectAsStateWithLifecycle()
     val screenLive by core.fm1Screen.collectAsStateWithLifecycle()
-    val gloPage = gloPageState(mixNow, screenLive, pads.selected.track, pads.rows.firstOrNull { it.track == pads.selected.track }?.name?.substringAfter(" · ").orEmpty())
+    // hybrid UI (2026-11-17): GLO's shared pages are the Mix tab's sub-pages now, not the docked panel's (decision 44 superseded by the agreed map)
+    val gloPage: PageState? = null
+    val selName = pads.rows.firstOrNull { it.track == pads.selected.track }?.name?.substringAfter(" · ").orEmpty()
     androidx.activity.compose.BackHandler(enabled = shell.bottom.kind == BottomKind.Page || gloPage != null) { askCore.send(GoHome) }
 
     FollowFm1Screen(shell, core, editUi, touches, phoneAsks)
@@ -151,7 +153,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                 val fm1Family = if (glo) "GLO" else if (soundUp) soundPage0.family else null
                 // a shut panel with the FM-1 already on that family's page: the FM-1 won't change, so the panel is simply shown
                 if (railKeyAction(family, if (docked) soundPage.family else null, fm1Family) == RailKeyAction.Show) { panel.show(); return@SoundKeysRail }
-                if (family == "GLO") { askCore.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", gloKeyTarget(docked && soundPage.family == "GLO", soundPage.page))); return@SoundKeysRail }
+                // GLO opens the Mix tab; pressed again there, it steps GLO's pages (the agreed map, 2026-11-17)
+                if (family == "GLO") { val onMix = shell.tab == Tab.Mix; if (!onMix) askCore.send(Intent.SetTab(Tab.Mix))
+                    askCore.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", gloStep(onMix, screenLive))); return@SoundKeysRail }
                 askCore.send(com.scottgerstl.lupe.core.PickPage(family, railTarget(family, if (docked) soundPage.family else null, soundPage.pages.map { it.index }, soundPage.page)))
             })
         }
@@ -171,7 +175,10 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                             }
                             Tab.Timeline -> TimelineSlot(core)
                             Tab.Mix -> { val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core); val meters = core.meters.collectAsStateWithLifecycle()
-                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value) }
+                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value) {
+                                    val gp = com.scottgerstl.lupe.core.ScreenPages.GLO.getOrNull(mix.first.page)
+                                    busPageState(mixNow, gp?.first ?: 0, gp?.second.orEmpty(), pads.selected.track, selName)?.let { BusPage(it, gloCore, labs.showGraphics) }
+                                } }
                         }
                     }
                 }
@@ -431,5 +438,39 @@ private class HeldPageCore(private val base: LupeCore, snapshot: PageState) : Lu
     override fun send(intent: Intent) {
         if (intent is com.scottgerstl.lupe.core.SetParam || intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile) return
         base.send(intent)
+    }
+}
+
+/** The GLO key's next page: off the Mix tab, the page the FM-1 last showed there (MIXER at first); on it, the next of GLO's five, round again. */
+internal fun gloStep(onMix: Boolean, screen: com.scottgerstl.lupe.core.Fm1ScreenState): Int {
+    val pages = com.scottgerstl.lupe.core.ScreenPages.GLO.map { it.first }
+    val at = if (screen.key == "GLO") pages.indexOf(screen.page) else -1
+    return if (!onMix) pages[at.coerceAtLeast(0)] else pages[(at + 1).mod(pages.size)]
+}
+
+/**
+ * A shared page on the Mix tab (Delay, Reverb, Chorus, Global): its four dials (white: turning them changes every track), its settings as
+ * tiles, and the FM-1's own grey picture under them when Show graphics is on (decision 34), on a `panel` card at the sheet radius.
+ */
+@Composable
+private fun BusPage(page: PageState, core: LupeCore, graphics: Boolean) {
+    androidx.compose.foundation.layout.Column(
+        Modifier.fillMaxSize().clip(RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.sheet)).background(Tok.panel).padding(16.dp),
+    ) {
+        SoundDials(page, core, Modifier.fillMaxWidth().height(110.dp))
+        page.tiles?.let { t ->
+            Spacer(Modifier.height(8.dp))
+            PageTilesContent(t, Tok.text2Raised, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) },
+                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.pad)))
+        }
+        val picture = com.scottgerstl.lupe.ui.page.pictureOf(page)
+        val skiff = com.scottgerstl.lupe.ui.page.rememberSkiffPicture(page, true, enabled = graphics)
+        if (graphics && (skiff != null || com.scottgerstl.lupe.ui.page.hasPicture(picture))) {
+            Spacer(Modifier.height(8.dp))
+            val said = "${page.title}: " + if (com.scottgerstl.lupe.ui.page.hasPicture(picture)) com.scottgerstl.lupe.ui.page.describe(picture) else "the FM-1's picture"
+            val m = Modifier.fillMaxWidth().weight(1f).background(Tok.well, RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.pad)).padding(4.dp)
+            if (skiff != null) com.scottgerstl.lupe.ui.page.SkiffPictureImage(skiff, said, m)
+            else com.scottgerstl.lupe.ui.page.GraphContent(picture, Tok.text2Raised, -1, m)
+        }
     }
 }

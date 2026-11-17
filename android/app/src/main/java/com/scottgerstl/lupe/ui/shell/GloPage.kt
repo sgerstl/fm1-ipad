@@ -34,6 +34,14 @@ fun onGloBus(screen: Fm1ScreenState): Boolean = screen.key == "GLO" && screen.pa
  */
 fun gloPageState(mix: MixState, screen: Fm1ScreenState, track: Int, trackName: String): PageState? {
     if (!onGloBus(screen)) return null
+    return busPageState(mix, screen.page, screen.title, track, trackName)
+}
+
+/**
+ * A shared page as a page of dials, whatever the FM-1 shows: the Mix tab's Delay, Reverb, Chorus and Global sub-pages (hybrid UI, 2026-11-17).
+ * [page] is the GLO page's number in Lupe's numbering; null when the core's `mix` area has no card (the mixer).
+ */
+fun busPageState(mix: MixState, page: Int, title: String, track: Int, trackName: String): PageState? {
     val card = mix.card ?: return null
     val controls = (card.controls + List(4) { null }).take(4)
     val key = mix.section
@@ -43,8 +51,8 @@ fun gloPageState(mix: MixState, screen: Fm1ScreenState, track: Int, trackName: S
     val names = setting?.names.orEmpty().ifEmpty { if (label == "DELAY MODE") com.scottgerstl.lupe.core.FakeP5.DELAY_MODES else emptyList() }
     val tiles = if (setting != null && names.size in 2..6) PageTilesState(kind = "pick", labels = names, picked = setting.raw.coerceIn(0, names.lastIndex)) else null
     return PageState(
-        family = "GLO", pages = ScreenPages.GLO.map { PageRef(it.first, it.second) }, page = screen.page,
-        track = track, trackName = trackName, controls = controls, title = screen.title.ifEmpty { card.title.uppercase() },
+        family = "GLO", pages = ScreenPages.GLO.map { PageRef(it.first, it.second) }, page = page,
+        track = track, trackName = trackName, controls = controls, title = title.ifEmpty { card.title.uppercase() },
         tiles = tiles, graph = busGraphOf(key, card) ?: com.scottgerstl.lupe.core.PageGraph(),
     )
 }
