@@ -345,10 +345,9 @@ fun ToggleSegment(label: String, description: String, on: Boolean, state: String
     ) {
         Box(
             Modifier.fillMaxWidth().height(height).drawBehind {
-                val pill = size.height / 2; val inner = 8.dp.toPx()
                 val s = shape.coerceIn(0f, 1.2f)
-                fun r(outer: Boolean) = if (outer) pill else inner + (pill - inner) * s
-                val l = CornerRadius(r(first).coerceAtMost(pill)); val rr = CornerRadius(r(last).coerceAtMost(pill))
+                val (lr, rrr) = segmentCorners(size.height / 2, 8.dp.toPx(), s, first, last)
+                val l = CornerRadius(lr); val rr = CornerRadius(rrr)
                 drawPath(Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, l, rr, rr, l)) }, Tok.control)
                 // on: the white grows out from the middle as the corners round (Reduce Motion: it fades in where it stands)
                 val g = if (reduce) 1f else (0.55f + 0.45f * s).coerceAtMost(1.04f)
@@ -359,9 +358,17 @@ fun ToggleSegment(label: String, description: String, on: Boolean, state: String
         ) {
             BasicText(label, style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2, Tok.onColour, lit), fontWeight = FontWeight.SemiBold), maxLines = 1)
             // the launch trace: tertiary grey, 2 dp, the same as the Pads row's Mute; it draws with Reduce Motion too (it's information)
-            if (pending != null) com.scottgerstl.lupe.ui.shell.LaunchTrace(pending, Tok.text3, height / 2, 2.dp, Modifier.matchParentSize(), base = LAUNCH_TRACE_BASE)
+            // on the key's own outline as it shows now: the pill ends outside, the joined inner corners 8 while off, rounding as it turns on
+            if (pending != null) com.scottgerstl.lupe.ui.shell.LaunchTrace(pending, Tok.text3, height / 2, 2.dp, Modifier.matchParentSize(), base = LAUNCH_TRACE_BASE,
+                corners = { sz -> val (l, r) = segmentCorners(sz.height / 2, 8.dp.toPx(), shape.coerceIn(0f, 1.2f), first, last); floatArrayOf(l, l, r, r) })
         }
     }
+}
+
+/** A joined segment's left and right corner radii (px): the pair's outer ends a pill, its inner ends [inner] off, rounding to a pill as [s] (the shape spring) reaches 1. The key and its launch trace both draw from this. */
+fun segmentCorners(pill: Float, inner: Float, s: Float, first: Boolean, last: Boolean): Pair<Float, Float> {
+    fun r(outer: Boolean) = (if (outer) pill else inner + (pill - inner) * s).coerceAtMost(pill)
+    return r(first) to r(last)
 }
 
 /** The launch trace on a mute or solo key: the faint whole outline under the part already drawn (Pads and Mix alike). */

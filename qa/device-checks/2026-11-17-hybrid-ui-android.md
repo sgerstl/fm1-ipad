@@ -214,10 +214,20 @@ Open the step panel or a sound page first so the grid pages by 8.
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
-| 106 | Mix › Mixer, playing, Launch at = Bar: tap a track's Mute. | Under the finger: a quick squash and a springy return. The key stays unmuted while a grey line runs round it from the top, clockwise, closing as the bar turns over; then it goes white and round and the track drops out. | – | ☐ pass ☐ fail: |
+| 106 | Mix › Mixer, playing, Launch at = Bar: tap a track's Mute. | Under the finger: a quick squash and a springy return. The key stays unmuted while a grey line runs round it from the top left corner, down the left side first (counter-clockwise, as every launch trace in Lupe and on the iPad), closing as the bar turns over; then it goes white and round and the track drops out. | – | ☐ pass ☐ fail: |
 | 107 | Same track: tap Mute again to unmute. Then set Launch at to 4 bars and repeat 106 and 107. | Unmuting: it stays white (muted) while the line runs round; it turns back only as the line closes. At 4 bars the line takes four bars to close. | – | ☐ pass ☐ fail: |
 | 108 | While a line is running, tap the key again. Then try Solo the same way. Then stop and tap Mute. | Tapped again: it does what the Pads row does (the change is called off and the line goes). Solo traces the same way. Stopped: it changes at once, no line. | – | ☐ pass ☐ fail: |
 | 109 | Put Pads and Mix side by side in behaviour: mute a track from the Pads row's Mute while playing, then from Mix. Then turn Remove animations on and repeat once. | Both lines are the same grey and thickness and close at the same moment. With Remove animations on: no squash, but the line still draws. | – | ☐ pass ☐ fail: |
+
+## Round 13d: the selected ring and shape-true traces (Scott, 2026-11-17)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 110 | Stopped: tap pads one after another along a row, then on another row. | The ring on the old pad fades out while the new one fades in, together, quickly and smoothly. No flicker or flash. | – | ☐ pass ☐ fail: |
+| 111 | Playing: tap a pad that isn't playing (it queues). Then let it land. | No flash of the ring on the tapped pad: it shows the launch trace only, and the old pad's ring fades out. As it lands, the trace goes and the ring fades in. | – | ☐ pass ☐ fail: |
+| 112 | Mix, playing: tap an unmuted Mute (and an unsoloed Solo). | The grey line runs on the key's own edge: round at the outer end, the tighter corners at the inner end where Mute meets Solo. It doesn't cut across any corner. | – | ☐ pass ☐ fail: |
+| 113 | Mix, playing: unmute a muted key. | The line runs on the white key's pill outline. As it closes and the key changes shape, there's no jump between line and key. | – | ☐ pass ☐ fail: |
+| 114 | Pads, playing: recall a stored scene. Watch its key, and a queued pad's trace. | The scene's trace runs on the round key's own outline (and on the squarer one if the current scene is recalled again); the pad's trace hugs the pad's corners. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).

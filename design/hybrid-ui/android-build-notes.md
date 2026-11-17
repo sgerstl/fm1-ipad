@@ -66,3 +66,10 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 
 - **Effect cards:** tiles have a floor of 80 dp (the hybrid tile's padding, label row, value and gauge), not the "about 72" in the request; at 72 the gauge sits under the padding. If a card is ever shorter, the tiles scroll rather than shrink.
 - **Mix Mute and Solo trace:** the strip's mute and solo states come from the core's `mix` area, and their waits come from the `pads` rows (`mutePending`, `soloPending`, `launchTick`), so the shell provides both to the Mix tab (`LocalMixLaunch`). The trace draws a pill outline; on the joined pair's inner corners (radius 8 while off) it runs a little inside the key's corner.
+
+## Round 13d (2026-11-17)
+
+- **The dither** was the selected ring's alpha `sel × (1 − wait)`: two 150 ms fades multiplied. A pad tapped while playing is both selected and waiting, so its ring rose to ~25 % and fell back as the trace faded in, a flash on every queued pick. One fade now, target `selected && !waiting`.
+- **A second possible flicker, not changed:** SloopKit's `readTrackList` (shared with the iPad) sets `selectedTrack` from the FM-1's poll without honouring the recent `select` write. A poll in flight while you pick a pad on another track can bounce the selection back for one publish (the core's `selectedPad()` then falls back to that track's current entry). It's iPad code, so it's left for Scott's word.
+- **Traces now take the shape's own corners** (`traceOutline` with four radii, `LaunchTrace(corners = …)` read each frame): Mix Mute and Solo, the scene keys (they used a fixed 8 on a round key), and waiting pads. The Pads Mute and the head's solo trace were already right (pills).
+- **Direction:** every trace runs counter-clockwise from the top left corner (the iPad's). Round 13c's request said "from the top, clockwise"; that isn't built, and check 106 now describes what is.

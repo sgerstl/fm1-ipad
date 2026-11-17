@@ -287,7 +287,9 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                         ) {
                             BasicText("${i + 1}", style = LupeType.number.copy(fontSize = 17.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if (s.current) Tok.onColour else if (s.stored) Tok.text else Tok.text2))
                             // recalled while playing: it waits for the launch point, its outline drawn as that comes (a scene is global: white, or dark on the lit key)
-                            if (s.waiting) LaunchTrace({ clock.value.ticksLeft(s.launchTick, android.os.SystemClock.uptimeMillis()) }, if (s.current) Tok.onColour else Tok.text, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+                            if (s.waiting) LaunchTrace({ clock.value.ticksLeft(s.launchTick, android.os.SystemClock.uptimeMillis()) }, if (s.current) Tok.onColour else Tok.text, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f,
+                                corners = { sz -> val round = sz.minDimension / 2; val square = com.scottgerstl.lupe.ui.theme.Shape.selected.toPx()
+                                    val k = (round + (square - round) * sq.coerceIn(0f, 1.15f)).coerceAtLeast(2f); floatArrayOf(k, k, k, k) })
                         }
                     }
                     }   // the scenes' scroller
@@ -454,7 +456,10 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val ringMuted = animatedFloat(if (playing && row.muted) 1f else 0f, Dur.STATE)
     val wait = animatedFloat(if (e.play == PadPlay.Waiting) 1f else 0f, Dur.STATE)
     val next = animatedFloat(if (e.play == PadPlay.Next) 1f else 0f, Dur.STATE)
-    val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
+    // the selected ring fades out on the old pad while it fades in on the new one, 150 ms ease-out, each one fade with one target. It used to be
+    // `selected` × (1 − waiting), two fades multiplied: a pad tapped while playing is selected and waiting at once, so its ring flashed up to a
+    // quarter and back within ~150 ms as the trace came in (the "dither" Scott saw, 2026-11-17). A waiting pad shows the trace, not the ring
+    val sel = animatedFloat(if (selected && e.play != PadPlay.Waiting) 1f else 0f, Dur.STATE)
     var pressed by remember { mutableStateOf(false) }
     val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100)
     val onRow = animatedFloat(if (pads.selected.track == row.track) 1f else 0f, Dur.STATE)
@@ -676,7 +681,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     // the selected pad: a ring in the track's colour (never white), with a dark gap inside it so it reads on a filled, playing pad
                     // …but not while it waits: a tap selects the pad it launches, and the ring (the same colour, the same place) hid the waiting outline
                     // drawn over it (Scott, 2026-11-14: "the outline timer still doesn't show"). The outline says both until it lands.
-                    val ringA = sel.value * (1f - wait.value)
+                    val ringA = sel.value
                     if (ringA > 0f) {
                         drawRoundRect(color.copy(alpha = ringA), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
                         drawRoundRect(Tok.page.copy(alpha = ringA), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius((rr - 2.75.dp.toPx()).coerceAtLeast(1f)), style = Stroke(1.5.dp.toPx()))
@@ -719,7 +724,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             // the pass bar along the foot: it moves every frame, on from the core's last word by the clock's rate (never stepping on each publish)
             if ((e.progress != null || row.passTicks != null) && playing && !row.muted) PassBar({ clock.value.passProgress(row.passStartTick, row.passTicks, android.os.SystemClock.uptimeMillis()) ?: e.progress }, Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 4.dp).width(PAD_W - 24.dp).height(4.dp))
             // waiting for the launch point: the outline drawn as that comes, in the track's colour; dashed when there is no clock
-            if (wait.value > 0f) LaunchTrace({ clock.value.ticksLeft(e.launchTick ?: row.launchTick, android.os.SystemClock.uptimeMillis()) }, color, com.scottgerstl.lupe.ui.theme.Shape.pad, 2.dp, Modifier.matchParentSize().graphicsLayer { alpha = wait.value })
+            if (wait.value > 0f) LaunchTrace({ clock.value.ticksLeft(e.launchTick ?: row.launchTick, android.os.SystemClock.uptimeMillis()) }, color, com.scottgerstl.lupe.ui.theme.Shape.pad, 2.dp, Modifier.matchParentSize().graphicsLayer { alpha = wait.value },
+                corners = { sz -> val padR = com.scottgerstl.lupe.ui.theme.Shape.pad.toPx(); val k = (padR + (sz.height / 2 - padR) * pill.coerceIn(0f, 1.15f)).coerceIn(2f, sz.height / 2); floatArrayOf(k, k, k, k) })
         }
     }
 }

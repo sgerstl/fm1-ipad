@@ -200,6 +200,7 @@ Motion follows `DESIGN.md` (nothing pops). Particular to the pad:
 ### Decision log
 
 - 2026-11-10: the stale-poll fix: one cancellable reread of a changed pattern's length, not two full reads, because pads fell behind the FM-1 (13e75ef).
+- 2026-11-17: **the selected ring cross-fades cleanly** (Scott: "there's like a dithering of the outline transition"). The ring is each pad's own, two outlines: the old pad's fades out while the new one's fades in, 150 ms ease-out. Its alpha was `selected × (1 − waiting)`, two fades multiplied, so a pad tapped while playing (selected and waiting at once) flashed its ring up to a quarter and back within ~150 ms as the launch trace came in. Now one fade, target `selected and not waiting`. The waiting pad's trace follows the pad's own radius as it draws. Device checks 110–111.
 
 ## 4. Usage
 
