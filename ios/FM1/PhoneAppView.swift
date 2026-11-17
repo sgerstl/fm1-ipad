@@ -98,11 +98,6 @@ struct PhoneAppView: View {
                 if let store = session.skiffSong { PatternsSheet(session: session, store: store, ui: ui, mode: ui.patternsSheet ?? .manage) }
             }
         }
-        .overlay {
-            PhoneSheetFrame(open: ui.projectsOpen && session.dialect == .skiff, height: 330, label: "Projects", close: { ui.projectsOpen = false }) {
-                PhoneProjectsSheet(session: session, ui: ui)
-            }
-        }
         // the sampler (a track's menu › Record sample…, or an empty sample slot), full screen
         .overlay {
             if let r = ui.sampler {
@@ -116,7 +111,8 @@ struct PhoneAppView: View {
         .sheet(isPresented: Binding(get: { ui.phoneSettingsOpen }, set: { ui.phoneSettingsOpen = $0 })) {
             SettingsSheet(session: session).environment(through)
         }
-        .sheet(isPresented: Binding(get: { ui.projectsOpen && session.dialect != .skiff }, set: { ui.projectsOpen = $0 })) {
+        // Projects: the iPad's sheet, so the phone can keep its own project files too (2026-11-17)
+        .sheet(isPresented: Binding(get: { ui.projectsOpen }, set: { ui.projectsOpen = $0 })) {
             ProjectsSheet(store: projects, session: session)
         }
         .overlay { EdgeWells(session: session, ui: ui) }        // (a dragged pad's Clear, Edit and Duplicate wells, on the screen's edges)

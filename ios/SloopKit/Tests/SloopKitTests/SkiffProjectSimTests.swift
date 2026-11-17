@@ -99,6 +99,55 @@ import Testing
         #expect(Data(chunk) == changedT1.data)
         #expect((try await d.projects()).name == "NIGHT DRIVE")
     }
+
+    /// Copy a slot to the iPad (ProjectStore.copySlot, 2026-11-17): the music read, the slot loaded and read, the music
+    /// written back. The copy is the slot's music; what comes back is what was playing, with no new pool numbers.
+    @Test func copySlotThenPutTheMusicBack() async throws {
+        let d = try await driver()
+        _ = try await d.transport(play: false)
+        try await Task.sleep(for: .milliseconds(200))
+        let base = SkiffProjectTransfer.request(d)
+        // music with a pattern and a note, saved to P1
+        var s = try await d.songLists()
+        let e = try #require(s.tracks[0].entries.firstIndex { $0.isEmpty })
+        s = try await d.list(.new(track: 0, entry: e)).song
+        _ = try await d.list(.play(track: 0, entry: e))
+        _ = try await d.setSynthStep(track: 0, index: 0, note(60))
+        #expect(try await d.projectSaveAs(slot: 0, name: "SLOT ONE") == 0)
+        let inSlot = try await SkiffProjectTransfer.read(firmware: d.info.version, request: base)
+        // then changed, and not saved anywhere
+        _ = try await d.setSynthStep(track: 0, index: 0, note(67))
+        _ = try await d.setSynthStep(track: 0, index: 5, note(70))
+        let before = try await SkiffProjectTransfer.read(firmware: d.info.version, request: base)
+        #expect(before.fingerprint != inSlot.fingerprint)
+        // (step 6 is a new note, but the pattern is the slot's pattern too: only the arrangement tells them apart)
+
+        #expect(try await d.projectLoad(slot: 0))
+        let copy = try await SkiffProjectTransfer.read(firmware: d.info.version, request: base)
+        // A slot keeps the arrangement and names pattern numbers; it doesn't keep its own copy of the patterns (Skiff
+        // 2.2, seen here 2026-11-17). Editing a pattern after saving changes the slot too, so the copy is P1's
+        // arrangement with the patterns as the pool holds them now: what loading P1 on the FM-1 plays.
+        #expect(copy.record == inSlot.record)
+        #expect(copy.patterns.map(\.id) == before.patterns.map(\.id))
+        #expect(copy.patterns.map(\.data) == before.patterns.map(\.data))
+        #expect(copy.patterns.map(\.data) != inSlot.patterns.map(\.data))
+
+        let c = Counter()
+        let counting: BackupRequest = { cmd, args, m in
+            if cmd == SkiffProjectTransfer.put, args.first == 0 { if args[1] == 0 { c.projectPuts += 1 } else { c.chunkPuts += 1 } }
+            return try await base(cmd, args, m)
+        }
+        let poolBefore = try await d.pool()
+        try await SkiffProjectTransfer.write(before, name: "SLOT ONE", request: counting)
+        let after = try await SkiffProjectTransfer.read(firmware: d.info.version, request: base)
+        print("copy: chunk puts", c.chunkPuts, "project puts", c.projectPuts)
+        #expect(after.fingerprint == before.fingerprint)         // what was playing is back
+        #expect((try await d.synthStep(track: 0, index: 5)).notes == [70])
+        let poolAfter = try await d.pool()
+        #expect(poolAfter.patterns.filter { $0.length > 0 }.count == poolBefore.patterns.filter { $0.length > 0 }.count)
+        let names = try await d.projects()
+        #expect(names.slots[0].used && names.slots[0].name == "SLOT ONE")   // P1 untouched
+    }
 }
 
 #endif

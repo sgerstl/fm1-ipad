@@ -191,7 +191,7 @@ final class EditorUI {
         guard let i = a.firstIndex(of: "-sound-panel"), i + 1 < a.count, let f = SoundFamily(rawValue: a[i + 1]) else { return nil }
         return SoundPanelState(family: f)
     }()
-    var projectsOpen = false
+    var projectsOpen = LaunchArgs.all.contains("-projects")
     /// The pad last cleared (batch item 13: no confirm, an Undo strip instead), offered for undo until the next change:
     /// valid while the song store's undo stack is as deep as it was right after the clear.
     var padClear: PadClear?

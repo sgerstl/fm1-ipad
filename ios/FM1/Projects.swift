@@ -100,6 +100,9 @@ final class ProjectStore {
                p.name == String(decoding: SKF4.skiffName(c.name), as: UTF8.self) {
                 baseline = c.baseline
                 edited = true
+            } else if let p = s.skiffProjects, p.musicSlot != nil {
+                // the music came from (or was saved to) one of the FM-1's slots: that slot is its home
+                cameFromSlot(changed: p.changed)
             } else {
                 setCurrent(nil)
                 baseline = nil
@@ -200,6 +203,82 @@ final class ProjectStore {
             message = "Couldn't open it: \(Self.describe(error)). The music on the FM-1 is as it was; patterns it brought may be in the pool."
         }
     }
+
+    // MARK: The FM-1's slots
+
+    /// The music came from one of the FM-1's slots, or was just saved to one: that slot is its home now, not an iPad
+    /// file. (The slot holds it, so opening over it needs no safety copy unless it changed.)
+    func cameFromSlot(changed: Bool = false) {
+        setCurrent(nil)
+        baseline = Self.slotBaseline
+        edited = changed
+    }
+    static let slotBaseline = "fm1-slot"
+
+    /// Copies FM-1 slot k to a project on this device, then puts back what was playing. The FM-1 can only read a slot by
+    /// loading it, so: what's playing is read first (and kept as a safety copy unless its slot still holds it as it is),
+    /// the slot is loaded and read into a new file, then the music goes back (by reloading its slot when that holds it
+    /// unchanged, else by writing what was read). Returns the new project's name, or nil when it didn't finish.
+    @discardableResult
+    func copySlot(_ k: Int, name: String) async -> String? {
+        guard let s = session, busy == nil, let slots = s.skiffProjects else { return nil }
+        let wasCurrent = current, wasBaseline = baseline, wasEdited = edited
+        let fromSlot = slots.musicSlot
+        // the slot it came from holds this music exactly: put it back by loading that slot again
+        let cleanSlot = fromSlot != nil && !slots.changed && !edited && current == nil
+        busy = ("Copying P\(k + 1)…", nil)
+        defer { busy = nil }
+        var kept = false
+        do {
+            if s.playing {
+                s.setPlaying(false)
+                for _ in 0..<40 where s.playing { try await Task.sleep(for: .milliseconds(50)) }
+            }
+            let file = Self.cleaned(name) ?? nextName()
+            // it's the one playing, unchanged: read it as it is
+            if fromSlot == k && cleanSlot {
+                busy = ("Reading P\(k + 1)…", nil)
+                var (copy, _) = try await capture(name: file)
+                copy.baseline = ""
+                try write(copy)
+                message = nil
+                return file
+            }
+            busy = ("Reading what's playing…", nil)
+            let (before, _) = try await capture(name: "Before copying P\(k + 1)", safetyCopy: true)
+            if !cleanSlot { try keepSafetyCopy(before); kept = true }
+            busy = ("Loading P\(k + 1)…", nil)
+            guard await s.loadSkiffProject(slot: k) else { throw CopyError.load }
+            busy = ("Reading P\(k + 1)…", nil)
+            var (copy, _) = try await capture(name: file)
+            copy.baseline = ""                  // not on the FM-1 as the music: what was playing goes back
+            try write(copy)
+            busy = ("Putting back what was playing…", nil)
+            if cleanSlot, let j = fromSlot {
+                guard await s.loadSkiffProject(slot: j) else { throw CopyError.restore }
+                cameFromSlot()
+            } else {
+                // named as it was, so an iPad project is still recognised as itself
+                try await s.writeSkiffProject(before.skiff, name: wasCurrent?.name ?? slots.name)
+                setCurrent(wasCurrent?.id)
+                baseline = wasBaseline
+                edited = wasEdited || fromSlot != nil     // off its slot now: only a save keeps it
+            }
+            message = nil
+            return file
+        } catch CopyError.restore {
+            message = "P\(k + 1) is copied, but the slot that was playing didn't load again. Load it from the list."
+            return Self.cleaned(name)
+        } catch CopyError.load {
+            message = "P\(k + 1) didn't load, so nothing was copied. The music on the FM-1 is as it was."
+        } catch {
+            let where_ = kept ? " What was playing is in Safety copies." : ""
+            message = "Couldn't finish copying P\(k + 1): \(Self.describe(error)).\(where_)"
+        }
+        return nil
+    }
+
+    private enum CopyError: Error { case load, restore }
 
     // MARK: Managing
 
