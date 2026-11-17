@@ -143,6 +143,17 @@ object Roll {
         return null
     }
 
+    /**
+     * The note whose drawn body covers [step] on [pitch]: the step it starts on (the latest start at or before [step] whose length reaches it),
+     * or null for an empty cell. A touch anywhere on a long note belongs to it (Scott, 2026-11-17: a tap past its first step shortened it).
+     */
+    fun noteAt(notes: List<List<Int>>, lengths: List<Int>, pitch: Int, step: Int): Int? {
+        for (s0 in minOf(step, notes.lastIndex) downTo 0) {
+            if (pitch in notes[s0]) return if (s0 + lengths.getOrElse(s0) { 1 }.coerceAtLeast(1) > step) s0 else null
+        }
+        return null
+    }
+
     /** The length a resize gives: the note's end at the step boundary nearest content x [cx], from [start], within 1…[maxLen]. */
     fun resizeLength(start: Int, cx: Float, stepPx: Float, maxLen: Int): Int = (kotlin.math.round(cx / stepPx).toInt() - start).coerceIn(1, max(1, maxLen))
 

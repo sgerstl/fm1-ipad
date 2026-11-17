@@ -124,7 +124,6 @@ fun StepGrid(
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val reduce = LocalReduceMotion.current
-    val longPress = LocalViewConfiguration.current.longPressTimeoutMillis
     val dwellMs by rememberUpdatedState(com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.padSlideDwellMs.toLong())
     val scope = rememberCoroutineScope()
     val tm = rememberTextMeasurer()
@@ -217,14 +216,18 @@ fun StepGrid(
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), g[0]) else Roll.clampScrollY(scrollY, g[0], g[1])
                                 val i = Roll.stepAt(down.position.x, Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4], pageNow)), g[2], totalNow); val pitch = Roll.pitchAt(down.position.y, base, g[0])
                                 var cancelled = false
-                                // a still hold stays lock (decision 9a)
-                                val onNote = pitch in stepNotes(edNow.steps.getOrNull(i) ?: Step())
+                                // the note under the finger by its drawn body (start step to end, its row), not its start cell; [owner] is its start step
+                                val owner = Roll.noteAt(edNow.steps.map { stepNotes(it) }, edNow.steps.map { it.length }, pitch, i)
+                                val onNote = owner != null
                                 var dragging = false
                                 // on a note's right edge (its grips): moving past slop resizes it, at once, no dwell (Scott, 2026-11-17)
                                 val sc0 = Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4], pageNow))
                                 val edge = Roll.edgeAt(edNow.steps.map { stepNotes(it) }, edNow.steps.map { it.length }, pitch, down.position.x + sc0, g[2], 2.dp.toPx(), 18.dp.toPx(), 10.dp.toPx())
                                 var resizing = false
-                                val up = withTimeoutOrNull(longPress) {
+                                // a note: until the dwell (150 ms), a lift is a tap and a move a swipe; then it lifts. An empty cell has no hold: a lift is a
+                                // tap and a move a swipe, however long the finger stays (9a reversed for the grid, Scott 2026-11-17)
+                                var held = false
+                                val up = withTimeoutOrNull(if (onNote) dwellMs else Long.MAX_VALUE) {
                                     while (true) {
                                         val ev = awaitPointerEvent()
                                         val ch = ev.changes.firstOrNull { it.id == down.id }
@@ -274,26 +277,28 @@ fun StepGrid(
                                     }
                                     return@awaitEachGesture
                                 }
-                                // a still hold: lock for as long as the finger stays (decision 9a). On a note, a finger that then moves past slop ends the
-                                // lock with nothing written and lifts the note (Scott, 2026-11-17: "long press and move the note"); lifting keeps today's lock
-                                if (!dragging && !cancelled && up == null) {
-                                    onPick(i); haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    core.send(Intent.StepHold(i, true))
-                                    if (!onNote) waitForUpOrCancellation()
-                                    else while (true) {
+                                // held still on a note for the dwell: it lifts at once (1.08, the shadow, a light tick). A move then drags it; a lift without moving
+                                // settles it back, nothing changed. No lock from the grid: locks are the step panel's Lock key and the FM-1's own step hold
+                                val start = owner ?: i
+                                var d = NoteDrag(start, pitch, start, pitch)
+                                fun liftNote() { noteDrag = d; scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { lift.animateTo(1f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) } } }
+                                if (onNote && !dragging && !cancelled && up == null) {
+                                    held = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate); liftNote()
+                                    while (true) {
                                         val ev = awaitPointerEvent()
                                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                                         if (!ch.pressed || ch.isConsumed) break
                                         if ((ch.position - down.position).getDistance() > viewConfiguration.touchSlop) { ch.consume(); dragging = true; break }
                                     }
-                                    core.send(Intent.StepHold(i, false))
-                                    if (!dragging) return@awaitEachGesture
+                                    if (!dragging) {
+                                        val fin = d
+                                        scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { lift.animateTo(0f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) }; if (noteDrag == fin) noteDrag = null }
+                                        return@awaitEachGesture
+                                    }
                                 }
                                 if (dragging) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-                                    var d = NoteDrag(i, pitch, i, pitch)
-                                    noteDrag = d
-                                    scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { lift.animateTo(1f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) } }
+                                    if (!held) { haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate); liftNote() }
                                     var pagedAt = 0L
                                     var ok = true
                                     try {
@@ -304,7 +309,8 @@ fun StepGrid(
                                             val bs = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), gg[0]) else Roll.clampScrollY(scrollY, gg[0], gg[1])
                                             val j = Roll.stepAt(ch.position.x.coerceIn(0f, size.width - 1f), sc, gg[2], totalNow)
                                             val q = Roll.pitchAt(ch.position.y.coerceIn(0f, size.height - 1f), bs, gg[0])
-                                            if (j != d.toStep || q != d.toPitch) { d = d.copy(toStep = j, toPitch = q); noteDrag = d; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                                            val js = (start + j - i).coerceIn(0, totalNow - 1)   // the grab point keeps its place on the note
+                                            if (js != d.toStep || q != d.toPitch) { d = d.copy(toStep = js, toPitch = q); noteDrag = d; haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
                                             // at the grid's edge the 8-step grid turns its page (once a second while held there)
                                             val edge = 24.dp.toPx(); val now = System.currentTimeMillis()
                                             if (now - pagedAt > 900) {
@@ -322,7 +328,8 @@ fun StepGrid(
                                     return@awaitEachGesture
                                 }
                                 if (cancelled) return@awaitEachGesture
-                                if (up != null) tapCell(i, pitch)
+                                // a tap on a note's body is a tap on that note (its start step): it picks it, or on the picked note removes the whole note
+                                if (up != null) tapCell(owner ?: i, pitch)
                             }
                         },
                 ) {

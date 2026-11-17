@@ -634,14 +634,14 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                             customActions = listOf(CustomAccessibilityAction("Pick this hit without changing it") { onPick(lane to i); core.send(Intent.StepSelect(i)); true })
                                         }
                                         .pointerInput(k, i, on) {
-                                            val hold = viewConfiguration.longPressTimeoutMillis
                                             awaitEachGesture {
                                                 val down = awaitFirstDown()
                                                 var dragging = false; var cancelled = false
                                                 // a tap toggles on touch-up, only if the finger never left the slop; a still hold picks the hit. Past the slop it
                                                 // is a page swipe and the cell isn't touched, unless the finger pressed on a hit and held still for the dwell
                                                 // first: then the hit is carried along its lane (Roll.move; Scott, 2026-11-17)
-                                                val up = withTimeoutOrNull(hold) {
+                                                // a hit lifts after the dwell; an empty cell has no hold (a lift is a tap, a move a swipe)
+                                                val up = withTimeoutOrNull(if (on) dwellMs else Long.MAX_VALUE) {
                                                     while (true) {
                                                         val ev = awaitPointerEvent()
                                                         val ch = ev.changes.firstOrNull { it.id == down.id }
@@ -655,18 +655,23 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                                     }
                                                     @Suppress("UNREACHABLE_CODE") null
                                                 }
-                                                // a still hold picks the hit; on a hit, a finger that then moves past slop carries it along its lane, however long
-                                                // the hold was (Scott, 2026-11-17: "long press and move"). Lifting keeps it picked
-                                                if (!dragging && !cancelled && up == null) {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i))
-                                                    if (!on) waitForUpOrCancellation()
-                                                    else while (true) {
+                                                // held still on a hit for the dwell: it lifts at once (Scott, 2026-11-17). A move carries it along its lane; a lift without
+                                                // moving settles it back, unchanged, and picks it for the panel (a tap toggles, so this is the grid's way to pick a hit)
+                                                if (on && !dragging && !cancelled && up == null) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                                                    hitDrag = Triple(k, i, i)
+                                                    scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { hitLift.animateTo(1f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) } }
+                                                    while (true) {
                                                         val ev = awaitPointerEvent()
                                                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                                                         if (!ch.pressed || ch.isConsumed) break
                                                         if ((ch.position - down.position).getDistance() > viewConfiguration.touchSlop) { ch.consume(); dragging = true; break }
                                                     }
-                                                    if (!dragging) return@awaitEachGesture
+                                                    if (!dragging) {
+                                                        scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { hitLift.animateTo(0f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) }; hitDrag = null }
+                                                        onPick(lane to i); core.send(Intent.StepSelect(i))
+                                                        return@awaitEachGesture
+                                                    }
                                                 }
                                                 when {
                                                     dragging -> {

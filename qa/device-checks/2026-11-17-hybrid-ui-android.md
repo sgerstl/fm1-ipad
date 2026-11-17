@@ -256,10 +256,18 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 |---|---|---|---|---|
 | 122 | Press a 1-step note's right end (the two grip marks) and drag right two steps, then let go. Then drag a long note's end left. | The end follows by whole steps with a tick each, "3 steps" above it; let go and the step panel's LENGTH reads 3. Dragged left it shortens, never below 1 or past the next note. | – | ☐ pass ☐ fail: |
 | 123 | Resize a note near the page's right edge, holding the finger at the grid's edge. | The grid pages on and the note keeps growing onto the next page. | – | ☐ pass ☐ fail: |
-| 124 | Press a note, hold still well past a second (lock on), then move the finger. | The lock ends with nothing changed, and the note lifts and follows; let go and it lands. | – | ☐ pass ☐ fail: |
+| 124 | Press a note, hold still well past a second, then move the finger. | The note lifts as soon as the hold registers (about a sixth of a second: it grows a little, with a shadow and a light tick), then follows; let go and it lands. No lock at any point. | – | ☐ pass ☐ fail: |
 | 125 | Press a note, hold for about a quarter of a second, then move. | It lifts and drags (as before). | – | ☐ pass ☐ fail: |
 | 126 | Swipe quickly sideways from a note's body and from its grip end. | From the body, the page turns and the note is untouched. From the grip end, it resizes (the handle has no delay). | – | ☐ pass ☐ fail: |
-| 127 | Hold a note still and lift without moving; turn an FM-1 knob while holding. Then drum: hold a hit, then slide along the lane. | Melodic: lock as before (the knob writes a lock on that step). Drum: the hit is picked on the hold, then carried along its lane and dropped on an empty cell. | – | ☐ pass ☐ fail: |
+| 127 | Hold a note still, then lift without moving. Then use the step panel's Lock key and turn an FM-1 knob. Then drum: hold a hit and lift; hold another and slide along the lane. | A hold lifts the note; letting go without moving changes nothing (it settles back). The Lock key still locks: the knob writes a lock on the step. Drum: a held hit lifts and settles back picked, unchanged; slid, it's carried along its lane onto an empty cell. Holding a step on the FM-1 itself still shows lock. | – | ☐ pass ☐ fail: |
+
+## Round 13h: long notes own their body (Scott: "it should select that note regardless of what step you're tapping")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 128 | Make a 3-step note. Tap its 2nd step, then its 3rd (pick another step in between). | Each tap picks the note; the step panel shows its first step. Nothing new is made and the note keeps its length. | – | ☐ pass ☐ fail: |
+| 129 | With that note picked, tap its 2nd step again. | The whole note goes, not a slice of it. | – | ☐ pass ☐ fail: |
+| 130 | Long-press the middle of a long note and move it two steps right and up a row. Then hold an empty cell a long time and lift. | The whole note moves, keeping its length, with the finger at the same place on it. The long hold on an empty cell writes a note, the same as a tap. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).

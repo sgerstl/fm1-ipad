@@ -144,4 +144,17 @@ class RollModelTest {
         assertEquals(1, Roll.resizeLength(0, 5f, step, 16))       // never under one step
         assertEquals(4, Roll.resizeLength(0, 900f, step, 4))      // never past the core's most
     }
+
+    // a touch anywhere on a note's body belongs to that note (Scott, 2026-11-17)
+    @Test fun noteBodyOwnsItsCells() {
+        val notes = listOf(listOf(60, 64), emptyList(), emptyList(), listOf(60), emptyList())
+        val lens = listOf(3, 1, 1, 1, 1)
+        assertEquals(0, Roll.noteAt(notes, lens, 60, 0))
+        assertEquals(0, Roll.noteAt(notes, lens, 60, 1))      // the 2nd step of the 3-step note
+        assertEquals(0, Roll.noteAt(notes, lens, 60, 2))      // the 3rd
+        assertEquals(3, Roll.noteAt(notes, lens, 60, 3))      // the next note's own start
+        assertEquals(null, Roll.noteAt(notes, lens, 60, 4))   // empty: no body covers it
+        assertEquals(0, Roll.noteAt(notes, lens, 64, 2))      // a chord: the row decides
+        assertEquals(null, Roll.noteAt(notes, lens, 62, 1))
+    }
 }
