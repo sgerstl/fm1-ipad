@@ -34,6 +34,8 @@ interface LupeCore {
     val clock: StateFlow<ClockState> get() = ClockDefaults.clock
     /** The editor track's playing step (PlayheadState.kt): one small send per step, not part of the editor area. */
     val playhead: StateFlow<PlayheadState> get() = PlayheadDefaults.state
+    /** The FM-1's notes sounding now, by track (KeysState.kt). */
+    val keys: StateFlow<KeysState> get() = KeysDefaults.state
 
     /** The pattern pool (PatternsState.kt, board 79) and its pictures. */
     val patterns: StateFlow<PatternsState> get() = PatternsDefaults.patterns

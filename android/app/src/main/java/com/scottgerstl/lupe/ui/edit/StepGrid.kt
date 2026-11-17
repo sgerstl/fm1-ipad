@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.edit
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import androidx.compose.ui.graphics.StrokeCap
 
 import androidx.compose.foundation.gestures.drag
@@ -115,6 +117,11 @@ fun StepGrid(
     val paged = pageSteps == Roll.PAGE_DOCKED
     // the smooth playhead and the hits' bounce, by the FM-1's clock (Scott, 2026-11-17)
     val pc = rememberPlayheadClock(core)
+    // the FM-1's keys held now on this track (its keys; while playing, its sequencer's notes too): lit on the edge, glowing across their rows
+    val keysArea by core.keys.collectAsStateWithLifecycle()
+    val linkNow by core.link.collectAsStateWithLifecycle()
+    val heldKeys = if (linkNow.phase == com.scottgerstl.lupe.core.LinkPhase.Ready) keysArea.on(ed.track) else emptySet()
+    val glow = rememberKeyGlow(heldKeys)
     // a note being dragged (Edit redesign, Scott 2026-11-17): where it came from and where it would land; [lift] 0…1 on the spatial spring
     var noteDrag by remember { mutableStateOf<NoteDrag?>(null) }
     // a note being resized by its right edge (Scott, 2026-11-17): its start step, its pitch and the length it would get; [resizeLen] eases to it
@@ -183,7 +190,11 @@ fun StepGrid(
 
             androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(with(density) { viewH.toDp() })) {
-                PianoEdge(sy, rowPx, core, canPlay, Modifier.width(PIANO_EDGE).fillMaxHeight())
+                PianoEdge(sy, rowPx, core, canPlay, Modifier.width(PIANO_EDGE).fillMaxHeight(), glow, heldKeys, track, reduce) { p ->
+                    // a marker tapped: the roll glides to that pitch, centred, on the spring (never on its own: it would jump under the hands)
+                    val to = Roll.clampScrollY((127 - p) * rowPx - viewH / 2 + rowPx / 2, rowPx, viewH)
+                    scope.launch { if (reduce) scrollY = to else animate(sy, to, animationSpec = motion.spatial()) { v, _ -> scrollY = v } }
+                }
                 Spacer(Modifier.width(4.dp))
                 Box(
                     Modifier.width(gridW).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Tok.well)
@@ -342,6 +353,8 @@ fun StepGrid(
                             val y = (127 - p) * rowPx - sy
                             if (Roll.isBlack(p)) drawRect(lerp(Tok.well, Tok.page, 0.6f), Offset(0f, y), Size(size.width, rowPx))
                         }
+                        // an FM-1 key held: its row glows faintly in the track's colour, where a note would go
+                        for (p in glow.lit) { val k = glow.of(p); if (k > 0f && p in pitches) drawRect(track.copy(alpha = 0.12f * k), Offset(0f, (127 - p) * rowPx - sy), Size(size.width, rowPx)) }
                         for (i in 0 until total) {
                             val x = x0 + i * stepPx
                             if (i % 4 == 0) drawRect(Tok.text.copy(alpha = 0.03f), Offset(x, 0f), Size(stepPx, size.height))
@@ -511,15 +524,25 @@ internal fun MiniMap(ed: EditorState, track: Color, total: Int, pageSteps: Int, 
 
 /** The piano edge: the rows' keys, a black key 62 % of the width over a white one, the white keys' joins drawn, C named. A key plays its note while it is held. */
 @Composable
-private fun PianoEdge(scrollY: Float, rowPx: Float, core: LupeCore, canPlay: () -> Boolean, modifier: Modifier) {
+private fun PianoEdge(scrollY: Float, rowPx: Float, core: LupeCore, canPlay: () -> Boolean, modifier: Modifier,
+    glow: KeyGlow = KeyGlow(), held: Set<Int> = emptySet(), track: Color = Tok.text, reduce: Boolean = false, onReveal: (Int) -> Unit = {}) {
     val tm = rememberTextMeasurer()
     val sy by rememberUpdatedState(scrollY)
     val row by rememberUpdatedState(rowPx)
+    val heldNow by rememberUpdatedState(held)
+    val reveal by rememberUpdatedState(onReveal)
     Canvas(
         modifier.clip(RoundedCornerShape(4.dp))
+            // TalkBack: the lit keys aren't announced (they'd speak every note)
             .semantics { contentDescription = "Piano keys: touch one to hear its note" }
             .pointerInput(Unit) {
                 detectTapGestures(onPress = { at ->
+                    // a marker at the top or bottom (an FM-1 key held out of view): the roll goes to the nearest such note, no note plays
+                    val vis = Roll.visiblePitches(sy, row, size.height.toFloat())
+                    val markH = 22.dp.toPx()
+                    val above = heldNow.filter { offScreen(it, vis) == 1 }; val below = heldNow.filter { offScreen(it, vis) == -1 }
+                    if (at.y < markH && above.isNotEmpty()) { reveal(above.min()); return@detectTapGestures }
+                    if (at.y > size.height - markH && below.isNotEmpty()) { reveal(below.max()); return@detectTapGestures }
                     val midi = Roll.pitchAt(at.y, sy, row)
                     if (canPlay()) { core.send(PlayNote(note = midi, on = true)); tryAwaitRelease(); core.send(PlayNote(note = midi, on = false)) }
                 })
@@ -532,11 +555,26 @@ private fun PianoEdge(scrollY: Float, rowPx: Float, core: LupeCore, canPlay: () 
             // two white keys side by side (B over C, E over F): the join between them
             val m = Math.floorMod(p, 12)
             if (m == 0 || m == 5) drawLine(Tok.primaryEdge, Offset(0f, y + rowPx), Offset(size.width, y + rowPx), 1.dp.toPx())
-            if (Roll.isC(p)) {
+            // an FM-1 key held: the key fills with the track's colour and presses in a little (0.96; Reduce Motion: no press), its name on it
+            val k = glow.of(p)
+            if (k > 0f) {
+                val black = Roll.isBlack(p)
+                val kx = if (black) -4.dp.toPx() else 0f; val kw = if (black) size.width * 0.62f + 4.dp.toPx() else size.width
+                val sc = if (reduce) 1f else 1f - 0.04f * k
+                val w = kw * sc; val h = rowPx * sc
+                drawRoundRect(track.copy(alpha = k), Offset(kx + (kw - w) / 2, y + (rowPx - h) / 2), Size(w, h), CornerRadius(3.dp.toPx()))
+                val r = tm.measure(FakeData.noteName(p), LupeType.label.copy(fontSize = 10.sp, color = Tok.onColour.copy(alpha = k)))
+                if (rowPx >= r.size.height) drawText(r, topLeft = Offset(size.width - r.size.width - 3.dp.toPx(), y + (rowPx - r.size.height) / 2))
+            } else if (Roll.isC(p)) {
                 val r = tm.measure(FakeData.noteName(p), LupeType.label.copy(fontSize = 10.sp, color = Tok.onColour))
                 drawText(r, topLeft = Offset(size.width - r.size.width - 3.dp.toPx(), y + (rowPx - r.size.height) / 2))
             }
         }
+        // held keys out of view: a small track-coloured marker at that edge, pointing to them
+        val vis = Roll.visiblePitches(scrollY, rowPx, size.height)
+        val tw = 12.dp.toPx(); val th = 7.dp.toPx(); val cx = size.width / 2
+        if (held.any { offScreen(it, vis) == 1 }) drawPath(Path().apply { moveTo(cx - tw / 2, 4.dp.toPx() + th); lineTo(cx + tw / 2, 4.dp.toPx() + th); lineTo(cx, 4.dp.toPx()); close() }, track)
+        if (held.any { offScreen(it, vis) == -1 }) drawPath(Path().apply { val b = size.height - 4.dp.toPx(); moveTo(cx - tw / 2, b - th); lineTo(cx + tw / 2, b - th); lineTo(cx, b); close() }, track)
     }
 }
 

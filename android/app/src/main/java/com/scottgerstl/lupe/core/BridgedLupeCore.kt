@@ -34,6 +34,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _fm1Screen = MutableStateFlow(Fm1ScreenState())
     private val _clock = MutableStateFlow(ClockState())
     private val _playhead = MutableStateFlow(PlayheadState())
+    private val _keys = MutableStateFlow(KeysState())
     private var clockChecked = false
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
@@ -53,6 +54,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val fm1Screen: StateFlow<Fm1ScreenState> = _fm1Screen
     override val clock: StateFlow<ClockState> = _clock
     override val playhead: StateFlow<PlayheadState> = _playhead
+    override val keys: StateFlow<KeysState> = _keys
     private val _notice = MutableStateFlow(CoreNotice())
     override val notice: StateFlow<CoreNotice> = _notice
     private val _patterns = MutableStateFlow(PatternsState())
@@ -116,6 +118,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "homeKnobs" -> _homeKnobs.value = lupeJson.decodeFromString(HomeKnobsState.serializer(), json)
                 "fm1Screen" -> _fm1Screen.value = lupeJson.decodeFromString(Fm1ScreenState.serializer(), json)
                 "playhead" -> _playhead.value = lupeJson.decodeFromString(PlayheadState.serializer(), json)
+                "keys" -> _keys.value = lupeJson.decodeFromString(KeysState.serializer(), json)
                 "clock" -> {
                     // atMs must be on SystemClock.uptimeMillis()'s clock: the screen moves the outlines and pass bars on from it every frame. If it isn't
                     // (a boot-time clock that counts sleep would put it hours off), take the time the frame arrived instead, and say so once.

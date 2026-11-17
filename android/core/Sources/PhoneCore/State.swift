@@ -258,3 +258,9 @@ enum AreaJSON {
     static let encoder: JSONEncoder = { let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]; return e }()
     static func encode<T: Encodable>(_ v: T) -> String { String(decoding: (try? encoder.encode(v)) ?? Data("{}".utf8), as: UTF8.self) }
 }
+
+
+/// The FM-1's notes sounding now, a list a track (1…6 at 0…5): its keys, and while playing its sequencer's notes.
+public struct KeysArea: Codable, Equatable, Sendable {
+    public var tracks: [[Int]]
+}

@@ -28,6 +28,9 @@ public final class PhoneCore {
     var pickedLane: String?
     var copiedStep: SynthStep?
     var notesIn = 0
+    /// The FM-1's notes sounding now, by track (0…5, the channel Skiff sends on): Edit lights its piano edge and lane keys from them
+    /// (Scott, 2026-11-17). Its keys, and while playing its sequencer's notes too (NOTES OUT ALL).
+    var keysHeld: [Set<Int>] = Array(repeating: [], count: 6)
     /// P5's screen-local state (P5Areas.swift): the Mix section on screen, Lupe's solos, the Sounds browser's target
     /// and the engine browsed, a project op going on.
     var mixSection = "mixer"
@@ -117,7 +120,14 @@ public final class PhoneCore {
         // The FM-1's keys play its sound and never write from the phone (decision 5 revised, Scott 2026-11-14: "the
         // fm1 keys should work just like they do on the ipad"). The notes are only counted, for the debug screen.
         s.onDeviceNote = { [weak self] e in
-            guard let self, e.on else { return }
+            guard let self else { return }
+            let t = Int(e.channel)
+            if self.keysHeld.indices.contains(t) {
+                let before = self.keysHeld[t]
+                if e.on { self.keysHeld[t].insert(Int(e.note)) } else { self.keysHeld[t].remove(Int(e.note)) }
+                if self.keysHeld[t] != before { self.pokeAreas(["keys"]) }
+            }
+            guard e.on else { return }
             self.notesIn += 1; self.pokeAreas(["diag"])
         }
         // Any edit, here or on the FM-1, since a phone project was read or written (the iPad's ProjectStore.noteEdit)
@@ -169,6 +179,11 @@ public final class PhoneCore {
             AreaWatch(name: "timeline", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.timelineArea()) : nil }, publish: publish),
             AreaWatch(name: "automation", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.automationArea()) : nil }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
+            // the FM-1's sounding notes by track; nothing while unlinked (a lost note-off doesn't stay lit across a reconnect)
+            AreaWatch(name: "keys", build: { [unowned self] in
+                if !self.session.isConnected { for i in self.keysHeld.indices { self.keysHeld[i] = [] } }
+                return AreaJSON.encode(KeysArea(tracks: self.keysHeld.map { $0.sorted() }))
+            }, publish: publish),
         ]
         for a in areas {
             a.trace = { [weak self] name, ms, bytes, published in

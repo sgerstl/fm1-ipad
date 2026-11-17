@@ -275,6 +275,14 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 |---|---|---|---|---|
 | 131 | Real FM-1 linked, a melodic track. Tap Chord (it turns white). Tap step 1's column on three other rows, then a fifth. Tap Chord off and tap another row. | Each tap adds a note to step 1, up to four; the fifth is refused with a message. With Chord off, a tap replaces the step's notes with the one tapped. The FM-1's own CHRD setting doesn't change. | – | ☐ pass ☐ fail: |
 
+## Round 13j: the FM-1's keys light Edit (Scott, 2026-11-17)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 132 | Edit on a melodic track, stopped. Press single keys on the FM-1, then hold a chord. | Each held key's piano-edge key fills with the track colour and dips in a little, its name on it; its row glows faintly across the grid. Let go: it fades back, no snap. A chord lights every key. | – | ☐ pass ☐ fail: |
+| 133 | Scroll the roll so the FM-1's octave is out of view; hold a key. Tap the marker at the edge. | A small track-coloured marker at the top (or bottom) of the piano edge, pointing to the note; the roll doesn't move by itself. A tap glides the roll to that note. | – | ☐ pass ☐ fail: |
+| 134 | A drum track: hit pads on the FM-1. Then press play and watch a melodic track's Edit. | The lane key for each pad hit lights and fades. Playing: the keys also light with the sequencer's own notes (expected: the FM-1 sends them on the same channel). | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

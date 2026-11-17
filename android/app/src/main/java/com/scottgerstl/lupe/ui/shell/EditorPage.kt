@@ -502,6 +502,11 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
     val pc = com.scottgerstl.lupe.ui.edit.rememberPlayheadClock(core)
     // a hit being dragged along its lane (Edit redesign): lane, from step, to step; [hitLift] on the spatial spring
     var hitDrag by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    // the FM-1's pads hit now on this kit (its lane notes): their lane keys light (Scott, 2026-11-17)
+    val keysArea by core.keys.collectAsStateWithLifecycle()
+    val linkNow by core.link.collectAsStateWithLifecycle()
+    val heldLanes = if (linkNow.phase != com.scottgerstl.lupe.core.LinkPhase.Ready) emptySet() else keysArea.on(ed.track).let { on -> ed.kitNotes.indices.filter { ed.kitNotes[it] in on }.toSet() }
+    val laneGlow = com.scottgerstl.lupe.ui.edit.rememberKeyGlow(heldLanes)
     val dwellMs by rememberUpdatedState(com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.padSlideDwellMs.toLong())
     val hitLift = remember { androidx.compose.animation.core.Animatable(0f) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -538,10 +543,11 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                     val keyH = minOf(28.dp, rh - 4.dp)
                     Box(
                         Modifier.fillMaxWidth().height(rh)
-                            .graphicsLayer { val (qx, qy) = squash(); scaleX = qx; scaleY = qy }
+                            .graphicsLayer { val (qx, qy) = squash(); val g = if (reduce) 1f else 1f - 0.04f * laneGlow.of(k); scaleX = qx * g; scaleY = qy * g }
                             .drawBehind {
                                 val kw = 40.dp.toPx(); val kh = keyH.toPx()
-                                drawRoundRect(lerp(Tok.control, Tok.text, lit), Offset((size.width - kw) / 2, (size.height - kh) / 2), Size(kw, kh), CornerRadius((10f - 4f * sq.coerceIn(0f, 1.2f)).dp.toPx()))
+                                // the FM-1 hitting this lane: the key fills with the track's colour, fading back over 150 ms
+                                drawRoundRect(lerp(lerp(Tok.control, Tok.text, lit), track, laneGlow.of(k)), Offset((size.width - kw) / 2, (size.height - kh) / 2), Size(kw, kh), CornerRadius((10f - 4f * sq.coerceIn(0f, 1.2f)).dp.toPx()))
                             }
                             .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "$lane lane"; selected = on; onClick("Pick the lane") { pickLane(core, k, lane, hit, ed, onPick); true } }
                             .pointerInput(k, hit) {
@@ -552,7 +558,7 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        BasicText(lane, Modifier.width(38.dp), style = LupeType.label.copy(fontSize = 10.sp, lineHeight = 11.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit), textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 1,
+                        BasicText(lane, Modifier.width(38.dp), style = LupeType.label.copy(fontSize = 10.sp, lineHeight = 11.sp, color = lerp(lerp(Tok.text2Raised, Tok.onColour, lit), Tok.onColour, laneGlow.of(k)), textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 1,
                             autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = 10.sp, stepSize = 0.5.sp))
                     }
                 }
