@@ -149,6 +149,8 @@ Motion follows `DESIGN.md` (arrivals say where they come from: out of the finger
 
 ## 3. Build notes
 
+- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; spec 3.9): `LupeMenu` (the menus from a control or at the finger, the Mix strip's menu) is `held` at radius 14 with 6 inside; rows 44 (52 with a second line) at radius 10; a checked row is a `lifted` pill with its tick (shape as state); second lines in `textSecondaryRaised`. It grows from 0.94 and drops 12 into place on the spring, and leaves in 120 ms. **The pad's arc wheel (`HoldMenu.kt`) is unchanged**: the straight menu was a study-only call, and the shipped wheel stays until Scott says otherwise.
+
 - Device checks: `2026-11-09-lupe-batch-2026-11-06.md` 10 (menus from the finger, both hands; no result recorded); `2026-11-09-perform-grid-map.md` 19–20 (the empty pad's fan; not recorded), 49 (step clear names its pattern; not recorded), 61 and 66 (no system dialogs, Don't ask again; passed 2026-11-11); `2026-11-10-accessibility.md` 13 and 22 (Entry menu, Escape; parts A–C passed 2026-11-11).
 - `TouchPointWatch` records touch-downs without taking part in any gesture, so a confirm can open where the finger was.
 - `[open]` Android's radial puts at most six choices in one place, the rest behind "More…" (`HoldMenu.kt`). The iPad's filled-pad menu has nine. How does the full set sit in the radial: More…, two rings, or a column?

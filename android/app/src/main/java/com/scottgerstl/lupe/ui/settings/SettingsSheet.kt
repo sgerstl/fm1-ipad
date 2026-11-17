@@ -203,43 +203,57 @@ fun SwitchRow(title: String, sub: String, on: Boolean, trial: Boolean = false, o
     }
 }
 
-/** 52 × 30: the thumb slides and the track blends in 150 ms (Reduce Motion: the blend only). On is the light key, off the dark. */
+/**
+ * The hybrid switch (spec 3.6): 52 × 32, round. On: a `text` track with a 24 `onColour` thumb. Off: a `control` track with a 2 dp `primaryEdge`
+ * edge (4.4:1) and a 16 thumb in `primaryEdge`. The thumb's size is the shape-as-state cue beside the colour; it travels and grows on the
+ * spring, the colours ease (Reduce Motion: it lands at once and only the colours blend).
+ */
 @Composable
 fun LupeSwitch(on: Boolean) {
     val reduce = LocalReduceMotion.current
+    val m = com.scottgerstl.lupe.ui.theme.hybridMotion
     val t = animatedFloat(if (on) 1f else 0f, Dur.STATE)
+    val move by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
     Box(
-        Modifier.width(52.dp).height(30.dp)
+        Modifier.width(52.dp).height(32.dp)
             .drawBehind {
                 val r = CornerRadius(size.height / 2)
-                drawRoundRect(lerp(Tok.control, Tok.primaryTop, t.value), cornerRadius = r)
-                // off: a 2 dp outline in text2 (about 6:1 on the sheet), so the control's edge and state read without colour alone
-                if (t.value < 1f) drawRoundRect(Tok.text2.copy(alpha = 1f - t.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-                val pad = 5.dp.toPx(); val d = size.height - 2 * pad
-                val x = if (reduce) (if (on) size.width - pad - d else pad) else pad + (size.width - 2 * pad - d) * t.value
-                drawRoundRect(lerp(Tok.text2, Tok.onColour, t.value), Offset(x, pad), Size(d, d), CornerRadius(d / 2))
+                drawRoundRect(lerp(Tok.control, Tok.text, t.value), cornerRadius = r)
+                if (t.value < 1f) drawRoundRect(Tok.primaryEdge.copy(alpha = 1f - t.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                val k = if (reduce) (if (on) 1f else 0f) else move
+                val d = (com.scottgerstl.lupe.ui.theme.Shape.switchThumbOff + (com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn - com.scottgerstl.lupe.ui.theme.Shape.switchThumbOff) * k.coerceIn(0f, 1.1f)).toPx()
+                val inset = (size.height - com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx()) / 2
+                val cx = (inset + com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx() / 2) + (size.width - 2 * inset - com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx()) * k
+                drawCircle(lerp(Tok.primaryEdge, Tok.onColour, t.value), d / 2, Offset(cx, size.height / 2))
             },
     )
 }
 
-/** Three (or so) choices in a well, the chosen one a raised key blending in over 150 ms (as the Pads · Timeline · Mix tabs). */
+/**
+ * A few choices as a connected group (hybrid UI, spec 3.4): the chosen one a white pill with dark ink, the others `control` with grey ink, inner
+ * corners 8 and the group's ends round, 2 apart. The colour eases; the corners spring.
+ */
 @Composable
 fun Segmented(options: List<String>, selected: Int, name: String, onPick: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(40.dp).background(Tok.well, RoundedCornerShape(10.dp)).selectableGroup()) {
+    val reduce = LocalReduceMotion.current
+    val m = com.scottgerstl.lupe.ui.theme.hybridMotion
+    Row(Modifier.fillMaxWidth().height(40.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         options.forEachIndexed { i, label ->
-            val lit = animatedFloat(if (i == selected) 1f else 0f, Dur.STATE)
+            val on = i == selected
+            val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
+            val shape by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
             Box(
                 Modifier.weight(1f).fillMaxHeight()
-                    .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = i == selected; contentDescription = "$name: $label" }
+                    .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = on; contentDescription = "$name: $label" }
                     .pointerInput(i) { detectTapGestures { onPick(i) } }
-                    .padding(3.dp)
                     .drawBehind {
-                        val r = CornerRadius(8.dp.toPx())
-                        drawRoundRect(Tok.chicletEdge.copy(alpha = lit.value), Offset(0f, 2.dp.toPx()), Size(size.width, size.height - 2.dp.toPx()), r)
-                        drawRoundRect(Tok.control.copy(alpha = lit.value), Offset.Zero, Size(size.width, size.height - 2.dp.toPx()), r)
+                        val pill = size.height / 2; val inner = 8.dp.toPx()
+                        val k = if (reduce) (if (on) 1f else 0f) else shape.coerceIn(0f, 1.15f)
+                        fun r(outer: Boolean) = if (outer) pill else inner + (pill - inner) * k
+                        with(com.scottgerstl.lupe.ui.shell.SegmentDraw) { segment(lerp(Tok.control, Tok.text, lit.value), r(i == 0), r(i == options.lastIndex)) }
                     },
                 contentAlignment = Alignment.Center,
-            ) { BasicText(label, style = LupeType.key.copy(color = lerp(Tok.text2, Tok.text, lit.value))) }
+            ) { BasicText(label, style = LupeType.key.copy(color = lerp(Tok.text2, Tok.onColour, lit.value), fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal)) }
         }
     }
 }

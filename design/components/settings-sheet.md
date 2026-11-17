@@ -133,6 +133,8 @@ No iPad board; it's a system form. Phone row "Settings": `design/boards/phone-co
 
 ## 3. Build notes
 
+- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; spec 3.6, 3.8): every sheet (`LupeSheet`) sits below the header (top 60) at a 24 top radius, rises on the spring (Labs › Hybrid · sheets and panels), with a 36 × 4 `primaryEdge` handle and a 40 round close key; 24 each side. The switch is 52 × 32: on, a `text` track with a 24 dark thumb; off, `control` with a 2 dp `primaryEdge` edge and a 16 thumb (the thumb's size is the second channel). Segments are the connected group. **Not built:** the two-column landscape layout and the list-and-detail rail (spec 3.8); the sheet's upward shadow (depth comes from the surface step).
+
 - The sheet is shared with the iPhone, where its toggle still reads "Play through the iPad" (the iPhone's menu says "Play through the iPhone").
 - `LabsSection` redraws on a counter because UserDefaults isn't observed.
 - Android today (branch `claude/android-p2-shell-02c86f`): sections FM-1 (status, theme), Turning values (Slide to turn, Magnifier, Haptics, Show graphics) and Labs (switches marked TRIAL, and feel sliders). No handedness and no Sound keys yet.

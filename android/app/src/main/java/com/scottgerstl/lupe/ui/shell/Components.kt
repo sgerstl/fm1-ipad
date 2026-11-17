@@ -55,8 +55,9 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 
 /**
- * The flat chiclet (tokens.chiclet): a top standing on a hard 2 dp base edge. Pressed, the top drops onto the
- * edge in 60 ms and comes back in 100 ms. [on] is a latched toggle (the primary look, blended in 150 ms).
+ * A key, hybrid UI (spec 3.5): a tonal pill on `lifted`; [on] (a latched toggle) is the white key with dark ink, blended in 150 ms. Pressed, it
+ * squashes a little on the spring (Labs › Hybrid · press squash) and darkens. Before the hybrid look it was the flat chiclet on a 2 dp base edge;
+ * [litTop] and [litEdge] are kept for the callers that tint the lit key.
  *
  * The touch target is at least 48 × 48 dp even where the drawn key is 44: the visible key sits centred in it.
  */
@@ -84,6 +85,9 @@ fun Key(
     val focused by source.collectIsFocusedAsState()
     val drop = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100, easing = androidx.compose.animation.core.LinearEasing)
     val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
+    val reduce = com.scottgerstl.lupe.ui.theme.LocalReduceMotion.current
+    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val squash by com.scottgerstl.lupe.ui.theme.springFloat(if (pressed) hm.pressScale else 1f, if (pressed) 100 else hm.fingerMs, hm.bounce, spring = !reduce)
     Box(
         modifier
             .defaultMinSize(minTarget, minTarget)
@@ -105,15 +109,14 @@ fun Key(
             Modifier
                 .then(if (fill) Modifier.fillMaxWidth() else Modifier.width(width ?: 44.dp))
                 .height(height)
+                .graphicsLayer { val k = if (reduce) 1f else squash; scaleX = k; scaleY = k }
                 .drawBehind {
-                    val r = CornerRadius(Tok.CHICLET_RADIUS.dp.toPx())
-                    val e = Tok.CHICLET_EDGE.dp.toPx()
-                    drawRoundRect(lerp(Tok.chicletEdge, litEdge, lit.value), Offset(0f, e), size, r)
-                    drawRoundRect(lerp(Tok.control, litTop, lit.value), Offset(0f, drop.value * e), size, r)
+                    val r = CornerRadius(size.height / 2)
+                    drawRoundRect(lerp(Tok.lifted, litTop, lit.value), cornerRadius = r)
+                    if (drop.value > 0f) drawRoundRect(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.18f * drop.value), cornerRadius = r)
                     // keyboard focus: a 2 dp ring outside the key, text.primary on the page (well over 3:1)
-                    if (focused) drawRoundRect(Tok.text, Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx() + e), CornerRadius(r.x + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
-                }
-                .graphicsLayer { translationY = drop.value * Tok.CHICLET_EDGE.dp.toPx() },
+                    if (focused) drawRoundRect(Tok.text, Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(r.x + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
+                },
             contentAlignment = Alignment.Center,
         ) { content(fg) }
     }
@@ -181,9 +184,9 @@ fun WideKey(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
             .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = text }
             .combinedClickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
             .drawBehind {
-                val r = CornerRadius(Tok.CHICLET_RADIUS.dp.toPx()); val e = Tok.CHICLET_EDGE.dp.toPx()
-                drawRoundRect(Tok.chicletEdge, Offset(0f, e), Size(size.width, size.height - e), r)
-                drawRoundRect(Tok.control, Offset(0f, drop.value * e), Size(size.width, size.height - e), r)
+                val r = CornerRadius(size.height / 2)
+                drawRoundRect(Tok.lifted, cornerRadius = r)
+                if (drop.value > 0f) drawRoundRect(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.18f * drop.value), cornerRadius = r)
             },
         contentAlignment = Alignment.Center,
     ) { KeyLabel(text, Tok.text) }

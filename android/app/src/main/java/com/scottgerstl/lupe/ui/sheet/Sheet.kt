@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.sheet
 
+import androidx.compose.ui.unit.sp
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -99,6 +101,9 @@ fun LupeSheet(
 ) {
     val reduce = LocalReduceMotion.current
     val t = animatedFloat(if (visible) 1f else 0f, if (visible) Dur.PANEL else Dur.EXIT, if (visible) EaseOut else EaseIn)
+    // the sheet rises on the spring (spec §5: 300 ms, bounce 0.2; Labs › Hybrid · sheets and panels); the scrim and Reduce Motion's fade ease
+    val m = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val rise by com.scottgerstl.lupe.ui.theme.springFloat(if (visible) 1f else 0f, if (visible) m.panelMs else 120, if (visible) m.sheetBounce else 0f, spring = !reduce)
     if (!visible && t.value <= 0.001f) return
     BackHandler(enabled = visible) { onDismiss() }
     val scope = rememberCoroutineScope()
@@ -106,7 +111,8 @@ fun LupeSheet(
     LaunchedEffect(visible) { if (visible) drag.snapTo(0f) }
     val density = LocalDensity.current
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val maxSheet = maxHeight * 0.92f   // landscape: the screen is short, so the sheet takes nearly all of it
+        // hybrid UI (spec 3.8): the sheet sits below the header (its 56 and the 4 above it) and fills the rest
+        val maxSheet = (maxHeight - SHEET_TOP).coerceAtLeast(maxHeight * 0.6f)
         // the scrim: what's behind is dimmed and can't be touched
         Box(
             Modifier.fillMaxSize().graphicsLayer { alpha = t.value }.background(Color.Black.copy(alpha = 0.55f))
@@ -119,9 +125,9 @@ fun LupeSheet(
                 .heightIn(max = maxSheet)
                 .graphicsLayer {
                     alpha = if (reduce) t.value else 1f
-                    if (!reduce) translationY = (1f - t.value) * size.height.coerceAtLeast(1f) + drag.value
+                    if (!reduce) translationY = (1f - rise) * size.height.coerceAtLeast(1f) + drag.value
                 }
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .clip(RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, topEnd = com.scottgerstl.lupe.ui.theme.Shape.sheet))
                 .background(Tok.panel)
                 .pointerInput(Unit) { detectTapGestures { } }   // taps on the sheet don't reach the scrim
                 .semantics { paneTitle = title; isTraversalGroup = true }
@@ -143,21 +149,25 @@ fun LupeSheet(
                 },
             ) {
                 Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
-                    Box(Modifier.width(44.dp).height(5.dp).background(Tok.lifted, RoundedCornerShape(3.dp)))
+                    Box(Modifier.width(36.dp).height(4.dp).background(Tok.primaryEdge, RoundedCornerShape(2.dp)))
                 }
-                if (showTitle) Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(title, Modifier.weight(1f).semantics { heading() }, style = LupeType.title)
-                    Key(onDismiss, "Close $title", width = 48.dp, height = 40.dp) { fg ->
+                if (showTitle) Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(title, Modifier.weight(1f).semantics { heading() }, style = LupeType.title.copy(fontSize = 19.sp))
+                    // changes apply at once, so a close key (40 round `lifted`), not a Done (spec 3.8)
+                    com.scottgerstl.lupe.ui.shell.TransportKey(onDismiss, "Close $title", 40.dp, primary = false) { _ ->
                         Canvas(Modifier.size(12.dp)) {
                             val w = 2.dp.toPx()
-                            drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), w, StrokeCap.Round)
-                            drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), w, StrokeCap.Round)
+                            drawLine(Tok.text, Offset(0f, 0f), Offset(size.width, size.height), w, StrokeCap.Round)
+                            drawLine(Tok.text, Offset(size.width, 0f), Offset(0f, size.height), w, StrokeCap.Round)
                         }
                     }
                 }
             }
             if (fixed != null) Column(Modifier.fillMaxWidth().height(fixed.coerceAtMost(maxSheet - if (showTitle) 64.dp else 24.dp)).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 8.dp), content = content)
-            else Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 24.dp), content = content)
+            else Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 16.dp), content = content)
         }
     }
 }
+
+/** Where a sheet's top sits: under the header (56) and its 4 above (spec 3.8). */
+val SHEET_TOP = 60.dp

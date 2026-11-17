@@ -116,3 +116,8 @@ internal fun DrawScope.segmentShape(color: Color, left: Float, right: Float) {
     val l = CornerRadius(left.coerceAtMost(size.height / 2)); val r = CornerRadius(right.coerceAtMost(size.height / 2))
     drawPath(Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, l, r, r, l)) }, color)
 }
+
+/** The connected group's segment shape, for other packages (Settings' segments). */
+object SegmentDraw {
+    fun DrawScope.segment(color: Color, left: Float, right: Float) = segmentShape(color, left, right)
+}
