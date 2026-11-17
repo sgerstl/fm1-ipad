@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -67,7 +68,9 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 fun ParamTile(
     label: String, knob: Int?, value: String, name: String, tint: Color, key: Any, modifier: Modifier = Modifier,
     unit: String? = null, num: Int? = null, min: Int = 0, max: Int = 0, bipolar: Boolean = false, dpPerStep: Float = 12f, tick: Boolean = false,
-    locked: Boolean = false, limitWord: String? = null, onSteps: (Int) -> Unit,
+    locked: Boolean = false, limitWord: String? = null,
+    /** False: shown but not editable from the phone (the FM-1's knob still turns it); dimmed, no slide, TalkBack says why. */
+    enabled: Boolean = true, disabledWhy: String? = null, onSteps: (Int) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     val send by rememberUpdatedState(onSteps)
@@ -81,7 +84,10 @@ fun ParamTile(
     fun step(d: Int) { if (d == 0) return; net += d; send(d); if (tick) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
     Column(
         modifier.clip(RoundedCornerShape(10.dp)).background(lerp(Tok.lifted, Tok.held, hotF))
-            .semantics(mergeDescendants = true) {
+            .then(if (enabled) Modifier else Modifier.semantics(mergeDescendants = true) {
+                contentDescription = name + (knob?.let { ", FM-1 knob $it" } ?: ""); stateDescription = value + (disabledWhy?.let { ". $it" } ?: "")
+            })
+            .then(if (!enabled) Modifier else Modifier.semantics(mergeDescendants = true) {
                 contentDescription = name + (knob?.let { ", FM-1 knob $it" } ?: "") + if (locked) ", locked on this step" else ""
                 stateDescription = value + (unit?.let { " $it" } ?: "") + (if (num != null) ", range $min to $max" else "") + (limitWord?.let { ", can't grow: $it" } ?: "")
                 role = Role.Button
@@ -94,8 +100,8 @@ fun ParamTile(
                     CustomAccessibilityAction("Decrease $name") { step(-1); true },
                     CustomAccessibilityAction("Put $name back as it was") { val b = -net; net = 0; send(b); true },
                 )
-            }
-            .pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) { send(b); haptic.performHapticFeedback(HapticFeedbackType.Confirm) } }) }
+            })
+            .then(if (!enabled) Modifier else Modifier.pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) { send(b); haptic.performHapticFeedback(HapticFeedbackType.Confirm) } }) }
             .slideToTurn(
                 enabled = true, stepDp = dpPerStep,
                 face = remember(label, tint) { MagnifierFace(label, { shown }, { frac }, bipolar, ring = false, tint = tint) },
@@ -103,7 +109,8 @@ fun ParamTile(
                 bounds = { num?.let { n -> -(n - min)..(max - n) } },
                 onLimit = { haptic.performHapticFeedback(HapticFeedbackType.ContextClick) },
                 forceDirection = SlideDirection.Sideways, strictAxis = true,
-            )
+            ))
+            .graphicsLayer { alpha = if (enabled) 1f else 0.55f }
             .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

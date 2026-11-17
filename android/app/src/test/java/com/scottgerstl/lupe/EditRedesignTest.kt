@@ -52,4 +52,16 @@ class EditRedesignTest {
         moveNote(ed, NoteDrag(2, 64, 2, 67), same) {}
         assertEquals(listOf<Intent>(SetStepNotes(2, listOf(60, 67))), same.sent)    // a pitch change alone: no move
     }
+
+    /** FEEL's knob 1 runs CHANCE 0–100, then on into the trig conditions (Skiff v2.5.1 feel_turn); the core keeps the two fields apart. */
+    @Test fun chanceRunsIntoTheConditions() {
+        assertEquals(75, com.scottgerstl.lupe.ui.shell.chanceValue(75, "ALWAYS"))
+        assertEquals(110, com.scottgerstl.lupe.ui.shell.chanceValue(100, "3:4"))          // condition 10
+        assertEquals("75%", com.scottgerstl.lupe.ui.shell.chanceText(75))
+        assertEquals("2nd of 4", com.scottgerstl.lupe.ui.shell.chanceText(109))
+        assertEquals(listOf(StepField.Chance to 5), com.scottgerstl.lupe.ui.shell.chanceSteps(95, "ALWAYS", 5))
+        assertEquals(listOf(StepField.Chance to 5, StepField.Cond to 2), com.scottgerstl.lupe.ui.shell.chanceSteps(95, "ALWAYS", 7))   // past 100: 100 and the 2nd condition
+        assertEquals(listOf(StepField.Cond to -2, StepField.Chance to -3).toSet(), com.scottgerstl.lupe.ui.shell.chanceSteps(100, "!FILL", -5).toSet())   // back under: ALWAYS again, 97 %
+        assertEquals(emptyList<Pair<StepField, Int>>(), com.scottgerstl.lupe.ui.shell.chanceSteps(100, "4:4", 3))                  // the last condition: no further
+    }
 }

@@ -264,7 +264,7 @@ fun EditTab(
                     customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the step panel") { ui.stepPanel = false; true }) }
                 .padding(12.dp),
         ) {
-            if (drum) HitPanel(ed, track, core, hit, narrow = true) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
+            if (drum) HitPanel(ed, track, core, hit, narrow = true, onLane = { l -> hit = l to (hit?.second ?: ed.selected) }) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
         }
     }
 }
@@ -692,31 +692,50 @@ private fun pickLane(core: LupeCore, k: Int, lane: String, hit: Pair<String, Int
 
 /** The picked hit's values in boxes (a kit has more than four per hit, so boxes, not dials), under a "SD · step 5 ✕" key: one row, or docked ([narrow]) two rows of three. */
 @Composable
-private fun HitPanel(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, narrow: Boolean = false, onClose: () -> Unit) {
+private fun HitPanel(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, narrow: Boolean = false, onLane: (String) -> Unit = {}, onClose: () -> Unit) {
     val (lane, step) = hit ?: return
     val s = ed.steps.getOrNull(step) ?: Step()
     val send = { f: StepField, d: Int -> core.send(Intent.StepAdjust(f, d)) }
-    val close: @Composable () -> Unit = {
-        Key(onClose, "$lane, step ${step + 1}: close", width = 112.dp, height = 28.dp, minTarget = 44.dp) { fg ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel("$lane · step ${step + 1}", fg, style = LupeType.key.copy(fontSize = 13.sp)); Cross(fg) }
+    val lanes = ed.kitLanes.ifEmpty { listOf(lane) }
+    val k = lanes.indexOf(lane).coerceAtLeast(0)
+    val h = s.hits.firstOrNull { it.lane == k }
+    val on = s.on && (if (s.hits.isNotEmpty()) h != null else lane in s.note.split(" "))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) { heading() }) {
+                BasicText("STEP ${step + 1}", style = LupeType.title.copy(fontSize = 19.sp, lineHeight = 21.sp))
+                BasicText("$lane · ${if (on) "hit" else "empty"}", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
+            }
+            Key(onClose, "Close the step panel", width = 40.dp, height = 40.dp, minTarget = 44.dp) { fg -> Cross(fg) }
         }
-    }
-    val boxes: List<@Composable (Modifier) -> Unit> = listOf(
-        { m -> ValueBox("VELOCITY", "${s.velocity}", "Velocity", track, "velocity" to step, 3f, false, s.velocity, 1, 127, unit = 4, modifier = m) { send(StepField.Velocity, it) } },
-        { m -> ValueBox("CHANCE", "${s.chance}%", "Chance", track, "chance" to step, 4f, false, s.chance, 0, 100, unit = 5, modifier = m) { send(StepField.Chance, it) } },
-        { m -> ValueBox("RATCHET", "×${s.ratchet}", "Ratchet", track, "ratchet" to step, 28f, true, s.ratchet, 1, 4, modifier = m) { send(StepField.Ratchet, it) } },
-        { m -> ValueBox("NUDGE", "${s.nudge}", "Nudge", track, "nudge" to step, 12f, false, s.nudge, -12, 12, bipolar = true, modifier = m) { send(StepField.Nudge, it) } },
-        // the lane's own PITCH and DECAY: the editor area doesn't carry a lane's sound yet, so they show and say so (P1)
-        { m -> ValueBox("PITCH", "—", "Lane pitch, not available yet", track, "lp" to lane, 12f, false, null, enabled = false, modifier = m) { } },
-        { m -> ValueBox("DECAY", "—", "Lane decay, not available yet", track, "ld" to lane, 12f, false, null, enabled = false, modifier = m) { } },
-    )
-    if (narrow) Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        close()
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { boxes.take(3).forEach { it(Modifier.weight(1f)) } }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { boxes.drop(3).forEach { it(Modifier.weight(1f)) } }
-    } else Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        close()
-        boxes.forEach { it(Modifier.weight(1f)) }
+        Spacer(Modifier.height(8.dp))
+        // the FM-1's NOTES knobs on a kit (Skiff v2.5.1 source, grid_edit; not a live probe): 1 LANE, 2 HIT, 3 ACC, 4 VELOCITY
+        BasicText("NOTES", Modifier.padding(bottom = 6.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.scottgerstl.lupe.ui.page.ParamTile("LANE", 1, lane, "Lane", track, "lane" to step, Modifier.weight(1f), num = k, min = 0, max = (lanes.size - 1).coerceAtLeast(0), dpPerStep = 24f, tick = true) { d ->
+                lanes.getOrNull((k + d).coerceIn(0, lanes.lastIndex))?.let(onLane) }
+            com.scottgerstl.lupe.ui.page.ParamTile("HIT", 2, if (on) "On" else "Off", "Hit", track, "hit" to (step to k), Modifier.weight(1f), num = if (on) 1 else 0, min = 0, max = 1, dpPerStep = 24f, tick = true) { d ->
+                if ((d > 0) != on) core.send(ToggleHit(k, step)) }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // ACC: the core has no intent for one hit's accent yet; the FM-1's knob 3 turns it
+            com.scottgerstl.lupe.ui.page.ParamTile("ACC", 3, if (h?.accent == true) "On" else "Off", "Accent", track, "acc" to (step to k), Modifier.weight(1f), enabled = false,
+                disabledWhy = "Turn the FM-1's knob 3; Lupe can't set an accent yet") { }
+            com.scottgerstl.lupe.ui.page.ParamTile("VELOCITY", 4, "${s.velocity}", "Velocity", track, "velocity" to step, Modifier.weight(1f), num = s.velocity, min = 1, max = 127, dpPerStep = 3f) { send(StepField.Velocity, it) }
+        }
+        Spacer(Modifier.height(12.dp))
+        BasicText("FEEL", Modifier.padding(bottom = 6.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
+        val chanceV = chanceValue(s.chance, s.cond)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.scottgerstl.lupe.ui.page.ParamTile("CHANCE", 1, chanceText(chanceV), "Chance, then the trig conditions", track, "chance" to step, Modifier.weight(1f), num = chanceV, min = 0, max = CHANCE_MAX, dpPerStep = 4f) { d -> chanceSteps(s.chance, s.cond, d).forEach { (f, v) -> send(f, v) } }
+            com.scottgerstl.lupe.ui.page.ParamTile("RATCHET", 2, "${s.ratchet}", "Ratchet", track, "ratchet" to step, Modifier.weight(1f), num = s.ratchet, min = 1, max = 5, dpPerStep = 28f, tick = true) { send(StepField.Ratchet, it) }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.scottgerstl.lupe.ui.page.ParamTile("NUDGE", 3, if (s.nudge > 0) "+${s.nudge}" else "${s.nudge}", "Nudge", track, "nudge" to step, Modifier.weight(1f), num = s.nudge, min = -32, max = 31, bipolar = true, dpPerStep = 6f) { send(StepField.Nudge, it) }
+            com.scottgerstl.lupe.ui.page.ParamTile("TYPE", 4, "—", "Type", track, "type" to step, Modifier.weight(1f), enabled = false, disabledWhy = "Turn the FM-1's knob 4; Lupe doesn't read it yet") { }
+        }
     }
 }
 
@@ -857,20 +876,31 @@ private fun StepControls(ed: EditorState, track: Color, core: LupeCore, tab: Pan
                         }
                     }
                     PanelTab.Feel -> {
-                        // touch controls (the FM-1's FEEL knobs are CHANCE RATCHET NUDGE TYPE: Skiff 2.5.1 feel_turn)
-                        FeelSlider("CHANCE", "${s.chance}%", s.chance, 0, 100, track, false, "chance" to ed.selected) { send(StepField.Chance, it) }
-                        Spacer(Modifier.height(8.dp))
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            BasicText("RATCHET", Modifier.width(88.dp), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
-                            // the core writes 1–4 (it keeps 0–3); the firmware's FEEL knob turns to 5 (feel_turn): noted in the build notes
-                            SegmentGroup(listOf("1", "2", "3", "4"), (s.ratchet - 1).coerceIn(0, 3), { send(StepField.Ratchet, it + 1 - s.ratchet) }, Modifier.weight(1f),
-                                height = 40.dp, padH = 4.dp, role = Role.RadioButton, descriptions = (1..4).map { "Ratchet $it" }, fontSize = 15, fill = true)
+                        // the FM-1's FEEL knobs (Skiff v2.5.1 source, feel_turn; not a live probe): 1 CHANCE (running past 100 into the trig conditions),
+                        // 2 RATCHET, 3 NUDGE, 4 TYPE. Same control language as Notes, linked the same way (the panel on Feel puts the FM-1 on SEQ › FEEL)
+                        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Canvas(Modifier.size(12.dp)) { drawCircle(Tok.text2Raised, size.width / 2 - 1.dp.toPx(), style = Stroke(1.5.dp.toPx())) }
+                            BasicText(if (linked) "FM-1 knobs 1–4 → step $n" else "FM-1 knobs 1–4 drive the step once the FM-1 is linked", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
+                        }
+                        val chanceV = chanceValue(s.chance, s.cond)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.scottgerstl.lupe.ui.page.ParamTile("CHANCE", 1, chanceText(chanceV), "Chance, then the trig conditions", track, "chance" to ed.selected, Modifier.weight(1f),
+                                num = chanceV, min = 0, max = CHANCE_MAX, dpPerStep = 4f, locked = s.isLocked("CHANCE")) { d -> chanceSteps(s.chance, s.cond, d).forEach { (f, v) -> send(f, v) } }
+                            // the core writes 1–4 (it keeps 0–3); the FM-1's knob reaches 5 (feel_turn), shown when it does: a core follow-up
+                            com.scottgerstl.lupe.ui.page.ParamTile("RATCHET", 2, "${s.ratchet}", "Ratchet", track, "ratchet" to ed.selected, Modifier.weight(1f),
+                                num = s.ratchet, min = 1, max = 5, dpPerStep = 28f, tick = true, locked = s.isLocked("RATCHET")) { send(StepField.Ratchet, it) }
                         }
                         Spacer(Modifier.height(8.dp))
-                        CondPicker(s.cond) { idx -> val now = CONDITIONS.indexOf(s.cond).coerceAtLeast(0); send(StepField.Cond, idx - now) }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.scottgerstl.lupe.ui.page.ParamTile("NUDGE", 3, if (s.nudge > 0) "+${s.nudge}" else "${s.nudge}", "Nudge", track, "nudge" to ed.selected, Modifier.weight(1f),
+                                num = s.nudge, min = -32, max = 31, bipolar = true, dpPerStep = 6f, locked = s.isLocked("NUDGE")) { send(StepField.Nudge, it) }
+                            // TYPE: the FM-1's knob 4; the core carries no field for it yet, so the phone shows the tile and leaves the turning to the FM-1
+                            com.scottgerstl.lupe.ui.page.ParamTile("TYPE", 4, "—", "Type", track, "type" to ed.selected, Modifier.weight(1f), enabled = false,
+                                disabledWhy = "Turn the FM-1's knob 4; Lupe doesn't read it yet") { }
+                        }
                         Spacer(Modifier.height(8.dp))
-                        // NUDGE: −32…31 (the core's and the firmware's range; Android showed ±12 before)
-                        FeelSlider("NUDGE", if (s.nudge > 0) "+${s.nudge}" else "${s.nudge}", s.nudge, -32, 31, track, true, "nudge" to ed.selected) { send(StepField.Nudge, it) }
+                        // a touch shortcut to the same value as CHANCE past 100 (not a parameter of its own)
+                        CondPicker(s.cond, label = "Conditions") { idx -> val now = CONDITIONS.indexOf(s.cond).coerceAtLeast(0); send(StepField.Cond, idx - now) }
                     }
                     PanelTab.Sound -> {
                         if (s.values.isEmpty()) BasicText("No locks on this step. Hold it and turn a knob on the FM-1, or latch Lock.", Modifier.padding(top = 6.dp), style = LupeType.body.copy(fontSize = 14.sp))
@@ -880,6 +910,27 @@ private fun StepControls(ed: EditorState, track: Color, core: LupeCore, tab: Pan
             }
         }
     }
+}
+
+/** CHANCE's range on the FM-1's knob: 0–100, then the trig conditions after ALWAYS (100 + condition number; Skiff v2.5.1 feel_turn). */
+internal val CHANCE_MAX = 100 + 11
+
+/** The knob's value for a step: its chance, or 100 + its condition when it has one (on the FM-1 one knob turns through both). */
+internal fun chanceValue(chance: Int, cond: String): Int { val c = CONDITIONS.indexOf(cond); return if (c > 0) 100 + c else chance.coerceIn(0, 100) }
+
+/** What the CHANCE tile shows: "75%", or past 100 the condition ("2nd of 4"). */
+internal fun chanceText(v: Int): String = if (v <= 100) "$v%" else condWords(CONDITIONS[(v - 100).coerceIn(1, CONDITIONS.lastIndex)]).removePrefix("Every ")
+
+/**
+ * A turn of the CHANCE tile by [d] steps, as the core's two fields: the chance (0–100) and the condition (0 = ALWAYS). Past 100 the chance sits at
+ * 100 and the condition counts up; back under, the condition returns to ALWAYS.
+ */
+internal fun chanceSteps(chance: Int, cond: String, d: Int): List<Pair<StepField, Int>> {
+    val now = chanceValue(chance, cond)
+    val to = (now + d).coerceIn(0, CHANCE_MAX)
+    val c0 = CONDITIONS.indexOf(cond).coerceAtLeast(0)
+    val (ch1, c1) = if (to <= 100) to to 0 else 100 to (to - 100)
+    return buildList { if (ch1 != chance) add(StepField.Chance to (ch1 - chance)); if (c1 != c0) add(StepField.Cond to (c1 - c0)) }
 }
 
 /** The trig conditions by COND number (the core's table: PadsEditor.swift, the iPad's StepInspector). */
@@ -911,65 +962,18 @@ private fun PagerHalf(label: String, description: String, first: Boolean, onClic
     ) { BasicText(label, style = LupeType.key.copy(fontSize = 20.sp)) }
 }
 
-/**
- * A Feel slider (Edit redesign): its label and value over a 44-tall touch lane with an 8-tall track, the fill in the track colour (from the centre
- * when [bipolar]) and a 4 × 20 handle. A sideways slide across the whole lane spans the range; it takes the drag only once it's clearly sideways.
- * Double tap puts back what it changed. TalkBack: range, Increase, Decrease.
- */
-@Composable
-private fun FeelSlider(label: String, text: String, value: Int, min: Int, max: Int, tint: Color, bipolar: Boolean, key: Any, onSteps: (Int) -> Unit) {
-    val send by rememberUpdatedState(onSteps)
-    var net by remember(key) { mutableStateOf(0) }
-    var last by remember { mutableStateOf(0) }
-    val latest by rememberUpdatedState(value)
-    fun step(d: Int) { if (d == 0) return; net += d; send(d) }
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth()) {
-            BasicText(label, Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
-            BasicText(text, style = LupeType.number.copy(fontSize = 18.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
-        }
-        BoxWithConstraints(Modifier.fillMaxWidth().height(44.dp)) {
-            val widthDp = maxWidth.value
-            Box(
-                Modifier.fillMaxSize()
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = label.lowercase().replaceFirstChar { it.uppercase() }; stateDescription = text; role = Role.Button
-                        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), min.toFloat()..max.toFloat(), max - min - 1)
-                        setProgress { v -> step(kotlin.math.round(v).toInt() - latest); true }
-                        customActions = listOf(CustomAccessibilityAction("Increase") { step(1); true }, CustomAccessibilityAction("Decrease") { step(-1); true })
-                    }
-                    .pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) send(b) }) }
-                    .slideToTurn(enabled = true, stepDp = (widthDp / (max - min).coerceAtLeast(1)).coerceAtLeast(1.5f), face = null,
-                        onStart = { last = 0 }, onSlide = { total -> step(total - last); last = total },
-                        bounds = { (min - latest)..(max - latest) }, forceDirection = com.scottgerstl.lupe.ui.slide.SlideDirection.Sideways, strictAxis = true),
-            ) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val th = 8.dp.toPx(); val y = (size.height - th) / 2; val hw = 4.dp.toPx()
-                    val f = if (max > min) (value - min).toFloat() / (max - min) else 0f
-                    val x = hw / 2 + (size.width - hw) * f
-                    drawRoundRect(Tok.control, Offset(0f, y), Size(size.width, th), CornerRadius(th / 2))
-                    val from = if (bipolar) hw / 2 + (size.width - hw) * ((0 - min).toFloat() / (max - min)) else 0f
-                    drawRoundRect(tint, Offset(minOf(from, x), y), Size(kotlin.math.abs(x - from).coerceAtLeast(if (bipolar) 2.dp.toPx() else 0f), th), CornerRadius(th / 2))
-                    if (bipolar) drawRect(Tok.text2, Offset(from - 0.75.dp.toPx(), y - 3.dp.toPx()), Size(1.5.dp.toPx(), th + 6.dp.toPx()))
-                    drawRoundRect(Tok.text, Offset(x - hw / 2, (size.height - 20.dp.toPx()) / 2), Size(hw, 20.dp.toPx()), CornerRadius(2.dp.toPx()))
-                }
-            }
-        }
-    }
-}
-
 /** COND as a picker row (Edit redesign): `control` at radius 12, 52 tall, "COND" and the condition in words with ⌄; it opens the list. */
 @Composable
-private fun CondPicker(cond: String, onPick: (Int) -> Unit) {
+private fun CondPicker(cond: String, label: String = "COND", onPick: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(12.dp)).background(Tok.control)
-                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Condition, ${condWords(cond)}. Opens the list" }
+            Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).background(Tok.control)
+                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "$label, ${condWords(cond)}. Opens the list" }
                 .clickable { open = true }.padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BasicText("COND", Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
+            BasicText(label, Modifier.weight(1f), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp))
             BasicText(condWords(cond), style = LupeType.key.copy(fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal))
             Spacer(Modifier.width(8.dp)); Chevron(Tok.text2Raised)
         }
