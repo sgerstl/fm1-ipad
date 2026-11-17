@@ -142,6 +142,7 @@ No iPad board; it's a system form. Phone row "Settings": `design/boards/phone-co
 ### Decision log
 
 - 2026-11-10: Labs keys merged without losing what was set (`Labs.migrate`).
+- 2026-11-18: **Offer played phrases**: Chip (default), Pop-up, Off, under Touch after Haptics (Scott: the FREE TAKE strip kept blocking the page).
 
 ## 4. Usage
 

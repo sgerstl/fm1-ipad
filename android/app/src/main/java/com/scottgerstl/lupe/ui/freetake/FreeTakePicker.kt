@@ -232,8 +232,9 @@ fun TakeKey(text: String, modifier: Modifier = Modifier, primary: Boolean = fals
 
 /** A phrase heard on the FM-1, offered; after Keep it, what it became, with the FM-1's own undo. Sits at the top of the editor. */
 @Composable
-fun TakeStrips(state: FreeTakeState, core: LupeCore, modifier: Modifier = Modifier) {
-    val offer = state.offer; val landed = state.landed
+fun TakeStrips(state: FreeTakeState, core: LupeCore, modifier: Modifier = Modifier, showOffer: Boolean = true) {
+    // the offer shows here only when Settings › Offer played phrases is Pop-up (Scott, 2026-11-18); Chip puts it by Record, Off nowhere
+    val offer = state.offer?.takeIf { showOffer }; val landed = state.landed
     if (offer == null && landed == null) return
     Row(
         modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (offer != null) Tok.outline else Tok.lifted).padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),

@@ -188,7 +188,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                                 // the grid keeps its step width and scrolls under the docked panel (decision 35, B)
                                 EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = DOCK_W * dockT.value)
                                 // the FREE TAKE offer and the landing sit on top of the editor
-                                com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
+                                com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp), showOffer = labs.takeOffer == com.scottgerstl.lupe.ui.slide.PhoneSettings.TAKE_POPUP)
                             }
                             Tab.Timeline -> TimelineSlot(core)
                             Tab.Mix -> { val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core); val meters = core.meters.collectAsStateWithLifecycle()

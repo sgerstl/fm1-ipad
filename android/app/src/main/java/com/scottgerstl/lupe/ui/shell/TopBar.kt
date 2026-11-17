@@ -1,5 +1,15 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.foundation.background
+
+import androidx.compose.foundation.shape.RoundedCornerShape
+
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -144,6 +154,8 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 }
             }
         }
+        // a played phrase on offer (FREE TAKE), as a chip beside Record when Settings › Offer played phrases is Chip (Scott, 2026-11-18)
+        TakeChip(core)
         Spacer(Modifier.width(12.dp))
         // Record: round 48, `lifted` with the red dot (22); latched, it fills REC red and the dot goes dark (shape: the dot never moves)
         TransportKey({ core.send(Intent.Rec) }, "Record", Shape.record, primary = false, lit = top.rec, role = Role.Switch, state = if (top.rec) "On" else "Off") { fg ->
@@ -195,5 +207,43 @@ private fun FakeMenu(core: FakeLupeCore, close: () -> Unit) {
     MenuRow("Bottom: editor", { core.showBottom(com.scottgerstl.lupe.core.BottomPage()); close() })
     listOf("ENV" to "ENV", "LFO" to "LFO", "FX" to "REVERB").forEach { (fam, page) ->
         MenuRow("Bottom: $fam page", { core.showBottom(com.scottgerstl.lupe.core.BottomPage(com.scottgerstl.lupe.core.BottomKind.Page, fam, page)); close() })
+    }
+}
+
+
+/**
+ * The FM-1's FREE TAKE offer as a chip by Record (Scott, 2026-11-18): a track-colour dot and the note count. It scales in once on the spring and
+ * doesn't pulse; a newer offer changes the count; it goes when the offer expires or is taken. A tap opens the picker (Keep that). It covers nothing.
+ */
+@Composable
+private fun TakeChip(core: com.scottgerstl.lupe.core.LupeCore) {
+    val phone = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current
+    val take by core.freeTake.collectAsStateWithLifecycle()
+    val offer = take.offer?.takeIf { phone.takeOffer == com.scottgerstl.lupe.ui.slide.PhoneSettings.TAKE_CHIP && !it.refused }
+    var last by remember { mutableStateOf<com.scottgerstl.lupe.core.TakeOffer?>(null) }
+    if (offer != null) last = offer
+    val reduce = com.scottgerstl.lupe.ui.theme.LocalReduceMotion.current
+    val inT by com.scottgerstl.lupe.ui.theme.springFloat(if (offer != null) 1f else 0f, if (offer != null) 380 else 150, if (offer != null) 0.3f else 0f, spring = !reduce && offer != null)
+    val shown = last ?: return
+    if (inT <= 0.01f && offer == null) return
+    val messages = LocalMessages.current
+    val colour = Tok.track[(shown.track - 1).coerceAtLeast(0) % Tok.track.size]
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val press by com.scottgerstl.lupe.ui.theme.pressScale(pressed, reduce)
+    Spacer(Modifier.width(8.dp))
+    Row(
+        Modifier.height(32.dp)
+            .graphicsLayer { val k = if (reduce) 1f else inT.coerceIn(0f, 1.2f); scaleX = k * press; scaleY = k * press; alpha = inT.coerceIn(0f, 1f) }
+            .clip(RoundedCornerShape(50)).background(Tok.held)
+            .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Played phrase on track ${shown.track}, ${shown.notes} note${if (shown.notes == 1) "" else "s"}. Double-tap to keep it" }
+            .clickable(source, null, enabled = offer != null) {
+                if (shown.canStart) core.send(com.scottgerstl.lupe.core.TakeStart) else messages.refuse("The FM-1 can't open its picker from here. Press SHIFT + SAVE on the FM-1 to keep it.")
+            }
+            .padding(start = 10.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(10.dp).background(colour, androidx.compose.foundation.shape.CircleShape))
+        BasicText("${shown.notes}", style = LupeType.number.copy(fontSize = 15.sp, lineHeight = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1)
     }
 }

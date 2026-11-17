@@ -283,6 +283,16 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 | 133 | Scroll the roll so the FM-1's octave is out of view; hold a key. Tap the marker at the edge. | A small track-coloured marker at the top (or bottom) of the piano edge, pointing to the note; the roll doesn't move by itself. A tap glides the roll to that note. | – | ☐ pass ☐ fail: |
 | 134 | A drum track: hit pads on the FM-1. Then press play and watch a melodic track's Edit. | The lane key for each pad hit lights and fades. Playing: the keys also light with the sequencer's own notes (expected: the FM-1 sends them on the same channel). | – | ☐ pass ☐ fail: |
 
+## Round 14 (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 135 | Stopped, play a phrase on the FM-1 and wait. | No strip over the page. A small chip by Record: the track's dot and the note count, scaling in once and then still. Play another phrase: the count changes. A tap opens the FREE TAKE picker. | – | ☐ pass ☐ fail: |
+| 136 | Settings › Offer played phrases: Pop-up, then Off; play a phrase each time. | Pop-up: the old strip over Edit. Off: nothing at all. | – | ☐ pass ☐ fail: |
+| 137 | A kit on Edit (first time on this install). Then hold a hit and let go without moving. | A one-line "Hold a hit to edit it" in the app strip, gone at the next touch. The held hit lifts, settles, and the step panel opens titled "BD · STEP 5" (its lane and step), with the tiles; the FM-1 goes to SEQ › NOTES on that step. | – | ☐ pass ☐ fail: |
+| 138 | With the panel open, hold another hit; then use ‹ ›. | The panel retargets to the new hit. ‹ › step through that lane's hits, round from the last to the first. | – | ☐ pass ☐ fail: |
+| 139 | Close the panel; tap Step on the kit with nothing picked. Then tap a cell; hold and slide a hit. | Step opens on the last picked hit, or the pattern's first. A tap toggles; hold and slide drags the hit along its lane. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

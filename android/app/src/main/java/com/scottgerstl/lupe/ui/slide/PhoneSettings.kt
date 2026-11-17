@@ -158,6 +158,18 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         private set
     fun chooseSoundKeys(on: Boolean) { soundKeys = on; put(SOUND_KEYS, on) }
 
+    /**
+     * Offer played phrases (Scott, 2026-11-18: "the constant popping up of 'you just played 15 notes'… always blocks shit I want to see"): how
+     * the FM-1's FREE TAKE offer shows. [TAKE_CHIP] a small chip by Record (the default), [TAKE_POPUP] the strip over Edit (as before), [TAKE_OFF] nothing.
+     */
+    var takeOffer by mutableStateOf(prefs?.getInt(TAKE_OFFER, TAKE_CHIP) ?: TAKE_CHIP)
+        private set
+    fun chooseTakeOffer(v: Int) { takeOffer = v.coerceIn(TAKE_CHIP, TAKE_OFF); prefs?.edit()?.putInt(TAKE_OFFER, takeOffer)?.apply() }
+    /** The kit hint ("Hold a hit to edit it") has been shown: once per install. */
+    var kitHintShown by mutableStateOf(prefs?.getBoolean(KIT_HINT, false) ?: false)
+        private set
+    fun markKitHintShown() { if (!kitHintShown) { kitHintShown = true; put(KIT_HINT, true) } }
+
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
     fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
     fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN, on) }
@@ -173,6 +185,11 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
             "labs_motion_page_flip_ms", "labs_motion_press_scale", "labs_spatial_stiffness", "labs_spatial_damping", "labs_fast_spatial_stiffness", "labs_squash_pct",
             "labs_bounce_scale", "labs_bounce_up_ms", "labs_bounce_back_ms")
         const val HAPTICS = "haptics"
+        const val TAKE_OFFER = "take_offer"
+        const val TAKE_CHIP = 0
+        const val TAKE_POPUP = 1
+        const val TAKE_OFF = 2
+        const val KIT_HINT = "kit_hint_shown"
         const val LEFT_HANDED = "left_handed"       // (the old one, read once to fill the two below)
         const val RAIL_LEFT = "rail_left"
         const val MENUS_RIGHT = "menus_right"

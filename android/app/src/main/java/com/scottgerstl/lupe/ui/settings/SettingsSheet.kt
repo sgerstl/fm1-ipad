@@ -101,6 +101,9 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         Segmented(options = listOf("Left", "Right"), selected = if (phone.menusRight) 1 else 0, name = "Menus open") { phone.chooseMenusRight(it == 1) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Haptics", "On pads and value steps", phone.haptics) { phone.chooseHaptics(it) }
+        Text2("Offer played phrases", "When you play a phrase on the FM-1 while stopped: a small chip by Record, a pop-up over Edit, or nothing.")
+        Segmented(options = listOf("Chip", "Pop-up", "Off"), selected = phone.takeOffer, name = "Offer played phrases") { phone.chooseTakeOffer(it) }
+        Spacer(Modifier.height(8.dp))
 
         Section("Sound pages")
         SwitchRow("Show graphics", "Each sound page shows its picture with its dials, and the Mix pages show theirs. Off: dials only", phone.showGraphics) { phone.chooseShowGraphics(it) }

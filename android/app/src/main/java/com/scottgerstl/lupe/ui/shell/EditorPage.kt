@@ -175,6 +175,11 @@ fun EditTab(
     val top by core.top.collectAsStateWithLifecycle()
     // a kit's picked hit: the lane and the step (the step is also the core's selected step, so its values follow)
     var hit by remember(ed.track, ed.pattern) { mutableStateOf<Pair<String, Int>?>(null) }
+    // the first time a kit opens here, once per install: a one-line hint in the app strip; it goes on a timer or at the next touch on the grid
+    val phone = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current
+    val messages = LocalMessages.current
+    var hintId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(drum) { if (drum && !phone.kitHintShown) { messages.post(MessageKind.Confirmation, "Hold a hit to edit it"); hintId = messages.current?.id; phone.markKitHintShown() } }
     val stepPicked = if (drum) hit != null else pick.step != null
     // the step panel: docked while Step is latched and something is picked; the shell's sound panel stands in front of it
     val panelOpen = ui.stepPanel && stepPicked
@@ -197,11 +202,13 @@ fun EditTab(
     }
     // the phone to the FM-1: a step picked with the panel open on Notes or Feel puts the FM-1 on that page with its cursor there (screenGoto's cursor,
     // the core's showOnDevice(page:cursor:)); nothing is sent when it is already there, so the two don't echo. Knob turns are the FM-1's own: no StepAdjust.
-    LaunchedEffect(panelOpen, pick.step, tab, linked) {
-        if (drum || !panelOpen || !linked || tab == PanelTab.Sound) return@LaunchedEffect
-        val st = pick.step ?: return@LaunchedEffect
+    val hitNow by rememberUpdatedState(hit)
+    LaunchedEffect(panelOpen, pick.step, hit, tab, linked) {
+        if (!panelOpen || !linked || (!drum && tab == PanelTab.Sound)) return@LaunchedEffect
+        // a kit (2026-11-18): its NOTES page is the FM-1's drum grid, the cursor its step (Skiff 2.5.1 grid_edit); its LANE knob keeps its own lane
+        val st = (if (drum) hitNow?.second else pick.step) ?: return@LaunchedEffect
         kotlinx.coroutines.delay(120)
-        val pg = if (tab == PanelTab.Feel) 42 else 41
+        val pg = if (!drum && tab == PanelTab.Feel) 42 else 41
         val now = screenNow
         if (now.key == "SEQ" && now.page == pg && now.cursor == st) return@LaunchedEffect
         core.send(com.scottgerstl.lupe.core.ScreenGoto("SEQ", pg, cursor = st))
@@ -232,9 +239,14 @@ fun EditTab(
             val n = (if (drum) hit?.second else pick.step) ?: ed.selected
             Key({
                 if (panelOpen) ui.stepPanel = false
-                else { if (!drum && pick.step == null) { pick.step = ed.selected; core.send(Intent.StepSelect(ed.selected)) }; ui.stepPanel = true }
-            }, "Step ${n + 1} panel", width = 96.dp, height = 40.dp, minTarget = 44.dp, on = panelOpen, role = Role.Switch, enabled = !drum || hit != null,
-                state = when { panelOpen -> "Open"; drum && hit == null -> "Hold a cell to pick a hit first"; else -> "Closed" }) { fg ->
+                else {
+                    if (!drum && pick.step == null) { pick.step = ed.selected; core.send(Intent.StepSelect(ed.selected)) }
+                    // a kit: the last picked hit, else the pattern's first hit (Scott, 2026-11-18: the key no longer waits for a hold)
+                    if (drum && hit == null) firstHit(ed)?.let { hit = it; core.send(Intent.StepSelect(it.second)) }
+                    ui.stepPanel = true
+                }
+            }, "Step ${n + 1} panel", width = 96.dp, height = 40.dp, minTarget = 44.dp, on = panelOpen, role = Role.Switch, enabled = !drum || hit != null || firstHit(ed) != null,
+                state = when { panelOpen -> "Open"; drum && hit == null && firstHit(ed) == null -> "No hits yet: tap a cell to add one"; else -> "Closed" }) { fg ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { KeyLabel("Step ${n + 1}", fg, style = LupeType.key.copy(fontSize = 15.sp)); Chevron(fg) }
             }
         }
@@ -247,7 +259,8 @@ fun EditTab(
         }) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    if (drum) DrumGrid(ed, track, core, hit, if (paged) 0.dp else dock, pageSteps = if (paged) com.scottgerstl.lupe.ui.edit.Roll.PAGE_DOCKED else 16, follow = ui.follow) { hit = it }
+                    if (drum) DrumGrid(ed, track, core, hit, if (paged) 0.dp else dock, pageSteps = if (paged) com.scottgerstl.lupe.ui.edit.Roll.PAGE_DOCKED else 16, follow = ui.follow,
+                        onOpen = { hit = it; ui.stepPanel = true }, onTouch = { hintId?.let { messages.dismiss(it) }; hintId = null }) { hit = it }
                     else com.scottgerstl.lupe.ui.edit.StepGrid(ed, track, core, pick.step, { pick.step = it }, if (paged) 0.dp else dock, canPlay = { !(top.rec && top.playing) },
                         pageSteps = if (paged) com.scottgerstl.lupe.ui.edit.Roll.PAGE_DOCKED else com.scottgerstl.lupe.ui.edit.Roll.STEPS, follow = ui.follow)
                 }
@@ -274,7 +287,8 @@ fun EditTab(
                     customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the step panel") { ui.stepPanel = false; true }) }
                 .padding(12.dp),
         ) {
-            if (drum) HitPanel(ed, track, core, hit, narrow = true, onLane = { l -> hit = l to (hit?.second ?: ed.selected) }) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
+            if (drum) HitPanel(ed, track, core, hit, narrow = true, onLane = { l -> hit = l to (hit?.second ?: ed.selected) },
+                onStep = { st -> hit = (hit?.first ?: "") to st; core.send(Intent.StepSelect(st)) }) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
             // the grab handle (Scott, 2026-11-17; WCAG 2.5.1): tap closes the panel as the swipe does
             PanelHandle("Close the step panel", { ui.stepPanel = false }, Modifier.align(Alignment.CenterStart).offset(x = (-12).dp))
         }
@@ -482,7 +496,9 @@ private fun stepNotes(s: Step): List<Int> = if (!s.on) emptyList() else s.notes.
  * each key's touch area the whole row pitch with no gap between rows.
  */
 @Composable
-private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, dock: Dp = 0.dp, pageSteps: Int = 16, follow: Boolean = true, onPick: (Pair<String, Int>?) -> Unit) {
+private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, dock: Dp = 0.dp, pageSteps: Int = 16, follow: Boolean = true,
+    /** A hit held and let go without moving: the step panel opens on it (Scott, 2026-11-18). */
+    onOpen: (Pair<String, Int>) -> Unit = {}, onTouch: () -> Unit = {}, onPick: (Pair<String, Int>?) -> Unit) {
     val lanes = ed.kitLanes.ifEmpty { ed.steps.flatMap { it.note.split(" ") }.filter { it.isNotEmpty() }.distinct() }.ifEmpty { listOf("—") }
     val top by core.top.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
@@ -652,6 +668,7 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                         .pointerInput(k, i, on) {
                                             awaitEachGesture {
                                                 val down = awaitFirstDown()
+                                                onTouch()
                                                 var dragging = false; var cancelled = false
                                                 // a tap toggles on touch-up, only if the finger never left the slop; a still hold picks the hit. Past the slop it
                                                 // is a page swipe and the cell isn't touched, unless the finger pressed on a hit and held still for the dwell
@@ -685,7 +702,7 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                                     }
                                                     if (!dragging) {
                                                         scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { hitLift.animateTo(0f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) }; hitDrag = null }
-                                                        onPick(lane to i); core.send(Intent.StepSelect(i))
+                                                        onPick(lane to i); core.send(Intent.StepSelect(i)); onOpen(lane to i)
                                                         return@awaitEachGesture
                                                     }
                                                 }
@@ -735,7 +752,7 @@ private fun pickLane(core: LupeCore, k: Int, lane: String, hit: Pair<String, Int
 
 /** The picked hit's values in boxes (a kit has more than four per hit, so boxes, not dials), under a "SD · step 5 ✕" key: one row, or docked ([narrow]) two rows of three. */
 @Composable
-private fun HitPanel(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, narrow: Boolean = false, onLane: (String) -> Unit = {}, onClose: () -> Unit) {
+private fun HitPanel(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, narrow: Boolean = false, onLane: (String) -> Unit = {}, onStep: (Int) -> Unit = {}, onClose: () -> Unit) {
     val (lane, step) = hit ?: return
     val s = ed.steps.getOrNull(step) ?: Step()
     val send = { f: StepField, d: Int -> core.send(Intent.StepAdjust(f, d)) }
@@ -746,8 +763,17 @@ private fun HitPanel(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) { heading() }) {
-                BasicText("STEP ${step + 1}", style = LupeType.title.copy(fontSize = 19.sp, lineHeight = 21.sp))
-                BasicText("$lane · ${if (on) "hit" else "empty"}", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
+                // "KICK · STEP 5" (Scott, 2026-11-18): the lane and the step together
+                BasicText("${lane.uppercase()} · STEP ${step + 1}", style = LupeType.title.copy(fontSize = 19.sp, lineHeight = 21.sp), maxLines = 1,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 13.sp, maxFontSize = 19.sp, stepSize = 1.sp))
+                BasicText(if (on) "Hit" else "Empty", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
+            }
+            // ‹ › step through this lane's hits (round to the other end)
+            val laneHits = laneHitSteps(ed, k)
+            if (laneHits.size > 1 || (laneHits.isNotEmpty() && step !in laneHits)) {
+                PagerHalf("‹", "Previous ${lane} hit", first = true) { prevHit(laneHits, step)?.let(onStep) }
+                Spacer(Modifier.width(2.dp))
+                PagerHalf("›", "Next ${lane} hit", first = false) { nextHit(laneHits, step)?.let(onStep) }
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -1072,4 +1098,18 @@ private fun Step.isLocked(param: String) = values.any { it.locked && it.param ==
 private fun edStepsHit(ed: EditorState, i: Int, k: Int): Boolean {
     val s = ed.steps.getOrNull(i) ?: return false
     return s.on && (if (s.hits.isNotEmpty()) s.hits.any { it.lane == k } else (ed.kitLanes.getOrNull(k) ?: "") in s.note.split(" "))
+}
+
+
+/** The steps where kit lane [k] has a hit, in order. */
+internal fun laneHitSteps(ed: EditorState, k: Int): List<Int> = ed.steps.indices.filter { i -> val s = ed.steps[i]; s.on && s.hits.any { it.lane == k } }
+/** The lane's hit before [step], round from the first to the last; null when it has none. */
+internal fun prevHit(hits: List<Int>, step: Int): Int? = if (hits.isEmpty()) null else hits.lastOrNull { it < step } ?: hits.last()
+/** The lane's hit after [step], round from the last to the first. */
+internal fun nextHit(hits: List<Int>, step: Int): Int? = if (hits.isEmpty()) null else hits.firstOrNull { it > step } ?: hits.first()
+/** A kit's first hit in the pattern, as (lane name, step), for the Step key with nothing picked. */
+internal fun firstHit(ed: EditorState): Pair<String, Int>? {
+    val i = ed.steps.indices.firstOrNull { ed.steps[it].on && ed.steps[it].hits.isNotEmpty() } ?: return null
+    val k = ed.steps[i].hits.first().lane
+    return (ed.kitLanes.getOrNull(k) ?: return null) to i
 }
