@@ -674,7 +674,10 @@ class FakeLupeCore(
                         }) }) }
                 recount()
                 // as the real core sends it now: its own small area per step, the editor area's playhead stays -1
-                _playhead.value = PlayheadState(track = _editor.value.track, step = stepCount % model.size, steps = model.size)
+                // with the step's start and next ticks on the demo's own clock (24 a beat, 6 a step), as the real core's playhead area carries them,
+                // so the playhead sweeps and the hits bounce on the demo too
+                _playhead.value = PlayheadState(track = _editor.value.track, step = stepCount % model.size, steps = model.size, direction = 1,
+                    startTick = stepCount * 6.0, nextTick = stepCount * 6.0 + 6.0)
                 // the meters move while it plays: each track near its level, never louder
                 _meters.value = MetersState(_mix.value.rows.mapIndexed { n, r -> if (r.mute) 0.0 else (r.level / 127.0) * (0.55 + 0.45 * kotlin.math.abs(kotlin.math.sin((stepCount + n * 3) * 0.7))) })
             }
