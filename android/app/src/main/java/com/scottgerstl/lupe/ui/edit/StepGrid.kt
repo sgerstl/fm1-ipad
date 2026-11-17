@@ -296,12 +296,12 @@ private val MINIMAP_H = 28.dp
  * reads "1–8" or "9–16", cross-fading as the page turns.
  */
 @Composable
-private fun MiniMap(ed: EditorState, track: Color, total: Int, pageSteps: Int, pageAt: Float, follow: Boolean, gridW: Dp, reduce: Boolean, onPage: (Int) -> Unit) {
+internal fun MiniMap(ed: EditorState, track: Color, total: Int, pageSteps: Int, pageAt: Float, follow: Boolean, gridW: Dp, reduce: Boolean, labelW: Dp = PIANO_EDGE + 4.dp, onPage: (Int) -> Unit) {
     val page = kotlin.math.round(pageAt).toInt().coerceAtLeast(0)
     val start = Roll.minimapStart(page, pageSteps)
     val cells = Roll.STEPS
     Row(Modifier.fillMaxWidth().height(MINIMAP_H), verticalAlignment = Alignment.CenterVertically) {
-        com.scottgerstl.lupe.ui.theme.LupeCrossfade(Roll.pageLabel(page, pageSteps, total), Modifier.width(PIANO_EDGE + 4.dp)) { label ->
+        com.scottgerstl.lupe.ui.theme.LupeCrossfade(Roll.pageLabel(page, pageSteps, total), Modifier.width(labelW)) { label ->
             BasicText(label, Modifier.semantics { contentDescription = "Steps $label" },
                 style = com.scottgerstl.lupe.ui.theme.LupeType.number.copy(fontSize = 13.sp, lineHeight = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Tok.text2Raised))
         }
@@ -328,7 +328,7 @@ private fun MiniMap(ed: EditorState, track: Color, total: Int, pageSteps: Int, p
                     drawRoundRect(if (onPage) Tok.control else Tok.panel, Offset(x, inset), cell, CornerRadius(4.dp.toPx()))
                     if (!follow && step == ed.playhead) drawRoundRect(Tok.text.copy(alpha = 0.35f), Offset(x, inset), cell, CornerRadius(4.dp.toPx()))
                     val s = ed.steps.getOrNull(step)
-                    if (s != null && stepNotes(s).isNotEmpty()) drawCircle(track, 3.dp.toPx(), Offset(x + cell.width / 2, size.height / 2))
+                    if (s != null && s.on && (s.hits.isNotEmpty() || stepNotes(s).isNotEmpty())) drawCircle(track, 3.dp.toPx(), Offset(x + cell.width / 2, size.height / 2))
                 }
             }
         }

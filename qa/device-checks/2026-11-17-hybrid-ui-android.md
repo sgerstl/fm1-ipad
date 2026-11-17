@@ -84,8 +84,24 @@ Labs › **Shape spring · stiffness / damping**, **Fast spring · stiffness**, 
 | 43 | Mix: long-press a strip; slide Pan and Reverb send; tap the Sound tile. | Tiles Sound · Mute · Solo, then PAN and REVERB SEND slide rows; the strip's values line follows; Sound opens Sounds for that track. | – | ☐ pass ☐ fail: |
 | 44 | Remove animations on: open a pad's menu while playing and unfold it. | The menu and the unfold fade, nothing slides or springs. | – | ☐ pass ☐ fail: |
 
+## Round 5: Scott's build-gap mocks (2026-11-17; `build-gaps-2026-11-17/`)
+
+Install round 4 and 5 together (the Pixel hasn't had 7836f51).
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 45 | **Drums, docked.** Pads › hold the Drum Kit's pattern › Edit steps. Press EDIT on the FM-1 so the panel docks. | Lane keys down the left (KICK, SNARE, CL HAT…), the picked one white and squarer. The grid pages by 8 beside the panel, with the minimap "1–8" under it and Follow in the bar. Hits are rounded squares in the track colour; an accented hit wears a white cap; a ratcheted step shows its repeats as narrow segments. | – | ☐ pass ☐ fail: |
+| 46 | Tap a few cells; hold one; play with Follow on, then off; tap the minimap's other half. | A tap places a hit (it grows in) or takes it off; a hold rings it white without changing it. Follow on: pages turn at step 9 and 1. Off: they stay; the playhead's cell lights on the minimap; a tap turns the page. | – | ☐ pass ☐ fail: |
+| 47 | On EDIT › LANES (the FM-1's lanes page), tap another lane key. | The key turns white (with a small squash), the FM-1's LANE knob follows, so the docked page shows that lane's Level, Tune and Decay. (The mock's Tune · Decay · Level · Pan tiles and curve aren't built.) A press on a key still plays the lane. | – | ☐ pass ☐ fail: |
+| 48 | Lanes 7–8: count the lanes on screen. | All eight lanes share the height (no scroll). **Scott's call, still open:** ☐ keep shorter rows ☐ want a vertical scroll. | – | ☐ noted |
+| 49 | **Stopped,** long-press a filled pad. Compare with `2a`. | Two columns: tiles (4 apart) and Playback under them on the left; Arrange and Remove on the right. Nothing scrolls; 12 from every edge. | – | ☐ pass ☐ fail: |
+| 50 | Long-press a track head; tap Mute; long-press a Mix strip and slide Pan. | Mute's tile turns white and **squares off** with a squash. The Mix strip's Pan and Reverb send fills are in the track's colour. | – | ☐ pass ☐ fail: |
+| 51 | Stopped, long-press a Timeline block. Compare with `2d`. | Tiles and Passes… on the left, Arrange and Remove on the right. | – | ☐ pass ☐ fail: |
+| 52 | **Live switch.** Stopped, long-press a filled pad; with the menu open, press Play on the FM-1. Then press Stop. | Play: the tiles stay put. Arrange, Remove's Delete and Playback fold away to the left. Clear steps travels across to sit under the tiles. Then "6 more after Stop" drops in last. The menu narrows toward your finger without jumping. Stop: "6 more after Stop" leaves first, Clear steps travels back, and the groups come back in. **Scott to judge: does the menu keep its place well enough?** | – | ☐ pass ☐ fail: |
+| 53 | Remove animations on; repeat 52. | The two layouts cross-fade in about 150 ms; nothing slides. | – | ☐ pass ☐ fail: |
+| 54 | Settings › Menus open: Left (the default) and Right. | The mocks open to the right of the finger. With Left, the menu opens to the left and flips near the edge. **Scott's call:** ☐ keep Left as the default ☐ make Right the default. | – | ☐ noted |
+
 **Not covered here** (needs a later round or Scott's call):
-- The hold menu picks its layout (playing or stopped) when it opens. If the song stops or starts while one is open, it keeps that layout until it's opened again; the live switch isn't built (the menu's choices are made when it opens).
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - A kit (drum) track on Edit with the panel docked: its lanes still scroll under the panel, as before. 8-step pages are melodic only for now.
 - The Timeline's own hybrid changes (pill heads, connected zoom group, pass-count chips) and the Sounds and Projects sheets' row styling aren't built; they pick up only the shared keys, menus and sheet.

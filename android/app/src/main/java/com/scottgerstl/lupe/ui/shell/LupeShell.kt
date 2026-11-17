@@ -152,7 +152,8 @@ fun LupeShell(core: LupeCore) {
         // a pad being dragged, with the Clear / Edit / Duplicate wells on the screen's edges (board 81.4)
         PadDragOverlay(padDrag, top.playing)
         // the hold menu: over the page and the sheets, under the finger that opened it
-        HoldMenuHost(holdMenu)
+        // the menu rebuilds its choices when the transport starts or stops with it open (round 5)
+        HoldMenuHost(holdMenu, playing = top.playing)
         // installing Skiff-Lupe (decision 42): the offer, the confirm and, while it runs, the cover over everything
         com.scottgerstl.lupe.ui.firmware.FirmwareLayer(core, firmwareHost)
         // the Magnifier floats over everything, above the finger

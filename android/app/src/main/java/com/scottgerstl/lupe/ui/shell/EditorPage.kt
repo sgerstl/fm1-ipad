@@ -166,7 +166,8 @@ fun EditTab(
     val dock = maxOf(DOCK_W * panelT.value, soundDock)
     // a panel docked: a melodic grid shows 8 steps a page beside it (hybrid UI, Scott 2026-11-17), and the pattern bar spans the width left of it.
     // A kit's lanes keep scrolling under it (decision 35, B) until the drum grid gets pages too.
-    val paged = !drum && (panelOpen || soundDock > 0.dp)
+    // round 5: a kit pages by 8 too (`build-gaps-2026-11-17/1-drum-edit-docked.png`)
+    val paged = panelOpen || soundDock > 0.dp
     val beside = if (paged) dock + 8.dp * (dock / DOCK_W).coerceIn(0f, 1f) else 0.dp
     Box(modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().padding(end = beside)) {
@@ -204,7 +205,7 @@ fun EditTab(
         }) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    if (drum) DrumGrid(ed, track, core, hit, dock) { hit = it }
+                    if (drum) DrumGrid(ed, track, core, hit, if (paged) 0.dp else dock, pageSteps = if (paged) com.scottgerstl.lupe.ui.edit.Roll.PAGE_DOCKED else 16, follow = ui.follow) { hit = it }
                     else com.scottgerstl.lupe.ui.edit.StepGrid(ed, track, core, pick.step, { pick.step = it }, if (paged) 0.dp else dock, canPlay = { !(top.rec && top.playing) },
                         pageSteps = if (paged) com.scottgerstl.lupe.ui.edit.Roll.PAGE_DOCKED else com.scottgerstl.lupe.ui.edit.Roll.STEPS, follow = ui.follow)
                 }
@@ -390,102 +391,165 @@ private fun stepNotes(s: Step): List<Int> = if (!s.on) emptyList() else s.notes.
 // ---- a kit: lanes by steps
 
 /**
- * A kit (board 73 C): its lanes down, the sixteen steps across in fours. A tap puts a hit on or takes it off; a hold picks the hit without
- * toggling it (white ring; its values show under the grid). The fill's strength is the step's velocity.
+ * A kit (board 73 C; hybrid look, `build-gaps-2026-11-17/1-drum-edit-docked.png`): its lanes down, the steps across. The lane names are keys down
+ * the left; the picked lane's key is white and squarer (shape as state); pressing a key plays the lane, a tap picks it (and, while the FM-1 is on
+ * EDIT › LANES, turns that page's LANE knob so the docked panel follows). Hits are rounded squares in the track colour on the `well` grid; an
+ * accent wears a white cap; a ratchet splits the hit into its repeats with 3 dp gaps. A tap toggles a hit, a hold picks it (white ring) without
+ * toggling. With a panel docked ([pageSteps] 8) the grid pages by 8 beside it, with the 16-cell minimap, turning with the playhead only while
+ * [follow] is on; otherwise 16 steps in chunks, as built. Every lane is in view: rows share the height (lanes 7–8 on a short phone: scroll or
+ * shorter rows is `[open]`, so it stays as built).
  */
 @Composable
-private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, dock: Dp = 0.dp, onPick: (Pair<String, Int>?) -> Unit) {
+private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, dock: Dp = 0.dp, pageSteps: Int = 16, follow: Boolean = true, onPick: (Pair<String, Int>?) -> Unit) {
     val lanes = ed.kitLanes.ifEmpty { ed.steps.flatMap { it.note.split(" ") }.filter { it.isNotEmpty() }.distinct() }.ifEmpty { listOf("—") }
     val top by core.top.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
     val reduce = LocalReduceMotion.current
     val density = LocalDensity.current
-    // a docked panel covers the right side: the steps keep their width and scroll under it (decision 35, B); the names stay
+    val motion = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val paged = pageSteps == com.scottgerstl.lupe.ui.edit.Roll.PAGE_DOCKED
     var scrollX by remember { mutableFloatStateOf(0f) }
     var touchedAt by remember { mutableStateOf(0L) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val total = maxOf(ed.patternSteps, ed.steps.size, 1).coerceAtMost(64)
     val totalNow by rememberUpdatedState(total)
+    val pageNow by rememberUpdatedState(pageSteps)
+    // the picked lane: the picked hit's, else the first
+    val pickedLane = hit?.first ?: lanes.first()
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val gap = 3.dp
-        val rh = ((maxHeight - gap * (lanes.size - 1)) / lanes.size)
-        val labelW = 44.dp
-        val gw = maxWidth - labelW
-        val viewPx = with(density) { gw.toPx() }; val stepPx = viewPx / 16
+        val gap = 4.dp
+        val mapH = if (paged) 34.dp else 0.dp
+        val rh = ((maxHeight - mapH - gap * (lanes.size - 1)) / lanes.size)
+        val labelW = 52.dp
+        val gw = maxWidth - labelW - 4.dp
+        val viewPx = with(density) { gw.toPx() }; val stepPx = viewPx / pageSteps
         val dockPx by rememberUpdatedState(with(density) { dock.toPx() }.coerceAtMost(viewPx - stepPx * 4))
         val roll = com.scottgerstl.lupe.ui.edit.Roll
-        fun sx() = roll.clampScrollX(scrollX, roll.maxScroll(totalNow, viewPx, dockPx))
+        fun sx() = roll.clampScrollX(scrollX, roll.maxScroll(totalNow, viewPx, dockPx, pageNow))
         suspend fun glide(to: Float) {
-            val target = roll.clampScrollX(to, roll.maxScroll(totalNow, viewPx, dockPx))
-            if (kotlin.math.abs(target - scrollX) > 0.5f) androidx.compose.animation.core.animate(scrollX, target, animationSpec = androidx.compose.animation.core.tween(if (reduce) 0 else Dur.PANEL, easing = com.scottgerstl.lupe.ui.theme.EaseOut)) { v, _ -> scrollX = v }
+            val target = roll.clampScrollX(to, roll.maxScroll(totalNow, viewPx, dockPx, pageNow))
+            if (kotlin.math.abs(target - scrollX) > 0.5f) androidx.compose.animation.core.animate(scrollX, target,
+                animationSpec = if (reduce) androidx.compose.animation.core.tween(0) else if (paged) com.scottgerstl.lupe.ui.theme.lupeSpring(motion.pageFlipMs, motion.bounce) else androidx.compose.animation.core.tween(Dur.PANEL, easing = com.scottgerstl.lupe.ui.theme.EaseOut)) { v, _ -> scrollX = v }
         }
-        // a panel docking or leaving, the length changing or a hit picked: it comes into view (clear of the panel), else the grid settles on a chunk
-        LaunchedEffect(dockPx > 0f, hit?.second, total) { glide(hit?.second?.let { roll.reveal(it, sx(), stepPx, viewPx, dockPx, total) } ?: roll.snap(sx(), total, viewPx, dockPx)) }
-        // playing: the playhead's chunk, unless a finger moved the steps in the last two and a half seconds
+        LaunchedEffect(dockPx > 0f, hit?.second, total, pageSteps) { glide(hit?.second?.let { roll.reveal(it, sx(), stepPx, viewPx, dockPx, total, pageSteps) } ?: roll.snap(sx(), total, viewPx, dockPx, pageSteps)) }
         LaunchedEffect(ed.playhead, total) {
-            if (ed.playhead < 0 || System.currentTimeMillis() - touchedAt < 2500L) return@LaunchedEffect
-            roll.follow(ed.playhead, sx(), stepPx, viewPx, dockPx, total)?.let { glide(it) }
+            if (ed.playhead < 0 || !roll.pagesFollow(pageSteps, follow, System.currentTimeMillis() - touchedAt < 2500L)) return@LaunchedEffect
+            roll.follow(ed.playhead, sx(), stepPx, viewPx, dockPx, total, pageSteps)?.let { glide(it) }
         }
-        Column(
-            Modifier.pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { touchedAt = System.currentTimeMillis() },
-                    onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx)) } },
-                    onDragCancel = { scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx)) } },
-                ) { change, dx -> if (totalNow > 16 || dockPx > 0f) { change.consume(); touchedAt = System.currentTimeMillis(); scrollX = roll.clampScrollX(scrollX - dx, roll.maxScroll(totalNow, viewPx, dockPx)) } }
+        Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().weight(1f)) {
+            // the lane keys
+            Column(Modifier.width(labelW).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                lanes.forEachIndexed { k, lane ->
+                    val on = lane == pickedLane
+                    val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE).value
+                    val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
+                    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(on, reduce)
+                    Box(
+                        Modifier.fillMaxWidth().height(rh)
+                            .graphicsLayer { val (qx, qy) = squash(); scaleX = qx; scaleY = qy }
+                            .drawBehind { drawRoundRect(lerp(Tok.control, Tok.text, lit), cornerRadius = CornerRadius((12f - 4f * sq.coerceIn(0f, 1.2f)).dp.toPx())) }
+                            .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "$lane lane"; selected = on; onClick("Pick the lane") { pickLane(core, k, lane, hit, ed, onPick); true } }
+                            .pointerInput(k, hit) {
+                                detectTapGestures(
+                                    onPress = { if (!(top.rec && top.playing)) { core.send(PlayNote(lane = k, on = true)); tryAwaitRelease(); core.send(PlayNote(lane = k, on = false)) } },
+                                    onTap = { pickLane(core, k, lane, hit, ed, onPick) },
+                                )
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BasicText(lane.replace(" ", "\n"), style = LupeType.label.copy(fontSize = 12.sp, lineHeight = 13.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit), textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 2)
+                    }
+                }
             }
-                .drawWithContent {
-                    drawContent()
-                    // the scroll indicator, while a panel covers part of the steps
-                    if (dockPx > 0.5f || total > 16) {
-                        val (a, b) = roll.indicator(sx(), stepPx, viewPx, dockPx, total); val x0 = labelW.toPx() + 4.dp.toPx(); val wv = viewPx - dockPx - 8.dp.toPx()
-                        drawRoundRect(Tok.control, Offset(x0, size.height - 3.dp.toPx()), Size(wv, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
-                        drawRoundRect(Tok.text2Raised, Offset(x0 + a * wv, size.height - 3.dp.toPx()), Size((b - a) * wv, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
+            Spacer(Modifier.width(4.dp))
+            // the grid
+            Box(
+                Modifier.width(gw).fillMaxHeight().clip(RoundedCornerShape(18.dp)).background(Tok.well)
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { touchedAt = System.currentTimeMillis() },
+                            onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx, pageNow)) } },
+                            onDragCancel = { scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx, pageNow)) } },
+                        ) { change, dx -> if (totalNow > pageNow || dockPx > 0f) { change.consume(); touchedAt = System.currentTimeMillis(); scrollX = roll.clampScrollX(scrollX - dx, roll.maxScroll(totalNow, viewPx, dockPx, pageNow)) } }
+                    },
+            ) {
+                // the beats: odd beats on a band; the playhead's column lit, with a cap; lane lines faint
+                Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+                    val x0 = -sx()
+                    for (i in 0 until total) { val x = x0 + i * stepPx; if ((i / 4) % 2 == 1) drawRect(Tok.panel, Offset(x, 0f), Size(stepPx, size.height)) }
+                    val rowPx = rh.toPx() + gap.toPx()
+                    for (k in 1 until lanes.size) drawLine(Tok.outline.copy(alpha = 0.5f), Offset(0f, k * rowPx - gap.toPx() / 2), Offset(size.width, k * rowPx - gap.toPx() / 2), 1.dp.toPx())
+                    if (ed.playhead in 0 until total) {
+                        val x = x0 + ed.playhead * stepPx
+                        drawRect(Tok.text.copy(alpha = 0.12f), Offset(x, 0f), Size(stepPx, size.height))
+                        drawRoundRect(Tok.text, Offset(x + 6.dp.toPx(), 4.dp.toPx()), Size(stepPx - 12.dp.toPx(), 4.dp.toPx()), CornerRadius(2.dp.toPx()))
                     }
-                },
-            verticalArrangement = Arrangement.spacedBy(gap),
-        ) {
-            lanes.forEachIndexed { k, lane ->
-                Box(Modifier.fillMaxWidth().height(rh).clipToBounds()) {
-                    for (i in 0 until total) {
-                        val s = ed.steps.getOrNull(i) ?: Step()
-                        val on = s.on && (if (s.hits.isNotEmpty()) s.hits.any { it.lane == k } else lane in s.note.split(" "))
-                        val picked = hit?.first == lane && hit.second == i
-                        val (x0, cw) = colX(i % 16, gw); val x = x0 + gw * (i / 16)
-                        val onF = animatedFloat(if (on) 1f else 0f, Dur.STATE)
-                        val sel = animatedFloat(if (picked) 1f else 0f, Dur.STATE)
-                        val fill = lerp(Tok.page, track, (30 + s.velocity / 127f * 60) / 100f)
-                        Box(
-                            Modifier.offset(x = labelW + x).offset { IntOffset(-sx().toInt(), 0) }.width(cw).fillMaxHeight()
-                                .drawBehind {
-                                    val r = CornerRadius(5.dp.toPx())
-                                    drawRoundRect(lerp(Tok.stepEmpty, fill, onF.value), cornerRadius = r)
-                                    if (ed.playhead == i) drawRoundRect(track.copy(alpha = 0.7f), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(4.dp.toPx()), style = Stroke(1.5.dp.toPx()))
-                                    if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(4.dp.toPx()), style = Stroke(2.dp.toPx()))
-                                }
-                                .semantics(mergeDescendants = true) {
-                                    role = Role.Button
-                                    contentDescription = "$lane, step ${i + 1}" + (if (on) ", hit" else ", empty") + if (picked) ", picked" else ""
-                                    onClick { core.send(ToggleHit(k, i)); true }
-                                    customActions = listOf(CustomAccessibilityAction("Pick this hit without changing it") { onPick(lane to i); core.send(Intent.StepSelect(i)); true })
-                                }
-                                .pointerInput(k, i) {
-                                    detectTapGestures(
-                                        onTap = { core.send(ToggleHit(k, i)) },
-                                        onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i)) },
-                                    )
-                                },
-                        )
+                }
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    lanes.forEachIndexed { k, lane ->
+                        Box(Modifier.fillMaxWidth().height(rh).clipToBounds()) {
+                            for (i in 0 until total) {
+                                val s = ed.steps.getOrNull(i) ?: Step()
+                                val h = s.hits.firstOrNull { it.lane == k }
+                                val on = s.on && (if (s.hits.isNotEmpty()) h != null else lane in s.note.split(" "))
+                                val accent = h?.accent == true
+                                val picked = hit?.first == lane && hit.second == i
+                                val onF = animatedFloat(if (on) 1f else 0f, Dur.STATE)
+                                val sel = animatedFloat(if (picked) 1f else 0f, Dur.STATE)
+                                val pop by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce, fast = true)
+                                Box(
+                                    Modifier.offset { IntOffset((i * stepPx - sx()).roundToInt(), 0) }.width(with(density) { stepPx.toDp() }).fillMaxHeight()
+                                        .drawBehind {
+                                            if (onF.value <= 0.001f && sel.value <= 0f) return@drawBehind
+                                            // the hit: a rounded square, inset; it grows in on the spring when placed
+                                            val inset = 6.dp.toPx()
+                                            val g = if (reduce) 1f else pop.coerceIn(0f, 1.15f)
+                                            val w = (size.width - 2 * inset) * g; val hh = (size.height - 2 * inset) * g
+                                            val left = (size.width - w) / 2; val topY = (size.height - hh) / 2
+                                            val fill = track.copy(alpha = onF.value * (0.7f + 0.3f * s.velocity / 127f))
+                                            val r = CornerRadius(8.dp.toPx())
+                                            val n = if (s.ratchet > 1) s.ratchet.coerceAtMost(4) else 1
+                                            if (n == 1) drawRoundRect(fill, Offset(left, topY), Size(w, hh), r)
+                                            else { val sg = 3.dp.toPx(); val sw = (w - sg * (n - 1)) / n
+                                                for (j in 0 until n) drawRoundRect(fill, Offset(left + j * (sw + sg), topY), Size(sw, hh), CornerRadius(minOf(6.dp.toPx(), sw / 2))) }
+                                            // an accent: a white cap along the top
+                                            if (accent) drawRoundRect(Tok.text.copy(alpha = onF.value), Offset(left + 4.dp.toPx(), topY - 5.dp.toPx()), Size(w - 8.dp.toPx(), 4.dp.toPx()), CornerRadius(2.dp.toPx()))
+                                            if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(left - 2.dp.toPx(), topY - 2.dp.toPx()), Size(w + 4.dp.toPx(), hh + 4.dp.toPx()), CornerRadius(10.dp.toPx()), style = Stroke(2.dp.toPx()))
+                                        }
+                                        .semantics(mergeDescendants = true) {
+                                            role = Role.Button
+                                            contentDescription = "$lane, step ${i + 1}" + (if (on) ", hit" + (if (accent) ", accent" else "") + (if (s.ratchet > 1) ", ratchet ${s.ratchet}" else "") else ", empty") + if (picked) ", picked" else ""
+                                            onClick { core.send(ToggleHit(k, i)); true }
+                                            customActions = listOf(CustomAccessibilityAction("Pick this hit without changing it") { onPick(lane to i); core.send(Intent.StepSelect(i)); true })
+                                        }
+                                        .pointerInput(k, i) {
+                                            detectTapGestures(
+                                                onTap = { core.send(ToggleHit(k, i)) },
+                                                onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i)) },
+                                            )
+                                        },
+                                )
+                            }
+                        }
                     }
-                    // the lane's name, over the cells that scroll under it: it plays the lane while pressed (not while recording: the FM-1 would
-                    // record it)
-                    BasicText(lane, Modifier.align(Alignment.CenterStart).width(labelW).fillMaxHeight().background(Tok.page).wrapContentHeight().padding(end = 4.dp)
-                        .semantics { role = Role.Button; contentDescription = "Play $lane" }
-                        .pointerInput(k) { detectTapGestures(onPress = { if (!(top.rec && top.playing)) { core.send(PlayNote(lane = k, on = true)); tryAwaitRelease(); core.send(PlayNote(lane = k, on = false)) } }) }, style = LupeType.label.copy(fontSize = 13.sp, color = if (hit?.first == lane) Tok.text else Tok.text2Raised), maxLines = 1)
                 }
             }
         }
+        if (paged) {
+            Spacer(Modifier.height(6.dp))
+            val pagePx = pageSteps * stepPx
+            com.scottgerstl.lupe.ui.edit.MiniMap(ed, track, total, pageSteps, sx() / pagePx.coerceAtLeast(1f), follow, gw, reduce, labelW = labelW + 4.dp) { p -> touchedAt = System.currentTimeMillis(); scope.launch { glide(p * pagePx) } }
+        }
+        }
     }
+}
+
+/** A lane key tapped: the lane is picked (its hit at the picked step, else the selected one); on EDIT › LANES the FM-1's LANE knob follows. */
+private fun pickLane(core: LupeCore, k: Int, lane: String, hit: Pair<String, Int>?, ed: EditorState, onPick: (Pair<String, Int>?) -> Unit) {
+    onPick(lane to (hit?.second ?: ed.selected))
+    val p = core.page.value
+    if (p.family == "EDIT" && p.title.contains("LANE", ignoreCase = true) && p.tiles != null) core.send(com.scottgerstl.lupe.core.PickTile(k))
 }
 
 /** The picked hit's values in boxes (a kit has more than four per hit, so boxes, not dials), under a "SD · step 5 ✕" key: one row, or docked ([narrow]) two rows of three. */

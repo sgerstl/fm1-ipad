@@ -245,4 +245,28 @@ class PriorityTilesMenuTest {
         org.junit.Assert.assertTrue(tall.y >= 12f && tall.y + 380f <= 412f - 12f)
         org.junit.Assert.assertTrue(tall.x >= 12f && tall.x + 616f <= 914f - 12f)
     }
+
+    @org.junit.Test fun stoppedPadMatchesTheMockTilesAndPlaybackLeftArrangeAndRemoveRight() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), 412f - 24f)
+        org.junit.Assert.assertEquals(listOf("Playback"), lay.columns[0].map { it.name })
+        org.junit.Assert.assertEquals(listOf("Arrange", "Remove"), lay.columns[1].map { it.name })
+    }
+
+    /** Round 5: the live switch. The tiles never move; Clear steps keeps its key (so it travels); the after-Stop card exists only while playing. */
+    @org.junit.Test fun theLayoutSwitchKeepsTheTilesAndCarriesClearSteps() {
+        val maxH = 412f - 24f
+        val stopped = com.scottgerstl.lupe.ui.shell.menuGeometry(pad(false), com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), maxH), false)
+        val playing = com.scottgerstl.lupe.ui.shell.menuGeometry(pad(true), com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(true), maxH), false)
+        fun at(g: com.scottgerstl.lupe.ui.shell.MenuGeom, k: String) = g.els.first { it.key == k }
+        for (t in listOf("t:Edit steps", "t:Select sound", "t:Set pattern…")) { org.junit.Assert.assertEquals(at(stopped, t).x, at(playing, t).x, 0f); org.junit.Assert.assertEquals(at(stopped, t).y, at(playing, t).y, 0f) }
+        val a = at(stopped, "r:Clear steps"); val b = at(playing, "r:Clear steps")
+        org.junit.Assert.assertTrue(a.x > b.x)                                   // from the right column to under the tiles
+        org.junit.Assert.assertEquals(com.scottgerstl.lupe.ui.shell.TILE_H + com.scottgerstl.lupe.ui.shell.GROUP_GAP + 4f, b.y, 0.01f)
+        org.junit.Assert.assertTrue(stopped.els.none { it.key == "after" })
+        org.junit.Assert.assertTrue(playing.els.any { it.key == "after" })
+        org.junit.Assert.assertTrue(playing.els.none { it.key == "r:Move earlier" })   // folded, not drawn
+        org.junit.Assert.assertEquals(296f, com.scottgerstl.lupe.ui.shell.MENU_W, 0f)  // three 96 tiles, 4 apart
+        org.junit.Assert.assertEquals(296f, playing.w, 0f)                              // playing, one column: it shrinks toward the finger
+        org.junit.Assert.assertEquals(296f * 2 + 8f, stopped.w, 0f)
+    }
 }

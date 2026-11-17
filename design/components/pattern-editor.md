@@ -196,6 +196,7 @@ Motion follows `DESIGN.md`. Particular to the editor:
 - 2026-11-14: decision 31, the iPhone's step grid with a piano edge on both phones (Scott).
 - 2026-11-17: phone Edit with the sound panel docked shows 8 steps a page with a minimap, over a bottom panel (only 4 of 7 rows) or a slim panel (about 38 pt a step) (Scott, hybrid UI study).
 - 2026-11-17: the 8-step pages follow the playhead only when Follow is on (a Follow toggle joins the phone's pattern bar); by hand otherwise. Amends 2026-11-01 for 8-step pages (Scott).
+- 2026-11-17 (round 5, `build-gaps-2026-11-17/1-drum-edit-docked.png`): a kit pages by 8 beside the docked panel too, with the minimap and Follow; lane names are keys down the left, the picked lane white and squarer; hits are rounded squares in the track colour, an accent a white cap, a ratchet split into its repeats with 3 dp gaps. Lanes 7–8 on a short phone (scroll or shorter rows) stays `[open]`: built as before, all lanes sharing the height.
 
 ## 3. Build notes
 
