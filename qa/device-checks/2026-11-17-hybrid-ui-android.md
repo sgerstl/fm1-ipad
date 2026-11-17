@@ -229,6 +229,17 @@ Open the step panel or a sound page first so the grid pages by 8.
 | 113 | Mix, playing: unmute a muted key. | The line runs on the white key's pill outline. As it closes and the key changes shape, there's no jump between line and key. | – | ☐ pass ☐ fail: |
 | 114 | Pads, playing: recall a stored scene. Watch its key, and a queued pad's trace. | The scene's trace runs on the round key's own outline (and on the squarer one if the current scene is recalled again); the pad's trace hugs the pad's corners. | – | ☐ pass ☐ fail: |
 
+## Round 13e: HOME goes back to where you were (Scott, 2026-11-17)
+
+Press HOME on the FM-1 itself.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 115 | On Pads, tap the Mix tab on the phone; pick Effects and a card. Press HOME. Repeat starting from GLO on the FM-1. | Back on Pads, with a fade-through, both times. | – | ☐ pass ☐ fail: |
+| 116 | On Timeline, tap Mix; press HOME. Then on Timeline, tap Edit; press HOME. | Back on Timeline both times. | – | ☐ pass ☐ fail: |
+| 117 | On Pads, tap Edit; press HOME. Then press HOME again on Pads, and on Timeline. | Edit → back to Pads (shrinking into the selected pad). HOME on Pads or Timeline: the tab stays. | – | ☐ pass ☐ fail: |
+| 118 | On Edit with a sound page open (ENV on the FM-1), tap the panel's handle. Then open it again and press HOME on the FM-1. | Handle: the panel closes and you stay on Edit. FM-1 HOME: the panel closes and the phone goes back to the last of Pads and Timeline. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

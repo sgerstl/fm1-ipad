@@ -468,6 +468,7 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
     val link by core.link.collectAsStateWithLifecycle()
     val linked = link.phase == LinkPhase.Ready
     LaunchedEffect(linked) { if (!linked) place.reset() }
+    LaunchedEffect(shell.tab) { place.noteTab(shell.tab) }
     var settledKey by remember { mutableStateOf("") }
     LaunchedEffect(screen.key, screen.page, screen.title, linked) {
         if (!linked) return@LaunchedEffect
@@ -475,7 +476,7 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
         // short settle so a fast run of presses on the FM-1 isn't answered page by page
         delay(if (screen.key != settledKey) 300 else 120)
         settledKey = screen.key
-        place.follow(screen, PlaceNow(shell.tab, editUi.lane, sheets.open == SheetKind.Mix, sounds.request != null, sheets.open == SheetKind.Projects)).forEach { a ->
+        place.follow(screen, PlaceNow(shell.tab, editUi.lane, sheets.open == SheetKind.Mix, sounds.request != null, sheets.open == SheetKind.Projects, homeAsked = PhoneHome.recent())).forEach { a ->
             when (a) {
                 is PlaceAction.Tab -> core.send(Intent.SetTab(a.tab))
                 is PlaceAction.Lane -> editUi.lane = a.on
@@ -506,9 +507,14 @@ private fun <T> followed(actual: T, pin: Boolean, pause: Boolean, touches: Int, 
     return m.shown to m.frozen
 }
 
+/** When the phone itself last sent the FM-1 HOME: the HOME that comes back moves no tab (a panel closed on Edit stays on Edit). */
+internal object PhoneHome { @Volatile var askedAt = 0L; const val WINDOW_MS = 1500L
+    fun recent(): Boolean = android.os.SystemClock.uptimeMillis() - askedAt < WINDOW_MS }
+
 /** The core as the sound page sees it: a change the phone asks for tells the follower first. */
 private class AskingCore(private val base: LupeCore, private val asked: () -> Unit) : LupeCore by base {
     override fun send(intent: Intent) {
+        if (intent == GoHome) PhoneHome.askedAt = android.os.SystemClock.uptimeMillis()
         if (intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile || intent is com.scottgerstl.lupe.core.MixSectionPick || intent == GoHome) asked()
         base.send(intent)
     }

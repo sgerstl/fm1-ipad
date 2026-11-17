@@ -18,7 +18,9 @@ sealed interface PlaceAction {
 }
 
 /** What is open on the phone now, as the follower needs it. */
-data class PlaceNow(val tab: Tab, val lane: Boolean = false, val mixOpen: Boolean = false, val soundsOpen: Boolean = false, val projectsOpen: Boolean = false)
+data class PlaceNow(val tab: Tab, val lane: Boolean = false, val mixOpen: Boolean = false, val soundsOpen: Boolean = false, val projectsOpen: Boolean = false,
+    /** The phone itself just sent the FM-1 HOME (a panel closed, Back): that HOME closes things but moves no tab. */
+    val homeAsked: Boolean = false)
 
 /**
  * The phone follows the FM-1's own GLO, SAVE and SEQ (decisions 24, 27, 28): for GLO the Mix tab on its MIXER page and the Mix sheet on
@@ -35,10 +37,21 @@ class PlaceFollower {
     private var last: Fm1ScreenState? = null
     private var primed = false
 
+    /**
+     * The last of Pads and Timeline the phone was on, however it got there (Scott, 2026-11-17): the FM-1's HOME from Mix or Edit goes back
+     * to it. Pads until either has been seen. Kept for the session.
+     */
+    var homeTab: Tab = Tab.Pads
+        private set
+
+    /** The phone is showing [tab] now (fed on every tab change, the phone's own taps included). */
+    fun noteTab(tab: Tab) { if (tab == Tab.Pads || tab == Tab.Timeline) homeTab = tab }
+
     /** The link dropped: the next screen it sees is a new baseline. */
     fun reset() { last = null; primed = false }
 
     fun follow(screen: Fm1ScreenState, now: PlaceNow): List<PlaceAction> {
+        noteTab(now.tab)
         if (screen == last) return emptyList()
         last = screen
         // the first screen seen after start or reconnect only sets the baseline: nothing opens for where the FM-1 already was
@@ -80,7 +93,12 @@ class PlaceFollower {
                 "AUTOMATION" -> { goTab(Tab.Edit); lane(true) }
                 else -> { lane(false); goTab(Tab.Edit) }
             } }
-            else -> { mix(false); sounds(false); projects(false); lane(false); restoreTab() }   // HOME, a sound family: back to where the phone was
+            // HOME: off Mix or Edit, back to the last of Pads and Timeline (homeTab); on those it stays. It used to restore only a tab the FM-1
+            // itself had moved the phone off, so a Mix reached by the phone's own tab (or GLO from the phone, which sends the FM-1 to GLO while
+            // already on Mix, saving Mix as the tab to go back to) stayed put on HOME: the "doesn't always" (Scott, 2026-11-17)
+            "HOME" -> { mix(false); sounds(false); projects(false); lane(false); savedTab = null
+                if (!now.homeAsked && (tab == Tab.Mix || tab == Tab.Edit) && homeTab != tab) { out += PlaceAction.Tab(homeTab); tab = homeTab } }
+            else -> { mix(false); sounds(false); projects(false); lane(false); restoreTab() }   // a sound family: back to where the phone was
         }
         return out
     }

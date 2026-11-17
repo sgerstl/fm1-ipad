@@ -60,6 +60,32 @@ class PlaceFollowerTest {
         val f = primed()
         assertEquals(listOf(PlaceAction.Tab(Tab.Edit), PlaceAction.Lane(true)), f.follow(s("SEQ", 44, "AUTOMATION"), PlaceNow(Tab.Pads)))
         assertEquals(listOf(PlaceAction.Lane(false), PlaceAction.Tab(Tab.Timeline)), f.follow(s("SEQ", 45, "SONG"), PlaceNow(Tab.Edit, lane = true)))
-        assertEquals(listOf(PlaceAction.Tab(Tab.Pads)), f.follow(s("HOME"), PlaceNow(Tab.Timeline)))
+        // HOME on the Timeline stays there (Scott, 2026-11-17: HOME goes to the last of Pads and Timeline; it used to restore Pads here)
+        assertTrue(f.follow(s("HOME"), PlaceNow(Tab.Timeline)).isEmpty())
+    }
+
+    /** HOME goes back to the last of Pads and Timeline, however the phone got to Mix or Edit (Scott, 2026-11-17). */
+    @Test fun homeReturnsToTheLastOfPadsAndTimeline() {
+        val f = primed()
+        f.noteTab(Tab.Timeline); f.noteTab(Tab.Mix)                                  // the phone's own taps: Timeline, then Mix
+        assertTrue(f.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Mix)).isEmpty())   // a Mix pick sends the FM-1 to GLO: already there
+        assertEquals(listOf(PlaceAction.Tab(Tab.Timeline)), f.follow(s("HOME"), PlaceNow(Tab.Mix)))
+        f.noteTab(Tab.Pads); f.noteTab(Tab.Edit)
+        assertTrue(f.follow(s("SEQ", 41, "NOTES"), PlaceNow(Tab.Edit)).isEmpty())
+        assertEquals(listOf(PlaceAction.Tab(Tab.Pads)), f.follow(s("HOME"), PlaceNow(Tab.Edit)))
+    }
+
+    @Test fun homeOnPadsOrTimelineStaysPutAndAPhoneHomeMovesNoTab() {
+        val f = primed()
+        assertTrue(f.follow(s("SEQ", 50, "SONG"), PlaceNow(Tab.Timeline)).isEmpty())
+        assertTrue(f.follow(s("HOME"), PlaceNow(Tab.Timeline)).isEmpty())           // on Timeline: stays
+        f.noteTab(Tab.Edit)
+        assertTrue(f.follow(s("ENV", 10, "ENV"), PlaceNow(Tab.Edit)).isEmpty())
+        assertTrue(f.follow(s("HOME"), PlaceNow(Tab.Edit, homeAsked = true)).isEmpty())   // the phone closed the panel: Edit stays
+    }
+
+    @Test fun homeGoesToPadsWhenNeitherWasSeen() {
+        val f = PlaceFollower().also { it.follow(s("GLO", 30, "MIXER"), PlaceNow(Tab.Mix)) }
+        assertEquals(listOf(PlaceAction.Tab(Tab.Pads)), f.follow(s("HOME"), PlaceNow(Tab.Mix)))
     }
 }
