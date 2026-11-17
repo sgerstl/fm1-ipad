@@ -265,6 +265,8 @@ fun EditTab(
                 .padding(12.dp),
         ) {
             if (drum) HitPanel(ed, track, core, hit, narrow = true, onLane = { l -> hit = l to (hit?.second ?: ed.selected) }) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
+            // the grab handle (Scott, 2026-11-17; WCAG 2.5.1): tap closes the panel as the swipe does
+            PanelHandle("Close the step panel", { ui.stepPanel = false }, Modifier.align(Alignment.CenterStart).offset(x = (-12).dp))
         }
     }
 }
@@ -320,14 +322,16 @@ private fun Ruler(ed: EditorState, track: Color, core: LupeCore, stepPicked: Boo
 }
 
 /**
- * A toggle in the pattern bar (Edit redesign): 40 tall, hugging its word; off it's outlined (1.5 dp `primaryEdge`) with a grey dot, on it's the
- * white key with a dark dot. Shape carries the state too: the fill grows from the middle on the spring (Reduce Motion: it fades in).
+ * A toggle in the pattern bar (Edit redesign; Scott 2026-11-17: no dots, one toggle language with Store): 40 tall, hugging its word. Off, an
+ * outlined pill (1.5 dp `primaryEdge`); on, the white key with dark text, its corners squaring to 12 on the spatial spring, the colour blending
+ * in 150 ms (the hybrid selectable rule: shape and fill together). Reduce Motion: the corners ease, no overshoot.
  */
 @Composable
 private fun ToggleKey(label: String, on: Boolean, description: String, state: String, onClick: () -> Unit) {
     val reduce = LocalReduceMotion.current
     val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE).value
-    val grow by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
+    val square by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
+    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(on, reduce)
     val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box(
         Modifier.defaultMinSize(minHeight = 44.dp)
@@ -335,18 +339,15 @@ private fun ToggleKey(label: String, on: Boolean, description: String, state: St
             .clickable(source, null, role = Role.Switch, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
-            Modifier.height(40.dp).drawBehind {
-                val r = CornerRadius(size.height / 2)
-                if (lit < 1f) drawRoundRect(Tok.primaryEdge.copy(alpha = 1f - lit), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(size.height / 2 - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
-                if (lit > 0f) { val g = if (reduce) 1f else (0.6f + 0.4f * grow).coerceAtMost(1.04f); val w = size.width * g; val h = size.height * g
-                    drawRoundRect(Tok.text.copy(alpha = lit), Offset((size.width - w) / 2, (size.height - h) / 2), Size(w, h), CornerRadius(h / 2)) }
-            }.padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Canvas(Modifier.size(8.dp)) { drawCircle(lerp(Tok.text2, Tok.onColour, lit)) }
-            BasicText(label, style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = lerp(Tok.text, Tok.onColour, lit)), maxLines = 1)
-        }
+        Box(
+            Modifier.height(40.dp).graphicsLayer { val (qx, qy) = squash(); scaleX = qx; scaleY = qy }.drawBehind {
+                val pill = size.height / 2; val k = square.coerceIn(0f, 1.15f)
+                val r = (pill + (12.dp.toPx() - pill) * k).coerceAtLeast(4f)
+                if (lit < 1f) drawRoundRect(Tok.primaryEdge.copy(alpha = 1f - lit), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(r - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                if (lit > 0f) drawRoundRect(Tok.text.copy(alpha = lit), cornerRadius = CornerRadius(r))
+            }.padding(horizontal = 18.dp),
+            contentAlignment = Alignment.Center,
+        ) { BasicText(label, style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = lerp(Tok.text, Tok.onColour, lit)), maxLines = 1) }
     }
 }
 
@@ -706,7 +707,6 @@ private fun HitPanel(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                 BasicText("STEP ${step + 1}", style = LupeType.title.copy(fontSize = 19.sp, lineHeight = 21.sp))
                 BasicText("$lane · ${if (on) "hit" else "empty"}", style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised), maxLines = 1)
             }
-            Key(onClose, "Close the step panel", width = 40.dp, height = 40.dp, minTarget = 44.dp) { fg -> Cross(fg) }
         }
         Spacer(Modifier.height(8.dp))
         // the FM-1's NOTES knobs on a kit (Skiff v2.5.1 source, grid_edit; not a live probe): 1 LANE, 2 HIT, 3 ACC, 4 VELOCITY

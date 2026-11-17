@@ -178,6 +178,17 @@ Install rounds 7, 8 and 9 together. **Check 72 is the one only the real FM-1 can
 | 90 | Mix › Effects with the real FM-1 (long names): look at the three collapsed cards and the picked card's tiles. | Every collapsed card: name, picture and values on one left edge; the pictures all at the same height (Global's bars no higher than the others); the value rows lined up along the bottom across the cards; long names cut with "…", nothing running past an edge. Tile labels too are cut inside the tile, never wrapped. | – | ☐ pass ☐ fail: |
 | 89 | Remove animations on; repeat 86–88. | Tabs and Edit cross-fade; a press only brightens the key (no shrink). | – | ☐ pass ☐ fail: |
 
+## Round 12 (Scott, 2026-11-17)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 91 | On Pads, tap the Edit tab; then tap Pads. Scroll the pads so the selected track's pad is off screen and tap Edit again. | Edit grows out of the selected track's current pad (as from its hold menu); Pads → Edit back shrinks Edit into that pad while Pads fades in. With the pad scrolled away: a plain fade-through. Timeline/Mix ↔ Edit: fade-through. **Scott: keep the shrink back?** ☐ keep ☐ drop | – | ☐ pass ☐ fail: |
+| 92 | Open a sound page (ENV on the FM-1). Look at the panel's header and left edge. Tap the small bar on the left edge; open it again and swipe it away. | No close arrow. "1 of 2" (or "3 of 7") large at the header's right end; the page name on the left without a count. A short grey bar on the panel's left edge: a tap closes the panel, and the FM-1 goes back to HOME (on Mix: to GLO's page); a swipe does the same. | – | ☐ pass ☐ fail: |
+| 93 | Edit: open the step panel; tap its left-edge bar. | The step panel closes (the same bar, same tap). | – | ☐ pass ☐ fail: |
+| 94 | Pads: tap Store, then tap it again. | No dot. Armed: Store turns white with dark text and its corners square off a little, with a small squash; empty scenes show a clearer outline. Disarmed: back to a grey pill. Its width doesn't change. | – | ☐ pass ☐ fail: |
+| 95 | Edit: tap Chord, Lane, Follow. | No dots: off, outlined pills; on, white with squarer corners (the same language as Store). **Scott: keep?** ☐ keep ☐ dots back | – | ☐ pass ☐ fail: |
+| 96 | TalkBack on: find the sound panel's handle and the step panel's handle. | Each reads "Close the sound panel" / "Close the step panel" as a button; double tap closes. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

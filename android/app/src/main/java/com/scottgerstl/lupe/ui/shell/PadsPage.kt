@@ -205,17 +205,24 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                     // the scenes toolbar (spec 3.3): one floating `panel` group at radius 24, 4 inside; Store a `lifted` pill with its dot, lit white while armed
                     Row(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.sheet)).background(Tok.panel).padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Store (Scott, 2026-11-17: "lose the little LED indicator… change shape"): disarmed a `held` pill; armed white with dark text, its
+                    // corners squaring to 12 on the spatial spring, the colour blending in 150 ms. The width never changes (S6)
                     val armed = animatedFloat(if (store) 1f else 0f, Dur.STATE)
+                    val storeReduce = LocalReduceMotion.current
+                    val square by com.scottgerstl.lupe.ui.theme.spatialFloat(if (store) 1f else 0f, storeReduce)
+                    val storeSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(store, storeReduce)
                     Box(
-                        Modifier.width(88.dp).fillMaxHeight().clip(RoundedCornerShape(50)).background(lerp(Tok.lifted, Tok.text, armed.value))
+                        Modifier.width(88.dp).fillMaxHeight()
+                            .graphicsLayer { val (qx, qy) = storeSquash(); scaleX = qx; scaleY = qy }
+                            .drawBehind {
+                                val pill = size.height / 2; val k = square.coerceIn(0f, 1.15f)
+                                drawRoundRect(lerp(Tok.held, Tok.text, armed.value), cornerRadius = CornerRadius((pill + (12.dp.toPx() - pill) * k).coerceAtLeast(4f)))
+                            }
                             .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Store scene"; stateDescription = if (store) "On: tap a scene to store what plays now" else "Off" }
                             .clickable(role = Role.Switch) { store = !store },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            androidx.compose.foundation.Canvas(Modifier.size(6.dp)) { drawCircle(androidx.compose.ui.graphics.lerp(Tok.text2, Tok.rec, armed.value)) }
-                            KeyLabel("Store", lerp(Tok.text, Tok.onColour, armed.value), style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal))
-                        }
+                        KeyLabel("Store", lerp(Tok.text, Tok.onColour, armed.value), style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal))
                     }
                     // the sixteen scroll across the room the HOME knobs leave (decision 50): the last recalled kept in view, a fade at a clipped edge
                     val sceneScroll = rememberScrollState()
@@ -242,6 +249,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                             .horizontalScroll(sceneScroll).padding(horizontal = SCENE_PAD),   // (the keys' press sink stays inside the clip)
                         horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically,
                     ) {
+                    val armedNow = animatedFloat(if (store) 1f else 0f, Dur.STATE).value
                     pads.scenes.forEachIndexed { i, s ->
                         val kept = animatedFloat(if (s.stored || s.current) 1f else 0f, Dur.STATE); val cur = animatedFloat(if (s.current) 1f else 0f, Dur.STATE)
                         // shape as state: the current scene squares to 12, a stored one is round, an empty one bare; a press squashes it (spec §5)
@@ -260,6 +268,8 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                     val r = CornerRadius((round + (square - round) * t).coerceAtLeast(2f))
                                     fun layer(c: Color) { if (!reduceMotion) drawRoundRect(c, cornerRadius = r) else { val u = sq.coerceIn(0f, 1f); drawRoundRect(c.copy(alpha = c.alpha * (1f - u)), cornerRadius = CornerRadius(round)); drawRoundRect(c.copy(alpha = c.alpha * u), cornerRadius = CornerRadius(square)) } }
                                     if (kept.value > 0f) layer(Tok.lifted.copy(alpha = kept.value))
+                                    // S2: while Store is armed the empty scenes show a stronger outline, so the targets read
+                                    if (kept.value < 1f && armedNow > 0f) drawRoundRect(Tok.primaryEdge.copy(alpha = armedNow * (1f - kept.value)), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(r.x - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
                                     if (cur.value > 0f) layer(Tok.text.copy(alpha = cur.value))
                                 }
                                 .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = label }
@@ -637,6 +647,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (sproutHide) 0f else if (lifted) 0.35f else 1f; val (sx, sy) = padSquash(); scaleX = sx; scaleY = sy }.onGloballyPositioned {
         padCoords = it
         dragState?.slots?.set(slotToken, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
+        if (selected) editGrow.selectedPad = EditOrigin(it.boundsInWindow(), color, 10f, 0L)
     }) {
         Box(
             Modifier.matchParentSize()

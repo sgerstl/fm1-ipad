@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.Color
  */
 class EditGrow {
     var origin by mutableStateOf<EditOrigin?>(null)
+    /** The selected track's current pad as Pads last laid it out (round 12: the Edit tab grows out of it, and shrinks back into it). */
+    var selectedPad: EditOrigin? = null
     fun from(rect: Rect, colour: Color, radiusDp: Float) { origin = EditOrigin(rect, colour, radiusDp, System.currentTimeMillis()) }
     /** Takes the origin if it was set a moment ago (a stale one, from a menu that didn't change the tab, is dropped). */
     fun take(): EditOrigin? { val o = origin; origin = null; return o?.takeIf { System.currentTimeMillis() - it.atMs < 800 } }
