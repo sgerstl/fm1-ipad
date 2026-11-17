@@ -179,6 +179,7 @@ Motion follows `DESIGN.md` (nothing pops). Particular to the pad:
 - 2026-11-10: the waiting trace replaces countdown numbers (Scott, 4d2f711).
 - 2026-11-10: the lifted copy stays under the finger where it was grabbed (Scott).
 - 2026-11-10: drops from the Patterns panel ask before replacing anything (Scott).
+- 2026-11-17: **the drag wells in the hybrid look** (Scott's picks: "1 · Edge tabs" and "Grow, then fill"; Figma "Drag wells · hybrid options (2026-11-17)", vault `fm1-ipad/assets/drag-wells-hybrid-2026-11-17/1-edge-tabs.png`). Decision 41's placement and behaviour stay: Cancel at the bottom, Clear steps and Delete pattern at the top (Delete greyed with "Stop first" while playing; the layout never changes), Edit right, Duplicate left, the tick and the hot zone. The glass, blur and dashed edges go: each well is a solid `held` surface flush to its edge, square on the edge side and radius 24 facing in, elevation 3, an icon (22) and the label (vertical on the sides, horizontal top and bottom). The glow goes too: a well grows outward with the pad's closeness (the tuned glow and hot distances); hot, it fills with the pad's track colour, the ink turns dark and the icon grows to 26. Clear steps and Delete fill track-coloured, not red, unless Scott says otherwise. Wells slide in on the spatial spring and out quicker; growth tracks the finger directly; the fill eases over 150 ms; Reduce Motion fades only.
 
 ## 3. Build notes
 

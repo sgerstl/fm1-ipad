@@ -129,6 +129,10 @@ iPad hold menu: a column of nine pills from the pad. The default item (Edit patt
 
 `DESIGN.md`'s message rule, drawn: `held`, radius 12, 44 tall, 14 left; icon 16, label Barlow Medium 14, keys 32 tall `control` at radius 8, ✕ last. Bottom centre, 12 above the foot on phones and 24 on the iPad. The Undo strip and the refusal strip (Timeline's "Stop to change the song" with a Stop key) both use it.
 
+### 3.10b Drag wells (decided 2026-11-17)
+
+Decision 41's five wells on the screen's edges while a pad is dragged, drawn as edge tabs: a solid `held` surface flush to its edge, square on the edge side and `radius.sheet` facing in, elevation 3; icon 22 and the label (Barlow 15, `text`; "Stop first" `textSecondaryRaised`). Approach is size, not glow: a well grows outward with the pad's closeness; hot, it fills with the pad's track colour (Clear steps and Delete too), ink `onColour`, icon 26, with the tick. Slides in on the spatial spring, out quicker; growth follows the finger; fill 150 ms ease-out; Reduce Motion fades. Record: `design/components/pattern-pad.md`, decision log.
+
 ### 3.11 Confirm in place
 
 `DESIGN.md`'s rule, in a list row (Projects › Save over…). The row gains a 1.5 `recText` edge. Its trailing actions become **Cancel (Tonal) and the Destructive button naming exactly what goes** ("Replace Tuesday Jam with Song One"), with a line saying the safeguard ("The FM-1 is backed up first"). The other rows dim to 40 %. The 0.4 s double-tap guard applies; it isn't drawn.

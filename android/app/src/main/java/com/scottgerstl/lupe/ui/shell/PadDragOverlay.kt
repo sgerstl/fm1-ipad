@@ -61,11 +61,11 @@ import kotlin.math.roundToInt
 private val SlideIn = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 
 /**
- * The wells for a dragged pad (board 81.4) and the lifted pad over them, in one layer over the whole screen. Three wells sit flush on the edges, square on the
- * edge side and rounded 12 inside, dashed on the three inner sides, resting as dark glass (black 62 %; the iPhone blurs what is behind, which this does not):
- * Dark glass: a 12 dp blur of the page behind (a recorded copy of the page, blurred), black 62 % over it. Decision 41: Cancel at the bottom, Clear steps and Delete pattern on the top, Edit on the right, Duplicate on the left. They slide in from their edges as the pad lifts (Labs: slide, staggered 30 ms) and out in 72 %
- * of that; a glow in the track colour (red for Clear) builds from the glow distance; hot, within the hot distance, the well fills solid with a dark label, ticks,
- * and the lifted pad tilts toward it. Reduce Motion: they fade, the pad doesn't tilt or grow. It takes no touches. TalkBack keeps the hold menu.
+ * The wells for a dragged pad (board 81.4; hybrid look, Scott 2026-11-17: edge tabs that grow, then fill) and the lifted pad over them, in one layer
+ * over the whole screen. Decision 41: Cancel at the bottom, Clear steps and Delete pattern on the top, Edit on the right, Duplicate on the left. They
+ * slide in from their edges on the spatial spring as the pad lifts (Labs: wells slide in, staggered 30 ms) and out quicker; each grows with the pad's
+ * closeness and, hot, fills with its track colour and ticks, and the lifted pad tilts toward it ([Well]). Reduce Motion: they fade, the pad doesn't
+ * tilt or grow. It takes no touches. TalkBack keeps the hold menu.
  */
 @Composable
 fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = Modifier) {
@@ -81,19 +81,7 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
     val feel = state.feel(labs.wellGlowPct / 100f * state.screen.height, labs.wellHotDp * d, labs.wellSideGlowPct / 100f * state.screen.width, labs.wellSideHotDp * d, playing)
     val w = state.screen.width; val h = state.screen.height
     val hot = if (drag != null && w > 0f) EdgeWellsGeometry.hot(drag.centre - state.origin, w, h, d, feel) else null
-    // the window as it is when the pad lifts, for the wells' glass (a snapshot: the glass is blurred, so the page moving under it doesn't show)
-    val act = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
-    LaunchedEffect(drag != null) {
-        if (drag != null && act != null) {
-            val v = act.window.decorView
-            if (v.width > 0 && v.height > 0) {
-                val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
-                try {
-                    android.view.PixelCopy.request(act.window, bmp, { r -> if (r == android.view.PixelCopy.SUCCESS) state.backdrop = bmp.asImageBitmap() }, android.os.Handler(android.os.Looper.getMainLooper()))
-                } catch (e: Exception) { /* no glass: the plain dark fill stays */ }
-            }
-        } else { kotlinx.coroutines.delay(500); state.backdrop = null }
-    }
+    val wellBounce = com.scottgerstl.lupe.ui.theme.hybridMotion.bounce
     LaunchedEffect(hot) { if (hot != null && labs.haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
 
     Box(modifier.fillMaxSize().onGloballyPositioned { state.screen = Size(it.size.width.toFloat(), it.size.height.toFloat()); state.origin = it.positionInWindow() }.clearAndSetSemantics { }) {
@@ -104,14 +92,15 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
                 progress[a] = p.value
                 LaunchedEffect(drag != null, reduce, labs.wellSlideMs) {
                     unscaled {
-                        if (drag != null) p.animateTo(1f, if (reduce) tween(150) else tween(labs.wellSlideMs, delayMillis = a.staggerMs, easing = SlideIn))
+                        // in on the spatial spring (Labs: wells slide in sets its length; hybrid UI, Scott 2026-11-17), staggered; out quicker
+                        if (drag != null) { if (!reduce && a.staggerMs > 0) kotlinx.coroutines.delay(a.staggerMs.toLong()); p.animateTo(1f, if (reduce) tween(150) else com.scottgerstl.lupe.ui.theme.lupeSpring(labs.wellSlideMs, wellBounce)) }
                         else p.animateTo(0f, if (reduce) tween(150) else tween((labs.wellSlideMs * 0.72f).roundToInt(), easing = FastOutLinearInEasing))
                     }
                 }
                 if (p.value > 0.001f) {
                     val on = (drag ?: last)
-                    // Cancel neutral (a soft white when hot), Delete red, the others the track's colour
-                    val tint = when (a) { EdgeAction.Cancel -> Tok.text; EdgeAction.Delete -> Tok.rec; else -> on?.colour ?: Tok.text }
+                    // hot, every well fills with the dragged pad's track colour (Scott, 2026-11-17: Clear steps and Delete too, not red, unless he says otherwise)
+                    val tint = on?.colour ?: Tok.text
                     Well(a, Rect(0f, 0f, w, h), d, p.value, hot == a, a in feel.off, state,
                         if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f, tint, reduce, feel, labels = false)
                 }
@@ -146,7 +135,8 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
         // the wells' labels, over the lifted pad (it would cover Cancel's otherwise)
         if (w > 0f) for (a in EdgeAction.entries) {
             val p = progress[a] ?: 0f
-            if (p > 0.001f) Well(a, Rect(0f, 0f, w, h), d, p, hot == a, a in feel.off, state, 0f, Tok.text, reduce, feel, labels = true)
+            if (p > 0.001f) Well(a, Rect(0f, 0f, w, h), d, p, hot == a, a in feel.off, state,
+                if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f, (drag ?: last)?.colour ?: Tok.text, reduce, feel, labels = true)
         }
         // a duplicate the core never answered (refused): the sprout is forgotten after a while and the pad is shown
         LaunchedEffect(state.sprout) { val sp = state.sprout; if (sp != null && sp.to == null) { kotlinx.coroutines.delay(3000); if (state.sprout == sp) { state.sprout = null; state.sproutHidden = false } } }
@@ -209,21 +199,28 @@ private fun Sprout(state: PadDragState, s: PadSprout, reduce: Boolean) {
     }
 }
 
-/** One well: [full] is the screen, [p] 0…1 how far it has slid in, [glow] 0…1 how near the pad is, [off] it refuses a drop now (greyed, "Stop first"). */
+/**
+ * One well, hybrid look (Scott, 2026-11-17: "1 · Edge tabs", "Grow, then fill"). A solid `held` surface flush to its screen edge, square on the
+ * edge side and radius 24 (the sheet radius) facing in, elevation 3; an icon (22) over its label on the side wells, beside it on the top and
+ * bottom ones. As the dragged pad nears, the well grows outward with closeness ([near] 0…1, read straight from the finger: no spring lag), from
+ * the glow distance to the hot one; hot, it fills with the pad's track colour ([tint], 150 ms ease-out), the ink turns dark and the icon grows to
+ * 26 (the tick is the caller's). [p] is how far it has slid in; [off] refuses a drop now (greyed, "Stop first"). Reduce Motion: no slide, no
+ * growth; it fades. Drawn twice: the surface under the lifted pad, the label ([labels]) over it.
+ */
 @Composable
-private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, state: PadDragState, glow: Float, tint: Color, reduce: Boolean, feel: WellFeel, labels: Boolean) {
+private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, state: PadDragState, near: Float, tint: Color, reduce: Boolean, feel: WellFeel, labels: Boolean) {
     val r = EdgeWellsGeometry.rect(a, full.width, full.height, d)
-    // the hot one grows by 8 dp into the screen
-    val hotT = com.scottgerstl.lupe.ui.theme.animatedFloat(if (hot) 1f else 0f, 120).value
-    val g = 8f * d * hotT
+    val hotT = com.scottgerstl.lupe.ui.theme.animatedFloat(if (hot) 1f else 0f, com.scottgerstl.lupe.ui.theme.Dur.STATE).value
+    // size is the signal: up to 16 dp outward (and 8 along) with closeness, all of it once hot
+    val k = if (reduce || off) 0f else (if (hot) 1f else near.coerceIn(0f, 1f))
+    val g = 16f * d * k; val along = 8f * d * k
     val e = a.edge
     val grown = when (e) {
-        WellEdge.Bottom -> Rect(r.left - 4f * d * hotT, r.top - g, r.right + 4f * d * hotT, r.bottom)
-        WellEdge.Top -> Rect(r.left - 4f * d * hotT, r.top, r.right + 4f * d * hotT, r.bottom + g)
-        WellEdge.Right -> Rect(r.left - g, r.top - g, r.right, r.bottom + g)
-        WellEdge.Left -> Rect(r.left, r.top - g, r.right + g, r.bottom + g)
+        WellEdge.Bottom -> Rect(r.left - along, r.top - g, r.right + along, r.bottom)
+        WellEdge.Top -> Rect(r.left - along, r.top, r.right + along, r.bottom + g)
+        WellEdge.Right -> Rect(r.left - g, r.top - along, r.right, r.bottom + along)
+        WellEdge.Left -> Rect(r.left, r.top - along, r.right + g, r.bottom + along)
     }
-    // slides in from its own edge
     val travel = if (a.across) grown.height else grown.width
     val slide = if (reduce) Offset.Zero else when (e) {
         WellEdge.Bottom -> Offset(0f, (1f - p) * (travel + 8f * d))
@@ -231,79 +228,43 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
         WellEdge.Right -> Offset((1f - p) * (travel + 8f * d), 0f)
         WellEdge.Left -> Offset(-(1f - p) * (travel + 8f * d), 0f)
     }
-    val glowA = if (hot) 1f else glow
     val dens = androidx.compose.ui.platform.LocalDensity.current
+    val rIn = com.scottgerstl.lupe.ui.theme.Shape.sheet; val r0 = 0.dp
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(
+        topStart = if (e == WellEdge.Bottom || e == WellEdge.Right) rIn else r0, topEnd = if (e == WellEdge.Bottom || e == WellEdge.Left) rIn else r0,
+        bottomEnd = if (e == WellEdge.Top || e == WellEdge.Left) rIn else r0, bottomStart = if (e == WellEdge.Top || e == WellEdge.Right) rIn else r0)
     Box(
         Modifier.offset { IntOffset((grown.left + slide.x).roundToInt(), (grown.top + slide.y).roundToInt()) }
             .size(with(dens) { grown.width.toDp() }, with(dens) { grown.height.toDp() })
-            .graphicsLayer { alpha = (if (reduce) p else 1f) * (if (off) 0.45f else 1f) },
+            .graphicsLayer {
+                alpha = (if (reduce) p else 1f) * (if (off) 0.45f else 1f)
+                if (!labels) { shadowElevation = 12.dp.toPx(); this.shape = shape; clip = true; ambientShadowColor = Color.Black; spotShadowColor = Color.Black }
+            },
     ) {
-        // dark glass: the window as it was, blurred (12 dp), behind the well; cut to the well's shape (square on the edge side, rounded 12 inside)
-        if (!labels && !hot) state.backdrop?.let { img ->
-            val r12 = 12.dp; val r0 = 0.dp
-            val shape = androidx.compose.foundation.shape.RoundedCornerShape(
-                topStart = if (e == WellEdge.Bottom || e == WellEdge.Right) r12 else r0, topEnd = if (e == WellEdge.Bottom || e == WellEdge.Left) r12 else r0,
-                bottomEnd = if (e == WellEdge.Top || e == WellEdge.Left) r12 else r0, bottomStart = if (e == WellEdge.Top || e == WellEdge.Right) r12 else r0)
-            val m = (24f * d).roundToInt()          // a margin past the well, so the blur has real picture at the edges
-            val wpx = grown.width.roundToInt(); val hpx = grown.height.roundToInt()
-            val sx = (grown.left + state.origin.x).roundToInt() - m; val sy = (grown.top + state.origin.y).roundToInt() - m
-            Box(Modifier.fillMaxSize().clip(shape)) {
-                Canvas(
-                    Modifier.requiredSize(with(dens) { (wpx + 2 * m).toDp() }, with(dens) { (hpx + 2 * m).toDp() })
-                        .offset { IntOffset(-m, -m) }
-                        .graphicsLayer { renderEffect = androidx.compose.ui.graphics.BlurEffect(12f * d, 12f * d, androidx.compose.ui.graphics.TileMode.Clamp) },
-                ) {
-                    val x0 = sx.coerceIn(0, (img.width - 1).coerceAtLeast(0)); val y0 = sy.coerceIn(0, (img.height - 1).coerceAtLeast(0))
-                    val w0 = (wpx + 2 * m).coerceAtMost(img.width - x0); val h0 = (hpx + 2 * m).coerceAtMost(img.height - y0)
-                    if (w0 > 0 && h0 > 0) drawImage(img, srcOffset = IntOffset(x0, y0), srcSize = androidx.compose.ui.unit.IntSize(w0, h0), dstOffset = IntOffset((x0 - sx), (y0 - sy)), dstSize = androidx.compose.ui.unit.IntSize(w0, h0))
-                }
-            }
-        }
         if (!labels) Canvas(Modifier.fillMaxSize()) {
-            val rad = 12.dp.toPx()
-            val z = CornerRadius.Zero; val c = CornerRadius(rad)
-            // square on the edge side, rounded 12 inside
-            val shape = RoundRect(Rect(Offset.Zero, size),
-                topLeft = if (e == WellEdge.Bottom || e == WellEdge.Right) c else z,
-                bottomLeft = if (e == WellEdge.Top || e == WellEdge.Right) c else z,
-                bottomRight = if (e == WellEdge.Top || e == WellEdge.Left) c else z,
-                topRight = if (e == WellEdge.Bottom || e == WellEdge.Left) c else z)
-            val path = Path().apply { addRoundRect(shape) }
-            // the glow around it, building in its colour
-            if (glowA > 0f) for (k in 3 downTo 1) drawPath(path, tint.copy(alpha = (if (hot) 0.5f else 0.4f * glowA) * 0.18f), style = Stroke(width = k * 5.dp.toPx() * glowA.coerceAtLeast(0.2f)))
-            if (!hot) drawPath(path, Color.Black.copy(alpha = 0.62f))
-            // (Cancel's a soft white, not a colour)
-            drawPath(path, tint.copy(alpha = if (hot) (if (a == EdgeAction.Cancel) 0.85f else 1f) else (if (a == EdgeAction.Cancel) 0.18f else 0.35f) * glowA))
-            // dashes on the three inner sides: the outline, pushed 4 dp past the edge it sits on so that side is off the screen
-            val pad = 4.dp.toPx()
-            val out = Rect(
-                if (e == WellEdge.Left) -pad else 0f, if (e == WellEdge.Top) -pad else 0f,
-                if (e == WellEdge.Right) size.width + pad else size.width, if (e == WellEdge.Bottom) size.height + pad else size.height)
-            val dashed = Path().apply {
-                addRoundRect(RoundRect(out, topLeft = shape.topLeftCornerRadius, bottomLeft = shape.bottomLeftCornerRadius, bottomRight = shape.bottomRightCornerRadius, topRight = shape.topRightCornerRadius))
-            }
-            drawPath(dashed, if (hot) tint else Tok.text2.copy(alpha = 0.55f + 0.45f * glowA),
-                style = Stroke(1.5.dp.toPx(), pathEffect = if (hot) null else PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
+            drawRect(Tok.held)
+            if (hotT > 0f) drawRect(tint.copy(alpha = hotT))
         }
         if (labels) {
-        val ink = if (hot) Tok.onColour else Tok.text
-        val icon = when (a) { EdgeAction.Cancel -> R.drawable.ms_close; EdgeAction.ClearSteps -> R.drawable.ms_delete_sweep; EdgeAction.Delete -> R.drawable.ms_delete; EdgeAction.Edit -> R.drawable.ms_edit; EdgeAction.Duplicate -> R.drawable.ms_library_add }
-        val tintF = ColorFilter.tint(if (hot) Tok.onColour else Tok.text2)
-        val labelBox = Modifier.align(Alignment.Center)
-        if (a.across) {
-            Row(labelBox, verticalAlignment = Alignment.CenterVertically) {
-                Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = tintF)
-                Column(Modifier.padding(start = 8.dp)) {
-                    BasicText(a.title, style = LupeType.key.copy(fontSize = 14.sp, color = ink), maxLines = 1)
-                    if (off) BasicText("Stop first", style = LupeType.small.copy(fontSize = 11.sp, color = Tok.text2))
+            val ink = androidx.compose.ui.graphics.lerp(Tok.text, Tok.onColour, hotT)
+            val icon = when (a) { EdgeAction.Cancel -> R.drawable.ms_close; EdgeAction.ClearSteps -> R.drawable.ms_delete_sweep; EdgeAction.Delete -> R.drawable.ms_delete; EdgeAction.Edit -> R.drawable.ms_edit; EdgeAction.Duplicate -> R.drawable.ms_library_add }
+            val iconDp = (22f + 4f * hotT).dp
+            val labelBox = Modifier.align(Alignment.Center)
+            val word = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = ink)
+            if (a.across) {
+                Row(labelBox, verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(icon), null, Modifier.size(iconDp), colorFilter = ColorFilter.tint(ink))
+                    Column(Modifier.padding(start = 8.dp)) {
+                        BasicText(a.title, style = word, maxLines = 1)
+                        if (off) BasicText("Stop first", style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised))
+                    }
+                }
+            } else {
+                Column(labelBox, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Image(painterResource(icon), null, Modifier.size(iconDp), colorFilter = ColorFilter.tint(ink))
+                    BasicText(a.title, Modifier.padding(top = 4.dp), style = word, maxLines = 1)
                 }
             }
-        } else {
-            Column(labelBox, horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = tintF)
-                BasicText(a.title, Modifier.offset(y = 4.dp), style = LupeType.key.copy(fontSize = 13.sp, color = ink), maxLines = 1)
-            }
-        }
         }
     }
 }

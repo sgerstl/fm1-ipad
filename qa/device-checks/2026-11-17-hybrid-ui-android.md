@@ -39,6 +39,15 @@ Build: the commit that adds this section. Same setup; no backup.
 | 23 | Open the Bar ⌄ menu and pick another launch point; reopen it. | The ✓'s pill grows in on the new row and shrinks away from the old. | – | ☐ pass ☐ fail: |
 | 24 | Turn on Android's **Remove animations** and repeat 17, 19 and 20. | Nothing slides or grows: the tab pill fades out of the old tab and into the new; fills fade in where they stand; the menu fades in and out in place. Corner changes ease without overshoot. Nothing pops. | – | ☐ pass ☐ fail: |
 
+## Round 2b: the drag wells (Scott, 2026-11-17: "1 · Edge tabs", "Grow, then fill")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 25 | Stopped: press a filled pad briefly, then slide it off its place. | Five solid grey tabs slide in from the screen's edges on a small spring: Cancel at the bottom, Clear steps and Delete pattern at the top, Edit on the right, Duplicate on the left. Each sits flush on its edge, square there and well rounded toward the middle. No blur, no dashes, no glow. Icons over the words on the sides, beside them top and bottom. | – | ☐ pass ☐ fail: |
+| 26 | Drag the pad slowly toward Edit, then away, then onto it. | Edit **grows outward** as you near it, following your finger with no lag, and shrinks as you back off. Close enough, it fills with the pad's colour, its words and icon go dark and the icon grows, with a tick. Drop: Edit opens on that pad, and the wells slide away quicker than they came. | – | ☐ pass ☐ fail: |
+| 27 | Drag to Clear steps and to Delete pattern (stopped); then play and drag toward Delete. | Hot, Clear steps and Delete fill **in the track's colour, not red** (Scott's call to keep or change: ☐ keep ☐ want red). While playing, Delete is greyed with "Stop first" in readable grey, doesn't grow and takes no drop; the layout doesn't change. | – | ☐ pass ☐ fail: |
+| 28 | Drag to Cancel and to Duplicate. Turn on Remove animations and drag once more. | Cancel and Duplicate behave like Edit (grow, fill in the track's colour). With Remove animations: the wells fade in and out in place and don't grow; hot still fills. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - A kit (drum) track on Edit with the panel docked: its lanes still scroll under the panel, as before. 8-step pages are melodic only for now.
