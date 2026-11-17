@@ -179,13 +179,17 @@ fun StepGrid(
                     Modifier.width(gridW).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Tok.well)
                         // one finger: up and down scrolls the pitches, sideways scrolls the steps under a docked panel
                         .pointerInput(Unit) {
+                            val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                            var startX = 0f
+                            val fling = Roll.FLING_DP_S.dp.toPx()
                             detectDragGestures(
-                                onDragStart = { touchedAt = System.currentTimeMillis() },
-                                // let go: the steps settle on a chunk (or, a panel docked, on the place its last steps come clear)
-                                onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4], pageNow)) } },
-                                onDragCancel = { scope.launch { glide(Roll.snap(sx(), totalNow, geo[3], geo[4], pageNow)) } },
+                                onDragStart = { touchedAt = System.currentTimeMillis(); startX = sx(); tracker.resetTracking() },
+                                // let go: a fling or a drag past a fifth of the page turns it, and it springs the rest of the way; otherwise back
+                                onDragEnd = { touchedAt = System.currentTimeMillis(); val v = tracker.calculateVelocity().x
+                                    scope.launch { glide(if (geo[4] > 0.5f) Roll.snap(sx(), totalNow, geo[3], geo[4], pageNow) else Roll.pageTarget(startX, sx(), v, geo[3], totalNow, pageNow, fling)) } },
+                                onDragCancel = { scope.launch { glide(Roll.pageTarget(startX, startX, 0f, geo[3], totalNow, pageNow, fling)) } },
                             ) { change, d ->
-                                change.consume(); touchedAt = System.currentTimeMillis()
+                                change.consume(); touchedAt = System.currentTimeMillis(); tracker.addPosition(change.uptimeMillis, change.position)
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), geo[0]) else scrollY
                                 scrollY = Roll.clampScrollY(base - d.y, geo[0], geo[1])
                                 scrollX = Roll.clampScrollX(scrollX - d.x, Roll.maxScroll(totalNow, geo[3], geo[4], pageNow))

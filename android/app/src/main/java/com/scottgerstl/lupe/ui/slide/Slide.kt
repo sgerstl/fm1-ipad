@@ -111,6 +111,11 @@ fun Modifier.slideToTurn(
     onLimit: () -> Unit = {},
     /** A control drawn as a line (a fader) follows the finger along its own axis whatever the setting; the setting is for knobs and value boxes. */
     forceDirection: SlideDirection? = null,
+    /**
+     * Inside something that scrolls (Settings): claim the drag only once it is clearly along this control's axis (1.5 × the other way after touch
+     * slop), so a mostly vertical drag passes to the scroll (Scott, 2026-11-17: sliders stole the scroll).
+     */
+    strictAxis: Boolean = false,
 ): Modifier {
     val settings = LocalSlideSettings.current
     val magnifier = LocalMagnifier.current
@@ -137,7 +142,8 @@ fun Modifier.slideToTurn(
                 var first = Offset.Zero
                 val claimed: PointerInputChange = awaitTouchSlopOrCancellation(down.id) { change, over ->
                     val up = abs(over.y) > abs(over.x)
-                    if (dir.takes(up)) { vertical = up; first = over; change.consume() }
+                    val clear = !strictAxis || (if (up) abs(over.y) > 1.5f * abs(over.x) else abs(over.x) > 1.5f * abs(over.y))
+                    if (clear && dir.takes(up)) { vertical = up; first = over; change.consume() }
                 } ?: return@awaitEachGesture
                 var acc = if (vertical) -first.y else first.x
                 start()

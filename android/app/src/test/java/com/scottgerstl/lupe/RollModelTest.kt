@@ -106,4 +106,15 @@ class RollModelTest {
         assertEquals(0, Roll.minimapStart(1, 8)); assertEquals(16, Roll.minimapStart(2, 8)); assertEquals(16, Roll.minimapStart(3, 8))
         assertEquals("1\u20138", Roll.pageLabel(0, 8, 16)); assertEquals("9\u201312", Roll.pageLabel(1, 8, 12))
     }
+
+    /** Round 7 (Scott: "you really have to drag it all the way over"): a fling or a fifth of the page turns it. */
+    @Test fun aShortDragOrAFlingTurnsThePage() {
+        val page = 480f; val fling = 1000f
+        assertEquals(0f, Roll.pageTarget(0f, 80f, 0f, page, 16, 8, fling), 0f)            // a sixth: back
+        assertEquals(480f, Roll.pageTarget(0f, 100f, 0f, page, 16, 8, fling), 0f)         // past a fifth: on
+        assertEquals(480f, Roll.pageTarget(0f, 20f, -1200f, page, 16, 8, fling), 0f)      // a quick fling leftward: on, however short
+        assertEquals(0f, Roll.pageTarget(480f, 470f, 1500f, page, 16, 8, fling), 0f)      // flung rightward from page 2: back to 1
+        assertEquals(480f, Roll.pageTarget(480f, 700f, -2000f, page, 16, 8, fling), 0f)   // never past the last page
+        assertEquals(0f, Roll.pageTarget(0f, -150f, 2000f, page, 16, 8, fling), 0f)       // nor before the first
+    }
 }

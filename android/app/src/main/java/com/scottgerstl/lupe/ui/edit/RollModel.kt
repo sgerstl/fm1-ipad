@@ -138,4 +138,27 @@ object Roll {
         val a = pageIndex * pageSteps + 1; val b = min(total, (pageIndex + 1) * pageSteps)
         return "$a\u2013$b"
     }
+
+    /** A fling turns the page from this finger speed, in dp a second (Android's pagers use about 400). */
+    const val FLING_DP_S = 400f
+    /** …or a drag past this share of the page. */
+    const val TURN_SHARE = 0.2f
+
+    /**
+     * Where a let-go settles (Scott, 2026-11-17: "you really have to drag it all the way over"): the page the drag began on, or the next one
+     * either way once the finger flung ([fingerVelocity] px/s, the finger's x speed; leftward is negative, toward later steps) faster than
+     * [flingPx] or dragged more than [TURN_SHARE] of a page ([startScroll] → [scroll]). Never past the pattern's first or last page.
+     */
+    fun pageTarget(startScroll: Float, scroll: Float, fingerVelocity: Float, pagePx: Float, total: Int, page: Int, flingPx: Float): Float {
+        if (pagePx <= 0f) return 0f
+        val startPage = kotlin.math.round(startScroll / pagePx).toInt()
+        val moved = scroll - startScroll
+        val step = when {
+            fingerVelocity <= -flingPx -> 1
+            fingerVelocity >= flingPx -> -1
+            abs(moved) > TURN_SHARE * pagePx -> if (moved > 0) 1 else -1
+            else -> 0
+        }
+        return (startPage + step).coerceIn(0, chunks(total, page) - 1) * pagePx
+    }
 }

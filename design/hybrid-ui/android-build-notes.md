@@ -27,7 +27,7 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 
 ## Labs (CLAUDE.md rule 3)
 
-Settings › Labs › **Hybrid ·**: spring bounce (25 %), at the finger (200 ms), sheets and panels (300 ms), Edit page flip (280 ms), press squash (92 %). Added 2026-11-17, review 2026-12-01. They graduate to `tokens.json`'s `motion` when Scott settles them; the radii and shape pairs in `tokens-proposal.json` live in `ui/theme/Hybrid.kt` until he approves the look after the Pixel trial.
+**Cleared 2026-11-17** (Scott: "let's start over with all the sliders and the motion tuning… If I want to play with something, I'll let you know and we can add the settings back in one by one"). Every Labs slider is gone and its stored value dropped (`PhoneSettings.RETIRED_TUNING`). The values are fixed at the defaults: spring bounce 25 %, at the finger 200 ms, sheets and panels 300 ms, page flip 280 ms, press 92 %, shape spring 380 / 0.80, fast spring 800, squash 6 %, hit bounce 112 % / 50 / 200 ms, tab change 380 ms, and the pad-drag distances. They graduate to `tokens.json`'s `motion` when Scott settles them; the radii and shape pairs in `tokens-proposal.json` live in `ui/theme/Hybrid.kt` until he approves the look after the Pixel trial.
 
 ## Round 5 (2026-11-17)
 

@@ -14,14 +14,14 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 | 5 | Tap another track's head, then a scene, then Store and a scene. | Heads are pills; the selected one gets the track's tint, a coloured edge, and its number badge squares off (the others are round). Scenes sit in one dark toolbar: the current scene white and squarer, stored ones grey and round, empty ones bare. A scene key squashes and springs back when pressed. Store turns white while armed. The HOME knobs still sit at the right. | – | ☐ pass ☐ fail: |
 | 6 | **Edit.** Open a melodic track's pattern (Pads › hold › Edit steps). With the panel shut, play. | All 16 steps across the width, as before; it pages along with the playhead as before (patterns longer than 16). | – | ☐ pass ☐ fail: |
 | 7 | Press **ENV** on the FM-1 (or LFO) while on Edit. | The sound panel docks at the right (grey, rounded left corners) and the grid steps aside to **8 steps a page**. Under the grid: a strip of 16 small cells with "1–8" at its left, a lighter window behind the page shown, dots where notes are. A **Follow** key (white, on) appears in the bar above the grid. | – | ☐ pass ☐ fail: |
-| 8 | Play with Follow on, then tap Follow off and keep playing; tap the minimap's other half; swipe the grid sideways. | Follow on: at step 9 the grid flips to 9–16 with a short spring and the label changes, and back at step 1. Follow off: the page stays put; a light cell runs along the minimap showing where the playhead is. A tap on the other half, or a swipe, turns the page. **Say how the flip feels** (Settings › Labs › Hybrid · Edit page flip tunes it). | – | ☐ pass ☐ fail: |
+| 8 | Play with Follow on, then tap Follow off and keep playing; tap the minimap's other half; swipe the grid sideways. | Follow on: at step 9 the grid flips to 9–16 with a short spring and the label changes, and back at step 1. Follow off: the page stays put; a light cell runs along the minimap showing where the playhead is. A tap on the other half, or a swipe, turns the page. Say how the flip feels. | – | ☐ pass ☐ fail: |
 | 9 | **Mix.** Tap the Mix tab. Slide a strip's fader up and down; double-tap it. Tap Mute and Solo. | Sub-pages Mixer · Delay · Reverb · Chorus · Global along the top (Mixer lit). Six strips fill the width, each with a tall fader and a meter beside it moving with the sound, the dB under it, a line like "C · Rev 12%", and Mute and Solo joined. The fader follows your finger up and down (the Magnifier shows the value) and its white handle thickens while held; double tap puts it back. Mute and Solo turn white and round when on; the FM-1's levels follow. | – | ☐ pass ☐ fail: |
 | 10 | Long-press a strip (not on the fader). Slide Pan, then Reverb send. Tap Select sound…. | A dark menu opens beside your finger with the track's badge and name, a Pan slider with a centre mark, a Reverb send slider, then Select sound…. The strip's values line changes as you slide; the FM-1's pan and send follow. Select sound… opens Sounds for that track. | – | ☐ pass ☐ fail: |
 | 11 | Press **GLO** on the FM-1 from Pads, then press it again a few times. Then tap Delay on the phone. | GLO takes the phone to the Mix tab; each press steps Mixer → Delay → Reverb → Chorus → Global, and the lit sub-page follows. Delay shows its four dials, DELAY MODE as tiles and the FM-1's grey picture on a dark card (not the docked panel). Tapping Delay on the phone sends the FM-1 to GLO 2/5. HOME on the FM-1 puts the phone back on the tab it was on. | – | ☐ pass ☐ fail: |
 | 12 | Song menu › Settings. Flip a switch; pick a Sideways / Up and down segment. Close. | The sheet rises from below the header (the header stays visible above it) with rounded top corners and a short spring, a small grey handle and a round ✕. A switch on is white with a big dark thumb; off, dark with a grey edge and a small grey thumb; the thumb grows and slides. Segments are joined pills with the chosen one white. | – | ☐ pass ☐ fail: |
 | 13 | Open the Bar ⌄ menu and the Song menu. | Menus are a lighter grey card with rounder corners; the ticked row is a lighter pill with its ✓; second lines are readable grey. Each menu grows in with a small drop from its key. | – | ☐ pass ☐ fail: |
 | 14 | Long-press a pad. | Replaced by check 20 (round 2: the straight menu). | – | – |
-| 15 | Settings › Labs: find the five **Hybrid ·** rows (the two Hold menu · spring / speed rows are gone with the wheel) (spring bounce, at the finger, sheets and panels, Edit page flip, press squash). Set the bounce to 0, tap a tab, set it back to 25. | Bounce 0: tabs and pads change shape with no overshoot. 25: a small overshoot. Values stick after leaving Settings. | – | ☐ pass ☐ fail: |
+| 15 | (Retired 2026-11-17: the Labs motion sliders were removed; their values are fixed.) | – | – | – |
 | 16 | Turn on Android's **Remove animations** (Settings › Accessibility › Colour and motion) and repeat 2, 4 and 8. | Shapes land in place without travelling; colours still cross-fade; the 8-step page cuts and its label cross-fades. Nothing pops without a fade. | – | ☐ pass ☐ fail: |
 
 ## Round 2 (Scott's Pixel feedback, 2026-11-17: every shape-as-state change travels; the straight hold menu)
@@ -50,7 +50,7 @@ Build: the commit that adds this section. Same setup; no backup.
 
 ## Round 3 (Scott, 2026-11-17: the colour swells; shape changes must read as a transformation)
 
-Labs › **Shape spring · stiffness / damping**, **Fast spring · stiffness**, **Squash and stretch** tune all of these on the phone (starting at M3 Expressive's 380 / 0.80, 800 and 6 %).
+The springs are fixed at M3 Expressive's 380 / 0.80 and 800, the squash at 6 % (the Labs sliders were removed 2026-11-17).
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
@@ -60,7 +60,7 @@ Labs › **Shape spring · stiffness / damping**, **Fast spring · stiffness**, 
 | 32 | Tap tabs far apart (Pads → Mix) and next door (Edit → Timeline). | The white pill **stretches and thins** as it runs, its front edge leading, then gathers to full height on the new tab with a slight overshoot. | – | ☐ pass ☐ fail: |
 | 33 | Toggle Follow, Chord, a Pads Mute, a Mix Mute and Solo. | Each fill grows out with a small bulge and settles; off, it shrinks back with the reverse. | – | ☐ pass ☐ fail: |
 | 34 | Drag a pad slowly toward each well. | The well **swells in colour** as you near it, from grey toward the pad's colour, getting bigger at the same time, tracking your finger with no jump; the words turn dark partway, smoothly. At the hot point it's full colour, the icon is bigger and you feel the tick. Clear steps and Delete use the track colour (Scott's call, round 3). | – | ☐ pass ☐ fail: |
-| 35 | In Labs, set Shape spring · damping to 0.50, then 1.00; Squash to 0 and 12. Repeat 29. | 0.50 bounces more, 1.00 not at all; squash 0 has none, 12 a lot. Say which feels right. | – | ☐ pass ☐ fail: values: |
+| 35 | (Retired 2026-11-17: the spring and squash sliders left Labs; the round 3 values are fixed.) | – | – | – |
 | 36 | Remove animations on; repeat 29, 30 and 34. | The card and the pill **cross-fade** (no squash, no travel); the badge's circle and square cross-fade; the well's colour still swells with distance (that's tracking, not motion) but it doesn't grow. | – | ☐ pass ☐ fail: |
 
 ## Round 4: the hold menu as priority tiles (Scott, 2026-11-17: "C: priority tiles")
@@ -110,7 +110,7 @@ Install round 4 and 5 together (the Pixel hasn't had 7836f51).
 
 ## Round 6: the smooth playhead and the hit bounce (Scott, 2026-11-17)
 
-Labs › **Hit bounce · size / rise / settle** tune the bounce (starting at 112 %, 50 ms, 200 ms).
+The bounce is fixed at 112 %, 50 ms up, 200 ms back (the Labs sliders were removed 2026-11-17).
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
@@ -119,7 +119,16 @@ Labs › **Hit bounce · size / rise / settle** tune the bounce (starting at 112
 | 59 | A busy kit: all eight lanes full, some accents and ratchets; tempo up to 180–200. Play on Edit with the panel docked. | The sweep stays smooth and in time; every hit bounces as it sounds; a ratchet bounces as one; nothing stutters. **Frame check:** after a minute of this, tell Claude, who reads the frame stats from the phone over adb (`dumpsys gfxinfo`, read-only). | – | ☐ pass ☐ fail: |
 | 60 | Change tempo while playing; stop and start; turn the FM-1's direction to reverse if it has it. | The sweep follows the new tempo at once, never runs ahead of the sound, and starts clean from step 1; in reverse it sweeps backwards. | – | ☐ pass ☐ fail: |
 | 61 | Remove animations on; play again. | The playhead **jumps** step to step and nothing bounces. **Scott's call:** this was decided for you; ☐ keep ☐ want the glide kept with Reduce Motion. | – | ☐ pass ☐ fail: |
-| 62 | Labs: set Hit bounce · size to 100 %, then 125 %. | 100 %: no bounce. 125 %: a clear one. Say what feels right. | – | ☐ pass ☐ fail: value: |
+| 62 | (Retired 2026-11-17: the hit bounce sliders left Labs; 112 %, 50 ms, 200 ms are fixed.) | – | – | – |
+
+## Round 7: small fixes (Scott, 2026-11-17: "everything seems good so far")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 63 | Song menu › Labs. | Only four switches: Pause following after a touch, Pin the sound page, Piano under the grid, Timeline: time across. No sliders. Everything moves as it did (the values are fixed at the defaults). | – | ☐ pass ☐ fail: |
+| 64 | Song menu › tap the readout (the tempo menu), and anywhere else a slider shows in a menu or sheet. Start a scroll with your finger **on a slider** and drag up and down. | The label and value sit on the left, the slider on the right half. An up-and-down drag scrolls (or does nothing in a short menu) and **never changes the value**; only a clearly sideways drag on the slider moves it. Double tap still puts it back. | – | ☐ pass ☐ fail: |
+| 65 | Edit with the panel docked: swipe the grid a little (about a fifth of its width) and let go; then flick it quickly a short way. | Either turns the page, and it springs the rest of the way. A tiny nudge springs back. It never skips more than one page. | – | ☐ pass ☐ fail: |
+| 66 | Edit: open the step panel (Step N), then swipe it to the right. | It slides away, the same gesture as the sound panel; the grid takes the width back. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).

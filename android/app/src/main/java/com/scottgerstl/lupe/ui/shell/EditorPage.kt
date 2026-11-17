@@ -222,8 +222,14 @@ fun EditTab(
             Modifier.align(Alignment.TopEnd).width(DOCK_W).fillMaxHeight()
                 .graphicsLayer { if (reduce) alpha = panelT.value else translationX = (1f - panelT.value) * size.width; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
                 .background(Tok.panel)
+                // a swipe to the right that no control took shuts it, the sound panel's gesture (round 7); it slides out on the panel's own motion
+                .pointerInput(Unit) {
+                    var total = 0f
+                    detectHorizontalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 32.dp.toPx()) { ui.stepPanel = false } }) { change, dx -> change.consume(); total += dx }
+                }
                 .pointerInput(Unit) { detectTapGestures { } }      // a touch on the panel doesn't reach the grid under it
-                .semantics { paneTitle = "Step panel"; isTraversalGroup = true }
+                .semantics { paneTitle = "Step panel"; isTraversalGroup = true
+                    customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the step panel") { ui.stepPanel = false; true }) }
                 .padding(12.dp),
         ) {
             if (drum) HitPanel(ed, track, core, hit, narrow = true) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
@@ -477,11 +483,16 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
             Box(
                 Modifier.width(gw).fillMaxHeight().clip(RoundedCornerShape(18.dp)).background(Tok.well)
                     .pointerInput(Unit) {
+                        val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                        var startX = 0f
+                        val fling = roll.FLING_DP_S.dp.toPx()
                         detectHorizontalDragGestures(
-                            onDragStart = { touchedAt = System.currentTimeMillis() },
-                            onDragEnd = { touchedAt = System.currentTimeMillis(); scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx, pageNow)) } },
-                            onDragCancel = { scope.launch { glide(roll.snap(sx(), totalNow, viewPx, dockPx, pageNow)) } },
-                        ) { change, dx -> if (totalNow > pageNow || dockPx > 0f) { change.consume(); touchedAt = System.currentTimeMillis(); scrollX = roll.clampScrollX(scrollX - dx, roll.maxScroll(totalNow, viewPx, dockPx, pageNow)) } }
+                            onDragStart = { touchedAt = System.currentTimeMillis(); startX = sx(); tracker.resetTracking() },
+                            // a fling or a fifth of the page turns it (Scott, 2026-11-17), then it springs the rest of the way
+                            onDragEnd = { touchedAt = System.currentTimeMillis(); val v = tracker.calculateVelocity().x
+                                scope.launch { glide(if (dockPx > 0.5f) roll.snap(sx(), totalNow, viewPx, dockPx, pageNow) else roll.pageTarget(startX, sx(), v, viewPx, totalNow, pageNow, fling)) } },
+                            onDragCancel = { scope.launch { glide(roll.pageTarget(startX, startX, 0f, viewPx, totalNow, pageNow, fling)) } },
+                        ) { change, dx -> if (totalNow > pageNow || dockPx > 0f) { change.consume(); touchedAt = System.currentTimeMillis(); tracker.addPosition(change.uptimeMillis, change.position); scrollX = roll.clampScrollX(scrollX - dx, roll.maxScroll(totalNow, viewPx, dockPx, pageNow)) } }
                     },
             ) {
                 // the beats: odd beats on a band; the playhead's column lit, with a cap; lane lines faint

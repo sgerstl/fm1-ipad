@@ -18,6 +18,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * switch off, nothing hard-wired.
  */
 class PhoneSettings(private val prefs: SharedPreferences? = null) {
+    init {
+        // 2026-11-17: the Labs sliders were cleared (Scott: start over; add back one by one when he asks). Any value a slider stored is dropped so
+        // the phone runs the defaults below; the properties stay, read-only from the UI, so the code keeps one place for each value.
+        prefs?.edit()?.apply { RETIRED_TUNING.forEach { remove(it) } }?.apply()
+    }
+
     var haptics by mutableStateOf(prefs?.getBoolean(HAPTICS, true) ?: true)
         private set
     /** Labs: the sound page holds for 3 s after you touch it (decision 3's "pause after a phone touch"). */
@@ -161,6 +167,11 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
 
     companion object {
         fun from(context: android.content.Context) = PhoneSettings(context.getSharedPreferences("lupe_settings", android.content.Context.MODE_PRIVATE))
+        /** The tuning keys retired from Labs on 2026-11-17; their stored values are removed so the defaults rule. */
+        val RETIRED_TUNING = listOf("labs_tab_slide_ms", "labs_menu_spring", "labs_menu_speed", "labs_pad_slide_start", "labs_pad_slide_dwell", "labs_well_slide",
+            "labs_well_side_glow_pct", "labs_well_side_hot", "labs_well_glow_pct", "labs_well_hot2", "labs_motion_bounce", "labs_motion_finger_ms", "labs_motion_panel_ms",
+            "labs_motion_page_flip_ms", "labs_motion_press_scale", "labs_spatial_stiffness", "labs_spatial_damping", "labs_fast_spatial_stiffness", "labs_squash_pct",
+            "labs_bounce_scale", "labs_bounce_up_ms", "labs_bounce_back_ms")
         const val HAPTICS = "haptics"
         const val LEFT_HANDED = "left_handed"       // (the old one, read once to fill the two below)
         const val RAIL_LEFT = "rail_left"
