@@ -168,6 +168,7 @@ Particular to the head:
 - 2026-11-14: phones take Android's head; taps select, holds open menus; mutes paint (Scott, decisions 29 and 31).
 - 2026-11-14: phones show selection as the track's muted colour under the row (Scott, decision 31).
 - 2026-11-17 (round 3): the badge squares off on M3 Expressive's spatial spring with a squash and stretch; Reduce Motion cross-fades the circle and the square (spec §5, round 3).
+- 2026-11-17: **the Mute key's launch trace is grey** (Scott, matching the Mix strip): 2 dp in the tertiary grey `text3`, with the faint whole outline at 30 % under it. It was the track's colour on an unmuted key and dark on a muted one, with the outline at 60 %. The head's solo trace keeps the track colour (not asked).
 
 ## 3. Build notes
 

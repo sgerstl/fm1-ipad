@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -303,24 +304,43 @@ private fun Meter(track: Int, colour: Color, dim: Float, meters: androidx.compos
  */
 @Composable
 private fun MuteSolo(t: MixTrackUi, actions: MixActions, modifier: Modifier) {
+    // playing, a mute or solo waits for the launch point (the core's pads rows say which, and when): the key keeps its look and a grey line
+    // traces its outline, closing on the launch point, as on the Pads row's Mute (Scott, 2026-11-17). Stopped, it changes at once, no trace
+    val launch = LocalMixLaunch.current
+    val row = launch?.pads?.value?.rows?.firstOrNull { it.track == t.number }
+    val left: () -> Double? = { launch?.clock?.value?.ticksLeft(row?.launchTick, android.os.SystemClock.uptimeMillis()) }
+    val mutePending = row != null && row.mutePending != "none"
+    val soloPending = row?.soloPending == true
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        ToggleSegment("Mute", "Mute ${t.name}", t.muted, if (t.muted) "Muted" else "Not muted", first = true, last = false, Modifier.weight(1f)) { actions.mute(t.number) }
-        ToggleSegment("Solo", "Solo ${t.name}", t.solo, if (t.solo) "Solo" else "Not solo", first = false, last = true, Modifier.weight(1f)) { actions.solo(t.number) }
+        ToggleSegment("Mute", "Mute ${t.name}", t.muted, (if (t.muted) "Muted" else "Not muted") + if (mutePending) ", changing at the launch point" else "", first = true, last = false, Modifier.weight(1f),
+            pending = if (mutePending) left else null) { actions.mute(t.number) }
+        ToggleSegment("Solo", "Solo ${t.name}", t.solo, (if (t.solo) "Solo" else "Not solo") + if (soloPending) ", changing at the launch point" else "", first = false, last = true, Modifier.weight(1f),
+            pending = if (soloPending) left else null) { actions.solo(t.number) }
     }
 }
 
+/** What the Mix strip's Mute and Solo need to trace a change waiting for the launch point: the core's pads rows and its clock (provided by the shell). */
+class MixLaunch(val pads: androidx.compose.runtime.State<com.scottgerstl.lupe.core.PadsState>, val clock: androidx.compose.runtime.State<com.scottgerstl.lupe.core.ClockState>)
+val LocalMixLaunch = androidx.compose.runtime.staticCompositionLocalOf<MixLaunch?> { null }
+
 /** A switch drawn as one end of a connected pair: on, the white key gone fully round; off, `control` with its inner corners 8. */
 @Composable
-fun ToggleSegment(label: String, description: String, on: Boolean, state: String, first: Boolean, last: Boolean, modifier: Modifier = Modifier, height: Dp = 36.dp, onClick: () -> Unit) {
+fun ToggleSegment(label: String, description: String, on: Boolean, state: String, first: Boolean, last: Boolean, modifier: Modifier = Modifier, height: Dp = 36.dp,
+    /** Pulses to the launch point while a change waits for it (playing): a grey line traces the key's outline. Null: no change waiting. */
+    pending: (() -> Double?)? = null, onClick: () -> Unit) {
     val reduce = LocalReduceMotion.current
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    // the navigation keys' elastic press (round 11): 0.92 at once, back with a small overshoot; Reduce Motion: no squash
+    val press by com.scottgerstl.lupe.ui.theme.pressScale(pressed, reduce)
     val m = hybridMotion
     val shape by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
     val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
     val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(on, reduce)
     Box(
-        modifier.defaultMinSize(minHeight = 44.dp).graphicsLayer { val (sx, sy) = squash(); scaleX = sx; scaleY = sy }
+        modifier.defaultMinSize(minHeight = 44.dp).graphicsLayer { val (sx, sy) = squash(); scaleX = sx * press; scaleY = sy * press }
             .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = description; stateDescription = state }
-            .clickable(remember { MutableInteractionSource() }, null, role = Role.Switch, onClick = onClick),
+            .clickable(source, null, role = Role.Switch, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -336,6 +356,13 @@ fun ToggleSegment(label: String, description: String, on: Boolean, state: String
                     drawPath(Path().apply { addRoundRect(RoundRect(x, y, x + w, y + h, CornerRadius(l.x * g), CornerRadius(rr.x * g), CornerRadius(rr.x * g), CornerRadius(l.x * g))) }, Tok.text.copy(alpha = lit)) }
             },
             contentAlignment = Alignment.Center,
-        ) { BasicText(label, style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2, Tok.onColour, lit), fontWeight = FontWeight.SemiBold), maxLines = 1) }
+        ) {
+            BasicText(label, style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2, Tok.onColour, lit), fontWeight = FontWeight.SemiBold), maxLines = 1)
+            // the launch trace: tertiary grey, 2 dp, the same as the Pads row's Mute; it draws with Reduce Motion too (it's information)
+            if (pending != null) com.scottgerstl.lupe.ui.shell.LaunchTrace(pending, Tok.text3, height / 2, 2.dp, Modifier.matchParentSize(), base = LAUNCH_TRACE_BASE)
+        }
     }
 }
+
+/** The launch trace on a mute or solo key: the faint whole outline under the part already drawn (Pads and Mix alike). */
+const val LAUNCH_TRACE_BASE = 0.3f

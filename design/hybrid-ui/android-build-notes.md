@@ -61,3 +61,8 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 - **The bug:** the kit's cells took a tap on touch-up even after the finger had swiped (the page drag sits on the grid behind the cells, and the cell never checked how far the finger went). A swipe that started on a hit or note carried it. Melodic empty cells were already safe.
 - **The rule** (`Roll.move`, unit-tested): within slop, a tap or hold; past slop, a page swipe unless it pressed on a note or hit and held still for 150 ms first. The 150 ms is the pad drag's dwell (`padSlideDwellMs`), so the two drags feel the same.
 - **Checked, left alone:** the lane keys and the piano edge sound a note on touch-down (an audition, nothing written; a lane is picked on lift); the minimap pages on lift. A slide along the minimap still counts as a tap there.
+
+## Round 13b–c (2026-11-17)
+
+- **Effect cards:** tiles have a floor of 80 dp (the hybrid tile's padding, label row, value and gauge), not the "about 72" in the request; at 72 the gauge sits under the padding. If a card is ever shorter, the tiles scroll rather than shrink.
+- **Mix Mute and Solo trace:** the strip's mute and solo states come from the core's `mix` area, and their waits come from the `pads` rows (`mutePending`, `soloPending`, `launchTick`), so the shell provides both to the Mix tab (`LocalMixLaunch`). The trace draws a pill outline; on the joined pair's inner corners (radius 8 while off) it runs a little inside the key's corner.

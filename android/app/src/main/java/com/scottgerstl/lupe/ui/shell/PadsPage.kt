@@ -431,9 +431,10 @@ private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore, clock: androi
                 contentAlignment = Alignment.Center,
             ) {
                 BasicText("Mute", style = LupeType.key.copy(fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = lerp(Tok.text2Raised, Tok.onColour, lit.value)))
-                // a mute that waits for the launch point: the key's outline drawn as it comes, in the track's colour (dark on the lit, white key)
+                // a mute that waits for the launch point: the key's outline drawn as it comes, in the tertiary grey, 2 dp, as on the Mix strip
+                // (Scott, 2026-11-17; was the track's colour, dark on the lit key)
                 if (r.mutePending != "none") LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) },
-                    if (r.muted) Tok.onColour else Tok.track[(r.track - 1) % Tok.track.size], rh / 2, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+                    Tok.text3, rh / 2, 2.dp, Modifier.matchParentSize(), base = com.scottgerstl.lupe.ui.mix.LAUNCH_TRACE_BASE)
             }
         }
     }

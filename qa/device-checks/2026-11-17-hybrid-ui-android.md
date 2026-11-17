@@ -210,6 +210,15 @@ Open the step panel or a sound page first so the grid pages by 8.
 | 104 | Pick Delay. | Tiles whole. Under the picture: MODE with Mono · Stereo · Ping pills, all three readable; a tap changes the FM-1's mode. | – | ☐ pass ☐ fail: |
 | 105 | Pick Chorus and Global. Then turn the font size up in Android settings and look again at all four. | Tiles whole, the picture fills the right column. At a large font, the tiles keep their height and scroll if they must; nothing is cut off. | – | ☐ pass ☐ fail: |
 
+## Round 13c: Mute and Solo on Mix wait visibly (Scott: "a bounce under my finger and then a gray line around the button timing it")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 106 | Mix › Mixer, playing, Launch at = Bar: tap a track's Mute. | Under the finger: a quick squash and a springy return. The key stays unmuted while a grey line runs round it from the top, clockwise, closing as the bar turns over; then it goes white and round and the track drops out. | – | ☐ pass ☐ fail: |
+| 107 | Same track: tap Mute again to unmute. Then set Launch at to 4 bars and repeat 106 and 107. | Unmuting: it stays white (muted) while the line runs round; it turns back only as the line closes. At 4 bars the line takes four bars to close. | – | ☐ pass ☐ fail: |
+| 108 | While a line is running, tap the key again. Then try Solo the same way. Then stop and tap Mute. | Tapped again: it does what the Pads row does (the change is called off and the line goes). Solo traces the same way. Stopped: it changes at once, no line. | – | ☐ pass ☐ fail: |
+| 109 | Put Pads and Mix side by side in behaviour: mute a track from the Pads row's Mute while playing, then from Mix. Then turn Remove animations on and repeat once. | Both lines are the same grey and thickness and close at the same moment. With Remove animations on: no squash, but the line still draws. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

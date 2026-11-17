@@ -193,7 +193,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                             Tab.Timeline -> TimelineSlot(core)
                             Tab.Mix -> { val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core); val meters = core.meters.collectAsStateWithLifecycle()
                                 // Mixer · Effects: the shared pages as effect cards (direction C, 2026-11-17), replacing the bus dials
-                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value, graphics = labs.showGraphics) }
+                                val launch = com.scottgerstl.lupe.ui.mix.MixLaunch(core.pads.collectAsStateWithLifecycle(), core.clock.collectAsStateWithLifecycle())
+                                androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.mix.LocalMixLaunch provides launch) {
+                                    com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value, graphics = labs.showGraphics) } }
                         }
                     }
                 }
