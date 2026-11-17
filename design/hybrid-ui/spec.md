@@ -122,7 +122,7 @@ Landscape layouts: list and detail. A 132-wide rail (selected item `lifted`, rad
 ### 3.9 Menu and popup
 
 `held`, radius 14, `Elevation/3 Held`, 6 inside, rows 44 (52 with a second line), row radius 10. Icon 20 `textSecondary` (icons need 3:1, and 4.13:1 passes). Label in Barlow Medium 16 `text`, second line `textSecondaryRaised`. **The selected row is `lifted` with a pill radius and a check** (shape as state). Opens at the control or finger that called it (vault memory: long-press popups at the finger). Rows that go somewhere else get a chevron.
-Phone hold menu: a straight column beside the finger with a touch disc (56, `text` at 18 %). In this study the arc wheel is dropped (Scott, 2026-11-17, "for this exercise"); the shipped wheel isn't retired.
+Phone hold menu: a straight column beside the finger with a touch disc (56, `text` at 18 %). **Decided for Android (Scott, 2026-11-17, on the Pixel: "let's adopt the material menu, and not the arc menu"); it replaces the wheel there.** The iPhone and iPad wait for the Android trial.
 iPad hold menu: a column of nine pills from the pad. The default item (Edit pattern) is the white key at radius 14; the rest are `held` pills.
 
 ### 3.10 App strip (messages)
@@ -273,4 +273,4 @@ The five conflicts this spec raised, settled:
 - Whether the playhead's 60 ms glide counts as travel under Reduce Motion, or jumps.
 - The slider's unfilled track at 1.33:1.
 - The phone's Sounds: a sheet here (`phone-07`). The structure map's phone section (2026-11-10) still lists a Sounds tab.
-- The arc wheel vs the straight pad menu: a study call only. The wheel stays the shipped design until Scott says otherwise.
+- ~~The arc wheel vs the straight pad menu~~: decided 2026-11-17, the straight menu on Android (see `design/components/hold-menus.md`).

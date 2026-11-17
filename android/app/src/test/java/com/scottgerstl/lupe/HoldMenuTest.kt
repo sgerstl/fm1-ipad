@@ -194,3 +194,30 @@ class HoldMenuTest {
         assertEquals(5, HoldWheel(500f, 200f, 9, 915f, 412f, true).shown)
     }
 }
+
+/** The straight hold menu (Scott, 2026-11-17: "let's adopt the material menu, and not the arc menu"). */
+class StraightHoldMenuTest {
+    private val w = 914f; private val h = 412f
+    @org.junit.Test fun opensBesideTheFingerOnTheChosenSideAndFlipsWhenThereIsNoRoom() {
+        val p = com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 200f, w, h, 200f, menusRight = false)
+        org.junit.Assert.assertTrue(p.left); org.junit.Assert.assertEquals(600f - 36f - 264f, p.x, 0.01f)
+        val near = com.scottgerstl.lupe.ui.shell.straightMenuPlace(120f, 200f, w, h, 200f, menusRight = false)   // no room on the left
+        org.junit.Assert.assertFalse(near.left); org.junit.Assert.assertEquals(156f, near.x, 0.01f)
+        val r = com.scottgerstl.lupe.ui.shell.straightMenuPlace(400f, 200f, w, h, 200f, menusRight = true)
+        org.junit.Assert.assertFalse(r.left)
+        val edge = com.scottgerstl.lupe.ui.shell.straightMenuPlace(800f, 200f, w, h, 200f, menusRight = true)   // no room on the right
+        org.junit.Assert.assertTrue(edge.left)
+    }
+
+    @org.junit.Test fun staysBetweenTheHeaderAndTheFoot() {
+        org.junit.Assert.assertEquals(172f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 200f, w, h, 200f, false).y, 0.01f)   // first row level with the finger
+        org.junit.Assert.assertEquals(60f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 70f, w, h, 200f, false).y, 0.01f)     // not over the header
+        org.junit.Assert.assertEquals(h - 16f - 200f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 400f, w, h, 200f, false).y, 0.01f)
+        org.junit.Assert.assertEquals(60f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 300f, w, h, 500f, false).y, 0.01f)    // too tall: from the header, scrolling
+    }
+
+    @org.junit.Test fun rowsAre44Or52() {
+        val items = listOf(com.scottgerstl.lupe.ui.shell.HoldItem("Edit steps"), com.scottgerstl.lupe.ui.shell.HoldItem("Sounds…", sub = "Analog"))
+        org.junit.Assert.assertEquals(12f + 44f + 52f, com.scottgerstl.lupe.ui.shell.menuHeight(items), 0.01f)
+    }
+}

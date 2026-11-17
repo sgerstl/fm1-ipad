@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -35,6 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import kotlinx.coroutines.launch
 import com.scottgerstl.lupe.core.Tab
 import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.LocalReduceMotion
@@ -56,57 +60,88 @@ fun Tabs(current: Tab, onPick: (Tab) -> Unit, modifier: Modifier = Modifier, pad
     SegmentGroup(Tab.entries.map { it.name }, current.ordinal, { onPick(Tab.entries[it]) }, modifier, height = 40.dp, padH = padH, role = Role.Tab)
 
 /**
- * A connected group (spec 3.4): segments 2 apart; the selected one a full pill in `text` with `onColour` ink (SemiBold), the rest `control` with
- * grey ink, inner corners [Shape.key] and the outer ends round. Used for the tabs and pagers. Each segment's target is at least 48 tall even when
- * drawn at 36 or 40. [selected] −1 selects none.
+ * A connected group (spec 3.4). The segments are `control` with their inner corners 8 and the group's ends round, 2 apart; one white pill
+ * (the selection) slides between them. Shape carries the state and it travels (Scott, 2026-11-17, on the Pixel: "any of those shape
+ * transitions that also indicate state should all be animated"): the pill's leading edge springs ahead and its trailing edge follows, so it
+ * stretches as it goes and settles on the new segment; the inks blend in 150 ms. With Reduce Motion the pill cross-fades from the old
+ * segment to the new one. Labels keep one weight so nothing reflows. [selected] −1 selects none.
+ * [selectedFill]/[idleFill]: the Mix sub-pages use a quiet variant (a `lifted` pill over bare words).
  */
 @Composable
 fun SegmentGroup(
     labels: List<String>, selected: Int, onPick: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 40.dp, padH: Dp = 16.dp,
     role: Role = Role.Tab, descriptions: List<String> = labels, fontSize: Int = 16, minWidth: Dp = 0.dp,
+    fill: Boolean = false, selectedFill: Color = Tok.text, idleFill: Color? = Tok.control, selectedInk: Color = Tok.onColour, idleInk: Color = Tok.text2,
+    gap: Dp = 2.dp,
 ) {
-    Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-        labels.forEachIndexed { i, label ->
-            Segment(label, descriptions[i], i == selected, first = i == 0, last = i == labels.lastIndex, height = height, padH = padH, role = role,
-                fontSize = fontSize, minWidth = minWidth) { onPick(i) }
-        }
-    }
-}
-
-@Composable
-private fun Segment(label: String, description: String, on: Boolean, first: Boolean, last: Boolean, height: Dp, padH: Dp, role: Role, fontSize: Int, minWidth: Dp, onClick: () -> Unit) {
     val reduce = LocalReduceMotion.current
     val m = hybridMotion
-    val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    // shape on the spring, colour eased (spec §5: effects never bounce)
-    val shape by springFloat(if (on) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
-    val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
-    Box(
-        Modifier.defaultMinSize(minHeight = 48.dp, minWidth = minWidth)
-            .semantics(mergeDescendants = true) { this.role = role; selected = on; contentDescription = description }
-            .clickable(interactionSource = source, indication = null, role = role, onClick = onClick),
-        contentAlignment = Alignment.Center,
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // each segment's place in the row (px), measured
+    val lefts = remember(labels.size) { androidx.compose.runtime.mutableStateListOf<Float>().apply { repeat(labels.size) { add(-1f) } } }
+    val widths = remember(labels.size) { androidx.compose.runtime.mutableStateListOf<Float>().apply { repeat(labels.size) { add(0f) } } }
+    val known = selected in labels.indices && widths.getOrElse(selected) { 0f } > 0f
+    val targetL = if (known) lefts[selected] else 0f
+    val targetR = if (known) lefts[selected] + widths[selected] else 0f
+    val l = remember { androidx.compose.animation.core.Animatable(-1f) }
+    val r = remember { androidx.compose.animation.core.Animatable(-1f) }
+    // Reduce Motion: the old place and the new, cross-fading
+    var fromSel by remember { androidx.compose.runtime.mutableIntStateOf(selected) }
+    val fade = remember { androidx.compose.animation.core.Animatable(1f) }
+    androidx.compose.runtime.LaunchedEffect(targetL, targetR, known) {
+        if (!known) return@LaunchedEffect
+        if (l.value < 0f || reduce) { l.snapTo(targetL); r.snapTo(targetR) }
+        if (reduce) return@LaunchedEffect
+        val right = targetL > l.value
+        // the leading edge is quicker, the trailing one slower: the pill stretches toward the new segment, then gathers there
+        kotlinx.coroutines.coroutineScope {
+            launch { com.scottgerstl.lupe.ui.theme.unscaled { l.animateTo(targetL, com.scottgerstl.lupe.ui.theme.lupeSpring((m.fingerMs * if (right) 1.25f else 0.8f).toInt(), m.bounce)) } }
+            launch { com.scottgerstl.lupe.ui.theme.unscaled { r.animateTo(targetR, com.scottgerstl.lupe.ui.theme.lupeSpring((m.fingerMs * if (right) 0.8f else 1.25f).toInt(), m.bounce)) } }
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(selected) {
+        if (!reduce) { fromSel = selected; return@LaunchedEffect }
+        fade.snapTo(0f); com.scottgerstl.lupe.ui.theme.unscaled { fade.animateTo(1f, androidx.compose.animation.core.tween(Dur.STATE, easing = com.scottgerstl.lupe.ui.theme.EaseOut)) }; fromSel = selected
+    }
+    Row(
+        modifier.selectableGroup().drawBehind {
+            val h = height.toPx(); val top = (size.height - h) / 2
+            val pill = h / 2; val inner = Shape.key.toPx()
+            // the segments' own shapes
+            if (idleFill != null) for (i in labels.indices) {
+                if (widths[i] <= 0f) continue
+                val outerL = i == 0; val outerR = i == labels.lastIndex
+                val lr = CornerRadius(if (outerL) pill else inner); val rr = CornerRadius(if (outerR) pill else inner)
+                drawPath(Path().apply { addRoundRect(RoundRect(lefts[i], top, lefts[i] + widths[i], top + h, lr, rr, rr, lr)) }, idleFill)
+            }
+            // the selection
+            fun pillAt(a: Float, b: Float, alpha: Float) { if (b > a && alpha > 0f) drawRoundRect(selectedFill.copy(alpha = selectedFill.alpha * alpha), Offset(a, top), Size(b - a, h), CornerRadius(pill)) }
+            if (!known) return@drawBehind
+            if (reduce) {
+                if (fromSel in labels.indices && fromSel != selected) pillAt(lefts[fromSel], lefts[fromSel] + widths[fromSel], 1f - fade.value)
+                pillAt(targetL, targetR, if (fromSel != selected) fade.value else 1f)
+            } else pillAt(l.value, r.value, 1f)
+        },
+        horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.height(height).defaultMinSize(minWidth = minWidth)
-                .drawBehind {
-                    val pill = size.height / 2
-                    val inner = Shape.key.toPx()
-                    // with Reduce Motion nothing changes size in flight: the shape lands where it belongs
-                    val s = if (reduce) (if (on) 1f else 0f) else shape.coerceIn(0f, 1.2f)
-                    fun r(outer: Boolean) = if (outer) pill else inner + (pill - inner) * s
-                    segmentShape(lerp(Tok.control, Tok.text, lit), r(first), r(last))
-                    if (focused) drawRoundRect(Tok.text, Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(pill + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
-                }
-                .padding(horizontal = padH),
-            contentAlignment = Alignment.Center,
-        ) {
-            BasicText(
-                label, maxLines = 1,
-                style = LupeType.key.copy(fontSize = fontSize.sp, lineHeight = (fontSize * 1.2f).sp, color = lerp(Tok.text2, Tok.onColour, lit),
-                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal),
-            )
+        labels.forEachIndexed { i, label ->
+            val on = i == selected
+            val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
+            val source = remember { MutableInteractionSource() }
+            val focused by source.collectIsFocusedAsState()
+            Box(
+                (if (fill) Modifier.weight(1f) else Modifier)
+                    .defaultMinSize(minHeight = 48.dp, minWidth = minWidth)
+                    .onGloballyPositioned { c -> val x = c.positionInParent().x; val w = c.size.width.toFloat(); if (lefts.getOrNull(i) != x) lefts[i] = x; if (widths.getOrNull(i) != w) widths[i] = w }
+                    .semantics(mergeDescendants = true) { this.role = role; this.selected = on; contentDescription = descriptions[i] }
+                    .clickable(interactionSource = source, indication = null, role = role) { onPick(i) }
+                    .drawBehind { if (focused) { val h = height.toPx(); drawRoundRect(Tok.text, Offset(-3.dp.toPx(), (size.height - h) / 2 - 3.dp.toPx()), Size(size.width + 6.dp.toPx(), h + 6.dp.toPx()), CornerRadius(h / 2 + 3.dp.toPx()), style = Stroke(2.dp.toPx())) } }
+                    .padding(horizontal = padH),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(label, maxLines = 1,
+                    style = LupeType.key.copy(fontSize = fontSize.sp, lineHeight = (fontSize * 1.2f).sp, color = lerp(idleInk, selectedInk, lit), fontWeight = FontWeight.SemiBold))
+            }
         }
     }
 }

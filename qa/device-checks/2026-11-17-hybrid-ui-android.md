@@ -20,15 +20,30 @@ Written by the session that built it (see `CLAUDE.md`, rule 2). Scott runs it on
 | 11 | Press **GLO** on the FM-1 from Pads, then press it again a few times. Then tap Delay on the phone. | GLO takes the phone to the Mix tab; each press steps Mixer → Delay → Reverb → Chorus → Global, and the lit sub-page follows. Delay shows its four dials, DELAY MODE as tiles and the FM-1's grey picture on a dark card (not the docked panel). Tapping Delay on the phone sends the FM-1 to GLO 2/5. HOME on the FM-1 puts the phone back on the tab it was on. | – | ☐ pass ☐ fail: |
 | 12 | Song menu › Settings. Flip a switch; pick a Sideways / Up and down segment. Close. | The sheet rises from below the header (the header stays visible above it) with rounded top corners and a short spring, a small grey handle and a round ✕. A switch on is white with a big dark thumb; off, dark with a grey edge and a small grey thumb; the thumb grows and slides. Segments are joined pills with the chosen one white. | – | ☐ pass ☐ fail: |
 | 13 | Open the Bar ⌄ menu and the Song menu. | Menus are a lighter grey card with rounder corners; the ticked row is a lighter pill with its ✓; second lines are readable grey. Each menu grows in with a small drop from its key. | – | ☐ pass ☐ fail: |
-| 14 | Long-press a pad. | The shipped arc wheel, unchanged. | – | ☐ pass ☐ fail: |
-| 15 | Settings › Labs: find the five **Hybrid ·** rows (spring bounce, at the finger, sheets and panels, Edit page flip, press squash). Set the bounce to 0, tap a tab, set it back to 25. | Bounce 0: tabs and pads change shape with no overshoot. 25: a small overshoot. Values stick after leaving Settings. | – | ☐ pass ☐ fail: |
+| 14 | Long-press a pad. | Replaced by check 20 (round 2: the straight menu). | – | – |
+| 15 | Settings › Labs: find the five **Hybrid ·** rows (the two Hold menu · spring / speed rows are gone with the wheel) (spring bounce, at the finger, sheets and panels, Edit page flip, press squash). Set the bounce to 0, tap a tab, set it back to 25. | Bounce 0: tabs and pads change shape with no overshoot. 25: a small overshoot. Values stick after leaving Settings. | – | ☐ pass ☐ fail: |
 | 16 | Turn on Android's **Remove animations** (Settings › Accessibility › Colour and motion) and repeat 2, 4 and 8. | Shapes land in place without travelling; colours still cross-fade; the 8-step page cuts and its label cross-fades. Nothing pops without a fade. | – | ☐ pass ☐ fail: |
+
+## Round 2 (Scott's Pixel feedback, 2026-11-17: every shape-as-state change travels; the straight hold menu)
+
+Build: the commit that adds this section. Same setup; no backup.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 17 | Tap the header tabs one after another, near and far (Pads → Mix, Mix → Edit). | **One** white pill slides from the old tab to the new: its leading edge runs ahead so it stretches, then it gathers on the new tab with a small overshoot. The labels' colours blend; no tab changes width. | – | ☐ pass ☐ fail: |
+| 18 | Mix: tap through Mixer · Delay · Reverb · Chorus · Global. Settings: tap the Slide to turn and Menus open segments. | The same: the grey pill (Mix) or white pill (Settings) slides and stretches between choices; nothing jumps. | – | ☐ pass ☐ fail: |
+| 19 | Tap Follow and Chord on Edit; Mute on Pads; Mute and Solo on a Mix strip. | Switching on, the white fill **grows out from the middle** of the key and settles; switching off, it shrinks back. Mute and Solo on Mix also round their inner corners as they fill. | – | ☐ pass ☐ fail: |
+| 20 | Long-press a filled pad, an empty pad, a track head and a Timeline block. | A soft white disc grows under your finger; beside it a grey card slides out from the finger and grows in, its rows appearing one after another (quick). Rows have a grey icon, the label and any second line; the current choice is a lighter pill with a ✓; Set pattern… has a ›. No arc, no stalks, no darkening behind. It opens to the left of your finger (Settings › Menus open flips it) and never covers the header. | – | ☐ pass ☐ fail: |
+| 21 | In that menu: tap a choice; open it again and tap outside; open it on a pad near the left edge; open a long one (the filled pad's). Pick Delete pattern. | A tap picks and the menu fades out quickly (about 120 ms). Outside closes it. Near the left edge it opens to the right instead. A long one scrolls inside the card. Delete pattern turns its row red-edged with the words naming what goes, the other rows dim; a second tap after a moment confirms. | – | ☐ pass ☐ fail: |
+| 22 | Hold a track head: slide LEVEL and PAN in its menu. | The slide rows work as before inside the new card. | – | ☐ pass ☐ fail: |
+| 23 | Open the Bar ⌄ menu and pick another launch point; reopen it. | The ✓'s pill grows in on the new row and shrinks away from the old. | – | ☐ pass ☐ fail: |
+| 24 | Turn on Android's **Remove animations** and repeat 17, 19 and 20. | Nothing slides or grows: the tab pill fades out of the old tab and into the new; fills fade in where they stand; the menu fades in and out in place. Corner changes ease without overshoot. Nothing pops. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - A kit (drum) track on Edit with the panel docked: its lanes still scroll under the panel, as before. 8-step pages are melodic only for now.
 - The Timeline's own hybrid changes (pill heads, connected zoom group, pass-count chips) and the Sounds and Projects sheets' row styling aren't built; they pick up only the shared keys, menus and sheet.
 - The narrow-width give-way (spec 4.1) never triggers on the Pixel (it starts below 790 dp); its order is unit-tested only.
-- Still open, untouched: the track thread's place, Reduce Motion for a playhead glide (no glide built), the slider's unfilled track contrast, arc vs straight pad menu, the empty pad's edge (A11), a playing pad on a muted row (S14).
+- Still open, untouched: the track thread's place, Reduce Motion for a playhead glide (no glide built), the slider's unfilled track contrast, the empty pad's edge (A11), a playing pad on a muted row (S14).
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device".

@@ -88,6 +88,8 @@ fun Key(
     val reduce = com.scottgerstl.lupe.ui.theme.LocalReduceMotion.current
     val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
     val squash by com.scottgerstl.lupe.ui.theme.springFloat(if (pressed) hm.pressScale else 1f, if (pressed) 100 else hm.fingerMs, hm.bounce, spring = !reduce)
+    // a toggle switching on: the white key grows out from the middle on the spring (shape carries the state; Reduce Motion: it only fades)
+    val grow by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduce)
     Box(
         modifier
             .defaultMinSize(minTarget, minTarget)
@@ -112,7 +114,12 @@ fun Key(
                 .graphicsLayer { val k = if (reduce) 1f else squash; scaleX = k; scaleY = k }
                 .drawBehind {
                     val r = CornerRadius(size.height / 2)
-                    drawRoundRect(lerp(Tok.lifted, litTop, lit.value), cornerRadius = r)
+                    drawRoundRect(Tok.lifted, cornerRadius = r)
+                    if (lit.value > 0f) {
+                        val g = if (reduce) 1f else (0.5f + 0.5f * grow).coerceIn(0.5f, 1.05f)
+                        val w = size.width * g; val h = size.height * g
+                        drawRoundRect(litTop.copy(alpha = lit.value), Offset((size.width - w) / 2, (size.height - h) / 2), Size(w, h), CornerRadius(h / 2))
+                    }
                     if (drop.value > 0f) drawRoundRect(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.18f * drop.value), cornerRadius = r)
                     // keyboard focus: a 2 dp ring outside the key, text.primary on the page (well over 3:1)
                     if (focused) drawRoundRect(Tok.text, Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(r.x + 3.dp.toPx()), style = Stroke(2.dp.toPx()))

@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
@@ -135,17 +136,28 @@ fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, wi
  */
 @Composable
 fun MenuRow(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, checked: Boolean? = null, enabled: Boolean = true, sub: String? = null) {
+    // the checked pill grows in from the row's middle and its tick fades in; moving the tick to another row, the old pill shrinks away
+    val reduce = LocalReduceMotion.current
+    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val on = checked == true
+    val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
+    val grow by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduce)
     Row(
         modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = if (sub != null) 52.dp else 44.dp)
-            .background(if (checked == true) Tok.lifted else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(if (checked == true) 26.dp else 10.dp))
+            .drawBehind {
+                if (lit <= 0f) return@drawBehind
+                val g = if (reduce) 1f else (0.85f + 0.15f * grow).coerceIn(0.85f, 1.02f)
+                val w = size.width * g; val h = size.height * g
+                drawRoundRect(Tok.lifted.copy(alpha = lit), androidx.compose.ui.geometry.Offset((size.width - w) / 2, (size.height - h) / 2), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(h / 2))
+            }
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 if (checked == true) selected = true
                 if (!enabled) disabled()
             }
-            .clip(RoundedCornerShape(if (checked == true) 26.dp else 10.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -154,7 +166,7 @@ fun MenuRow(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, ch
             BasicText(text, style = LupeType.key.copy(fontSize = 16.sp, lineHeight = 19.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = if (enabled) Tok.text else Tok.text2Raised))
             if (sub != null) BasicText(sub, style = LupeType.small.copy(color = Tok.text2Raised))
         }
-        if (checked == true) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
+        if (lit > 0f) { Spacer(Modifier.width(8.dp)); Box(Modifier.graphicsLayer { alpha = lit }) { Check(Tok.text) } }
     }
 }
 

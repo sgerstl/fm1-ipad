@@ -146,17 +146,18 @@ Motion follows `DESIGN.md` (arrivals say where they come from: out of the finger
 - 2026-11-10: confirm in place replaces every system alert; "Don't ask again" on clearing a pad (Scott).
 - 2026-11-10: "Clear all pads" named for what it does (Scott).
 - 2026-11-14: phones take Android's radial styling with the full option set (decision 31).
+- 2026-11-17: **Android adopts the straight menu, not the arc.** Scott, on the Pixel 10 with the hybrid build: "let's adopt the material menu, and not the arc menu." Every Android hold menu that used the wheel (pads, empty slots, track heads, the Timeline's blocks, Steps) is now the straight menu of spec 3.9: a touch disc under the finger and a `held` card beside it at radius 14, rows 44 (52 with a second line), the current choice a `lifted` pill with a tick, opening on the side Settings › Menus open names and flipping when there's no room; it slides 16 from the finger, grows from 0.94 and fades in on the spring, rows 20 ms apart, and leaves in 120 ms. A tap picks; a drag never does (decision 36's rule kept). Replaces decision 36's wheel on Android; the iPhone and iPad wait for the Android trial.
 
 ## 3. Build notes
 
-- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; spec 3.9): `LupeMenu` (the menus from a control or at the finger, the Mix strip's menu) is `held` at radius 14 with 6 inside; rows 44 (52 with a second line) at radius 10; a checked row is a `lifted` pill with its tick (shape as state); second lines in `textSecondaryRaised`. It grows from 0.94 and drops 12 into place on the spring, and leaves in 120 ms. **The pad's arc wheel (`HoldMenu.kt`) is unchanged**: the straight menu was a study-only call, and the shipped wheel stays until Scott says otherwise.
+- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; spec 3.9): `LupeMenu` (the menus from a control or at the finger, the Mix strip's menu) is `held` at radius 14 with 6 inside; rows 44 (52 with a second line) at radius 10; a checked row is a `lifted` pill with its tick (shape as state); second lines in `textSecondaryRaised`. It grows from 0.94 and drops 12 into place on the spring, and leaves in 120 ms. The pad's arc wheel was left alone in the first build; Scott then chose the straight menu (decision log, 2026-11-17), so `HoldMenuHost` draws it now. The two Labs rows that tuned the wheel (Hold menu · spring, · speed) left Labs with it; the straight menu reads Labs › Hybrid.
 
 - Device checks: `2026-11-09-lupe-batch-2026-11-06.md` 10 (menus from the finger, both hands; no result recorded); `2026-11-09-perform-grid-map.md` 19–20 (the empty pad's fan; not recorded), 49 (step clear names its pattern; not recorded), 61 and 66 (no system dialogs, Don't ask again; passed 2026-11-11); `2026-11-10-accessibility.md` 13 and 22 (Entry menu, Escape; parts A–C passed 2026-11-11).
 - `TouchPointWatch` records touch-downs without taking part in any gesture, so a confirm can open where the finger was.
-- `[open]` Android's radial puts at most six choices in one place, the rest behind "More…" (`HoldMenu.kt`). The iPad's filled-pad menu has nine. How does the full set sit in the radial: More…, two rings, or a column?
+- ~~`[open]` Android's radial puts at most six choices in one place…~~ Answered for Android by the straight menu (2026-11-17): every choice in one column, a long list scrolls.
 - `[open]` Android's radial dims the page and blocks it; the iPad's menus leave the page live and pass an outside touch through. Which do the phones keep?
-- `[open]` Android opens to the right unless near the right edge; the iPad follows Handedness. Settings › Handedness is in the phones' union (decision 33). Does the radial follow it?
-- `[open]` Slide-to-pick (pick in the same gesture as the hold) is Android's. Does it come to the iPhone with the styling, and to the iPad?
+- ~~`[open]` …Does the radial follow it?~~ The straight menu follows Settings › Menus open, flipping when there's no room (2026-11-17).
+- `[open]` (still, for the iPhone and iPad) Slide-to-pick (pick in the same gesture as the hold) is Android's; Android itself has been tap-only since decision 36. Does it come to the iPhone with the styling, and to the iPad?
 
 ### Decision log
 

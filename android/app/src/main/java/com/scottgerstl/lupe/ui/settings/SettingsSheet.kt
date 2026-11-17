@@ -117,8 +117,6 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
         // a feel value to tune by hand (added 2026-11-14, review 2026-11-28): slide it
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("TAB CHANGE · MS", "${phone.tabSlideMs} ms", phone.tabSlideMs / 10, 15, 70, "How long a tab change takes", stepDp = 8f, revertTo = 38) { phone.chooseTabSlide(it * 10) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPRING", "${phone.menuSpring}", phone.menuSpring / 5, 0, 20, "How far the hold menu's circle springs past its size", stepDp = 12f, revertTo = 12) { phone.chooseMenuSpring(it * 5) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPEED", "${phone.menuSpeed}%", phone.menuSpeed / 10, 5, 20, "How fast the hold menu opens", stepDp = 12f, revertTo = 10) { phone.chooseMenuSpeed(it * 10) }
         // hybrid motion (design/hybrid-ui/spec.md §5; added 2026-11-17, review 2026-12-01): starting values, tuned by hand on the Pixel
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("HYBRID · SPRING BOUNCE", "${phone.motionBounce} %", phone.motionBounce, 0, 50, "How far shapes and panels spring past where they land", stepDp = 8f, revertTo = 25) { phone.chooseMotionBounce(it) }
         com.scottgerstl.lupe.ui.slide.MenuSlideRow("HYBRID · AT THE FINGER", "${phone.motionFingerMs} ms", phone.motionFingerMs / 10, 10, 40, "Pads changing shape, menus and pop-ups", stepDp = 8f, revertTo = 20) { phone.chooseMotionFinger(it * 10) }
@@ -220,40 +218,21 @@ fun LupeSwitch(on: Boolean) {
                 val r = CornerRadius(size.height / 2)
                 drawRoundRect(lerp(Tok.control, Tok.text, t.value), cornerRadius = r)
                 if (t.value < 1f) drawRoundRect(Tok.primaryEdge.copy(alpha = 1f - t.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-                val k = if (reduce) (if (on) 1f else 0f) else move
-                val d = (com.scottgerstl.lupe.ui.theme.Shape.switchThumbOff + (com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn - com.scottgerstl.lupe.ui.theme.Shape.switchThumbOff) * k.coerceIn(0f, 1.1f)).toPx()
-                val inset = (size.height - com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx()) / 2
-                val cx = (inset + com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx() / 2) + (size.width - 2 * inset - com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx()) * k
-                drawCircle(lerp(Tok.primaryEdge, Tok.onColour, t.value), d / 2, Offset(cx, size.height / 2))
+                val off = com.scottgerstl.lupe.ui.theme.Shape.switchThumbOff.toPx(); val onD = com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx()
+                val inset = (size.height - onD) / 2
+                fun thumb(k: Float, alpha: Float) {
+                    val d = off + (onD - off) * k.coerceIn(0f, 1.1f)
+                    val cx = (inset + onD / 2) + (size.width - 2 * inset - onD) * k
+                    drawCircle(lerp(Tok.primaryEdge, Tok.onColour, t.value).copy(alpha = alpha), d / 2, Offset(cx, size.height / 2))
+                }
+                // Reduce Motion: nothing travels; the thumb fades out of one end and into the other
+                if (reduce) { thumb(0f, 1f - t.value); thumb(1f, t.value) } else thumb(move, 1f)
             },
     )
 }
 
-/**
- * A few choices as a connected group (hybrid UI, spec 3.4): the chosen one a white pill with dark ink, the others `control` with grey ink, inner
- * corners 8 and the group's ends round, 2 apart. The colour eases; the corners spring.
- */
+/** A few choices as the connected group (spec 3.4), filling the width: the white pill slides between them (see `SegmentGroup`). */
 @Composable
-fun Segmented(options: List<String>, selected: Int, name: String, onPick: (Int) -> Unit) {
-    val reduce = LocalReduceMotion.current
-    val m = com.scottgerstl.lupe.ui.theme.hybridMotion
-    Row(Modifier.fillMaxWidth().height(40.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        options.forEachIndexed { i, label ->
-            val on = i == selected
-            val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE)
-            val shape by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
-            Box(
-                Modifier.weight(1f).fillMaxHeight()
-                    .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = on; contentDescription = "$name: $label" }
-                    .pointerInput(i) { detectTapGestures { onPick(i) } }
-                    .drawBehind {
-                        val pill = size.height / 2; val inner = 8.dp.toPx()
-                        val k = if (reduce) (if (on) 1f else 0f) else shape.coerceIn(0f, 1.15f)
-                        fun r(outer: Boolean) = if (outer) pill else inner + (pill - inner) * k
-                        with(com.scottgerstl.lupe.ui.shell.SegmentDraw) { segment(lerp(Tok.control, Tok.text, lit.value), r(i == 0), r(i == options.lastIndex)) }
-                    },
-                contentAlignment = Alignment.Center,
-            ) { BasicText(label, style = LupeType.key.copy(color = lerp(Tok.text2, Tok.onColour, lit.value), fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal)) }
-        }
-    }
-}
+fun Segmented(options: List<String>, selected: Int, name: String, onPick: (Int) -> Unit) =
+    com.scottgerstl.lupe.ui.shell.SegmentGroup(options, selected, onPick, Modifier.fillMaxWidth(), height = 40.dp, padH = 8.dp,
+        role = Role.RadioButton, descriptions = options.map { "$name: $it" }, fontSize = 15, fill = true)

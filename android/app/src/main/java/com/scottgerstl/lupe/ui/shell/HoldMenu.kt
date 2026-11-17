@@ -1,5 +1,13 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.foundation.layout.heightIn
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -288,212 +296,152 @@ fun hubScale(p: Float, spring: Float): Float {
 }
 
 /**
- * Decision 36 (Scott, 2026-11-14): the menu is a wheel ([HoldWheel]). Five choices in view on a shallow curve beside the finger, each on
- * a 22 dp stalk from a thin rim; a drag rolls the rest along the curve, fading at its ends, small triangles past the rim's ends say
- * there is more, and it settles on a whole choice. A tap picks; a drag never does. There is no "More…" page.
+ * The hold menu, straight (Scott, 2026-11-17, on the Pixel: "let's adopt the material menu, and not the arc menu"; spec 3.9,
+ * `phone-04-pads-hold-menu`). It replaces decision 36's wheel on Android ([HoldWheel] stays for its tests and the iPhone's reference).
  *
- * Draws the hold menu over everything. A filled circle in the track's colour at about 45 % over the page grows exactly under the finger
- * (64 dp at rest, an elastic grow-in); lines 1.5 dp in the track's colour run out from its edge one by one to each choice, each ending in a
- * small node, the lit choice's line white; the choices are the iPad's rows in 48 dp rounded rectangles. Leaving: choices and lines fade in
- * 120 ms and the circle shrinks out faster than it came. Reduce Motion: fades only. TalkBack reads the choices as a plain menu.
+ * A touch disc (56, `text` at 18 %) grows from half its size exactly under the finger. Beside it a `held` card at radius 14 (elevation 3, 6
+ * inside) holds the choices as rows 44 tall (52 with a second line) at radius 10: an icon in grey, the label, its second line in
+ * `textSecondaryRaised`, a tick on the current choice (the row a `lifted` pill), a chevron on one that opens more. The card opens on the side
+ * Settings › Menus open names, flipping when there's no room, its first row level with the finger, kept between the header and the foot; a
+ * long list scrolls. It slides 16 out from the finger, grows from 0.94 and fades in on the spring, its rows fading in 20 ms apart; it leaves in
+ * 120 ms. A tap picks; a drag never does (decision 36's rule stays). A confirm turns its row into a red-edged row naming what goes, the others
+ * dim. The page isn't dimmed; a tap outside closes it. Reduce Motion: it fades in and out where it stands. TalkBack reads a plain menu.
  */
 @Composable
 fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
     val reduce = LocalReduceMotion.current
     val labs = LocalPhoneSettings.current
-    val haptic = LocalHapticFeedback.current
+    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
     val density = LocalDensity.current
-    // what is drawn: the open menu, or the last one while it leaves
     var shown by remember { mutableStateOf(state.menu) }
     val live = state.menu
     if (live != null) shown = live
-    val elapsed = remember { Animatable(0f) }      // ms since it opened, at the Labs speed
-    val leave = remember { Animatable(0f) }        // 0…1 as it leaves
-    val speed = labs.menuSpeed / 100f
+    val enter = remember { Animatable(0f) }     // 0…1 on the spring (Reduce Motion: eased)
+    val clock = remember { Animatable(0f) }     // ms since it opened, for the rows' stagger
+    val leave = remember { Animatable(0f) }     // 0…1 as it leaves
     LaunchedEffect(state.opened) {
         if (state.menu == null) return@LaunchedEffect
-        leave.snapTo(0f); elapsed.snapTo(0f)
-        unscaled { elapsed.animateTo(1200f, tween((1200 / speed).roundToInt(), easing = LinearEasing)) }
+        leave.snapTo(0f); enter.snapTo(0f); clock.snapTo(0f)
+        kotlinx.coroutines.coroutineScope {
+            launch { unscaled { enter.animateTo(1f, if (reduce) tween(150, easing = com.scottgerstl.lupe.ui.theme.EaseOut) else com.scottgerstl.lupe.ui.theme.lupeSpring(hm.fingerMs, hm.bounce)) } }
+            launch { unscaled { clock.animateTo(600f, tween(600, easing = LinearEasing)) } }
+        }
     }
     LaunchedEffect(live == null) {
-        if (live == null && shown != null) { unscaled { leave.animateTo(1f, tween(140, easing = LinearEasing)) }; shown = null }
+        if (live == null && shown != null) { unscaled { leave.animateTo(1f, tween(120, easing = com.scottgerstl.lupe.ui.theme.EaseIn)) }; shown = null }
     }
     val m = shown ?: return
     BackHandler(enabled = live != null) { state.close() }
-    // From the moment it is told to close it takes no touches, though it is still on screen fading out for 140 ms (the iPhone's cbdc2ad:
-    // a hold begun at once after closing went to the leaving menu, so nothing opened). The page underneath gets them.
     val takes = live != null
     var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    // how far the wheel is turned, in choices. The geometry is made inside the layout box; the drag on the whole layer reads it from here
-    var turn by remember(m) { mutableFloatStateOf(0f) }
-    var wheelNow by remember(m) { mutableStateOf<HoldWheel?>(null) }
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var settling by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    fun settleTo(to: Float) {
-        settling?.cancel()
-        // 320 ms ease-out cubic, travelling along the curve (every place is recomputed from the turn); with Reduce Motion it is simply there
-        settling = scope.launch { if (reduce) turn = to else unscaled { androidx.compose.animation.core.animate(turn, to, animationSpec = tween(320, easing = androidx.compose.animation.core.CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f))) { v, _ -> turn = v } } }
-    }
     BoxWithConstraints(
         modifier.fillMaxSize().onGloballyPositioned { origin = it }
-            // the page behind is not dimmed (Scott, 2026-11-14: only the black backing behind the choices darkens anything) but it can't be
-            // touched; a tap outside the choices closes the menu
             .then(if (takes) Modifier.pointerInput(Unit) { detectTapGestures { state.close() } } else Modifier)
-            // more than five choices: a drag anywhere on the menu rolls them along the arc (56 dp of finger a choice, giving past the ends);
-            // let go and it settles on a whole choice, carried on by the finger's speed. A drag never picks: only a tap does.
-            .then(if (!takes) Modifier else Modifier.pointerInput(m) {
-                val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
-                var start = 0f; var total = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { settling?.cancel(); start = turn; total = 0f; tracker.resetTracking() },
-                    onDragEnd = {
-                        val w = wheelNow
-                        if (w != null && w.maxTurn > 0f) { val ahead = total + tracker.calculateVelocity().y * 0.2f; settleTo(w.settle(start - ahead.toDp().value / HoldWheel.PITCH)) }
-                    },
-                    onDragCancel = { wheelNow?.let { settleTo(it.settle(turn)) } },
-                ) { change, dy ->
-                    val w = wheelNow
-                    if (w != null && w.maxTurn > 0f) { change.consume(); tracker.addPosition(change.uptimeMillis, change.position); total += dy; turn = w.give(start - total.toDp().value / HoldWheel.PITCH) }
-                }
-            })
-            .semantics {
-                paneTitle = "Menu"; isTraversalGroup = true
-                // the way to the rest of the wheel that isn't a drag (WCAG 2.5.7)
-                val w = wheelNow
-                if (w != null && w.maxTurn > 0f) customActions = listOf(
-                    androidx.compose.ui.semantics.CustomAccessibilityAction("Later choices") { turn = w.settle(turn + 5f); true },
-                    androidx.compose.ui.semantics.CustomAccessibilityAction("Earlier choices") { turn = w.settle(turn - 5f); true },
-                )
-            },
+            .semantics { paneTitle = "Menu"; isTraversalGroup = true },
     ) {
         val w = maxWidth.value; val h = maxHeight.value
-        // the finger, in this layer's dp
         val fingerPx = origin?.takeIf { it.isAttached }?.windowToLocal(m.at) ?: m.at
         val fx = with(density) { fingerPx.x.toDp().value }; val fy = with(density) { fingerPx.y.toDp().value }
-        val wheel = remember(m, w, h, fx, fy, labs.menusRight) { HoldWheel(fx, fy, m.items.size, w, h, leftHanded = labs.menusRight) }
-        wheelNow = wheel
-        val spots = List(m.items.size) { wheel.spot(it, turn) }
-        val itemW = HoldWheel.ROW_W; val itemH = HoldWheel.ROW_H
-        val fadeAll = 1f - (leave.value / 0.86f).coerceAtMost(1f)   // choices and lines: gone in 120 of the 140 ms
-        // A black backing behind the arc (Scott, 2026-11-14: the pads underneath competed): an annular sector round the curve's centre,
-        // 53 % black with a narrow soft edge, drawn first, the only darkening there is, under the circle, rim, stalks and choices.
-        Canvas(Modifier.fillMaxSize().graphicsLayer {
-            renderEffect = androidx.compose.ui.graphics.BlurEffect(HoldWheel.FIELD_FEATHER.dp.toPx(), HoldWheel.FIELD_FEATHER.dp.toPx(), androidx.compose.ui.graphics.TileMode.Decal)
-        }) {
-            val a = HoldWheel.FIELD_ALPHA * (elapsed.value / 150f).coerceAtMost(1f) * fadeAll
-            if (a > 0f) {
-                val cc = Offset(wheel.centreX.dp.toPx(), wheel.mid.dp.toPx())
-                val r0 = HoldWheel.FIELD_INNER.dp.toPx(); val r1 = HoldWheel.FIELD_OUTER.dp.toPx()
-                val base = if (wheel.left) 180f else 0f; val s0 = wheel.fieldInnerSweep; val s1 = wheel.fieldOuterSweep
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    arcTo(androidx.compose.ui.geometry.Rect(cc.x - r1, cc.y - r1, cc.x + r1, cc.y + r1), base - s1, s1 * 2, true)
-                    arcTo(androidx.compose.ui.geometry.Rect(cc.x - r0, cc.y - r0, cc.x + r0, cc.y + r0), base + s0, -s0 * 2, false)
-                    close()
-                }
-                drawPath(path, Color.Black.copy(alpha = a))
-            }
+        val out = 1f - leave.value
+        // the touch disc under the finger
+        Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+            val k = if (reduce) 1f else (0.5f + 0.5f * enter.value) * (1f - 0.3f * leave.value)
+            val a = (if (reduce) enter.value else 1f) * out
+            drawCircle(Tok.text.copy(alpha = 0.18f * a), (STRAIGHT_DISC / 2).dp.toPx() * k, Offset(fx.dp.toPx(), fy.dp.toPx()))
         }
-        Canvas(Modifier.fillMaxSize()) {
-            val c = Offset(fx.dp.toPx(), fy.dp.toPx())
-            // the circle: the track's colour at about 45 % over the page, a thin edge in the full colour; exactly under the finger
-            val scale = if (reduce) 1f else hubScale((elapsed.value / 460f).coerceIn(0f, 1f), labs.menuSpring / 100f) * (1f - leave.value)
-            val hubA = if (reduce) (elapsed.value / 150f).coerceAtMost(1f) * (1f - leave.value) else 1f
-            drawCircle(lerp(Tok.page, m.colour, 0.45f).copy(alpha = hubA), 32.dp.toPx() * scale, c)
-            drawCircle(m.colour.copy(alpha = hubA), 32.dp.toPx() * scale, c, style = Stroke(1.5.dp.toPx()))
-            // the wheel's rim: a thin arc in the track's colour, a stalk inside the choices, from the top choice's outer edge to the bottom
-            // one's. It draws out from its middle from 100 ms over 260. Nothing joins it to the circle.
-            val grow = if (reduce) 1f else ((elapsed.value - 100f) / 260f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
-            val rimA = 0.55f * fadeAll * (if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else 1f)
-            if (grow > 0f && rimA > 0f) {
-                val cc = Offset(wheel.centreX.dp.toPx(), wheel.mid.dp.toPx())
-                val rr = HoldWheel.RIM.dp.toPx(); val sweep = wheel.rimHalfSweep * grow
-                // a dashed knob scale (board 78 tile 11, the iPhone's 67707f3): 3 dp dashes, 1.5 thick, 5 dp gaps, butt caps, the track's colour at 80 %
-                drawArc(m.colour.copy(alpha = 0.8f * rimA / 0.55f), (if (wheel.left) 180f else 0f) - sweep, sweep * 2, false, Offset(cc.x - rr, cc.y - rr), Size(rr * 2, rr * 2),
-                    style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Butt, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 5.dp.toPx()))))
-                // more choices that way: a small triangle past each end of the rim, in the track's colour, blending out as that end is reached
-                for (up in listOf(true, false)) {
-                    val a = (if (up) wheel.moreAbove(turn) else wheel.moreBelow(turn)) * grow * fadeAll
-                    if (a <= 0f) continue
-                    val (bx, by) = wheel.triangle(up); val hw = HoldWheel.TRI_W.dp.toPx() / 2; val th = HoldWheel.TRI_H.dp.toPx() * (if (up) -1f else 1f)
-                    drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(bx.dp.toPx() - hw, by.dp.toPx()); lineTo(bx.dp.toPx() + hw, by.dp.toPx()); lineTo(bx.dp.toPx(), by.dp.toPx() + th); close() }, m.colour.copy(alpha = a))
+        val place = straightMenuPlace(fx, fy, w, h, menuHeight(m.items), labs.menusRight)
+        val maxH = (h - HEADER_FOOT - 16f).coerceAtLeast(120f)
+        Column(
+            Modifier.offset { IntOffset(place.x.dp.roundToPx(), place.y.dp.roundToPx()) }
+                .width(STRAIGHT_W.dp).heightIn(max = maxH.dp)
+                .graphicsLayer {
+                    alpha = (if (reduce) enter.value else enter.value.coerceIn(0f, 1f)) * out
+                    if (!reduce) {
+                        val sc = (0.94f + 0.06f * enter.value) * (1f - 0.04f * leave.value)
+                        scaleX = sc; scaleY = sc
+                        translationX = (if (place.left) 16.dp.toPx() else -16.dp.toPx()) * (1f - enter.value)
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (place.left) 1f else 0f, ((fy - place.y) / menuHeight(m.items).coerceAtLeast(1f)).coerceIn(0f, 1f))
+                    }
+                    shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.panel); clip = true
+                    ambientShadowColor = Color.Black; spotShadowColor = Color.Black
                 }
-            }
-            spots.forEachIndexed { k, s ->
-                val vis = s.alpha
-                if (vis <= 0f) return@forEachIndexed
-                // the stalk: 22 dp from the rim out to the choice's node
-                val start = Offset(s.stalkX.dp.toPx(), s.stalkY.dp.toPx()); val end = Offset(s.nodeX.dp.toPx(), s.nodeY.dp.toPx())
-                val d0 = 160f + (k - kotlin.math.floor(turn)).coerceIn(0f, 7f) * 30f
-                // it draws out from the rim (with Reduce Motion it only fades in)
-                val drawn = if (reduce) 1f else ((elapsed.value - d0) / 180f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
-                val a = (if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else 1f) * fadeAll * vis * (if (state.confirming >= 0 && state.confirming != k) 0.3f else 1f)
-                // thin grey stalks ending in a small square node at the choice's near edge (1 dp in #71717A, a 6 dp square in #A1A1AA)
-                if (drawn > 0f) drawLine(Tok.text3.copy(alpha = a), start, Offset(start.x + (end.x - start.x) * drawn, start.y + (end.y - start.y) * drawn), 1.dp.toPx(), StrokeCap.Butt)
-                val nodeA = (if (reduce) 1f else ((elapsed.value - d0 - 140f) / 120f).coerceIn(0f, 1f)) * a
-                if (nodeA > 0f) drawRect(Tok.text2.copy(alpha = nodeA), Offset(end.x - 3.dp.toPx(), end.y - 3.dp.toPx()), Size(6.dp.toPx(), 6.dp.toPx()))
-            }
-        }
-        m.items.forEachIndexed { k, item ->
-            val s = spots[k]
-            // a choice under half shown isn't there (to a finger or to TalkBack's focus); past the arc's end it fades and shrinks a little
-            val vis = s.alpha
-            if (vis <= 0f) return@forEachIndexed
-            val d0 = 160f + (k - kotlin.math.floor(turn)).coerceIn(0f, 7f) * 30f
-            val inP = if (reduce) (elapsed.value / 150f).coerceAtMost(1f) else ((elapsed.value - d0 - 100f) / 220f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) }
-            val confirming = state.confirming == k
-            val dimmed = state.confirming >= 0 && !confirming
-            Box(
-                Modifier.offset { IntOffset((s.rowX.dp.toPx()).roundToInt(), (s.rowY.dp.toPx()).roundToInt()) }
-                    .width(itemW.dp).height(itemH.dp)
-                    .graphicsLayer {
-                        alpha = inP * fadeAll * vis * (if (dimmed) 0.3f else 1f)
-                        if (!reduce) { translationX = (if (wheel.left) 10.dp.toPx() else -10.dp.toPx()) * (1f - inP); val sc = (0.96f + 0.04f * inP) * (0.9f + 0.1f * vis); scaleX = sc; scaleY = sc }
+                .background(Tok.held)
+                .pointerInput(m) { detectTapGestures { } }   // a tap on the card's padding doesn't close it
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(6.dp),
+        ) {
+            m.items.forEachIndexed { k, item ->
+                val confirming = state.confirming == k
+                val dimmed = state.confirming >= 0 && !confirming
+                // each row fades in 20 ms after the one above it
+                val rowIn = if (reduce) 1f else ((clock.value - 20f * k) / 120f).coerceIn(0f, 1f)
+                val rowH = if (item.sub != null || item.slide != null || confirming) 52.dp else 44.dp
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = rowH)
+                        .graphicsLayer { alpha = rowIn * (if (dimmed) 0.4f else 1f) }
+                        .clip(RoundedCornerShape(if (item.checked) rowH / 2 else 10.dp))
+                        .background(if (item.checked) Tok.lifted else Color.Transparent)
+                        .drawBehind { if (confirming) drawRoundRect(Tok.rec, Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(10.dp.toPx()), style = Stroke(1.5.dp.toPx())) }
+                        .then(if (!takes) Modifier.clearAndSetSemantics { } else if (item.slide != null) Modifier else Modifier.semantics(mergeDescendants = true) {
+                            role = Role.Button
+                            contentDescription = if (confirming) "Confirm: ${item.confirm}" else item.title + (item.sub?.let { ", $it" } ?: "")
+                            if (item.checked) selected = true
+                            if (!item.enabled) disabled()
+                            onClick { state.pick(k); true }
+                        }.pointerInput(k, m) { detectTapGestures { state.pick(k) } })
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val ink = if (!item.enabled) Tok.text3 else Tok.text
+                    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                        holdIcon(item.title)?.let { Image(androidx.compose.ui.res.painterResource(it), null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (item.enabled) Tok.text2Raised else Tok.text3)) }
                     }
-                    .drawBehind {
-                        // a fully round pill on the dark panel grey, no edge bar (board 78 tile 11); a confirm is a 2 dp red outline on it
-                        drawRoundRect(Tok.panel, cornerRadius = CornerRadius(size.height / 2))
-                        if (confirming) drawRoundRect(Tok.rec, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = Stroke(2.dp.toPx()))
-                    }
-                    .then(if (vis < 0.5f || !takes) Modifier.clearAndSetSemantics { } else if (item.slide != null) Modifier.pointerInput(k, m) { detectTapGestures { } } else Modifier.semantics(mergeDescendants = true) {
-                        role = Role.Button
-                        contentDescription = if (confirming) "Confirm: ${item.confirm}" else item.title + (item.sub?.let { ", $it" } ?: "")
-                        if (item.checked) selected = true
-                        if (!item.enabled) disabled()
-                        onClick { state.pick(k); true }
-                    }
-                    .pointerInput(k, m) { detectTapGestures { state.pick(k) } })
-                    .padding(start = 9.dp, end = 16.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                // the pill's contents (the iPhone's 67707f3): a 30 dp disc in the track's colour at the left (40 % when the choice can't be made) with
-                // its icon, 14 dp, in the dark on-colour inside; a 10 gap; the label in Barlow regular 16 (14 over 20 characters). A tick for the
-                // current choice, a chevron for one that opens more.
-                val ink = if (!item.enabled) Tok.text3 else Tok.text
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(30.dp).background(m.colour.copy(alpha = if (item.enabled) 1f else 0.4f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                        holdIcon(item.title)?.let { Image(androidx.compose.ui.res.painterResource(it), null, Modifier.size(14.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tok.onColour)) }
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    if (item.slide != null) Box(Modifier.weight(1f).fillMaxHeight()) { HoldSlideRow(item.title, item.slide, takes) }
-                    // what a confirm says goes must be readable whole: up to three lines, the type stepping down before anything is cut
-                    else if (confirming) BasicText(item.confirm.orEmpty(), Modifier.weight(1f), style = LupeType.key.copy(fontSize = 13.sp, lineHeight = 1.1.em), maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 13.sp, stepSize = 1.sp))
+                    Spacer(Modifier.width(12.dp))
+                    if (item.slide != null) Box(Modifier.weight(1f).height(rowH)) { HoldSlideRow(item.title, item.slide, takes) }
+                    else if (confirming) BasicText(item.confirm.orEmpty(), Modifier.weight(1f), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 1.15.em, color = Tok.rec), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 1.sp))
                     else {
                         Column(Modifier.weight(1f)) {
-                            // a long title wraps to a second line when it has the pill to itself, or steps down; with a second line under it, it stays on one
-                            val size = if (item.title.length > 20) 14.sp else 16.sp
-                            BasicText(item.title, style = LupeType.body.copy(fontSize = size, lineHeight = 1.1.em, color = ink), maxLines = if (item.sub == null) 2 else 1, overflow = TextOverflow.Ellipsis,
-                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = if (item.sub == null) 12.sp else 11.sp, maxFontSize = size, stepSize = 1.sp))
-                            if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 1.1.em), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 11.sp, stepSize = 1.sp))
+                            BasicText(item.title, style = LupeType.body.copy(fontSize = 16.sp, lineHeight = 1.15.em, color = ink), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 16.sp, stepSize = 1.sp))
+                            if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 1.15.em, color = Tok.text2Raised), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (item.checked) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
-                        if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(color = Tok.text2)) }
+                        if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(fontSize = 18.sp, color = Tok.text2Raised)) }
                     }
                 }
             }
         }
     }
+}
+
+/** The straight menu's measures (dp): the card's width, the touch disc, the header's foot it stays under. */
+const val STRAIGHT_W = 264f
+const val STRAIGHT_DISC = 56f
+const val HEADER_FOOT = 60f
+/** How far the card's near edge sits from the finger: past the touch disc's edge with a gap. */
+const val STRAIGHT_GAP = 36f
+
+/** The card's height for these choices (dp): 6 inside top and foot, rows 44, or 52 with a second line or a slider. */
+fun menuHeight(items: List<HoldItem>): Float = 12f + items.sumOf { (if (it.sub != null || it.slide != null) 52 else 44).toInt() }.toFloat()
+
+/** Where the card goes: its top-left (dp) and whether it opens to the finger's left. */
+data class StraightPlace(val x: Float, val y: Float, val left: Boolean)
+
+/**
+ * Beside the finger: to its left unless [menusRight] (Settings › Menus open), flipping to the other side when there's no room; its first row
+ * level with the finger (the row's middle 28 below the card's top); held between the header's foot and 16 above the screen's foot. A card
+ * taller than that room starts at the header and scrolls.
+ */
+fun straightMenuPlace(fx: Float, fy: Float, screenW: Float, screenH: Float, menuH: Float, menusRight: Boolean, margin: Float = 16f): StraightPlace {
+    val leftX = fx - STRAIGHT_GAP - STRAIGHT_W
+    val rightX = fx + STRAIGHT_GAP
+    val fitsLeft = leftX >= margin; val fitsRight = rightX + STRAIGHT_W <= screenW - margin
+    val left = if (menusRight) !fitsRight && fitsLeft else fitsLeft || !fitsRight
+    val x = (if (left) leftX else rightX).coerceIn(margin, (screenW - margin - STRAIGHT_W).coerceAtLeast(margin))
+    val room = screenH - HEADER_FOOT - margin
+    val y = if (menuH >= room) HEADER_FOOT else (fy - 28f).coerceIn(HEADER_FOOT, screenH - margin - menuH)
+    return StraightPlace(x, y, left)
 }
 
 /** A slide row's inside: the name, the value large at the right, a gauge along the foot; a finger slid along it (either way) sets the value. */

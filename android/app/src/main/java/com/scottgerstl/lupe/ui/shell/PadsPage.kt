@@ -254,7 +254,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                 .graphicsLayer { val k = if (reduceMotion) 1f else squash; scaleX = k; scaleY = k }
                                 // the current scene white and square, a stored one `lifted` and round, an empty one bare with a grey number (fill and ink both carry it)
                                 .drawBehind {
-                                    val t = if (reduceMotion) (if (s.current) 1f else 0f) else sq.coerceIn(0f, 1.15f)
+                                    val t = sq.coerceIn(0f, 1.15f)   // Reduce Motion: eased, no overshoot
                                     val round = size.minDimension / 2; val square = com.scottgerstl.lupe.ui.theme.Shape.selected.toPx()
                                     val r = CornerRadius((round + (square - round) * t).coerceAtLeast(2f))
                                     if (kept.value > 0f) drawRoundRect(Tok.lifted.copy(alpha = kept.value), cornerRadius = r)
@@ -402,9 +402,18 @@ private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore, clock: androi
     ) {
         rows.forEach { r ->
             val lit = animatedFloat(if (r.muted) 1f else 0f, Dur.STATE)
+            // muted: the white grows out from the middle of the pill on the spring (Reduce Motion: it fades where it stands)
+            val muteGrow by com.scottgerstl.lupe.ui.theme.springFloat(if (r.muted) 1f else 0f, com.scottgerstl.lupe.ui.theme.hybridMotion.fingerMs, com.scottgerstl.lupe.ui.theme.hybridMotion.bounce, spring = !LocalReduceMotion.current)
+            val reduceMute = LocalReduceMotion.current
             val sound = r.name.substringAfter(" · ")
             Box(
-                Modifier.fillMaxWidth().height(rh).clip(RoundedCornerShape(50)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
+                Modifier.fillMaxWidth().height(rh).clip(RoundedCornerShape(50)).background(Tok.control)
+                    .drawBehind {
+                        if (lit.value <= 0f) return@drawBehind
+                        val g = if (reduceMute) 1f else (0.5f + 0.5f * muteGrow).coerceIn(0.5f, 1.05f)
+                        val w = size.width * g; val hh = size.height * g
+                        drawRoundRect(Tok.primaryTop.copy(alpha = lit.value), Offset((size.width - w) / 2, (size.height - hh) / 2), Size(w, hh), CornerRadius(hh / 2))
+                    }
                     .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Mute $sound"; stateDescription = (if (r.muted) "Muted" else "Not muted") + if (r.mutePending != "none") ", changing at the launch point" else ""; onClick { core.send(Intent.TrackMute(r.track)); true } },
                 contentAlignment = Alignment.Center,
             ) {
@@ -619,7 +628,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             Modifier.matchParentSize()
                 .drawBehind {
                     val padR = com.scottgerstl.lupe.ui.theme.Shape.pad.toPx()
-                    val shapeT = if (reduceMotion) (if (playing && !row.muted && !pressed) 1f else 0f) else pill.coerceIn(0f, 1.15f)
+                    val shapeT = pill.coerceIn(0f, 1.15f)   // Reduce Motion: springFloat eases it over 150 ms, no overshoot (never a cut)
                     val rr = (padR + (size.height / 2 - padR) * shapeT).coerceIn(2f, size.height / 2)
                     val r = CornerRadius(rr)
                     // an empty slot is an outline with its letter (decision 33; its edge colour is A11, still open); a filled one a card

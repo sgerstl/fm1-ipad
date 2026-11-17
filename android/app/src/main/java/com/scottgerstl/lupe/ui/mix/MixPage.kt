@@ -98,26 +98,12 @@ fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.Stat
     }
 }
 
-/** The sub-pages: a quiet segmented row, the page showing a `lifted` pill (36 tall), the rest bare words in grey. */
+/** The sub-pages: a quiet segmented row, the page showing a `lifted` pill (36 tall) that slides between the bare grey words. */
 @Composable
-private fun SubPages(pages: List<String>, current: Int, onPick: (Int) -> Unit) {
-    Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        pages.forEachIndexed { i, name ->
-            val on = i == current
-            val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
-            Box(
-                Modifier.defaultMinSize(minHeight = 44.dp)
-                    .semantics(mergeDescendants = true) { role = Role.Tab; selected = on; contentDescription = "$name, GLO ${i + 1} of ${pages.size}" }
-                    .clickable(remember { MutableInteractionSource() }, null, role = Role.Tab) { onPick(i) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.height(36.dp).drawBehind { drawRoundRect(Tok.lifted.copy(alpha = lit), cornerRadius = CornerRadius(size.height / 2)) }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                    BasicText(name, style = LupeType.key.copy(fontSize = 15.sp, color = lerp(Tok.text2, Tok.text, lit), fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1)
-                }
-            }
-        }
-    }
-}
+private fun SubPages(pages: List<String>, current: Int, onPick: (Int) -> Unit) =
+    com.scottgerstl.lupe.ui.shell.SegmentGroup(pages, current, onPick, height = 36.dp, padH = 16.dp, role = Role.Tab,
+        descriptions = pages.mapIndexed { i, n -> "$n, GLO ${i + 1} of ${pages.size}" }, fontSize = 15,
+        selectedFill = Tok.lifted, idleFill = null, selectedInk = Tok.text, idleInk = Tok.text2, gap = 4.dp)
 
 @Composable
 private fun Strips(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>) {
@@ -203,7 +189,7 @@ fun TrackBadge(number: Int, colour: Color, selected: Boolean, size: Dp, fontSize
     val sq by springFloat(if (selected) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
     Box(
         Modifier.size(size).drawBehind {
-            val s = if (reduce) (if (selected) 1f else 0f) else sq.coerceIn(0f, 1.2f)
+            val s = sq.coerceIn(0f, 1.2f)   // Reduce Motion: the corners ease over 150 ms, no overshoot
             val half = this.size.minDimension / 2
             val r = half - (half - this.size.minDimension * 0.3f) * s
             drawRoundRect(colour, cornerRadius = CornerRadius(r.coerceAtLeast(2f)))
@@ -314,13 +300,17 @@ fun ToggleSegment(label: String, description: String, on: Boolean, state: String
         Box(
             Modifier.fillMaxWidth().height(height).drawBehind {
                 val pill = size.height / 2; val inner = 8.dp.toPx()
-                val s = if (reduce) (if (on) 1f else 0f) else shape.coerceIn(0f, 1.2f)
+                val s = shape.coerceIn(0f, 1.2f)
                 fun r(outer: Boolean) = if (outer) pill else inner + (pill - inner) * s
                 val l = CornerRadius(r(first).coerceAtMost(pill)); val rr = CornerRadius(r(last).coerceAtMost(pill))
-                drawPath(Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, l, rr, rr, l)) }, lerp(Tok.control, Tok.text, lit))
+                drawPath(Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, l, rr, rr, l)) }, Tok.control)
+                // on: the white grows out from the middle as the corners round (Reduce Motion: it fades in where it stands)
+                val g = if (reduce) 1f else (0.55f + 0.45f * s).coerceAtMost(1.04f)
+                if (lit > 0f) { val w = size.width * g; val h = size.height * g; val x = (size.width - w) / 2; val y = (size.height - h) / 2
+                    drawPath(Path().apply { addRoundRect(RoundRect(x, y, x + w, y + h, CornerRadius(l.x * g), CornerRadius(rr.x * g), CornerRadius(rr.x * g), CornerRadius(l.x * g))) }, Tok.text.copy(alpha = lit)) }
             },
             contentAlignment = Alignment.Center,
-        ) { BasicText(label, style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2, Tok.onColour, lit), fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1) }
+        ) { BasicText(label, style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2, Tok.onColour, lit), fontWeight = FontWeight.SemiBold), maxLines = 1) }
     }
 }
 
