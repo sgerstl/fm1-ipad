@@ -189,6 +189,19 @@ Install rounds 7, 8 and 9 together. **Check 72 is the one only the real FM-1 can
 | 95 | Edit: tap Chord, Lane, Follow. | No dots: off, outlined pills; on, white with squarer corners (the same language as Store). **Scott: keep?** ☐ keep ☐ dots back | – | ☐ pass ☐ fail: |
 | 96 | TalkBack on: find the sound panel's handle and the step panel's handle. | Each reads "Close the sound panel" / "Close the step panel" as a button; double tap closes. | – | ☐ pass ☐ fail: |
 
+## Round 13: a swipe never edits (Scott, 2026-11-17: "I can't swipe between the pages without adding a step or a drum step")
+
+Open the step panel or a sound page first so the grid pages by 8.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 97 | Drum track: swipe sideways starting on an **empty** cell. | The page turns. No hit appears where the finger started or anywhere it passed. | – | ☐ pass ☐ fail: |
+| 98 | Drum track: swipe sideways starting **on a hit**, right away (no pause). | The page turns. The hit stays where it was, not toggled off, not moved. | – | ☐ pass ☐ fail: |
+| 99 | Melodic track: repeat 97 and 98 on an empty cell and on a note. Also swipe up and down. | Sideways pages, up and down scrolls the pitches. No note is written, removed or moved. | – | ☐ pass ☐ fail: |
+| 100 | A quick flick from a hit (drum) and from a note (melodic). | One page on; nothing changed in the grid. | – | ☐ pass ☐ fail: |
+| 101 | Press a hit (or a note), hold still a moment (about a sixth of a second), then slide. | It lifts and drags as before (round 9); let go and it lands; the page doesn't turn under it. A plain tap still toggles; a longer still hold still locks (melodic) or picks (drum). | – | ☐ pass ☐ fail: |
+| 102 | Tap a cell quickly several times while the pattern plays. | Each tap toggles once, on lift. A tap that slides a little (within a fingertip) still counts as a tap. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

@@ -491,6 +491,7 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
     val pc = com.scottgerstl.lupe.ui.edit.rememberPlayheadClock(core)
     // a hit being dragged along its lane (Edit redesign): lane, from step, to step; [hitLift] on the spatial spring
     var hitDrag by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    val dwellMs by rememberUpdatedState(com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.padSlideDwellMs.toLong())
     val hitLift = remember { androidx.compose.animation.core.Animatable(0f) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // rows touch (no gap): the pitch is the touch target; what's drawn sits inside it
@@ -636,14 +637,20 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                             awaitEachGesture {
                                                 val down = awaitFirstDown()
                                                 var dragging = false; var cancelled = false
-                                                // a hit moved past touch slop before the hold fires is carried along its lane (Edit redesign); a still hold picks it
+                                                // a tap toggles on touch-up, only if the finger never left the slop; a still hold picks the hit. Past the slop it
+                                                // is a page swipe and the cell isn't touched, unless the finger pressed on a hit and held still for the dwell
+                                                // first: then the hit is carried along its lane (Roll.move; Scott, 2026-11-17)
                                                 val up = withTimeoutOrNull(hold) {
                                                     while (true) {
                                                         val ev = awaitPointerEvent()
                                                         val ch = ev.changes.firstOrNull { it.id == down.id }
                                                         if (ch == null || ch.isConsumed) { cancelled = true; return@withTimeoutOrNull null }
                                                         if (!ch.pressed) return@withTimeoutOrNull ch
-                                                        if (on && kotlin.math.abs(ch.position.x - down.position.x) > viewConfiguration.touchSlop) { ch.consume(); dragging = true; return@withTimeoutOrNull null }
+                                                        when (com.scottgerstl.lupe.ui.edit.Roll.move((ch.position - down.position).getDistance(), viewConfiguration.touchSlop, ch.uptimeMillis - down.uptimeMillis, dwellMs, on)) {
+                                                            com.scottgerstl.lupe.ui.edit.Roll.Move.Drag -> { ch.consume(); dragging = true; return@withTimeoutOrNull null }
+                                                            com.scottgerstl.lupe.ui.edit.Roll.Move.Swipe -> { cancelled = true; return@withTimeoutOrNull null }
+                                                            null -> Unit
+                                                        }
                                                     }
                                                     @Suppress("UNREACHABLE_CODE") null
                                                 }

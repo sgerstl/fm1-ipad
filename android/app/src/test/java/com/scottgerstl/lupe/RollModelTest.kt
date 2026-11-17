@@ -117,4 +117,15 @@ class RollModelTest {
         assertEquals(480f, Roll.pageTarget(480f, 700f, -2000f, page, 16, 8, fling), 0f)   // never past the last page
         assertEquals(0f, Roll.pageTarget(0f, -150f, 2000f, page, 16, 8, fling), 0f)       // nor before the first
     }
+    // a page swipe never places, removes or moves anything (Scott, 2026-11-17): the grid's one decision for drum and melodic alike
+    @Test fun gridFingerIsTapSwipeOrDrag() {
+        val slop = 18f; val dwell = 150L
+        assertEquals(null, Roll.move(10f, slop, 40L, dwell, onItem = false))           // still within the slop: may yet be a tap or a hold
+        assertEquals(null, Roll.move(18f, slop, 900L, dwell, onItem = true))
+        assertEquals(Roll.Move.Swipe, Roll.move(40f, slop, 60L, dwell, onItem = false))  // a quick swipe from an empty cell
+        assertEquals(Roll.Move.Swipe, Roll.move(40f, slop, 60L, dwell, onItem = true))   // from a hit or note, too quick to lift it
+        assertEquals(Roll.Move.Swipe, Roll.move(40f, slop, 400L, dwell, onItem = false)) // a slow slide on empty cells still pages
+        assertEquals(Roll.Move.Drag, Roll.move(40f, slop, 150L, dwell, onItem = true))   // pressed on a note, held still, then moved
+        assertEquals(Roll.Move.Drag, Roll.move(40f, slop, 300L, dwell, onItem = true))
+    }
 }

@@ -113,6 +113,20 @@ object Roll {
         else -> Tap.Add
     }
 
+    /** What a finger on the grid has become once it moved (Scott, 2026-11-17: a page swipe never places, removes or moves anything). */
+    enum class Move { Swipe, Drag }
+
+    /**
+     * A finger [movedPx] from where it went down, [heldMs] after: null while it is still within [slopPx] (it may yet be a tap or a hold).
+     * Past the slop it is a page [Move.Swipe], wherever it started, unless it was on a note or hit ([onItem]) and held still for [dwellMs]
+     * first (the pad drag's press-before-slide, 150 ms): then it is a [Move.Drag] of that note. Either way the pending tap is cancelled.
+     */
+    fun move(movedPx: Float, slopPx: Float, heldMs: Long, dwellMs: Long, onItem: Boolean): Move? = when {
+        movedPx <= slopPx -> null
+        onItem && heldMs >= dwellMs -> Move.Drag
+        else -> Move.Swipe
+    }
+
     /** The first and last visible rows' pitches for a scroll, a row more each way so partial rows draw. */
     fun visiblePitches(scrollY: Float, rowPx: Float, viewPx: Float): IntRange {
         val first = (scrollY / rowPx).toInt(); val last = ((scrollY + viewPx) / rowPx).toInt()

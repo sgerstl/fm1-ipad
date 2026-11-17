@@ -120,6 +120,7 @@ fun StepGrid(
     val haptic = LocalHapticFeedback.current
     val reduce = LocalReduceMotion.current
     val longPress = LocalViewConfiguration.current.longPressTimeoutMillis
+    val dwellMs by rememberUpdatedState(com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current.padSlideDwellMs.toLong())
     val scope = rememberCoroutineScope()
     val tm = rememberTextMeasurer()
     val edNow by rememberUpdatedState(ed)
@@ -200,7 +201,9 @@ fun StepGrid(
                                 scrollX = Roll.clampScrollX(scrollX - d.x, Roll.maxScroll(totalNow, geo[3], geo[4], pageNow))
                             }
                         }
-                        // a tap writes or picks; a hold is lock mode for as long as the finger stays down (the FM-1's own gesture)
+                        // a tap writes or picks, on touch-up and only if the finger never left the slop; a hold is lock mode for as long as the finger
+                        // stays down (the FM-1's own gesture). A finger that slides past the slop is a page swipe (the drag above takes it) and changes
+                        // nothing, unless it pressed on a note and held still for the dwell first: then the note lifts and drags (Roll.move)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
@@ -209,17 +212,22 @@ fun StepGrid(
                                 val base = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(edNow.steps.flatMap { stepNotes(it) }), g[0]) else Roll.clampScrollY(scrollY, g[0], g[1])
                                 val i = Roll.stepAt(down.position.x, Roll.clampScrollX(scrollX, Roll.maxScroll(totalNow, g[3], g[4], pageNow)), g[2], totalNow); val pitch = Roll.pitchAt(down.position.y, base, g[0])
                                 var cancelled = false
-                                // on a note, movement past touch slop before the hold fires lifts it (a still hold stays lock: decision 9a)
+                                // a still hold stays lock (decision 9a)
                                 val onNote = pitch in stepNotes(edNow.steps.getOrNull(i) ?: Step())
                                 var dragging = false
                                 val up = withTimeoutOrNull(longPress) {
-                                    if (!onNote) return@withTimeoutOrNull waitForUpOrCancellation().also { if (it == null) cancelled = true }
                                     while (true) {
                                         val ev = awaitPointerEvent()
                                         val ch = ev.changes.firstOrNull { it.id == down.id }
                                         if (ch == null || ch.isConsumed) { cancelled = true; return@withTimeoutOrNull null }
                                         if (!ch.pressed) return@withTimeoutOrNull ch
-                                        if ((ch.position - down.position).getDistance() > viewConfiguration.touchSlop) { ch.consume(); dragging = true; return@withTimeoutOrNull null }
+                                        when (Roll.move((ch.position - down.position).getDistance(), viewConfiguration.touchSlop, ch.uptimeMillis - down.uptimeMillis, dwellMs, onNote)) {
+                                            // consumed here first (this handler sees each move before the page drag), so the page stays put
+                                            Roll.Move.Drag -> { ch.consume(); dragging = true; return@withTimeoutOrNull null }
+                                            // left alone: the page drag takes it; the cell isn't touched
+                                            Roll.Move.Swipe -> { cancelled = true; return@withTimeoutOrNull null }
+                                            null -> Unit
+                                        }
                                     }
                                     @Suppress("UNREACHABLE_CODE") null
                                 }

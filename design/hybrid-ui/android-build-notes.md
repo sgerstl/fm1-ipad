@@ -55,3 +55,9 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 - **Collapsed cards show the values from when each was last picked.** The core's `mix` area carries one card, the FM-1's current GLO page, so a card shows "—" until it has been opened once since the app started.
 - **The tile labels and ranges come from the device's card** (the core sends them), so the real FM-1's names show. The demo FM-1 has its own fake names.
 - **The cards fill the width exactly while they move** because every card springs on the same curve: a growing and a shrinking card always add up.
+
+## Round 13: a swipe never edits (2026-11-17)
+
+- **The bug:** the kit's cells took a tap on touch-up even after the finger had swiped (the page drag sits on the grid behind the cells, and the cell never checked how far the finger went). A swipe that started on a hit or note carried it. Melodic empty cells were already safe.
+- **The rule** (`Roll.move`, unit-tested): within slop, a tap or hold; past slop, a page swipe unless it pressed on a note or hit and held still for 150 ms first. The 150 ms is the pad drag's dwell (`padSlideDwellMs`), so the two drags feel the same.
+- **Checked, left alone:** the lane keys and the piano edge sound a note on touch-down (an audition, nothing written; a lane is picked on lift); the minimap pages on lift. A slide along the minimap still counts as a tap there.
