@@ -269,6 +269,12 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 | 129 | With that note picked, tap its 2nd step again. | The whole note goes, not a slice of it. | – | ☐ pass ☐ fail: |
 | 130 | Long-press the middle of a long note and move it two steps right and up a row. Then hold an empty cell a long time and lift. | The whole note moves, keeping its length, with the finger at the same place on it. The long hold on an empty cell writes a note, the same as a tap. | – | ☐ pass ☐ fail: |
 
+## Round 13i: Chord with the real FM-1 (Scott: "the chord key doesn't work")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 131 | Real FM-1 linked, a melodic track. Tap Chord (it turns white). Tap step 1's column on three other rows, then a fifth. Tap Chord off and tap another row. | Each tap adds a note to step 1, up to four; the fifth is refused with a message. With Chord off, a tap replaces the step's notes with the one tapped. The FM-1's own CHRD setting doesn't change. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

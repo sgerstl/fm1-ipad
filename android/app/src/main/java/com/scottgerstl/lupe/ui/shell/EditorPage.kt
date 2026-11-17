@@ -136,7 +136,16 @@ class EditUi {
     var stepPanel by mutableStateOf(false)
     /** 8-step pages turn with the playhead (Scott, 2026-11-17: "follows only when Follow is on"). On by default, as `phone-01` draws it. */
     var follow by mutableStateOf(true)
+    /**
+     * Chord: a tap on another pitch adds a note to the step (up to its maxNotes) instead of replacing it. The phone's own editing mode, kept for
+     * the session (Scott, 2026-11-17: "the chord key doesn't work"). It was the core's `chord`, which only the demo core flipped: the real core
+     * sends `chord: false` and has no chordToggle, so on the FM-1 the key never turned on.
+     */
+    var chord by mutableStateOf(false)
 }
+
+/** What the grid and the panel see: the editor area with the phone's Chord mode in place of the core's flag. */
+internal fun withChord(ed: EditorState, chord: Boolean): EditorState = if (ed.chord == chord) ed else ed.copy(chord = chord)
 
 private val PANEL_H = 110.dp      // the step panel: a 32 dp header row, 4, the dials (74)
 private val KIT_PANEL_H = 76.dp   // a kit's: one row (the picked hit's boxes, or the dials alone), so the lanes keep their height
@@ -153,10 +162,11 @@ val DOCK_W = 360.dp
  */
 @Composable
 fun EditTab(
-    ed: EditorState, core: LupeCore, auto: com.scottgerstl.lupe.core.AutomationState, pick: StepPick, ui: EditUi, modifier: Modifier = Modifier,
+    edArea: EditorState, core: LupeCore, auto: com.scottgerstl.lupe.core.AutomationState, pick: StepPick, ui: EditUi, modifier: Modifier = Modifier,
     /** How much of the right side the shell's docked sound panel covers now (it animates). */
     soundDock: Dp = 0.dp,
 ) {
+    val ed = withChord(edArea, ui.chord)
     var tab by rememberSaveable { mutableStateOf(PanelTab.Notes) }
     val track = Tok.track[(ed.track - 1).coerceAtLeast(0) % Tok.track.size]
     if (ed.steps.isEmpty()) { Placeholder("No pattern", "Pick a pad on the Pads tab: hold it, then Edit steps", modifier); return }
@@ -206,7 +216,7 @@ fun EditTab(
         Ruler(ed, track, core, stepPicked) {
             // the pattern bar (Edit redesign, Scott 2026-11-17): keys 40 tall; the step menu moved into the step panel's header (⋯)
             if (!drum) {
-                ToggleKey("Chord", ed.chord, "Chord", if (ed.chord) "On: a tap adds a note to the step, up to ${ed.maxNotes}" else "Off: a tap replaces the step's note") { core.send(Intent.ChordToggle) }
+                ToggleKey("Chord", ed.chord, "Chord", if (ed.chord) "On: a tap adds a note to the step, up to ${ed.maxNotes}" else "Off: a tap replaces the step's note") { ui.chord = !ui.chord }
                 Spacer(Modifier.width(6.dp))
                 ToggleKey("Lane", ui.lane, "Automation lane", if (ui.lane) "On: the lane is under the grid" else "Off") { ui.lane = !ui.lane }
                 Spacer(Modifier.width(6.dp))
