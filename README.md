@@ -17,7 +17,7 @@ Lupe began on [SLOOP](https://github.com/isod89/sloop-fm1) and spoke both firmwa
 
 ## Install on Android
 
-1. On the phone, open the [latest release](https://github.com/sgerstl/fm1-ipad/releases/latest) and download the APK (`Lupe-0.2-android.apk` or later).
+1. On the phone, open [Lupe for Android 0.2.1](https://github.com/sgerstl/fm1-ipad/releases/tag/lupe-android-0.2.1) and download `Lupe-0.2.1-android.apk`. Newer builds are listed under [Releases](https://github.com/sgerstl/fm1-ipad/releases) as "Lupe for Android".
 2. Open the file. Android asks you to allow installs from that source (your browser or the Files app). Allow it, go back, and install.
 3. Plug in the FM-1 and switch it on. If Android asks whether Lupe may use the FM-1, allow it.
 
