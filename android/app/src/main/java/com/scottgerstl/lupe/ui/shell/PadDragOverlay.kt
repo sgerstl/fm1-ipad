@@ -210,7 +210,12 @@ private fun Sprout(state: PadDragState, s: PadSprout, reduce: Boolean) {
 @Composable
 private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, off: Boolean, state: PadDragState, near: Float, tint: Color, reduce: Boolean, feel: WellFeel, labels: Boolean) {
     val r = EdgeWellsGeometry.rect(a, full.width, full.height, d)
-    val hotT = com.scottgerstl.lupe.ui.theme.animatedFloat(if (hot) 1f else 0f, com.scottgerstl.lupe.ui.theme.Dur.STATE).value
+    // round 3 (Scott: "the color should swell as the user gets closer"): the fill blends from `held` toward the track colour with closeness,
+    // straight from the finger (no step), full at the hot distance; the size grows with it
+    val swell = if (off) 0f else (if (hot) 1f else near.coerceIn(0f, 1f))
+    val fillColour = androidx.compose.ui.graphics.lerp(Tok.held, tint, swell)
+    // the ink crosses to the dark on-colour once that reads better on the fill, blended over a short band (computed contrast, not a fixed point)
+    val hotT = inkWeight(fillColour)
     // size is the signal: up to 16 dp outward (and 8 along) with closeness, all of it once hot
     val k = if (reduce || off) 0f else (if (hot) 1f else near.coerceIn(0f, 1f))
     val g = 16f * d * k; val along = 8f * d * k
@@ -242,13 +247,12 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
             },
     ) {
         if (!labels) Canvas(Modifier.fillMaxSize()) {
-            drawRect(Tok.held)
-            if (hotT > 0f) drawRect(tint.copy(alpha = hotT))
+            drawRect(fillColour)
         }
         if (labels) {
             val ink = androidx.compose.ui.graphics.lerp(Tok.text, Tok.onColour, hotT)
             val icon = when (a) { EdgeAction.Cancel -> R.drawable.ms_close; EdgeAction.ClearSteps -> R.drawable.ms_delete_sweep; EdgeAction.Delete -> R.drawable.ms_delete; EdgeAction.Edit -> R.drawable.ms_edit; EdgeAction.Duplicate -> R.drawable.ms_library_add }
-            val iconDp = (22f + 4f * hotT).dp
+            val iconDp = (22f + 4f * swell).dp
             val labelBox = Modifier.align(Alignment.Center)
             val word = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = ink)
             if (a.across) {
@@ -268,3 +272,16 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
         }
     }
 }
+
+/** WCAG relative luminance of [c]. */
+private fun lum(c: Color): Float {
+    fun ch(v: Float) = if (v <= 0.03928f) v / 12.92f else Math.pow(((v + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+    return 0.2126f * ch(c.red) + 0.7152f * ch(c.green) + 0.0722f * ch(c.blue)
+}
+private fun contrast(a: Color, b: Color): Float { val x = lum(a); val y = lum(b); return (maxOf(x, y) + 0.05f) / (minOf(x, y) + 0.05f) }
+
+/**
+ * How dark a well's ink is on [fill], 0 (the light `text`) … 1 (`onColour`): whichever has the higher contrast, blended over about a unit of
+ * contrast either side of the crossover so the ink never flips in one frame.
+ */
+internal fun inkWeight(fill: Color): Float = ((contrast(Tok.onColour, fill) - contrast(Tok.text, fill)) / 2f + 0.5f).coerceIn(0f, 1f)

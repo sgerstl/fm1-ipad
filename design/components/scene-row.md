@@ -137,6 +137,7 @@ Particular to the row:
 - 2026-11-09: the whole key and a margin take the touch (Scott: "hard to hit").
 - 2026-11-14: both phones take the iPhone's row (Scott, decision 33).
 - 2026-11-15: the iPad's row gives its right end to the selected track's four HOME knobs; the scenes scroll in the rest (Scott, decision 50). The phones too, the same day (Scott: "Phones too").
+- 2026-11-17 (round 3): recalling a scene squares it off on M3 Expressive's spatial spring with a squash and stretch, on top of the press squash; Reduce Motion cross-fades the shapes (spec §5, round 3).
 
 ## 3. Build notes
 

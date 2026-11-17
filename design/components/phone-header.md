@@ -161,6 +161,7 @@ Particular to the header:
 - 2026-11-14: one header on both phones, Android's; the bar countdown goes (Scott, decision 31).
 - 2026-11-14: the song-name menu takes the iPhone's audio, demo and Developer items; the launch menu is the iPhone's with Cancel waiting (Scott, decision 33).
 - 2026-11-17: tabs Pads · Edit · Timeline · Mix as a connected pill group and launch timing as a "Bar ⌄" pill, over decision 29's underlined words; Record round 48 and Play/Stop round 56, the largest key, flush right (Scott, hybrid UI study; `design/hybrid-ui/spec.md` 4.1).
+- 2026-11-17 (round 3, Scott on the Pixel): the selected tab is one pill that travels between tabs on M3 Expressive's spatial spring, its leading edge on a stiffer spring so it stretches and thins, then gathers (spec §5, round 3).
 
 ## 3. Build notes
 

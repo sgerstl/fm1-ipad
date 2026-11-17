@@ -89,7 +89,8 @@ fun Key(
     val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
     val squash by com.scottgerstl.lupe.ui.theme.springFloat(if (pressed) hm.pressScale else 1f, if (pressed) 100 else hm.fingerMs, hm.bounce, spring = !reduce)
     // a toggle switching on: the white key grows out from the middle on the spring (shape carries the state; Reduce Motion: it only fades)
-    val grow by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduce)
+    val grow by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
+    val toggleSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(on, reduce)
     Box(
         modifier
             .defaultMinSize(minTarget, minTarget)
@@ -111,7 +112,7 @@ fun Key(
             Modifier
                 .then(if (fill) Modifier.fillMaxWidth() else Modifier.width(width ?: 44.dp))
                 .height(height)
-                .graphicsLayer { val k = if (reduce) 1f else squash; scaleX = k; scaleY = k }
+                .graphicsLayer { val k = if (reduce) 1f else squash; val (sx, sy) = toggleSquash(); scaleX = k * sx; scaleY = k * sy }
                 .drawBehind {
                     val r = CornerRadius(size.height / 2)
                     drawRoundRect(Tok.lifted, cornerRadius = r)

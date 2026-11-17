@@ -246,19 +246,21 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                         val kept = animatedFloat(if (s.stored || s.current) 1f else 0f, Dur.STATE); val cur = animatedFloat(if (s.current) 1f else 0f, Dur.STATE)
                         // shape as state: the current scene squares to 12, a stored one is round, an empty one bare; a press squashes it (spec §5)
                         var scenePressed by remember { mutableStateOf(false) }
-                        val sq by com.scottgerstl.lupe.ui.theme.springFloat(if (s.current) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduceMotion)
+                        val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (s.current) 1f else 0f, reduceMotion)
+                        val sceneSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(s.current, reduceMotion)
                         val squash by com.scottgerstl.lupe.ui.theme.springFloat(if (scenePressed) hm.pressScale else 1f, if (scenePressed) 100 else hm.fingerMs, hm.bounce, spring = !reduceMotion)
                         val label = "Scene ${i + 1}" + (if (!s.stored) ", empty" else if (s.current) ", current" else "") + if (s.waiting) ", waiting for the launch point" else ""
                         Box(
                             Modifier.width(SCENE_KEY_W).fillMaxHeight()
-                                .graphicsLayer { val k = if (reduceMotion) 1f else squash; scaleX = k; scaleY = k }
+                                .graphicsLayer { val k = if (reduceMotion) 1f else squash; val (sx, sy) = sceneSquash(); scaleX = k * sx; scaleY = k * sy }
                                 // the current scene white and square, a stored one `lifted` and round, an empty one bare with a grey number (fill and ink both carry it)
                                 .drawBehind {
-                                    val t = sq.coerceIn(0f, 1.15f)   // Reduce Motion: eased, no overshoot
+                                    val t = sq.coerceIn(0f, 1.15f)
                                     val round = size.minDimension / 2; val square = com.scottgerstl.lupe.ui.theme.Shape.selected.toPx()
                                     val r = CornerRadius((round + (square - round) * t).coerceAtLeast(2f))
-                                    if (kept.value > 0f) drawRoundRect(Tok.lifted.copy(alpha = kept.value), cornerRadius = r)
-                                    if (cur.value > 0f) drawRoundRect(Tok.text.copy(alpha = cur.value), cornerRadius = r)
+                                    fun layer(c: Color) { if (!reduceMotion) drawRoundRect(c, cornerRadius = r) else { val u = sq.coerceIn(0f, 1f); drawRoundRect(c.copy(alpha = c.alpha * (1f - u)), cornerRadius = CornerRadius(round)); drawRoundRect(c.copy(alpha = c.alpha * u), cornerRadius = CornerRadius(square)) } }
+                                    if (kept.value > 0f) layer(Tok.lifted.copy(alpha = kept.value))
+                                    if (cur.value > 0f) layer(Tok.text.copy(alpha = cur.value))
                                 }
                                 .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = label }
                                 .pointerInput(i, store, s.stored) {
@@ -403,11 +405,12 @@ private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore, clock: androi
         rows.forEach { r ->
             val lit = animatedFloat(if (r.muted) 1f else 0f, Dur.STATE)
             // muted: the white grows out from the middle of the pill on the spring (Reduce Motion: it fades where it stands)
-            val muteGrow by com.scottgerstl.lupe.ui.theme.springFloat(if (r.muted) 1f else 0f, com.scottgerstl.lupe.ui.theme.hybridMotion.fingerMs, com.scottgerstl.lupe.ui.theme.hybridMotion.bounce, spring = !LocalReduceMotion.current)
+            val muteGrow by com.scottgerstl.lupe.ui.theme.spatialFloat(if (r.muted) 1f else 0f, LocalReduceMotion.current)
+            val muteSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(r.muted, LocalReduceMotion.current)
             val reduceMute = LocalReduceMotion.current
             val sound = r.name.substringAfter(" · ")
             Box(
-                Modifier.fillMaxWidth().height(rh).clip(RoundedCornerShape(50)).background(Tok.control)
+                Modifier.fillMaxWidth().height(rh).graphicsLayer { val (sx, sy) = muteSquash(); scaleX = sx; scaleY = sy }.clip(RoundedCornerShape(50)).background(Tok.control)
                     .drawBehind {
                         if (lit.value <= 0f) return@drawBehind
                         val g = if (reduceMute) 1f else (0.5f + 0.5f * muteGrow).coerceIn(0.5f, 1.05f)
@@ -448,7 +451,12 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     // the colour eases (spec §5). A press morphs a playing pad back toward the card. With Reduce Motion the shape lands at once.
     val reduceMotion = LocalReduceMotion.current
     val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
-    val pill by com.scottgerstl.lupe.ui.theme.springFloat(if (playing && !row.muted && !pressed) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduceMotion)
+    // round 3 (Scott: "it should be clear that there is a shape transformation happening"): the shape rides M3 Expressive's default spatial
+    // spring (slower, so the change reads) and the pad squashes and stretches as it starts or stops (wider and shorter going into play, the
+    // reverse coming out). Reduce Motion: the two shapes cross-fade, no squash.
+    val livePlaying = playing && !row.muted
+    val pill by com.scottgerstl.lupe.ui.theme.spatialFloat(if (livePlaying && !pressed) 1f else 0f, reduceMotion)
+    val padSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(livePlaying, reduceMotion)
     val letter = ('A' + idx).toString()
     // The entry its touches act on. An outlined slot past the row's one free entry stands for that entry (Skiff's list has no gaps, so
     // whatever is made there lands in the first free place): [target] is that entry, and the menu says where it goes.
@@ -620,7 +628,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     }
     val lifted = dragState?.drag?.let { it.track == row.track && it.from == at } == true
     val sproutHide = dragState?.sprout?.let { it.track == row.track && it.idx == idx && dragState.sproutHidden && e.kind != PadKind.Empty && usedNow > it.usedBefore } == true
-    Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (sproutHide) 0f else if (lifted) 0.35f else 1f }.onGloballyPositioned {
+    Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (sproutHide) 0f else if (lifted) 0.35f else 1f; val (sx, sy) = padSquash(); scaleX = sx; scaleY = sy }.onGloballyPositioned {
         padCoords = it
         dragState?.slots?.set(slotToken, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
     }) {
@@ -628,13 +636,18 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             Modifier.matchParentSize()
                 .drawBehind {
                     val padR = com.scottgerstl.lupe.ui.theme.Shape.pad.toPx()
-                    val shapeT = pill.coerceIn(0f, 1.15f)   // Reduce Motion: springFloat eases it over 150 ms, no overshoot (never a cut)
+                    val shapeT = pill.coerceIn(0f, 1.15f)
                     val rr = (padR + (size.height / 2 - padR) * shapeT).coerceIn(2f, size.height / 2)
                     val r = CornerRadius(rr)
+                    // a filled layer in the pad's shape: on the spring it changes shape; with Reduce Motion the card and the pill cross-fade
+                    fun layer(c: Color) {
+                        if (!reduceMotion) drawRoundRect(c, cornerRadius = r)
+                        else { val t = pill.coerceIn(0f, 1f); drawRoundRect(c.copy(alpha = c.alpha * (1f - t)), cornerRadius = CornerRadius(padR)); drawRoundRect(c.copy(alpha = c.alpha * t), cornerRadius = CornerRadius(size.height / 2)) }
+                    }
                     // an empty slot is an outline with its letter (decision 33; its edge colour is A11, still open); a filled one a card
                     if (empty) drawRoundRect(emptyOutline(color, onRow.value), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(rr - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
-                    else drawRoundRect(androidx.compose.ui.graphics.lerp(Tok.control, Tok.lifted, next.value), cornerRadius = r)
-                    if (fill.value > 0f) drawRoundRect(color.copy(alpha = fill.value), cornerRadius = r)
+                    else layer(androidx.compose.ui.graphics.lerp(Tok.control, Tok.lifted, next.value))
+                    if (fill.value > 0f) layer(color.copy(alpha = fill.value))
                     if (ringMuted.value > 0f) drawRoundRect(color.copy(alpha = ringMuted.value), cornerRadius = r, style = Stroke(4.dp.toPx()), topLeft = Offset.Zero)
                     if (ringMuted.value > 0f && !empty) drawRoundRect(Tok.control, topLeft = Offset(2.dp.toPx(), 2.dp.toPx()), size = Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()), cornerRadius = CornerRadius(6.dp.toPx()), alpha = ringMuted.value)
                     // (a waiting pad's outline is the LaunchTrace drawn over the pad, below)

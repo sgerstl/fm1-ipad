@@ -48,6 +48,21 @@ Build: the commit that adds this section. Same setup; no backup.
 | 27 | Drag to Clear steps and to Delete pattern (stopped); then play and drag toward Delete. | Hot, Clear steps and Delete fill **in the track's colour, not red** (Scott's call to keep or change: ☐ keep ☐ want red). While playing, Delete is greyed with "Stop first" in readable grey, doesn't grow and takes no drop; the layout doesn't change. | – | ☐ pass ☐ fail: |
 | 28 | Drag to Cancel and to Duplicate. Turn on Remove animations and drag once more. | Cancel and Duplicate behave like Edit (grow, fill in the track's colour). With Remove animations: the wells fade in and out in place and don't grow; hot still fills. | – | ☐ pass ☐ fail: |
 
+## Round 3 (Scott, 2026-11-17: the colour swells; shape changes must read as a transformation)
+
+Labs › **Shape spring · stiffness / damping**, **Fast spring · stiffness**, **Squash and stretch** tune all of these on the phone (starting at M3 Expressive's 380 / 0.80, 800 and 6 %).
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 29 | Play the song. Launch a pad on the next bar and watch it start; then stop a playing pad (launch an empty slot or Rest on its row). | Starting: the card **visibly turns into a pill**, its corners rounding over a moment while it bulges wider and flatter, then settles, as the colour fills. Stopping: the pill turns back into a card, narrowing and briefly taller, then settling. It should read as one shape becoming another. | – | ☐ pass ☐ fail: |
+| 30 | Tap one track head, then another. | The old badge rounds back to a circle, the new one **squares off with a little squash**, as the head's tint and edge move. | – | ☐ pass ☐ fail: |
+| 31 | Recall a stored scene, then another. | The new scene squares off and fills white with a bulge and settle (after its press squash); the old one rounds back. | – | ☐ pass ☐ fail: |
+| 32 | Tap tabs far apart (Pads → Mix) and next door (Edit → Timeline). | The white pill **stretches and thins** as it runs, its front edge leading, then gathers to full height on the new tab with a slight overshoot. | – | ☐ pass ☐ fail: |
+| 33 | Toggle Follow, Chord, a Pads Mute, a Mix Mute and Solo. | Each fill grows out with a small bulge and settles; off, it shrinks back with the reverse. | – | ☐ pass ☐ fail: |
+| 34 | Drag a pad slowly toward each well. | The well **swells in colour** as you near it, from grey toward the pad's colour, getting bigger at the same time, tracking your finger with no jump; the words turn dark partway, smoothly. At the hot point it's full colour, the icon is bigger and you feel the tick. Clear steps and Delete use the track colour (Scott's call, round 3). | – | ☐ pass ☐ fail: |
+| 35 | In Labs, set Shape spring · damping to 0.50, then 1.00; Squash to 0 and 12. Repeat 29. | 0.50 bounces more, 1.00 not at all; squash 0 has none, 12 a lot. Say which feels right. | – | ☐ pass ☐ fail: values: |
+| 36 | Remove animations on; repeat 29, 30 and 34. | The card and the pill **cross-fade** (no squash, no travel); the badge's circle and square cross-fade; the well's colour still swells with distance (that's tracking, not motion) but it doesn't grow. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - A kit (drum) track on Edit with the panel docked: its lanes still scroll under the panel, as before. 8-step pages are melodic only for now.

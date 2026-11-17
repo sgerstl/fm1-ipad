@@ -167,6 +167,7 @@ Particular to the head:
 - 2026-11-10: effect chips stacked between the words and the keys, three then "+N" (Scott, board 46).
 - 2026-11-14: phones take Android's head; taps select, holds open menus; mutes paint (Scott, decisions 29 and 31).
 - 2026-11-14: phones show selection as the track's muted colour under the row (Scott, decision 31).
+- 2026-11-17 (round 3): the badge squares off on M3 Expressive's spatial spring with a squash and stretch; Reduce Motion cross-fades the circle and the square (spec §5, round 3).
 
 ## 3. Build notes
 

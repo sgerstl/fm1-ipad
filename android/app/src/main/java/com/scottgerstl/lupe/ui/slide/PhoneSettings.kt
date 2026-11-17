@@ -73,6 +73,23 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     fun chooseMotionPageFlip(v: Int) { motionPageFlipMs = v.coerceIn(150, 480); prefs?.edit()?.putInt(M_FLIP, motionPageFlipMs)?.apply() }
     var motionPressScale by mutableStateOf(prefs?.getInt(M_PRESS, 92) ?: 92)
         private set
+    /**
+     * Expressive springs (Scott, 2026-11-17, round 3: "the animation should show the transformation from one shape to another"). Starting values
+     * are Material 3 Expressive's own (androidx compose material3 `ExpressiveMotionTokens`: default spatial damping 0.8, stiffness 380; fast
+     * spatial 0.6, 800), and the squash-and-stretch that makes a shape change read (6 %). Added 2026-11-17, review 2026-12-01.
+     */
+    var spatialStiffness by mutableStateOf(prefs?.getInt(M_SP_STIFF, 380) ?: 380)
+        private set
+    fun chooseSpatialStiffness(v: Int) { spatialStiffness = v.coerceIn(100, 1500); prefs?.edit()?.putInt(M_SP_STIFF, spatialStiffness)?.apply() }
+    var spatialDamping by mutableStateOf(prefs?.getInt(M_SP_DAMP, 80) ?: 80)
+        private set
+    fun chooseSpatialDamping(v: Int) { spatialDamping = v.coerceIn(30, 100); prefs?.edit()?.putInt(M_SP_DAMP, spatialDamping)?.apply() }
+    var fastStiffness by mutableStateOf(prefs?.getInt(M_FAST_STIFF, 800) ?: 800)
+        private set
+    fun chooseFastStiffness(v: Int) { fastStiffness = v.coerceIn(200, 3000); prefs?.edit()?.putInt(M_FAST_STIFF, fastStiffness)?.apply() }
+    var squashPct by mutableStateOf(prefs?.getInt(M_SQUASH, 6) ?: 6)
+        private set
+    fun chooseSquash(v: Int) { squashPct = v.coerceIn(0, 15); prefs?.edit()?.putInt(M_SQUASH, squashPct)?.apply() }
     fun chooseMotionPress(v: Int) { motionPressScale = v.coerceIn(80, 100); prefs?.edit()?.putInt(M_PRESS, motionPressScale)?.apply() }
 
     /**
@@ -155,6 +172,10 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val M_PANEL = "labs_motion_panel_ms"
         const val M_FLIP = "labs_motion_page_flip_ms"
         const val M_PRESS = "labs_motion_press_scale"
+        const val M_SP_STIFF = "labs_spatial_stiffness"
+        const val M_SP_DAMP = "labs_spatial_damping"
+        const val M_FAST_STIFF = "labs_fast_spatial_stiffness"
+        const val M_SQUASH = "labs_squash_pct"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"

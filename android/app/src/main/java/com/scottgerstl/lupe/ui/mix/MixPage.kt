@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -186,13 +187,14 @@ internal fun panShort(text: String): String = when (text.trim().uppercase()) { "
 fun TrackBadge(number: Int, colour: Color, selected: Boolean, size: Dp, fontSize: Int) {
     val reduce = LocalReduceMotion.current
     val m = hybridMotion
-    val sq by springFloat(if (selected) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
+    // round 3: M3 Expressive's spatial spring and a squash as it squares off; Reduce Motion: the circle and the square cross-fade
+    val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (selected) 1f else 0f, reduce)
+    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(selected, reduce)
     Box(
-        Modifier.size(size).drawBehind {
-            val s = sq.coerceIn(0f, 1.2f)   // Reduce Motion: the corners ease over 150 ms, no overshoot
-            val half = this.size.minDimension / 2
-            val r = half - (half - this.size.minDimension * 0.3f) * s
-            drawRoundRect(colour, cornerRadius = CornerRadius(r.coerceAtLeast(2f)))
+        Modifier.size(size).graphicsLayer { val (sx, sy) = squash(); scaleX = sx; scaleY = sy }.drawBehind {
+            val half = this.size.minDimension / 2; val square = this.size.minDimension * 0.3f
+            if (reduce) { val u = sq.coerceIn(0f, 1f); drawRoundRect(colour.copy(alpha = 1f - u), cornerRadius = CornerRadius(half)); drawRoundRect(colour.copy(alpha = u), cornerRadius = CornerRadius(square)) }
+            else { val s = sq.coerceIn(0f, 1.25f); drawRoundRect(colour, cornerRadius = CornerRadius((half - (half - square) * s).coerceAtLeast(2f))) }
         },
         contentAlignment = Alignment.Center,
     ) { BasicText("$number", style = LupeType.number.copy(fontSize = fontSize.sp, lineHeight = fontSize.sp, fontWeight = FontWeight.Bold, color = Tok.onColour)) }
@@ -289,10 +291,11 @@ private fun MuteSolo(t: MixTrackUi, actions: MixActions, modifier: Modifier) {
 fun ToggleSegment(label: String, description: String, on: Boolean, state: String, first: Boolean, last: Boolean, modifier: Modifier = Modifier, height: Dp = 36.dp, onClick: () -> Unit) {
     val reduce = LocalReduceMotion.current
     val m = hybridMotion
-    val shape by springFloat(if (on) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
+    val shape by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
     val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
+    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(on, reduce)
     Box(
-        modifier.defaultMinSize(minHeight = 44.dp)
+        modifier.defaultMinSize(minHeight = 44.dp).graphicsLayer { val (sx, sy) = squash(); scaleX = sx; scaleY = sy }
             .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = description; stateDescription = state }
             .clickable(remember { MutableInteractionSource() }, null, role = Role.Switch, onClick = onClick),
         contentAlignment = Alignment.Center,

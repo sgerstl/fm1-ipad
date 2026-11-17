@@ -231,6 +231,8 @@ Starting values. Put each in **Labs** (`ios/FM1/Labs.swift`) and graduate it to 
 
 Exits are quicker than entrances, and nothing reaches 500 ms (`DESIGN.md`). References: `motion/`.
 
+**Round 3 on Android (Scott on the Pixel, 2026-11-17: "the animation should show the transformation from one shape to another").** Shape changes ride Material 3 Expressive's springs, read from the AndroidX source (`compose/material3/.../tokens/ExpressiveMotionTokens.kt`): default spatial damping 0.8, stiffness 380 (pads, badges, scenes, tabs, toggles); fast spatial 0.6, 800 (presses, the squash's first beat); default effects 1.0, 1600 (colour). Because a corner radius can't overshoot past a pill, every shape-as-state change also **squashes and stretches**: going on, 6 % wider and 4 % shorter on the fast spring, settling on the spatial one; going off, the reverse. The tab pill's leading edge rides a stiffer spring than its trailing edge, so it stretches and thins, then gathers. All of it is in Labs (Shape spring · stiffness, · damping; Fast spring · stiffness; Squash and stretch). A spring may settle past 500 ms; the visible motion is done well before. Reduce Motion: the two shapes cross-fade, no squash. `graphics-shapes` `Morph` wasn't used: between a rounded card and a pill it traces the same outline as the radius, so it adds nothing visible here.
+
 ---
 
 ## 6. Accessibility (computed, not eyeballed)

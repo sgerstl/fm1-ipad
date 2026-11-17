@@ -95,8 +95,11 @@ fun SegmentGroup(
         val right = targetL > l.value
         // the leading edge is quicker, the trailing one slower: the pill stretches toward the new segment, then gathers there
         kotlinx.coroutines.coroutineScope {
-            launch { com.scottgerstl.lupe.ui.theme.unscaled { l.animateTo(targetL, com.scottgerstl.lupe.ui.theme.lupeSpring((m.fingerMs * if (right) 1.25f else 0.8f).toInt(), m.bounce)) } }
-            launch { com.scottgerstl.lupe.ui.theme.unscaled { r.animateTo(targetR, com.scottgerstl.lupe.ui.theme.lupeSpring((m.fingerMs * if (right) 0.8f else 1.25f).toInt(), m.bounce)) } }
+            // round 3: M3 Expressive's spatial spring (Labs › Shape spring); the leading edge on a 1.8× stiffer one so the pill visibly stretches
+            val lead = androidx.compose.animation.core.spring<Float>(dampingRatio = m.spatialDamping, stiffness = m.spatialStiffness * 1.8f)
+            val trail = androidx.compose.animation.core.spring<Float>(dampingRatio = m.spatialDamping, stiffness = m.spatialStiffness * 0.85f)
+            launch { com.scottgerstl.lupe.ui.theme.unscaled { l.animateTo(targetL, if (right) trail else lead) } }
+            launch { com.scottgerstl.lupe.ui.theme.unscaled { r.animateTo(targetR, if (right) lead else trail) } }
         }
     }
     androidx.compose.runtime.LaunchedEffect(selected) {
@@ -120,7 +123,13 @@ fun SegmentGroup(
             if (reduce) {
                 if (fromSel in labels.indices && fromSel != selected) pillAt(lefts[fromSel], lefts[fromSel] + widths[fromSel], 1f - fade.value)
                 pillAt(targetL, targetR, if (fromSel != selected) fade.value else 1f)
-            } else pillAt(l.value, r.value, 1f)
+            } else {
+                // stretched, the pill thins a little (squash and stretch), back to full height as it gathers
+                val natural = (targetR - targetL).coerceAtLeast(1f)
+                val stretch = ((r.value - l.value) / natural - 1f).coerceIn(0f, 1f)
+                val thin = h * m.squash * 1.2f * stretch
+                if (r.value > l.value) drawRoundRect(selectedFill, Offset(l.value, top + thin / 2), Size(r.value - l.value, h - thin), CornerRadius((h - thin) / 2))
+            }
         },
         horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -126,3 +126,17 @@ class NearestWellTest {
         if (dTop <= 64f && dSide <= 96f) assertEquals(want, got)
     }
 }
+
+/** Round 3: a well's ink is light on `held` and dark on every track colour, and it blends rather than flips. */
+class WellInkTest {
+    @org.junit.Test fun lightOnHeldDarkOnTrackColours() {
+        val ui = com.scottgerstl.lupe.ui.theme.Tok
+        org.junit.Assert.assertEquals(0f, com.scottgerstl.lupe.ui.shell.inkWeight(ui.held), 0.001f)
+        for (c in ui.track) org.junit.Assert.assertEquals(1f, com.scottgerstl.lupe.ui.shell.inkWeight(c), 0.001f)
+        // along the swell the weight only rises: no flip back
+        for (c in ui.track) {
+            var last = 0f
+            for (i in 0..20) { val w = com.scottgerstl.lupe.ui.shell.inkWeight(androidx.compose.ui.graphics.lerp(ui.held, c, i / 20f)); org.junit.Assert.assertTrue(w >= last - 0.001f); last = w }
+        }
+    }
+}
