@@ -160,6 +160,7 @@ Particular to the header:
 - 2026-11-14: launch timing beside the tempo; Play and Record in from the corner; tabs slide with the track's outline travelling (Scott, decision 29).
 - 2026-11-14: one header on both phones, Android's; the bar countdown goes (Scott, decision 31).
 - 2026-11-14: the song-name menu takes the iPhone's audio, demo and Developer items; the launch menu is the iPhone's with Cancel waiting (Scott, decision 33).
+- 2026-11-17: tabs Pads · Edit · Timeline · Mix as a connected pill group and launch timing as a "Bar ⌄" pill, over decision 29's underlined words; Record round 48 and Play/Stop round 56, the largest key, flush right (Scott, hybrid UI study; `design/hybrid-ui/spec.md` 4.1).
 
 ## 3. Build notes
 

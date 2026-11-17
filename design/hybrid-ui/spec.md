@@ -153,11 +153,11 @@ Frame references: `screens/`. Positions are drawn on an 874 × 402 phone frame; 
 
 ### 4.1 Phone header (every phone screen)
 
-56 tall, 16 each side, 12 between. From the left: **Song menu** (40 pill `lifted`, name and ⌄), **tabs Pads · Edit · Timeline · Mix** (connected group, 3.4), *flexible space*, **Bar ⌄** (40 pill, 1 pt `primaryEdge`, opens the Launch at menu), **readout** (right-aligned: "27·3" and "120 bpm · Song"; tap opens the tempo popup), **Record** (48 round `lifted`, `rec` dot 22), **Stop or Play** (68 × 48, radius 16, `text`, the largest key, flush to the right margin).
+56 tall, 16 each side, 12 between. From the left: **Song menu** (40 pill `lifted`, name and ⌄), **tabs Pads · Edit · Timeline · Mix** (connected group, 3.4), *flexible space*, **Bar ⌄** (40 pill, 1 pt `primaryEdge`, opens the Launch at menu), **readout** (right-aligned: "27·3" and "120 bpm · Song"; tap opens the tempo popup), **Record** (48 round `lifted`, `rec` dot 22), **Play/Stop** (**56 round**, `text`, icon 26 in `onColour`: the largest key, flush to the right margin). Round as decision 23; larger so size carries the priority (Scott, 2026-11-17).
 
 > The space between the tabs and Bar has to grow (`FILL` / `Spacer()` / `weight(1f)`). A mock bug left about 150 pt empty right of the transport (fixed 2026-11-17). The transport sits flush right.
 
-**Narrow widths** (iPhone inside its safe areas, about 734 wide): the row as drawn needs about 772. Give way in this order, never touching the tabs, Record or Stop: (1) the Song menu's name truncates to 96 with an ellipsis; (2) the Bar key drops its outline and shows "Bar ⌄" as a word (decision 29's form); (3) the readout's second line goes, with its words moving to the tempo popup's header. `[open]` whether the tabs may shrink their padding from 16 to 12 before step 1.
+**Narrow widths** (iPhone inside its safe areas, about 734 wide): the row as drawn needs about 760. Tabs and Bar stay pills (Scott, 2026-11-17). Give way in this order, never dropping a tab, Record or Play/Stop: (1) the Song menu's name truncates to 96 with an ellipsis; (2) tab padding goes from 16 to 12 a side; (3) the readout's second line moves into the tempo popup's header; (4) the Bar pill tightens to 12/6. Steps 1–2 alone win about 60.
 
 ### 4.2 Pads (`phone-03-pads`)
 
@@ -165,12 +165,12 @@ Six rows of 43 with 4 between: head (118), Mute (56), then 8 pads filling the wi
 
 ### 4.3 Edit · 8-step pages (`phone-01`, decided)
 
-- **Pattern bar** (44): badge, "Acid · Pattern A 01" over "Chromatic · 16 steps", then Step ⌄ (Tonal at radius 12) and Velocity (outline toggle) at the right. It spans the width left of the panel.
+- **Pattern bar** (44): badge, "Acid · Pattern A 01" over "Chromatic · 16 steps", then Step ⌄ (Tonal at radius 12), Velocity (outline toggle) and **Follow** (toggle; on = white key) at the right. It spans the width left of the panel.
 - **Grid:** piano edge 40 wide (white keys `text` with the note name, black keys `lifted`, radius 8), then a `well` grid at radius 18 holding **8 steps at about 65 each** and all 7 rows. Odd beats sit on `panel` bands, row lines are `disabledOutline` at 50 %, the playhead is `text` at 12 % with a 4-pt cap, and notes are pills in track colour with two length marks.
 - **Minimap** (3.14) under the grid.
 - **Sound panel** docked right at 280 wide, from the header's foot to 8 above the bottom: `panel`, left corners `radius.sheet`, 14/12 inside. Page title (ENV, "1 of 2") and a connected pager. Four tiles in 2 × 2 (60 tall), then the envelope on `well`.
 - **Panel closed** (`phone-02`): the same grid shows all 16 steps at the full width, which is what's built today.
-- **Paging is by hand:** a tap on the minimap's other half, or a horizontal swipe on the grid. This follows the editor's decision of 2026-11-01, "no paging with the playhead". While the playhead is on the other page, the minimap shows it as a moving cell highlight. The reference render `motion/edit-8-step-page-flip.mp4` flips with the playhead to show the transition itself; that following is **not** the behaviour (see 7, conflict 5).
+- **Paging:** with **Follow on**, the page turns with the playhead (to 9–16 at step 9, back at step 1), as `motion/edit-8-step-page-flip.mp4` shows. With Follow off, paging is by hand: a tap on the minimap's other half or a horizontal swipe, and the minimap shows where the playhead is as a moving cell highlight (Scott, 2026-11-17; amends the 2026-11-01 "no paging with the playhead" for 8-step pages only).
 
 ### 4.4 Timeline (`phone-05`)
 
@@ -178,7 +178,7 @@ Zoom (− +, connected, 50 × 40), then the ruler. Track heads are 104 pills (ba
 
 ### 4.5 Mix tab (`phone-06`, decided)
 
-Sub-pages Mixer · Delay · Reverb · Chorus · Global as a quiet segmented row (selected `lifted` pill, 36). Six strips fill the width (about 135 each on 874): `panel` at radius 20, and the selected strip gets the track tint and a 2 pt edge. Each strip holds a badge and name, the fader with its meter, dB, Mute/Solo connected (labelled), and the reverb send. The Global pages are grey (decision 34). The Mix pop-up and its sheet go.
+Sub-pages Mixer · Delay · Reverb · Chorus · Global as a quiet segmented row (selected `lifted` pill, 36). Six strips fill the width (about 135 each on 874): `panel` at radius 20, and the selected strip gets the track tint and a 2 pt edge. Each strip holds a badge and name, the fader with its meter (taller now), dB, **a values line "C · Rev 12%"** (Medium 12 `textSecondary`), and Mute/Solo connected (labelled). **Pan and the reverb send live in the strip's long-press menu** (`phone-06b`): a `held` menu at the finger with the track's badge and name, a centred Pan slider, a Reverb send slider, a divider, then Select sound…. State stays visible on the strip and the controls are a hold away (Scott, 2026-11-17: "you can longpress most things in the app for more options"). VoiceOver: Pan and Reverb send as adjustable actions on the strip, so they don't depend on the long press. The Global pages are grey (decision 34). The Mix pop-up and its sheet go.
 
 ### 4.6 Sheets and popups
 
@@ -256,18 +256,21 @@ Exits are quicker than entrances, and nothing reaches 500 ms (`DESIGN.md`). Refe
 
 ---
 
-## 7. Conflicts and open questions (Scott decides)
+## 7. Decisions (Scott, 2026-11-17) and what's still open
 
-**Conflicts with built decisions:**
-1. **Tabs:** connected pill tabs vs decision 29's word tabs with a gliding underline and the track thread. The pill puts the selection in a shape (mechanism 1). The underline is built on Android.
-2. **Transport:** Stop and Play as a 68 × 48 rounded rectangle, the largest key, vs decision 23's round Record and Play.
-3. **Launch timing:** "Bar ⌄" as an outlined pill vs decision 29's word with ⌄ (the narrow-width rule falls back to the word anyway).
-4. **Mix row content:** the pop-up's `[open]` lines in `mix.md` (level and send only, or pan too) carry over to the tab's strips. As drawn, each strip has level, Mute/Solo and send, and pan isn't drawn.
-5. **Edit paging and the playhead:** the editor's 2026-11-01 decision is "no paging with the playhead", so 8-step pages page by hand. With only half the pattern in view, should the page follow the playhead while playing (with Follow on, say)? Until Scott says so, it doesn't.
+The five conflicts this spec raised, settled:
 
-**Open:**
-- Whether the playhead's 60 ms glide counts as "travel" under Reduce Motion, or jumps.
+| # | Question | Decision | Effect on built decisions |
+|---|---|---|---|
+| 1 | Tabs: pills or words | **Pills**, as drawn (connected group, the selected tab a white pill) | Replaces decision 29's word tabs with the gliding underline; the track thread needs a new home or goes |
+| 2 | Transport | **Round**, Record 48 and Play/Stop **56** | Keeps decision 23's shape; Play/Stop grows |
+| 3 | Launch timing | **Pill** ("Bar ⌄", outlined) | Replaces decision 29's word form |
+| 4 | Pan and send on the Mix strip | **In the strip's long-press menu**; the strip shows their values | Answers `mix.md`'s level-and-send `[open]` for the phone tab |
+| 5 | Edit paging and the playhead | **Follows only when Follow is on** | Amends the 2026-11-01 log for 8-step pages |
+
+**Still open:**
+- Where the track thread goes now the tabs are pills: drop it, or move it to the selected pill's edge?
+- Whether the playhead's 60 ms glide counts as travel under Reduce Motion, or jumps.
 - The slider's unfilled track at 1.33:1.
-- Tab padding at narrow widths (4.1).
-- The phone's Sounds: a sheet here (`phone-07`). The structure map's phone section (2026-11-10) still lists a Sounds tab. Five tabs don't fit; this proposal keeps Sounds as a sheet.
-- The arc wheel vs the straight menu: only a study call. The wheel stays the shipped design until Scott says otherwise.
+- The phone's Sounds: a sheet here (`phone-07`). The structure map's phone section (2026-11-10) still lists a Sounds tab.
+- The arc wheel vs the straight pad menu: a study call only. The wheel stays the shipped design until Scott says otherwise.

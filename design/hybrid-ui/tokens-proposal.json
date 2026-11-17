@@ -14,7 +14,8 @@
     "pad": { "idle": "radius.padPt", "queued": "radius.padPt", "playing": "radius.pill", "pressed": "radius.padPt" },
     "selectable": { "unselected": "radius.pill", "selected": "radius.keyPt + 4 (12 at 40 tall)", "applies": ["scene key", "track badge (30: 15 → 9)", "rail item", "preset row (selected → pill)"] },
     "segment": { "selected": "radius.pill", "unselected": "radius.keyPt (outer ends pill)" },
-    "switch": { "thumbOffPt": 16, "thumbOnPt": 24 }
+    "switch": { "thumbOffPt": 16, "thumbOnPt": 24 },
+    "transport": { "recordPt": 48, "playStopPt": 56, "shape": "round (decision 23); Play/Stop the largest key" }
   },
   "elevation": {
     "note": "Unchanged. Menus, popups and the app strip use elevation 3 (held); sheets and docked panels elevation 1 (panel) with the sheet's upward shadow.",

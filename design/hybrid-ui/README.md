@@ -11,10 +11,12 @@ It came out of one design session on 2026-11-17: an M3 Expressive study, then a 
 | Phone Edit with the sound panel docked uses **8-step pages** with a 16-cell minimap | **Decided** (Scott, 2026-11-17) | `design/components/pattern-editor.md` decision log; answers that file's `[open]` on board 75 |
 | **Mix returns as a phone tab** (Pads · Edit · Timeline · Mix); the Mix pop-up goes | **Decided** (Scott, 2026-11-17: "most people want it more accessible") | `design/components/mix.md` decision log; reverses decision 28 |
 | The hybrid look as a whole (shape-as-state pads, pill keys, connected tabs, sheet and menu styling, motion vocabulary) | **Proposal.** Scott hasn't approved it for the app | This folder |
-| Phone header as drawn here (connected pill tabs, rounded-square Stop) | **Proposal, conflicts with built decisions 29 and 23** (word tabs with a gliding underline, round Record and Play) | `spec.md` › Conflicts |
+| Phone header: **pill tabs and a Bar pill; round Record (48) and Play/Stop (56)** | **Decided** (Scott, 2026-11-17); replaces decision 29's word tabs and launch word, keeps decision 23's round keys | `design/components/phone-header.md` decision log |
+| Mix strip: **pan and reverb send in the strip's long-press menu**, values shown on the strip | **Decided** (Scott, 2026-11-17) | `design/components/mix.md` decision log |
+| 8-step Edit **follows the playhead only when Follow is on** | **Decided** (Scott, 2026-11-17) | `design/components/pattern-editor.md` decision log |
 | Structure changes (the phone's tabs) | **Needs the structure map agreed first** (repo `CLAUDE.md` rule 4) | `structure-map-proposal.md` |
 
-**Before building anything from this:** get Scott's OK on `structure-map-proposal.md` and on each Conflict in `spec.md`. Any line in a component's CRD marked `[open]` still means stop and ask.
+**Before building anything from this:** get Scott's OK on `structure-map-proposal.md`. The conflicts are settled (`spec.md` §7). Any line in a component's CRD marked `[open]` still means stop and ask.
 
 ## What's here
 
@@ -23,9 +25,9 @@ It came out of one design session on 2026-11-17: an M3 Expressive study, then a 
 | `spec.md` | The build spec: principles, token mapping, components with every state, screens with dimensions, the motion table, accessibility and contrast, conflicts and open questions |
 | `tokens-proposal.json` | Additions to `tokens/tokens.json`: radii, shape-state rules and motion starting values. Motion values go to **Labs first** (rule 3), not straight into tokens |
 | `structure-map-proposal.md` | The phone section of `design/structure-map.md` as it would read, for Scott to agree |
-| `screens/` | The final frames at 1x (phone 874 × 402, iPad 1376 × 1032): 14 phone, 4 iPad |
+| `screens/` | The final frames at 1x (phone 874 × 402, iPad 1376 × 1032): 15 phone (with `06b`, the Mix strip's hold menu), 4 iPad |
 | `components/` | The hybrid pad's states, buttons, the parameter tile and the switch |
-| `motion/` | 10 reference renders (MP4, 2x, 30 fps) for the transitions in the motion table |
+| `motion/` | 10 reference renders (MP4, 2x, 30 fps) for the transitions in the motion table. They were rendered before the 2026-11-17 decisions, so their headers show the older rounded-square Stop and some show three tabs. The motion itself is current |
 
 ## Figma
 

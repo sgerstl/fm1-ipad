@@ -16,11 +16,11 @@ For Scott to agree before any screen is built (repo `CLAUDE.md` rule 4). When ag
 | Tab | What's on it |
 |---|---|
 | **Pads** | The grid of every track's entries, row heads (badge, name, Mute), the scenes toolbar (Store and 16). Hold menus as today. |
-| **Edit** | The selected pad's pattern. Panel shut: all 16 steps. Panel docked (FX, SEL, ENV, LFO, EDIT, ARP): **8 steps a page** with the minimap. |
+| **Edit** | The selected pad's pattern. Panel shut: all 16 steps. Panel docked (FX, SEL, ENV, LFO, EDIT, ARP): **8 steps a page** with the minimap. Pages follow the playhead when Follow is on; otherwise by hand. |
 | **Timeline** | The song's lanes and blocks, zoom, the ruler. A refusal ("Stop to change the song") shows in the app strip. |
-| **Mix** | Six strips (level fader with meter, dB, Mute and Solo, reverb send), and the Global pages as sub-pages: Mixer · Delay · Reverb · Chorus · Global. |
+| **Mix** | Six strips (level fader with meter, dB, a pan · send values line, Mute and Solo); **pan and the reverb send in the strip's long-press menu**, with Select sound…. The Global pages as sub-pages: Mixer · Delay · Reverb · Chorus · Global. |
 
-**Header, one row:** Song menu, the four tabs, then flush right: Launch at (Bar ⌄), the readout (opens the tempo popup), Record, Stop or Play. At narrow widths, things give way in the order in `spec.md` 4.1; the tabs, Record and Play never go.
+**Header, one row:** Song menu, the four tabs (pills), then flush right: Launch at (Bar ⌄ pill), the readout (opens the tempo popup), Record (round 48), Play/Stop (round 56). At narrow widths, things give way in the order in `spec.md` 4.1; the tabs, Record and Play never go.
 
 **Over any tab:** the Sounds sheet, Projects, Settings, the Launch at menu and the tempo popup. Messages show in the app strip, bottom centre.
 
