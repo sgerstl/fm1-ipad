@@ -293,6 +293,12 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 | 138 | With the panel open, hold another hit; then use ‹ ›. | The panel retargets to the new hit. ‹ › step through that lane's hits, round from the last to the first. | – | ☐ pass ☐ fail: |
 | 139 | Close the panel; tap Step on the kit with nothing picked. Then tap a cell; hold and slide a hit. | Step opens on the last picked hit, or the pattern's first. A tap toggles; hold and slide drags the hit along its lane. | – | ☐ pass ☐ fail: |
 
+## Round 14b: the band's corners (2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 140 | Pads, then the Timeline: look closely at the selected track's band round its head. Pick track 1, then track 6; then switch tabs. | The band's left end is fully round, running parallel to the head pill with an even gap (about 2 dp) top, bottom and left; its right end is rounded a little more than the last pad, with nothing cut flat at either edge. Between tabs the travelling band keeps those corners and lands without changing shape. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

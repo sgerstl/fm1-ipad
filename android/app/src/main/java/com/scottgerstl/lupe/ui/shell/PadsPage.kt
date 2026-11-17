@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.layout.layout
+
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -123,7 +125,8 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     // the clock reference: the pass bars and the waiting outlines move on from it every frame (read inside the draw, so a new reference recomposes nothing)
     val clock = core.clock.collectAsStateWithLifecycle()
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
+    // the page's content sits BAND_INSET in from its edges, so the selected track's band (which reaches that far past the row) isn't cut off by the page
+    BoxWithConstraints(modifier.fillMaxSize().padding(start = BAND_INSET, end = BAND_INSET, top = BAND_INSET)) {
         val scenesH = 44.dp   // the scenes toolbar: 4 inside, scene keys 36 (spec 3.3 draws 40–48; the Pixel's height is the limit)
         val rows = pads.rows.ifEmpty { return@BoxWithConstraints }
         val rh = ((maxHeight - scenesH - 8.dp - GAP * (rows.size - 1)) / rows.size).coerceAtLeast(24.dp)
@@ -137,10 +140,15 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                     val y = animatedFloat(at.toFloat(), Dur.STATE)
                     val travelling = LocalTabTravelling.current
                     val band = trackBand(Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size])
+                    // an even inset round the row (BAND_INSET, half the row gap, so it never reaches the next row); the left end wraps the round head
+                    // pill, so it is fully round; the right end wraps the last pad: its radius plus the inset (nested corners, Scott 2026-11-18)
+                    val bandR = com.scottgerstl.lupe.ui.theme.Shape.pad + BAND_INSET
                     Box(
-                        Modifier.fillMaxWidth().height(rh + 4.dp).offset { IntOffset(0, ((rh + GAP).toPx() * y.value - 2.dp.toPx()).roundToInt()) }
-                            .selectedTrackAnchor()
-                            .drawBehind { if (!travelling) drawRoundRect(band, cornerRadius = CornerRadius(10.dp.toPx())) }
+                        Modifier.fillMaxWidth().padding(horizontal = 0.dp).height(rh + BAND_INSET * 2)
+                            .offset { IntOffset(-BAND_INSET.roundToPx(), ((rh + GAP).toPx() * y.value - BAND_INSET.toPx()).roundToInt()) }
+                            .layout { m, c -> val extra = (BAND_INSET * 2).roundToPx(); val p = m.measure(c.copy(minWidth = c.minWidth + extra, maxWidth = c.maxWidth + extra)); layout(c.maxWidth, p.height) { p.place(0, 0) } }
+                            .selectedTrackAnchor(leftR = (-1).dp, rightR = bandR)
+                            .drawBehind { if (!travelling) drawBand(band, Offset.Zero, size, -1f, bandR.toPx()) }
                             .clearAndSetSemantics { },
                     )
                 }

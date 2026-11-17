@@ -193,6 +193,7 @@ Motion follows `DESIGN.md`. Particular to the Timeline:
 - 2026-11-10: blocks toned down, the selected one in the Pads' language, option A of board 48 (Scott).
 - 2026-11-10: the lane tab added to the shut selected lane, as on Pads (Scott: "Yes, add it").
 - 2026-11-14: Android's Timeline is the keeper for both phones (decision 33, Scott).
+- 2026-11-18: the selected track's band nests round the head pill (logged in `track-head.md`): even 2 dp inset, round left end, right end 14 + 2.
 
 ## 3. Build notes
 

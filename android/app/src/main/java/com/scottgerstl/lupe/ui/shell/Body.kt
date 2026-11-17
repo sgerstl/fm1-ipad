@@ -331,11 +331,17 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: I
         val a = fromRect; val bb = anchors.rects[shown]
         if (from != null && (a != null || bb != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
             val p = t.value; val band = trackBand(colour)
-            fun fill(rr: androidx.compose.ui.geometry.Rect, alpha: Float) = drawRoundRect(band.copy(alpha = alpha), Offset(rr.left, rr.top),
-                androidx.compose.ui.geometry.Size(rr.width, rr.height), androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()))
+            // the band keeps each place's own corners while it travels (nested corners, 2026-11-18): it lands without changing shape
+            val ra = from?.let { anchors.radii[it] } ?: (10.dp.toPx() to 10.dp.toPx()); val rb = anchors.radii[shown] ?: (10.dp.toPx() to 10.dp.toPx())
+            fun fill(rr: androidx.compose.ui.geometry.Rect, alpha: Float, rad: Pair<Float, Float>) = drawBand(band.copy(alpha = alpha), Offset(rr.left, rr.top), androidx.compose.ui.geometry.Size(rr.width, rr.height), rad.first, rad.second)
             when {
-                reduce || a == null || bb == null -> { a?.let { fill(it, 1f - p) }; bb?.let { fill(it, p) } }
-                else -> fill(androidx.compose.ui.geometry.Rect(a.left + (bb.left - a.left) * p, a.top + (bb.top - a.top) * p, a.right + (bb.right - a.right) * p, a.bottom + (bb.bottom - a.bottom) * p), 1f)
+                reduce || a == null || bb == null -> { a?.let { fill(it, 1f - p, ra) }; bb?.let { fill(it, p, rb) } }
+                else -> {
+                    val r = androidx.compose.ui.geometry.Rect(a.left + (bb.left - a.left) * p, a.top + (bb.top - a.top) * p, a.right + (bb.right - a.right) * p, a.bottom + (bb.bottom - a.bottom) * p)
+                    // each end's radius resolved for its own place's height, then blended
+                    val (al, ar) = bandRadii(a.height, ra.first, ra.second); val (bl, br) = bandRadii(bb.height, rb.first, rb.second)
+                    fill(r, 1f, (al + (bl - al) * p) to (ar + (br - ar) * p))
+                }
             }
         }
         androidx.compose.runtime.key(shown) {

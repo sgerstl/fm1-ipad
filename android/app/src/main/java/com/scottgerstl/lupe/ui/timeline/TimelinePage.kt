@@ -1,5 +1,8 @@
 package com.scottgerstl.lupe.ui.timeline
 
+import androidx.compose.ui.layout.layout
+import com.scottgerstl.lupe.ui.shell.drawBand
+
 import androidx.compose.ui.layout.boundsInWindow
 
 import androidx.compose.ui.semantics.disabled
@@ -132,7 +135,8 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
     val view = remember { TimelineViewState() }
     val scope = rememberCoroutineScope()
     val tm = rememberTextMeasurer()
-    BoxWithConstraints(modifier.fillMaxSize()) {
+    // BAND_INSET in from the page's edges, so the selected track's band reaching past its row isn't cut off (2026-11-18)
+    BoxWithConstraints(modifier.fillMaxSize().padding(horizontal = com.scottgerstl.lupe.ui.shell.BAND_INSET)) {
         val lanePx = with(density) { (maxWidth - HEAD - GAP).toPx() }
         // what is drawn: the state, kept inside what the lanes allow (the state itself is only written by a touch)
         val barPx = clampBarPx(view.barPx, lanePx)
@@ -234,10 +238,15 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                     val at = animatedFloat((ui.selectedTrack - 1).toFloat(), Dur.STATE)
                     val travelling = LocalTabTravelling.current
                     val band = com.scottgerstl.lupe.ui.shell.trackBand(Tok.track[(ui.selectedTrack - 1) % Tok.track.size])
+                    // nested corners (Scott, 2026-11-18): an even inset; the left end wraps the round head pill (fully round), the right the lane's well (14) plus the inset
+                    val bandIn = com.scottgerstl.lupe.ui.shell.BAND_INSET
+                    val bandR = 14.dp + bandIn
                     Box(
-                        Modifier.fillMaxWidth().height(rh + 4.dp).offset { IntOffset(0, ((rh + GAP).toPx() * at.value - 2.dp.toPx()).toInt()) }
-                            .selectedTrackAnchor()
-                            .drawBehind { if (!travelling) drawRoundRect(band, cornerRadius = CornerRadius(10.dp.toPx())) }
+                        Modifier.fillMaxWidth().height(rh + bandIn * 2)
+                            .offset { IntOffset(-bandIn.roundToPx(), ((rh + GAP).toPx() * at.value - bandIn.toPx()).toInt()) }
+                            .layout { m, c -> val extra = (bandIn * 2).roundToPx(); val p = m.measure(c.copy(minWidth = c.minWidth + extra, maxWidth = c.maxWidth + extra)); layout(c.maxWidth, p.height) { p.place(0, 0) } }
+                            .selectedTrackAnchor(leftR = (-1).dp, rightR = bandR)
+                            .drawBehind { if (!travelling) drawBand(band, Offset.Zero, size, -1f, bandR.toPx()) }
                             .clearAndSetSemantics { },
                     )
                 }

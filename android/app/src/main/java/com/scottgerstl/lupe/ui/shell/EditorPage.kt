@@ -254,7 +254,7 @@ fun EditTab(
         // the track thread rests round the pattern (the tab-thread mockup): the selected track's outline in its colour; while the tabs slide the
         // travelling one stands in for it
         val travelling = LocalTabTravelling.current
-        Box(Modifier.weight(1f).fillMaxWidth().selectedTrackAnchor(outset = 4.dp).drawBehind {
+        Box(Modifier.weight(1f).fillMaxWidth().selectedTrackAnchor(outset = 4.dp, leftR = 11.dp).drawBehind {
             if (!travelling) drawRoundRect(track, Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(11.dp.toPx()), style = Stroke(2.dp.toPx()))
         }) {
             Column(Modifier.fillMaxSize()) {

@@ -169,6 +169,7 @@ Particular to the head:
 - 2026-11-14: phones show selection as the track's muted colour under the row (Scott, decision 31).
 - 2026-11-17 (round 3): the badge squares off on M3 Expressive's spatial spring with a squash and stretch; Reduce Motion cross-fades the circle and the square (spec §5, round 3).
 - 2026-11-17: **the Mute key's launch trace is grey** (Scott, matching the Mix strip): 2 dp in the tertiary grey `text3`, with the faint whole outline at 30 % under it. It was the track's colour on an unmuted key and dark on a muted one, with the outline at 60 %. The head's solo trace keeps the track colour (not asked).
+- 2026-11-18: **the selected track's band nests round the head** (from a Pixel screenshot: the band's ~10 dp corners against the head pill's full round, the gap uneven). Nested-corner rule (DESIGN.md: outer = inner + padding). The band sits an even 2 dp (`BAND_INSET`) round the row on every side: half the 4 dp row gap, the most it can take without reaching the next row (4 or 6 dp would need a wider gap). Its left end wraps the round head pill, so it is fully round (half the band's height). Its right end wraps the last pad, radius 10 + 2 (the Timeline: the lane's 14 + 2). The pages' content moved 2 dp in from their edges so the band isn't cut off by the page. The travelling band (decision 29) keeps each place's radii as it travels and lands without a change. The thread's placement is still [open]; only the corners changed. Device check 140.
 
 ## 3. Build notes
 
