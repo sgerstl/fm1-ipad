@@ -170,6 +170,8 @@ Particular to the head:
 
 ## 3. Build notes
 
+- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; spec 3.2): the head is a pill on `control`; selected, the track's tint with a 2 dp edge in its colour, and the 30 badge squares off from round on the spring (`TrackBadge` in `MixPage.kt`, shared with the Mix strips). Mute is a pill with the word "Mute" (spec keeps the word). The row band behind the selected row and the travelling thread are untouched (the thread's place is `[open]`, spec 7).
+
 - `SoundName` is laid out hidden inside the head's button and drawn on top by `SoundNameKey` through an anchor preference; since 2026-11-15 it takes no touches, so the head's button gets every tap and its hold.
 - `TrackMenuPress` selects the track as the hold fires, then places the menu at the press point in `AppView.space`.
 - The Mute key on the row form has no countdown in its accessibility value ("mutes at the launch point"), while the card's says the countdown. The phone's `HeadKeySurface` gets no `left:` closure, so its trace has no time to draw against; checked in code only.

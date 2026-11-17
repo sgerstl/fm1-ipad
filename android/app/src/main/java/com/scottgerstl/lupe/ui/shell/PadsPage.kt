@@ -9,6 +9,7 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -123,7 +124,7 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     val clock = core.clock.collectAsStateWithLifecycle()
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val scenesH = 34.dp
+        val scenesH = 44.dp   // the scenes toolbar: 4 inside, scene keys 36 (spec 3.3 draws 40–48; the Pixel's height is the limit)
         val rows = pads.rows.ifEmpty { return@BoxWithConstraints }
         val rh = ((maxHeight - scenesH - 8.dp - GAP * (rows.size - 1)) / rows.size).coerceAtLeast(24.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -201,17 +202,25 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
             Box(Modifier.fillMaxWidth().height(scenesH)) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {   // (8 between Store, the scenes and the knobs)
                     // the iPhone's short Store key with a dot (decision 33): the same word either way, lit while armed, so the scenes beside it never move
-                    Key({ store = !store }, "Store scene", width = 88.dp, height = scenesH, minTarget = scenesH, on = store,
-                        role = Role.Switch, state = if (store) "On: tap a scene to store what plays now" else "Off") { fg ->
+                    // the scenes toolbar (spec 3.3): one floating `panel` group at radius 24, 4 inside; Store a `lifted` pill with its dot, lit white while armed
+                    Row(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.sheet)).background(Tok.panel).padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val armed = animatedFloat(if (store) 1f else 0f, Dur.STATE)
+                    Box(
+                        Modifier.width(88.dp).fillMaxHeight().clip(RoundedCornerShape(50)).background(lerp(Tok.lifted, Tok.text, armed.value))
+                            .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Store scene"; stateDescription = if (store) "On: tap a scene to store what plays now" else "Off" }
+                            .clickable(role = Role.Switch) { store = !store },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val armed = animatedFloat(if (store) 1f else 0f, Dur.STATE)
-                            androidx.compose.foundation.Canvas(Modifier.size(6.dp)) { drawCircle(androidx.compose.ui.graphics.lerp(Tok.text3, Tok.rec, armed.value)) }
-                            KeyLabel("Store", fg)
+                            androidx.compose.foundation.Canvas(Modifier.size(6.dp)) { drawCircle(androidx.compose.ui.graphics.lerp(Tok.text2, Tok.rec, armed.value)) }
+                            KeyLabel("Store", lerp(Tok.text, Tok.onColour, armed.value), style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal))
                         }
                     }
                     // the sixteen scroll across the room the HOME knobs leave (decision 50): the last recalled kept in view, a fade at a clipped edge
                     val sceneScroll = rememberScrollState()
                     val reduceMotion = LocalReduceMotion.current
+                    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
                     val keyPx = with(androidx.compose.ui.platform.LocalDensity.current) { (SCENE_KEY_W + GAP).toPx() }
                     val current = pads.scenes.indexOfFirst { it.current }
                     var viewPx by remember { mutableStateOf(0) }
@@ -235,20 +244,25 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                     ) {
                     pads.scenes.forEachIndexed { i, s ->
                         val kept = animatedFloat(if (s.stored || s.current) 1f else 0f, Dur.STATE); val cur = animatedFloat(if (s.current) 1f else 0f, Dur.STATE)
+                        // shape as state: the current scene squares to 12, a stored one is round, an empty one bare; a press squashes it (spec §5)
+                        var scenePressed by remember { mutableStateOf(false) }
+                        val sq by com.scottgerstl.lupe.ui.theme.springFloat(if (s.current) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduceMotion)
+                        val squash by com.scottgerstl.lupe.ui.theme.springFloat(if (scenePressed) hm.pressScale else 1f, if (scenePressed) 100 else hm.fingerMs, hm.bounce, spring = !reduceMotion)
                         val label = "Scene ${i + 1}" + (if (!s.stored) ", empty" else if (s.current) ", current" else "") + if (s.waiting) ", waiting for the launch point" else ""
                         Box(
-                            Modifier.width(SCENE_KEY_W).height(scenesH)
-                                .clip(RoundedCornerShape(8.dp))
-                                // the current scene white, a stored one filled, an empty one only outlined (the fills and the outline blend, nothing pops)
+                            Modifier.width(SCENE_KEY_W).fillMaxHeight()
+                                .graphicsLayer { val k = if (reduceMotion) 1f else squash; scaleX = k; scaleY = k }
+                                // the current scene white and square, a stored one `lifted` and round, an empty one bare with a grey number (fill and ink both carry it)
                                 .drawBehind {
-                                    val r = CornerRadius(8.dp.toPx())
-                                    if (kept.value > 0f) drawRoundRect(Tok.control.copy(alpha = kept.value), cornerRadius = r)
-                                    if (cur.value > 0f) drawRoundRect(Tok.primaryTop.copy(alpha = cur.value), cornerRadius = r)
-                                    if (kept.value < 1f) drawRoundRect(Tok.outline.copy(alpha = 1f - kept.value), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(7.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                                    val t = if (reduceMotion) (if (s.current) 1f else 0f) else sq.coerceIn(0f, 1.15f)
+                                    val round = size.minDimension / 2; val square = com.scottgerstl.lupe.ui.theme.Shape.selected.toPx()
+                                    val r = CornerRadius((round + (square - round) * t).coerceAtLeast(2f))
+                                    if (kept.value > 0f) drawRoundRect(Tok.lifted.copy(alpha = kept.value), cornerRadius = r)
+                                    if (cur.value > 0f) drawRoundRect(Tok.text.copy(alpha = cur.value), cornerRadius = r)
                                 }
                                 .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = label }
                                 .pointerInput(i, store, s.stored) {
-                                    detectTapGestures {
+                                    detectTapGestures(onPress = { scenePressed = true; tryAwaitRelease(); scenePressed = false }) {
                                         when {
                                             store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis() }   // a kept scene: ask first
                                             store -> { core.send(Intent.SceneStore(i)); store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) }
@@ -259,13 +273,14 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                                 },
                             contentAlignment = Alignment.Center,
                         ) {
-                            BasicText("${i + 1}", style = LupeType.key.copy(color = if (s.current) Tok.onColour else if (s.stored) Tok.text else Tok.text2))
+                            BasicText("${i + 1}", style = LupeType.number.copy(fontSize = 17.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if (s.current) Tok.onColour else if (s.stored) Tok.text else Tok.text2))
                             // recalled while playing: it waits for the launch point, its outline drawn as that comes (a scene is global: white, or dark on the lit key)
                             if (s.waiting) LaunchTrace({ clock.value.ticksLeft(s.launchTick, android.os.SystemClock.uptimeMillis()) }, if (s.current) Tok.onColour else Tok.text, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
                         }
                     }
                     }   // the scenes' scroller
-                    SceneHomeKnobs(core, scenesH)
+                    }   // the toolbar
+                    SceneHomeKnobs(core, 34.dp)   // decision 50's row height: the toolbar grew, the knobs keep theirs
                 }
                 // Store over a kept scene: a red-outlined row naming it, Cancel beside it; a tap ignores the first 0.4 s
                 LupeCrossfade(confirmScene, Modifier.fillMaxSize()) { c ->
@@ -319,11 +334,14 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
         HoldItem("Solo", sub = "Plays this track alone", checked = solo) { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)) },
     )
     Box(Modifier.width(HEAD_W).height(h).onGloballyPositioned { headCoords = it }) {
+        // the head (spec 3.2): a pill on `control`; selected, the track's tint with a 2 dp edge in its colour, and its badge squares off
         Row(
-            Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
+            Modifier.fillMaxSize().clip(RoundedCornerShape(50))
                 .drawBehind {
-                    drawRect(lerp(Tok.control, lerp(Tok.page, color, 0.30f), sel.value))
-                    if (press.value > 0f) drawRect(Color.Black.copy(alpha = 0.25f * press.value))
+                    val pillR = CornerRadius(size.height / 2)
+                    drawRoundRect(lerp(Tok.control, lerp(Tok.page, color, 0.30f), sel.value), cornerRadius = pillR)
+                    if (sel.value > 0f) drawRoundRect(color.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(size.height / 2 - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+                    if (press.value > 0f) drawRoundRect(Color.Black.copy(alpha = 0.25f * press.value), cornerRadius = pillR)
                 }
                 .semantics(mergeDescendants = true) {
                     role = Role.Button; contentDescription = "Track ${r.track}, $sound" + (if (engine.isNotEmpty()) ", $engine" else "") + (if (solo) ", solo" else ""); stateDescription = if (selected) "Selected" else ""
@@ -338,19 +356,20 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
                 .tapOrHoldMenu(r.track, color, { headItems() }, onTap = { core.send(Intent.TrackSelect(r.track)) }, pressed = { pressed = it }),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.width(30.dp).fillMaxHeight().background(color), contentAlignment = Alignment.Center) { BasicText("${r.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
-            Column(Modifier.padding(start = 8.dp, end = 4.dp), verticalArrangement = Arrangement.Center) {
-                BasicText(sound, style = LupeType.key.copy(fontSize = 15.sp, lineHeight = 17.sp), maxLines = 1, softWrap = false,
+            Spacer(Modifier.width(((h - 30.dp) / 2).coerceAtLeast(4.dp)))
+            com.scottgerstl.lupe.ui.mix.TrackBadge(r.track, color, selected, minOf(30.dp, h - 8.dp), 18)
+            Column(Modifier.padding(start = 8.dp, end = 12.dp), verticalArrangement = Arrangement.Center) {
+                BasicText(sound, style = LupeType.key.copy(fontSize = 14.5.sp, lineHeight = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1, softWrap = false,
                     autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 15.sp, stepSize = 1.sp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (engine.isNotEmpty()) BasicText(engine, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 1)
+                    if (engine.isNotEmpty()) BasicText(engine, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp, color = Tok.text2), maxLines = 1)
                     // solo: a lit pill with the word (never the colour alone)
                     if (solo) BasicText("SOLO", Modifier.background(Tok.primaryTop, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp), style = LupeType.label.copy(fontSize = 10.sp, lineHeight = 11.sp, color = Tok.onColour))
                 }
             }
         }
         // a solo that waits for the launch point: the head's outline drawn as it comes, in the track's colour
-        if (r.soloPending) LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) }, color, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+        if (r.soloPending) LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) }, color, h / 2, 2.dp, Modifier.matchParentSize(), base = 0.6f)
     }
 }
 
@@ -385,14 +404,14 @@ private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore, clock: androi
             val lit = animatedFloat(if (r.muted) 1f else 0f, Dur.STATE)
             val sound = r.name.substringAfter(" · ")
             Box(
-                Modifier.fillMaxWidth().height(rh).clip(RoundedCornerShape(8.dp)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
+                Modifier.fillMaxWidth().height(rh).clip(RoundedCornerShape(50)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
                     .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Mute $sound"; stateDescription = (if (r.muted) "Muted" else "Not muted") + if (r.mutePending != "none") ", changing at the launch point" else ""; onClick { core.send(Intent.TrackMute(r.track)); true } },
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText("MUTE", style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit.value)))
+                BasicText("Mute", style = LupeType.key.copy(fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = lerp(Tok.text2Raised, Tok.onColour, lit.value)))
                 // a mute that waits for the launch point: the key's outline drawn as it comes, in the track's colour (dark on the lit, white key)
                 if (r.mutePending != "none") LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) },
-                    if (r.muted) Tok.onColour else Tok.track[(r.track - 1) % Tok.track.size], 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+                    if (r.muted) Tok.onColour else Tok.track[(r.track - 1) % Tok.track.size], rh / 2, 2.dp, Modifier.matchParentSize(), base = 0.6f)
             }
         }
     }
@@ -416,6 +435,11 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     var pressed by remember { mutableStateOf(false) }
     val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100)
     val onRow = animatedFloat(if (pads.selected.track == row.track) 1f else 0f, Dur.STATE)
+    // shape as state (hybrid UI, spec 3.1): a playing pad is a full pill, every other state a 10-radius card; the shape travels on the spring,
+    // the colour eases (spec §5). A press morphs a playing pad back toward the card. With Reduce Motion the shape lands at once.
+    val reduceMotion = LocalReduceMotion.current
+    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val pill by com.scottgerstl.lupe.ui.theme.springFloat(if (playing && !row.muted && !pressed) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduceMotion)
     val letter = ('A' + idx).toString()
     // The entry its touches act on. An outlined slot past the row's one free entry stands for that entry (Skiff's list has no gaps, so
     // whatever is made there lands in the first free place): [target] is that entry, and the menu says where it goes.
@@ -594,15 +618,19 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         Box(
             Modifier.matchParentSize()
                 .drawBehind {
-                    val r = CornerRadius(8.dp.toPx())
-                    // an empty slot is an outline with its letter (decision 33); a filled one a key
-                    if (empty) drawRoundRect(emptyOutline(color, onRow.value), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(7.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
-                    else drawRoundRect(Tok.control, cornerRadius = r)
+                    val padR = com.scottgerstl.lupe.ui.theme.Shape.pad.toPx()
+                    val shapeT = if (reduceMotion) (if (playing && !row.muted && !pressed) 1f else 0f) else pill.coerceIn(0f, 1.15f)
+                    val rr = (padR + (size.height / 2 - padR) * shapeT).coerceIn(2f, size.height / 2)
+                    val r = CornerRadius(rr)
+                    // an empty slot is an outline with its letter (decision 33; its edge colour is A11, still open); a filled one a card
+                    if (empty) drawRoundRect(emptyOutline(color, onRow.value), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(rr - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                    else drawRoundRect(androidx.compose.ui.graphics.lerp(Tok.control, Tok.lifted, next.value), cornerRadius = r)
                     if (fill.value > 0f) drawRoundRect(color.copy(alpha = fill.value), cornerRadius = r)
                     if (ringMuted.value > 0f) drawRoundRect(color.copy(alpha = ringMuted.value), cornerRadius = r, style = Stroke(4.dp.toPx()), topLeft = Offset.Zero)
                     if (ringMuted.value > 0f && !empty) drawRoundRect(Tok.control, topLeft = Offset(2.dp.toPx(), 2.dp.toPx()), size = Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()), cornerRadius = CornerRadius(6.dp.toPx()), alpha = ringMuted.value)
                     // (a waiting pad's outline is the LaunchTrace drawn over the pad, below)
-                    if (next.value > 0f) drawRoundRect(Tok.text2.copy(alpha = next.value), topLeft = Offset(0.75.dp.toPx(), 0.75.dp.toPx()), size = Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                    // queued for its next pass (spec 3.1): `lifted` with a 2 dp edge in the track's colour and the word "Next"
+                    if (next.value > 0f) drawRoundRect(color.copy(alpha = next.value), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
                     if (e.hasSound && !empty) drawPath(Path().apply { moveTo(size.width - 10.dp.toPx(), 0f); lineTo(size.width, 0f); lineTo(size.width, 10.dp.toPx()); close() }, Tok.page)
                     if (press.value > 0f) drawRoundRect(Color.Black.copy(alpha = 0.25f * press.value), cornerRadius = r)
                     // the selected pad: a ring in the track's colour (never white), with a dark gap inside it so it reads on a filled, playing pad
@@ -610,8 +638,8 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     // drawn over it (Scott, 2026-11-14: "the outline timer still doesn't show"). The outline says both until it lands.
                     val ringA = sel.value * (1f - wait.value)
                     if (ringA > 0f) {
-                        drawRoundRect(color.copy(alpha = ringA), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
-                        drawRoundRect(Tok.page.copy(alpha = ringA), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius(5.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                        drawRoundRect(color.copy(alpha = ringA), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+                        drawRoundRect(Tok.page.copy(alpha = ringA), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius((rr - 2.75.dp.toPx()).coerceAtLeast(1f)), style = Stroke(1.5.dp.toPx()))
                     }
                 }
                 .semantics(mergeDescendants = true) {
@@ -631,27 +659,27 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         ) {
             val fg = Color.lerp(Tok.text, Tok.onColour, fill.value)
             if (empty) {
-                BasicText(letter, Modifier.align(Alignment.CenterStart).padding(start = 8.dp), style = LupeType.label.copy(color = Tok.text2Raised))
+                BasicText(letter, Modifier.align(Alignment.CenterStart).padding(start = 12.dp), style = LupeType.label.copy(fontSize = 13.sp, color = Tok.text2Raised))
             } else if (e.kind == PadKind.Rest) {
-                BasicText("REST", Modifier.align(Alignment.CenterStart).padding(start = 8.dp), style = LupeType.label.copy(color = fg))
+                BasicText("Rest", Modifier.align(Alignment.CenterStart).padding(start = 12.dp), style = LupeType.key.copy(fontSize = 14.sp, color = fg))
             } else if (e.kind == PadKind.Pattern) {
-                Row(Modifier.align(Alignment.CenterStart).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BasicText(letter, style = LupeType.label.copy(color = Color.lerp(Tok.text2Raised, Tok.onColour, fill.value)))
-                    BasicText("%02d".format(e.pattern ?: 0), style = LupeType.number.copy(fontSize = 20.sp, color = fg))
+                Row(Modifier.align(Alignment.CenterStart).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    BasicText(letter, style = LupeType.label.copy(fontSize = 13.sp, color = Color.lerp(Tok.text2Raised, Tok.onColour, fill.value)))
+                    BasicText("%02d".format(e.pattern ?: 0), style = LupeType.number.copy(fontSize = 21.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = fg))
                 }
             }
             if (h >= 36.dp) {
                 val side = when {
-                    e.play == PadPlay.Next -> "next"
+                    e.play == PadPlay.Next -> "Next"
                     e.passes != null && e.passes > 1 -> if (playing && e.pass != null) "${e.pass}/${e.passes}" else "×${e.passes}"
                     else -> null
                 }
                 if (side != null) BasicText(side, Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 11.sp, color = Color.lerp(Tok.text2Raised, Tok.onColour, fill.value), textAlign = androidx.compose.ui.text.style.TextAlign.End))
             }
             // the pass bar along the foot: it moves every frame, on from the core's last word by the clock's rate (never stepping on each publish)
-            if ((e.progress != null || row.passTicks != null) && playing && !row.muted) PassBar({ clock.value.passProgress(row.passStartTick, row.passTicks, android.os.SystemClock.uptimeMillis()) ?: e.progress }, Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = 3.dp).width(PAD_W - 12.dp).height(3.dp))
+            if ((e.progress != null || row.passTicks != null) && playing && !row.muted) PassBar({ clock.value.passProgress(row.passStartTick, row.passTicks, android.os.SystemClock.uptimeMillis()) ?: e.progress }, Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 4.dp).width(PAD_W - 24.dp).height(4.dp))
             // waiting for the launch point: the outline drawn as that comes, in the track's colour; dashed when there is no clock
-            if (wait.value > 0f) LaunchTrace({ clock.value.ticksLeft(e.launchTick ?: row.launchTick, android.os.SystemClock.uptimeMillis()) }, color, 8.dp, 2.dp, Modifier.matchParentSize().graphicsLayer { alpha = wait.value })
+            if (wait.value > 0f) LaunchTrace({ clock.value.ticksLeft(e.launchTick ?: row.launchTick, android.os.SystemClock.uptimeMillis()) }, color, com.scottgerstl.lupe.ui.theme.Shape.pad, 2.dp, Modifier.matchParentSize().graphicsLayer { alpha = wait.value })
         }
     }
 }
@@ -679,7 +707,7 @@ internal fun emptyOutline(track: Color, onBand: Float): Color = androidx.compose
 @Composable
 private fun EmptySlot(idx: Int, h: Dp, outline: () -> Color) {
     Box(Modifier.width(PAD_W).height(h).drawBehind {
-        drawRoundRect(outline(), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(7.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+        drawRoundRect(outline(), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(com.scottgerstl.lupe.ui.theme.Shape.pad.toPx() - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
     }.clearAndSetSemantics { }) {
         if (idx < 8) BasicText(('A' + idx).toString(), Modifier.align(Alignment.CenterStart).padding(start = 8.dp), style = LupeType.label.copy(color = Tok.text2Raised))
     }

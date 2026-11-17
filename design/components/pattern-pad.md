@@ -182,6 +182,8 @@ Motion follows `DESIGN.md` (nothing pops). Particular to the pad:
 
 ## 3. Build notes
 
+- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; spec 3.1): a playing pad is a full pill, every other state a 10-radius card; the shape springs (Labs › Hybrid · at the finger) and a press morphs a playing pad back toward the card; colour still eases. Queued for the next pass: `lifted` with a 2 dp edge in the track colour and "Next". Pass bar 4 tall. Pad value Barlow Condensed Bold 21; "Rest" in words. **Left as built, because their lines are `[open]`:** the empty pad's edge (A11: the spec's `primaryEdge` would answer it, if Scott adopts it), the playing pad on a muted row (S14: still the ring, and it stays a card), the own-sound mark (S15: the cut corner sits oddly on a pill).
+
 - Layout is `PadGrid`, a Layout, so pads glide between positions; keep it that way (F3).
 - Marks refresh at 4 Hz; the pass bar and the trace run per frame.
 - Launches serialise one at a time and wait behind an edit (`SkiffSongStore`). Lupe's own reads go to the back of the queue (13e75ef, after pads fell behind the FM-1; device checks 70–71 passed).
