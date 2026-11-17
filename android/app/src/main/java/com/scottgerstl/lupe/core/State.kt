@@ -160,6 +160,10 @@ data class PadRow(
     val passStartTick: Double? = null,
     /** One per column: entries A… up to the last any track uses, plus one empty. */
     val entries: List<PadEntry> = emptyList(),
+    /** Steps on no pattern yet: the entry (0-based) the FM-1 will keep them as when it is next stopped and idle; null: none waiting. */
+    val newAt: Int? = null,
+    /** Armed with the transport running: recording into the entry it is on, or into [newAt]. */
+    val recording: Boolean = false,
 )
 
 /** [waiting]: recalled while playing and its last track isn't in yet; [launchTick] is the pulse it lands on (null: no clock). */

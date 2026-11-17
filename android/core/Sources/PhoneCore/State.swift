@@ -91,6 +91,11 @@ public struct PadsArea: Codable, Equatable, Sendable {
         public var soloPending = false
         /// The pulse this track's launch point comes on (its waiting pad, mute or solo lands there); nil with no clock.
         public var launchTick: Double? = nil
+        /// Steps on no pattern yet (recorded onto a track with no pattern): the entry the FM-1 will keep them as, 0-based, when it is
+        /// next stopped and idle (Skiff 2.5.1 bank.c trk_keep / trk_name: the entry it is on if that's empty, else the first empty one).
+        public var newAt: Int? = nil
+        /// The track is armed and the transport runs: it is recording now (into the entry it is on, or into `newAt`).
+        public var recording = false
     }
     public struct Scene: Codable, Equatable, Sendable {
         public var stored: Bool; public var current: Bool

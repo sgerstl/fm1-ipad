@@ -299,6 +299,14 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 |---|---|---|---|---|
 | 140 | Pads, then the Timeline: pick track 1, then track 6, and look closely at the selected head and its band; then switch tabs. With a solo waiting, look at the head's trace. | The selected head morphs from a pill to a rounded rectangle (12 dp corners), with a small squash; its number badge stays a circle. The band's corners run parallel to the head's, with an even ~2 dp gap top, bottom and left; its right end is a little rounder than the last pad, nothing cut flat. Between tabs the travelling band keeps those corners. A waiting solo's trace runs on the squared outline. | – | ☐ pass ☐ fail: |
 
+## Round 14d: where a recording goes (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 141 | Pads, an empty track selected (no pads), no pad picked. Press REC on the FM-1, play a few notes, stop. Wait two seconds without touching the FM-1. | While recording: the track's first pad has a steady red edge and says "Rec". After stopping: dashed "New" until the FM-1 keeps it (about 1–2 s idle), then it fills with its pattern number and becomes the picked pad. Edit (SEQ) shows the notes, titled "… · A new" until it's kept, then "… · A 22". | – | ☐ pass ☐ fail: |
+| 142 | A track with patterns, a pad picked. Record a few notes and stop. | The playing pad has the red edge while recording; after stopping it is the picked pad. | – | ☐ pass ☐ fail: |
+| 143 | A track with patterns, no pad picked in Lupe (another track's pad picked). Select the track on the FM-1, record, stop. | The red edge on the pad the track is on; after stopping that pad is picked, and Edit shows it. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

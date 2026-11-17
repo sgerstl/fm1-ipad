@@ -336,7 +336,8 @@ private fun Ruler(ed: EditorState, track: Color, core: LupeCore, stepPicked: Boo
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 com.scottgerstl.lupe.ui.mix.TrackBadge(ed.track, track, true, 30.dp, 18)
                 Column {
-                    BasicText("${ed.trackName.substringAfter(" · ")} · ${ed.entry} ${"%02d".format(ed.pattern)}", style = LupeType.key.copy(fontSize = 16.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1,
+                    // no pattern yet (a recording the FM-1 hasn't kept): the track and "new" rather than a pattern 00 (Scott, 2026-11-18)
+                    BasicText("${ed.trackName.substringAfter(" · ")} · ${ed.entry} " + (if (ed.pattern > 0) "%02d".format(ed.pattern) else "new"), style = LupeType.key.copy(fontSize = 16.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1,
                         autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 16.sp, stepSize = 0.5.sp))
                     BasicText(ed.scale.ifEmpty { if (ed.kind == EditorKind.Drum) "Drum" else "" } + " · ${ed.patternSteps} steps", style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp, color = Tok.text2Raised), maxLines = 1)
                 }

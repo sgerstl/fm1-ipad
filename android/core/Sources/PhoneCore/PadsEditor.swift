@@ -55,6 +55,13 @@ extension PhoneCore {
             if let pc = passClock(t) { row.passTicks = pc.ticks; row.passStartTick = pc.start }
             switch perf?.staged[safe: t] ?? PerformState.Staged.none { case .mute: row.mutePending = "mute"; case .unmute: row.mutePending = "unmute"; case .none: break }
             row.soloPending = store?.soloWaiting[t] != nil
+            // steps that no pattern holds yet: where the FM-1 will keep them (the pad shows "New" there until the list does)
+            let cur = list?.entryOn ?? 0
+            let onPattern = entries[safe: cur].map { $0.kind != .empty } ?? false
+            if !onPattern, s.tracks[t].steps.contains(where: { $0.isOn }) {
+                row.newAt = (entries[safe: cur]?.kind == .empty) ? cur : entries.firstIndex { $0.kind == .empty }
+            }
+            row.recording = s.playing && (s.armedTracks >> t) & 1 == 1
             let waits = row.mutePending != "none" || row.soloPending || entries.contains { $0.play == .waiting }
             if waits { row.launchTick = launchTick(t) }
             rows.append(row)

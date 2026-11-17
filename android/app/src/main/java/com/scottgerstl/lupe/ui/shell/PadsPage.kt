@@ -124,6 +124,18 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     val mix by core.mix.collectAsStateWithLifecycle()
     // the clock reference: the pass bars and the waiting outlines move on from it every frame (read inside the draw, so a new reference recomposes nothing)
     val clock = core.clock.collectAsStateWithLifecycle()
+    // after a recording, the pad that holds the take becomes the picked pad, so Pads and Edit agree (Scott, 2026-11-18): the "New" pad once the
+    // FM-1 has kept it (its newAt goes and the entry is a pattern), or the pad it was on when the recording stops
+    val lastNew = remember { androidx.compose.runtime.mutableStateMapOf<Int, Int?>() }
+    val lastRec = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
+    androidx.compose.runtime.LaunchedEffect(pads.rows) {
+        for (r in pads.rows) {
+            val was = lastNew[r.track]
+            if (was != null && r.newAt == null && r.entries.getOrNull(was)?.kind == PadKind.Pattern) core.send(Intent.PadSelect(r.track, was))
+            else if (lastRec[r.track] == true && !r.recording && r.newAt == null) r.entries.indexOfFirst { it.play == PadPlay.Playing }.takeIf { it >= 0 }?.let { core.send(Intent.PadSelect(r.track, it)) }
+            lastNew[r.track] = r.newAt; lastRec[r.track] = r.recording
+        }
+    }
 
     // the page's content sits BAND_INSET in from its edges, so the selected track's band (which reaches that far past the row) isn't cut off by the page
     BoxWithConstraints(modifier.fillMaxSize().padding(start = BAND_INSET, end = BAND_INSET, top = BAND_INSET)) {
@@ -496,6 +508,12 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val at = target
     val goes = if (at != idx) "Goes in ${'A' + at}" else null
     val empty = e.kind == PadKind.Empty
+    // a recording that no pattern holds yet will be kept here (the FM-1 does it once stopped and idle: row.newAt); recording now, a steady red
+    // edge on the pad the take goes into (Scott, 2026-11-18: "it doesn't show on the pad")
+    val newHere = empty && row.newAt == target && target == idx
+    val recHere = row.recording && (newHere || (row.newAt == null && playing))
+    val recA = animatedFloat(if (recHere) 1f else 0f, Dur.STATE)
+    val newA = animatedFloat(if (newHere) 1f else 0f, Dur.STATE)
     val holdMenu = LocalHoldMenu.current
     val sheetHost = com.scottgerstl.lupe.ui.sheet.LocalSheetHost.current
     val pool by core.patterns.collectAsStateWithLifecycle()
@@ -593,6 +611,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         PadPlay.Idle -> ""
     }
     val desc = "${row.name}, entry $letter, $what$stateWord" + (if (goes != null) ". ${goes.replaceFirst("Goes in", "What you add here goes in")}, the next free entry" else "") + if (selected) ", selected" else ""
+    val descFull = desc + (if (newHere) ", a recording the FM-1 keeps here when it stops" else "") + (if (recHere) ", recording" else "")
 
     // a tap selects the pad and its track (the editor follows) and still launches it (decision 29)
     // …an empty slot is only selected: the FM-1 refuses to play one, and selecting it is the way in that isn't a hold
@@ -697,6 +716,10 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     // the selected pad: a ring in the track's colour (never white), with a dark gap inside it so it reads on a filled, playing pad
                     // …but not while it waits: a tap selects the pad it launches, and the ring (the same colour, the same place) hid the waiting outline
                     // drawn over it (Scott, 2026-11-14: "the outline timer still doesn't show"). The outline says both until it lands.
+                    // the take's pad: "New" pending is a dashed edge in the track's colour; recording, a steady 2 dp edge in the record red
+                    if (newA.value > 0f && recA.value < 1f) drawRoundRect(color.copy(alpha = newA.value * (1f - recA.value)), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(rr - 1.dp.toPx()),
+                        style = Stroke(2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))))
+                    if (recA.value > 0f) drawRoundRect(Tok.rec.copy(alpha = recA.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
                     val ringA = sel.value
                     if (ringA > 0f) {
                         drawRoundRect(color.copy(alpha = ringA), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
@@ -705,7 +728,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                 }
                 .semantics(mergeDescendants = true) {
                     role = Role.Button
-                    contentDescription = desc
+                    contentDescription = descFull
                     onClick { tap(); true }
                     onLongClick("Pad menu") { padCoords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), color, padItems()) }; true }
                     // every long-press has a non-hold way in (WCAG 2.5.7)
@@ -731,6 +754,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
             }
             if (h >= 36.dp) {
                 val side = when {
+                    newHere -> if (row.recording) "Rec" else "New"
                     e.play == PadPlay.Next -> "Next"
                     e.passes != null && e.passes > 1 -> if (playing && e.pass != null) "${e.pass}/${e.passes}" else "×${e.passes}"
                     else -> null
