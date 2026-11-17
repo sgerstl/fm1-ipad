@@ -157,6 +157,17 @@ Install rounds 7, 8 and 9 together. **Check 72 is the one only the real FM-1 can
 | 78 | Kit: drag a hit along its lane onto an empty step, then onto a step with a hit. | Onto empty: it moves (an accent isn't carried). Onto a hit: refused with a buzz, nothing changes. | – | ☐ pass ☐ fail: |
 | 79 | Kit: pick a hit (hold it) and open the step panel. | NOTES tiles 1 LANE, 2 HIT, 3 ACC (greyed: the FM-1's knob 3 turns it), 4 VELOCITY, then the FEEL tiles. Sliding LANE picks the next lane; HIT turns the hit on or off. | – | ☐ pass ☐ fail: |
 
+## Round 10: Mix effect cards (direction C; Scott, 2026-11-17: "yes send the cards")
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 80 | Mix tab: tap Effects. Compare with `1-delay-picked.png`. | Sub-tabs Mixer · Effects. Four cards: the picked one wide with its title, "Shared effect · all tracks", four numbered tiles (the FM-1's names for that page), the FM-1's picture in grey and white, and on Delay the DELAY MODE pills; three narrow cards with name, a small picture and two values ("—" for any not opened yet). | – | ☐ pass ☐ fail: |
+| 81 | Tap Reverb, then Chorus, then Global, then Delay. | The tapped card squashes a little, then grows as the old one narrows, both moving together on a spring (no gap, nothing blank); the contents swap with a short overlap. The FM-1 goes to that GLO page each time. | – | ☐ pass ☐ fail: |
+| 82 | On the FM-1, press GLO repeatedly from Pads. | Mixer, then Delay, Reverb, Chorus, Global as the picked card, the phone following each press. | – | ☐ pass ☐ fail: |
+| 83 | With a card picked, turn the FM-1's knobs 1–4; slide a tile sideways on the phone. | The knobs move the matching tiles; a sideways slide on a tile changes it and the FM-1 follows. | – | ☐ pass ☐ fail: |
+| 84 | Delay: tap Stereo, then Ping-pong. Reverb: tap a track's send chip and slide. | The mode pills move the white pill and the FM-1's DELAY MODE. The send chip opens a small menu with REVERB SEND as a slide row; the chip's number and the Mix strip's values line follow. | – | ☐ pass ☐ fail: |
+| 85 | Remove animations on; pick another card. | The cards cross-fade; widths change without travelling. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

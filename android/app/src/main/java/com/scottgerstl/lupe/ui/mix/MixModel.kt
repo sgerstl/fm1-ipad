@@ -44,6 +44,9 @@ data class MixUi(
     val settings: List<PageControl> = emptyList(),
     /** The bus page's picture (decision 34): the FM-1's own drawing, from the card's four knobs. Null on Mixer. */
     val graph: com.scottgerstl.lupe.core.PageGraph? = null,
+    /** The section's key ("delay"…), and the core's whole card for it (the effect cards remember each one they've seen). */
+    val sectionKey: String = "mixer",
+    val card: com.scottgerstl.lupe.core.MixCard? = null,
 )
 
 /**
@@ -83,6 +86,7 @@ fun MixState.toUi(): MixUi {
         // the core names a track "Engine · Sound" ("Analog · Acid"); the row has room for the sound's name
         tracks = rows.map { MixTrackUi(it.track, it.name.substringAfter(" · "), it.level, it.levelText, it.pan + 64, it.panText, it.reverb ?: 0, it.reverbText ?: "…", it.mute, it.solo, null, it.selected) },
         bus = card?.controls.orEmpty(), settings = card?.settings.orEmpty(), graph = busGraph(section, card),
+        sectionKey = section, card = card,
     )
 }
 

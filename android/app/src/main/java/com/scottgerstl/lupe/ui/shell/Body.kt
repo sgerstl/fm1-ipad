@@ -175,10 +175,8 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                             }
                             Tab.Timeline -> TimelineSlot(core)
                             Tab.Mix -> { val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core); val meters = core.meters.collectAsStateWithLifecycle()
-                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value) {
-                                    val gp = com.scottgerstl.lupe.core.ScreenPages.GLO.getOrNull(mix.first.page)
-                                    busPageState(mixNow, gp?.first ?: 0, gp?.second.orEmpty(), pads.selected.track, selName)?.let { BusPage(it, gloCore, labs.showGraphics) }
-                                } }
+                                // Mixer · Effects: the shared pages as effect cards (direction C, 2026-11-17), replacing the bus dials
+                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value, graphics = labs.showGraphics) }
                         }
                     }
                 }
@@ -445,31 +443,4 @@ internal fun gloStep(onMix: Boolean, screen: com.scottgerstl.lupe.core.Fm1Screen
     val pages = com.scottgerstl.lupe.core.ScreenPages.GLO.map { it.first }
     val at = if (screen.key == "GLO") pages.indexOf(screen.page) else -1
     return if (!onMix) pages[at.coerceAtLeast(0)] else pages[(at + 1).mod(pages.size)]
-}
-
-/**
- * A shared page on the Mix tab (Delay, Reverb, Chorus, Global): its four dials (white: turning them changes every track), its settings as
- * tiles, and the FM-1's own grey picture under them when Show graphics is on (decision 34), on a `panel` card at the sheet radius.
- */
-@Composable
-private fun BusPage(page: PageState, core: LupeCore, graphics: Boolean) {
-    androidx.compose.foundation.layout.Column(
-        Modifier.fillMaxSize().clip(RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.sheet)).background(Tok.panel).padding(16.dp),
-    ) {
-        SoundDials(page, core, Modifier.fillMaxWidth().height(110.dp))
-        page.tiles?.let { t ->
-            Spacer(Modifier.height(8.dp))
-            PageTilesContent(t, Tok.text2Raised, { core.send(com.scottgerstl.lupe.core.PickRoute(it)) }, { core.send(com.scottgerstl.lupe.core.PickTile(it)) },
-                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.pad)))
-        }
-        val picture = com.scottgerstl.lupe.ui.page.pictureOf(page)
-        val skiff = com.scottgerstl.lupe.ui.page.rememberSkiffPicture(page, true, enabled = graphics)
-        if (graphics && (skiff != null || com.scottgerstl.lupe.ui.page.hasPicture(picture))) {
-            Spacer(Modifier.height(8.dp))
-            val said = "${page.title}: " + if (com.scottgerstl.lupe.ui.page.hasPicture(picture)) com.scottgerstl.lupe.ui.page.describe(picture) else "the FM-1's picture"
-            val m = Modifier.fillMaxWidth().weight(1f).background(Tok.well, RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.pad)).padding(4.dp)
-            if (skiff != null) com.scottgerstl.lupe.ui.page.SkiffPictureImage(skiff, said, m)
-            else com.scottgerstl.lupe.ui.page.GraphContent(picture, Tok.text2Raised, -1, m)
-        }
-    }
 }

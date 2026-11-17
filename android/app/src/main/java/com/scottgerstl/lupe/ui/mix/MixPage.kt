@@ -90,12 +90,15 @@ const val UNITY = 100
  * (decision 34). [soundDock] is the width the docked sound panel takes at the right.
  */
 @Composable
-fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier, soundDock: Dp = 0.dp, bus: @Composable () -> Unit = {}) {
+fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.State<com.scottgerstl.lupe.core.MetersState>, modifier: Modifier = Modifier, soundDock: Dp = 0.dp, graphics: Boolean = true) {
+    // Mixer · Effects (direction C, Scott 2026-11-17): Effects is GLO's four shared pages as cards; it opens on the card last picked
+    var lastEffect by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(1) }
+    if (ui.page in 1..4) lastEffect = ui.page
     Column(modifier.fillMaxSize().padding(end = soundDock)) {
-        SubPages(ui.pages, ui.page, actions.page)
+        SubPages(listOf("Mixer", "Effects"), if (ui.page == 0) 0 else 1) { if (it == 0) actions.page(0) else actions.page(lastEffect) }
         Spacer(Modifier.height(4.dp))
         LupeCrossfade(ui.page == 0, Modifier.weight(1f).fillMaxWidth()) { mixer ->
-            if (mixer) Strips(ui, actions, meters) else bus()
+            if (mixer) Strips(ui, actions, meters) else EffectsPage(ui, actions, graphics)
         }
     }
 }
@@ -104,7 +107,7 @@ fun MixTab(ui: MixUi, actions: MixActions, meters: androidx.compose.runtime.Stat
 @Composable
 private fun SubPages(pages: List<String>, current: Int, onPick: (Int) -> Unit) =
     com.scottgerstl.lupe.ui.shell.SegmentGroup(pages, current, onPick, height = 36.dp, padH = 16.dp, role = Role.Tab,
-        descriptions = pages.mapIndexed { i, n -> "$n, GLO ${i + 1} of ${pages.size}" }, fontSize = 15,
+        descriptions = pages, fontSize = 15,
         selectedFill = Tok.lifted, idleFill = null, selectedInk = Tok.text, idleInk = Tok.text2, gap = 4.dp)
 
 @Composable

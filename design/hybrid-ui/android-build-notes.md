@@ -49,3 +49,9 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 - **The core changed (Swift):** `Fm1ScreenArea` carries `cursor`/`cursor2` on SEQ › NOTES and FEEL, and `screenGoto` takes a `cursor`.
 - **Build quirk, again:** `:app:buildSwift` failed once more with "No Android NDK is installed at any of the standard locations" when the Swift core had changed, then built clean on the next run. It looks like a transient lookup in the Swift Android SDK, since the NDK and its sysroot links are intact.
 - **Feel became knob tiles** (amended the same day): 1 CHANCE (into the conditions past 100), 2 RATCHET, 3 NUDGE, 4 TYPE. TYPE is shown only, since the core has no field for it; RATCHET goes to 5 on the FM-1 but only to 4 from the phone until the core's write range is checked. Drum steps get LANE · HIT · ACC · VELOCITY (ACC shown only: there's no accent intent) and the Feel tiles.
+
+## Round 10: Mix effect cards (2026-11-17)
+
+- **Collapsed cards show the values from when each was last picked.** The core's `mix` area carries one card, the FM-1's current GLO page, so a card shows "—" until it has been opened once since the app started.
+- **The tile labels and ranges come from the device's card** (the core sends them), so the real FM-1's names show. The demo FM-1 has its own fake names.
+- **The cards fill the width exactly while they move** because every card springs on the same curve: a growing and a shrinking card always add up.
