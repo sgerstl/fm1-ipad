@@ -417,6 +417,8 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
     val pageNow by rememberUpdatedState(pageSteps)
     // the picked lane: the picked hit's, else the first
     val pickedLane = hit?.first ?: lanes.first()
+    // the smooth playhead and the hits' bounce, by the FM-1's clock (Scott, 2026-11-17)
+    val pc = com.scottgerstl.lupe.ui.edit.rememberPlayheadClock(core)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // rows touch (no gap): the pitch is the touch target; what's drawn sits inside it
         val gap = 0.dp
@@ -488,11 +490,12 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                     for (i in 0 until total) { val x = x0 + i * stepPx; if ((i / 4) % 2 == 1) drawRect(Tok.panel, Offset(x, 0f), Size(stepPx, size.height)) }
                     val rowPx = rh.toPx() + gap.toPx()
                     for (k in 1 until lanes.size) drawLine(Tok.outline.copy(alpha = 0.5f), Offset(0f, k * rowPx - gap.toPx() / 2), Offset(size.width, k * rowPx - gap.toPx() / 2), 1.dp.toPx())
-                    if (ed.playhead in 0 until total) {
-                        val x = x0 + ed.playhead * stepPx
+                    // the playhead sweeps continuously by the FM-1's clock; Reduce Motion: it jumps step to step
+                    pc.position(ed.track)?.let { p -> if (p < total) {
+                        val x = x0 + p * stepPx
                         drawRect(Tok.text.copy(alpha = 0.12f), Offset(x, 0f), Size(stepPx, size.height))
                         drawRoundRect(Tok.text, Offset(x + 6.dp.toPx(), 4.dp.toPx()), Size(stepPx - 12.dp.toPx(), 4.dp.toPx()), CornerRadius(2.dp.toPx()))
-                    }
+                    } }
                 }
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
                     lanes.forEachIndexed { k, lane ->
@@ -512,7 +515,8 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                             if (onF.value <= 0.001f && sel.value <= 0f) return@drawBehind
                                             // the hit: a rounded square, inset; it grows in on the spring when placed
                                             // 41 × 23 centred in the row (smaller only where the step or the row is narrower)
-                                            val g = if (reduce) 1f else pop.coerceIn(0f, 1.15f)
+                                            // grows in when placed; bounces as its step sounds (a ratchet's segments bounce together, as one hit)
+                                            val g = (if (reduce) 1f else pop.coerceIn(0f, 1.15f)) * (if (on) pc.bounce(i, ed.track) else 1f)
                                             val w = minOf(41.dp.toPx(), size.width - 8.dp.toPx()) * g; val hh = minOf(23.dp.toPx(), size.height - 9.dp.toPx()) * g
                                             val left = (size.width - w) / 2; val topY = (size.height - hh) / 2
                                             val fill = track.copy(alpha = onF.value * (0.7f + 0.3f * s.velocity / 127f))

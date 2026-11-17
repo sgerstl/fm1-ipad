@@ -223,8 +223,8 @@ Starting values. Put each in **Labs** (`ios/FM1/Labs.swift`) and graduate it to 
 | Popup or menu from a control | y −12 → 0, scale 0.94 → 1, fade; rows 20 ms apart | 200 | spring 0.2 | fade |
 | Docked panel opens | slides in from the right edge | 300 | spring 0.2 | fade |
 | Edit page flip (8-step, by hand) | grid strip slides one page; minimap window slides 8 cells; label cross-fades | 280 | spring 0.25 | cut to the page, cross-fade the label |
-| Playhead step | glides 60 ms into each step | 60 a step | ease-out | jumps (it's a position readout) `[open]` |
-| Note hit | scale 1 → 1.12 → 1 | 50 up, 200 back | ease-out, spring | none |
+| Playhead (amended 2026-11-17) | sweeps continuously across the grid, its place read from the FM-1's clock (the step's start and next ticks, interpolated), never frame time | continuous | linear in ticks | jumps step to step (decided 2026-11-17 by the main session for Scott; Scott to confirm) |
+| Hit bounce (amended 2026-11-17) | only cells holding a hit, as their step sounds by the clock: scale 1 → 1.12 → 1; a ratchet bounces as one hit; empty steps never move | 50 up, ~200 back | ease-out, spring | none |
 | App strip arrives | y +24 → 0, fade | 300 | spring 0.25 | fade |
 | Confirm in place | trailing keys scale 0.9 → 1 and fade; row edge 0 → 1.5; other rows → 40 % | 150–200 | spring / ease-out | fade |
 | Fader handle held | handle grows to 1.6× height | 150 | ease-out, release on a spring | none |
@@ -277,7 +277,7 @@ The five conflicts this spec raised, settled:
 
 **Still open:**
 - Where the track thread goes now the tabs are pills: drop it, or move it to the selected pill's edge?
-- Whether the playhead's 60 ms glide counts as travel under Reduce Motion, or jumps.
+- ~~Whether the playhead's glide counts as travel under Reduce Motion~~: it jumps step to step, and nothing bounces (decided 2026-11-17 by the main session on Scott's behalf; Scott can override).
 - The slider's unfilled track at 1.33:1.
 - The phone's Sounds: a sheet here (`phone-07`). The structure map's phone section (2026-11-10) still lists a Sounds tab.
 - ~~The arc wheel vs the straight pad menu~~: decided 2026-11-17, the straight menu on Android (see `design/components/hold-menus.md`).

@@ -90,6 +90,16 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     var squashPct by mutableStateOf(prefs?.getInt(M_SQUASH, 6) ?: 6)
         private set
     fun chooseSquash(v: Int) { squashPct = v.coerceIn(0, 15); prefs?.edit()?.putInt(M_SQUASH, squashPct)?.apply() }
+    /** The hit bounce (Scott, 2026-11-17): how far a hit grows as its step sounds (112 %), its rise (50 ms) and its spring back (200 ms). Added 2026-11-17, review 2026-12-01. */
+    var bounceScalePct by mutableStateOf(prefs?.getInt(B_SCALE, 112) ?: 112)
+        private set
+    fun chooseBounceScale(v: Int) { bounceScalePct = v.coerceIn(100, 130); prefs?.edit()?.putInt(B_SCALE, bounceScalePct)?.apply() }
+    var bounceUpMs by mutableStateOf(prefs?.getInt(B_UP, 50) ?: 50)
+        private set
+    fun chooseBounceUp(v: Int) { bounceUpMs = v.coerceIn(10, 150); prefs?.edit()?.putInt(B_UP, bounceUpMs)?.apply() }
+    var bounceBackMs by mutableStateOf(prefs?.getInt(B_BACK, 200) ?: 200)
+        private set
+    fun chooseBounceBack(v: Int) { bounceBackMs = v.coerceIn(60, 500); prefs?.edit()?.putInt(B_BACK, bounceBackMs)?.apply() }
     fun chooseMotionPress(v: Int) { motionPressScale = v.coerceIn(80, 100); prefs?.edit()?.putInt(M_PRESS, motionPressScale)?.apply() }
 
     /**
@@ -176,6 +186,9 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val M_SP_DAMP = "labs_spatial_damping"
         const val M_FAST_STIFF = "labs_fast_spatial_stiffness"
         const val M_SQUASH = "labs_squash_pct"
+        const val B_SCALE = "labs_bounce_scale"
+        const val B_UP = "labs_bounce_up_ms"
+        const val B_BACK = "labs_bounce_back_ms"
         const val PAUSE = "labs_pause_following"
         const val PIN = "labs_pin_bottom"
         const val PIANO = "labs_piano"

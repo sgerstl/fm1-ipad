@@ -15,7 +15,7 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 - **Empty scenes lose their outline** (spec 3.3). Fill and ink carry the state. The empty *pad* keeps its outline colour, because A11 is `[open]`.
 - **No sheet shadow.** Depth comes from the surface step.
 - **Readout keeps Android's menu** (tempo slide, Playback). Which popup the phones keep is phone-header I6, still open, so the spec's tempo popup (4.6) isn't built.
-- **No playhead glide.** Building it would decide its Reduce Motion behaviour, which is `[open]`; the playhead still steps.
+- **The playhead sweeps (2026-11-17)** by the FM-1's clock, and hits bounce as they sound. Reduce Motion: jumps, no bounce (decided by the main session for Scott). The Timeline's playhead and the automation lane are unchanged.
 
 ## Not built yet (in scope, left for the next round)
 

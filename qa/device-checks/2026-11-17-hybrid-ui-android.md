@@ -108,11 +108,23 @@ Install round 4 and 5 together (the Pixel hasn't had 7836f51).
 | 55 | Drum Kit on Edit with the panel docked. Count the lanes; look at a hit, an accent and a ratchet. | All eight lanes (KICK … RIM, or the kit's own names) in the height six used, no scroll. Lane keys are small (40 × 28) with their names on one line; hits are wide, short rounded squares centred in their rows; accent caps and ratchet segments still read. | – | ☐ pass ☐ fail: |
 | 56 | **While playing,** tap lane keys quickly up and down the column, and tap hits on neighbouring lanes. | Each tap picks or plays the lane you meant: the touch area is the whole row, though the key is drawn smaller. **Do neighbouring lanes get mis-tapped?** ☐ never ☐ sometimes (which lanes?) ☐ often | – | ☐ pass ☐ fail: |
 
+## Round 6: the smooth playhead and the hit bounce (Scott, 2026-11-17)
+
+Labs › **Hit bounce · size / rise / settle** tune the bounce (starting at 112 %, 50 ms, 200 ms).
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 57 | Edit a melodic pattern and play, panel shut and then docked. | The playhead **sweeps smoothly** across the grid (a light band with a white cap), not hopping step to step, and stays exactly with what you hear, bar after bar. | – | ☐ pass ☐ fail: |
+| 58 | Watch the notes as it plays. | Each note gives a **small bounce as it sounds** (grows a touch, springs back); steps with no note never move. It lines up with the sound, not with where the band's edge is. | – | ☐ pass ☐ fail: |
+| 59 | A busy kit: all eight lanes full, some accents and ratchets; tempo up to 180–200. Play on Edit with the panel docked. | The sweep stays smooth and in time; every hit bounces as it sounds; a ratchet bounces as one; nothing stutters. **Frame check:** after a minute of this, tell Claude, who reads the frame stats from the phone over adb (`dumpsys gfxinfo`, read-only). | – | ☐ pass ☐ fail: |
+| 60 | Change tempo while playing; stop and start; turn the FM-1's direction to reverse if it has it. | The sweep follows the new tempo at once, never runs ahead of the sound, and starts clean from step 1; in reverse it sweeps backwards. | – | ☐ pass ☐ fail: |
+| 61 | Remove animations on; play again. | The playhead **jumps** step to step and nothing bounces. **Scott's call:** this was decided for you; ☐ keep ☐ want the glide kept with Reduce Motion. | – | ☐ pass ☐ fail: |
+| 62 | Labs: set Hit bounce · size to 100 %, then 125 %. | 100 %: no bounce. 125 %: a clear one. Say what feels right. | – | ☐ pass ☐ fail: value: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
-- A kit (drum) track on Edit with the panel docked: its lanes still scroll under the panel, as before. 8-step pages are melodic only for now.
 - The Timeline's own hybrid changes (pill heads, connected zoom group, pass-count chips) and the Sounds and Projects sheets' row styling aren't built; they pick up only the shared keys, menus and sheet.
 - The narrow-width give-way (spec 4.1) never triggers on the Pixel (it starts below 790 dp); its order is unit-tested only.
-- Still open, untouched: the track thread's place, Reduce Motion for a playhead glide (no glide built), the slider's unfilled track contrast, the empty pad's edge (A11), a playing pad on a muted row (S14).
+- Still open, untouched: the track thread's place, the slider's unfilled track contrast, the empty pad's edge (A11), a playing pad on a muted row (S14).
 
 **After the run:** failures go on the batch list with the check number; passes move their batch items to "On the device".

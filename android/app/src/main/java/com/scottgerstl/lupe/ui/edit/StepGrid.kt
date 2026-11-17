@@ -109,6 +109,8 @@ fun StepGrid(
 ) {
     val motion = com.scottgerstl.lupe.ui.theme.hybridMotion
     val paged = pageSteps == Roll.PAGE_DOCKED
+    // the smooth playhead and the hits' bounce, by the FM-1's clock (Scott, 2026-11-17)
+    val pc = rememberPlayheadClock(core)
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val reduce = LocalReduceMotion.current
@@ -227,10 +229,14 @@ fun StepGrid(
                         for (i in 0..total) { val x = x0 + i * stepPx; if (i % Roll.STEPS == 0 && i > 0 && i < total) drawLine(Tok.text3, Offset(x, 0f), Offset(x, size.height), 2.dp.toPx()) else drawLine(if (i % 4 == 0) Tok.control else line, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx()) }
                         // the notes: as long as they hold, stronger the harder they are played; the picked step's ringed white; ◆ for a lock
                         ed.steps.forEachIndexed { i, s ->
+                            // a note bounces as its step sounds (1 → 1.12 → 1 by the clock; Labs › Hit bounce); empty steps never move
+                            val bz = if (stepNotes(s).isEmpty()) 1f else pc.bounce(i, ed.track)
                             for (n in stepNotes(s)) {
                                 if (n !in pitches) continue
-                                val x = x0 + i * stepPx + 2.dp.toPx(); val y = (127 - n) * rowPx - sy + 2.dp.toPx()
-                                val w = (s.length.coerceAtLeast(1) * stepPx - 4.dp.toPx()).coerceAtLeast(6.dp.toPx()); val h = (rowPx - 4.dp.toPx()).coerceAtLeast(4.dp.toPx())
+                                val w0 = (s.length.coerceAtLeast(1) * stepPx - 4.dp.toPx()).coerceAtLeast(6.dp.toPx()); val h0 = (rowPx - 4.dp.toPx()).coerceAtLeast(4.dp.toPx())
+                                val cx = x0 + i * stepPx + 2.dp.toPx() + w0 / 2; val cy = (127 - n) * rowPx - sy + 2.dp.toPx() + h0 / 2
+                                val w = w0 * bz; val h = h0 * bz
+                                val x = cx - w / 2; val y = cy - h / 2
                                 drawRoundRect(lerp(Tok.page, track, 0.55f + 0.45f * (s.velocity / 127f)), Offset(x, y), Size(w, h), CornerRadius(5.dp.toPx()))
                                 if (picked == i) drawRoundRect(Tok.text, Offset(x - 1.dp.toPx(), y - 1.dp.toPx()), Size(w + 2.dp.toPx(), h + 2.dp.toPx()), CornerRadius(6.dp.toPx()), style = Stroke(2.dp.toPx()))
                                 if (s.locked) { val cx = x + w - 7.dp.toPx(); val cy = y + h / 2; val r = 3.5.dp.toPx(); drawPath(Path().apply { moveTo(cx, cy - r); lineTo(cx + r, cy); lineTo(cx, cy + r); lineTo(cx - r, cy); close() }, Tok.onColour) }
@@ -242,8 +248,13 @@ fun StepGrid(
                             if (ns.any { it > pitches.last }) drawCircle(track, 2.5.dp.toPx(), Offset(x, 5.dp.toPx()))
                             if (ns.any { it < pitches.first }) drawCircle(track, 2.5.dp.toPx(), Offset(x, size.height - 5.dp.toPx()))
                         }
-                        // the playhead: a bar along the top of the playing step
-                        if (ed.playhead in 0 until total) drawRect(Tok.text, Offset(x0 + ed.playhead * stepPx, 0f), Size(stepPx, 3.dp.toPx()))
+                        // the playhead: a band (`text` at 12 %) with a 4 dp cap, sweeping continuously by the FM-1's clock (spec §5, amended 2026-11-17);
+                        // with Reduce Motion it sits on the playing step and jumps
+                        pc.position(ed.track)?.let { p -> if (p < total) {
+                            val px = x0 + p * stepPx
+                            drawRect(Tok.text.copy(alpha = 0.12f), Offset(px, 0f), Size(stepPx, size.height))
+                            drawRoundRect(Tok.text, Offset(px + 4.dp.toPx(), 0f), Size(stepPx - 8.dp.toPx(), 4.dp.toPx()), CornerRadius(2.dp.toPx()))
+                        } }
                         // the held step (lock mode): its column outlined in the track's colour
                         if (ed.lock == LockMode.Held && ed.selected in 0 until total) drawRect(track, Offset(x0 + ed.selected * stepPx + 1.dp.toPx(), 1.dp.toPx()), Size(stepPx - 2.dp.toPx(), size.height - 2.dp.toPx()), style = Stroke(2.dp.toPx()))
                         // the scroll indicator, while a panel covers part of the grid: what is in view beside it, along the foot
