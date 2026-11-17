@@ -138,6 +138,7 @@ Motion follows `DESIGN.md`. Particular to Mix: the strips move between one row a
 - 2026-11-13: Android's PAN in the row's hold menu (decision 14).
 - 2026-11-14: phones get a pop-up, not a tab (decisions 28, 31); its pictures redrawn from the FM-1's, in greys (decision 34).
 - 2026-11-15: the iPad's Mix drops the effects row (GLO 2–5 are sound-panel pages, decision 44); the strips take the page, and stand in two rows of three while the sound panel is open (Scott, decision 48).
+- 2026-11-17: Mix comes back as a phone tab (Pads · Edit · Timeline · Mix); the pop-up goes. Scott: "I think most people want it more accessible." Reverses decision 28 for Mix (hybrid UI study; strips drawn in `design/hybrid-ui/`, the structure map still to be agreed).
 
 ## 3. Build notes
 

@@ -183,7 +183,7 @@ Boards: 19–20 (the Song tab, `compose.py`), 32–34 (the three places), `steps
 Motion follows `DESIGN.md`. Particular to the editor:
 - Opening from shut, the editor comes up from the panel's foot on the panel's own spring, rising with the tint, never uncovered by it (Scott, 2026-11-09). The sampler's sideways swap runs only between the sampler and the editor.
 - The tab's carets take the track colour on its tint (Scott, 2026-11-09).
-- `[open]` Phone Edit with the panel docked: board 75's A or B.
+- Phone Edit with the panel docked: **8-step pages** beside a 280-wide panel, with a 16-cell minimap under the grid that shows the other page's notes and pages on a tap. Paging stays by hand (2026-11-01 log); whether it follows the playhead is an open question in `design/hybrid-ui/spec.md` §7 (Scott, 2026-11-17; options drawn in the vault's `figma-ui-kit.md`, "Edit squeeze").
 - `[open]` The phone's piano edge: display only ("to show white and black keys", decision 31), or does a touch play the note as the iPad's row labels do?
 
 ### Decision log
@@ -194,6 +194,7 @@ Motion follows `DESIGN.md`. Particular to the editor:
 - 2026-11-09: pinned entry said in the header, not a panel over the steps; flick goes one place on; carets on the tab (Scott).
 - 2026-11-13: decision 5, the FM-1's keys never write steps from the phone (Scott).
 - 2026-11-14: decision 31, the iPhone's step grid with a piano edge on both phones (Scott).
+- 2026-11-17: phone Edit with the sound panel docked shows 8 steps a page with a minimap, over a bottom panel (only 4 of 7 rows) or a slim panel (about 38 pt a step) (Scott, hybrid UI study).
 
 ## 3. Build notes
 
