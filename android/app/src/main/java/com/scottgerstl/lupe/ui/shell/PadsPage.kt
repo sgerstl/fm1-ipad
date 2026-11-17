@@ -329,11 +329,11 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
     // the head's hold menu (the iPad's rows, and LEVEL and PAN now the track controls box is gone: decision 31): its sounds, level, pan, mute, solo
     val mixNow = core.mix.collectAsStateWithLifecycle()
     fun headItems() = listOf(
-        HoldItem("Sounds…", sub = engine.ifEmpty { null }) { soundsHost.open(r.track) },
-        HoldItem("LEVEL", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.level ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.levelText.orEmpty() }, 0, 127) { core.send(com.scottgerstl.lupe.core.SetLevel(r.track, it)) }),
-        HoldItem("PAN", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.pan ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.panText.orEmpty() }, -64, 63, bipolarAt = 0) { core.send(com.scottgerstl.lupe.core.SetPan(r.track, it)) }),
-        HoldItem("Mute", checked = r.muted) { core.send(Intent.TrackMute(r.track)) },
-        HoldItem("Solo", sub = "Plays this track alone", checked = solo) { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)) },
+        HoldItem("Sounds…", sub = engine.ifEmpty { null }, tile = true, short = "Sounds", tileSub = engine.ifEmpty { null }) { soundsHost.open(r.track) },
+        HoldItem("Mute", checked = r.muted, tile = true) { core.send(Intent.TrackMute(r.track)) },
+        HoldItem("Solo", sub = "Plays this track alone", checked = solo, tile = true) { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)) },
+        HoldItem("LEVEL", group = "Mix", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.level ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.levelText.orEmpty() }, 0, 127) { core.send(com.scottgerstl.lupe.core.SetLevel(r.track, it)) }),
+        HoldItem("PAN", group = "Mix", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.pan ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.panText.orEmpty() }, -64, 63, bipolarAt = 0) { core.send(com.scottgerstl.lupe.core.SetPan(r.track, it)) }),
     )
     Box(Modifier.width(HEAD_W).height(h).onGloballyPositioned { headCoords = it }) {
         // the head (spec 3.2): a pill on `control`; selected, the track's tint with a 2 dp edge in its colour, and its badge squares off
@@ -498,53 +498,56 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         val idle = padMenuIdle(core.top.value.playing, tl.playing)
         val stopFirst = if (idle) null else "Stop first"
         if (e.kind == PadKind.Pattern) {
-            add(HoldItem("Edit steps") { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
+            // priority tiles (Scott, 2026-11-17, "C"): Edit steps, Sound, Pattern
+            add(HoldItem("Edit steps", tile = true) { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
             // the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
-            add(HoldItem("Select sound", sub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
+            add(HoldItem("Select sound", sub = row.name.substringAfter(" · "), tile = true, short = "Sound", tileSub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
         }
         val kept0 = keptPatterns(pads)
         val fullPool = empty && (pads.patternsFree == 0 || kept0.size >= 64)
         // a pad cleared a moment ago: the way back, here as well as in the app strip
         val undo = pads.clearUndo.lastOrNull { !it.block && it.track == row.track && it.entry == at }
-        if (undo != null) add(HoldItem(if (undo.kind == "steps") "Undo clear steps" else "Undo clear", sub = if (undo.kind == "steps") "The notes come back" else undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
+        if (undo != null) add(HoldItem(if (undo.kind == "steps") "Undo clear steps" else "Undo clear", sub = if (undo.kind == "steps") "The notes come back" else undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back", group = "Undo") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
         if (empty) {
             // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap, and offers the ways on (board 79.4)
             val full = fullPool
-            add(HoldItem("New pattern", sub = if (full) com.scottgerstl.lupe.core.NO_PATTERN_FREE else goes, enabled = !full) { core.send(Intent.PadNew(row.track, at)) })
+            add(HoldItem("New pattern", sub = if (full) com.scottgerstl.lupe.core.NO_PATTERN_FREE else goes, enabled = !full, tile = true, short = "New", tileSub = if (full) "None free" else null) { core.send(Intent.PadNew(row.track, at)) })
             if (full) {
                 // a fresh pattern without a free number: the lowest unused one onto this pad, then emptied (stopped only); it names the number
                 val recycle = pool.recycle ?: pads.unused.minOrNull()
-                add(HoldItem("Recycle an unused pattern", sub = if (recycle == null) "None unused: saved projects hold them" else stopFirst ?: "Takes ${"%02d".format(recycle)}", enabled = idle && recycle != null) {
+                add(HoldItem("Recycle an unused pattern", sub = if (recycle == null) "None unused: saved projects hold them" else "Takes ${"%02d".format(recycle)}", enabled = recycle != null, group = "Pool", afterStop = !idle) {
                     core.send(com.scottgerstl.lupe.core.RecyclePattern(row.track, at)) })
                 // the sheet in pick mode: the pad then plays the same pattern as its other users
-                add(HoldItem("Put a kept pattern here…", sub = "Edits are shared") { sheetHost.showPatterns(row.track to at) })
+                add(HoldItem("Put a kept pattern here…", sub = "Edits are shared", group = "Pool") { sheetHost.showPatterns(row.track to at) })
             }
             // (a REST added at the list's end is one LIST SET, which Skiff takes while playing; if it can't, its refusal shows on screen)
-            add(HoldItem("Rest", sub = goes) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
+            add(HoldItem("Rest", sub = goes, tile = true) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
         }
         val kept = keptPatterns(pads)
         // (with the pool full, "Put a kept pattern here…" above is the way to a kept one)
         if (!fullPool)         add(HoldItem(if (empty) "Pick a pattern…" else "Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else if (empty) goes else null, enabled = kept.isNotEmpty(),
+            tile = true, short = "Pattern", tileSub = if (empty) null else e.pattern?.let { "%02d".format(it) },
             children = { kept.map { p -> HoldItem("Pattern %02d".format(p), checked = e.pattern == p) { core.send(Intent.PadSet(row.track, at, p)) } } }))
-        if (empty) add(HoldItem("Patterns…", sub = if (pool.kept > 0) "${pool.kept} kept · ${pool.unused} unused" else null) { sheetHost.showPatterns() })
+        if (empty) add(HoldItem("Patterns…", sub = if (pool.kept > 0) "${pool.kept} kept · ${pool.unused} unused" else null, group = "Pool") { sheetHost.showPatterns() })
         if (!empty && block != null) {
             // how many passes it plays (the iPad's Play once more / less); a chain repeats whole, on its last entry's count
             val chained = block.last > block.first
-            add(HoldItem("Play once more", sub = stopFirst ?: (if (chained) "The chain: " else "") + "×${block.reps} to ×${minOf(16, block.reps + 1)}", enabled = idle && block.reps < 16) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps + 1)) })
-            add(HoldItem("Play once less", sub = stopFirst ?: (if (chained) "The chain: " else "") + "×${block.reps} to ×${maxOf(1, block.reps - 1)}", enabled = idle && block.reps > 1) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps - 1)) })
+            // while playing these wait for Stop (Skiff rewrites a list only while stopped): folded into one "N more after Stop" row
+            add(HoldItem("Play once more", sub = (if (chained) "The chain: " else "") + "×${block.reps} to ×${minOf(16, block.reps + 1)}", enabled = block.reps < 16, group = "Playback", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps + 1)) })
+            add(HoldItem("Play once less", sub = (if (chained) "The chain: " else "") + "×${block.reps} to ×${maxOf(1, block.reps - 1)}", enabled = block.reps > 1, group = "Playback", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps - 1)) })
             val full = (tl.tracks.firstOrNull { it.track == row.track }?.entriesUsed ?: 0) >= 16
-            add(HoldItem("Duplicate after", sub = stopFirst ?: if (full) "The track's 16 entries are full" else null, enabled = idle && !full) { sproutTo(row.track, block.last + 1); core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, block.id)) })
+            add(HoldItem("Duplicate after", sub = if (full) "The track's 16 entries are full" else null, enabled = !full, group = "Arrange", afterStop = !idle) { sproutTo(row.track, block.last + 1); core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, block.id)) })
             val at = blocks.indexOfFirst { it.id == block.id }
-            add(HoldItem("Move earlier", sub = stopFirst, enabled = idle && at > 0) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, -1)) })
-            add(HoldItem("Move later", sub = stopFirst, enabled = idle && at in 0 until blocks.size - 1) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, 1)) })
+            add(HoldItem("Move earlier", enabled = at > 0, group = "Arrange", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, -1)) })
+            add(HoldItem("Move later", enabled = at in 0 until blocks.size - 1, group = "Arrange", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, 1)) })
         }
         if (!empty) {
             val erases = e.kind == PadKind.Pattern && others.isEmpty()
             // no confirm (batch item 13): it clears at once and the app strip's Undo, and "Undo clear" in this pad's menu, put it back until the next edit (Scott, 2026-11-17, messages rule)
             // decision 41: Clear steps wipes the notes and keeps the pad (works while playing on the pattern the track is on; a pattern others use loses its notes there too);
             // Delete pattern takes the pad (stopped only: the FM-1 rewrites a list only while stopped)
-            if (e.kind == PadKind.Pattern) add(HoldItem("Clear steps", sub = if (others.isNotEmpty()) "Pattern %02d is shared: its notes clear on ${others.first()} too".format(e.pattern) else "Keeps the pad and the pattern") { core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at)) })
-            add(HoldItem("Delete pattern", sub = if (!core.top.value.playing || e.kind != PadKind.Pattern) (if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null) else "Stop first", enabled = !core.top.value.playing || e.kind != PadKind.Pattern) { core.send(Intent.PadClear(row.track, at)) })
+            if (e.kind == PadKind.Pattern) add(HoldItem("Clear steps", sub = if (others.isNotEmpty()) "Pattern %02d is shared: its notes clear on ${others.first()} too".format(e.pattern) else "Keeps the pad and the pattern", group = "Remove") { core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at)) })
+            add(HoldItem("Delete pattern", sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null, group = "Remove", afterStop = core.top.value.playing && e.kind == PadKind.Pattern) { core.send(Intent.PadClear(row.track, at)) })
         }
     }
     val what = when (e.kind) { PadKind.Empty -> "empty"; PadKind.Rest -> "rest"; PadKind.Pattern -> "pattern ${e.pattern}" }

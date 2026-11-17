@@ -325,31 +325,32 @@ private fun BlockView(
         val erases = !b.rest && b.pattern != null && (ui.uses[b.pattern] ?: 0) <= 1
         val old = "%02d".format(b.pattern ?: 0)
         // the iPad's block menu opens with Edit pattern (decision 31: the full set): the Edit tab, on this block's pattern
-        if (!b.rest) add(HoldItem("Edit steps") { actions.selectTrack(b.track); actions.select(b.key); actions.edit(b) })
-        add(HoldItem("Set pattern…", sub = if (b.rest) "REST" else "Pattern $old", children = {
+        // priority tiles (Scott, 2026-11-17, "C"): Edit steps, Pattern, Sound. The menu opens only while stopped (editable), so nothing folds
+        if (!b.rest) add(HoldItem("Edit steps", tile = true) { actions.selectTrack(b.track); actions.select(b.key); actions.edit(b) })
+        add(HoldItem("Set pattern…", sub = if (b.rest) "REST" else "Pattern $old", tile = true, short = "Pattern", tileSub = if (b.rest) "REST" else old, children = {
             ui.kept.map { p ->
                 val n = "%02d".format(p)
                 HoldItem("Pattern $n", checked = !b.rest && b.pattern == p,
                     confirm = if (erases && p != b.pattern) "Set $n: pattern $old is used nowhere else, so it's erased" else null) { actions.setPattern(b, p) }
             }
         }))
-        add(HoldItem("Passes…", sub = "${b.reps} · ${barsText(b.length)}", children = {
+        add(HoldItem("Passes…", sub = "${b.reps} · ${barsText(b.length)}", group = "Playback", children = {
             (listOf(1, 2, 3, 4, 6, 8, 12, 16) + b.reps).distinct().sorted().map { n -> HoldItem(if (n == 1) "1 pass" else "$n passes", sub = barsText(n * b.passBars), checked = n == b.reps) { actions.stretch(b, n) } }
         }))
-        add(HoldItem("Duplicate") { actions.duplicate(b) })
-        add(HoldItem("Insert before…", enabled = (ui.entries[b.track] ?: 0) < 16, sub = if ((ui.entries[b.track] ?: 0) < 16) null else "The track's 16 entries are full", children = {
+        add(HoldItem("Duplicate", group = "Arrange") { actions.duplicate(b) })
+        add(HoldItem("Insert before…", group = "Arrange", enabled = (ui.entries[b.track] ?: 0) < 16, sub = if ((ui.entries[b.track] ?: 0) < 16) null else "The track's 16 entries are full", children = {
             listOf(HoldItem("REST") { actions.insert(b.track, b.id, 65) }) + ui.kept.map { p -> HoldItem("Pattern ${"%02d".format(p)}") { actions.insert(b.track, b.id, p) } }
         }))
-        add(HoldItem("Select sound") { actions.openSounds(b.track) })
+        add(HoldItem("Select sound", tile = true, short = "Sound", tileSub = name.ifEmpty { null }) { actions.openSounds(b.track) })
         // the way to reorder that isn't a drag (WCAG 2.5.7), as the iPad's Move earlier / Move later
         val at = mine.indexOfFirst { it.key == b.key }
-        add(HoldItem("Move earlier", enabled = at > 0) { actions.moveBy(b, -1) })
-        add(HoldItem("Move later", enabled = at in 0 until mine.size - 1) { actions.moveBy(b, 1) })
+        add(HoldItem("Move earlier", enabled = at > 0, group = "Arrange") { actions.moveBy(b, -1) })
+        add(HoldItem("Move later", enabled = at in 0 until mine.size - 1, group = "Arrange") { actions.moveBy(b, 1) })
         // no confirm: it goes at once and can come back until the next edit (the app strip, and "Undo delete" in this track's lane menu)
-        add(HoldItem("Delete", sub = if (erases) "Pattern $old is used nowhere else" else null) { actions.delete(b) })
+        add(HoldItem("Delete", sub = if (erases) "Pattern $old is used nowhere else" else null, group = "Remove") { actions.delete(b) })
         // a chain plays its patterns as one block; Chain joins this block to the next, Split takes a chain apart
-        if (ui.blocks.any { it.track == b.track && !it.gap && it.id == b.id + b.entries }) add(HoldItem("Chain with the next") { actions.chain(b) })
-        if (b.entries > 1) add(HoldItem("Split the chain") { actions.split(b) })
+        if (ui.blocks.any { it.track == b.track && !it.gap && it.id == b.id + b.entries }) add(HoldItem("Chain with the next", group = "Chain") { actions.chain(b) })
+        if (b.entries > 1) add(HoldItem("Split the chain", group = "Chain") { actions.split(b) })
     }
     fun openMenuAtCentre() { if (editable) coords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), colour, blockItems()) } }
 
@@ -453,10 +454,10 @@ private fun TrackEnd(track: Int, ui: TimelineUi, actions: TimelineActions, barPx
         // a block deleted a moment ago: the way back, here as well as in the app strip (only while the track is as the delete left it)
         val undo = ui.deleted.lastOrNull { it.track == track }
         listOfNotNull(
-            undo?.let { u -> HoldItem("Undo delete", sub = u.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { actions.undoDelete(u) } },
-            HoldItem("New pattern", sub = why, enabled = !full) { actions.newBlock(track) },
-            HoldItem("Add a pattern…", sub = why, enabled = !full, children = { ui.kept.map { p -> HoldItem("Pattern ${"%02d".format(p)}") { actions.insert(track, at, p) } } }),
-            HoldItem("Add a REST", sub = why, enabled = !full) { actions.insert(track, at, 65) },
+            undo?.let { u -> HoldItem("Undo delete", sub = u.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back", group = "Undo") { actions.undoDelete(u) } },
+            HoldItem("New pattern", sub = why, enabled = !full, tile = true, short = "New") { actions.newBlock(track) },
+            HoldItem("Add a pattern…", sub = why, enabled = !full, tile = true, short = "Pattern", children = { ui.kept.map { p -> HoldItem("Pattern ${"%02d".format(p)}") { actions.insert(track, at, p) } } }),
+            HoldItem("Add a REST", sub = why, enabled = !full, tile = true, short = "Rest") { actions.insert(track, at, 65) },
         )
     })
     Box(

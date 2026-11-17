@@ -33,7 +33,7 @@ Build: the commit that adds this section. Same setup; no backup.
 | 17 | Tap the header tabs one after another, near and far (Pads → Mix, Mix → Edit). | **One** white pill slides from the old tab to the new: its leading edge runs ahead so it stretches, then it gathers on the new tab with a small overshoot. The labels' colours blend; no tab changes width. | – | ☐ pass ☐ fail: |
 | 18 | Mix: tap through Mixer · Delay · Reverb · Chorus · Global. Settings: tap the Slide to turn and Menus open segments. | The same: the grey pill (Mix) or white pill (Settings) slides and stretches between choices; nothing jumps. | – | ☐ pass ☐ fail: |
 | 19 | Tap Follow and Chord on Edit; Mute on Pads; Mute and Solo on a Mix strip. | Switching on, the white fill **grows out from the middle** of the key and settles; switching off, it shrinks back. Mute and Solo on Mix also round their inner corners as they fill. | – | ☐ pass ☐ fail: |
-| 20 | Long-press a filled pad, an empty pad, a track head and a Timeline block. | A soft white disc grows under your finger; beside it a grey card slides out from the finger and grows in, its rows appearing one after another (quick). Rows have a grey icon, the label and any second line; the current choice is a lighter pill with a ✓; Set pattern… has a ›. No arc, no stalks, no darkening behind. It opens to the left of your finger (Settings › Menus open flips it) and never covers the header. | – | ☐ pass ☐ fail: |
+| 20 | (Superseded by round 4's priority tiles, checks 37–44.) Long-press a filled pad, an empty pad, a track head and a Timeline block. | A soft white disc grows under your finger; beside it a grey card slides out from the finger and grows in, its rows appearing one after another (quick). Rows have a grey icon, the label and any second line; the current choice is a lighter pill with a ✓; Set pattern… has a ›. No arc, no stalks, no darkening behind. It opens to the left of your finger (Settings › Menus open flips it) and never covers the header. | – | ☐ pass ☐ fail: |
 | 21 | In that menu: tap a choice; open it again and tap outside; open it on a pad near the left edge; open a long one (the filled pad's). Pick Delete pattern. | A tap picks and the menu fades out quickly (about 120 ms). Outside closes it. Near the left edge it opens to the right instead. A long one scrolls inside the card. Delete pattern turns its row red-edged with the words naming what goes, the other rows dim; a second tap after a moment confirms. | – | ☐ pass ☐ fail: |
 | 22 | Hold a track head: slide LEVEL and PAN in its menu. | The slide rows work as before inside the new card. | – | ☐ pass ☐ fail: |
 | 23 | Open the Bar ⌄ menu and pick another launch point; reopen it. | The ✓'s pill grows in on the new row and shrinks away from the old. | – | ☐ pass ☐ fail: |
@@ -63,7 +63,29 @@ Labs › **Shape spring · stiffness / damping**, **Fast spring · stiffness**, 
 | 35 | In Labs, set Shape spring · damping to 0.50, then 1.00; Squash to 0 and 12. Repeat 29. | 0.50 bounces more, 1.00 not at all; squash 0 has none, 12 a lot. Say which feels right. | – | ☐ pass ☐ fail: values: |
 | 36 | Remove animations on; repeat 29, 30 and 34. | The card and the pill **cross-fade** (no squash, no travel); the badge's circle and square cross-fade; the well's colour still swells with distance (that's tracking, not motion) but it doesn't grow. | – | ☐ pass ☐ fail: |
 
+## Round 4: the hold menu as priority tiles (Scott, 2026-11-17: "C: priority tiles")
+
+**Tile picks to confirm** (Claude chose these from each menu's contents; tick or say what you'd swap):
+- Filled pad: **Edit steps · Sound · Pattern** (the mock's) ☐ ok
+- Empty pad: **New · Pattern · Rest** ☐ ok
+- Track head: **Sounds · Mute · Solo** (Mute and Solo tiles turn white while on) ☐ ok
+- Timeline block: **Edit steps · Pattern · Sound** ☐ ok
+- Timeline lane (hold an empty stretch): **New · Pattern · Rest** ☐ ok
+- Mix strip: **Sound · Mute · Solo**, with Pan and Reverb send as slide rows under them ☐ ok
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 37 | **Playing:** long-press a filled pad. | Beside your finger: three tiles (Edit steps; Sound with the sound's name; Pattern with its number), then a rounded group with Clear steps, then one row "6 more after Stop" with "Play once ±, Duplicate, Move, Delete" under it, ⏸ at the left and ⌄ at the right. No "Stop first" anywhere. It all fits, nothing scrolls, nothing touches an edge. Tiles appear first, then the rows, quickly. | – | ☐ pass ☐ fail: |
+| 38 | Tap "6 more after Stop", then tap it again. | It **unfolds in place**: the six show, dimmed (they can't be tapped), and the ⌄ turns; the menu grows smoothly (it may open a second column beside it if there's no room below). Again: it folds back the same way. | – | ☐ pass ☐ fail: |
+| 39 | **Stopped:** long-press the same pad. Pick Delete pattern. | Tiles, then groups: Playback (Play once more / less), Arrange (Duplicate after, Move earlier, Move later), Remove (Clear steps, Delete pattern), in two columns if they'd be taller than the screen. A pressed row grows a lighter pill. Delete asks in place (red edge, the words); a second tap confirms. | – | ☐ pass ☐ fail: |
+| 40 | Long-press an empty pad. | Tiles New · Pattern · Rest, then Patterns… in a group. With the pattern pool full: the Pool group shows Recycle and Put a kept pattern here…. | – | ☐ pass ☐ fail: |
+| 41 | Long-press a track head; tap the Mute tile; slide LEVEL. | Tiles Sounds (engine under it) · Mute · Solo, then LEVEL and PAN as slide rows. Mute's tile turns white with dark words, and the track mutes. | – | ☐ pass ☐ fail: |
+| 42 | Stopped, on the Timeline: long-press a block, then an empty stretch of a lane. | Block: tiles Edit steps · Pattern · Sound; groups Playback (Passes…), Arrange (Duplicate, Insert before…, Move earlier / later), Remove (Delete), and Chain where it applies. Lane: tiles New · Pattern · Rest. | – | ☐ pass ☐ fail: |
+| 43 | Mix: long-press a strip; slide Pan and Reverb send; tap the Sound tile. | Tiles Sound · Mute · Solo, then PAN and REVERB SEND slide rows; the strip's values line follows; Sound opens Sounds for that track. | – | ☐ pass ☐ fail: |
+| 44 | Remove animations on: open a pad's menu while playing and unfold it. | The menu and the unfold fade, nothing slides or springs. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
+- The hold menu picks its layout (playing or stopped) when it opens. If the song stops or starts while one is open, it keeps that layout until it's opened again; the live switch isn't built (the menu's choices are made when it opens).
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - A kit (drum) track on Edit with the panel docked: its lanes still scroll under the panel, as before. 8-step pages are melodic only for now.
 - The Timeline's own hybrid changes (pill heads, connected zoom group, pass-count chips) and the Sounds and Projects sheets' row styling aren't built; they pick up only the shared keys, menus and sheet.

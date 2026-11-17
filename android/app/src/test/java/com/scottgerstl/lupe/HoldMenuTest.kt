@@ -195,29 +195,54 @@ class HoldMenuTest {
     }
 }
 
-/** The straight hold menu (Scott, 2026-11-17: "let's adopt the material menu, and not the arc menu"). */
-class StraightHoldMenuTest {
-    private val w = 914f; private val h = 412f
-    @org.junit.Test fun opensBesideTheFingerOnTheChosenSideAndFlipsWhenThereIsNoRoom() {
-        val p = com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 200f, w, h, 200f, menusRight = false)
-        org.junit.Assert.assertTrue(p.left); org.junit.Assert.assertEquals(600f - 36f - 264f, p.x, 0.01f)
-        val near = com.scottgerstl.lupe.ui.shell.straightMenuPlace(120f, 200f, w, h, 200f, menusRight = false)   // no room on the left
-        org.junit.Assert.assertFalse(near.left); org.junit.Assert.assertEquals(156f, near.x, 0.01f)
-        val r = com.scottgerstl.lupe.ui.shell.straightMenuPlace(400f, 200f, w, h, 200f, menusRight = true)
-        org.junit.Assert.assertFalse(r.left)
-        val edge = com.scottgerstl.lupe.ui.shell.straightMenuPlace(800f, 200f, w, h, 200f, menusRight = true)   // no room on the right
-        org.junit.Assert.assertTrue(edge.left)
+/** The hold menu as priority tiles (Scott, 2026-11-17: "C: priority tiles"). */
+class PriorityTilesMenuTest {
+    private fun item(t: String, tile: Boolean = false, group: String? = null, after: Boolean = false, sub: String? = null) =
+        com.scottgerstl.lupe.ui.shell.HoldItem(t, sub = sub, tile = tile, group = group, afterStop = after)
+    // the filled pad's menu while playing, and stopped
+    private fun pad(playing: Boolean) = listOf(
+        item("Edit steps", tile = true), item("Select sound", tile = true, sub = "Pad"), item("Set pattern…", tile = true),
+        item("Play once more", group = "Playback", after = playing, sub = "×4 to ×5"), item("Play once less", group = "Playback", after = playing, sub = "×4 to ×3"),
+        item("Duplicate after", group = "Arrange", after = playing), item("Move earlier", group = "Arrange", after = playing), item("Move later", group = "Arrange", after = playing),
+        item("Clear steps", group = "Remove", sub = "Keeps the pad"), item("Delete pattern", group = "Remove", after = playing),
+    )
+
+    @org.junit.Test fun playingFoldsEverythingThatWaitsIntoOneRow() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(true), 412f - 24f)
+        org.junit.Assert.assertEquals(listOf(0, 1, 2), lay.tiles)
+        org.junit.Assert.assertEquals(1, lay.columns.size)                                   // fits: one column, no scroll
+        val groups = lay.columns.single()
+        org.junit.Assert.assertEquals(listOf(8), groups[0].rows)                             // Clear steps, the one thing available now
+        org.junit.Assert.assertTrue(groups[1].waiting)
+        org.junit.Assert.assertEquals(listOf(3, 4, 5, 6, 7, 9), groups[1].rows)
+        org.junit.Assert.assertEquals("6 more after Stop", com.scottgerstl.lupe.ui.shell.afterStopTitle(6))
+        org.junit.Assert.assertEquals("Play once ±, Duplicate, Move, Delete", com.scottgerstl.lupe.ui.shell.afterStopNames(pad(true), groups[1].rows))
     }
 
-    @org.junit.Test fun staysBetweenTheHeaderAndTheFoot() {
-        org.junit.Assert.assertEquals(172f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 200f, w, h, 200f, false).y, 0.01f)   // first row level with the finger
-        org.junit.Assert.assertEquals(60f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 70f, w, h, 200f, false).y, 0.01f)     // not over the header
-        org.junit.Assert.assertEquals(h - 16f - 200f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 400f, w, h, 200f, false).y, 0.01f)
-        org.junit.Assert.assertEquals(60f, com.scottgerstl.lupe.ui.shell.straightMenuPlace(600f, 300f, w, h, 500f, false).y, 0.01f)    // too tall: from the header, scrolling
+    @org.junit.Test fun stoppedShowsTheGroupsInTwoColumnsWhenTooTall() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), 412f - 24f)
+        val all = lay.columns.flatten()
+        org.junit.Assert.assertEquals(listOf("Playback", "Arrange", "Remove"), all.map { it.name })
+        org.junit.Assert.assertTrue(all.none { it.waiting })
+        org.junit.Assert.assertEquals(2, lay.columns.size)                                    // 84 + 3 groups would pass the screen
+        org.junit.Assert.assertEquals(1, com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), 900f).columns.size)
     }
 
-    @org.junit.Test fun rowsAre44Or52() {
-        val items = listOf(com.scottgerstl.lupe.ui.shell.HoldItem("Edit steps"), com.scottgerstl.lupe.ui.shell.HoldItem("Sounds…", sub = "Analog"))
-        org.junit.Assert.assertEquals(12f + 44f + 52f, com.scottgerstl.lupe.ui.shell.menuHeight(items), 0.01f)
+    @org.junit.Test fun unfoldingTheWaitingRowMovesItToAColumnOfItsOwnWhenItWouldOverflow() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(true), 412f - 24f, expanded = true)
+        org.junit.Assert.assertEquals(2, lay.columns.size)
+        org.junit.Assert.assertTrue(lay.columns[1].single().waiting)
+    }
+
+    @org.junit.Test fun opensBesideTheFingerAndKeepsTwelveFromEveryEdge() {
+        val p = com.scottgerstl.lupe.ui.shell.holdMenuPlace(600f, 200f, 914f, 412f, 304f, 220f, menusRight = false)
+        org.junit.Assert.assertTrue(p.left); org.junit.Assert.assertEquals(600f - 36f - 304f, p.x, 0.01f); org.junit.Assert.assertEquals(158f, p.y, 0.01f)
+        val near = com.scottgerstl.lupe.ui.shell.holdMenuPlace(150f, 200f, 914f, 412f, 304f, 220f, menusRight = false)
+        org.junit.Assert.assertFalse(near.left)
+        val low = com.scottgerstl.lupe.ui.shell.holdMenuPlace(600f, 400f, 914f, 412f, 304f, 220f, false)
+        org.junit.Assert.assertEquals(412f - 12f - 220f, low.y, 0.01f)
+        val tall = com.scottgerstl.lupe.ui.shell.holdMenuPlace(600f, 200f, 914f, 412f, 616f, 380f, false)   // taller than below the header: from the 12 margin
+        org.junit.Assert.assertTrue(tall.y >= 12f && tall.y + 380f <= 412f - 12f)
+        org.junit.Assert.assertTrue(tall.x >= 12f && tall.x + 616f <= 914f - 12f)
     }
 }

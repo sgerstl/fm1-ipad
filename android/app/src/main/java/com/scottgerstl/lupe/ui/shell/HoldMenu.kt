@@ -1,5 +1,13 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.layout.Arrangement
+
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+
+import androidx.compose.foundation.clickable
+
+import androidx.compose.animation.animateContentSize
+
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 import androidx.compose.ui.draw.clip
@@ -106,6 +114,15 @@ class HoldItem(
     val confirm: String? = null, val children: (() -> List<HoldItem>)? = null,
     /** A value set by sliding on the row (LEVEL, PAN on a track's head): the row stays, the menu stays open. */
     val slide: HoldSlide? = null,
+    /**
+     * Priority tiles (Scott, 2026-11-17, "C: priority tiles"): one of the menu's three most-used actions, shown as a big tile across the top,
+     * labelled [short] (the title if null) with [tileSub] under it.
+     */
+    val tile: Boolean = false, val short: String? = null, val tileSub: String? = null,
+    /** The row group it sits in when stopped: "Playback", "Arrange", "Remove"… Consecutive items of one group share a rounded surface. */
+    val group: String? = null,
+    /** It waits for Stop right now (Skiff rewrites a list only while stopped): folded into the one "N more after Stop" row while playing. */
+    val afterStop: Boolean = false,
     val action: () -> Unit = {},
 )
 
@@ -296,16 +313,16 @@ fun hubScale(p: Float, spring: Float): Float {
 }
 
 /**
- * The hold menu, straight (Scott, 2026-11-17, on the Pixel: "let's adopt the material menu, and not the arc menu"; spec 3.9,
- * `phone-04-pads-hold-menu`). It replaces decision 36's wheel on Android ([HoldWheel] stays for its tests and the iPhone's reference).
+ * The hold menu as priority tiles (Scott, 2026-11-17: "C: priority tiles"; spec 3.9; vault `fm1-ipad/assets/hold-menu-hybrid-2026-11-17/`).
+ * It replaced the ungrouped straight list that ran off the screen and said "Stop first" four times.
  *
- * A touch disc (56, `text` at 18 %) grows from half its size exactly under the finger. Beside it a `held` card at radius 14 (elevation 3, 6
- * inside) holds the choices as rows 44 tall (52 with a second line) at radius 10: an icon in grey, the label, its second line in
- * `textSecondaryRaised`, a tick on the current choice (the row a `lifted` pill), a chevron on one that opens more. The card opens on the side
- * Settings › Menus open names, flipping when there's no room, its first row level with the finger, kept between the header and the foot; a
- * long list scrolls. It slides 16 out from the finger, grows from 0.94 and fades in on the spring, its rows fading in 20 ms apart; it leaves in
- * 120 ms. A tap picks; a drag never does (decision 36's rule stays). A confirm turns its row into a red-edged row naming what goes, the others
- * dim. The page isn't dimmed; a tap outside closes it. Reduce Motion: it fades in and out where it stands. TalkBack reads a plain menu.
+ * Under a touch disc at the finger (56, `text` at 18 %): the menu's three most-used actions as tiles across the top (96 × 84, `held`, radius 18,
+ * icon 24, label, an optional second line), then the actions available now as rows in rounded `held` groups (radius 16, 4 apart, rows 44 or
+ * 52; a pressed or current row grows a `lifted` pill). While playing, everything that waits for Stop folds into one row, "N more after Stop",
+ * naming them; a tap unfolds it in place to show them dimmed. Stopped, those are their own groups (Playback, Arrange, Remove). A menu taller
+ * than the screen minus 24 takes two columns; it never scrolls or touches an edge (12 margin). It opens on the side Settings › Menus open names,
+ * springs out from the finger (tiles first, then rows, 20 ms apart) and leaves in 120 ms; unfolding is an animated layout change on the
+ * spatial spring. A tap picks; a drag never does (decision 36). Reduce Motion: fades. TalkBack reads a plain menu, the fold as a button.
  */
 @Composable
 fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
@@ -316,15 +333,17 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
     var shown by remember { mutableStateOf(state.menu) }
     val live = state.menu
     if (live != null) shown = live
-    val enter = remember { Animatable(0f) }     // 0…1 on the spring (Reduce Motion: eased)
-    val clock = remember { Animatable(0f) }     // ms since it opened, for the rows' stagger
-    val leave = remember { Animatable(0f) }     // 0…1 as it leaves
+    val enter = remember { Animatable(0f) }
+    val clock = remember { Animatable(0f) }
+    val leave = remember { Animatable(0f) }
+    var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(state.opened) {
         if (state.menu == null) return@LaunchedEffect
+        expanded = false
         leave.snapTo(0f); enter.snapTo(0f); clock.snapTo(0f)
         kotlinx.coroutines.coroutineScope {
-            launch { unscaled { enter.animateTo(1f, if (reduce) tween(150, easing = com.scottgerstl.lupe.ui.theme.EaseOut) else com.scottgerstl.lupe.ui.theme.lupeSpring(hm.fingerMs, hm.bounce)) } }
-            launch { unscaled { clock.animateTo(600f, tween(600, easing = LinearEasing)) } }
+            launch { unscaled { enter.animateTo(1f, if (reduce) tween(150, easing = com.scottgerstl.lupe.ui.theme.EaseOut) else hm.spatial()) } }
+            launch { unscaled { clock.animateTo(800f, tween(800, easing = LinearEasing)) } }
         }
     }
     LaunchedEffect(live == null) {
@@ -339,108 +358,266 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier) {
             .then(if (takes) Modifier.pointerInput(Unit) { detectTapGestures { state.close() } } else Modifier)
             .semantics { paneTitle = "Menu"; isTraversalGroup = true },
     ) {
-        val w = maxWidth.value; val h = maxHeight.value
+        val h = maxHeight.value
         val fingerPx = origin?.takeIf { it.isAttached }?.windowToLocal(m.at) ?: m.at
         val fx = with(density) { fingerPx.x.toDp().value }; val fy = with(density) { fingerPx.y.toDp().value }
         val out = 1f - leave.value
-        // the touch disc under the finger
         Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
             val k = if (reduce) 1f else (0.5f + 0.5f * enter.value) * (1f - 0.3f * leave.value)
-            val a = (if (reduce) enter.value else 1f) * out
-            drawCircle(Tok.text.copy(alpha = 0.18f * a), (STRAIGHT_DISC / 2).dp.toPx() * k, Offset(fx.dp.toPx(), fy.dp.toPx()))
+            drawCircle(Tok.text.copy(alpha = 0.18f * (if (reduce) enter.value else 1f) * out), (STRAIGHT_DISC / 2).dp.toPx() * k, Offset(fx.dp.toPx(), fy.dp.toPx()))
         }
-        val place = straightMenuPlace(fx, fy, w, h, menuHeight(m.items), labs.menusRight)
-        val maxH = (h - HEADER_FOOT - 16f).coerceAtLeast(120f)
-        Column(
-            Modifier.offset { IntOffset(place.x.dp.roundToPx(), place.y.dp.roundToPx()) }
-                .width(STRAIGHT_W.dp).heightIn(max = maxH.dp)
-                .graphicsLayer {
-                    alpha = (if (reduce) enter.value else enter.value.coerceIn(0f, 1f)) * out
-                    if (!reduce) {
-                        val sc = (0.94f + 0.06f * enter.value) * (1f - 0.04f * leave.value)
-                        scaleX = sc; scaleY = sc
-                        translationX = (if (place.left) 16.dp.toPx() else -16.dp.toPx()) * (1f - enter.value)
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (place.left) 1f else 0f, ((fy - place.y) / menuHeight(m.items).coerceAtLeast(1f)).coerceIn(0f, 1f))
-                    }
-                    shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.panel); clip = true
-                    ambientShadowColor = Color.Black; spotShadowColor = Color.Black
-                }
-                .background(Tok.held)
-                .pointerInput(m) { detectTapGestures { } }   // a tap on the card's padding doesn't close it
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                .padding(6.dp),
-        ) {
-            m.items.forEachIndexed { k, item ->
-                val confirming = state.confirming == k
-                val dimmed = state.confirming >= 0 && !confirming
-                // each row fades in 20 ms after the one above it
-                val rowIn = if (reduce) 1f else ((clock.value - 20f * k) / 120f).coerceIn(0f, 1f)
-                val rowH = if (item.sub != null || item.slide != null || confirming) 52.dp else 44.dp
+        val lay = layoutHoldMenu(m.items, h - 2 * MENU_MARGIN, expanded)
+        var leftSide by remember(m) { mutableStateOf(true) }
+        var menuH by remember(m) { mutableStateOf(0f) }
+        androidx.compose.ui.layout.Layout(
+            content = {
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = rowH)
-                        .graphicsLayer { alpha = rowIn * (if (dimmed) 0.4f else 1f) }
-                        .clip(RoundedCornerShape(if (item.checked) rowH / 2 else 10.dp))
-                        .background(if (item.checked) Tok.lifted else Color.Transparent)
-                        .drawBehind { if (confirming) drawRoundRect(Tok.rec, Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(10.dp.toPx()), style = Stroke(1.5.dp.toPx())) }
-                        .then(if (!takes) Modifier.clearAndSetSemantics { } else if (item.slide != null) Modifier else Modifier.semantics(mergeDescendants = true) {
-                            role = Role.Button
-                            contentDescription = if (confirming) "Confirm: ${item.confirm}" else item.title + (item.sub?.let { ", $it" } ?: "")
-                            if (item.checked) selected = true
-                            if (!item.enabled) disabled()
-                            onClick { state.pick(k); true }
-                        }.pointerInput(k, m) { detectTapGestures { state.pick(k) } })
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val ink = if (!item.enabled) Tok.text3 else Tok.text
-                    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
-                        holdIcon(item.title)?.let { Image(androidx.compose.ui.res.painterResource(it), null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (item.enabled) Tok.text2Raised else Tok.text3)) }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    if (item.slide != null) Box(Modifier.weight(1f).height(rowH)) { HoldSlideRow(item.title, item.slide, takes) }
-                    else if (confirming) BasicText(item.confirm.orEmpty(), Modifier.weight(1f), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 1.15.em, color = Tok.rec), maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 1.sp))
-                    else {
-                        Column(Modifier.weight(1f)) {
-                            BasicText(item.title, style = LupeType.body.copy(fontSize = 16.sp, lineHeight = 1.15.em, color = ink), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 16.sp, stepSize = 1.sp))
-                            if (item.sub != null) BasicText(item.sub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 1.15.em, color = Tok.text2Raised), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Modifier
+                        .graphicsLayer {
+                            alpha = enter.value.coerceIn(0f, 1f) * out
+                            if (!reduce) {
+                                val sc = (0.94f + 0.06f * enter.value) * (1f - 0.04f * leave.value)
+                                scaleX = sc; scaleY = sc
+                                translationX = (if (leftSide) 16.dp.toPx() else -16.dp.toPx()) * (1f - enter.value)
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (leftSide) 1f else 0f, 0.2f)
+                            }
                         }
-                        if (item.checked) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
-                        if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(fontSize = 18.sp, color = Tok.text2Raised)) }
+                        // unfolding the after-Stop row, or a second column appearing for it, is a layout change on the spatial spring
+                        .animateContentSize(if (reduce) tween(150) else hm.spatial(androidx.compose.ui.unit.IntSize(1, 1)))
+                        .pointerInput(m) { detectTapGestures { } },
+                    horizontalArrangement = Arrangement.spacedBy(GROUP_GAP.dp),
+                ) {
+                    var order = 0
+                    lay.columns.forEachIndexed { ci, col ->
+                        Column(Modifier.width(MENU_W.dp), verticalArrangement = Arrangement.spacedBy(GROUP_GAP.dp)) {
+                            if (ci == 0 && lay.tiles.isNotEmpty()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(TILE_GAP.dp)) {
+                                    lay.tiles.forEach { k -> val d = order++; MenuTile(m.items[k], k, state, takes, appear(clock.value, d, reduce)) }
+                                }
+                            }
+                            col.forEach { g ->
+                                val d0 = order; order += 1 + (if (g.waiting) 0 else g.rows.size)
+                                if (g.waiting) AfterStopGroup(m.items, g.rows, expanded, { expanded = !expanded }, takes, reduce, appear(clock.value, d0, reduce))
+                                else MenuGroupCard(m.items, g.rows, state, takes, d0, clock.value, reduce)
+                            }
+                        }
                     }
                 }
-            }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) { ms, c ->
+            val pl = ms[0].measure(androidx.compose.ui.unit.Constraints())
+            val wDp = pl.width / density.density; val hDp = pl.height / density.density
+            val place = holdMenuPlace(fx, fy, c.maxWidth / density.density, c.maxHeight / density.density, wDp, hDp, labs.menusRight)
+            leftSide = place.left; menuH = hDp
+            layout(c.maxWidth, c.maxHeight) { pl.place((place.x * density.density).roundToInt(), (place.y * density.density).roundToInt()) }
         }
     }
 }
 
-/** The straight menu's measures (dp): the card's width, the touch disc, the header's foot it stays under. */
-const val STRAIGHT_W = 264f
+/** 0…1 as the [order]th piece of the menu fades in (tiles first, then rows, 20 ms apart). */
+private fun appear(clockMs: Float, order: Int, reduce: Boolean) = if (reduce) 1f else ((clockMs - 20f * order) / 140f).coerceIn(0f, 1f)
+
+/** A priority tile: 96 × 84, `held` at radius 18 (white with dark ink while its choice is on, Mute or Solo), icon 24 over the label and a second line. */
+@Composable
+private fun MenuTile(item: HoldItem, k: Int, state: HoldMenuState, takes: Boolean, appear: Float) {
+    val reduce = LocalReduceMotion.current
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val lit = com.scottgerstl.lupe.ui.theme.animatedFloat(if (item.checked) 1f else 0f, com.scottgerstl.lupe.ui.theme.Dur.STATE).value
+    val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (pressed) 0.94f else 1f, reduce, fast = true)
+    val ink = lerp(Tok.text, Tok.onColour, lit)
+    Column(
+        Modifier.size(TILE_W.dp, TILE_H.dp)
+            .graphicsLayer { alpha = appear * (if (item.enabled) 1f else 0.4f); scaleX = sq; scaleY = sq; shadowElevation = 8.dp.toPx(); shape = RoundedCornerShape(18.dp); clip = true; ambientShadowColor = Color.Black; spotShadowColor = Color.Black }
+            .background(lerp(Tok.held, Tok.text, lit))
+            .then(if (!takes) Modifier.clearAndSetSemantics { } else Modifier.semantics(mergeDescendants = true) {
+                role = Role.Button; contentDescription = item.title + (item.tileSub?.let { ", $it" } ?: "")
+                if (item.checked) selected = true
+                if (!item.enabled) disabled()
+            })
+            .clickable(source, null, enabled = takes && item.enabled) { state.pick(k) }
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+            holdIcon(item.title)?.let { Image(androidx.compose.ui.res.painterResource(it), null, Modifier.size(24.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(lerp(Tok.text2Raised, Tok.onColour, lit))) }
+        }
+        Spacer(Modifier.height(6.dp))
+        BasicText(item.short ?: item.title, style = LupeType.body.copy(fontSize = 14.sp, lineHeight = 16.sp, color = ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 1,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 14.sp, stepSize = 1.sp))
+        if (item.tileSub != null) BasicText(item.tileSub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit), textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** One rounded group of rows: `held` at radius 16, 4 inside. */
+@Composable
+private fun MenuGroupCard(items: List<HoldItem>, rows: List<Int>, state: HoldMenuState, takes: Boolean, order0: Int, clockMs: Float, reduce: Boolean) {
+    Column(
+        Modifier.fillMaxWidth()
+            .graphicsLayer { alpha = appear(clockMs, order0, reduce); shadowElevation = 8.dp.toPx(); shape = RoundedCornerShape(16.dp); clip = true; ambientShadowColor = Color.Black; spotShadowColor = Color.Black }
+            .background(Tok.held).padding(4.dp),
+    ) {
+        rows.forEachIndexed { i, k -> MenuRowItem(items[k], k, state, takes, appear(clockMs, order0 + 1 + i, reduce)) }
+    }
+}
+
+@Composable
+private fun MenuRowItem(item: HoldItem, k: Int, state: HoldMenuState, takes: Boolean, appear: Float, dimmed: Boolean = false) {
+    val reduce = LocalReduceMotion.current
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val confirming = state.confirming == k
+    val others = state.confirming >= 0 && !confirming
+    val rowH = if (item.sub != null || item.slide != null || confirming) 52.dp else 44.dp
+    // a pressed or current row grows a lifted pill (shape as state)
+    val pill by com.scottgerstl.lupe.ui.theme.spatialFloat(if (pressed || item.checked) 1f else 0f, reduce, fast = true)
+    val pillA = com.scottgerstl.lupe.ui.theme.animatedFloat(if (pressed || item.checked) 1f else 0f, 100).value
+    val usable = takes && item.enabled && !dimmed
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = rowH)
+            .graphicsLayer { alpha = appear * (if (others || dimmed || !item.enabled) 0.4f else 1f) }
+            .drawBehind {
+                if (pillA > 0f) { val g = if (reduce) 1f else (0.86f + 0.14f * pill).coerceAtMost(1.03f); val w = size.width * g; val hh = size.height * g
+                    drawRoundRect(Tok.lifted.copy(alpha = pillA), Offset((size.width - w) / 2, (size.height - hh) / 2), Size(w, hh), CornerRadius(hh / 2)) }
+                if (confirming) drawRoundRect(Tok.rec, Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(12.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+            }
+            .then(if (!takes || dimmed) Modifier.clearAndSetSemantics { if (dimmed) { contentDescription = "${item.title}, after Stop"; disabled() } } else if (item.slide != null) Modifier else Modifier.semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = if (confirming) "Confirm: ${item.confirm}" else item.title + (item.sub?.let { ", $it" } ?: "")
+                if (item.checked) selected = true
+                if (!item.enabled) disabled()
+            })
+            .then(if (item.slide != null || !usable) Modifier else Modifier.clickable(source, null) { state.pick(k) })
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+            holdIcon(item.title)?.let { Image(androidx.compose.ui.res.painterResource(it), null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tok.text2Raised)) }
+        }
+        Spacer(Modifier.width(12.dp))
+        if (item.slide != null) Box(Modifier.weight(1f).height(rowH)) { HoldSlideRow(item.title, item.slide, takes) }
+        else if (confirming) BasicText(item.confirm.orEmpty(), Modifier.weight(1f), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 1.15.em, color = Tok.rec), maxLines = 3, overflow = TextOverflow.Ellipsis,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 1.sp))
+        else {
+            Column(Modifier.weight(1f)) {
+                BasicText(item.title, style = LupeType.body.copy(fontSize = 16.sp, lineHeight = 1.15.em, color = Tok.text), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 16.sp, stepSize = 1.sp))
+                if (item.sub != null && !dimmed) BasicText(item.sub, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 1.15.em, color = Tok.text2Raised), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (item.checked) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
+            if (item.children != null) { Spacer(Modifier.width(8.dp)); BasicText("›", style = LupeType.key.copy(fontSize = 18.sp, color = Tok.text2Raised)) }
+        }
+    }
+}
+
+/** While playing: the one "N more after Stop" row naming what waits; a tap unfolds it in place, those choices dimmed (findable, not doable). */
+@Composable
+private fun AfterStopGroup(items: List<HoldItem>, rows: List<Int>, expanded: Boolean, toggle: () -> Unit, takes: Boolean, reduce: Boolean, appear: Float) {
+    val turn = com.scottgerstl.lupe.ui.theme.spatialFloat(if (expanded) 1f else 0f, reduce).value
+    Column(
+        Modifier.fillMaxWidth()
+            .graphicsLayer { alpha = appear; shadowElevation = 8.dp.toPx(); shape = RoundedCornerShape(16.dp); clip = true; ambientShadowColor = Color.Black; spotShadowColor = Color.Black }
+            .background(Tok.held).padding(4.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = afterStopTitle(rows.size) + ": " + afterStopNames(items, rows); stateDescription = if (expanded) "Shown" else "Folded" }
+                .clickable(enabled = takes) { toggle() }
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // ⏸: they wait for the transport
+            Canvas(Modifier.size(20.dp)) { val bw = 3.dp.toPx(); val bh = 12.dp.toPx(); val y = (size.height - bh) / 2
+                drawRoundRect(Tok.text2Raised, Offset(size.width / 2 - bw - 1.5.dp.toPx(), y), Size(bw, bh), CornerRadius(1.dp.toPx()))
+                drawRoundRect(Tok.text2Raised, Offset(size.width / 2 + 1.5.dp.toPx(), y), Size(bw, bh), CornerRadius(1.dp.toPx())) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                BasicText(afterStopTitle(rows.size), style = LupeType.body.copy(fontSize = 16.sp, lineHeight = 1.15.em, color = Tok.text), maxLines = 1)
+                BasicText(afterStopNames(items, rows), style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 1.15.em, color = Tok.text2Raised), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Chevron(Tok.text2Raised, Modifier.graphicsLayer { rotationZ = 180f * turn })
+        }
+        if (expanded) rows.forEach { k -> MenuRowItem(items[k], k, HoldMenuState(), takes, 1f, dimmed = true) }
+    }
+}
+
+internal fun afterStopTitle(n: Int) = "$n more after Stop"
+
+/** The waiting choices named briefly, without repeats: "Play once ±, Duplicate, Move, Delete". */
+internal fun afterStopNames(items: List<HoldItem>, rows: List<Int>): String = rows.map { k ->
+    val t = items[k].title
+    when {
+        t.startsWith("Play once") -> "Play once ±"
+        t.startsWith("Move ") -> "Move"
+        t.startsWith("Duplicate") -> "Duplicate"
+        t.startsWith("Delete") -> "Delete"
+        t.startsWith("Recycle") -> "Recycle"
+        else -> t.removeSuffix("…")
+    }
+}.distinct().joinToString(", ")
+
+/** The menu's measures (dp). */
+const val TILE_W = 96f
+const val TILE_H = 84f
+const val TILE_GAP = 8f
+/** A column: three tiles and their gaps. */
+const val MENU_W = TILE_W * 3 + TILE_GAP * 2
+const val GROUP_GAP = 4f
+const val MENU_MARGIN = 12f
 const val STRAIGHT_DISC = 56f
 const val HEADER_FOOT = 60f
-/** How far the card's near edge sits from the finger: past the touch disc's edge with a gap. */
 const val STRAIGHT_GAP = 36f
 
-/** The card's height for these choices (dp): 6 inside top and foot, rows 44, or 52 with a second line or a slider. */
-fun menuHeight(items: List<HoldItem>): Float = 12f + items.sumOf { (if (it.sub != null || it.slide != null) 52 else 44).toInt() }.toFloat()
+/** A group of rows in the menu: their indices into the items, or the folded after-Stop row ([waiting]). */
+data class MenuGroup(val name: String?, val rows: List<Int>, val waiting: Boolean = false)
+/** The tiles (indices) and the groups in one or two columns. */
+data class MenuLayout(val tiles: List<Int>, val columns: List<List<MenuGroup>>)
 
-/** Where the card goes: its top-left (dp) and whether it opens to the finger's left. */
+private fun rowH(i: HoldItem) = if (i.sub != null || i.slide != null) 52f else 44f
+private fun groupH(items: List<HoldItem>, g: MenuGroup, expanded: Boolean) =
+    8f + if (g.waiting) 52f + (if (expanded) g.rows.size * 44f else 0f) else g.rows.sumOf { rowH(items[it]).toDouble() }.toFloat()
+
+/**
+ * Lays out a hold menu (pure, tested): up to three [HoldItem.tile]s; the rest grouped by [HoldItem.group] in order, with every
+ * [HoldItem.afterStop] choice folded into one last group; one column if it fits [maxH], else two, the tiles always at the top left.
+ */
+fun layoutHoldMenu(items: List<HoldItem>, maxH: Float, expanded: Boolean = false): MenuLayout {
+    val tiles = items.indices.filter { items[it].tile }.take(3)
+    val rest = items.indices.filter { it !in tiles }
+    val groups = mutableListOf<MenuGroup>()
+    for (k in rest.filter { !items[it].afterStop }) {
+        val last = groups.lastOrNull()
+        if (last != null && last.name == items[k].group) groups[groups.lastIndex] = last.copy(rows = last.rows + k) else groups += MenuGroup(items[k].group, listOf(k))
+    }
+    val waiting = rest.filter { items[it].afterStop }
+    if (waiting.isNotEmpty()) groups += MenuGroup("after-stop", waiting, waiting = true)
+    val tilesH = if (tiles.isEmpty()) 0f else TILE_H + GROUP_GAP
+    val heights = groups.map { groupH(items, it, expanded) + GROUP_GAP }
+    if (tilesH + heights.sum() - GROUP_GAP <= maxH || groups.size < 2) return MenuLayout(tiles, listOf(groups))
+    // two columns: the left takes groups while it stays at or under half the total (and always the first), the rest go right
+    val total = tilesH + heights.sum()
+    var left = tilesH; var split = 0
+    while (split < groups.size && (split == 0 || left + heights[split] <= maxOf(total / 2f, tilesH + heights[0]) + 1f) && left + heights[split] <= maxH + GROUP_GAP) { left += heights[split]; split++ }
+    if (split == 0) split = 1
+    return MenuLayout(tiles, listOf(groups.take(split), groups.drop(split)))
+}
+
+/** Where the menu's top-left goes (dp) and whether it opens to the finger's left. */
 data class StraightPlace(val x: Float, val y: Float, val left: Boolean)
 
 /**
- * Beside the finger: to its left unless [menusRight] (Settings › Menus open), flipping to the other side when there's no room; its first row
- * level with the finger (the row's middle 28 below the card's top); held between the header's foot and 16 above the screen's foot. A card
- * taller than that room starts at the header and scrolls.
+ * Beside the finger: to its left unless [menusRight] (Settings › Menus open), flipping when there's no room; its top 42 above the finger so
+ * the tiles sit level with it; under the header when it fits, never nearer an edge than [margin].
  */
-fun straightMenuPlace(fx: Float, fy: Float, screenW: Float, screenH: Float, menuH: Float, menusRight: Boolean, margin: Float = 16f): StraightPlace {
-    val leftX = fx - STRAIGHT_GAP - STRAIGHT_W
+fun holdMenuPlace(fx: Float, fy: Float, screenW: Float, screenH: Float, menuW: Float, menuH: Float, menusRight: Boolean, margin: Float = MENU_MARGIN): StraightPlace {
+    val leftX = fx - STRAIGHT_GAP - menuW
     val rightX = fx + STRAIGHT_GAP
-    val fitsLeft = leftX >= margin; val fitsRight = rightX + STRAIGHT_W <= screenW - margin
+    val fitsLeft = leftX >= margin; val fitsRight = rightX + menuW <= screenW - margin
     val left = if (menusRight) !fitsRight && fitsLeft else fitsLeft || !fitsRight
-    val x = (if (left) leftX else rightX).coerceIn(margin, (screenW - margin - STRAIGHT_W).coerceAtLeast(margin))
-    val room = screenH - HEADER_FOOT - margin
-    val y = if (menuH >= room) HEADER_FOOT else (fy - 28f).coerceIn(HEADER_FOOT, screenH - margin - menuH)
+    val x = (if (left) leftX else rightX).coerceIn(margin, (screenW - margin - menuW).coerceAtLeast(margin))
+    val top = if (menuH <= screenH - HEADER_FOOT - margin) HEADER_FOOT else margin
+    val y = (fy - 42f).coerceIn(top, (screenH - margin - menuH).coerceAtLeast(top))
     return StraightPlace(x, y, left)
 }
 

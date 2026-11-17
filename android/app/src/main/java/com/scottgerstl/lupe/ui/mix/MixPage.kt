@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -124,15 +125,23 @@ private fun Strip(t: MixTrackUi, actions: MixActions, meters: androidx.compose.r
     val colour = Tok.track[(t.number - 1) % Tok.track.size]
     val sel by animatedFloat(if (t.selected) 1f else 0f, Dur.STATE)
     val dim by animatedFloat(if (t.muted) 1f else 0f, Dur.STATE)
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
     val haptic = LocalHapticFeedback.current
     val latest by rememberUpdatedState(t)
+    // the strip's long-press menu is the app's hold menu (Scott, 2026-11-17, "C: priority tiles"): Sound, Mute, Solo as tiles; Pan and the reverb send as slide rows
+    val holdMenu = com.scottgerstl.lupe.ui.shell.LocalHoldMenu.current
+    val sounds = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
+    var stripCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    fun openMenu(at: Offset) {
+        val c = stripCoords?.takeIf { it.isAttached } ?: return
+        holdMenu?.open(c.localToWindow(at), colour, stripItems({ latest }, actions) { sounds.open(latest.number) })
+    }
     Column(
         modifier
             .clip(RoundedCornerShape(20.dp))
             .background(lerp(Tok.panel, lerp(Tok.page, colour, 0.28f), sel))
             .drawBehind { if (sel > 0f) drawRoundRect(colour.copy(alpha = sel), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(19.dp.toPx()), style = Stroke(2.dp.toPx())) }
-            .pointerInput(t.number) { detectTapGestures(onTap = { actions.select(latest.number) }, onLongPress = { at -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = at }) }
+            .onGloballyPositioned { stripCoords = it }
+            .pointerInput(t.number) { detectTapGestures(onTap = { actions.select(latest.number) }, onLongPress = { at -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); openMenu(at) }) }
             .semantics {
                 isTraversalGroup = true
                 customActions = listOf(
@@ -151,7 +160,7 @@ private fun Strip(t: MixTrackUi, actions: MixActions, meters: androidx.compose.r
             Modifier.fillMaxWidth().defaultMinSize(minHeight = 32.dp)
                 .semantics(mergeDescendants = true) {
                     role = Role.Button; contentDescription = "Track ${t.number}, ${t.name}"; stateDescription = if (t.selected) "Selected" else ""
-                    onLongClick("Track menu: pan, reverb send, select sound") { menuAt = Offset(80f, 40f); true }
+                    onLongClick("Track menu: sound, mute, solo, pan, reverb send") { openMenu(Offset(80f, 40f)); true }
                 },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -173,7 +182,18 @@ private fun Strip(t: MixTrackUi, actions: MixActions, meters: androidx.compose.r
         Spacer(Modifier.height(6.dp))
         MuteSolo(t, actions, Modifier.fillMaxWidth())
     }
-    StripMenu(t, colour, menuAt, { menuAt = null }, actions)
+}
+
+/** The strip's hold menu: tiles Sound, Mute, Solo; then Pan and the reverb send, slid on their rows. Values are read live while it's open. */
+internal fun stripItems(t: () -> MixTrackUi, actions: MixActions, openSounds: () -> Unit): List<com.scottgerstl.lupe.ui.shell.HoldItem> {
+    val now = t()
+    return listOf(
+        com.scottgerstl.lupe.ui.shell.HoldItem("Select sound", tile = true, short = "Sound", tileSub = now.name) { openSounds() },
+        com.scottgerstl.lupe.ui.shell.HoldItem("Mute", checked = now.muted, tile = true) { actions.mute(now.number) },
+        com.scottgerstl.lupe.ui.shell.HoldItem("Solo", checked = now.solo, tile = true) { actions.solo(now.number) },
+        com.scottgerstl.lupe.ui.shell.HoldItem("PAN", group = "Mix", slide = com.scottgerstl.lupe.ui.shell.HoldSlide({ t().pan }, { t().panText }, 0, 127, bipolarAt = 64) { actions.pan(now.number, it) }),
+        com.scottgerstl.lupe.ui.shell.HoldItem("REVERB SEND", group = "Mix", slide = com.scottgerstl.lupe.ui.shell.HoldSlide({ t().send }, { t().sendText }, 0, 127) { actions.send(now.number, it) }),
+    )
 }
 
 /** The FM-1's pan words shortened for the values line: centre → "C", "L12" stays. */
@@ -314,81 +334,5 @@ fun ToggleSegment(label: String, description: String, on: Boolean, state: String
             },
             contentAlignment = Alignment.Center,
         ) { BasicText(label, style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2, Tok.onColour, lit), fontWeight = FontWeight.SemiBold), maxLines = 1) }
-    }
-}
-
-/**
- * The strip's long-press menu at the finger (`phone-06b`): the track's badge and name, a centred Pan slider, the Reverb send, a divider, then
- * Select sound…. On `held`, with its secondary text in `textSecondaryRaised`.
- */
-@Composable
-private fun StripMenu(t: MixTrackUi, colour: Color, at: Offset?, close: () -> Unit, actions: MixActions) {
-    LupeMenu(at != null, close, width = 272.dp, at = at) {
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TrackBadge(t.number, colour, true, 24.dp, 15)
-            BasicText(t.name, style = LupeType.key.copy(fontSize = 16.sp, color = Tok.text), maxLines = 1)
-        }
-        MenuSlider("Pan", t.name, t.pan, t.panText, colour, bipolarAt = 64) { actions.pan(t.number, it) }
-        MenuSlider("Reverb send", t.name, t.send, t.sendText, colour, bipolarAt = null) { actions.send(t.number, it) }
-        MenuDivider()
-        val sounds = com.scottgerstl.lupe.ui.sounds.LocalSoundsHost.current
-        MenuRow("Select sound…", { close(); sounds.open(t.number) })
-    }
-}
-
-/**
- * A slider in a menu (spec 3.13's send): its label and value over an 8-tall track with a 4 × 16 handle; Pan fills from its centre mark. Slid
- * sideways; double tap puts it back to what it was when the menu opened. TalkBack: range, Increase, Decrease, Put back. The unfilled track
- * against the menu is low contrast (spec 7, `[open]`); the handle and the fill carry the value.
- */
-@Composable
-private fun MenuSlider(what: String, track: String, value: Int, text: String, colour: Color, bipolarAt: Int?, onSet: (Int) -> Unit) {
-    var optimistic by remember { mutableIntStateOf(Int.MIN_VALUE) }
-    androidx.compose.runtime.LaunchedEffect(value) { if (optimistic == value) optimistic = Int.MIN_VALUE }
-    val raw = if (optimistic != Int.MIN_VALUE) optimistic else value
-    val latestValue by rememberUpdatedState(value)
-    val send by rememberUpdatedState(onSet)
-    val latestText by rememberUpdatedState(text)
-    val opened = remember(track, what) { value }
-    var base by remember { mutableIntStateOf(0) }
-    fun now() = if (optimistic != Int.MIN_VALUE) optimistic else latestValue
-    fun set(v: Int) { val n = v.coerceIn(0, 127); if (n != now()) { optimistic = n; send(n) } }
-    Column(
-        Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp)
-            .semantics(mergeDescendants = true) {
-                contentDescription = "$what, $track"; stateDescription = text
-                progressBarRangeInfo = ProgressBarRangeInfo(raw.toFloat(), 0f..127f, 126)
-                setProgress { v -> set(v.roundToInt()); true }
-                customActions = listOf(
-                    CustomAccessibilityAction("Increase ${what.lowercase()}") { set(now() + 1); true },
-                    CustomAccessibilityAction("Decrease ${what.lowercase()}") { set(now() - 1); true },
-                    CustomAccessibilityAction("Put ${what.lowercase()} back") { set(opened); true },
-                )
-            }
-            .pointerInput(opened) { detectTapGestures(onDoubleTap = { set(opened) }) }
-            .slideToTurn(
-                enabled = true, stepDp = 2f,
-                face = remember(track, what, colour) { MagnifierFace("${what.uppercase()} · $track", { latestText }, { now() / 127f }, bipolar = bipolarAt != null, tint = colour) },
-                onStart = { base = now() }, onSlide = { set(base + it) }, bounds = { -now()..(127 - now()) }, forceDirection = SlideDirection.Sideways,
-            )
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-    ) {
-        Row(Modifier.fillMaxWidth()) {
-            BasicText(what, Modifier.weight(1f), style = LupeType.small.copy(fontSize = 13.sp, color = Tok.text2Raised))
-            BasicText(text, style = LupeType.number.copy(fontSize = 15.sp, lineHeight = 16.sp))
-        }
-        Spacer(Modifier.height(8.dp))
-        Canvas(Modifier.fillMaxWidth().height(16.dp)) {
-            val th = 8.dp.toPx(); val y = (size.height - th) / 2
-            val hw = 4.dp.toPx()
-            val x = hw / 2 + (size.width - hw) * (raw / 127f)
-            drawRoundRect(Tok.lifted, Offset(0f, y), Size(size.width, th), CornerRadius(th / 2))
-            if (bipolarAt != null) {
-                val cx = hw / 2 + (size.width - hw) * (bipolarAt / 127f)
-                drawRoundRect(colour, Offset(minOf(cx, x), y), Size(kotlin.math.abs(x - cx).coerceAtLeast(2.dp.toPx()), th), CornerRadius(2.dp.toPx()))
-                drawRect(Tok.text2, Offset(cx - 0.75.dp.toPx(), y - 3.dp.toPx()), Size(1.5.dp.toPx(), th + 6.dp.toPx()))
-            } else drawRoundRect(colour, Offset(0f, y), Size(x, th), CornerRadius(th / 2))
-            drawRoundRect(Tok.text, Offset(x - hw / 2, 0f), Size(hw, size.height), CornerRadius(2.dp.toPx()))
-        }
     }
 }
