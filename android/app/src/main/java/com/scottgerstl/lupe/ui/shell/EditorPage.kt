@@ -396,8 +396,9 @@ private fun stepNotes(s: Step): List<Int> = if (!s.on) emptyList() else s.notes.
  * EDIT › LANES, turns that page's LANE knob so the docked panel follows). Hits are rounded squares in the track colour on the `well` grid; an
  * accent wears a white cap; a ratchet splits the hit into its repeats with 3 dp gaps. A tap toggles a hit, a hold picks it (white ring) without
  * toggling. With a panel docked ([pageSteps] 8) the grid pages by 8 beside it, with the 16-cell minimap, turning with the playhead only while
- * [follow] is on; otherwise 16 steps in chunks, as built. Every lane is in view: rows share the height (lanes 7–8 on a short phone: scroll or
- * shorter rows is `[open]`, so it stays as built).
+ * [follow] is on; otherwise 16 steps in chunks, as built. Every lane is in view on shorter rows, never a scroll (Scott, 2026-11-17, `1b`):
+ * eight lanes share the height six used (pitch about 32), hits 41 × 23 centred in their row, lane keys 40 × 28 with their names on one line,
+ * each key's touch area the whole row pitch with no gap between rows.
  */
 @Composable
 private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<String, Int>?, dock: Dp = 0.dp, pageSteps: Int = 16, follow: Boolean = true, onPick: (Pair<String, Int>?) -> Unit) {
@@ -417,10 +418,11 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
     // the picked lane: the picked hit's, else the first
     val pickedLane = hit?.first ?: lanes.first()
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val gap = 4.dp
+        // rows touch (no gap): the pitch is the touch target; what's drawn sits inside it
+        val gap = 0.dp
         val mapH = if (paged) 34.dp else 0.dp
-        val rh = ((maxHeight - mapH - gap * (lanes.size - 1)) / lanes.size)
-        val labelW = 52.dp
+        val rh = ((maxHeight - mapH) / lanes.size)
+        val labelW = 48.dp
         val gw = maxWidth - labelW - 4.dp
         val viewPx = with(density) { gw.toPx() }; val stepPx = viewPx / pageSteps
         val dockPx by rememberUpdatedState(with(density) { dock.toPx() }.coerceAtMost(viewPx - stepPx * 4))
@@ -445,10 +447,15 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                     val lit = animatedFloat(if (on) 1f else 0f, Dur.STATE).value
                     val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (on) 1f else 0f, reduce)
                     val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(on, reduce)
+                    // the key is drawn 40 × 28 (less on a very short phone); its touch area is the whole row, wider and taller than the key
+                    val keyH = minOf(28.dp, rh - 4.dp)
                     Box(
                         Modifier.fillMaxWidth().height(rh)
                             .graphicsLayer { val (qx, qy) = squash(); scaleX = qx; scaleY = qy }
-                            .drawBehind { drawRoundRect(lerp(Tok.control, Tok.text, lit), cornerRadius = CornerRadius((12f - 4f * sq.coerceIn(0f, 1.2f)).dp.toPx())) }
+                            .drawBehind {
+                                val kw = 40.dp.toPx(); val kh = keyH.toPx()
+                                drawRoundRect(lerp(Tok.control, Tok.text, lit), Offset((size.width - kw) / 2, (size.height - kh) / 2), Size(kw, kh), CornerRadius((10f - 4f * sq.coerceIn(0f, 1.2f)).dp.toPx()))
+                            }
                             .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "$lane lane"; selected = on; onClick("Pick the lane") { pickLane(core, k, lane, hit, ed, onPick); true } }
                             .pointerInput(k, hit) {
                                 detectTapGestures(
@@ -458,7 +465,8 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        BasicText(lane.replace(" ", "\n"), style = LupeType.label.copy(fontSize = 12.sp, lineHeight = 13.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit), textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 2)
+                        BasicText(lane, Modifier.width(38.dp), style = LupeType.label.copy(fontSize = 10.sp, lineHeight = 11.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit), textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 1,
+                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = 10.sp, stepSize = 0.5.sp))
                     }
                 }
             }
@@ -503,18 +511,18 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                         .drawBehind {
                                             if (onF.value <= 0.001f && sel.value <= 0f) return@drawBehind
                                             // the hit: a rounded square, inset; it grows in on the spring when placed
-                                            val inset = 6.dp.toPx()
+                                            // 41 × 23 centred in the row (smaller only where the step or the row is narrower)
                                             val g = if (reduce) 1f else pop.coerceIn(0f, 1.15f)
-                                            val w = (size.width - 2 * inset) * g; val hh = (size.height - 2 * inset) * g
+                                            val w = minOf(41.dp.toPx(), size.width - 8.dp.toPx()) * g; val hh = minOf(23.dp.toPx(), size.height - 9.dp.toPx()) * g
                                             val left = (size.width - w) / 2; val topY = (size.height - hh) / 2
                                             val fill = track.copy(alpha = onF.value * (0.7f + 0.3f * s.velocity / 127f))
-                                            val r = CornerRadius(8.dp.toPx())
+                                            val r = CornerRadius(6.dp.toPx())
                                             val n = if (s.ratchet > 1) s.ratchet.coerceAtMost(4) else 1
                                             if (n == 1) drawRoundRect(fill, Offset(left, topY), Size(w, hh), r)
                                             else { val sg = 3.dp.toPx(); val sw = (w - sg * (n - 1)) / n
                                                 for (j in 0 until n) drawRoundRect(fill, Offset(left + j * (sw + sg), topY), Size(sw, hh), CornerRadius(minOf(6.dp.toPx(), sw / 2))) }
                                             // an accent: a white cap along the top
-                                            if (accent) drawRoundRect(Tok.text.copy(alpha = onF.value), Offset(left + 4.dp.toPx(), topY - 5.dp.toPx()), Size(w - 8.dp.toPx(), 4.dp.toPx()), CornerRadius(2.dp.toPx()))
+                                            if (accent) drawRoundRect(Tok.text.copy(alpha = onF.value), Offset(left + 4.dp.toPx(), (topY - 4.dp.toPx()).coerceAtLeast(0f)), Size(w - 8.dp.toPx(), 3.dp.toPx()), CornerRadius(1.5.dp.toPx()))
                                             if (sel.value > 0f) drawRoundRect(Tok.text.copy(alpha = sel.value), Offset(left - 2.dp.toPx(), topY - 2.dp.toPx()), Size(w + 4.dp.toPx(), hh + 4.dp.toPx()), CornerRadius(10.dp.toPx()), style = Stroke(2.dp.toPx()))
                                         }
                                         .semantics(mergeDescendants = true) {
