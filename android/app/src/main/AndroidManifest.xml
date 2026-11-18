@@ -20,12 +20,19 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:screenOrientation="sensorLandscape"
             android:windowSoftInputMode="adjustNothing">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Plugging in the FM-1 opens Lupe (or brings it forward: singleTask, onNewIntent), and the link looks for it at once. Android asks
+                 "Open Lupe to handle FM-1?" itself; nothing else is asked. MIDI stays on android.media.midi. -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" android:resource="@xml/device_filter" />
         </activity>
         <!-- Sharing an FM-1 backup (firmware install, decision 42) from the done screen -->
         <provider

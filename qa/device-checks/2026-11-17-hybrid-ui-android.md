@@ -363,6 +363,16 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 |---|---|---|---|---|
 | 159 | Open ENV on Edit, then on Mix › Effects and Mixer. Drag sideways from the panel's left edge; turn the first dial; look along the pattern bar and the effect cards. | A clear lane with the bar at the panel's left edge, the first dial starting after it. The edge drag closes the panel without touching the dial; the dial turns without moving the panel. Edit's pattern bar keys are all whole, the grid's steps fit; Mix's cards and strips aren't cut off. | – | ☐ pass ☐ fail: |
 
+## Round 16: Lupe opens when the FM-1 is plugged in (Scott, 2026-11-18)
+
+USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instruments (read from the Pixel 10 with the FM-1 attached; the firmware's usb.c agrees). The update loader's 0x0002 is left out.
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 160 | Close Lupe (swipe it away). Unplug the FM-1 and plug it in (it can stay on). | Android asks "Open Lupe to handle FM-1?" (tick Always if you like); Lupe opens and links. No other prompt. | – | ☐ pass ☐ fail: |
+| 161 | Lupe in the background (another app in front): unplug and plug the FM-1 in. | Lupe comes forward (the same window, where you left it) and links; Back doesn't show a second Lupe. | – | ☐ pass ☐ fail: |
+| 162 | Lupe open: unplug and plug the FM-1 in. | It stays one window and relinks straight away. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

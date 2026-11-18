@@ -59,6 +59,8 @@ class MainActivity : ComponentActivity() {
 
         val app = application as LupeApp
         val core = app.core
+        // opened by plugging in the FM-1: the link looks for it now rather than at its next round
+        onFm1Attached(intent, core)
         // adb shell am start -n com.scottgerstl.lupe/.MainActivity --es scenario lost
         intent.getStringExtra("scenario")?.let { (core as? FakeLupeCore)?.play(it) }
 
@@ -127,6 +129,8 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         applyThroughExtras(intent, cold = false)
+        // plugged in again while Lupe is open (singleTask): the same window comes forward and the same core looks for the FM-1 at once
+        onFm1Attached(intent, (application as LupeApp).core)
     }
 
     override fun onStart() { super.onStart(); (application as LupeApp).through.foreground(true) }
@@ -136,4 +140,15 @@ class MainActivity : ComponentActivity() {
         contentResolver.unregisterContentObserver(observer)
         super.onDestroy()
     }
+}
+
+
+/**
+ * The FM-1 plugged in (USB_DEVICE_ATTACHED, device_filter.xml): the core retries its link straight away. True when the intent was one. The
+ * core is the app's, made once, so a re-plug never makes another (2026-11-18).
+ */
+internal fun onFm1Attached(intent: android.content.Intent?, core: com.scottgerstl.lupe.core.LupeCore): Boolean {
+    if (intent?.action != android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED) return false
+    core.send(com.scottgerstl.lupe.core.Intent.Retry)
+    return true
 }
