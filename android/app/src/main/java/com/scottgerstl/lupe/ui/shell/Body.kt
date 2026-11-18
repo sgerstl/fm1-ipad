@@ -411,7 +411,7 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
             }
     ) {
         // the grab handle (Scott, 2026-11-17: no close key; EN 301 549 / WCAG 2.5.1: a swipe needs a single-tap way too): tap it to close, drag it to swipe
-        PanelHandle("Close the sound panel", onDismiss, Modifier.align(Alignment.CenterStart))
+        PanelHandle("Close the sound panel", onDismiss, Modifier.align(Alignment.CenterStart), fullHeight = true)
         androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
         // the header: the page and, at its right end, "3 of 7" (the close key is gone)
         SoundDials(last, core, Modifier.fillMaxWidth().height(110.dp), notice, count = true)
@@ -550,9 +550,11 @@ internal fun gloStep(onMix: Boolean, screen: com.scottgerstl.lupe.core.Fm1Screen
  * swipe (the panel's own); it shows the panel can be swiped away. TalkBack: a button named [description].
  */
 @Composable
-internal fun PanelHandle(description: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
+internal fun PanelHandle(description: String, onClose: () -> Unit, modifier: Modifier = Modifier, fullHeight: Boolean = false) {
+    // [fullHeight]: the touch area runs the panel's whole leading edge (the bar stays 36 tall in the middle), so a swipe from the edge always
+    // moves the panel, whatever the tiles beside it take (2026-11-18)
     Box(
-        modifier.width(24.dp).height(48.dp)
+        modifier.width(24.dp).then(if (fullHeight) Modifier.fillMaxHeight() else Modifier.height(48.dp))
             .semantics(mergeDescendants = true) { role = androidx.compose.ui.semantics.Role.Button; contentDescription = description }
             .pointerInput(Unit) { detectTapGestures { onClose() } }
             .drawBehind { val w = 4.dp.toPx(); val h = 36.dp.toPx(); drawRoundRect(Tok.text2Raised, Offset((size.width - w) / 2 - 4.dp.toPx(), (size.height - h) / 2), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(w / 2)) },

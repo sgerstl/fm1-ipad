@@ -325,6 +325,14 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 | 150 | A quick short flick right on the panel; then drag left. | The flick closes it at speed. Dragged left, it moves a little and resists, then springs back. | – | ☐ pass ☐ fail: |
 | 151 | Edit's step panel: scroll its tiles up and down; slide a tile sideways; drag the grab handle right. Then Remove animations on: repeat a drag. | Scrolling never moves the panel; a tile's slide changes the value, not the panel; the handle drags the panel. With Remove animations on it still follows the finger and settles without overshoot. | – | ☐ pass ☐ fail: |
 
+## Round 15c: the step panel's motion (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 152 | Edit: open and close the step panel with the Step key several times; then drag it half way and back. | Smooth, no hitches: the panel slides, and the pattern bar and grid don't stutter while it moves. | – | ☐ pass ☐ fail: |
+| 153 | Close the panel (Step key, and a swipe). Watch the grid. | The grid changes with the panel, not after it: the wide layout fades in as the panel leaves, the 8-step one fades out; nothing catches up afterwards. Opening, the reverse. | – | ☐ pass ☐ fail: |
+| 154 | Swipe right from the panel's left edge (anywhere top to bottom), from its header and from the gap between tiles. Then slide a tile sideways. | Each edge, header or gap swipe moves the panel and, far enough or flung, closes it. A slide on a tile changes its value and leaves the panel. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

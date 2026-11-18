@@ -112,6 +112,8 @@ fun StepGrid(
     pageSteps: Int = Roll.STEPS,
     /** 8-step pages turn with the playhead only while Follow is on (Scott, 2026-11-17). */
     follow: Boolean = true,
+    /** The pitch scroll, shared by the two layouts while Edit cross-fades them (the 8-step one and the full one); null: its own. */
+    scrollYState: androidx.compose.runtime.MutableFloatState? = null,
 ) {
     val motion = com.scottgerstl.lupe.ui.theme.hybridMotion
     val paged = pageSteps == Roll.PAGE_DOCKED
@@ -137,7 +139,8 @@ fun StepGrid(
     val edNow by rememberUpdatedState(ed)
     val pickedNow by rememberUpdatedState(picked)
     Row(modifier.fillMaxSize()) {
-        var scrollY by remember(ed.track, ed.pattern) { mutableFloatStateOf(-1f) }
+        val ownScrollY = remember(ed.track, ed.pattern) { mutableFloatStateOf(-1f) }
+        var scrollY by (scrollYState ?: ownScrollY)
         var scrollX by remember { mutableFloatStateOf(0f) }
         // when a finger last moved the steps: while it plays the grid pages along with the playhead, unless it was touched a moment ago
         var touchedAt by remember { mutableStateOf(0L) }
