@@ -170,18 +170,6 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         private set
     fun markKitHintShown() { if (!kitHintShown) { kitHintShown = true; put(KIT_HINT, true) } }
 
-    /**
-     * Labs › Tab motion (temporary, Scott 2026-11-18; out again once he settles): the tab fade-through's style (Staggered, the default, is
-     * Material's: out, then in from 0.92; Now is the old overlap from 0.98) and a speed for every duration of the tab change (1×, 1.3×, 1.6×).
-     */
-    var tabStaggered by mutableStateOf(prefs?.getBoolean(TAB_STAGGER, true) ?: true)
-        private set
-    var tabSpeedIndex by mutableStateOf((prefs?.getInt(TAB_SPEED, 0) ?: 0).coerceIn(0, TAB_SPEEDS.lastIndex))
-        private set
-    val tabSpeed: Float get() = TAB_SPEEDS[tabSpeedIndex]
-    fun chooseTabStaggered(on: Boolean) { tabStaggered = on; put(TAB_STAGGER, on) }
-    fun chooseTabSpeed(i: Int) { tabSpeedIndex = i.coerceIn(0, TAB_SPEEDS.lastIndex); prefs?.edit()?.putInt(TAB_SPEED, tabSpeedIndex)?.apply() }
-
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
     fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
     fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN, on) }
@@ -195,11 +183,10 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         val RETIRED_TUNING = listOf("labs_tab_slide_ms", "labs_menu_spring", "labs_menu_speed", "labs_pad_slide_start", "labs_pad_slide_dwell", "labs_well_slide",
             "labs_well_side_glow_pct", "labs_well_side_hot", "labs_well_glow_pct", "labs_well_hot2", "labs_motion_bounce", "labs_motion_finger_ms", "labs_motion_panel_ms",
             "labs_motion_page_flip_ms", "labs_motion_press_scale", "labs_spatial_stiffness", "labs_spatial_damping", "labs_fast_spatial_stiffness", "labs_squash_pct",
-            "labs_bounce_scale", "labs_bounce_up_ms", "labs_bounce_back_ms")
+            "labs_bounce_scale", "labs_bounce_up_ms", "labs_bounce_back_ms",
+            // Labs › Tab motion, tried 2026-11-18 and locked in as "Now" at 1×
+            "labs_tab_staggered", "labs_tab_speed")
         const val HAPTICS = "haptics"
-        const val TAB_STAGGER = "labs_tab_staggered"
-        const val TAB_SPEED = "labs_tab_speed"
-        val TAB_SPEEDS = listOf(1f, 1.3f, 1.6f)
         const val TAKE_OFFER = "take_offer"
         const val TAKE_CHIP = 0
         const val TAKE_POPUP = 1

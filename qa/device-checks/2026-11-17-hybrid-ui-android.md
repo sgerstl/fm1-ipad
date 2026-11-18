@@ -383,7 +383,7 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
-| 164 | Switch Mix → Pads, Pads → Edit, Edit → Pads, Timeline → Pads a few times. Then Settings › Labs › Tab motion: try Now, and Speed 1.3× and 1.6×. | No cut: the old page fades fully, then the new one fades in from nothing and settles (Staggered); the grow and shrink play from their start. Now overlaps the two; the speeds lengthen it all. Remove animations on: plain cross-fades, unchanged. | – | ☐ pass ☐ fail: |
+| 164 | Switch Mix → Pads, Pads → Edit, Edit → Pads, Timeline → Pads a few times. Then open Settings › Labs. | No cut: the old page fades out as the new one fades in (overlapping, as Scott chose), the new one from nothing; the grow and shrink play from their start. Labs no longer has Tab motion. Remove animations on: plain cross-fades, unchanged. | – | ☐ pass ☐ fail: |
 
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
