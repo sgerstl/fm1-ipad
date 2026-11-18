@@ -27,11 +27,15 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     var haptics by mutableStateOf(prefs?.getBoolean(HAPTICS, true) ?: true)
         private set
     /**
-     * Labs is gone (Scott, 2026-11-18): its two built trials are fixed at the values he had. The sound page holds for 3 s after you touch it
-     * (decision 3's "pause after a phone touch": on), and it never pins (decision 3's pin: off).
+     * Settings › Following (Scott, 2026-11-18: "Pause following and pin the sound page can stay"; they were Labs trials): the sound page holds
+     * for 3 s after you touch it (decision 3's pause; on, as he had it), and pins (decision 3's pin; off).
      */
-    val pauseFollowing: Boolean get() = PAUSE_FOLLOWING
-    val pinBottom: Boolean get() = PIN_BOTTOM
+    var pauseFollowing by mutableStateOf(prefs?.getBoolean(PAUSE_FOLLOWING_KEY, true) ?: true)
+        private set
+    var pinBottom by mutableStateOf(prefs?.getBoolean(PIN_BOTTOM_KEY, false) ?: false)
+        private set
+    fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE_FOLLOWING_KEY, on) }
+    fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN_BOTTOM_KEY, on) }
 
     /**
      * Show graphics (decision 30, on by default): each sound page's picture appears under its four dials when a knob turns, and the Mix sheet's
@@ -207,9 +211,8 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val B_SCALE = "labs_bounce_scale"
         const val B_UP = "labs_bounce_up_ms"
         const val B_BACK = "labs_bounce_back_ms"
-        /** Labs' trials as Scott left them (2026-11-18): Pause following on, Pin off. */
-        const val PAUSE_FOLLOWING = true
-        const val PIN_BOTTOM = false
+        const val PAUSE_FOLLOWING_KEY = "pause_following"
+        const val PIN_BOTTOM_KEY = "pin_bottom"
     }
 }
 

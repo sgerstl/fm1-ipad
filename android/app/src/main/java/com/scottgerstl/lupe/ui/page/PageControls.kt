@@ -177,7 +177,7 @@ fun KnobTarget(slot: Int, pc: KnobControls, modifier: Modifier = Modifier, width
             .pointerInput(c.max, c.min, openedRaw) { detectTapGestures(onDoubleTap = { set(openedRaw) }) }
             .slideToTurn(
                 enabled = true, stepDp = stepDp(c),
-                face = remember(c.label, colour) { MagnifierFace(c.label, { latest.value }, { val l = latest; if (l.max > l.min) (now() - l.min).toFloat() / (l.max - l.min) else 0f }, ring = true, tint = colour) },
+                face = remember(c.label, colour) { MagnifierFace(c.label, { latest.value }, { val l = latest; if (l.max > l.min) (now() - l.min).toFloat() / (l.max - l.min) else 0f }, ring = true, tint = colour, knob = slot + 1) },
                 onStart = { base = now(); hotNow(true) },
                 onSlide = { steps -> set(base + steps) },
                 onEnd = { hotNow(false) },

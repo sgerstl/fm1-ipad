@@ -1,5 +1,9 @@
 package com.scottgerstl.lupe.ui.settings
 
+import androidx.compose.foundation.layout.widthIn
+
+import androidx.compose.foundation.layout.wrapContentWidth
+
 import androidx.compose.ui.semantics.disabled
 
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -77,6 +81,9 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
     val phone = LocalPhoneSettings.current
     val scroll = rememberScrollState()
     LupeSheet(host.open == SheetKind.Settings, "Settings", { host.close() }, scroll = scroll) {
+      // the content column: at most 560 wide, centred in the sheet (Scott, 2026-11-18: "narrow it down a little bit"), about 45–75 characters a
+      // subtitle line; the sheet's surface stays full width, as the sheet is a full-width drawer from the bottom
+      Column(Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 560.dp)) {
         Section("FM-1")
         Plain(
             "FM-1", if (fake) "A fake core: no FM-1 is connected" else when (link.phase) { LinkPhase.Ready -> "Skiff, connected over USB"; LinkPhase.WrongFirmware -> "Connected, but not running Skiff"; else -> "Not connected" },
@@ -107,8 +114,12 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         Section("Sound pages")
         SwitchRow("Show graphics", "Each sound page shows its picture with its dials, and the Mix pages show theirs. Off: dials only", phone.showGraphics) { phone.chooseShowGraphics(it) }
 
-        // Labs left on 2026-11-18 (Scott): Pause following and Pin are built in as he had them (PhoneSettings.PAUSE_FOLLOWING, PIN_BOTTOM); the
-        // piano under the grid and the Timeline with time across were never built and are in design/backlog.md
+        // Following (Scott, 2026-11-18): Labs' two built trials, kept as ordinary settings. The piano under the grid and the Timeline with time
+        // across were never built and are in design/backlog.md
+        Section("Following")
+        SwitchRow("Pause following after a touch", "The sound page you touched holds for 3 s before it follows the FM-1 again", phone.pauseFollowing) { phone.choosePauseFollowing(it) }
+        SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom) { phone.choosePinBottom(it) }
+      }
     }
 }
 
@@ -204,9 +215,26 @@ fun LupeSwitch(on: Boolean) {
 @Composable
 fun Segmented(options: List<String>, selected: Int, name: String, enabled: Boolean = true, disabledWhy: String? = null, onPick: (Int) -> Unit) {
     // disabled: dimmed, takes no touch, and TalkBack hears one unfocusable-as-action node saying why
-    val m = if (enabled) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().graphicsLayer { alpha = 0.4f }
+    val m = if (enabled) Modifier else Modifier.graphicsLayer { alpha = 0.4f }
         .clearAndSetSemantics { contentDescription = name; stateDescription = disabledWhy ?: "Off"; disabled() }
         .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() } } }
-    com.scottgerstl.lupe.ui.shell.SegmentGroup(options, selected, { if (enabled) onPick(it) }, m, height = 40.dp, padH = 8.dp,
-        role = Role.RadioButton, descriptions = options.map { "$name: $it" }, fontSize = 15, fill = true)
+    // each option its label plus 16 each side, at least 72 wide and 44 tall, the group left under its label (Scott, 2026-11-18: buttons not
+    // "obscenely wide"); when they don't fit (a large font size), equal shares with labels on two lines rather than cut
+    val tm = androidx.compose.ui.text.rememberTextMeasurer()
+    val style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val labelWidths = options.map { with(density) { tm.measure(it, style).size.width.toDp() } }
+        val fits = segmentedFits(labelWidths.map { it.value }, maxWidth.value)
+        com.scottgerstl.lupe.ui.shell.SegmentGroup(options, selected, { if (enabled) onPick(it) }, (if (fits) Modifier else Modifier.fillMaxWidth()).then(m),
+            height = 44.dp, padH = if (fits) SEG_PAD.dp else 8.dp, minWidth = SEG_MIN.dp, role = Role.RadioButton, descriptions = options.map { "$name: $it" },
+            fontSize = 15, fill = !fits, wrap = !fits)
+    }
 }
+
+/** A settings option's padding each side and least width (dp). */
+const val SEG_PAD = 16f
+const val SEG_MIN = 72f
+/** Whether options with labels [labelWidths] wide (dp), each its label plus [SEG_PAD] each side and at least [SEG_MIN], with 2 between, fit [available]. */
+fun segmentedFits(labelWidths: List<Float>, available: Float): Boolean =
+    labelWidths.sumOf { maxOf(it + 2 * SEG_PAD, SEG_MIN).toDouble() } + 2.0 * (labelWidths.size - 1).coerceAtLeast(0) <= available

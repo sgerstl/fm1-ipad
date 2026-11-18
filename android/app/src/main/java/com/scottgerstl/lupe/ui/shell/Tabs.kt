@@ -75,7 +75,7 @@ fun Tabs(current: Tab, onPick: (Tab) -> Unit, modifier: Modifier = Modifier, pad
 fun SegmentGroup(
     labels: List<String>, selected: Int, onPick: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 40.dp, padH: Dp = 16.dp,
     role: Role = Role.Tab, descriptions: List<String> = labels, fontSize: Int = 16, minWidth: Dp = 0.dp,
-    fill: Boolean = false, selectedFill: Color = Tok.text, idleFill: Color? = Tok.control, selectedInk: Color = Tok.onColour, idleInk: Color = Tok.text2,
+    fill: Boolean = false, wrap: Boolean = false, selectedFill: Color = Tok.text, idleFill: Color? = Tok.control, selectedInk: Color = Tok.onColour, idleInk: Color = Tok.text2,
     gap: Dp = 2.dp,
 ) {
     val reduce = LocalReduceMotion.current
@@ -170,8 +170,10 @@ fun SegmentGroup(
                     .padding(horizontal = padH),
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText(label, maxLines = 1,
-                    style = LupeType.key.copy(fontSize = fontSize.sp, lineHeight = (fontSize * 1.2f).sp, color = lerp(idleInk, selectedInk, lit), fontWeight = FontWeight.SemiBold))
+                // [wrap]: a label too long for its share goes onto a second line rather than being cut (Settings at large font sizes)
+                BasicText(label, maxLines = if (wrap) 2 else 1,
+                    style = LupeType.key.copy(fontSize = fontSize.sp, lineHeight = (fontSize * 1.2f).sp, color = lerp(idleInk, selectedInk, lit), fontWeight = FontWeight.SemiBold,
+                        textAlign = if (wrap) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Unspecified))
             }
         }
     }

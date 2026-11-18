@@ -1,5 +1,15 @@
 package com.scottgerstl.lupe.ui.slide
 
+import kotlinx.coroutines.launch
+
+import androidx.compose.foundation.layout.fillMaxWidth
+
+import androidx.compose.ui.draw.drawBehind
+
+import androidx.compose.ui.unit.em
+
+import androidx.compose.foundation.layout.widthIn
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -68,6 +78,8 @@ class MagnifierFace(
     val bipolar: Boolean = false,
     val ring: Boolean = false,
     val tint: Color = Tok.text,
+    /** The FM-1 knob that turns it (1–4): a badge at the plate's top right; null for none. */
+    val knob: Int? = null,
 )
 
 /** True while a sound page is showing: the back gesture sends HOME then (decision 19), so no control may exclude the screen's edges from it. */
@@ -177,16 +189,15 @@ fun Modifier.slideToTurn(
 }
 
 /**
- * Where the Magnifier draws: over the whole screen, above the finger, kept on screen. It takes no touches (no
- * handlers) and is hidden from TalkBack (the control says its own value). Grows out of the finger in 200 ms and
- * shrinks back in 150; with Reduce Motion it only fades.
+ * Where the Magnifier draws: over the whole screen, above the finger, kept 12 dp from the edges. It takes no touches (no handlers) and is
+ * hidden from TalkBack (the control says its own value). The held control lifted at 1.6× (Scott approved, 2026-11-18; Figma 141:9654): it grows
+ * out of the finger on the elastic spring (to about 1.03, then settles) and leaves faster than it came; with Reduce Motion it only fades.
  */
 @Composable
 fun MagnifierHost(state: MagnifierState, modifier: Modifier = Modifier) {
-    val reduce = LocalReduceMotion.current
-    val t = animatedFloat(if (state.shown) 1f else 0f, if (state.shown) Dur.FINGER else Dur.EXIT)
     val face = state.face
-    if (face == null || (t.value <= 0.001f && !state.shown)) return
+    val (alpha, scale) = magnifierMotion(state.shown)
+    if (face == null || (alpha.value <= 0.001f && !state.shown)) return
     val density = LocalDensity.current
     val lift = with(density) { 64.dp.roundToPx() }
     val margin = with(density) { 12.dp.roundToPx() }
@@ -202,43 +213,80 @@ fun MagnifierHost(state: MagnifierState, modifier: Modifier = Modifier) {
                         p.place(x.toInt(), y.toInt())
                     }
                 }
-                .graphicsLayer {
-                    alpha = t.value
-                    if (!reduce) {
-                        val s = 0.2f + 0.8f * t.value
-                        scaleX = s; scaleY = s
-                        // grows from the finger: the origin is where the finger is, relative to the plate
-                        transformOrigin = TransformOrigin(0.5f, 1f)
-                    }
-                    shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(12.dp); clip = false
-                    ambientShadowColor = Color.Black; spotShadowColor = Color.Black
-                }
-                .background(Tok.held, RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .graphicsLayer { this.alpha = alpha.value; scaleX = scale.value; scaleY = scale.value; transformOrigin = TransformOrigin(0.5f, 1f) },
         ) { MagnifierPlate(face) }
     }
 }
 
-/** 1.6 times the column: label 18, value 36, and the ring or gauge. */
+/** The plate's fade and scale: in on the elastic spring (overshoot about 3 %), out in 120 ms; Reduce Motion: the fade alone. */
 @Composable
-private fun MagnifierPlate(face: MagnifierFace) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (face.ring) {
-            val frac = face.fraction() ?: 0f
-            Canvas(Modifier.size(44.dp)) {
-                val w = 6.dp.toPx(); val tl = Offset(w / 2, w / 2); val sz = Size(size.width - w, size.height - w)
-                drawArc(Tok.control, 135f, 270f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
-                if (frac > 0.003f) drawArc(face.tint, 135f, 270f * frac, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+internal fun magnifierMotion(shown: Boolean): Pair<androidx.compose.runtime.State<Float>, androidx.compose.runtime.State<Float>> {
+    val reduce = LocalReduceMotion.current
+    val a = remember { androidx.compose.animation.core.Animatable(0f) }
+    val s = remember { androidx.compose.animation.core.Animatable(if (reduce) 1f else 0.6f) }
+    androidx.compose.runtime.LaunchedEffect(shown, reduce) {
+        com.scottgerstl.lupe.ui.theme.unscaled {
+            kotlinx.coroutines.coroutineScope {
+                if (shown) {
+                    launch { a.animateTo(1f, androidx.compose.animation.core.tween(if (reduce) Dur.FINGER else 90)) }
+                    if (reduce) s.snapTo(1f) else launch { s.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = MAGNIFIER_DAMPING, stiffness = 700f)) }
+                } else {
+                    launch { a.animateTo(0f, androidx.compose.animation.core.tween(if (reduce) Dur.EXIT else 120)) }
+                    if (!reduce) launch { s.animateTo(0.6f, androidx.compose.animation.core.tween(120, easing = com.scottgerstl.lupe.ui.theme.EaseIn)) }
+                }
             }
         }
-        Column {
-            BasicText(face.label, style = LupeType.number.copy(fontSize = 18.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp), maxLines = 1)
-            BasicText(face.value(), style = LupeType.number.copy(fontSize = 36.sp, lineHeight = 38.sp, color = Tok.text), maxLines = 1)
-            val f = if (face.ring) null else face.fraction()
-            if (f != null) Canvas(Modifier.padding(top = 4.dp).width(128.dp).height(5.dp)) {
-                drawRect(Tok.stepEmpty)
+    }
+    return a.asState() to s.asState()
+}
+/** The spring's damping: its overshoot is about 3 % (e^(−ζπ/√(1−ζ²)) at 0.75). */
+internal const val MAGNIFIER_DAMPING = 0.75f
+
+/**
+ * The plate (Figma 141:9654): `held`, corner 16, a 2 dp edge inside in the track's colour, no shadow; 13 top, 16 right and bottom, 19 left so it
+ * sits optically centred. Top row: the label (Barlow 19, +4 % tracking; `text`, since `text2` on `held` is 4.13:1) and the knob's badge (28 on
+ * `panel`). A tile: the value (Barlow Condensed Bold 42) and a 6 dp track across the plate. A dial: the flat arc dial at 64 with the value beside it.
+ */
+@Composable
+internal fun MagnifierPlate(face: MagnifierFace) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        Modifier.widthIn(min = 220.dp).background(Tok.held, shape)
+            .drawBehind { val w = 2.dp.toPx(); drawRoundRect(face.tint, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), androidx.compose.ui.geometry.CornerRadius(16.dp.toPx() - w / 2), style = Stroke(w)) }
+            .padding(start = 19.dp, top = 13.dp, end = 16.dp, bottom = 16.dp),
+    ) {
+        Row(Modifier.widthIn(min = 185.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(face.label, Modifier.weight(1f, fill = false).padding(end = 10.dp),
+                style = LupeType.body.copy(fontSize = 19.sp, lineHeight = 22.sp, color = Tok.text, letterSpacing = 0.04.em), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f, fill = true))
+            face.knob?.let { k ->
+                Box(Modifier.size(28.dp).background(Tok.panel, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                    BasicText("$k", style = LupeType.number.copy(fontSize = 19.sp, lineHeight = 19.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Tok.text))
+                }
+            }
+        }
+        androidx.compose.foundation.layout.Spacer(Modifier.height(6.dp))
+        val valueStyle = LupeType.number.copy(fontSize = 42.sp, lineHeight = 44.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Tok.text)
+        if (face.ring) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                val frac = face.fraction() ?: 0f
+                // the sound panel's flat arc dial at 64: a ring 0.86 inside, swept 270°, `control` with the value's arc in the track colour
+                Canvas(Modifier.size(64.dp)) {
+                    val w = size.minDimension / 2f * (1f - 0.86f)      // inner radius 0.86 of the outer
+                    val tl = Offset(w / 2, w / 2); val sz = Size(size.width - w, size.height - w)
+                    drawArc(Tok.control, 135f, 270f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+                    if (frac > 0.003f) drawArc(face.tint, 135f, 270f * frac.coerceIn(0f, 1f), false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+                }
+                BasicText(face.value(), style = valueStyle, maxLines = 1)
+            }
+        } else {
+            BasicText(face.value(), style = valueStyle, maxLines = 1)
+            val f = face.fraction()
+            if (f != null) Canvas(Modifier.padding(top = 8.dp).fillMaxWidth().height(6.dp)) {
+                val r = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
+                drawRoundRect(Tok.control, cornerRadius = r)
                 val x = f.coerceIn(0f, 1f) * size.width; val from = if (face.bipolar) size.width / 2 else 0f
-                drawRect(face.tint, Offset(minOf(from, x), 0f), Size(maxOf(abs(x - from), if (face.bipolar) 2f else 0f), size.height))
+                drawRoundRect(face.tint, Offset(minOf(from, x), 0f), Size(maxOf(abs(x - from), if (face.bipolar) 3.dp.toPx() else 0f), size.height), r)
             }
         }
     }
@@ -250,10 +298,9 @@ private fun MagnifierPlate(face: MagnifierFace) {
  */
 @Composable
 fun MagnifierPopup(state: MagnifierState) {
-    val reduce = LocalReduceMotion.current
-    val t = animatedFloat(if (state.shown) 1f else 0f, if (state.shown) Dur.FINGER else Dur.EXIT)
     val face = state.face
-    if (face == null || (t.value <= 0.001f && !state.shown)) return
+    val (alpha, scale) = magnifierMotion(state.shown)
+    if (face == null || (alpha.value <= 0.001f && !state.shown)) return
     val density = LocalDensity.current
     val lift = with(density) { 72.dp.roundToPx() }
     val margin = with(density) { 12.dp.roundToPx() }
@@ -269,11 +316,7 @@ fun MagnifierPopup(state: MagnifierState) {
     androidx.compose.ui.window.Popup(provider, properties = androidx.compose.ui.window.PopupProperties(focusable = false, clippingEnabled = false)) {
         Box(
             Modifier.clearAndSetSemantics { }
-                .graphicsLayer {
-                    alpha = t.value
-                    if (!reduce) { val s = 0.2f + 0.8f * t.value; scaleX = s; scaleY = s; transformOrigin = TransformOrigin(0.5f, 1f) }
-                }
-                .background(Tok.held, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+                .graphicsLayer { this.alpha = alpha.value; scaleX = scale.value; scaleY = scale.value; transformOrigin = TransformOrigin(0.5f, 1f) },
         ) { MagnifierPlate(face) }
     }
 }

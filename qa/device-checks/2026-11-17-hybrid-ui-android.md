@@ -391,6 +391,12 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 |---|---|---|---|---|
 | 165 | Open the song menu; then Settings, top to bottom, with Play through on. Turn Sound keys off and on; hold a pad near the screen's right edge and in the middle. | Menu: no Shared effects…, no Labs. Audio: Play through and (if needed) Needs a hand; the Bluetooth note only on Bluetooth; no Output, Delay or Details. Touch: "Slider gesture"; Sound keys right above Sound keys side, which is dimmed and says "Turn on Sound keys first" with TalkBack while off; no Menus open. No Labs section. Hold menus open to the right of the finger, flipping left at the right edge. | – | ☐ pass ☐ fail: |
 
+## Round 16e: Following back, narrower Settings, the new magnifier (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 166 | Open Settings in landscape, then portrait; then set the system font to its largest and open it again. Find Following. Then hold a dial on a sound page and a tile in Edit's step panel, slide, and let go; once more with Remove animations on. | Rows sit in a centred column about half the landscape width, the sheet still full width. Segmented options are only as wide as their words, left-aligned; at the largest font nothing is cut off (options may wrap to two lines). Following, after Sound pages: Pause following (on) and Pin the sound page (off), plain switches. The magnifier rises from the finger with a slight overshoot and leaves quicker: a raised plate with the label and knob number on top, the big value, and a thin track (tiles) or a flat arc (dials). Remove animations: it fades in and out. | 167bda4 | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

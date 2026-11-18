@@ -89,7 +89,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     val labs = LocalPhoneSettings.current
     var touches by remember { mutableIntStateOf(0) }
     var phoneAsks by remember { mutableIntStateOf(0) }
-    val followed = followed(shell.bottom, PhoneSettings.PIN_BOTTOM, PhoneSettings.PAUSE_FOLLOWING, touches, phoneAsks)
+    val followed = followed(shell.bottom, labs.pinBottom, labs.pauseFollowing, touches, phoneAsks)
     val shown = followed.first
     val frozen = followed.second
     val onSoundTouch = { touches++; Unit }
@@ -498,7 +498,7 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
     val screenNow by core.fm1Screen.collectAsStateWithLifecycle()
     var lastScreen by remember { mutableStateOf(screenNow) }
     if (screenNow.key.isNotEmpty()) lastScreen = screenNow   // under a MENU or a held layer nothing changes here
-    val screen = followed(lastScreen, PhoneSettings.PIN_BOTTOM, PhoneSettings.PAUSE_FOLLOWING, touches, asks).first
+    val screen = followed(lastScreen, labs.pinBottom, labs.pauseFollowing, touches, asks).first
     val place = remember { PlaceFollower() }
     val sheets = LocalSheetHost.current
     val sounds = LocalSoundsHost.current
