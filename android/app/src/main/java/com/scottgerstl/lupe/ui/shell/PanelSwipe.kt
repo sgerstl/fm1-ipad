@@ -89,9 +89,9 @@ fun Modifier.panelSwipe(state: PanelSwipe, onDismiss: () -> Unit): Modifier = co
             scope.launch {
                 unscaled {
                     if (PanelSwipeRule.dismisses(state.offset.value, w, vx, fling)) {
-                        // out with the finger's speed, then closed (the panel's own close takes over from off-screen)
-                        state.offset.animateTo(w, spring(dampingRatio = 1f, stiffness = 800f), initialVelocity = maxOf(vx, 0f))
+                        // closed at once, so what sits beside the panel changes with it, not after it; the panel leaves at the finger's speed
                         onDismiss()
+                        state.offset.animateTo(w, spring(dampingRatio = 1f, stiffness = 800f), initialVelocity = maxOf(vx, 0f))
                     } else {
                         state.offset.animateTo(0f, if (reduce) spring(dampingRatio = 1f, stiffness = 800f) else spring(dampingRatio = 0.8f, stiffness = 380f), initialVelocity = vx)
                     }

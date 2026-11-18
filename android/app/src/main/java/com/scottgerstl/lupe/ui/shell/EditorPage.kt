@@ -223,14 +223,9 @@ fun EditTab(
     // a panel docked: a melodic grid shows 8 steps a page beside it (hybrid UI, Scott 2026-11-17), and the pattern bar spans the width left of it.
     // A kit's lanes keep scrolling under it (decision 35, B) until the drum grid gets pages too.
     // round 5: a kit pages by 8 too (`build-gaps-2026-11-17/1-drum-edit-docked.png`)
-    // The step panel only moves (an offset, drawn); the pattern bar and the grid change layout once, not every frame (2026-11-18: the panel
-    // "a little janky", the grid "lags behind"). While the panel slides or is dragged, the 8-step layout beside it and the full one are both
-    // laid out and cross-fade with the panel's own position, frame by frame; at rest only one is there.
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val dockPx = with(density) { DOCK_W.toPx() }
-    val stepVis = { (panelT.value - stepSwipe.offset.value / dockPx).coerceIn(0f, 1f) }
-    val panelMoving by remember { androidx.compose.runtime.derivedStateOf { panelT.value in 0.001f..0.999f || stepSwipe.offset.value > 0.5f } }
-    val panelShown by remember { androidx.compose.runtime.derivedStateOf { panelT.value > 0.001f } }
+    // The step panel only moves (an offset, drawn), and stays composed while a step is picked, so opening and closing build nothing; the pattern
+    // bar and the grid change layout once, at the start of the open or close, in step with the panel (2026-11-18, measured: round 15c's
+    // cross-fade composed and laid out a second Edit layout on each open and close, 3–4 frames of 35–90 ms each)
     val sharedScrollY = remember(ed.track, ed.pattern) { androidx.compose.runtime.mutableFloatStateOf(-1f) }
     Box(modifier.fillMaxSize()) {
     @Composable
@@ -294,16 +289,13 @@ fun EditTab(
         }
     }
     }
-    if (!panelMoving) EditLayout(open = panelOpen, active = true, layerModifier = Modifier)
-    else {
-        // moving: the full layout under, the one beside the panel over it, faded by where the panel is
-        EditLayout(open = false, active = !panelOpen, layerModifier = Modifier)
-        EditLayout(open = true, active = panelOpen, layerModifier = Modifier.graphicsLayer { alpha = stepVis() })
-    }
+    EditLayout(open = panelOpen, active = true, layerModifier = Modifier)
     // the step panel, docked at the tab's right: `panel`, its left corners at the sheet radius (spec 4.3); it slides in from the right (with Reduce Motion it only fades)
-    if (panelShown) Box(
+    if (stepPicked) Box(
             Modifier.align(Alignment.TopEnd).width(DOCK_W).fillMaxHeight()
-                .graphicsLayer { if (reduce) alpha = panelT.value; translationX = panelX(if (!reduce) (1f - panelT.value) * size.width else 0f, stepSwipe.offset.value); shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
+                // closed, it waits off to the right (or invisible with Reduce Motion), takes no touches and says nothing
+                .then(if (panelOpen) Modifier else Modifier.clearAndSetSemantics { }.pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() } } })
+                .graphicsLayer { if (reduce) alpha = panelT.value; if (panelT.value <= 0.001f) alpha = 0f; translationX = panelX(if (!reduce) (1f - panelT.value) * size.width else 0f, stepSwipe.offset.value); shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
                 .background(Tok.panel)
                 // a swipe to the right that no control took follows the finger and, far enough or flung, shuts it (2026-11-18, the sound panel's gesture)
                 .panelSwipe(stepSwipe) { ui.stepPanel = false }
