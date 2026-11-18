@@ -156,7 +156,10 @@ fun StepGrid(
             val viewPx = with(density) { gridW.toPx() }
             val stepPx = viewPx / pageSteps
             val dockPx = with(density) { dock.toPx() }.coerceAtMost(viewPx - stepPx * 4)
-            val geo by rememberUpdatedState(floatArrayOf(rowPx, viewH, stepPx, viewPx, dockPx))
+            // the geometry the gestures read: a plain array updated in place, not state. As state (a new array each composition, never equal) it
+            // was written and read in the same composition whenever the minimap showed, and recomposed itself every frame on 8-step pages
+            // (measured 2026-11-18: Edit drew 60–120 fps with nothing moving)
+            val geo = remember { FloatArray(5) }.also { it[0] = rowPx; it[1] = viewH; it[2] = stepPx; it[3] = viewPx; it[4] = dockPx }
             val pageNow by rememberUpdatedState(pageSteps)
             // the window opens on the pattern's notes; after that it is where the finger left it
             val sy = if (scrollY < 0f) Roll.scrollYFor(Roll.topFor(ed.steps.flatMap { stepNotes(it) }), rowPx) else Roll.clampScrollY(scrollY, rowPx, viewH)
