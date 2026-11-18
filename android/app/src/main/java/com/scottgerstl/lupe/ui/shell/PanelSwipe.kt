@@ -78,17 +78,20 @@ fun Modifier.panelSwipe(state: PanelSwipe, onDismiss: () -> Unit): Modifier = co
             scope.launch { state.offset.stop() }
             val tracker = VelocityTracker()
             val origin = start!!.x
+            // where the finger put the panel last: the release decides from this, not from the animated offset, which can be a frame behind
+            var last = 0f
             drag(down.id) { ch ->
                 ch.consume()
                 tracker.addPosition(ch.uptimeMillis, ch.position)
                 val to = PanelSwipeRule.follow(ch.position.x - origin, maxLeft)
+                last = to
                 scope.launch { state.offset.snapTo(to) }
             }
             val vx = tracker.calculateVelocity().x
             val w = size.width.toFloat()
             scope.launch {
                 unscaled {
-                    if (PanelSwipeRule.dismisses(state.offset.value, w, vx, fling)) {
+                    if (PanelSwipeRule.dismisses(last, w, vx, fling)) {
                         // closed at once, so what sits beside the panel changes with it, not after it; the panel leaves at the finger's speed
                         onDismiss()
                         state.offset.animateTo(w, spring(dampingRatio = 1f, stiffness = 800f), initialVelocity = maxOf(vx, 0f))

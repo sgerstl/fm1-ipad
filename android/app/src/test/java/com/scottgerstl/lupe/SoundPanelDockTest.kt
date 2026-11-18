@@ -74,14 +74,14 @@ class SoundPanelDockTest {
         val right = { rule.onNodeWithTag("under").performTouchInput { click(Offset(width - 60f, height / 2f)) } }
         right(); rule.waitForIdle(); assertEquals("never shown: the tap reaches what's under", 1, under)
         visible = true; t = 1f; rule.waitForIdle()
-        // open: it is there (Robolectric can't hit-test a layer clipped to a shape with uneven corners, so the open panel's own taps are a device
-        // check; HitExperimentTest shows the limit)
         rule.onNode(androidx.compose.ui.test.hasContentDescription("Close the sound panel")).assertExists()
+        right(); rule.waitForIdle(); assertEquals("open: the panel takes the tap", 1, under)
         visible = false; t = 0f; rule.waitForIdle()
         right(); rule.waitForIdle(); assertEquals("closed (still built): the tap reaches what's under", 2, under)
         rule.onNode(androidx.compose.ui.test.hasContentDescription("Close the sound panel")).assertDoesNotExist()   // hidden from TalkBack too
         visible = true; t = 1f; rule.waitForIdle()
         rule.onNode(androidx.compose.ui.test.hasContentDescription("Close the sound panel")).assertExists()
+        right(); rule.waitForIdle(); assertEquals("open again: the panel takes it", 2, under)
     }
 
     @Test fun editComesToRestAfterTheSoundPanelDocksAndLeaves() {

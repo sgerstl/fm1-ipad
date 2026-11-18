@@ -408,12 +408,14 @@ internal fun SoundPanel(t: () -> Float, visible: Boolean, page: PageState, core:
         modifier.width(DOCK_W).fillMaxHeight()
             // hybrid UI (spec 4.3): `panel`, its left corners at the sheet radius, beside the grid rather than over it; no border, no track tint
             // its slide-in and, on top, the finger's drag (2026-11-18): it follows the swipe from the first movement
-            .graphicsLayer { val tt = t(); alpha = if (reduce) tt else 1f; translationX = stepPanelX(tt, size.width, swipe.offset.value, reduce); if (tt <= 0.001f) alpha = 0f; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
-            .background(Tok.panel)
+            // the swipe outside the moving layer (fixed coordinates), only while open (2026-11-18)
+            .then(if (visible) Modifier.panelSwipe(swipe, onDismiss) else Modifier)
+            .graphicsLayer { val tt = t(); alpha = if (reduce) tt else 1f; translationX = stepPanelX(tt, size.width, swipe.offset.value, reduce); if (tt <= 0.001f) alpha = 0f }
+            // its rounded leading corners drawn, not clipped: the content is padded clear of them, and an unclipped layer hit-tests the same everywhere
+            .background(Tok.panel, RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet))
             .countTouches(onTouch)
             .then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
             // a swipe to the right that no dial took moves it and, let go far enough or flung, shuts it; taps on the panel don't reach what is under it
-            .panelSwipe(swipe, onDismiss)
             .pointerInput(Unit) { detectTapGestures { } }
             .semantics {
                 paneTitle = "Sound page ${last.family}"; isTraversalGroup = true
@@ -568,13 +570,13 @@ internal fun gloStep(onMix: Boolean, screen: com.scottgerstl.lupe.core.Fm1Screen
  * swipe (the panel's own); it shows the panel can be swiped away. TalkBack: a button named [description].
  */
 @Composable
-internal fun PanelHandle(description: String, onClose: () -> Unit, modifier: Modifier = Modifier, fullHeight: Boolean = false) {
+internal fun PanelHandle(description: String, onClose: () -> Unit, modifier: Modifier = Modifier, fullHeight: Boolean = false, barCentred: Boolean = false) {
     // [fullHeight]: the touch area runs the panel's whole leading edge (the bar stays 36 tall in the middle), so a swipe from the edge always
     // moves the panel, whatever the tiles beside it take (2026-11-18)
     Box(
         modifier.width(24.dp).then(if (fullHeight) Modifier.fillMaxHeight() else Modifier.height(48.dp))
             .semantics(mergeDescendants = true) { role = androidx.compose.ui.semantics.Role.Button; contentDescription = description }
             .pointerInput(Unit) { detectTapGestures { onClose() } }
-            .drawBehind { val w = 4.dp.toPx(); val h = 36.dp.toPx(); drawRoundRect(Tok.text2Raised, Offset((size.width - w) / 2 - 4.dp.toPx(), (size.height - h) / 2), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(w / 2)) },
+            .drawBehind { val w = 4.dp.toPx(); val h = 36.dp.toPx(); drawRoundRect(Tok.text2Raised, Offset((size.width - w) / 2 - (if (barCentred) 0f else 4.dp.toPx()), (size.height - h) / 2), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(w / 2)) },
     )
 }

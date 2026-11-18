@@ -157,6 +157,8 @@ private val DIALS_W = 420.dp      // the dials area, at the right; the keyboard,
 
 /** The docked panels' width (the step panel here, the shell's sound panel): four 84 dp dials and their padding, about two fifths of the phone. */
 val DOCK_W = 360.dp
+/** The step panel's leading padding: the grab handle's 24 dp lane plus 8 dp clear before the first control (2026-11-18). */
+val STEP_GUTTER = 32.dp
 
 /**
  * The Edit tab (decisions 31 and 35, board 75): the ruler, then the pattern as the iPhone's step grid: a melodic track's piano roll
@@ -297,20 +299,25 @@ fun EditTab(
                 // blocker here: a modifier before the layer isn't moved with it, and the first try (c38b22a) left an invisible strip over Edit's right
                 // side that swallowed every touch, the Step key's too
                 .then(if (panelOpen) Modifier else Modifier.clearAndSetSemantics { })
-                .graphicsLayer { if (reduce) alpha = panelT.value; translationX = stepPanelX(panelT.value, size.width, stepSwipe.offset.value, reduce); if (panelT.value <= 0.001f) alpha = 0f; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
-                .background(Tok.panel)
-                // a swipe to the right that no control took follows the finger and, far enough or flung, shuts it (2026-11-18, the sound panel's gesture)
-                .panelSwipe(stepSwipe) { ui.stepPanel = false }
+                // the swipe sits outside the moving layer, so it measures the finger in coordinates that don't move with the panel (inside it, the
+                // panel following the finger halved the distance and the speed it saw: 2026-11-18). Only while open: closed, nothing waits at its rest
+                .then(if (panelOpen) Modifier.panelSwipe(stepSwipe) { ui.stepPanel = false } else Modifier)
+                .graphicsLayer { if (reduce) alpha = panelT.value; translationX = stepPanelX(panelT.value, size.width, stepSwipe.offset.value, reduce); if (panelT.value <= 0.001f) alpha = 0f }
+                // its rounded leading corners drawn, not clipped: the content is padded clear of them, and an unclipped layer hit-tests the same everywhere
+                .background(Tok.panel, RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet))
                 .pointerInput(Unit) { detectTapGestures { } }      // a touch on the panel doesn't reach the grid under it
                 .semantics { paneTitle = "Step panel"; isTraversalGroup = true
-                    customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the step panel") { ui.stepPanel = false; true }) }
-                .padding(12.dp),
+                    customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the step panel") { ui.stepPanel = false; true }) },
         ) {
+            // the gutter (Scott, 2026-11-18, "1 · Gutter"; Figma 139:9719): the handle's own 24 dp lane at the panel's edge, then 8 dp clear, so a drag
+            // that starts there moves the panel and one that starts on a tile edits it; the controls start 32 dp in
+            Box(Modifier.fillMaxSize().padding(start = STEP_GUTTER, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
             androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.page.LocalUndoMark provides undoMark) {
             if (drum) HitPanel(ed, track, core, hit, narrow = true, onLane = { l -> hit = l to (hit?.second ?: ed.selected) },
                 onStep = { st -> hit = (hit?.first ?: "") to st; core.send(Intent.StepSelect(st)) }) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true) }
-            // the grab handle (Scott, 2026-11-17; WCAG 2.5.1): tap closes the panel as the swipe does
-            PanelHandle("Close the step panel", { ui.stepPanel = false }, Modifier.align(Alignment.CenterStart).offset(x = (-12).dp), fullHeight = true)
+            }
+            // the grab handle (Scott, 2026-11-17; WCAG 2.5.1): tap closes the panel as the swipe does; it fills the gutter's first 24 dp, from the panel's edge
+            PanelHandle("Close the step panel", { ui.stepPanel = false }, Modifier.align(Alignment.CenterStart), fullHeight = true, barCentred = true)
         }
     }
 }
