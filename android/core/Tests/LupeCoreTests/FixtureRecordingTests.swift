@@ -11,7 +11,8 @@ import Testing
 ///
 /// Always checks each scenario's phases. Writes the files only when RECORD_FIXTURES=1:
 ///   RECORD_FIXTURES=1 swift test --filter FixtureRecording     (in android/core)
-@Suite(.serialized) @MainActor struct FixtureRecordingTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct FixtureRecordingTests {
     final class Recorder {
         let start = Date()
         var frames: [(ms: Int, area: String, json: String)] = []

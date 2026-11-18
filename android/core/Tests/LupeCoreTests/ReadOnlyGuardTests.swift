@@ -6,7 +6,8 @@ import Testing
 
 /// The read-only guard used for unattended runs against the real FM-1. Frames come from SloopKit's own
 /// requests; what counts as a read is Skiff's EDITOR_PROTOCOL.md table (ReadOnlyGuard.swift).
-@Suite(.serialized) @MainActor struct ReadOnlyGuardTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct ReadOnlyGuardTests {
     final class Blocked: @unchecked Sendable {
         let lock = NSLock(); var frames: [[UInt8]] = []
         func add(_ f: [UInt8]) { lock.withLock { frames.append(f) } }

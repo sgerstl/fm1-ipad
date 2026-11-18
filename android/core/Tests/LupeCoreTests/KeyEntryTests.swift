@@ -7,7 +7,8 @@ import Testing
 /// Decision 5 as revised by Scott (2026-11-14): "the fm1 keys should work just like they do on the ipad": the FM-1's
 /// keys play its sound and never write from the phone (14 keys had replaced pattern 56 on the device). And his answer
 /// on scenes: a kept scene is replaced only when the screen confirmed.
-@Suite(.serialized) @MainActor struct KeyEntryTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct KeyEntryTests {
     /// FakeSkiff with a notes stream the test plays into, as the FM-1's keys arrive on the transport.
     final class Keys: SysExTransport, @unchecked Sendable {
         let fake: FakeSkiff

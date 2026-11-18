@@ -150,7 +150,8 @@ fun ProjectsSheet(screen: ProjectsScreen) {
             rename = actions.rename,
         )
     }
-    LupeSheet(open, "Projects", { host.close() }) {
+    // as wide as Settings (Scott, 2026-11-18: "projects should match the width of settings"): the shared cap
+    LupeSheet(open, "Projects", { host.close() }, widthCap = com.scottgerstl.lupe.ui.sheet.SHEET_NARROW) {
         PlayingRow(playing, phone.busy, fm1, idle, ui, setPending = { pending = it }, saveHome = {
             when (playing.source) {
                 PlayingSource.Phone -> phone.saveOver(playing.projectId!!)
@@ -172,7 +173,8 @@ fun ProjectsSheet(screen: ProjectsScreen) {
         }
         if (!fm1) BasicText("Plug in the FM-1 to see its four project slots.", Modifier.padding(bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
         // the firmware's own rule (skiff-sim, 2026-11-17): a slot names pool patterns, it doesn't keep copies
-        else BasicText("Skiff keeps 4 projects on the FM-1. A slot keeps the arrangement but shares its patterns with what's playing, so editing a pattern changes every slot that uses it. A project on this phone keeps its own copy. Loading stops the FM-1.",
+        // pared down (Scott, 2026-11-18: "pare it down to the bare essentials"); that loading stops the FM-1 is in the Load confirm
+        else BasicText("Slots share patterns: editing one changes every slot that uses it.",
             Modifier.padding(bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ui.slots.forEach { slot ->
@@ -205,17 +207,15 @@ fun ProjectsSheet(screen: ProjectsScreen) {
         }
 
         SectionHead("On this phone")
-        BasicText("No limit. Patterns go with each project; user sounds and samples stay on the FM-1. Saving or opening stops the FM-1.",
-            Modifier.padding(bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
         if (phone.files.isEmpty()) {
-            BasicText("Nothing saved on this phone yet. Use Save to, then This phone.", Modifier.padding(vertical = 8.dp), style = LupeType.body.copy(fontSize = 14.sp))
+            BasicText("Nothing saved here yet.", Modifier.padding(vertical = 8.dp), style = LupeType.body.copy(fontSize = 14.sp))
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             phone.files.forEach { f -> FileBlock(f, phone, playing, pending, { pending = it }, fm1, idle) }
         }
         if (phone.safetyCopies.isNotEmpty()) {
             SectionHead("Safety copies")
-            BasicText("Lupe keeps one before it opens something over unsaved work, and keeps the last ${PhoneProjectStore.KEPT_SAFETY_COPIES}. Rename one to keep it as a project.",
+            BasicText("Made before Lupe opens over unsaved work. Rename one to keep it.",
                 Modifier.padding(bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 phone.safetyCopies.forEach { f -> FileBlock(f, phone, playing, pending, { pending = it }, fm1, idle) }
@@ -227,18 +227,9 @@ fun ProjectsSheet(screen: ProjectsScreen) {
 /** Copy to phone needs no question when the slot is the music already and nothing changed: nothing is saved or put back. */
 internal fun copyNeedsAsking(slotIndex0: Int, p: PlayingNow): Boolean = !(p.source == PlayingSource.Slot && p.slot == slotIndex0 && !p.changed)
 
-/** What Copy to phone does to the playing music, said before it starts. */
-internal fun copyWords(slot: ProjectSlotUi, p: PlayingNow): String {
-    val tag = "P${slot.index}"
-    val steps = when (p.source) {
-        PlayingSource.Phone -> if (p.changed) "Lupe keeps a safety copy of your changes, loads $tag, copies it, then puts your changes back."
-            else "Lupe loads $tag, copies it, then opens ${p.name} again."
-        PlayingSource.Slot -> if (p.changed) "Lupe keeps a safety copy of your changes, loads $tag, copies it, then puts your changes back."
-            else "Lupe loads $tag, copies it, then loads P${p.slot!! + 1} again."
-        PlayingSource.New -> "Lupe keeps a safety copy of what's playing, loads $tag, copies it, then puts the music back."
-    }
-    return "Copy $tag ${slot.name} to this phone? $steps The FM-1 stops."
-}
+/** Copy to phone's question (2026-11-18: the steps Lupe takes are no longer spelled out; the music still comes back as before). */
+@Suppress("UNUSED_PARAMETER")
+internal fun copyWords(slot: ProjectSlotUi, p: PlayingNow): String = "Copy P${slot.index} ${slot.name} to this phone? The FM-1 stops."
 
 @Composable
 private fun SectionHead(title: String) =
@@ -278,7 +269,7 @@ private fun PlayingRow(p: PlayingNow, busy: ProjectsBusy?, fm1: Boolean, idle: B
                 KeyLabel("Save to…", fg, style = LupeType.key.copy(fontSize = 13.sp))
             }
             LupeMenu(menu, { menu = false }, alignEnd = true, width = 260.dp) {
-                MenuRow("This phone…", { menu = false; setPending(Pending.NamePhone) }, sub = "No limit. The patterns go with it")
+                MenuRow("This phone…", { menu = false; setPending(Pending.NamePhone) })
                 ui.slots.forEach { s ->
                     MenuRow("FM-1 P${s.index} · ${if (s.empty) "Empty" else s.name}", {
                         menu = false
@@ -370,7 +361,7 @@ private fun SlotRow(
                     MenuRow("Copy to this phone", {
                         menu = false
                         if (copyNeedsAsking(slot.index - 1, playing)) setPending(Pending.Copy(slot, System.currentTimeMillis())) else copyNow()
-                    }, enabled = idle, sub = "Keeps P${slot.index} on the FM-1 too")
+                    }, enabled = idle)
                     // the playing project into this (used) slot: replaces what it holds, so it asks
                     if (!slot.current) MenuRow("Save the playing music here…", { menu = false; setPending(Pending.SaveAs(slot, System.currentTimeMillis())) }, enabled = idle, sub = "Replaces ${slot.name}")
                 }
@@ -418,7 +409,7 @@ private fun FileBlock(f: PhoneProject, phone: ProjectsController, playing: Playi
                     LupeMenu(menu, { menu = false }, alignEnd = true, width = 220.dp) {
                         MenuRow("Rename", { menu = false; setPending(Pending.RenameFile(f)) }, sub = if (f.isSafetyCopy) "Keeps it as a project" else null)
                         if (!f.isSafetyCopy) MenuRow("Duplicate", { menu = false; phone.duplicate(f.id) })
-                        MenuRow("Delete", { menu = false; setPending(Pending.Delete(f, System.currentTimeMillis())) }, sub = "Asks first")
+                        MenuRow("Delete", { menu = false; setPending(Pending.Delete(f, System.currentTimeMillis())) })
                     }
                 }
             }
@@ -431,7 +422,7 @@ private fun FileBlock(f: PhoneProject, phone: ProjectsController, playing: Playi
                 p.armedAt, { phone.open(f); setPending(null) }, { setPending(null) })
         }
         LupeCrossfade((pending as? Pending.Delete)?.takeIf { it.file.id == f.id }, Modifier.fillMaxWidth()) { p ->
-            if (p != null) ConfirmInPlace("Delete ${f.name} from this phone? It's gone for good. What's on the FM-1 stays as it is.",
+            if (p != null) ConfirmInPlace("Delete ${f.name} from this phone? This can't be undone.",
                 p.armedAt, { phone.delete(f.id); setPending(null) }, { setPending(null) })
         }
     }

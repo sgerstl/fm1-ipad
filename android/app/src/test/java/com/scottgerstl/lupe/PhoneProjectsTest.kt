@@ -182,11 +182,12 @@ class PhoneProjectsTest {
     @Test fun copyToPhoneSaysWhatHappensToThePlayingMusic() {
         val p3 = ProjectSlotUi(3, "NIGHT DRIVE", "kept on the FM-1")
         val fromP1 = playingNow(ProjectsState(slots(0), name = "ALPHA", changed = true), null) { null }
-        assertEquals("Copy P3 NIGHT DRIVE to this phone? Lupe keeps a safety copy of your changes, loads P3, copies it, then puts your changes back. The FM-1 stops.", copyWords(p3, fromP1))
+        // pared down (Scott, 2026-11-18): the question alone, whatever is playing
+        assertEquals("Copy P3 NIGHT DRIVE to this phone? The FM-1 stops.", copyWords(p3, fromP1))
         val phone = playingNow(ProjectsState(slots(), name = "NIGHT", phoneEdited = false), PhoneHome("a", "NIGHT", null)) { "Night" }
-        assertEquals("Copy P3 NIGHT DRIVE to this phone? Lupe loads P3, copies it, then opens Night again. The FM-1 stops.", copyWords(p3, phone))
+        assertEquals("Copy P3 NIGHT DRIVE to this phone? The FM-1 stops.", copyWords(p3, phone))
         val fresh = playingNow(ProjectsState(slots(), name = ""), null) { null }
-        assertTrue(copyWords(p3, fresh).contains("keeps a safety copy of what's playing"))
+        assertEquals("Copy P3 NIGHT DRIVE to this phone? The FM-1 stops.", copyWords(p3, fresh))
         // the playing slot, unchanged: nothing to keep, so no question
         val onP3 = playingNow(ProjectsState(slots(2), name = "NIGHT DRIVE", changed = false), null) { null }
         assertFalse(copyNeedsAsking(2, onP3))

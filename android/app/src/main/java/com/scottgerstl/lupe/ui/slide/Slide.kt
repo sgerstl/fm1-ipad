@@ -80,7 +80,21 @@ class MagnifierFace(
     val tint: Color = Tok.text,
     /** The FM-1 knob that turns it (1–4): a badge at the plate's top right; null for none. */
     val knob: Int? = null,
+    /** Values it can reach that may be wider than the one showing (its range's ends): the value's slot is sized to the widest, so the plate never changes width while you drag. */
+    val widest: List<String> = emptyList(),
 )
+
+/** A plate's least width: a short value ("1") doesn't make a sliver (Scott, 2026-11-18: the magnifier "too wide for no reason"). */
+internal const val PLATE_MIN_W = 120f
+
+/**
+ * The widths a value's slot must hold: the value now, its [MagnifierFace.widest] values, and the value now with every digit made the widest
+ * digit (so 19 → 20 → 88 can't grow it) and, bipolar, a minus in front. The slot takes the widest of these and of any value shown so far.
+ */
+internal fun valueTemplates(value: String, widest: List<String>, bipolar: Boolean, wideDigit: Char): List<String> {
+    val digits = value.map { if (it.isDigit()) wideDigit else it }.joinToString("")
+    return listOfNotNull(value, digits, if (bipolar && !digits.startsWith("-")) "-$digits" else null) + widest
+}
 
 /** True while a sound page is showing: the back gesture sends HOME then (decision 19), so no control may exclude the screen's edges from it. */
 val LocalBackGoesHome = androidx.compose.runtime.compositionLocalOf { false }
@@ -250,13 +264,14 @@ internal const val MAGNIFIER_DAMPING = 0.75f
 @Composable
 internal fun MagnifierPlate(face: MagnifierFace) {
     val shape = RoundedCornerShape(16.dp)
+    // the plate hugs its content (2026-11-18): the label row or the value's slot, whichever is wider, never under [PLATE_MIN_W]
     Column(
-        Modifier.widthIn(min = 220.dp).background(Tok.held, shape)
+        Modifier.widthIn(min = PLATE_MIN_W.dp).width(androidx.compose.foundation.layout.IntrinsicSize.Max).background(Tok.held, shape)
             .drawBehind { val w = 2.dp.toPx(); drawRoundRect(face.tint, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), androidx.compose.ui.geometry.CornerRadius(16.dp.toPx() - w / 2), style = Stroke(w)) }
             .padding(start = 19.dp, top = 13.dp, end = 16.dp, bottom = 16.dp),
     ) {
-        Row(Modifier.widthIn(min = 185.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(face.label, Modifier.weight(1f, fill = false).padding(end = 10.dp),
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(face.label, Modifier.padding(end = 10.dp),
                 style = LupeType.body.copy(fontSize = 19.sp, lineHeight = 22.sp, color = Tok.text, letterSpacing = 0.04.em), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f, fill = true))
             face.knob?.let { k ->
@@ -267,6 +282,15 @@ internal fun MagnifierPlate(face: MagnifierFace) {
         }
         androidx.compose.foundation.layout.Spacer(Modifier.height(6.dp))
         val valueStyle = LupeType.number.copy(fontSize = 42.sp, lineHeight = 44.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Tok.text)
+        // the value's slot: as wide as the widest value this control can show, so dragging never changes the plate's width
+        val tm = androidx.compose.ui.text.rememberTextMeasurer()
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val seen = remember(face) { floatArrayOf(0f) }
+        val now = face.value()
+        val wideDigit = remember(tm) { ('0'..'9').maxBy { tm.measure("$it", valueStyle).size.width } }
+        val slotPx = valueTemplates(now, face.widest, face.bipolar, wideDigit).maxOf { tm.measure(it, valueStyle).size.width.toFloat() }
+        seen[0] = maxOf(seen[0], slotPx)
+        val slot = with(density) { seen[0].toDp() }
         if (face.ring) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 val frac = face.fraction() ?: 0f
@@ -277,10 +301,10 @@ internal fun MagnifierPlate(face: MagnifierFace) {
                     drawArc(Tok.control, 135f, 270f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
                     if (frac > 0.003f) drawArc(face.tint, 135f, 270f * frac.coerceIn(0f, 1f), false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
                 }
-                BasicText(face.value(), style = valueStyle, maxLines = 1)
+                BasicText(now, Modifier.widthIn(min = slot), style = valueStyle, maxLines = 1, softWrap = false)
             }
         } else {
-            BasicText(face.value(), style = valueStyle, maxLines = 1)
+            BasicText(now, Modifier.widthIn(min = slot), style = valueStyle, maxLines = 1, softWrap = false)
             val f = face.fraction()
             if (f != null) Canvas(Modifier.padding(top = 8.dp).fillMaxWidth().height(6.dp)) {
                 val r = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())

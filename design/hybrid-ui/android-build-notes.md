@@ -81,3 +81,9 @@ Branch `hybrid-ui-android`, cut from `design-hybrid-ui`. Built against `spec.md`
 - **The handle starts resizing on any movement**, quick or slow, so a swipe begun on a grip end resizes instead of paging.
 - **A touch on the tail of a long note** (a later step it covers) still counts as an empty cell for tap and move; only its right edge is reachable there. As before.
 - **Not checked with the FM-1:** whether MOVE and LENGTH land on the real FM-1 as they do on the demo core. Device checks 122–127.
+
+## Swift core tests (2026-11-18)
+
+- **The full `swift test` run in `android/core` has one failure, and it's pre-existing.** Checked in throwaway worktrees at main (dee9d4f) and origin/main (375e21d) and on this branch: the same single failure everywhere, `ClockAreaTests.theReferenceRunForwardStaysOnTheCount` ("worst < 4"). It passes when run alone (3.8 s), so it's load-sensitive: it samples the interpolated clock every 37 ms on the main actor, and with the other suites running in parallel the samples land late and the count strays more than 4 pulses. `ReadOnlyGuardTests.sessionReachesReadyReadOnly` never hung; it passes everywhere (12.6 s). The suite just takes about 340 s, and an earlier run was killed before it finished.
+- Every suite now has a 3-minute time limit per test (`.timeLimit(.minutes(3))`), so a stuck test fails instead of stalling the run.
+

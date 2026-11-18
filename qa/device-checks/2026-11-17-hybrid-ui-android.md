@@ -419,7 +419,13 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 
 | # | Do this | You should see | Backup | Result |
 |---|---|---|---|---|
-| 170 | With the FM-1 plugged in and Lupe connected, press the power button, wait 5 s, wake and unlock. Then the same with 60 s. Do both stopped and playing, and with the speaker key on and off (eight runs). Once, unplug the FM-1 with Lupe open, plug it back in, and tap Try again if the card shows. | After every wake Lupe is connected: the page is live, no "FM-1 disconnected" card (at most a short "Connecting" while it reads the FM-1 again). Playing: the FM-1 keeps playing; Lupe shows it. Speaker key on: the sound comes back through the phone. Unplug and replug: it reconnects; Try again now actually reconnects. | 92fd7b1 | ☐ pass ☐ fail: |
+| 170 | With the FM-1 plugged in and Lupe connected, press the power button, wait 5 s, wake and unlock. Then the same with 60 s. Do both stopped and playing, and with the speaker key on and off (eight runs). Once, unplug the FM-1 with Lupe open, plug it back in, and tap Try again if the card shows. | After every wake Lupe is connected: the page is live, no "FM-1 disconnected" card (at most a short "Connecting" while it reads the FM-1 again). Playing: the FM-1 keeps playing; Lupe shows it. Speaker key on: the sound comes back through the phone. Unplug and replug: it reconnects; Try again now actually reconnects. | 92fd7b1 | ☑ pass (Scott, 2026-11-18: sleep and wake reconnect) |
+
+## Round 16j: Projects width and copy, a tighter magnifier (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 171 | Open Projects in landscape, then portrait; read it top to bottom; open a slot's menu and a phone project's menu; start Copy to this phone and Delete, then Cancel. Then hold a dial on a sound page and an Edit step tile with a short value (e.g. LENGTH 1) and drag the value through its range. | Projects is as wide as Settings in landscape (centred, dimmed either side), full width in portrait. The FM-1 note is one line about shared patterns; no note under "On this phone"; the menus have no grey sub-lines on This phone…, Copy to this phone or Delete; the confirms read "Copy P… to this phone? The FM-1 stops." and "Delete … from this phone? This can't be undone." The magnifier is only as wide as its label and number need (narrower than before), never a sliver, and doesn't change width while you drag. | 585a6a5 | ☐ pass ☐ fail: |
 
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).

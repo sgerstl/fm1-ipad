@@ -5,7 +5,8 @@ import Testing
 
 /// AndroidTransport and LinkGate against bytes shaped the way Android delivers them: arbitrary chunks,
 /// clock bytes inside frames. The FM-1 side comes from SloopKit's own frames (Frame.encode), not invented.
-@Suite struct AndroidTransportTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.timeLimit(.minutes(3))) struct AndroidTransportTests {
     final class Sent: @unchecked Sendable {
         let lock = NSLock(); var frames: [[UInt8]] = []
         func add(_ f: [UInt8]) { lock.withLock { frames.append(f) } }

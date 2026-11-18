@@ -6,7 +6,8 @@ import Testing
 
 /// The readout's writes through PhoneCore into FakeSkiff: setTempo (the BPM global, clamped), rec (REC's arming) and
 /// setLaunch (PERFORM's launch), each read back and republished in `top`; read-only sends none.
-@Suite(.serialized) @MainActor struct TopIntentTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct TopIntentTests {
     final class Box { var writes = true; var log: [String] = []; var top: [String] = [] }
 
     func connected(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {

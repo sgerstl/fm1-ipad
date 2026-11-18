@@ -5,7 +5,8 @@ import Testing
 @testable import SloopKit
 
 /// The `notice` area: what the core didn't carry out reaches the screen, with its track and entry, each time.
-@Suite(.serialized) @MainActor struct NoticeTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct NoticeTests {
     final class Box { var writes = true; var notices: [NoticeArea] = []; var log: [String] = [] }
 
     func connected(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {

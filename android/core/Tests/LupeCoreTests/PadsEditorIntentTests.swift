@@ -7,7 +7,8 @@ import Testing
 /// P3's pads and editor intents through PhoneCore into FakeSkiff (Skiff 2.2 as skiff-sim answered it): each reaches
 /// the fake as the write the iPad sends for the same thing and changes the fake's state; while read-only none is
 /// sent at all. FakeSkiff stays strict (rule 5): nothing it doesn't model may be asked.
-@Suite(.serialized) @MainActor struct PadsEditorIntentTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct PadsEditorIntentTests {
     final class Box { var writes = true; var log: [String] = [] }
 
     /// A core connected to a fresh FakeSkiff (no demo motion), the song and pool read.

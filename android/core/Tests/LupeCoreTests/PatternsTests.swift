@@ -6,7 +6,8 @@ import Testing
 
 /// Managing patterns (board 79) on FakeSkiff: the `patterns` area from POOL and LIST, the stored pictures read only
 /// while stopped and only with the sheet open, and clearPatterns, recyclePattern, copyPattern with their notices.
-@Suite(.serialized) @MainActor struct PatternsTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct PatternsTests {
     final class Box { var writes = true; var notices: [NoticeArea] = []; var log: [String] = [] }
 
     func connected(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {

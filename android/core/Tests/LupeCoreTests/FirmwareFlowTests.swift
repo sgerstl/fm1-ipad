@@ -8,7 +8,8 @@ import Testing
 /// plays both update steps as Skiff's ota.c and ldr_core.c do): the offer for a stock unit and for a cut-off install,
 /// the download handed in and checked against its pin, the two steps, and the refusals. And the link gate's part:
 /// who gets the device by its USB name, and the installer taking it from the Session. Offline; no real FM-1.
-@Suite(.serialized) @MainActor struct FirmwareFlowTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct FirmwareFlowTests {
     final class Box { var areas: [FirmwareArea] = []; var notices: [NoticeArea] = []; var log: [String] = []; var holds: [Bool] = [] }
     static let skiff251 = try! LupeFirmware.skiff251.load()
     static let releases = LupeFirmware.skiff251.localCopy!.deletingLastPathComponent()

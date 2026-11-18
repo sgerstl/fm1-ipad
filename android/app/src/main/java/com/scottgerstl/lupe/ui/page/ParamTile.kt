@@ -109,7 +109,7 @@ fun ParamTile(
             .then(if (!enabled) Modifier else Modifier.pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) { mark?.invoke(what); send(b); haptic.performHapticFeedback(HapticFeedbackType.Confirm) } }) }
             .slideToTurn(
                 enabled = true, stepDp = dpPerStep,
-                face = remember(label, tint) { MagnifierFace(label, { shown }, { frac }, bipolar, ring = false, tint = tint, knob = knob) },
+                face = remember(label, tint, min, max) { MagnifierFace(label, { shown }, { frac }, bipolar, ring = false, tint = tint, knob = knob, widest = if (num != null) listOf("$min", "$max") else emptyList()) },
                 onStart = { last = 0; hot = true; mark?.invoke(what) }, onSlide = { total -> step(total - last); last = total }, onEnd = { hot = false },
                 bounds = { num?.let { n -> -(n - min)..(max - n) } },
                 onLimit = { haptic.performHapticFeedback(HapticFeedbackType.ContextClick) },

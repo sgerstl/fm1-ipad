@@ -179,5 +179,8 @@ fun LupeSheet(
     }
 }
 
+/** The narrow sheet's width (Settings, Projects; Scott, 2026-11-18): its 560 column and 24 each side, centred on a wide screen. Pass as `widthCap`. */
+val SHEET_NARROW = 608.dp
+
 /** Where a sheet's top sits: under the header (56) and its 4 above (spec 3.8). */
 val SHEET_TOP = 60.dp

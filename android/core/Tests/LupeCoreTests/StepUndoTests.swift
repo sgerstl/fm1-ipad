@@ -5,7 +5,8 @@ import Testing
 @testable import SloopKit
 
 /// Edit's undo and redo (Scott, 2026-11-18): the history in the core.
-@Suite(.serialized) @MainActor struct StepUndoTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct StepUndoTests {
     func connected() async throws -> PhoneCore {
         let fake = try #require(FakeSkiff(demo: true))
         var once = false
