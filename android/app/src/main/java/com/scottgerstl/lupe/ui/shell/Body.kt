@@ -186,7 +186,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                             Tab.Pads -> PadsPage(pads, core)
                             Tab.Edit -> Box(Modifier.fillMaxSize()) {
                                 // the grid keeps its step width and scrolls under the docked panel (decision 35, B)
-                                EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = DOCK_W * dockT.value)
+                                // the docked sound panel's width as a target, not its animated width: Edit lays out once when it docks or leaves, and the
+                                // panel slides over as an offset (2026-11-18: reading the animated width re-laid out the shell and Edit every frame)
+                                EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = if (docked) DOCK_W else 0.dp)
                                 // the FREE TAKE offer and the landing sit on top of the editor
                                 com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp), showOffer = labs.takeOffer == com.scottgerstl.lupe.ui.slide.PhoneSettings.TAKE_POPUP)
                             }
@@ -195,11 +197,12 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                                 // Mixer · Effects: the shared pages as effect cards (direction C, 2026-11-17), replacing the bus dials
                                 val launch = com.scottgerstl.lupe.ui.mix.MixLaunch(core.pads.collectAsStateWithLifecycle(), core.clock.collectAsStateWithLifecycle())
                                 androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.mix.LocalMixLaunch provides launch) {
-                                    com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value, graphics = labs.showGraphics) } }
+                                    com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = if (docked) DOCK_W else 0.dp, graphics = labs.showGraphics) } }
                         }
                     }
                 }
-                SoundPanel(dockT.value, docked, soundPage, soundCore, notice, closePanel, Modifier.align(Alignment.TopEnd).countTouches(onSoundTouch), graphics = labs.showGraphics)
+                // its slide read only in drawing (no recomposition per frame); the touch count goes inside, after the layer that moves it
+                SoundPanel({ dockT.value }, docked, soundPage, soundCore, notice, closePanel, Modifier.align(Alignment.TopEnd), graphics = labs.showGraphics, onTouch = onSoundTouch)
             }
             if (rail && !labs.railLeft) { Spacer(Modifier.width(4.dp)); railNode() }
         }
@@ -377,12 +380,17 @@ private fun TimelineSlot(core: LupeCore) {
  * it. It is a pane of its own for TalkBack, with Close as an action.
  */
 @Composable
-private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true) {
+internal fun SoundPanel(t: () -> Float, visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true,
+    onTouch: () -> Unit = {}) {
     val swipe = rememberPanelSwipe(visible)
     val reduce = LocalReduceMotion.current
     var last by remember { mutableStateOf(page) }
     if (visible) last = page
-    if (t <= 0.001f) return
+    // built once it has been shown and kept (opening again builds nothing); closed, it waits a whole width off to the right, where no finger
+    // lands, with nothing before its layer that could take a touch at its resting spot (the 31a8f7a lesson)
+    var shown by remember { mutableStateOf(false) }
+    if (visible) shown = true
+    if (!shown) return
     // GLO's pages are neutral grey (decision 44), the others the track's colour
     val glo = last.family == "GLO"
     val colour = if (glo) Tok.text3 else trackColour(last.track)
@@ -400,8 +408,10 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
         modifier.width(DOCK_W).fillMaxHeight()
             // hybrid UI (spec 4.3): `panel`, its left corners at the sheet radius, beside the grid rather than over it; no border, no track tint
             // its slide-in and, on top, the finger's drag (2026-11-18): it follows the swipe from the first movement
-            .graphicsLayer { alpha = if (reduce) t else 1f; translationX = panelX(if (!reduce) (1f - t) * size.width else 0f, swipe.offset.value); shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
+            .graphicsLayer { val tt = t(); alpha = if (reduce) tt else 1f; translationX = stepPanelX(tt, size.width, swipe.offset.value, reduce); if (tt <= 0.001f) alpha = 0f; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
             .background(Tok.panel)
+            .countTouches(onTouch)
+            .then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
             // a swipe to the right that no dial took moves it and, let go far enough or flung, shuts it; taps on the panel don't reach what is under it
             .panelSwipe(swipe, onDismiss)
             .pointerInput(Unit) { detectTapGestures { } }

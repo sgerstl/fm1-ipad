@@ -345,6 +345,12 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 |---|---|---|---|---|
 | 156 | With Labs › Pause following on: on Edit, close the step panel, then tap FX at once. Then touch the grid and tap ENV within a second. | The sound panel opens straight away each time. (Pause following still holds a page the FM-1 changes by itself while you touch.) | – | ☐ pass ☐ fail: |
 
+## Round 15g: the sound panel's slide (2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 157 | On Edit, open and close sound panels (FX, ENV, LFO) several times, mixed with step panel toggles; with each closed, tap the grid's right side and the sound keys. Then on Pads, open FX and tap a pad under where the panel was after closing it. | The panel slides smoothly; the grid changes once, without stutter; the panel's dials and handle work; closed, the grid, the pads and the sound keys take taps at once. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

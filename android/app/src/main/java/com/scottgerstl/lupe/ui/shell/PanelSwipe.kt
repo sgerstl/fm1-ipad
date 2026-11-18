@@ -103,3 +103,4 @@ fun Modifier.panelSwipe(state: PanelSwipe, onDismiss: () -> Unit): Modifier = co
 
 /** A panel's x: its slide-in [slide] and the drag [offset]. Dragged left it resists from its place; dragged right (or leaving) whichever is further out, so a swiped-out panel doesn't jump back as its own close begins. */
 fun panelX(slide: Float, offset: Float): Float = if (offset < 0f) slide + offset else maxOf(slide, offset)
+
