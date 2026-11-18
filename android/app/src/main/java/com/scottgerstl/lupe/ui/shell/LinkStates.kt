@@ -68,7 +68,7 @@ class DemoControl(val canStart: Boolean = false, val inDemo: Boolean = false, va
 val LocalDemo = androidx.compose.runtime.staticCompositionLocalOf { DemoControl() }
 
 /** The firmware the phone works with, as the card says it. */
-const val FIRMWARE_NEEDED = "Skiff 2.5.1"
+const val FIRMWARE_NEEDED = "Skiff 2.5.1 or 2.6"
 
 internal data class PageCopy(val title: String, val line: String, val busy: Boolean, val retry: Boolean, val demo: Boolean)
 

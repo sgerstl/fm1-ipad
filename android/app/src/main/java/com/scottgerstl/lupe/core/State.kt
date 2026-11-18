@@ -160,6 +160,10 @@ data class PadRow(
     val passStartTick: Double? = null,
     /** One per column: entries A… up to the last any track uses, plus one empty. */
     val entries: List<PadEntry> = emptyList(),
+    /** Steps on no pattern yet: the entry (0-based) the FM-1 will keep them as when it is next stopped and idle; null: none waiting. */
+    val newAt: Int? = null,
+    /** Armed with the transport running: recording into the entry it is on, or into [newAt]. */
+    val recording: Boolean = false,
 )
 
 /** [waiting]: recalled while playing and its last track isn't in yet; [launchTick] is the pulse it lands on (null: no clock). */
@@ -184,7 +188,7 @@ data class PadsState(
     val patternsFree: Int? = null,
     /** The kept patterns nothing uses (1…64), as the FM-1's CLEAR UNUSED counts them: what "Clear N unused patterns" would erase. */
     val unused: List<Int> = emptyList(),
-    /** Pads cleared in the last ten seconds that can come back, oldest first (batch item 13). */
+    /** Pads cleared that can still come back (until the next edit ends them), oldest first (batch item 13). */
     val clearUndo: List<ClearedPad> = emptyList(),
 )
 
@@ -278,4 +282,7 @@ data class EditorState(
      */
     val patternSteps: Int = 16,
     val patternStepsMax: Int = 64,
+    /** Edit's undo (core StepUndo): what the next undo / redo would put back; null: nothing to undo / redo. */
+    val undoLabel: String? = null,
+    val redoLabel: String? = null,
 )

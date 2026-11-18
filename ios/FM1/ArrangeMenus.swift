@@ -87,7 +87,9 @@ struct OpenMenu: Hashable {
                 return MenuItem(title: name, chip: (Entries.number(p + 1), colour)) { edits.appendAtEnd(t, SongEntry(pattern: p + 1, reps: 1)) }
             }]
         })
-        return [first, [pick]]
+        // all 64 taken: the sheet, where unused ones are cleared (2026-11-17)
+        let manage = MenuItem(title: "Manage patterns…", icon: "square.grid.3x3") { ui.patternsSheet = .manage }
+        return [first, free ? [pick] : [pick, manage]]
     }
 
     /// Pattern (0...63) → the tracks whose lists name it.

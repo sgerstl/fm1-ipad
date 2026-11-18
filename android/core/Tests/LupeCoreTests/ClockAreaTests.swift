@@ -7,7 +7,8 @@ import Testing
 /// The clock reference and the launch countdowns (Scott's play test, 2026-11-14) on FakeSkiff's demo while it plays:
 /// the reference run forward stays on the session's count, a pass bar from the row's ticks matches the session's, a
 /// waiting pad, mute and scene carry the pulse they land on, and the readout's bar stays within its bars.
-@Suite(.serialized) @MainActor struct ClockAreaTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct ClockAreaTests {
     final class Box { var writes = true; var log: [String] = [] }
 
     func playing(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {

@@ -191,10 +191,12 @@ final class EditorUI {
         guard let i = a.firstIndex(of: "-sound-panel"), i + 1 < a.count, let f = SoundFamily(rawValue: a[i + 1]) else { return nil }
         return SoundPanelState(family: f)
     }()
-    var projectsOpen = false
+    var projectsOpen = LaunchArgs.all.contains("-projects")
     /// The pad last cleared (batch item 13: no confirm, an Undo strip instead), offered for undo until the next change:
     /// valid while the song store's undo stack is as deep as it was right after the clear.
     var padClear: PadClear?
+    /// A confirmation on the app strip (Messages.swift), 4 s.
+    var confirmation: AppConfirmation?
     /// The pad being dragged (Pads), for the edge wells (EdgeWells): its centre and track; nil when none is.
     var padDrag: PadDragShow?
     /// A duplicated Timeline block sprouting into its place (TimelineSprout).
@@ -204,7 +206,7 @@ final class EditorUI {
     var padDragSize: CGSize = .zero
     /// The phone's Mix pop-up (GLO's pages, board 77), and its Settings sheet (from the song-name menu).
     var phoneSettingsOpen = LaunchArgs.all.contains("-settings")
-    /// The phone's Patterns sheet (board 79): to manage the pool, or to pick a kept pattern for a pad. (-patterns opens it)
+    /// The Patterns sheet (board 79; the iPhone's frame, the iPad's page sheet): to manage the pool, or to pick a kept pattern for a pad. (-patterns opens it)
     var patternsSheet: PatternsSheetMode? = LaunchArgs.all.contains("-patterns") ? .manage : nil
     /// When a swipe up from the foot of the Song tab last moved the divider: the pad or scene key the swipe began on
     /// drops the tap its lift makes (Scott, 2026-11-07: the zone is the scene row's own keys).
@@ -251,7 +253,7 @@ struct PadClear: Equatable {
     var entry: Int
     var what: String           // "pattern 02", "REST"
     var depth: Int             // the store's undo stack right after the clear
-    var stripGone = false      // the strip has left (8 s); Undo clear stays in the pad's menu until the next change
+    var stripGone = false      // the app strip's Undo was dismissed or replaced; Undo clear stays in the pad's menu until the next change
     var before: [SongEntry] = []   // the track's list as it was (undo puts it back: the entry, its REPS, chain, sound)
     var kept: Int? = nil           // a pattern kept on the FM-1 for the undo (P1's route); cleared when the undo ends
     var keptAll: [Int] = []        // every pattern kept (a Timeline delete can keep several)

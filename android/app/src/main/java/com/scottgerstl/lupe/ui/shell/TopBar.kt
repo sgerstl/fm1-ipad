@@ -1,5 +1,15 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.foundation.background
+
+import androidx.compose.foundation.shape.RoundedCornerShape
+
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +53,8 @@ import com.scottgerstl.lupe.ui.theme.Dur
 import com.scottgerstl.lupe.ui.theme.LupeCrossfade
 import com.scottgerstl.lupe.ui.theme.LupeType
 import com.scottgerstl.lupe.ui.theme.Tok
+import com.scottgerstl.lupe.ui.theme.Shape
+import androidx.compose.ui.unit.sp
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 
 private fun TopState.tempoText(): String = if (tempo % 1.0 == 0.0) tempo.toInt().toString() else "%.1f".format(tempo)
@@ -50,54 +62,58 @@ private val LaunchQuantize.word get() = name
 private val PlaybackMode.word get() = name
 
 /**
- * The one header line (decision 28, board 73; decision 23's chrome): the project ⌄ as a word and the tabs Pads · Edit · Timeline as
- * underlined words at the left; at the right Loop ⌄, the readout, Record and Play. 48 dp tall; the shell draws the hairline under it.
+ * The one header line, hybrid UI (Scott, 2026-11-17; spec 4.1): the Song menu as a `lifted` pill, the four tabs as connected pills, then flush
+ * right the Bar ⌄ pill (Launch at), the readout, Record (round 48) and Play/Stop (round 56, the view's white key and its largest). 56 tall; the
+ * space between the tabs and Bar grows. At narrow widths it gives way in the spec's order and never drops a tab, Record or Play/Stop:
+ * (1) the song name truncates to 96, (2) the tabs' padding goes 16 → 12, (3) the readout's second line goes (the readout's menu still has the
+ * tempo), (4) the Bar pill tightens to 12/6.
  */
 @Composable
 fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, onTab: (com.scottgerstl.lupe.core.Tab) -> Unit, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf<Menu?>(null) }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth().height(56.dp)) {
+    val give = headerGiveWay(maxWidth.value)
     Row(
-        modifier.fillMaxWidth().height(48.dp),
+        Modifier.fillMaxWidth().height(56.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // FM-1 key: Projects…, Settings, Labs. Later phases fill them in (P5, Labs); none exist yet, so they say so.
+        // the Song menu: Projects…, Settings, Labs and the rest (decision 33's song-name menu)
         Box {
             val projects by core.projects.collectAsStateWithLifecycle()
             val project = top.project.ifEmpty { projects.name.ifEmpty { "FM-1" } }   // the core's top.project stays empty until a save or load; projects knows it
-            HeaderWord({ menu = Menu.Fm1 }, "FM-1 menu, project $project", project, 17, primary = true, textMax = 120.dp)
+            HeaderPill({ menu = Menu.Fm1 }, "Song menu, project $project", project, textMax = if (give >= 1) 96.dp else 140.dp)
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
                 val sheets = LocalSheetHost.current
+                // the song menu (Scott, 2026-11-18: "the menu can be Projects... Settings... Patterns... Firmware..."); Play through the phone is the
+                // header's speaker key now. (Shared effects… left 2026-11-18: the Mix tab's sub-pages cover it; Labs left with the Labs section)
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
-                // the mixer is the Mix tab now; this is the pop-up: the shared delay, reverb, chorus and global (batch item 11)
-                MenuRow("Shared effects…", { menu = null; core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", com.scottgerstl.lupe.core.ScreenPages.GLO[1].first)) }, sub = "Delay, reverb, chorus, global")
-                val firmwareHost = com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost.current
-                val fw by core.firmware.collectAsStateWithLifecycle()
-                MenuRow("FM-1 firmware…", { menu = null; firmwareHost?.info = true }, sub = com.scottgerstl.lupe.ui.firmware.firmwareLine(fw))
-                MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
-                MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
+                MenuRow("Settings…", { menu = null; sheets.show(SheetKind.Settings) })
                 // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too
                 val poolNow by core.patterns.collectAsStateWithLifecycle()
                 MenuRow("Patterns…", { menu = null; sheets.showPatterns() }, sub = if (poolNow.kept > 0) "${poolNow.kept} kept · ${poolNow.unused} unused" else "The FM-1's 64 pattern numbers")
-                // Play through the phone (as the iPhone's "Play through the iPhone"): the FM-1's USB audio to the phone's output
-                com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { through ->
-                    MenuDivider()
-                    MenuRow("Play through the phone", { menu = null; through.choose(!through.enabled) }, checked = through.enabled,
-                        sub = if (through.enabled) through.summary else "The FM-1's sound on the phone's speaker or headphones")
-                }
+                val firmwareHost = com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost.current
+                val fw by core.firmware.collectAsStateWithLifecycle()
+                MenuRow("Firmware…", { menu = null; firmwareHost?.info = true }, sub = com.scottgerstl.lupe.ui.firmware.firmwareLine(fw))
                 val demo = LocalDemo.current
                 if (demo.inDemo) { MenuDivider(); MenuRow("Leave the demo", { menu = null; demo.leave() }, sub = "Back to looking for your FM-1") }
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }
             }
         }
-        Spacer(Modifier.width(16.dp))
-        // the tabs, in the header line (decision 28): Pads · Edit · Timeline
-        Tabs(tab, onTab)
-        Spacer(Modifier.weight(1f))
-        // the right cluster: Loop ⌄ beside the tempo it belongs with, then the readout, Record, Play (decision 29)
-        // Launch: how a launch waits (Loop Bar Beat Now), and what is waiting
+        Spacer(Modifier.width(12.dp))
+        // the tabs: Pads · Edit · Timeline · Mix, connected pills
+        Tabs(tab, onTab, padH = if (give >= 2) 12.dp else 16.dp)
+        // the space that grows (a mock bug once left the room at the far right instead)
+        Spacer(Modifier.weight(1f).width(12.dp))
+        // Play through the phone: the speaker key, left of the Launch pill and in its style (Scott, 2026-11-18); its messages go to the strip
+        com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { through ->
+            ThroughKey(through)
+            ThroughMessages(through)
+            Spacer(Modifier.width(12.dp))
+        }
+        // Launch at: the Bar ⌄ pill, outlined; the waiting count as a small disc on it
         Box {
-            HeaderWord({ menu = Menu.Launch }, "Launch quantize, ${top.launch.word}" + if (top.waiting > 0) ", ${top.waiting} waiting" else "", top.launch.word, 14, primary = false,
-                sub = if (top.waiting > 0) "${top.waiting} waiting" else null)
+            HeaderPill({ menu = Menu.Launch }, "Launch at ${top.launch.word}" + if (top.waiting > 0) ", ${top.waiting} waiting" else "", top.launch.word, outlined = true,
+                padStart = if (give >= 4) 12.dp else 16.dp, padEnd = if (give >= 4) 6.dp else 12.dp, badge = if (top.waiting > 0) "${top.waiting}" else null)
             LupeMenu(menu == Menu.Launch, { menu = null }) {
                 MenuHeading("Launch at")
                 LaunchQuantize.entries.forEach { q ->
@@ -109,23 +125,22 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 else MenuRow("Nothing waiting", {}, enabled = false)
             }
         }
-        Spacer(Modifier.width(4.dp))
-        // Readout: bar · beat, tempo; opens tempo and Loop · Song · Once
+        Spacer(Modifier.width(12.dp))
+        // Readout: bar · beat over the tempo; opens the tempo slide and Loop · Song · Once (Android's menu: which popup the phones keep is phone-header I6, open)
         Box {
             Column(
                 Modifier
-                    .width(60.dp).defaultMinSize(minHeight = 48.dp)
+                    .defaultMinSize(minWidth = 64.dp, minHeight = 48.dp)
                     .semantics(mergeDescendants = true) {
                         role = Role.Button
                         contentDescription = "Bar ${top.bar}, beat ${top.beat}, ${top.tempoText()} beats per minute, ${top.mode.word}. Opens tempo and playback mode"
                     }
-                    .clickable { menu = Menu.Readout }
-                    .padding(end = 2.dp),
+                    .clickable { menu = Menu.Readout },
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.Center,
             ) {
-                BasicText("${top.bar}·${top.beat}", style = LupeType.number)
-                BasicText(if (top.mode == PlaybackMode.Loop) "${top.tempoText()} BPM" else "${top.tempoText()} ${top.mode.word.uppercase()}", style = LupeType.small, maxLines = 1)
+                BasicText("${top.bar}·${top.beat}", style = LupeType.number.copy(fontSize = 26.sp, lineHeight = 26.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+                if (give < 3) BasicText("${top.tempoText()} bpm · ${top.mode.word}", style = LupeType.small.copy(color = Tok.text2Raised), maxLines = 1)
             }
             LupeMenu(menu == Menu.Readout, { menu = null }, alignEnd = true, width = 240.dp) {
                 // the tempo is a value you slide (decision 10: no steppers anywhere); double tap puts it back to what it was when the menu opened
@@ -138,20 +153,33 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
                 }
             }
         }
-        Spacer(Modifier.width(4.dp))
-        // REC: a ring (outline) with the red dot. On, it latches: the circle fills REC red and the dot goes dark (6:1).
-        RoundButton({ core.send(Intent.Rec) }, "Record", lit = top.rec, litColour = Tok.rec, role = Role.Switch, state = if (top.rec) "On" else "Off") { _ ->
-            val lit = animatedFloat(if (top.rec) 1f else 0f, Dur.STATE)
-            Canvas(Modifier.size(14.dp)) { drawCircle(lerp(Tok.rec, Tok.onColour, lit.value)) }
+        // a played phrase on offer (FREE TAKE), as a chip beside Record when Settings › Offer played phrases is Chip (Scott, 2026-11-18)
+        TakeChip(core)
+        Spacer(Modifier.width(12.dp))
+        // Record: round 48, `lifted` with the red dot (22); latched, it fills REC red and the dot goes dark (shape: the dot never moves)
+        TransportKey({ core.send(Intent.Rec) }, "Record", Shape.record, primary = false, lit = top.rec, role = Role.Switch, state = if (top.rec) "On" else "Off") { fg ->
+            Canvas(Modifier.size(22.dp)) { drawCircle(fg) }
         }
-        Spacer(Modifier.width(4.dp))
-        // Play: a ring with the triangle; filled white with a dark stop square while playing
-        RoundButton({ core.send(if (top.playing) Intent.Stop else Intent.Play) }, if (top.playing) "Stop" else "Play", lit = top.playing, litColour = Tok.text) { fg ->
+        Spacer(Modifier.width(8.dp))
+        // Play/Stop: round 56, the white key; the icon is the state (▶ stopped, ■ playing)
+        TransportKey({ core.send(if (top.playing) Intent.Stop else Intent.Play) }, if (top.playing) "Stop" else "Play", Shape.playStop, primary = true) { fg ->
             val stop = animatedFloat(if (top.playing) 1f else 0f, Dur.STATE)
-            PlayStopIcon(stop.value, fg)
+            PlayStopIcon(stop.value, fg, iconSize = if (top.playing) 20.dp else 22.dp)
         }
-
     }
+    }
+}
+
+/**
+ * How far the header gives way at [widthDp] (spec 4.1): 0 none, then each step in order. The row as drawn needs about 760; the steps win
+ * about 44, 32, 0 (height only: the readout's width is its number) and 10. Never a tab, Record or Play/Stop.
+ */
+internal fun headerGiveWay(widthDp: Float): Int = when {
+    widthDp >= 790f -> 0
+    widthDp >= 750f -> 1
+    widthDp >= 720f -> 2
+    widthDp >= 700f -> 3
+    else -> 4
 }
 
 private enum class Menu { Fm1, Launch, Readout }
@@ -178,5 +206,43 @@ private fun FakeMenu(core: FakeLupeCore, close: () -> Unit) {
     MenuRow("Bottom: editor", { core.showBottom(com.scottgerstl.lupe.core.BottomPage()); close() })
     listOf("ENV" to "ENV", "LFO" to "LFO", "FX" to "REVERB").forEach { (fam, page) ->
         MenuRow("Bottom: $fam page", { core.showBottom(com.scottgerstl.lupe.core.BottomPage(com.scottgerstl.lupe.core.BottomKind.Page, fam, page)); close() })
+    }
+}
+
+
+/**
+ * The FM-1's FREE TAKE offer as a chip by Record (Scott, 2026-11-18): a track-colour dot and the note count. It scales in once on the spring and
+ * doesn't pulse; a newer offer changes the count; it goes when the offer expires or is taken. A tap opens the picker (Keep that). It covers nothing.
+ */
+@Composable
+private fun TakeChip(core: com.scottgerstl.lupe.core.LupeCore) {
+    val phone = com.scottgerstl.lupe.ui.slide.LocalPhoneSettings.current
+    val take by core.freeTake.collectAsStateWithLifecycle()
+    val offer = take.offer?.takeIf { phone.takeOffer == com.scottgerstl.lupe.ui.slide.PhoneSettings.TAKE_CHIP && !it.refused }
+    var last by remember { mutableStateOf<com.scottgerstl.lupe.core.TakeOffer?>(null) }
+    if (offer != null) last = offer
+    val reduce = com.scottgerstl.lupe.ui.theme.LocalReduceMotion.current
+    val inT by com.scottgerstl.lupe.ui.theme.springFloat(if (offer != null) 1f else 0f, if (offer != null) 380 else 150, if (offer != null) 0.3f else 0f, spring = !reduce && offer != null)
+    val shown = last ?: return
+    if (inT <= 0.01f && offer == null) return
+    val messages = LocalMessages.current
+    val colour = Tok.track[(shown.track - 1).coerceAtLeast(0) % Tok.track.size]
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val press by com.scottgerstl.lupe.ui.theme.pressScale(pressed, reduce)
+    Spacer(Modifier.width(8.dp))
+    Row(
+        Modifier.height(32.dp)
+            .graphicsLayer { val k = if (reduce) 1f else inT.coerceIn(0f, 1.2f); scaleX = k * press; scaleY = k * press; alpha = inT.coerceIn(0f, 1f) }
+            .clip(RoundedCornerShape(50)).background(Tok.held)
+            .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = "Played phrase on track ${shown.track}, ${shown.notes} note${if (shown.notes == 1) "" else "s"}. Double-tap to keep it" }
+            .clickable(source, null, enabled = offer != null) {
+                if (shown.canStart) core.send(com.scottgerstl.lupe.core.TakeStart) else messages.refuse("The FM-1 can't open its picker from here. Press SHIFT + SAVE on the FM-1 to keep it.")
+            }
+            .padding(start = 10.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(10.dp).background(colour, androidx.compose.foundation.shape.CircleShape))
+        BasicText("${shown.notes}", style = LupeType.number.copy(fontSize = 15.sp, lineHeight = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1)
     }
 }

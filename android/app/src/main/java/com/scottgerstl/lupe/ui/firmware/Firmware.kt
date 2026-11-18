@@ -11,6 +11,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -132,7 +134,7 @@ fun firmwareLine(fw: FirmwareState): String {
     val name = firmwareName(fw) ?: return "What the FM-1 runs, and Skiff-Lupe"
     val offer = fw.offer
     return when (offer?.kind) {
-        null -> if (fw.running != null) "$name · up to date" else name
+        null -> if (fw.running != null && name.startsWith("Skiff-Lupe")) "$name · up to date" else name   // (stock Skiff after Not now: just its name)
         "install", "update" -> "$name · Skiff-Lupe available"
         "finish" -> "$name · waiting to finish an install"
         else -> name
@@ -219,7 +221,11 @@ private fun Modifier.heightCap(): Modifier = this.then(Modifier.heightIn(max = 2
 
 @Composable
 private fun CardKey(title: String, primary: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) =
-    Key(onClick, title, minTarget = 48.dp, on = primary, enabled = enabled) { fg -> KeyLabel(title, fg, style = LupeType.key.copy(fontSize = 15.sp)) }
+    // (sized to the label, 16 dp each side, at least 88 wide: a fixed 48 dp key cut "Not now" and "Install Skiff-Lupe 2.5.1"
+    // to "Not…" and "Inst…" on the Pixel 7, 2026-11-16)
+    Key(onClick, title, Modifier.widthIn(min = 88.dp).width(IntrinsicSize.Max), minTarget = 48.dp, on = primary, enabled = enabled, fill = true) { fg ->
+        KeyLabel(title, fg, Modifier.padding(horizontal = 16.dp), style = LupeType.key.copy(fontSize = 15.sp))
+    }
 
 /** The offer: what the FM-1 runs and what Lupe can do about it, in the core's words; Install (to the confirm) or Not now (14 days). */
 @Composable

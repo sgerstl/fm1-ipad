@@ -28,6 +28,15 @@ public final class PhoneCore {
     var pickedLane: String?
     var copiedStep: SynthStep?
     var notesIn = 0
+    /// The FM-1's notes sounding now, by track (0…5, the channel Skiff sends on): Edit lights its piano edge and lane keys from them
+    /// (Scott, 2026-11-17). Its keys, and while playing its sequencer's notes too (NOTES OUT ALL).
+    var keysHeld: [Set<Int>] = Array(repeating: [], count: 6)
+    /// Edit's undo history (StepUndo.swift): a pattern's edits, newest last, and what was undone, by pattern.
+    var stepUndos: [String: [StepUndoEntry]] = [:]
+    var stepRedos: [String: [StepUndoEntry]] = [:]
+    var openUndo: StepUndoEntry?
+    var undoLabelNext: String?
+    var undoAfterTask: Task<Void, Never>?
     /// P5's screen-local state (P5Areas.swift): the Mix section on screen, Lupe's solos, the Sounds browser's target
     /// and the engine browsed, a project op going on.
     var mixSection = "mixer"
@@ -37,10 +46,15 @@ public final class PhoneCore {
     var soundsEntry: Int?
     var soundsViewing: Int?
     var projectBusy = false
+    /// Phone projects (PhoneProjects.swift): whether the music changed since it was last read for or written from a phone
+    /// project file. nil until one was, this run (the screen then can't tell, so it counts as changed).
+    var phoneEdited: Bool? { didSet { if phoneEdited != oldValue { pokeAreas(["projects"]) } } }
     /// Notes sounding from playNote, each with its safety note-off (NoteEntry.swift).
     var auditions: [Int: Task<Void, Never>] = [:]
     /// The firmware install (Firmware.swift): the link's ports and hold, where the app keeps files, and its state.
     public var firmwareLink: FirmwareLink?
+    /// Runs before Retry restarts the Session: the Android link gives it a fresh connection over the open ports (LinkGate.renew).
+    public var onRetry: (() -> Void)?
     public var appStorage: URL?
     /// Release files beside the app, for a build that carries them (the tests: the repository's firmware/releases).
     public var firmwareLocalReleases: URL?
@@ -53,6 +67,9 @@ public final class PhoneCore {
     var fwRunning: String?
     var fwIdentity: String?
     var fwSeen: DeviceIdentity?
+    /// Watch rounds in a row a waiting update loader didn't answer: its "finish" offer holds until 3 (one missed
+    /// handshake made the card vanish while the FM-1 still waited, on the Pixel 7, 2026-11-16).
+    var fwLoaderMisses = 0
     var fwBackup: String?
     var fwInUpdateMode = false
     var fwDownloads = false
@@ -77,6 +94,8 @@ public final class PhoneCore {
     /// Quiet time after a stop or a change before the stored patterns are read (the iPad's pads: 3 s).
     static var picturesQuiet: TimeInterval = 3
     private var picturesTask: Task<Void, Never>?
+    /// How many refusals have gone to the screen: an edit refused on the spot doesn't end an undo (PadClearUndo.swift).
+    var refusalsSaid = 0
     /// When the read-only notice last went to the screen (Notice.swift).
     var readOnlySaidAt = Date.distantPast
     /// The page lag's timing (LagTrace.swift), opened by pickPage and goHome.
@@ -109,9 +128,18 @@ public final class PhoneCore {
         // The FM-1's keys play its sound and never write from the phone (decision 5 revised, Scott 2026-11-14: "the
         // fm1 keys should work just like they do on the ipad"). The notes are only counted, for the debug screen.
         s.onDeviceNote = { [weak self] e in
-            guard let self, e.on else { return }
+            guard let self else { return }
+            let t = Int(e.channel)
+            if self.keysHeld.indices.contains(t) {
+                let before = self.keysHeld[t]
+                if e.on { self.keysHeld[t].insert(Int(e.note)) } else { self.keysHeld[t].remove(Int(e.note)) }
+                if self.keysHeld[t] != before { self.pokeAreas(["keys"]) }
+            }
+            guard e.on else { return }
             self.notesIn += 1; self.pokeAreas(["diag"])
         }
+        // Any edit, here or on the FM-1, since a phone project was read or written (the iPad's ProjectStore.noteEdit)
+        s.onEdit = { [weak self] in if self?.phoneEdited == false { self?.phoneEdited = true } }
         areas = [
             // marks the screen's changes in an open lag trace (the optimistic one, then the FM-1's reply or push)
             AreaWatch(name: "screenTrace", build: { [unowned self] in
@@ -159,6 +187,11 @@ public final class PhoneCore {
             AreaWatch(name: "timeline", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.timelineArea()) : nil }, publish: publish),
             AreaWatch(name: "automation", build: { [unowned self] in self.session.isConnected ? AreaJSON.encode(self.automationArea()) : nil }, publish: publish),
             AreaWatch(name: "diag", build: { [unowned self] in AreaJSON.encode(self.diagArea()) }, publish: publish),
+            // the FM-1's sounding notes by track; nothing while unlinked (a lost note-off doesn't stay lit across a reconnect)
+            AreaWatch(name: "keys", build: { [unowned self] in
+                if !self.session.isConnected { for i in self.keysHeld.indices { self.keysHeld[i] = [] } }
+                return AreaJSON.encode(KeysArea(tracks: self.keysHeld.map { $0.sorted() }))
+            }, publish: publish),
         ]
         for a in areas {
             a.trace = { [weak self] name, ms, bytes, published in
@@ -265,11 +298,17 @@ public final class PhoneCore {
     func pokeAreas(_ names: [String]) { poke(names) }
     /// The named areas built and published at once (AreaWatch.now).
     /// An event, not a watched state: sent as it happens (Notice.swift).
-    func publishNotice(_ n: NoticeArea) { publish("notice", AreaJSON.encode(n)) }
+    func publishNotice(_ n: NoticeArea) {
+        if n.kind == .refusal { refusalsSaid += 1 }
+        publish("notice", AreaJSON.encode(n))
+    }
+    /// An event area (`transfer`): sent as it happens, never compared with the last one.
+    func publishEvent(_ area: String, _ json: String) { publish(area, json) }
     func publishNow(_ names: [String]) { for n in names { areas.first { $0.name == n }?.now() } }
 
     public func stop() {
         session.onDeviceNote = nil
+        session.onEdit = nil
         runTask?.cancel(); runTask = nil
         clockTask?.cancel(); clockTask = nil
         projectTask?.cancel(); projectTask = nil
@@ -325,7 +364,20 @@ public final class PhoneCore {
 
     /// One intent from Compose, as JSON.
     public func handle(json: String) {
-        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) || handleFirmwareJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
+        // the next change to the song ends an open undo, unless it was refused on the spot (PadClearUndo.swift)
+        if let edit = songEdit(json) {
+            let said = refusalsSaid
+            defer { endUndos(after: edit, refusedNow: refusalsSaid != said) }
+            dispatch(json)
+        } else {
+            dispatch(json)
+        }
+    }
+
+    private func dispatch(_ json: String) {
+        if handleStepUndoJSON(json) { return }
+        noteUndoable(json)
+        if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handleProjectTransferJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) || handleFirmwareJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor
             if let p = try P5Intent.decode(json) { handle(p); return }        // P5's mix, sounds, projects
@@ -340,6 +392,7 @@ public final class PhoneCore {
             // Session looks again every second on its own; retry restarts the loop at once (a wrong-firmware
             // FM-1 otherwise waits 3 s between looks).
             runTask?.cancel()
+            onRetry?()
             let s = session
             runTask = Task { await s.run() }
         case .play, .stop:

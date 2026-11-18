@@ -5,7 +5,8 @@ import Testing
 
 /// AndroidTransport and LinkGate against bytes shaped the way Android delivers them: arbitrary chunks,
 /// clock bytes inside frames. The FM-1 side comes from SloopKit's own frames (Frame.encode), not invented.
-@Suite struct AndroidTransportTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.timeLimit(.minutes(3))) struct AndroidTransportTests {
     final class Sent: @unchecked Sendable {
         let lock = NSLock(); var frames: [[UInt8]] = []
         func add(_ f: [UInt8]) { lock.withLock { frames.append(f) } }
@@ -71,6 +72,43 @@ import Testing
         gate.readOnly = true                          // the default: the connection comes wrapped in the guard
         gate.opened()
         #expect(gate.makeTransport() is GuardedTransport)
+    }
+
+    /// The sleep bug (Scott on the Pixel, 2026-11-18): the Session started over (Retry) while the FM-1 stayed plugged in. The gate's one
+    /// connection was already handed out, so the new Session got nothing, for ever. renew() gives it a fresh one over the open ports.
+    @Test func renewGivesARestartedSessionAFreshConnection() async {
+        let gate = LinkGate(send: { _ in })
+        gate.readOnly = false
+        gate.renew()                                  // nothing open: nothing to renew
+        #expect(gate.makeTransport() == nil)
+        let first = gate.opened()
+        #expect(gate.makeTransport() === first)
+        #expect(gate.makeTransport() == nil)          // the restarted Session's ask, before the fix
+        gate.renew()
+        #expect(first.isFinished)                     // the old Session's stream ends
+        let second = gate.makeTransport()
+        #expect(second != nil && second !== first && gate.state == .open)
+        gate.hold(true)                               // the installer has it: renew leaves it alone
+        gate.renew()
+        #expect(gate.makeTransport() == nil)
+    }
+
+    /// The same, end to end: a Session restarted over the gate (what Retry does) reaches INFO again with the ports never closed.
+    @MainActor @Test func aRestartedSessionReconnectsOverOpenPorts() async throws {
+        let sent = Sent()
+        let gate = LinkGate(send: { sent.add($0) })
+        let session = DeviceSession(transport: { gate.makeTransport() })
+        var run = Task { await session.run() }
+        gate.opened()
+        for _ in 0..<60 where sent.frames.isEmpty { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(!sent.frames.isEmpty)
+        run.cancel()                                  // Retry: the run starts over
+        gate.renew()
+        let before = sent.frames.count
+        run = Task { await session.run() }
+        defer { run.cancel() }
+        for _ in 0..<60 where sent.frames.count == before { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(sent.frames.dropFirst(before).first.flatMap(Frame.decode)?.cmd == Cmd.info)
     }
 
     @Test func bytesReachTheOpenConnectionOnly() async {

@@ -201,6 +201,8 @@ public func startCore(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ ra
         // the firmware installer's ports are the link's, and it takes the FM-1 from the Session while it writes
         c.firmwareLink = FirmwareLink(ports: gate, hold: { gate.hold($0) },
                                       mayProbe: { gate.deviceName.map { !LinkGate.isEditorDevice(name: $0) } ?? false })
+        // Retry (the disconnected card's Try again, a re-plug) restarts the Session; it needs a fresh connection if the ports stayed open
+        c.onRetry = { gate.renew() }
         core = c
         c.start()
     }

@@ -542,8 +542,9 @@ struct ForkOfferCard: View {
                 Text("This FM-1 runs \(f). " + Self.withoutLink).bodyText(primary: true)
                 Text("Skiff-Lupe 2.5.1 is Skiff 2.5.1 with that link added; everything else stays as it is.").bodyText()
             case .newerSkiff(let f):
-                Text("This FM-1 runs \(f). " + Self.withoutLink).bodyText(primary: true)
-                Text("Installing goes back to Skiff-Lupe 2.5.1: what \(f) added (CAST) goes away until Skiff-Lupe catches up.").bodyText(primary: true)
+                // (Scott's wording, 2026-11-16: the benefits first, the step back once; the same text as Android's)
+                Text("This FM-1 runs \(f). Lupe works with it, but Skiff-Lupe, a custom build of Skiff, turns on all of Lupe’s features. The most important is the screen link, which keeps the FM-1 and Lupe fully linked in what they show and in their controls. Press a button or turn a knob on either one, and the other follows.").bodyText(primary: true)
+                Text("Skiff-Lupe is built on Skiff 2.5.1, so installing it goes back from \(f.replacingOccurrences(of: "Skiff ", with: "")), and CAST goes. Your projects stay, and Lupe backs them up first. It takes about a minute.").bodyText()
             case .sloop(let f):
                 Text("This FM-1 runs \(f). Lupe works with Skiff now: songs, the Timeline and the screen link, which keeps Lupe and the FM-1 on the same page.").bodyText(primary: true)
                 Text(Self.sloopProjects).bodyText()
@@ -553,9 +554,11 @@ struct ForkOfferCard: View {
                 Text("This FM-1 runs \(FirmwareOfferCard.name(f)). Lupe can’t connect to it at all. Skiff-Lupe 2.5.1 is Skiff, a firmware for the FM-1 with six tracks and songs, plus Lupe’s screen link.").bodyText(primary: true)
             }
             // (SLOOP and M-VAVE's own: Lupe can't connect, so there's nothing to back up through; the card says so above)
+            if case .newerSkiff = from {} else {
             Text(backsUp ? "Lupe backs up your projects to Files first. Installing takes about a minute; you can put stock V15 back any time from FM-1 firmware… in the song-name menu."
                          : "Installing takes about a minute; you can put stock V15 back any time from FM-1 firmware… in the song-name menu.")
                 .bodyText()
+            }
         } actions: {
             CardKey(title: "Not now") { centre.snooze(from) }
                 .accessibilityHint("Asks again in \(FirmwareCentre.snoozeDays) days. FM-1 firmware… in the song-name menu has it meanwhile")

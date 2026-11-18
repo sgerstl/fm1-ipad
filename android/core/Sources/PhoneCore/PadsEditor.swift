@@ -55,6 +55,13 @@ extension PhoneCore {
             if let pc = passClock(t) { row.passTicks = pc.ticks; row.passStartTick = pc.start }
             switch perf?.staged[safe: t] ?? PerformState.Staged.none { case .mute: row.mutePending = "mute"; case .unmute: row.mutePending = "unmute"; case .none: break }
             row.soloPending = store?.soloWaiting[t] != nil
+            // steps that no pattern holds yet: where the FM-1 will keep them (the pad shows "New" there until the list does)
+            let cur = list?.entryOn ?? 0
+            let onPattern = entries[safe: cur].map { $0.kind != .empty } ?? false
+            if !onPattern, s.tracks[t].steps.contains(where: { $0.isOn }) {
+                row.newAt = (entries[safe: cur]?.kind == .empty) ? cur : entries.firstIndex { $0.kind == .empty }
+            }
+            row.recording = s.playing && (s.armedTracks >> t) & 1 == 1
             let waits = row.mutePending != "none" || row.soloPending || entries.contains { $0.play == .waiting }
             if waits { row.launchTick = launchTick(t) }
             rows.append(row)
@@ -154,7 +161,7 @@ extension PhoneCore {
         // the playhead is the `playhead` area's (ClockArea.swift): this area doesn't change while a pattern plays
         let playhead = -1
         let scaleName = Music.scales[safe: tr.scale]?.name.lowercased() ?? ""
-        return EditorArea(
+        var area = EditorArea(
             track: t + 1, trackName: tr.displayName,
             entry: String(UnicodeScalar(UInt8(65 + max(0, min(25, entry))))),
             pattern: list?.entries[safe: entry]?.pattern ?? 0,
@@ -164,6 +171,10 @@ extension PhoneCore {
             lanes: lanes, lane: lane, laneValues: laneValues,
             maxNotes: kit ? 0 : Self.maxStepNotes, kitLanes: kit ? Self.laneShort : [], kitNotes: kit ? Music.skiffLaneNotes : [],
             patternSteps: max(1, min(s.stepCount, tr.length)), patternStepsMax: s.stepCount)
+        let uk = undoKey(t)
+        area.undoLabel = stepUndos[uk]?.last?.label ?? openUndo.flatMap { $0.key == uk && !$0.touched(self.session).isEmpty ? $0.label : nil }
+        area.redoLabel = stepRedos[uk]?.last?.label
+        return area
     }
 }
 

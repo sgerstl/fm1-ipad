@@ -91,6 +91,11 @@ public struct PadsArea: Codable, Equatable, Sendable {
         public var soloPending = false
         /// The pulse this track's launch point comes on (its waiting pad, mute or solo lands there); nil with no clock.
         public var launchTick: Double? = nil
+        /// Steps on no pattern yet (recorded onto a track with no pattern): the entry the FM-1 will keep them as, 0-based, when it is
+        /// next stopped and idle (Skiff 2.5.1 bank.c trk_keep / trk_name: the entry it is on if that's empty, else the first empty one).
+        public var newAt: Int? = nil
+        /// The track is armed and the transport runs: it is recording now (into the entry it is on, or into `newAt`).
+        public var recording = false
     }
     public struct Scene: Codable, Equatable, Sendable {
         public var stored: Bool; public var current: Bool
@@ -175,6 +180,9 @@ public struct EditorArea: Codable, Equatable, Sendable {
     /// The pattern's step count (the FM-1's LENGTH, 1…`patternStepsMax`); setPatternSteps sets it.
     public var patternSteps = 16
     public var patternStepsMax = 64
+    /// Edit's undo (StepUndo.swift, Scott 2026-11-18): what the next undo and redo would put back; nil: nothing to undo / redo.
+    public var undoLabel: String? = nil
+    public var redoLabel: String? = nil
 }
 
 // MARK: diag
@@ -257,4 +265,10 @@ public enum PhoneIntent: Equatable, Sendable {
 enum AreaJSON {
     static let encoder: JSONEncoder = { let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]; return e }()
     static func encode<T: Encodable>(_ v: T) -> String { String(decoding: (try? encoder.encode(v)) ?? Data("{}".utf8), as: UTF8.self) }
+}
+
+
+/// The FM-1's notes sounding now, a list a track (1…6 at 0…5): its keys, and while playing its sequencer's notes.
+public struct KeysArea: Codable, Equatable, Sendable {
+    public var tracks: [[Int]]
 }

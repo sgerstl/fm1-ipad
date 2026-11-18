@@ -71,7 +71,7 @@ class FakeLupeCore(
     // the pattern pool (board 79): 52 of 64 kept, twelve unused; "FM-1: all 64 patterns taken" in the fake menu fills it
     private var pool: List<PoolPattern> = FakePool.initial()
     private var poolFull = false
-    /** The track as it was before a block was deleted, for ten seconds (batch item 13). */
+    /** The track as it was before a block was deleted, until the next edit (batch item 13). */
     private val blockUndo = mutableMapOf<ClearedPad, TimelineTrack>()
     private val _patterns = MutableStateFlow(FakePool.state(pool, false))
     override val patterns: StateFlow<PatternsState> = _patterns
@@ -87,6 +87,8 @@ class FakeLupeCore(
     }
     /** The FM-1 refusing something, as the real one does (its reason, for the screen). */
     fun refuse(reason: String) { _notice.value = CoreNotice(_notice.value.seq + 1, refusalWords(reason)) }
+    /** A result the screen doesn't already show, as the real core sends it: a confirmation, gone after 4 s (Scott, 2026-11-17, messages rule). */
+    private fun confirm(text: String) { _notice.value = CoreNotice(_notice.value.seq + 1, text, kind = NoticeKind.Confirmation) }
     /** For looking at the full-pool case: the fake says no pattern number is free, and refuses New pattern as Skiff does. */
     fun fillPool(full: Boolean) { poolFull = full; publishPool() }
     private val _fm1Screen = MutableStateFlow(Fm1ScreenState(key = "HOME"))
@@ -112,6 +114,27 @@ class FakeLupeCore(
     override val playhead: StateFlow<PlayheadState> = _playhead
     override val sounds: StateFlow<SoundsState> = _sounds
     override val projects: StateFlow<ProjectsState> = _projects
+    private val _transfers = kotlinx.coroutines.flow.MutableSharedFlow<TransferEvent>(extraBufferCapacity = 64)
+    override val transfers: kotlinx.coroutines.flow.SharedFlow<TransferEvent> = _transfers
+
+    /** Phone projects without an FM-1: a read gives a small stand-in project, a write steps through its progress, a slot op lands as FakeP5's. */
+    private fun fakeTransfer(t: ProjectTransfer) {
+        scope.launch {
+            kotlinx.coroutines.delay(300)
+            when (t.op) {
+                "read" -> _transfers.emit(TransferEvent(t.id, "done", fingerprint = "fake", skiff = lupeJson.parseToJsonElement(
+                    """{"record":"","patterns":[{"id":1,"data":""},{"id":2,"data":""}],"firmware":"2.5.1"}""")))
+                "write" -> {
+                    for (k in 1..4) { _transfers.emit(TransferEvent(t.id, "progress", progress = k / 4.0)); kotlinx.coroutines.delay(200) }
+                    _projects.update { p -> p.copy(name = t.name.orEmpty().uppercase().take(12), changed = false, slots = p.slots.map { it.copy(current = false) }, phoneEdited = false) }
+                    _transfers.emit(TransferEvent(t.id, "done", fingerprint = "fake"))
+                }
+                "loadSlot" -> { _projects.update { FakeP5.projects(it, ProjectLoad(t.slot ?: 0, confirmed = true)) }; _transfers.emit(TransferEvent(t.id, "done")) }
+                "saveSlot" -> { _projects.update { FakeP5.projects(it, ProjectSaveAs(t.slot ?: 0, t.name ?: it.name, confirmed = true)) }; _transfers.emit(TransferEvent(t.id, "done")) }
+                else -> _transfers.emit(TransferEvent(t.id, "failed", error = "refused"))
+            }
+        }
+    }
 
     private var replay: Job? = null
     private var ticker: Job? = null
@@ -206,6 +229,24 @@ class FakeLupeCore(
     }
 
     override fun send(intent: Intent) {
+        // as the real core (PadClearUndo.swift): the next change to the song ends an open Undo, unless it was refused on the spot
+        val before = _pads.value.clearUndo
+        val edit = before.isNotEmpty() && isSongEdit(intent)
+        val said = _notice.value
+        sendNow(intent)
+        if (edit && (_notice.value == said || _notice.value.kind != NoticeKind.Refusal)) endUndos(before)
+    }
+
+    /** The Undos open before an edit end; the edit's own (a second pad cleared) stays. */
+    private fun endUndos(before: List<ClearedPad>) {
+        val now = _pads.value.clearUndo
+        val own = now.lastOrNull()?.takeIf { now.size > before.size || now != before }
+        val gone = before.filter { it != own }.toSet()
+        gone.forEach { blockUndo.remove(it) }
+        _pads.update { it.copy(clearUndo = it.clearUndo - gone) }
+    }
+
+    private fun sendNow(intent: Intent) {
         when (intent) {
             Intent.Retry -> play("ready")
             Intent.Play -> { setPlaying(true); publishPool() }
@@ -215,7 +256,7 @@ class FakeLupeCore(
                 val gone = pool.filter { it.number in intent.numbers && it.unused }.map { it.number }
                 if (gone.isEmpty()) refuse("Left alone because they are in use or empty: " + intent.numbers.joinToString(", ") { "%02d".format(it) }) else {
                     pool = pool.filter { it.number !in gone }; poolFull = false; publishPool()
-                    refuse("Cleared patterns ${gone.joinToString(" and ") { "%02d".format(it) }}. ${_patterns.value.free} pattern numbers are free.")
+                    confirm("Cleared patterns ${gone.joinToString(" and ") { "%02d".format(it) }}. ${_patterns.value.free} pattern numbers are free.")
                 }
             }
             is RecyclePattern -> { val n = _patterns.value.recycle
@@ -223,8 +264,8 @@ class FakeLupeCore(
                 else if (n == null) refuse("No pattern is unused, so there is nothing to recycle.")
                 else { pool = pool.map { if (it.number == n) it.copy(unused = false, uses = 1, here = listOf(PatternUse(intent.track, intent.entry)), on = listOf(intent.track)) else it }
                     editEntry(intent.track, intent.entry) { PadEntry(PadKind.Pattern, n) }; publishPool()
-                    refuse("Pattern %02d was emptied and put on T${intent.track} pad ${intent.entry + 1}.".format(n)) } }
-            is CopyPattern -> refuse("Pattern %02d was copied to a free number and put on T${intent.track} pad ${intent.entry + 1}.".format(intent.number))
+                    confirm("Pattern %02d was emptied and put on T${intent.track} pad ${intent.entry + 1}.".format(n)) } }
+            is CopyPattern -> confirm("Pattern %02d was copied to a free number and put on T${intent.track} pad ${intent.entry + 1}.".format(intent.number))
             Intent.Rec -> _top.update { it.copy(rec = !it.rec) }
             is Intent.SetTempo -> _top.update { it.copy(tempo = intent.bpm.coerceIn(20.0, 300.0)) }
             is Intent.SetLaunch -> _top.update { it.copy(launch = intent.quantize) }
@@ -244,7 +285,9 @@ class FakeLupeCore(
             is ScreenGoto -> {
                 val pages = ScreenPages.of(intent.screen)
                 val (n, title) = pages.firstOrNull { it.first == intent.page } ?: pages.firstOrNull() ?: return
-                _fm1Screen.value = Fm1ScreenState(key = intent.screen, page = n, title = title)
+                // as the real core: on SEQ › NOTES and FEEL the screen carries the step cursor (screenGoto's own, else where it was)
+                val cur = if (intent.screen == "SEQ" && (n == 41 || n == 42)) intent.cursor ?: _fm1Screen.value.cursor ?: _editor.value.selected else null
+                _fm1Screen.value = Fm1ScreenState(key = intent.screen, page = n, title = title, cursor = cur)
                 // as the real core: the mix area's section follows the FM-1's GLO page by itself
                 if (intent.screen == "GLO") listOf("mixer", "delay", "reverb", "chorus", "global").getOrNull(n - 30)?.let { sec -> _mix.update { FakeP5.mix(it, MixSectionPick(sec)) } }
                 if (intent.screen == "SEQ") _shell.update { it.copy(bottom = BottomPage()) }
@@ -257,15 +300,14 @@ class FakeLupeCore(
             is Intent.PadNew -> if (_pads.value.patternsFree == 0) refuse("All 64 patterns are taken. Clear unused ones to free a number") else padNew(intent.track, intent.entry)
             is Intent.PadSet -> editEntry(intent.track, intent.entry) { it.copy(kind = PadKind.Pattern, pattern = intent.pattern) }
             is ClearUnusedPatterns -> { val p = _pads.value; if (intent.confirmed && p.unused.isNotEmpty()) { val n = p.unused.size
-                _pads.value = p.copy(unused = emptyList(), kept = p.kept - p.unused.toSet(), patternsFree = (p.patternsFree ?: 0) + n); refuse("Cleared $n unused pattern${if (n == 1) "" else "s"}: their numbers are free") } }
+                _pads.value = p.copy(unused = emptyList(), kept = p.kept - p.unused.toSet(), patternsFree = (p.patternsFree ?: 0) + n); confirm("Cleared $n unused pattern${if (n == 1) "" else "s"}: their numbers are free") } }
             is ClearSteps -> {
-                // the notes go and the pad stays; the fake keeps no notes to wipe, so it only records the ten-second Undo (the real core wipes and restores them)
+                // the notes go and the pad stays; the fake keeps no notes to wipe, so it only records the Undo (the real core wipes and restores them)
                 val e = _pads.value.rows.firstOrNull { it.track == intent.track }?.entries?.getOrNull(intent.entry)
                 if (e == null || e.kind != PadKind.Pattern) refuse("T${intent.track} pad ${'A' + intent.entry} has no pattern to clear.")
                 else {
                     val c = ClearedPad(intent.track, intent.entry, e.pattern, kind = "steps")
                     _pads.update { it.copy(clearUndo = it.clearUndo + c) }
-                    scope.launch { kotlinx.coroutines.delay(10_000); _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
                 }
             }
             is PadMove -> {
@@ -286,13 +328,12 @@ class FakeLupeCore(
                 }
             }
             is Intent.PadClear -> {
-                // no confirm (batch item 13): the pad is cleared at once and can come back for ten seconds
+                // no confirm (batch item 13): the pad is cleared at once and can come back until the next edit
                 val e = _pads.value.rows.firstOrNull { it.track == intent.track }?.entries?.getOrNull(intent.entry)
                 editEntry(intent.track, intent.entry) { PadEntry() }
                 if (e != null && e.kind != PadKind.Empty) {
                     val c = ClearedPad(intent.track, intent.entry, if (e.kind == PadKind.Pattern) e.pattern else null)
                     _pads.update { it.copy(clearUndo = it.clearUndo + c) }
-                    scope.launch { kotlinx.coroutines.delay(10_000); _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
                 }
             }
             is UndoClear -> {
@@ -381,7 +422,7 @@ class FakeLupeCore(
                 _shell.update { it.copy(bottom = if (_freeTake.value.picker != null) BottomPage(BottomKind.FreeTake) else if (it.bottom.kind == BottomKind.FreeTake) BottomPage() else it.bottom) }
             }
             is BlockDelete -> {
-                // no confirm (batch item 13): it goes at once and can come back for ten seconds, the track as the delete left it
+                // no confirm (batch item 13): it goes at once and can come back until the next edit, the track as the delete left it
                 val tr = _timeline.value.tracks.firstOrNull { it.track == intent.track }
                 val b = tr?.blocks?.firstOrNull { it.id == intent.block }
                 _timeline.update { FakeP6.timeline(it, intent.copy(confirmed = true)) }
@@ -389,7 +430,6 @@ class FakeLupeCore(
                     val c = ClearedPad(intent.track, intent.block, if (b.kind == "pattern") b.pattern else null, block = true)
                     blockUndo[c] = tr
                     _pads.update { it.copy(clearUndo = it.clearUndo.filter { u -> !(u.block && u.track == c.track) } + c) }
-                    scope.launch { kotlinx.coroutines.delay(10_000); blockUndo.remove(c); _pads.update { it.copy(clearUndo = it.clearUndo - c) } }
                 }
             }
             is BlockMove, is BlockStretch, is BlockSetPattern, is BlockDuplicate, is BlockInsert -> _timeline.update { FakeP6.timeline(it, intent) }
@@ -414,6 +454,7 @@ class FakeLupeCore(
             is MixSectionPick, is SetLevel, is SetPan, is SetReverb, is TrackSolo, is SetMixParam, is SetMixSetting -> _mix.update { FakeP5.mix(it, intent) }
             is SoundsTargetPick, is SoundsView, is PickPreset, is PickUser, ClearEntrySound, is SaveSound, is EraseUser -> _sounds.update { FakeP5.sounds(it, intent) }
             is ProjectLoad, is ProjectSave, is ProjectSaveAs, is ProjectRename -> _projects.update { FakeP5.projects(it, intent) }
+            is ProjectTransfer -> fakeTransfer(intent)
             else -> {}
         }
     }
@@ -635,7 +676,10 @@ class FakeLupeCore(
                         }) }) }
                 recount()
                 // as the real core sends it now: its own small area per step, the editor area's playhead stays -1
-                _playhead.value = PlayheadState(track = _editor.value.track, step = stepCount % model.size, steps = model.size)
+                // with the step's start and next ticks on the demo's own clock (24 a beat, 6 a step), as the real core's playhead area carries them,
+                // so the playhead sweeps and the hits bounce on the demo too
+                _playhead.value = PlayheadState(track = _editor.value.track, step = stepCount % model.size, steps = model.size, direction = 1,
+                    startTick = stepCount * 6.0, nextTick = stepCount * 6.0 + 6.0)
                 // the meters move while it plays: each track near its level, never louder
                 _meters.value = MetersState(_mix.value.rows.mapIndexed { n, r -> if (r.mute) 0.0 else (r.level / 127.0) * (0.55 + 0.45 * kotlin.math.abs(kotlin.math.sin((stepCount + n * 3) * 0.7))) })
             }

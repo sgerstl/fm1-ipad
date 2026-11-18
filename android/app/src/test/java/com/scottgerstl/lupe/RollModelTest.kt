@@ -86,4 +86,75 @@ class RollModelTest {
         val r = Roll.visiblePitches(Roll.scrollYFor(71, 24f), 24f, 288f)
         assertTrue(71 in r && 60 in r); assertTrue(r.first >= 59 && r.last <= 72)
     }
+
+    /** Hybrid UI (Scott, 2026-11-17): with a panel docked a melodic grid pages by 8, and follows the playhead only with Follow on. */
+    @Test fun eightStepPagesBesideADockedPanel() {
+        val view = 480f; val step = view / Roll.PAGE_DOCKED
+        assertEquals(2, Roll.chunks(16, Roll.PAGE_DOCKED)); assertEquals(8, Roll.chunks(64, Roll.PAGE_DOCKED))
+        assertEquals(480f, Roll.maxScroll(16, view, 0f, Roll.PAGE_DOCKED), 0f)        // one page to the right
+        assertEquals(0f, Roll.snap(200f, 16, view, 0f, Roll.PAGE_DOCKED), 0f)          // under half a page: back
+        assertEquals(480f, Roll.snap(260f, 16, view, 0f, Roll.PAGE_DOCKED), 0f)        // over: on to 9–16
+        assertEquals(480f, Roll.follow(8, 0f, step, view, 0f, 16, Roll.PAGE_DOCKED)!!, 0f)   // step 9 plays: page 2
+        assertEquals(null, Roll.follow(3, 0f, step, view, 0f, 16, Roll.PAGE_DOCKED))  // step 4 is in view: nothing moves
+        assertEquals(1, Roll.pageOf(9, Roll.PAGE_DOCKED))
+        // Follow gates 8-step pages; 16-step chunks follow unless a finger moved them a moment ago (as built)
+        assertTrue(Roll.pagesFollow(8, follow = true, recentlyTouched = true))
+        assertFalse(Roll.pagesFollow(8, follow = false, recentlyTouched = false))
+        assertTrue(Roll.pagesFollow(16, follow = false, recentlyTouched = false))
+        assertFalse(Roll.pagesFollow(16, follow = true, recentlyTouched = true))
+        // the minimap shows the bar of 16 holding the page, and its label
+        assertEquals(0, Roll.minimapStart(1, 8)); assertEquals(16, Roll.minimapStart(2, 8)); assertEquals(16, Roll.minimapStart(3, 8))
+        assertEquals("1\u20138", Roll.pageLabel(0, 8, 16)); assertEquals("9\u201312", Roll.pageLabel(1, 8, 12))
+    }
+
+    /** Round 7 (Scott: "you really have to drag it all the way over"): a fling or a fifth of the page turns it. */
+    @Test fun aShortDragOrAFlingTurnsThePage() {
+        val page = 480f; val fling = 1000f
+        assertEquals(0f, Roll.pageTarget(0f, 80f, 0f, page, 16, 8, fling), 0f)            // a sixth: back
+        assertEquals(480f, Roll.pageTarget(0f, 100f, 0f, page, 16, 8, fling), 0f)         // past a fifth: on
+        assertEquals(480f, Roll.pageTarget(0f, 20f, -1200f, page, 16, 8, fling), 0f)      // a quick fling leftward: on, however short
+        assertEquals(0f, Roll.pageTarget(480f, 470f, 1500f, page, 16, 8, fling), 0f)      // flung rightward from page 2: back to 1
+        assertEquals(480f, Roll.pageTarget(480f, 700f, -2000f, page, 16, 8, fling), 0f)   // never past the last page
+        assertEquals(0f, Roll.pageTarget(0f, -150f, 2000f, page, 16, 8, fling), 0f)       // nor before the first
+    }
+    // a page swipe never places, removes or moves anything (Scott, 2026-11-17): the grid's one decision for drum and melodic alike
+    @Test fun gridFingerIsTapSwipeOrDrag() {
+        val slop = 18f; val dwell = 150L
+        assertEquals(null, Roll.move(10f, slop, 40L, dwell, onItem = false))           // still within the slop: may yet be a tap or a hold
+        assertEquals(null, Roll.move(18f, slop, 900L, dwell, onItem = true))
+        assertEquals(Roll.Move.Swipe, Roll.move(40f, slop, 60L, dwell, onItem = false))  // a quick swipe from an empty cell
+        assertEquals(Roll.Move.Swipe, Roll.move(40f, slop, 60L, dwell, onItem = true))   // from a hit or note, too quick to lift it
+        assertEquals(Roll.Move.Swipe, Roll.move(40f, slop, 400L, dwell, onItem = false)) // a slow slide on empty cells still pages
+        assertEquals(Roll.Move.Drag, Roll.move(40f, slop, 150L, dwell, onItem = true))   // pressed on a note, held still, then moved
+        assertEquals(Roll.Move.Drag, Roll.move(40f, slop, 300L, dwell, onItem = true))
+    }
+
+    // a note's right edge resizes it (Scott, 2026-11-17)
+    @Test fun noteEdgeAndResize() {
+        val step = 60f; val inset = 2f
+        val notes = listOf(listOf(60), emptyList(), emptyList(), listOf(60), listOf(60))
+        val lens = listOf(2, 1, 1, 1, 1)
+        assertEquals(0, Roll.edgeAt(notes, lens, 60, 2 * step - inset - 10f, step, inset, 18f, 10f))   // inside the 2-step note's end
+        assertEquals(0, Roll.edgeAt(notes, lens, 60, 2 * step - inset + 8f, step, inset, 18f, 10f))    // a little past it (the next cell is empty)
+        assertEquals(null, Roll.edgeAt(notes, lens, 60, 30f, step, inset, 18f, 10f))                    // the note's body: move and tap
+        assertEquals(null, Roll.edgeAt(notes, lens, 61, 2 * step - inset, step, inset, 18f, 10f))       // another row
+        // step 3's note: its end at 4·60 − 2; the cell after it is taken by step 4's note, so the handle doesn't reach past
+        assertEquals(null, Roll.edgeAt(notes, lens, 60, 4 * step - inset + 6f, step, inset, 18f, 10f))
+        assertEquals(3, Roll.resizeLength(0, 170f, step, 16))
+        assertEquals(1, Roll.resizeLength(0, 5f, step, 16))       // never under one step
+        assertEquals(4, Roll.resizeLength(0, 900f, step, 4))      // never past the core's most
+    }
+
+    // a touch anywhere on a note's body belongs to that note (Scott, 2026-11-17)
+    @Test fun noteBodyOwnsItsCells() {
+        val notes = listOf(listOf(60, 64), emptyList(), emptyList(), listOf(60), emptyList())
+        val lens = listOf(3, 1, 1, 1, 1)
+        assertEquals(0, Roll.noteAt(notes, lens, 60, 0))
+        assertEquals(0, Roll.noteAt(notes, lens, 60, 1))      // the 2nd step of the 3-step note
+        assertEquals(0, Roll.noteAt(notes, lens, 60, 2))      // the 3rd
+        assertEquals(3, Roll.noteAt(notes, lens, 60, 3))      // the next note's own start
+        assertEquals(null, Roll.noteAt(notes, lens, 60, 4))   // empty: no body covers it
+        assertEquals(0, Roll.noteAt(notes, lens, 64, 2))      // a chord: the row decides
+        assertEquals(null, Roll.noteAt(notes, lens, 62, 1))
+    }
 }

@@ -6,7 +6,8 @@ import Testing
 
 /// P5's intents through PhoneCore into FakeSkiff: each reaches the fake as the write the iPad sends for the same thing
 /// and changes its state; anything that loses something waits for the screen's confirm; read-only sends none.
-@Suite(.serialized) @MainActor struct P5IntentTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct P5IntentTests {
     final class Box { var writes = true; var log: [String] = [] }
 
     func connected(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {

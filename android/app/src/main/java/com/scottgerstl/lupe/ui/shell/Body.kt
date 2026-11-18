@@ -1,5 +1,13 @@
 package com.scottgerstl.lupe.ui.shell
 
+import com.scottgerstl.lupe.ui.slide.PhoneSettings
+
+import androidx.compose.ui.layout.boundsInWindow
+
+import androidx.compose.ui.semantics.role
+
+import androidx.compose.ui.semantics.contentDescription
+
 import com.scottgerstl.lupe.core.withPlayhead
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.unit.sp
@@ -67,6 +75,7 @@ import com.scottgerstl.lupe.ui.theme.LupeCrossfade
 import com.scottgerstl.lupe.ui.theme.Tok
 import com.scottgerstl.lupe.ui.theme.animatedFloat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Under the header line (decision 28): one tab at a time, Pads · Edit · Timeline. The FM-1 drives what else shows: a sound page puts its
@@ -104,7 +113,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     // GLO's shared pages (DELAY, REVERB, CHORUS, GLOBAL) are sound pages too (decision 44): the panel's page is made from the core's `mix` area
     val mixNow by core.mix.collectAsStateWithLifecycle()
     val screenLive by core.fm1Screen.collectAsStateWithLifecycle()
-    val gloPage = gloPageState(mixNow, screenLive, pads.selected.track, pads.rows.firstOrNull { it.track == pads.selected.track }?.name?.substringAfter(" · ").orEmpty())
+    // hybrid UI (2026-11-17): GLO's shared pages are the Mix tab's sub-pages now, not the docked panel's (decision 44 superseded by the agreed map)
+    val gloPage: PageState? = null
+    val selName = pads.rows.firstOrNull { it.track == pads.selected.track }?.name?.substringAfter(" · ").orEmpty()
     androidx.activity.compose.BackHandler(enabled = shell.bottom.kind == BottomKind.Page || gloPage != null) { askCore.send(GoHome) }
 
     FollowFm1Screen(shell, core, editUi, touches, phoneAsks)
@@ -136,6 +147,16 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
     LaunchedEffect(shell.tab) { if (shell.tab != tabSeen) { tabSeen = shell.tab; panel.dismiss() } }
     val docked = panel.up && pageKey != null && shell.bottom.kind != BottomKind.FreeTake
     val dockT = animatedFloat(if (docked) 1f else 0f, if (docked) Dur.PANEL else Dur.FINGER, if (docked) EaseOut else EaseIn)
+    // closing the panel (its handle, a swipe, TalkBack's action) does what the close key did (sound-panel B5): it shuts, and the FM-1 goes back to
+    // the tab's own place: GLO's page on Mix, HOME elsewhere
+    val closePanel: () -> Unit = {
+        panel.dismiss()
+        if (linked) {
+            if (shell.tab == Tab.Mix) { val i = com.scottgerstl.lupe.ui.mix.EFFECT_KEYS.indexOf(mixNow.section) + 1
+                askCore.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", com.scottgerstl.lupe.core.ScreenPages.GLO.getOrNull(i.coerceAtLeast(0))?.first)) }
+            else askCore.send(GoHome)
+        }
+    }
     // a Magnifier never outlives its dial: the tab changing or the panel leaving takes it down (Scott's stuck ATTACK overlay)
     val magnifier = com.scottgerstl.lupe.ui.slide.LocalMagnifier.current
     LaunchedEffect(shell.tab, panel.up, shell.bottom.kind) { magnifier?.hideAll() }
@@ -151,7 +172,9 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                 val fm1Family = if (glo) "GLO" else if (soundUp) soundPage0.family else null
                 // a shut panel with the FM-1 already on that family's page: the FM-1 won't change, so the panel is simply shown
                 if (railKeyAction(family, if (docked) soundPage.family else null, fm1Family) == RailKeyAction.Show) { panel.show(); return@SoundKeysRail }
-                if (family == "GLO") { askCore.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", gloKeyTarget(docked && soundPage.family == "GLO", soundPage.page))); return@SoundKeysRail }
+                // GLO opens the Mix tab; pressed again there, it steps GLO's pages (the agreed map, 2026-11-17)
+                if (family == "GLO") { val onMix = shell.tab == Tab.Mix; if (!onMix) askCore.send(Intent.SetTab(Tab.Mix))
+                    askCore.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", gloStep(onMix, screenLive))); return@SoundKeysRail }
                 askCore.send(com.scottgerstl.lupe.core.PickPage(family, railTarget(family, if (docked) soundPage.family else null, soundPage.pages.map { it.index }, soundPage.page)))
             })
         }
@@ -165,17 +188,23 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                             Tab.Pads -> PadsPage(pads, core)
                             Tab.Edit -> Box(Modifier.fillMaxSize()) {
                                 // the grid keeps its step width and scrolls under the docked panel (decision 35, B)
-                                EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = DOCK_W * dockT.value)
+                                // the docked sound panel's width as a target, not its animated width: Edit lays out once when it docks or leaves, and the
+                                // panel slides over as an offset (2026-11-18: reading the animated width re-laid out the shell and Edit every frame)
+                                EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = if (docked) SOUND_DOCK_W else 0.dp)
                                 // the FREE TAKE offer and the landing sit on top of the editor
-                                com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
+                                com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp), showOffer = labs.takeOffer == com.scottgerstl.lupe.ui.slide.PhoneSettings.TAKE_POPUP)
                             }
                             Tab.Timeline -> TimelineSlot(core)
                             Tab.Mix -> { val mix = com.scottgerstl.lupe.ui.mix.rememberMix(core); val meters = core.meters.collectAsStateWithLifecycle()
-                                com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = DOCK_W * dockT.value) }
+                                // Mixer · Effects: the shared pages as effect cards (direction C, 2026-11-17), replacing the bus dials
+                                val launch = com.scottgerstl.lupe.ui.mix.MixLaunch(core.pads.collectAsStateWithLifecycle(), core.clock.collectAsStateWithLifecycle())
+                                androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.mix.LocalMixLaunch provides launch) {
+                                    com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = if (docked) SOUND_DOCK_W else 0.dp, graphics = labs.showGraphics) } }
                         }
                     }
                 }
-                SoundPanel(dockT.value, docked, soundPage, soundCore, notice, { panel.dismiss() }, Modifier.align(Alignment.TopEnd).countTouches(onSoundTouch), graphics = labs.showGraphics)
+                // its slide read only in drawing (no recomposition per frame); the touch count goes inside, after the layer that moves it
+                SoundPanel({ dockT.value }, docked, soundPage, soundCore, notice, closePanel, Modifier.align(Alignment.TopEnd), graphics = labs.showGraphics, onTouch = onSoundTouch)
             }
             if (rail && !labs.railLeft) { Spacer(Modifier.width(4.dp)); railNode() }
         }
@@ -201,57 +230,150 @@ private fun SoundKeysRail(open: String?, onKey: (String) -> Unit) {
 }
 
 /**
- * The tabs' pages slide in the tab's direction, and the track thread travels with them (the tab-thread mockup, Scott 2026-11-14): going right
- * (Pads → Edit → Timeline) the old page leaves to the left and the new one comes in from the right, and back the other way; ease-out over
- * [ms] (Labs, default 380), the outgoing page done at 85 % of the time. The selected track's band (its colour muted, decision 31) never leaves the
- * screen: it eases from its rectangle on the old tab (Pads: the track's row; Edit: the step row; Timeline: the lane) to the one on the new tab,
- * on the same curve, landing with the incoming page. No scale, no overshoot. With Reduce Motion the pages cross-fade (150 ms) and the outline
- * cross-fades between its two places.
+ * The tab change (Scott, 2026-11-17: tab motion "b and c"). **B, fade-through:** the outgoing page fades out in 90 ms (ease-in) while the
+ * incoming one fades in over 210 ms (ease-out) and settles from 98 % to full size on the spatial spring. **C, Edit grows out of the pad:** when
+ * Edit was opened from a pad's or a Timeline block's "Edit steps" ([LocalEditGrow] holds its bounds), a surface grows from that pad to the page
+ * (panel fill, a 2 dp edge in its colour, the pad's colour over it fading in the first ~120 ms; spatial spring, bounce 0.15, ~420 ms; the corner
+ * from the pad's to the page's), Edit's content fading in over the last ~200 ms and Pads fading out under it. The selected track's band
+ * (decision 29) still travels between its places on both tabs, over the fade. Reduce Motion: a plain 150 ms cross-fade.
  */
 @Composable
-private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: Int, content: @Composable (Tab) -> Unit) {
+internal fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: Int, onMotionStart: () -> Unit = {},
+    content: @Composable (Tab) -> Unit) {
     val reduce = LocalReduceMotion.current
     val anchors = remember { TrackAnchors() }
+    // each tab's page as movable content (2026-11-18, measured: every switch built both pages in its first frame, 50–212 ms): the page showing
+    // moves into the outgoing slot when a switch starts instead of being built again; the incoming one is built once
+    val contentNow by androidx.compose.runtime.rememberUpdatedState(content)
+    val pageHolders = remember { mutableMapOf<Tab, TabPage>() }
+    val pages = remember { mutableMapOf<Tab, @Composable (Boolean) -> Unit>() }
+    fun pageOf(t: Tab): @Composable (Boolean) -> Unit = pages.getOrPut(t) {
+        val holder = pageHolders.getOrPut(t) { TabPage(t, anchors) }
+        androidx.compose.runtime.movableContentOf { travelling: Boolean ->
+            CompositionLocalProvider(LocalTabPage provides holder, LocalTabTravelling provides travelling) { contentNow(t) }
+        }
+    }
+    val grow = LocalEditGrow.current
     var shown by remember { mutableStateOf(tab) }
     var from by remember { mutableStateOf<Tab?>(null) }
     var fromRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    val t = remember { androidx.compose.animation.core.Animatable(1f) }
+    var origin by remember { mutableStateOf<EditOrigin?>(null) }
+    var shrink by remember { mutableStateOf(false) }   // Edit → Pads: Edit shrinks back into the pad (the reverse of C)
+    var pagerBox by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val t = remember { androidx.compose.animation.core.Animatable(1f) }       // the band's travel, 0…1
+    val outA = remember { androidx.compose.animation.core.Animatable(1f) }    // the outgoing page
+    val inA = remember { androidx.compose.animation.core.Animatable(1f) }     // the incoming page
+    val inS = remember { androidx.compose.animation.core.Animatable(1f) }     // the incoming page's scale (B)
+    val g = remember { androidx.compose.animation.core.Animatable(1f) }       // the grow (C), 0 pad … 1 page
+    val m = com.scottgerstl.lupe.ui.theme.hybridMotion
     LaunchedEffect(tab, reduce) {
         if (tab == shown) return@LaunchedEffect
         from = shown; fromRect = anchors.rects[shown]; shown = tab
-        t.snapTo(0f)
-        com.scottgerstl.lupe.ui.theme.unscaled { t.animateTo(1f, androidx.compose.animation.core.tween(if (reduce) Dur.STATE else ms, easing = EaseOut)) }
-        from = null
-    }
-    val dir = if ((from?.ordinal ?: shown.ordinal) <= shown.ordinal) 1f else -1f
-    Box(Modifier.fillMaxSize().clipToBounds()) {
-        // the thread while the pages move: the selected track's band easing from the old place to the new, behind both pages (their own
-        // bands are hidden while they slide); with Reduce Motion, the two places cross-fading
-        val a = fromRect; val b = anchors.rects[shown]
-        if (from != null && (a != null || b != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
-            val p = t.value; val band = trackBand(colour)
-            fun fill(r: androidx.compose.ui.geometry.Rect, alpha: Float) = drawRoundRect(band.copy(alpha = alpha), Offset(r.left, r.top),
-                androidx.compose.ui.geometry.Size(r.width, r.height), androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()))
-            when {
-                reduce || a == null || b == null -> { a?.let { fill(it, 1f - p) }; b?.let { fill(it, p) } }   // nothing travels: each fades where it stands
-                else -> fill(androidx.compose.ui.geometry.Rect(a.left + (b.left - a.left) * p, a.top + (b.top - a.top) * p, a.right + (b.right - a.right) * p, a.bottom + (b.bottom - a.bottom) * p), 1f)
+        // C: from a menu's "Edit steps", or (round 12, Scott: "the same animation as when edit is selected from the long press menu") the Edit tab
+        // tapped on Pads, out of the selected track's pad when it's in view; back to Pads, into it. Otherwise fade-through.
+        val menuOrigin = grow.take()
+        val box = pagerBox?.takeIf { it.isAttached }?.boundsInWindow()
+        fun inView(o: EditOrigin?) = o?.takeIf { box != null && it.rect.left >= box.left - 1f && it.rect.right <= box.right + 1f && it.rect.top >= box.top - 1f && it.rect.bottom <= box.bottom + 1f }
+        shrink = !reduce && tab == Tab.Pads && from == Tab.Edit && inView(grow.selectedPad) != null
+        origin = when {
+            reduce -> null
+            tab == Tab.Edit -> menuOrigin ?: if (from == Tab.Pads) inView(grow.selectedPad) else null
+            shrink -> inView(grow.selectedPad)
+            else -> null
+        }
+        t.snapTo(0f); outA.snapTo(1f); inA.snapTo(0f); inS.snapTo(if (reduce || origin != null) 1f else 0.98f); g.snapTo(if (shrink) 1f else 0f)
+        // the clock starts after the switch's first frame has drawn: through that heavy frame the outgoing page stays fully there and the incoming
+        // at 0, and then the whole transition plays (it used to start counting at that frame, so a 100 ms frame ate half the fade)
+        awaitFirstFrame()
+        onMotionStart()
+        com.scottgerstl.lupe.ui.theme.unscaled {
+            kotlinx.coroutines.coroutineScope {
+                when {
+                    reduce -> {
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(Dur.STATE)) }
+                        launch { inA.animateTo(1f, androidx.compose.animation.core.tween(Dur.STATE)) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(Dur.STATE)) }
+                    }
+                    shrink -> {
+                        // the reverse: Edit fades quickly, the surface shrinks from the page into the pad, Pads fades in under it
+                        launch { g.animateTo(0f, com.scottgerstl.lupe.ui.theme.lupeSpring(420, 0.15f)) }
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(100, easing = EaseIn)) }
+                        launch { kotlinx.coroutines.delay(60); inA.animateTo(1f, androidx.compose.animation.core.tween(260, easing = EaseOut)) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(420, easing = EaseOut)) }
+                    }
+                    origin != null -> {
+                        launch { g.animateTo(1f, com.scottgerstl.lupe.ui.theme.lupeSpring(420, 0.15f)) }
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(300, easing = EaseIn)) }
+                        launch { kotlinx.coroutines.delay(220); inA.animateTo(1f, androidx.compose.animation.core.tween(200, easing = EaseOut)) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(420, easing = EaseOut)) }
+                    }
+                    else -> {
+                        // fade-through, out 90 and in 210 together, the new page from 0.98 on the spatial spring (Scott tried a staggered Material
+                        // version and speeds in Labs, 2026-11-18, and locked in this one: "Lock it in")
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(90, easing = EaseIn)) }
+                        launch { inA.animateTo(1f, androidx.compose.animation.core.tween(210, easing = EaseOut)) }
+                        launch { inS.animateTo(1f, m.spatial()) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(maxOf(210, minOf(ms, 380)), easing = EaseOut)) }
+                    }
+                }
             }
         }
+        from = null; origin = null; shrink = false
+    }
+    Box(Modifier.fillMaxSize().clipToBounds().onGloballyPositioned { pagerBox = it }) {
         from?.let { old ->
             androidx.compose.runtime.key(old) {
-                val page = remember { TabPage(old, anchors) }
-                Box(Modifier.fillMaxSize().graphicsLayer { val out = (t.value / 0.85f).coerceAtMost(1f); if (reduce) alpha = 1f - t.value else { translationX = -dir * size.width * out; alpha = 1f - 0.4f * out } }
-                    .onGloballyPositioned { page.box = it }.clearAndSetSemantics { }) {
-                    CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides true) { content(old) }
+                val page = pageHolders.getOrPut(old) { TabPage(old, anchors) }
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = outA.value }.onGloballyPositioned { page.box = it }.clearAndSetSemantics { }) {
+                    pageOf(old)(true)      // moved here from the incoming slot, not built again
+                }
+            }
+        }
+        // C: the surface growing out of the pad (under the incoming page), or shrinking back into it (over Pads, landing on the pad)
+        val surface: @Composable () -> Unit = {
+            val o = origin
+            if (o != null && from != null) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+                val box = pagerBox?.takeIf { it.isAttached } ?: return@Canvas
+                val tl = box.windowToLocal(o.rect.topLeft); val br = box.windowToLocal(o.rect.bottomRight)
+                val k = g.value
+                val l = tl.x + (0f - tl.x) * k; val tp = tl.y + (0f - tl.y) * k
+                val r = br.x + (size.width - br.x) * k; val b = br.y + (size.height - br.y) * k
+                val rad = (o.radiusDp + (20f - o.radiusDp) * k.coerceIn(0f, 1f)).dp.toPx()
+                val shape = androidx.compose.ui.geometry.CornerRadius(rad)
+                val sz = androidx.compose.ui.geometry.Size((r - l).coerceAtLeast(1f), (b - tp).coerceAtLeast(1f))
+                // growing: it hands over to Edit's content as that fades in; shrinking: it fades as it reaches the pad
+                val fade = if (shrink) (k / 0.25f).coerceIn(0f, 1f) else (1f - inA.value)
+                val tint = if (shrink) fade * (1f - (k / 0.3f).coerceIn(0f, 1f)) else fade * (1f - (k / 0.3f).coerceIn(0f, 1f))
+                drawRoundRect(Tok.panel.copy(alpha = fade), Offset(l, tp), sz, shape)
+                drawRoundRect(o.colour.copy(alpha = tint), Offset(l, tp), sz, shape)
+                drawRoundRect(o.colour.copy(alpha = fade), Offset(l + 1.dp.toPx(), tp + 1.dp.toPx()), androidx.compose.ui.geometry.Size(sz.width - 2.dp.toPx(), sz.height - 2.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(rad - 1.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+            }
+        }
+        if (!shrink) surface()
+        // the band, travelling between its places over the fade (both pages hide their own while it does)
+        val a = fromRect; val bb = anchors.rects[shown]
+        if (from != null && (a != null || bb != null)) androidx.compose.foundation.Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+            val p = t.value; val band = trackBand(colour)
+            // the band keeps each place's own corners while it travels (nested corners, 2026-11-18): it lands without changing shape
+            val ra = from?.let { anchors.radii[it] } ?: (10.dp.toPx() to 10.dp.toPx()); val rb = anchors.radii[shown] ?: (10.dp.toPx() to 10.dp.toPx())
+            fun fill(rr: androidx.compose.ui.geometry.Rect, alpha: Float, rad: Pair<Float, Float>) = drawBand(band.copy(alpha = alpha), Offset(rr.left, rr.top), androidx.compose.ui.geometry.Size(rr.width, rr.height), rad.first, rad.second)
+            when {
+                reduce || a == null || bb == null -> { a?.let { fill(it, 1f - p, ra) }; bb?.let { fill(it, p, rb) } }
+                else -> {
+                    val r = androidx.compose.ui.geometry.Rect(a.left + (bb.left - a.left) * p, a.top + (bb.top - a.top) * p, a.right + (bb.right - a.right) * p, a.bottom + (bb.bottom - a.bottom) * p)
+                    // each end's radius resolved for its own place's height, then blended
+                    val (al, ar) = bandRadii(a.height, ra.first, ra.second); val (bl, br) = bandRadii(bb.height, rb.first, rb.second)
+                    fill(r, 1f, (al + (bl - al) * p) to (ar + (br - ar) * p))
                 }
             }
         }
         androidx.compose.runtime.key(shown) {
-            val page = remember { TabPage(shown, anchors) }
-            Box(Modifier.fillMaxSize().graphicsLayer { if (from != null) { if (reduce) alpha = t.value else translationX = dir * size.width * (1f - t.value) } }.onGloballyPositioned { page.box = it }) {
-                CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides (from != null)) { content(shown) }
+            val page = pageHolders.getOrPut(shown) { TabPage(shown, anchors) }
+            Box(Modifier.fillMaxSize().graphicsLayer { if (from != null) { alpha = inA.value; scaleX = inS.value; scaleY = inS.value } }.onGloballyPositioned { page.box = it }) {
+                pageOf(shown)(from != null)
             }
         }
+        if (shrink) surface()
     }
 }
 
@@ -278,11 +400,17 @@ private fun TimelineSlot(core: LupeCore) {
  * it. It is a pane of its own for TalkBack, with Close as an action.
  */
 @Composable
-private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true) {
+internal fun SoundPanel(t: () -> Float, visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true,
+    onTouch: () -> Unit = {}) {
+    val swipe = rememberPanelSwipe(visible)
     val reduce = LocalReduceMotion.current
     var last by remember { mutableStateOf(page) }
     if (visible) last = page
-    if (t <= 0.001f) return
+    // built once it has been shown and kept (opening again builds nothing); closed, it waits a whole width off to the right, where no finger
+    // lands, with nothing before its layer that could take a touch at its resting spot (the 31a8f7a lesson)
+    var shown by remember { mutableStateOf(false) }
+    if (visible) shown = true
+    if (!shown) return
     // GLO's pages are neutral grey (decision 44), the others the track's colour
     val glo = last.family == "GLO"
     val colour = if (glo) Tok.text3 else trackColour(last.track)
@@ -296,29 +424,30 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
     // It stands out from the page: the track's colour muted, 35 % over the page. Computed for all six track colours (2026-11-14): white text is
     // 6.7:1 or better on it, the raised grey of the labels 4.5:1 or better (lime is the least, 4.52), the track's own colour (the dials' arcs)
     // 3.6:1 or better. At 40 % the labels fall under 4.5:1 on yellow and lime, so 35 it is. A line in the track's colour marks its left edge.
-    val surface = androidx.compose.ui.graphics.lerp(Tok.page, colour, PANEL_TINT)
-    androidx.compose.foundation.layout.Column(
-        modifier.width(DOCK_W).fillMaxHeight()
-            .graphicsLayer { alpha = if (reduce) t else 1f; if (!reduce) translationX = (1f - t) * size.width; shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(12.dp.toPx()); clip = true }
-            .background(surface)
-            .drawBehind { drawRect(colour, size = androidx.compose.ui.geometry.Size(1.5.dp.toPx(), size.height)) }
-            // a swipe to the right that no dial took shuts it; taps on the panel don't reach what is under it
-            .pointerInput(Unit) {
-                var total = 0f
-                detectHorizontalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 32.dp.toPx()) onDismiss() }) { change, dx -> change.consume(); total += dx }
-            }
+    Box(
+        modifier.width(SOUND_DOCK_W).fillMaxHeight()
+            // hybrid UI (spec 4.3): `panel`, its left corners at the sheet radius, beside the grid rather than over it; no border, no track tint
+            // its slide-in and, on top, the finger's drag (2026-11-18): it follows the swipe from the first movement
+            // the swipe outside the moving layer (fixed coordinates), only while open (2026-11-18)
+            .then(if (visible) Modifier.panelSwipe(swipe, onDismiss) else Modifier)
+            .graphicsLayer { val tt = t(); alpha = if (reduce) tt else 1f; translationX = stepPanelX(tt, size.width, swipe.offset.value, reduce); if (tt <= 0.001f) alpha = 0f }
+            // its rounded leading corners drawn, not clipped: the content is padded clear of them, and an unclipped layer hit-tests the same everywhere
+            .background(Tok.panel, RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet))
+            .countTouches(onTouch)
+            .then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
+            // a swipe to the right that no dial took moves it and, let go far enough or flung, shuts it; taps on the panel don't reach what is under it
             .pointerInput(Unit) { detectTapGestures { } }
             .semantics {
                 paneTitle = "Sound page ${last.family}"; isTraversalGroup = true
                 customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the sound panel") { onDismiss(); true })
             }
-            .padding(12.dp),
     ) {
-        SoundDials(last, core, Modifier.fillMaxWidth().height(110.dp), notice, trailing = {
-            Key(onDismiss, "Close the sound panel", width = 32.dp, height = 28.dp, minTarget = 32.dp) { fg ->
-                androidx.compose.foundation.Canvas(Modifier.size(9.dp)) { val w = 1.5.dp.toPx(); drawLine(fg, Offset(0f, 0f), Offset(size.width, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round); drawLine(fg, Offset(size.width, 0f), Offset(0f, size.height), w, androidx.compose.ui.graphics.StrokeCap.Round) }
-            }
-        })
+        // the grab handle (Scott, 2026-11-17: no close key; EN 301 549 / WCAG 2.5.1: a swipe needs a single-tap way too): tap it to close, drag it to swipe
+        // in its own gutter (2026-11-18): 24 dp from the panel's edge, the bar centred, 8 dp clear before the first dial
+        PanelHandle("Close the sound panel", onDismiss, Modifier.align(Alignment.CenterStart), fullHeight = true, barCentred = true)
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(start = STEP_GUTTER, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
+        // the header: the page and, at its right end, "3 of 7" (the close key is gone)
+        SoundDials(last, core, Modifier.fillMaxWidth().height(110.dp), notice, count = true)
         // the tiles and the picture share what height is left. A page whose knob picks from a list of names (MOD's routes, LANES, SOUND,
         // OPERATOR's six) keeps Lupe's tappable tiles; the FM-1's own picture (decision 46) goes under them only while it gets at least 2×
         // the FM-1's pixels (276 px) in its half, otherwise the tiles have the space alone: they're the controls, the picture repeats them
@@ -351,6 +480,7 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
             }
         }
     }
+    }
 }
 
 /** How much of the track's colour the pop-up's surface carries over the page (see the contrast note in [SoundPanel]). */
@@ -376,6 +506,7 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
     val link by core.link.collectAsStateWithLifecycle()
     val linked = link.phase == LinkPhase.Ready
     LaunchedEffect(linked) { if (!linked) place.reset() }
+    LaunchedEffect(shell.tab) { place.noteTab(shell.tab) }
     var settledKey by remember { mutableStateOf("") }
     LaunchedEffect(screen.key, screen.page, screen.title, linked) {
         if (!linked) return@LaunchedEffect
@@ -383,7 +514,7 @@ private fun FollowFm1Screen(shell: ShellState, core: LupeCore, editUi: EditUi, t
         // short settle so a fast run of presses on the FM-1 isn't answered page by page
         delay(if (screen.key != settledKey) 300 else 120)
         settledKey = screen.key
-        place.follow(screen, PlaceNow(shell.tab, editUi.lane, sheets.open == SheetKind.Mix, sounds.request != null, sheets.open == SheetKind.Projects)).forEach { a ->
+        place.follow(screen, PlaceNow(shell.tab, editUi.lane, sheets.open == SheetKind.Mix, sounds.request != null, sheets.open == SheetKind.Projects, homeAsked = PhoneHome.recent())).forEach { a ->
             when (a) {
                 is PlaceAction.Tab -> core.send(Intent.SetTab(a.tab))
                 is PlaceAction.Lane -> editUi.lane = a.on
@@ -414,10 +545,23 @@ private fun <T> followed(actual: T, pin: Boolean, pause: Boolean, touches: Int, 
     return m.shown to m.frozen
 }
 
+/** When the phone itself last sent the FM-1 HOME: the HOME that comes back moves no tab (a panel closed on Edit stays on Edit). */
+internal object PhoneHome { @Volatile var askedAt = 0L; const val WINDOW_MS = 1500L
+    fun recent(): Boolean = android.os.SystemClock.uptimeMillis() - askedAt < WINDOW_MS }
+
+/**
+ * A change the phone itself asks for: it is never held by Labs' Pause following. The sound keys' page pick (PickPage) and GLO's ScreenGoto were
+ * missing (measured 2026-11-18: with Pause on, FX tapped within 3 s of a touch on Edit, closing the step panel for one, waited out the 3 s hold).
+ */
+internal fun isPhoneAsk(intent: Intent): Boolean =
+    intent is com.scottgerstl.lupe.core.PickPage || intent is com.scottgerstl.lupe.core.ScreenGoto || intent is com.scottgerstl.lupe.core.PickRoute ||
+        intent is com.scottgerstl.lupe.core.PickTile || intent is com.scottgerstl.lupe.core.MixSectionPick || intent == GoHome
+
 /** The core as the sound page sees it: a change the phone asks for tells the follower first. */
 private class AskingCore(private val base: LupeCore, private val asked: () -> Unit) : LupeCore by base {
     override fun send(intent: Intent) {
-        if (intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile || intent is com.scottgerstl.lupe.core.MixSectionPick || intent == GoHome) asked()
+        if (intent == GoHome) PhoneHome.askedAt = android.os.SystemClock.uptimeMillis()
+        if (isPhoneAsk(intent)) asked()
         base.send(intent)
     }
 }
@@ -433,3 +577,31 @@ private class HeldPageCore(private val base: LupeCore, snapshot: PageState) : Lu
         base.send(intent)
     }
 }
+
+/** The GLO key's next page: off the Mix tab, the page the FM-1 last showed there (MIXER at first); on it, the next of GLO's five, round again. */
+internal fun gloStep(onMix: Boolean, screen: com.scottgerstl.lupe.core.Fm1ScreenState): Int {
+    val pages = com.scottgerstl.lupe.core.ScreenPages.GLO.map { it.first }
+    val at = if (screen.key == "GLO") pages.indexOf(screen.page) else -1
+    return if (!onMix) pages[at.coerceAtLeast(0)] else pages[(at + 1).mod(pages.size)]
+}
+
+/**
+ * A docked panel's grab handle (Scott, 2026-11-17; EN 301 549 / WCAG 2.5.1): a 4 × 36 rounded bar in the raised grey, vertically centred on the
+ * panel's leading edge, in a 24 × 48 touch area that takes no header space. A tap closes the panel exactly as the swipe does; a drag on it is the
+ * swipe (the panel's own); it shows the panel can be swiped away. TalkBack: a button named [description].
+ */
+@Composable
+internal fun PanelHandle(description: String, onClose: () -> Unit, modifier: Modifier = Modifier, fullHeight: Boolean = false, barCentred: Boolean = false) {
+    // [fullHeight]: the touch area runs the panel's whole leading edge (the bar stays 36 tall in the middle), so a swipe from the edge always
+    // moves the panel, whatever the tiles beside it take (2026-11-18)
+    Box(
+        modifier.width(24.dp).then(if (fullHeight) Modifier.fillMaxHeight() else Modifier.height(48.dp))
+            .semantics(mergeDescendants = true) { role = androidx.compose.ui.semantics.Role.Button; contentDescription = description }
+            .pointerInput(Unit) { detectTapGestures { onClose() } }
+            .drawBehind { val w = 4.dp.toPx(); val h = 36.dp.toPx(); drawRoundRect(Tok.text2Raised, Offset((size.width - w) / 2 - (if (barCentred) 0f else 4.dp.toPx()), (size.height - h) / 2), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(w / 2)) },
+    )
+}
+
+
+/** Suspends until the frame after next: the switch's first (heavy) frame has been composed, laid out and drawn. */
+internal suspend fun awaitFirstFrame() { repeat(2) { androidx.compose.runtime.withFrameNanos { } } }

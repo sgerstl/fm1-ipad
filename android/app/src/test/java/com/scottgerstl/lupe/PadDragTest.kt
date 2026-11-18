@@ -29,7 +29,7 @@ class PadDragTest {
 
     @Test fun theTopHoldsClearStepsAndDeletePatternSideBySide() {
         val a = EdgeWellsGeometry.rect(EdgeAction.ClearSteps, w, h, 1f); val b = EdgeWellsGeometry.rect(EdgeAction.Delete, w, h, 1f)
-        assertEquals(0f, a.top, 0.01f); assertEquals(52f, a.height, 0.01f); assertEquals(8f, b.left - a.right, 0.01f)
+        assertEquals(0f, a.top, 0.01f); assertEquals(52f, a.height, 0.01f); assertEquals(24f, b.left - a.right, 0.01f)   // 24 apart (Scott, 2026-11-18)
         assertEquals(a.width, b.width, 0.01f); assertEquals(w / 2, (a.left + b.right) / 2, 0.01f)
         assertEquals(EdgeAction.ClearSteps, EdgeWellsGeometry.hot(Offset(a.center.x, 60f), w, h, 1f, feel))
         assertEquals(EdgeAction.Delete, EdgeWellsGeometry.hot(Offset(b.center.x, 60f), w, h, 1f, feel))
@@ -124,5 +124,19 @@ class NearestWellTest {
         val want = if (dTop / 64f < dSide / 96f) EdgeAction.ClearSteps else EdgeAction.Duplicate
         val got = EdgeWellsGeometry.hot(p, w, h, 1f, feel)
         if (dTop <= 64f && dSide <= 96f) assertEquals(want, got)
+    }
+}
+
+/** Round 3: a well's ink is light on `held` and dark on every track colour, and it blends rather than flips. */
+class WellInkTest {
+    @org.junit.Test fun lightOnHeldDarkOnTrackColours() {
+        val ui = com.scottgerstl.lupe.ui.theme.Tok
+        org.junit.Assert.assertEquals(0f, com.scottgerstl.lupe.ui.shell.inkWeight(ui.held), 0.001f)
+        for (c in ui.track) org.junit.Assert.assertEquals(1f, com.scottgerstl.lupe.ui.shell.inkWeight(c), 0.001f)
+        // along the swell the weight only rises: no flip back
+        for (c in ui.track) {
+            var last = 0f
+            for (i in 0..20) { val w = com.scottgerstl.lupe.ui.shell.inkWeight(androidx.compose.ui.graphics.lerp(ui.held, c, i / 20f)); org.junit.Assert.assertTrue(w >= last - 0.001f); last = w }
+        }
     }
 }

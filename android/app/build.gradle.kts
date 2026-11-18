@@ -15,8 +15,9 @@ android {
         applicationId = "com.scottgerstl.lupe"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1-p2-shell"
+        versionCode = 4
+        // Lupe's version, the same on every device: VERSION at the repo root (Scott, 2026-11-17; tools/set-version.sh)
+        versionName = rootProject.file("../VERSION").readText().trim()
     }
 
     buildTypes {
@@ -27,6 +28,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures { compose = true }
+    // Compose UI tests on the JVM (Robolectric): the step panel's open / close / reopen (2026-11-18)
+    testOptions { unitTests.isIncludeAndroidResources = true }
 
     // The fixtures live outside app/ so the Swift side (P1) writes to the same folder: assets/state/*.json
     sourceSets.getByName("main").assets.srcDir("../fixtures")
@@ -47,11 +50,14 @@ val demoFixtures by tasks.registering(Copy::class) {
 }
 tasks.matching { it.name == "mergeDebugAssets" || it.name == "generateDebugAssets" }.configureEach { dependsOn(demoFixtures) }
 
+// The native code's build: debug unless `-PnativeConfig=release` (the public APK: Swift in release mode, stripped).
+val nativeConfig = (findProperty("nativeConfig") as String?) ?: "debug"
+
 // P1: builds the Swift core before Gradle packs native libraries. Swift's own build is incremental.
 val buildSwift by tasks.registering(Exec::class) {
     description = "Builds android/core (LupeNative) for arm64 Android"
     val out = layout.buildDirectory.dir("swift/jniLibs").get().asFile
-    commandLine(rootProject.file("scripts/build-native.sh").path, out.path, "debug")
+    commandLine(rootProject.file("scripts/build-native.sh").path, out.path, nativeConfig)
     outputs.dir(out)
     outputs.upToDateWhen { false }
 }
@@ -59,7 +65,7 @@ val buildSwift by tasks.registering(Exec::class) {
 val buildThrough by tasks.registering(Exec::class) {
     description = "Builds app/src/main/cpp/through (libLupeThrough.so) for arm64 Android"
     val out = layout.buildDirectory.dir("through/jniLibs").get().asFile
-    commandLine(rootProject.file("scripts/build-through.sh").path, out.path, "debug")
+    commandLine(rootProject.file("scripts/build-through.sh").path, out.path, nativeConfig)
     inputs.dir(file("src/main/cpp/through"))
     outputs.dir(out)
 }
@@ -77,4 +83,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation(platform("androidx.compose:compose-bom:2025.09.00"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

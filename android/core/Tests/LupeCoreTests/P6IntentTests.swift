@@ -7,7 +7,8 @@ import Testing
 /// P6's intents through PhoneCore into FakeSkiff: block edits as the iPad's ArrangeEdits (the song store's rewrite),
 /// automation as its motion lanes (MotionPaint, paintMotion), the confirms (decision 16; erasing a pattern; clearing a
 /// lane), and read-only sending none.
-@Suite(.serialized) @MainActor struct P6IntentTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct P6IntentTests {
     final class Box { var writes = true; var log: [String] = [] }
 
     func connected(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {

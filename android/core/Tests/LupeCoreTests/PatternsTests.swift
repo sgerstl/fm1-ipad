@@ -6,7 +6,8 @@ import Testing
 
 /// Managing patterns (board 79) on FakeSkiff: the `patterns` area from POOL and LIST, the stored pictures read only
 /// while stopped and only with the sheet open, and clearPatterns, recyclePattern, copyPattern with their notices.
-@Suite(.serialized) @MainActor struct PatternsTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct PatternsTests {
     final class Box { var writes = true; var notices: [NoticeArea] = []; var log: [String] = [] }
 
     func connected(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {
@@ -145,6 +146,7 @@ import Testing
         let text = try #require(box.notices.last?.text)
         #expect(text.contains(String(format: "%02d and %02d", spare[0], spare[1])) && text.contains("Left alone") && text.contains(String(format: "%02d", used)), "\(text)")
         #expect(fake.poolLen[used - 1] == lens[used - 1])
+        #expect(box.notices.last?.kind == .confirmation, "all asked for went: a confirmation (Scott, 2026-11-17, messages rule)")
         #expect(core.patternsArea()?.patterns.contains { spare.contains($0.number) } == false)
         #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
@@ -178,16 +180,18 @@ import Testing
             Issue.record("recycle: entry \(e) holds \(fake.lists[1][e].p), wanted \(n); emptied \(fake.emptiedPatterns); notices \(box.notices.map(\.text)); log \(box.log.suffix(6))")
         }
         try await wait("said") { box.notices.last?.text.contains("was emptied and put on T2 pad \(e + 1)") == true }
+        #expect(box.notices.last?.kind == .confirmation)
         #expect(core.patternsArea()?.patterns.first { $0.number == n }?.here == [PatternsArea.Use(track: 2, entry: e)])
         // copy: onto an empty entry, a new number
         let e2 = try #require(core.session.skiffSong?.song?.tracks[2].entries.firstIndex { $0.isEmpty })
         core.handle(json: #"{"intent":"copyPattern","number":\#(n),"track":2,"entry":\#(e)}"#)
-        #expect(box.notices.last?.text.contains("isn't empty") == true)
+        #expect(box.notices.last?.text.contains("isn't empty") == true && box.notices.last?.kind == .refusal)
         let before = fake.poolLen.filter { $0 > 0 }.count
         try await idle(core)
         core.handle(json: #"{"intent":"copyPattern","number":\#(n),"track":3,"entry":\#(e2)}"#)
         try await wait("copied") { fake.lists[2][e2].p != 0 && fake.lists[2][e2].p != n && fake.poolLen.filter { $0 > 0 }.count == before + 1 }
         try await wait("said") { box.notices.last?.text.contains("was copied to") == true && box.notices.last?.track == 3 }
+        #expect(box.notices.last?.kind == .confirmation)
         // the pool full: a copy has nowhere to go
         for i in 0..<64 where fake.poolLen[i] == 0 { fake.poolLen[i] = 16 }
         try await wait("full") { core.patternsArea()?.free == 0 }

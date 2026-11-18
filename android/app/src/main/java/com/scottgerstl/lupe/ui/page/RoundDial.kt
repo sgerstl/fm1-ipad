@@ -89,7 +89,7 @@ fun DialFace(label: String, value: String, frac: Float?, colour: Color, on: Floa
                 if (bipolar) { val from = 135f + 135f; drawArc(ring, minOf(from, 135f + 270f * f), kotlin.math.abs(270f * f - 135f).coerceAtLeast(2f), false, tl, sz, style = Stroke(w, cap = StrokeCap.Round)) }
                 else if (f > 0.003f) drawArc(ring, 135f, 270f * f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
             }
-            FittedDialValue(value, if (dim) Tok.text2 else Tok.text)
+            FittedDialValue(value, if (dim) Tok.text2 else Tok.text, key = label)
         }
         Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             if (locked) { Diamond(colour); Box(Modifier.width(4.dp)) }
@@ -155,14 +155,18 @@ fun DeltaDial(
  * then ("GOSPEL" on a WHEEL track) is cut to the letters that fit, as the FM-1 does with its short forms.
  */
 @Composable
-fun FittedDialValue(value: String, color: Color) {
+fun FittedDialValue(value: String, color: Color, key: Any? = null) {
     val tm = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val inner = with(density) { 38.dp.roundToPx() }
     val base = LupeType.number.copy(color = color, textAlign = TextAlign.Center)
     fun fits(t: String, sp: Int) = tm.measure(t, base.copy(fontSize = sp.sp), maxLines = 1, softWrap = false).size.width <= inner
+    // the size only steps down while the dial shows the same control, never back up as the value turns: per control, never per value
+    // (Scott, 2026-11-17: the numbers jumped while a value changed, "-12" at 18 sp and "-120" at 16)
+    var cap by remember(key) { androidx.compose.runtime.mutableIntStateOf(18) }
     var size = 13; var text = value
-    for (sp in 18 downTo 13) if (fits(value, sp)) { size = sp; break }
+    for (sp in cap downTo 13) if (fits(value, sp)) { size = sp; break }
+    if (size < cap) androidx.compose.runtime.SideEffect { cap = size }
     if (!fits(value, size)) { var n = value.length; while (n > 1 && !fits(value.take(n), 13)) n-- ; text = value.take(n) }
     BasicText(text, style = base.copy(fontSize = size.sp, lineHeight = size.sp), maxLines = 1, softWrap = false)
 }

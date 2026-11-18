@@ -194,3 +194,107 @@ class HoldMenuTest {
         assertEquals(5, HoldWheel(500f, 200f, 9, 915f, 412f, true).shown)
     }
 }
+
+/** The hold menu as priority tiles (Scott, 2026-11-17: "C: priority tiles"). */
+class PriorityTilesMenuTest {
+    private fun item(t: String, tile: Boolean = false, group: String? = null, after: Boolean = false, sub: String? = null) =
+        com.scottgerstl.lupe.ui.shell.HoldItem(t, sub = sub, tile = tile, group = group, afterStop = after)
+    // the filled pad's menu while playing, and stopped
+    private fun pad(playing: Boolean) = listOf(
+        item("Edit steps", tile = true), item("Select sound", tile = true, sub = "Pad"), item("Set pattern…", tile = true),
+        item("Play once more", group = "Playback", after = playing, sub = "×4 to ×5"), item("Play once less", group = "Playback", after = playing, sub = "×4 to ×3"),
+        item("Duplicate after", group = "Arrange", after = playing), item("Move earlier", group = "Arrange", after = playing), item("Move later", group = "Arrange", after = playing),
+        item("Clear steps", group = "Remove", sub = "Keeps the pad"), item("Delete pattern", group = "Remove", after = playing),
+    )
+
+    @org.junit.Test fun playingFoldsEverythingThatWaitsIntoOneRow() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(true), 412f - 24f)
+        org.junit.Assert.assertEquals(listOf(0, 1, 2), lay.tiles)
+        org.junit.Assert.assertEquals(1, lay.columns.size)                                   // fits: one column, no scroll
+        val groups = lay.columns.single()
+        org.junit.Assert.assertEquals(listOf(8), groups[0].rows)                             // Clear steps, the one thing available now
+        org.junit.Assert.assertTrue(groups[1].waiting)
+        org.junit.Assert.assertEquals(listOf(3, 4, 5, 6, 7, 9), groups[1].rows)
+        org.junit.Assert.assertEquals("6 more after Stop", com.scottgerstl.lupe.ui.shell.afterStopTitle(6))
+        org.junit.Assert.assertEquals("Play once ±, Duplicate, Move, Delete", com.scottgerstl.lupe.ui.shell.afterStopNames(pad(true), groups[1].rows))
+    }
+
+    @org.junit.Test fun stoppedShowsTheGroupsInTwoColumnsWhenTooTall() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), 412f - 24f)
+        val all = lay.columns.flatten()
+        org.junit.Assert.assertEquals(listOf("Playback", "Arrange", "Remove"), all.map { it.name })
+        org.junit.Assert.assertTrue(all.none { it.waiting })
+        org.junit.Assert.assertEquals(2, lay.columns.size)                                    // 84 + 3 groups would pass the screen
+        org.junit.Assert.assertEquals(1, com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), 900f).columns.size)
+    }
+
+    @org.junit.Test fun unfoldingTheWaitingRowMovesItToAColumnOfItsOwnWhenItWouldOverflow() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(true), 412f - 24f, expanded = true)
+        org.junit.Assert.assertEquals(2, lay.columns.size)
+        org.junit.Assert.assertTrue(lay.columns[1].single().waiting)
+    }
+
+    @org.junit.Test fun opensBesideTheFingerAndKeepsTwelveFromEveryEdge() {
+        val p = com.scottgerstl.lupe.ui.shell.holdMenuPlace(600f, 200f, 914f, 412f, 304f, 220f, menusRight = false)
+        org.junit.Assert.assertTrue(p.left); org.junit.Assert.assertEquals(600f - 36f - 304f, p.x, 0.01f); org.junit.Assert.assertEquals(158f, p.y, 0.01f)
+        val near = com.scottgerstl.lupe.ui.shell.holdMenuPlace(150f, 200f, 914f, 412f, 304f, 220f, menusRight = false)
+        org.junit.Assert.assertFalse(near.left)
+        val low = com.scottgerstl.lupe.ui.shell.holdMenuPlace(600f, 400f, 914f, 412f, 304f, 220f, false)
+        org.junit.Assert.assertEquals(412f - 12f - 220f, low.y, 0.01f)
+        val tall = com.scottgerstl.lupe.ui.shell.holdMenuPlace(600f, 200f, 914f, 412f, 616f, 380f, false)   // taller than below the header: from the 12 margin
+        org.junit.Assert.assertTrue(tall.y >= 12f && tall.y + 380f <= 412f - 12f)
+        org.junit.Assert.assertTrue(tall.x >= 12f && tall.x + 616f <= 914f - 12f)
+    }
+
+    @org.junit.Test fun stoppedPadMatchesTheMockTilesAndPlaybackLeftArrangeAndRemoveRight() {
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), 412f - 24f)
+        org.junit.Assert.assertEquals(listOf("Playback"), lay.columns[0].map { it.name })
+        org.junit.Assert.assertEquals(listOf("Arrange", "Remove"), lay.columns[1].map { it.name })
+    }
+
+    /** Round 5: the live switch. The tiles never move; Clear steps keeps its key (so it travels); the after-Stop card exists only while playing. */
+    @org.junit.Test fun theLayoutSwitchKeepsTheTilesAndCarriesClearSteps() {
+        val maxH = 412f - 24f
+        val stopped = com.scottgerstl.lupe.ui.shell.menuGeometry(pad(false), com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(false), maxH), false)
+        val playing = com.scottgerstl.lupe.ui.shell.menuGeometry(pad(true), com.scottgerstl.lupe.ui.shell.layoutHoldMenu(pad(true), maxH), false)
+        fun at(g: com.scottgerstl.lupe.ui.shell.MenuGeom, k: String) = g.els.first { it.key == k }
+        for (t in listOf("t:Edit steps", "t:Select sound", "t:Set pattern…")) { org.junit.Assert.assertEquals(at(stopped, t).x, at(playing, t).x, 0f); org.junit.Assert.assertEquals(at(stopped, t).y, at(playing, t).y, 0f) }
+        val a = at(stopped, "r:Clear steps"); val b = at(playing, "r:Clear steps")
+        org.junit.Assert.assertTrue(a.x > b.x)                                   // from the right column to under the tiles
+        org.junit.Assert.assertEquals(com.scottgerstl.lupe.ui.shell.TILE_H + com.scottgerstl.lupe.ui.shell.GROUP_GAP + 4f, b.y, 0.01f)
+        org.junit.Assert.assertTrue(stopped.els.none { it.key == "after" })
+        org.junit.Assert.assertTrue(playing.els.any { it.key == "after" })
+        org.junit.Assert.assertTrue(playing.els.none { it.key == "r:Move earlier" })   // folded, not drawn
+        org.junit.Assert.assertEquals(296f, com.scottgerstl.lupe.ui.shell.MENU_W, 0f)  // three 96 tiles, 4 apart
+        org.junit.Assert.assertEquals(296f, playing.w, 0f)                              // playing, one column: it shrinks toward the finger
+        org.junit.Assert.assertEquals(296f * 2 + 8f, stopped.w, 0f)
+    }
+}
+
+/** No hold menu runs off the bottom (Scott, 2026-11-17: the steps menu stopped at 48 on the Pixel). */
+class MenuFitsTest {
+    private val pixelH = 410f - 2 * com.scottgerstl.lupe.ui.shell.MENU_MARGIN
+
+    @Test fun stepsMenuIsTwoTilesOverAFourByTwoPillGrid() {
+        val items = listOf(HoldItem("One fewer step", tile = true), HoldItem("One more step", tile = true)) +
+            listOf(4, 8, 12, 16, 24, 32, 48, 64).map { HoldItem("$it steps", short = "$it", checked = it == 16, pill = true, group = "Length") }
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(items, pixelH)
+        val geom = com.scottgerstl.lupe.ui.shell.menuGeometry(items, lay, false)
+        assertEquals(1, lay.columns.size)
+        val pills = geom.els.filter { it.kind == com.scottgerstl.lupe.ui.shell.ElKind.Pill }
+        assertEquals(8, pills.size)
+        assertEquals(2, pills.map { it.y }.distinct().size)                  // two rows of four
+        assertTrue(pills.all { it.w >= 44f && it.h >= 40f })
+        assertTrue(geom.h <= pixelH)
+        assertEquals("64 steps", pills.last().item.title)
+    }
+
+    @Test fun aLongListWithNoGroupsTakesASecondColumn() {
+        val items = (1..12).map { HoldItem("Choice $it") }
+        val lay = com.scottgerstl.lupe.ui.shell.layoutHoldMenu(items, pixelH)
+        val geom = com.scottgerstl.lupe.ui.shell.menuGeometry(items, lay, false)
+        assertEquals(2, lay.columns.size)
+        assertTrue(geom.h <= pixelH)
+        assertEquals(12, geom.els.count { it.kind == com.scottgerstl.lupe.ui.shell.ElKind.Row })
+    }
+}

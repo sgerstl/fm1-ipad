@@ -50,19 +50,26 @@ class TraceProgress {
  * right, back along the top (the iPad's TraceOutline). [inset] is half the line's width, so the line sits inside the shape; the corner radius
  * shrinks by it (the nested-corner rule: inner radius = outer radius − the inset).
  */
-fun traceOutline(size: Size, radius: Float, inset: Float): Path {
+fun traceOutline(size: Size, radius: Float, inset: Float): Path = traceOutline(size, radius, radius, radius, radius, inset)
+
+/**
+ * The same outline with each corner its own radius (top left, bottom left, bottom right, top right, in px, the shape's own as it draws), so a
+ * key whose corners differ (the joined Mute · Solo pair) or change (a scene squaring off) is traced on the shape it shows (Scott, 2026-11-17).
+ */
+fun traceOutline(size: Size, tl: Float, bl: Float, br: Float, tr: Float, inset: Float): Path {
     val l = inset; val t = inset; val r = size.width - inset; val b = size.height - inset
-    val c = (radius - inset).coerceAtMost((r - l) / 2).coerceAtMost((b - t) / 2).coerceAtLeast(0f)
+    fun c(x: Float) = (x - inset).coerceAtMost((r - l) / 2).coerceAtMost((b - t) / 2).coerceAtLeast(0f)
+    val a = c(tl); val d = c(bl); val e = c(br); val f = c(tr)
     return Path().apply {
-        moveTo(l + c, t)
-        arcTo(Rect(l, t, l + 2 * c, t + 2 * c), 270f, -90f, false)
-        lineTo(l, b - c)
-        arcTo(Rect(l, b - 2 * c, l + 2 * c, b), 180f, -90f, false)
-        lineTo(r - c, b)
-        arcTo(Rect(r - 2 * c, b - 2 * c, r, b), 90f, -90f, false)
-        lineTo(r, t + c)
-        arcTo(Rect(r - 2 * c, t, r, t + 2 * c), 0f, -90f, false)
-        lineTo(l + c, t)
+        moveTo(l + a, t)
+        if (a > 0f) arcTo(Rect(l, t, l + 2 * a, t + 2 * a), 270f, -90f, false)
+        lineTo(l, b - d)
+        if (d > 0f) arcTo(Rect(l, b - 2 * d, l + 2 * d, b), 180f, -90f, false)
+        lineTo(r - e, b)
+        if (e > 0f) arcTo(Rect(r - 2 * e, b - 2 * e, r, b), 90f, -90f, false)
+        lineTo(r, t + f)
+        if (f > 0f) arcTo(Rect(r - 2 * f, t, r, t + 2 * f), 0f, -90f, false)
+        lineTo(l + a, t)
     }
 }
 
@@ -74,7 +81,10 @@ fun traceOutline(size: Size, radius: Float, inset: Float): Path {
  * takes no touches and says nothing to TalkBack (the thing it sits on says "waiting").
  */
 @Composable
-fun LaunchTrace(left: () -> Double?, colour: Color, radius: Dp, width: Dp, modifier: Modifier = Modifier, base: Float = 0.3f) {
+fun LaunchTrace(left: () -> Double?, colour: Color, radius: Dp, width: Dp, modifier: Modifier = Modifier, base: Float = 0.3f,
+    /** The shape's corners as it draws them now (tl, bl, br, tr, px, for the size given), read every frame; null: [radius] all round. */
+    corners: (androidx.compose.ui.graphics.drawscope.DrawScope.(Size) -> FloatArray)? = null) {
+    val cornersNow by rememberUpdatedState(corners)
     val read by rememberUpdatedState(left)
     val progress = remember { TraceProgress() }
     // a frame clock: reading it in the draw redraws every frame without recomposing
@@ -84,7 +94,7 @@ fun LaunchTrace(left: () -> Double?, colour: Color, radius: Dp, width: Dp, modif
     Canvas(modifier.clearAndSetSemantics { }) {
         frame   // read: redraw each frame
         val w = width.toPx()
-        val whole = traceOutline(size, radius.toPx(), w / 2)
+        val whole = cornersNow?.let { f -> f(this, size) }?.let { k -> traceOutline(size, k[0], k[1], k[2], k[3], w / 2) } ?: traceOutline(size, radius.toPx(), w / 2)
         val now = read()
         if (now == null) {
             drawPath(whole, colour, style = Stroke(w, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 5.dp.toPx()))))

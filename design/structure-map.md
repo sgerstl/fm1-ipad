@@ -94,6 +94,19 @@ Rows are groups named for the track. The scene preview gets a VoiceOver action a
 
 ## The phone with a Skiff FM-1 (landscape, 852 × 393; agreed and built 2026-11-10, boards 46–50)
 
+> **Agreed 2026-11-17 (Scott): the hybrid UI's phone structure, Android first.** It replaces this section's tab list below, and decision 28's Mix pop-up. Build on Android, test on the Pixel with the FM-1, then decide the iPhone and iPad. Spec: `design/hybrid-ui/spec.md`. Proposal and reasons: `design/hybrid-ui/structure-map-proposal.md`.
+>
+> | Tab | What's on it |
+> |---|---|
+> | **Pads** | The grid of every track's entries, row heads (badge, name, Mute), the scenes toolbar (Store and 16). Hold menus as today. |
+> | **Edit** | The selected pad's pattern. Panel shut: all 16 steps. Panel docked (FX, SEL, ENV, LFO, EDIT, ARP): **8 steps a page** with a 16-cell minimap. Pages follow the playhead when Follow is on; otherwise by hand. |
+> | **Timeline** | The song's lanes and blocks, zoom, the ruler. A refusal shows in the app strip. |
+> | **Mix** | Six strips (level fader with meter, dB, a pan · send values line, Mute and Solo); pan, the reverb send and Select sound… in the strip's long-press menu. The Global pages as sub-pages: Mixer · Delay · Reverb · Chorus · Global. |
+>
+> **Header, one row:** Song menu, the four tabs as connected pills, then flush right: Launch at (Bar ⌄ pill), the readout (opens the tempo popup), Record (round 48), Play/Stop (round 56). At narrow widths, things give way as in `spec.md` 4.1; no tab, Record or Play/Stop ever goes.
+> **Over any tab:** the Sounds **sheet** (no Sounds tab), Projects, Settings, the Launch at menu, the tempo popup. Messages show in the app strip, bottom centre.
+> **The FM-1's buttons:** GLO opens the Mix tab, and pressed again steps its pages. FX, SEL, ENV, LFO, EDIT and ARP on Edit dock the sound panel, with the grid paging 8 steps.
+
 *Before this (7137fa9): Song · Mix · Sounds, the iPad's three. Song shows a card, "Arrange on Skiff is on the iPad for now"; Mix is the iPad's MixerPage as it is, which doesn't fit (strips under the top bar, the effect cards over the strips, the foot off the screen: `qa/accessibility-2026-11-10/screens/iPhone-skiff-mix.jpg`). Sounds works. SLOOP's phone tabs (Sequence · Shape · Arrange · Browse) are unchanged by this.*
 
 About 330 pt under the 44 pt top bar, inside the side safe areas (59 each side): 734 wide. One job a tab, never the iPad's canvas shrunk.

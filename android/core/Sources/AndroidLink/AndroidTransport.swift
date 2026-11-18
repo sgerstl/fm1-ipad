@@ -126,6 +126,20 @@ public final class LinkGate: @unchecked Sendable {
         old?.finish()
     }
 
+    /// A fresh connection over the ports that are already open, for a Session that has started over (Retry) while the FM-1 stayed
+    /// plugged in: the factory hands its one connection out once, so without this a restarted Session found nothing and searched
+    /// forever with the FM-1 right there (Scott on the Pixel, 2026-11-18: "it doesn't seem to reconnect with the fm1 after the phone
+    /// goes to sleep"). Nothing when no ports are open or the installer holds the FM-1.
+    public func renew() {
+        let old: AndroidTransport? = lock.withLock {
+            guard _state == .open, !held else { return nil }
+            let o = current
+            current = AndroidTransport(send: sender); handedOut = false
+            return o
+        }
+        old?.finish()
+    }
+
     /// The open device's USB name, nil when nothing is open.
     public var deviceName: String? { lock.withLock { _state == .open ? _name : nil } }
 

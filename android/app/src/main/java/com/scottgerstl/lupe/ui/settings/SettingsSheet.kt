@@ -1,5 +1,13 @@
 package com.scottgerstl.lupe.ui.settings
 
+import androidx.compose.foundation.layout.widthIn
+
+import androidx.compose.foundation.layout.wrapContentWidth
+
+import androidx.compose.ui.semantics.disabled
+
+import androidx.compose.ui.semantics.clearAndSetSemantics
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -61,10 +69,9 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 import com.scottgerstl.lupe.ui.theme.unscaled
 
 /**
- * Settings, from the song-name menu (board 67; decision 33: the grouped sheet with both phones' options): the FM-1, Touch (Slide to turn,
- * the Magnifier, Handedness, Haptics), Sound pages (Show graphics, Sound keys), and
- * Labs, the trials, each off until you switch it on. These replace the adb extras (`--es slide`, `--ez magnifier`),
- * which stay for testing. Everything is kept the moment it changes.
+ * Settings, from the song-name menu (board 67; decision 33: the grouped sheet with both phones' options): the FM-1, Audio, Touch (Slider
+ * gesture, the Magnifier, Sound keys and their side, Haptics, played phrases), Sound pages (Show graphics). Labs left on 2026-11-18. These
+ * replace the adb extras (`--es slide`, `--ez magnifier`), which stay for testing. Everything is kept the moment it changes.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -73,84 +80,46 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
     val slide = LocalSlideSettings.current
     val phone = LocalPhoneSettings.current
     val scroll = rememberScrollState()
-    // the Labs heading's place in the scrolling content, so the FM-1 menu's Labs row can open the sheet scrolled to it
-    var labsY by remember { androidx.compose.runtime.mutableStateOf(-1) }
-    LaunchedEffect(host.open, host.toLabs, labsY) { if (host.open == SheetKind.Settings && host.toLabs && labsY >= 0) { kotlinx.coroutines.delay(350); scroll.animateScrollTo(labsY) } }
-    LupeSheet(host.open == SheetKind.Settings, "Settings", { host.close() }, scroll = scroll) {
+    LupeSheet(host.open == SheetKind.Settings, "Settings", { host.close() }, scroll = scroll, widthCap = com.scottgerstl.lupe.ui.sheet.SHEET_NARROW) {
+      // the content column: at most 560 wide, centred in the sheet (Scott, 2026-11-18: "narrow it down a little bit"), about 45–75 characters a
+      // subtitle line; the sheet's surface stays full width, as the sheet is a full-width drawer from the bottom
+      Column(Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 560.dp)) {
         Section("FM-1")
         Plain(
             "FM-1", if (fake) "A fake core: no FM-1 is connected" else when (link.phase) { LinkPhase.Ready -> "Skiff, connected over USB"; LinkPhase.WrongFirmware -> "Connected, but not running Skiff"; else -> "Not connected" },
         )
         Plain("Theme", "Follows the FM-1 (SKIFF)")
 
-        com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { AudioSection(it) }
+        // (Audio left 2026-11-18: Play through the phone is the header's speaker key; what needs a hand and the Bluetooth note go to the message strip)
 
         Section("Touch")
-        Text2("Slide to turn", "Which way a finger slides a value. Up and right raise it.")
+        Text2("Slider gesture", "Which way a finger slides a value. Up and right raise it.")
         Segmented(
             options = SlideDirection.entries.map { it.title },
             selected = SlideDirection.entries.indexOf(slide.direction),
-            name = "Slide to turn",
+            name = "Slider gesture",
         ) { slide.chooseDirection(SlideDirection.entries[it]) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Magnifier", "A bigger copy of the value floats above your finger as you slide", slide.magnifier) { slide.chooseMagnifier(it) }
-        Text2("Sound keys side", "Which edge the sound keys sit on (when Sound keys is on).")
-        Segmented(options = listOf("Left", "Right"), selected = if (phone.railLeft) 0 else 1, name = "Sound keys side") { phone.chooseRailLeft(it == 0) }
-        Spacer(Modifier.height(8.dp))
-        Text2("Menus open", "Which side of your finger hold menus and pop-outs open to; they flip when there is no room.")
-        Segmented(options = listOf("Left", "Right"), selected = if (phone.menusRight) 1 else 0, name = "Menus open") { phone.chooseMenusRight(it == 1) }
+        // Sound keys, then its side right under it; the side is dimmed and says why while the keys are off (2026-11-18)
+        SwitchRow("Sound keys", "Off, sound pages open from the FM-1's own keys. On, FX SEL ENV LFO EDIT ARP stay down the side, so the phone can open them too", phone.soundKeys) { phone.chooseSoundKeys(it) }
+        Text2("Sound keys side", "Which edge the sound keys sit on.")
+        Segmented(options = listOf("Left", "Right"), selected = if (phone.railLeft) 0 else 1, name = "Sound keys side", enabled = phone.soundKeys, disabledWhy = "Turn on Sound keys first") { phone.chooseRailLeft(it == 0) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Haptics", "On pads and value steps", phone.haptics) { phone.chooseHaptics(it) }
+        Text2("Offer played phrases", "When you play a phrase on the FM-1 while stopped: a small chip by Record, a pop-up over Edit, or nothing.")
+        Segmented(options = listOf("Chip", "Pop-up", "Off"), selected = phone.takeOffer, name = "Offer played phrases") { phone.chooseTakeOffer(it) }
+        Spacer(Modifier.height(8.dp))
 
         Section("Sound pages")
         SwitchRow("Show graphics", "Each sound page shows its picture with its dials, and the Mix pages show theirs. Off: dials only", phone.showGraphics) { phone.chooseShowGraphics(it) }
-        SwitchRow("Sound keys", "Off, sound pages open from the FM-1's own keys. On, FX SEL ENV LFO EDIT ARP stay down the side, so the phone can open them too", phone.soundKeys) { phone.chooseSoundKeys(it) }
 
-        Column(Modifier.onGloballyPositioned { labsY = it.positionInParent().y.toInt() }) {
-            Spacer(Modifier.height(12.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Tok.lifted))
-            Spacer(Modifier.height(16.dp))
-            BasicText("Labs", Modifier.semantics { heading() }, style = LupeType.title.copy(fontSize = 17.sp))
-            BasicText("Settings to try on the phone. Each starts off; keep what works.", Modifier.padding(top = 2.dp, bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
-        }
-        SwitchRow("Pause following after a touch", "The sound page you touched holds for 3 s before it follows the FM-1 again", phone.pauseFollowing, trial = true) { phone.choosePauseFollowing(it) }
-        SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
-        // a feel value to tune by hand (added 2026-11-14, review 2026-11-28): slide it
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("TAB CHANGE · MS", "${phone.tabSlideMs} ms", phone.tabSlideMs / 10, 15, 70, "How long a tab change takes", stepDp = 8f, revertTo = 38) { phone.chooseTabSlide(it * 10) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPRING", "${phone.menuSpring}", phone.menuSpring / 5, 0, 20, "How far the hold menu's circle springs past its size", stepDp = 12f, revertTo = 12) { phone.chooseMenuSpring(it * 5) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("HOLD MENU · SPEED", "${phone.menuSpeed}%", phone.menuSpeed / 10, 5, 20, "How fast the hold menu opens", stepDp = 12f, revertTo = 10) { phone.chooseMenuSpeed(it * 10) }
-        // pad drag and its edge wells (added 2026-11-15, review 2026-11-29)
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · SLIDE BEFORE IT LIFTS", "${phone.padSlideStart} dp", phone.padSlideStart, 4, 30, "How far you slide a pad before it picks up", stepDp = 8f, revertTo = 8) { phone.choosePadSlideStart(it) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · PRESS BEFORE SLIDING", "${phone.padSlideDwellMs} ms", phone.padSlideDwellMs / 10, 5, 40, "A slide quicker than this after you touch is a swipe and doesn't pick the pad up", stepDp = 8f, revertTo = 15) { phone.choosePadSlideDwell(it * 10) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · WELLS SLIDE IN", "${phone.wellSlideMs} ms", phone.wellSlideMs / 10, 10, 50, "How long the Clear, Edit and Duplicate wells take to slide in", stepDp = 8f, revertTo = 22) { phone.chooseWellSlide(it * 10) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · TOP/BOTTOM GLOW START", "${phone.wellGlowPct} % of height", phone.wellGlowPct, 20, 70, "How far from the Cancel, Clear steps and Delete wells the dragged pad is when they start to glow, as a share of the screen height", stepDp = 6f, revertTo = 45) { phone.chooseWellGlow(it) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · TOP/BOTTOM HOT DISTANCE", "${phone.wellHotDp} dp", phone.wellHotDp / 4, 6, 32, "How near the dragged pad comes before a well is hot and a drop there acts", stepDp = 8f, revertTo = 16) { phone.chooseWellHot(it * 4) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · SIDE GLOW START", "${phone.wellSideGlowPct} % of width", phone.wellSideGlowPct, 20, 70, "How far from the Edit and Duplicate wells the dragged pad is when they start to glow, as a share of the screen width", stepDp = 6f, revertTo = 45) { phone.chooseWellSideGlow(it) }
-        com.scottgerstl.lupe.ui.slide.MenuSlideRow("PAD DRAG · SIDE HOT DISTANCE", "${phone.wellSideHotDp} dp", phone.wellSideHotDp / 4, 8, 48, "How near the dragged pad comes before Edit or Duplicate is hot and a drop there acts", stepDp = 8f, revertTo = 24) { phone.chooseWellSideHot(it * 4) }
-        SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
-        SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
-    }
-}
-
-/**
- * Audio: Play through the phone (the iPhone's "Play through the iPhone"). While it plays: where the sound goes, the phone's
- * share of the delay, what Bluetooth adds, and one technical line for the device check.
- */
-@Composable
-private fun AudioSection(through: com.scottgerstl.lupe.audio.AudioThrough) {
-    Section("Audio")
-    SwitchRow("Play through the phone", "The FM-1's sound on the phone's speaker or headphones, over the USB cable", through.enabled) { through.choose(it) }
-    if (!through.enabled) return
-    val state = through.state
-    com.scottgerstl.lupe.audio.ThroughModel.action(state)?.let { Plain("Needs a hand", it) }
-    if (state is com.scottgerstl.lupe.audio.ThroughState.Playing) {
-        Plain("Output", state.output)
-        val ms = com.scottgerstl.lupe.audio.ThroughModel.latencyText(through.stats)
-        Plain("Delay", if (ms == null) "Measuring…" else "$ms on the phone, from the USB cable to the output")
-        com.scottgerstl.lupe.audio.ThroughModel.bluetoothNote(state.kind)?.let { Text2("Bluetooth", it) }
-        Plain("Details", com.scottgerstl.lupe.audio.ThroughModel.details(through.stats))
-    } else if (state == com.scottgerstl.lupe.audio.ThroughState.Starting) {
-        Plain("Output", "Starting…")
+        // Following (Scott, 2026-11-18): Labs' two built trials, kept as ordinary settings. The piano under the grid and the Timeline with time
+        // across were never built and are in design/backlog.md
+        Section("Following")
+        SwitchRow("Pause following after a touch", "The sound page you touched holds for 3 s before it follows the FM-1 again", phone.pauseFollowing) { phone.choosePauseFollowing(it) }
+        SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom) { phone.choosePinBottom(it) }
+      }
     }
 }
 
@@ -197,43 +166,60 @@ fun SwitchRow(title: String, sub: String, on: Boolean, trial: Boolean = false, o
     }
 }
 
-/** 52 × 30: the thumb slides and the track blends in 150 ms (Reduce Motion: the blend only). On is the light key, off the dark. */
+/**
+ * The hybrid switch (spec 3.6): 52 × 32, round. On: a `text` track with a 24 `onColour` thumb. Off: a `control` track with a 2 dp `primaryEdge`
+ * edge (4.4:1) and a 16 thumb in `primaryEdge`. The thumb's size is the shape-as-state cue beside the colour; it travels and grows on the
+ * spring, the colours ease (Reduce Motion: it lands at once and only the colours blend).
+ */
 @Composable
 fun LupeSwitch(on: Boolean) {
     val reduce = LocalReduceMotion.current
+    val m = com.scottgerstl.lupe.ui.theme.hybridMotion
     val t = animatedFloat(if (on) 1f else 0f, Dur.STATE)
+    val move by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, m.fingerMs, m.bounce, spring = !reduce)
     Box(
-        Modifier.width(52.dp).height(30.dp)
+        Modifier.width(52.dp).height(32.dp)
             .drawBehind {
                 val r = CornerRadius(size.height / 2)
-                drawRoundRect(lerp(Tok.control, Tok.primaryTop, t.value), cornerRadius = r)
-                // off: a 2 dp outline in text2 (about 6:1 on the sheet), so the control's edge and state read without colour alone
-                if (t.value < 1f) drawRoundRect(Tok.text2.copy(alpha = 1f - t.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-                val pad = 5.dp.toPx(); val d = size.height - 2 * pad
-                val x = if (reduce) (if (on) size.width - pad - d else pad) else pad + (size.width - 2 * pad - d) * t.value
-                drawRoundRect(lerp(Tok.text2, Tok.onColour, t.value), Offset(x, pad), Size(d, d), CornerRadius(d / 2))
+                drawRoundRect(lerp(Tok.control, Tok.text, t.value), cornerRadius = r)
+                if (t.value < 1f) drawRoundRect(Tok.primaryEdge.copy(alpha = 1f - t.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((size.height - 2.dp.toPx()) / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                val off = com.scottgerstl.lupe.ui.theme.Shape.switchThumbOff.toPx(); val onD = com.scottgerstl.lupe.ui.theme.Shape.switchThumbOn.toPx()
+                val inset = (size.height - onD) / 2
+                fun thumb(k: Float, alpha: Float) {
+                    val d = off + (onD - off) * k.coerceIn(0f, 1.1f)
+                    val cx = (inset + onD / 2) + (size.width - 2 * inset - onD) * k
+                    drawCircle(lerp(Tok.primaryEdge, Tok.onColour, t.value).copy(alpha = alpha), d / 2, Offset(cx, size.height / 2))
+                }
+                // Reduce Motion: nothing travels; the thumb fades out of one end and into the other
+                if (reduce) { thumb(0f, 1f - t.value); thumb(1f, t.value) } else thumb(move, 1f)
             },
     )
 }
 
-/** Three (or so) choices in a well, the chosen one a raised key blending in over 150 ms (as the Pads · Timeline · Mix tabs). */
+/** A few choices as the connected group (spec 3.4), filling the width: the white pill slides between them (see `SegmentGroup`). */
 @Composable
-fun Segmented(options: List<String>, selected: Int, name: String, onPick: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(40.dp).background(Tok.well, RoundedCornerShape(10.dp)).selectableGroup()) {
-        options.forEachIndexed { i, label ->
-            val lit = animatedFloat(if (i == selected) 1f else 0f, Dur.STATE)
-            Box(
-                Modifier.weight(1f).fillMaxHeight()
-                    .semantics(mergeDescendants = true) { role = Role.RadioButton; this.selected = i == selected; contentDescription = "$name: $label" }
-                    .pointerInput(i) { detectTapGestures { onPick(i) } }
-                    .padding(3.dp)
-                    .drawBehind {
-                        val r = CornerRadius(8.dp.toPx())
-                        drawRoundRect(Tok.chicletEdge.copy(alpha = lit.value), Offset(0f, 2.dp.toPx()), Size(size.width, size.height - 2.dp.toPx()), r)
-                        drawRoundRect(Tok.control.copy(alpha = lit.value), Offset.Zero, Size(size.width, size.height - 2.dp.toPx()), r)
-                    },
-                contentAlignment = Alignment.Center,
-            ) { BasicText(label, style = LupeType.key.copy(color = lerp(Tok.text2, Tok.text, lit.value))) }
-        }
+fun Segmented(options: List<String>, selected: Int, name: String, enabled: Boolean = true, disabledWhy: String? = null, onPick: (Int) -> Unit) {
+    // disabled: dimmed, takes no touch, and TalkBack hears one unfocusable-as-action node saying why
+    val m = if (enabled) Modifier else Modifier.graphicsLayer { alpha = 0.4f }
+        .clearAndSetSemantics { contentDescription = name; stateDescription = disabledWhy ?: "Off"; disabled() }
+        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() } } }
+    // each option its label plus 16 each side, at least 72 wide and 44 tall, the group left under its label (Scott, 2026-11-18: buttons not
+    // "obscenely wide"); when they don't fit (a large font size), equal shares with labels on two lines rather than cut
+    val tm = androidx.compose.ui.text.rememberTextMeasurer()
+    val style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val labelWidths = options.map { with(density) { tm.measure(it, style).size.width.toDp() } }
+        val fits = segmentedFits(labelWidths.map { it.value }, maxWidth.value)
+        com.scottgerstl.lupe.ui.shell.SegmentGroup(options, selected, { if (enabled) onPick(it) }, (if (fits) Modifier else Modifier.fillMaxWidth()).then(m),
+            height = 44.dp, padH = if (fits) SEG_PAD.dp else 8.dp, minWidth = SEG_MIN.dp, role = Role.RadioButton, descriptions = options.map { "$name: $it" },
+            fontSize = 15, fill = !fits, wrap = !fits)
     }
 }
+
+/** A settings option's padding each side and least width (dp). */
+const val SEG_PAD = 16f
+const val SEG_MIN = 72f
+/** Whether options with labels [labelWidths] wide (dp), each its label plus [SEG_PAD] each side and at least [SEG_MIN], with 2 between, fit [available]. */
+fun segmentedFits(labelWidths: List<Float>, available: Float): Boolean =
+    labelWidths.sumOf { maxOf(it + 2 * SEG_PAD, SEG_MIN).toDouble() } + 2.0 * (labelWidths.size - 1).coerceAtLeast(0) <= available

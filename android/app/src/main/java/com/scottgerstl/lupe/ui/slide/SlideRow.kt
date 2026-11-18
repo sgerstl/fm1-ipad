@@ -38,9 +38,10 @@ import com.scottgerstl.lupe.ui.theme.Tok
 import kotlin.math.roundToInt
 
 /**
- * A value set by sliding, for a row inside a menu (decision 10: no − / + anywhere): label, the value large, a gauge at
- * the foot. The slide direction is Settings'; the Magnifier would sit behind the menu's window, so the value is big here
- * instead. [stepDp] is how far a finger moves for one step. TalkBack gets the range, Increase and Decrease.
+ * A value set by sliding, for a row in a menu or a sheet (decision 10: no − / + anywhere). Hybrid layout (Scott, 2026-11-17): the label and the
+ * value on the left half, the slider on the right half, so the left is a clear lane to scroll in. The slider takes only a sideways drag, and only
+ * once it is clearly sideways; an up-and-down drag goes to the scroll. [stepDp] is how far a finger moves for one step. Double tap puts it back to
+ * [revertTo]. TalkBack gets the range, Increase and Decrease.
  */
 @Composable
 fun MenuSlideRow(
@@ -57,25 +58,37 @@ fun MenuSlideRow(
     val face = remember(label, min, max, bipolarAt) { MagnifierFace(label, { shownText }, { if (max > min) (shownRaw - min).toFloat() / (max - min) else 0f }, bipolar = bipolarAt != null) }
     CompositionLocalProvider(LocalMagnifier provides loupe) {
         MagnifierPopup(loupe)
-        Column(
-            modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(Tok.well)
+        androidx.compose.foundation.layout.Row(
+            modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(Tok.well)
                 .semantics(mergeDescendants = true) {
                     contentDescription = name; stateDescription = text; role = Role.Button
                     progressBarRangeInfo = ProgressBarRangeInfo(raw.toFloat(), min.toFloat()..max.toFloat(), max - min - 1)
                     setProgress { v -> set(v.roundToInt()); true }
                     customActions = listOf(CustomAccessibilityAction("Increase $name") { set(latest + 1); true }, CustomAccessibilityAction("Decrease $name") { set(latest - 1); true })
                 }
-                .then(if (revertTo != null) Modifier.pointerInput(revertTo) { detectTapGestures(onDoubleTap = { set(revertTo) }) } else Modifier)
-                .slideToTurn(enabled = true, stepDp = stepDp, face = face, forceDirection = SlideDirection.Both, onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (min - latest)..(max - latest) })
-                .padding(10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
-            BasicText(label, style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2, letterSpacing = 0.5.sp))
-            BasicText(text, style = LupeType.number.copy(fontSize = 28.sp, lineHeight = 30.sp))
-            Canvas(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp)) {
-                drawRect(Tok.stepEmpty)
-                val x = if (max > min) ((raw - min).toFloat() / (max - min)) * size.width else 0f
-                val from = if (bipolarAt != null && max > min) ((bipolarAt - min).toFloat() / (max - min)) * size.width else 0f
-                drawRect(Tok.text, Offset(minOf(from, x), 0f), Size(maxOf(kotlin.math.abs(x - from), if (bipolarAt != null) 2f else 0f), size.height))
+            Column(Modifier.weight(1f)) {
+                BasicText(label, style = LupeType.number.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp), maxLines = 2)
+                BasicText(text, style = LupeType.number.copy(fontSize = 24.sp, lineHeight = 26.sp))
+            }
+            // the slider: the right half, a 44 tall touch lane with an 8 tall track and a 4 × 16 handle (spec 3.13's send)
+            androidx.compose.foundation.layout.Box(
+                Modifier.weight(1f).height(44.dp)
+                    .then(if (revertTo != null) Modifier.pointerInput(revertTo) { detectTapGestures(onDoubleTap = { set(revertTo) }) } else Modifier)
+                    .slideToTurn(enabled = true, stepDp = stepDp, face = face, forceDirection = SlideDirection.Sideways, strictAxis = true,
+                        onStart = { base = latest }, onSlide = { set(base + it) }, bounds = { (min - latest)..(max - latest) }),
+            ) {
+                Canvas(Modifier.fillMaxWidth().height(44.dp)) {
+                    val th = 8.dp.toPx(); val y = (size.height - th) / 2; val hw = 4.dp.toPx()
+                    val f = if (max > min) (raw - min).toFloat() / (max - min) else 0f
+                    val x = hw / 2 + (size.width - hw) * f
+                    drawRoundRect(Tok.lifted, Offset(0f, y), Size(size.width, th), androidx.compose.ui.geometry.CornerRadius(th / 2))
+                    val from = if (bipolarAt != null && max > min) hw / 2 + (size.width - hw) * ((bipolarAt - min).toFloat() / (max - min)) else 0f
+                    drawRoundRect(Tok.text, Offset(minOf(from, x), y), Size(maxOf(kotlin.math.abs(x - from), if (bipolarAt != null) 2f else 0f), th), androidx.compose.ui.geometry.CornerRadius(th / 2))
+                    drawRoundRect(Tok.text, Offset(x - hw / 2, (size.height - 16.dp.toPx()) / 2), Size(hw, 16.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+                }
             }
         }
     }

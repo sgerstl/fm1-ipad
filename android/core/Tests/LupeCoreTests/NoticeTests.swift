@@ -5,7 +5,8 @@ import Testing
 @testable import SloopKit
 
 /// The `notice` area: what the core didn't carry out reaches the screen, with its track and entry, each time.
-@Suite(.serialized) @MainActor struct NoticeTests {
+// every test ends within 3 minutes, so a stuck test fails instead of stalling the run (2026-11-18)
+@Suite(.serialized, .timeLimit(.minutes(3))) @MainActor struct NoticeTests {
     final class Box { var writes = true; var notices: [NoticeArea] = []; var log: [String] = [] }
 
     func connected(_ box: Box) async throws -> (PhoneCore, FakeSkiff) {
@@ -77,8 +78,8 @@ import Testing
         for v in 0..<20 { core.handle(json: #"{"intent":"setHomeKnob","slot":0,"value":\#(v)}"#) }
         #expect(box.notices.count == 1 && box.notices[0].text == PhoneCore.readOnlyNotice && box.notices[0].track == nil)
         #expect(box.log.filter { $0.hasPrefix("read-only:") }.count == 20)
-        // absent, not null, where the core doesn't know
-        #expect(AreaJSON.encode(box.notices[0]) == #"{"text":"\#(PhoneCore.readOnlyNotice)"}"#)
+        // absent, not null, where the core doesn't know; a refusal says so (Scott, 2026-11-17, messages rule)
+        #expect(AreaJSON.encode(box.notices[0]) == #"{"kind":"refusal","text":"\#(PhoneCore.readOnlyNotice)"}"#)
     }
 
     /// Clear unused patterns: read-only and unconfirmed send nothing, playing is refused with a notice, and stopped
@@ -115,11 +116,12 @@ import Testing
         core.handle(json: #"{"intent":"clearUnusedPatterns","confirmed":true}"#)
         try await wait("cleared") { unused.allSatisfy { fake.poolLen[$0 - 1] == 0 } }
         try await wait("said") { box.notices.last?.text.hasPrefix("Cleared \(unused.count) unused patterns.") == true }
+        #expect(box.notices.last?.kind == .confirmation, "a result, timed at 4 s on the screen (Scott, 2026-11-17, messages rule)")
         #expect(core.padsArea().unused.isEmpty && named.allSatisfy { fake.poolLen[$0 - 1] > 0 })
         #expect(core.padsArea().patternsFree == fake.poolLen.filter { $0 == 0 }.count)
         // nothing left: said, not sent
         core.handle(json: #"{"intent":"clearUnusedPatterns","confirmed":true}"#)
-        #expect(box.notices.last?.text.hasPrefix("No pattern is unused") == true)
+        #expect(box.notices.last?.text.hasPrefix("No pattern is unused") == true && box.notices.last?.kind == .refusal)
         #expect(fake.unansweredCommands.isEmpty, "\(fake.unansweredCommands)")
     }
 }

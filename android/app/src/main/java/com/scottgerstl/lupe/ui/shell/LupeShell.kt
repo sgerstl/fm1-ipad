@@ -79,6 +79,9 @@ fun LupeShell(core: LupeCore) {
     val soundsHost = remember { SoundsHost() }
     val holdMenu = remember { HoldMenuState() }
     val padDrag = remember { PadDragState() }
+    val editGrow = remember { EditGrow() }
+    // the app strip's one message (MessageStrip.kt; Scott, 2026-11-17, messages rule): what was there when the screen opened is not news
+    val messages = remember(core) { MessageModel(core.notice.value.seq, core.pads.value.clearUndo.lastOrNull()) }
     val firmwareHost = remember { com.scottgerstl.lupe.ui.firmware.FirmwareHost() }
     // a debug build can be launched with a pad already held over the wells, to look at them without a finger:
     // adb shell am start -n com.scottgerstl.lupe/.MainActivity --ez wellsDemo true --ef x 1000 --ef y 540  (the finger's place, px)
@@ -92,7 +95,7 @@ fun LupeShell(core: LupeCore) {
     }
     val sheetOpen = sheets.open != null
     Box(Modifier.fillMaxSize().background(Tok.page)) {
-      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost provides firmwareHost) {
+      CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost provides firmwareHost, LocalMessages provides messages, LocalEditGrow provides editGrow) {
         Column(
             Modifier.fillMaxSize()
                 .greyedBy { grey.value }
@@ -103,9 +106,8 @@ fun LupeShell(core: LupeCore) {
             // is hidden while Lupe runs. At the right the round keys sit inside the display's rounded corner.
             val sides = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
             TopBar(top, core, shell.tab, { core.send(com.scottgerstl.lupe.core.Intent.SetTab(it)) },
-                Modifier.windowInsetsPadding(sides).padding(start = 8.dp, end = cornerInset(), top = 4.dp))
-            // the hairline that ends the header runs the full width
-            Box(Modifier.fillMaxWidth().padding(top = 3.dp).height(1.dp).background(Tok.control))
+                Modifier.windowInsetsPadding(sides).padding(start = 16.dp, end = cornerInset(), top = 4.dp))
+            // hybrid UI: no hairline; the header ends by space (containment by surface steps, never borders: spec 1.3)
             ShellBody(shell, core, Modifier.windowInsetsPadding(sides).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp))
         }
       }
@@ -130,10 +132,9 @@ fun LupeShell(core: LupeCore) {
             )
         }
         // the sheets (FM-1 menu › Projects…, Settings) rise over the page and its link states
-        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag) {
+        CompositionLocalProvider(LocalMagnifier provides magnifier, LocalSheetHost provides sheets, LocalSoundsHost provides soundsHost, LocalHoldMenu provides holdMenu, LocalPadDrag provides padDrag, LocalMessages provides messages) {
             SettingsSheet(link, fake = core is com.scottgerstl.lupe.core.FakeLupeCore)
-            val projects = rememberProjects(core)
-            ProjectsSheet(projects.first, projects.second)
+            ProjectsSheet(rememberProjects(core))
             // Patterns (decision 38, board 79): the song-name menu, the full-pool notice and an empty slot's menu open it
             com.scottgerstl.lupe.ui.patterns.PatternsSheet(core)
             // Sounds: for a track (its head on Pads, or SAVE on the FM-1) or one pad's own sound. The browser has its own heading and Done.
@@ -143,16 +144,17 @@ fun LupeShell(core: LupeCore) {
                 lastRequest?.let { com.scottgerstl.lupe.ui.sounds.SoundsBrowser(core, it, { soundsHost.close() }) }
             }
         }
-        // what the FM-1 refused: at the foot of the page (or the sheet) where the action was taken, until it is dismissed
-        // …and, above it, the Undo strip after a pad was cleared (batch item 13)
-        androidx.compose.foundation.layout.Column(
-            Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 4.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
-        ) { UndoStrip(core); RefusalStrip(core) }
+        // the app strip (Scott, 2026-11-17, messages rule): every refusal, Undo and confirmation, one at a time, bottom centre 12 dp above the
+        // foot, over the page and over a sheet when one is up
+        CompositionLocalProvider(LocalSheetHost provides sheets) {
+            MessageStrip(core, messages,
+                Modifier.align(androidx.compose.ui.Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).padding(horizontal = 16.dp).padding(bottom = 12.dp))
+        }
         // a pad being dragged, with the Clear / Edit / Duplicate wells on the screen's edges (board 81.4)
         PadDragOverlay(padDrag, top.playing)
         // the hold menu: over the page and the sheets, under the finger that opened it
-        HoldMenuHost(holdMenu)
+        // the menu rebuilds its choices when the transport starts or stops with it open (round 5)
+        HoldMenuHost(holdMenu, playing = top.playing)
         // installing Skiff-Lupe (decision 42): the offer, the confirm and, while it runs, the cover over everything
         com.scottgerstl.lupe.ui.firmware.FirmwareLayer(core, firmwareHost)
         // the Magnifier floats over everything, above the finger
@@ -161,7 +163,7 @@ fun LupeShell(core: LupeCore) {
 }
 
 /**
- * How far in from the right edge the header's last round key (Play: a 40 dp circle in a 48 dp box, its centre 28 dp below the top) must sit to
+ * How far in from the right edge the header's last round key (Play/Stop: since the hybrid UI a 56 dp circle filling its box, its centre 28 dp below the top) must sit to
  * be wholly inside the display's rounded corner. From the corner's own radius (Android's RoundedCorner); 32 dp where the system gives none.
  */
 @Composable
@@ -170,7 +172,7 @@ private fun cornerInset(): androidx.compose.ui.unit.Dp {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val corner = view.rootWindowInsets?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_RIGHT)?.radius ?: return 32.dp
     val r = with(density) { corner.toDp() }.value
-    return headerCornerInset(r).dp
+    return headerCornerInset(r, keyR = 28f, boxPad = 0f).dp
 }
 
 /**
@@ -178,8 +180,8 @@ private fun cornerInset(): androidx.compose.ui.unit.Dp {
  * is the inset of the key's 48 dp box from the screen edge. Never under 24: at 8 dp Play was cut off on the Pixel 10 (Scott, 2026-11-14), whose
  * real corner is tighter than the circle the system reports, so the result also carries 6 dp over the geometry.
  */
-internal fun headerCornerInset(radius: Float): Float {
-    val keyR = 20f; val centreY = 28f; val boxPad = 4f; val spare = 2f
+internal fun headerCornerInset(radius: Float, keyR: Float = 20f, boxPad: Float = 4f): Float {
+    val centreY = 28f; val spare = 2f
     val py = centreY - keyR * 0.7071f                     // the 45° point's distance below the top
     if (radius <= py) return 24f                           // the corner's curve ends above it
     val reach = kotlin.math.sqrt(((radius - spare) * (radius - spare) - (radius - py) * (radius - py)).coerceAtLeast(0f))

@@ -237,18 +237,7 @@ struct PadsPage: View {
                 .accessibilitySortPriority(Self.rowOrder(tracks.count))
             Spacer(minLength: 0)
         }
-        // a refusal (an empty scene tapped, a change the FM-1 turned down): over the scenes until dismissed; the iPad's
-        // tool row has it, which the phone hasn't
-        .overlay(alignment: .bottom) {
-            if let rf = store.refusal {
-                RefusalLine(refusal: rf, session: session, store: store)
-                    .transition(.opacity)
-            } else if let s = previewScene, store.scenesSeen[s] == nil {
-                Text("Scene \(s + 1): not seen yet. Recall it once and holding it shows what it does")
-                    .font(.lupe(13)).padding(.horizontal, 12).frame(minHeight: 44)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
-            }
-        }
+        // (a refusal and an unseen scene are the app strip's since the messages rule, 2026-11-17)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pads")
     }
@@ -1177,7 +1166,11 @@ struct PadsPage: View {
             }]
         })
         if phone { return phoneEmptyMenu(t, i, free: free, list: list, newItem: first[0]) }
-        return [first, [pick, MenuItem(title: "Patterns", icon: "square.grid.2x2.fill") { ui.poolOpen = true }]]
+        // the iPad (2026-11-17): a full pool offers what the phone's does, Recycle and Put a kept pattern here…
+        var manage = MenuItem(title: "Manage patterns…", icon: "square.grid.3x3") { ui.patternsSheet = .manage }
+        manage.sub = poolCounts
+        return [first] + (free ? [] : [fullPoolItems(t, i)])
+            + [[pick, MenuItem(title: "Patterns", icon: "square.grid.2x2.fill") { ui.poolOpen = true }, manage]]
     }
 
     /// The phone's empty pad (board 79): New pattern (or why not), a copy only when a number is free, Recycle an unused
@@ -1192,35 +1185,43 @@ struct PadsPage: View {
                 Task { if await store.send(.set(track: t, entry: i, pattern: p + 1)) { await store.send(.copy(track: t, entry: i)) } }
             })
         }
-        let pool = store.pool?.patterns ?? []
-        let unused = pool.indices.filter { pool[$0].length > 0 && pool[$0].uses == 0 }
-        if !free {
-            // a fresh pattern without a free number: LIST SET the lowest unused one on the pad, then POOL op 2 empties it
-            var recycle = MenuItem(title: "Recycle an unused pattern", icon: "arrow.3.trianglepath",
-                                   enabled: idle && !session.playing && !unused.isEmpty) {
-                guard let p = unused.first else { return }
-                Task {
-                    guard await store.send(.set(track: t, entry: i, pattern: p + 1)) else { return }
-                    _ = await store.poolOp(2, pattern: p)
-                    edit(t, i)
-                }
-            }
-            recycle.sub = unused.isEmpty ? "None unused" : session.playing ? "Stop first" : "Takes \(Entries.number(unused[0] + 1)) and empties it · stopped only"
-            items.append(recycle)
-            var put = MenuItem(title: "Put a kept pattern here…", icon: "square.grid.2x2", enabled: idle) {
-                ui.patternsSheet = .pick(track: t, entry: i)
-            }
-            put.sub = "Plays the same pattern as its other uses"
-            items.append(put)
-        }
-        let kept = pool.filter { $0.length > 0 }.count
+        if !free { items += fullPoolItems(t, i) }
         var patterns = MenuItem(title: "Patterns…", icon: "square.grid.2x2.fill") { ui.patternsSheet = .manage }
-        patterns.sub = "\(kept) kept · \(unused.count) unused"
+        patterns.sub = poolCounts
         items.append(patterns)
         items.append(MenuItem(title: "Rest", icon: "pause", enabled: idle) {
             Task { await store.send(.set(track: t, entry: i, pattern: SongEntry.rest)) }
         })
         return [items]
+    }
+
+    /// "52 kept · 3 unused", under the menus' way into the Patterns sheet.
+    private var poolCounts: String {
+        let pool = store.pool?.patterns ?? []
+        return "\(pool.filter { $0.length > 0 }.count) kept · \(pool.filter { $0.length > 0 && $0.uses == 0 }.count) unused"
+    }
+
+    /// An empty pad with all 64 numbers taken (board 79, both layouts): Recycle an unused pattern (LIST SET the lowest
+    /// unused one on the pad, then POOL op 2 empties it: a fresh pattern without a free number) and Put a kept pattern here…
+    private func fullPoolItems(_ t: Int, _ i: Int) -> [MenuItem] {
+        let pool = store.pool?.patterns ?? []
+        let unused = pool.indices.filter { pool[$0].length > 0 && pool[$0].uses == 0 }
+        var recycle = MenuItem(title: "Recycle an unused pattern", icon: "arrow.3.trianglepath",
+                               enabled: idle && !session.playing && !unused.isEmpty) {
+            guard let p = unused.first else { return }
+            Task {
+                guard await store.send(.set(track: t, entry: i, pattern: p + 1)) else { return }
+                _ = await store.poolOp(2, pattern: p)
+                edit(t, i)
+            }
+        }
+        recycle.sub = unused.isEmpty ? "None unused: saved projects hold the rest" : session.playing ? "Stop first"
+            : "Takes \(Entries.number(unused[0] + 1)) and empties it · stopped only"
+        var put = MenuItem(title: "Put a kept pattern here…", icon: "square.grid.2x2", enabled: idle) {
+            ui.patternsSheet = .pick(track: t, entry: i)
+        }
+        put.sub = "Plays the same pattern as its other uses"
+        return [recycle, put]
     }
 
     /// A filled pad, held: edit it, its repeats, a copy of its own or beside it, its sound, clear it.

@@ -11,7 +11,8 @@ import kotlinx.coroutines.CoroutineScope
  * - `core`: "real" (default), "fake" (P2's FakeLupeCore replaying android/fixtures/state) or "demo" (debug builds: the real core
  *   on SloopKit's FakeSkiff, Skiff-Lupe 2.5.1 with screen link 6, for the emulator).
  * - `mode`: "session" (default) or "raw" (gate 3: no Session, the debug screen sends INFO itself).
- * - `allowWrites`: false (default): only reads reach the FM-1 (ReadOnlyGuard). True lets Play and edits through.
+ * - `allowWrites`: true (default since the public build, 2026-11-16): Play and edits reach the FM-1. False: only reads
+ *   reach it (ReadOnlyGuard), for development (`--ez allowWrites false`).
  */
 object LupeStartup {
     const val PREFS = "lupe"
@@ -24,7 +25,7 @@ object LupeStartup {
     fun wantsFake(context: Context) = prefs(context).getString("core", "real") == "fake"
     fun wantsDemo(context: Context) = prefs(context).getString("core", "real") == "demo"
     fun rawMode(context: Context) = prefs(context).getString("mode", "session") == "raw"
-    fun allowWrites(context: Context) = prefs(context).getBoolean("allowWrites", false)
+    fun allowWrites(context: Context) = prefs(context).getBoolean("allowWrites", true)
 
     /** The real core. Call once, on the UI thread. */
     fun start(app: Application, scope: CoroutineScope): LupeCore {

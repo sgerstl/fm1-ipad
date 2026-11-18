@@ -151,6 +151,6 @@ extension PhoneCore {
         let slots = (0..<4).map { k in
             ProjectsArea.Slot(slot: k, used: p?.slots[safe: k]?.used ?? false, name: p?.slots[safe: k]?.name ?? "", current: p?.musicSlot == k)
         }
-        return ProjectsArea(slots: slots, name: p?.name ?? "", changed: p?.changed ?? false, busy: projectBusy)
+        return ProjectsArea(slots: slots, name: p?.name ?? "", changed: p?.changed ?? false, busy: projectBusy, phoneEdited: phoneEdited)
     }
 }

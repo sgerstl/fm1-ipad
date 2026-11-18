@@ -137,8 +137,13 @@ Particular to the row:
 - 2026-11-09: the whole key and a margin take the touch (Scott: "hard to hit").
 - 2026-11-14: both phones take the iPhone's row (Scott, decision 33).
 - 2026-11-15: the iPad's row gives its right end to the selected track's four HOME knobs; the scenes scroll in the rest (Scott, decision 50). The phones too, the same day (Scott: "Phones too").
+- 2026-11-17 (round 3): recalling a scene squares it off on M3 Expressive's spatial spring with a squash and stretch, on top of the press squash; Reduce Motion cross-fades the shapes (spec §5, round 3).
+- 2026-11-17 (Scott: "the store button probably could lose the little LED indicator, and I'm wondering if it should change shape"): **Store drops its dot and changes shape**: disarmed a `held` pill; armed white with dark text, corners squaring to 12 on the spatial spring, colour blending in 150 ms; the width never changes (S6). S2 kept: while armed, empty scenes show a stronger outline (1.5 dp `primaryEdge`).
+- 2026-11-17: a waiting scene's launch trace follows the scene key's own radius (round, or squaring to 12 when current) instead of a fixed 8. Device check 114.
 
 ## 3. Build notes
+
+- `.android` hybrid look (branch `hybrid-ui-android`, 2026-11-17; spec 3.3): Store and the sixteen sit in one floating `panel` toolbar at radius 24, 4 inside. Store is a `lifted` pill (white while armed). The current scene is white and squares to 12; a stored one is `lifted` and round; an empty one is bare with a grey number (the outline is gone, so A9's outline contrast no longer applies there; fill and ink both carry the state). A press squashes the key (Labs › Hybrid · press squash) and it springs back. The row is 44 tall (scene keys 36). The HOME knobs (decision 50) stay at the right at their own 34 height; the agreed map's "Store and 16" doesn't mention them, so they weren't removed.
 
 - Device checks not yet passed: `2026-11-09-perform-grid-map.md` 10 (hold a stored scene), 23 (empty scene's help line), 42 (recall trace), 57 (unseen line on the strip), 64 (Store over a kept scene, not tried); `2026-11-10-accessibility.md` 14.
 - Hard-coded timing not in Labs: the recall trace's fade. If Scott comments on it, it goes into Labs first (repo rule 3).

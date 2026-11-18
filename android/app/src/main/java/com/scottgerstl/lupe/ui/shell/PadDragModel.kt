@@ -44,15 +44,20 @@ data class WellFeel(
 }
 
 object EdgeWellsGeometry {
+    /** The top pair's gap, and the least it may close to while one grows (each inner side grows at most half the difference). */
+    const val TOP_GAP = 24f
+    const val TOP_GAP_MIN = 16f
+    /** How far a top well's inner side (the one facing its pair) may grow along the edge: [along] up to half of what the gap can give. */
+    fun innerAlong(along: Float, d: Float): Float = minOf(along, (TOP_GAP - TOP_GAP_MIN) / 2f * d)
     /** Board 81.4 at the iPhone's 874 × 402: the bottom well 434 × 52 (half the width at most), the side wells 64 wide and 238 tall (a half of the height at most, a 0.6 of it at most), centred. [d] is the density. */
     fun rect(a: EdgeAction, w: Float, h: Float, d: Float): Rect {
         val sideH = minOf(h * 0.6f, maxOf(238f * d, h * 0.5f))
-        // the top pair: two 260 × 52 wells 8 apart, at most 0.6 of the width
-        val topW = minOf((2 * 260f + 8f) * d, w * 0.6f); val half = (topW - 8f * d) / 2; val topX = (w - topW) / 2
+        // the top pair: two 260 × 52 wells [TOP_GAP] apart, at most 0.6 of the width (the wells narrow, never the gap; Scott, 2026-11-18: "need some space between them")
+        val topW = minOf((2 * 260f + TOP_GAP) * d, w * 0.6f); val half = (topW - TOP_GAP * d) / 2; val topX = (w - topW) / 2
         return when (a) {
             EdgeAction.Cancel -> { val bw = minOf(434f * d, w * 0.5f); Rect((w - bw) / 2, h - 52f * d, (w + bw) / 2, h) }
             EdgeAction.ClearSteps -> Rect(topX, 0f, topX + half, 52f * d)
-            EdgeAction.Delete -> Rect(topX + half + 8f * d, 0f, topX + topW, 52f * d)
+            EdgeAction.Delete -> Rect(topX + half + TOP_GAP * d, 0f, topX + topW, 52f * d)
             EdgeAction.Duplicate -> Rect(0f, (h - sideH) / 2, 64f * d, (h + sideH) / 2)
             EdgeAction.Edit -> Rect(w - 64f * d, (h - sideH) / 2, w, (h + sideH) / 2)
         }

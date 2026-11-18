@@ -86,7 +86,7 @@ private val dim = Tok.text3        // T_DIM: decoration only, never words that c
 private val mid = Tok.text2        // T_MID
 
 /** Skiff's space on a canvas: x 0…240 and y 0…140 stretched to the size. */
-private class Sp(val d: DrawScope, val tm: TextMeasurer) {
+private class Sp(val d: DrawScope, val tm: TextMeasurer, val captions: Boolean = true) {
     fun Float.px() = with(d) { this@px.dp.toPx() }
     val w get() = d.size.width
     val h get() = d.size.height
@@ -125,7 +125,7 @@ fun hasPicture(g: PageGraph): Boolean = when (g.kind) {
 
 /** The page's picture for [g] (decision 30: under the dials, shown by Settings › Show graphics). [hot] is the control the FM-1's knob is turning (0…3), or -1. Read-only: the dials are the controls. */
 @Composable
-fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Modifier) {
+fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Modifier, caption: Boolean = true) {
     when (g.kind) {
         GraphKind.Fm6Op -> Fm6OperatorPicture(g, colour, modifier)
         GraphKind.Fm6All -> Fm6AllOpsPicture(g, colour, modifier)
@@ -133,7 +133,7 @@ fun GraphContent(g: PageGraph, colour: Color, hot: Int, modifier: Modifier = Mod
         GraphKind.Env -> EnvGraph(g, colour, hot, modifier)
         GraphKind.Lfo -> LfoGraph(g, colour, modifier)
         GraphKind.Drive, GraphKind.Fx, GraphKind.Scale, GraphKind.Arp, GraphKind.Analog, GraphKind.Voice, GraphKind.Chord, GraphKind.Follow,
-        GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Chorus, GraphKind.Global -> CanvasGraph(g, colour, hot, modifier)
+        GraphKind.FxDelay, GraphKind.FxReverb, GraphKind.Insert, GraphKind.Slicer, GraphKind.Duck, GraphKind.Delay, GraphKind.Reverb, GraphKind.Chorus, GraphKind.Global -> CanvasGraph(g, colour, hot, modifier, caption)
         else -> Unit
     }
 }
@@ -217,10 +217,10 @@ private fun EnvGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifier) 
 // ---- everything drawn on a plain canvas
 
 @Composable
-private fun CanvasGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifier) {
+private fun CanvasGraph(g: PageGraph, colour: Color, hot: Int, modifier: Modifier, caption: Boolean = true) {
     val tm = rememberTextMeasurer()
     Canvas(modifier.clearAndSetSemantics { contentDescription = describe(g) }) {
-        val s = Sp(this, tm)
+        val s = Sp(this, tm, caption)
         when (g.kind) {
             GraphKind.Voice -> drawVoice(s, g, colour)
             GraphKind.Chord -> drawChord(s, g, colour)
@@ -567,6 +567,7 @@ private fun drawDelay(s: Sp, g: PageGraph, c: Color) {
     delayBars(v[0], v[1], v[3], g.send).forEachIndexed { i, (x, w, h) ->
         s.bar(if (i == 0) Tok.text else uxMix(c, 15 + 50 * (i - 1) / 6), x.toFloat(), 120f - h, w.toFloat(), h.toFloat())
     }
+    if (!s.captions) return
     s.text("DRY", 14f, 17f, mid)
     // the FM-1 has MODE on its PRESETS card here; the phone names the mode (GLO › DELAY) beside the picture's top right
     if (g.kind == GraphKind.Delay) g.caption?.let { s.text(it.uppercase(), 228f, 17f, Tok.text, right = true) }
@@ -586,7 +587,7 @@ private fun drawReverb(s: Sp, g: PageGraph, c: Color) {
     val v = List(3) { g.values.getOrElse(it) { 0 } }
     val amp = g.send.coerceIn(0, 127)
     // the type by its name when the page gives it (the FM-1's own word), else by its number (0 ROOM, 1 SPRING, 2 HALL)
-    val type = g.caption?.uppercase()?.takeIf { it in setOf("ROOM", "SPRING", "HALL") } ?: listOf("ROOM", "SPRING", "HALL").getOrElse(v[0]) { "ROOM" }
+    val type = reverbType(g)
     listOf(84, 60, 72, 46, 52).forEachIndexed { i, e -> val h = (e * amp / 127).toFloat(); s.bar(Tok.text, 12f + i * 6, 126f - h, 3f, h) }
     reverbTail(v[1], v[2], type == "HALL", amp).forEachIndexed { i, (h, band) ->
         if (h <= 0) return@forEachIndexed
@@ -594,7 +595,7 @@ private fun drawReverb(s: Sp, g: PageGraph, c: Color) {
         s.bar(uxMix(c, 55 + 30 * i / 184), x, 126f - h, 1f, band.toFloat())             // the damped top: dark
         s.bar(uxMix(c, 60 * i / 184), x, 126f - h + band, 1f, (h - band).toFloat())      // the body: the full colour, darker to the right
     }
-    s.text(type, 12f, 18f, mid)
+    if (s.captions) s.text(type, 12f, 18f, mid)
     if (type == "SPRING") s.stroke(mid, (64..228).map { x -> x.toFloat() to 13f + (sin((x - 64) * 13 / 256.0 * 2 * Math.PI) * 3).toFloat() }, 1f)   // the coil
 }
 
@@ -626,7 +627,7 @@ private fun drawChorus(s: Sp, g: PageGraph, c: Color) {
         ys.forEachIndexed { i, y -> s.bar(uxMix(c, 75), 12f + i, y, 1f, 124f - y) }
         s.bar(line, 12f, 84f, 216f, 1f)
         s.d.drawPath(s.path(ys.mapIndexed { i, y -> (12f + i) to y }), c, style = Stroke(s.run { 3f.px() }, join = StrokeJoin.Miter))
-        s.text(if (mode == 1) "THE DRY AND ITS COPY: A COMB, SWEPT" else "FOUR STAGES: TWO NOTCHES, SWEPT", 12f, 17f, mid)
+        if (s.captions) s.text(pictureCaption(g).orEmpty(), 12f, 17f, mid)
         return
     }
     val a = (v[1] * 44 / 127).toFloat(); val b = a * v[3] / 127
@@ -634,7 +635,7 @@ private fun drawChorus(s: Sp, g: PageGraph, c: Color) {
     s.bar(mid, 12f, 74f, 216f, 1f)
     if (v[3] != 0) s.d.drawPath(s.path((0..216 step 2).map { (12f + it) to (74f + (sineI(it * inc - 0x30000000L) * b).toFloat()) }), mid, style = Stroke(s.run { 1f.px() }))
     s.d.drawPath(s.path((0..216 step 2).map { (12f + it) to (74f + (sineI(it * inc) * a).toFloat()) }), c, style = Stroke(s.run { 3f.px() }, join = StrokeJoin.Miter))
-    s.text("DRY AND ITS DRIFTING COPY", 12f, 17f, mid)
+    if (s.captions) s.text(pictureCaption(g).orEmpty(), 12f, 17f, mid)
 }
 
 /** "SWING 60:40": the long and short steps' share. */
@@ -651,7 +652,20 @@ private fun drawGlobal(s: Sp, g: PageGraph, c: Color) {
         s.bar(if (i % 4 == 0) Tok.text else if (i % 2 == 0) c else uxMix(c, 35), x.toFloat(), 120f - h, 7f, h.toFloat())
     }
     for (i in 0 until 4) s.text("${i + 1}", 14f + i * 52, 38f, mid, 13f, strong = true)
-    s.text(swingText(swing), 228f, 17f, mid, right = true)
+    if (s.captions) s.text(swingText(swing), 228f, 17f, mid, right = true)
+}
+
+/** Reverb's type word: the page's own (ROOM, SPRING, HALL) when it gives one, else by number. */
+internal fun reverbType(g: PageGraph): String =
+    g.caption?.uppercase()?.takeIf { it in setOf("ROOM", "SPRING", "HALL") } ?: listOf("ROOM", "SPRING", "HALL").getOrElse(g.values.getOrElse(0) { 0 }) { "ROOM" }
+
+/** The line a shared-effect picture writes across its top (GLO's Delay mode, Reverb type, Chorus's description, Global's swing), for a card that sets it as text itself (the collapsed effect cards). */
+internal fun pictureCaption(g: PageGraph): String? = when (g.kind) {
+    GraphKind.Delay -> g.caption?.uppercase()
+    GraphKind.Reverb -> reverbType(g)
+    GraphKind.Chorus -> when (g.values.getOrElse(2) { 0 }) { 1 -> "THE DRY AND ITS COPY: A COMB, SWEPT"; 2 -> "FOUR STAGES: TWO NOTCHES, SWEPT"; else -> "DRY AND ITS DRIFTING COPY" }
+    GraphKind.Global -> swingText(g.values.getOrElse(1) { 0 }.coerceIn(0, 100))
+    else -> null
 }
 
 /** SLICER (graph_slicer): the sixteen steps of its pattern in fours: open steps full, closed ones down by DEPTH (GATE) or hatched (STUT); OFF is grey. */

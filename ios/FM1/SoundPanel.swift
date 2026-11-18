@@ -168,7 +168,8 @@ struct SoundPanel: View {
         let current = session.screenLinked ? pages.first { SoundCard.onDevice(session, $0) }?.id : ui.focusedPage?.id
         // (the track's colour was tried: it reads more like an LED, but its orange is 3.4:1 on the panel; text is 9:1)
         let lit = Theme.text
-        return ScrollView(.horizontal) {
+        return ScrollViewReader { proxy in
+        ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 ForEach(pages) { p in
                     let on = current == p.id
@@ -196,12 +197,23 @@ struct SoundPanel: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(title) page")
                     .accessibilityAddTraits(on ? .isSelected : [])
+                    .id(p.id)
                 }
             }
             .padding(.leading, -12)          // the first word on the panel's edge; its target reaches past it
         }
         .scrollIndicators(.hidden)
-        .scrollClipDisabled()                // the line's glow isn't cut at the row's top
+        .scrollClipDisabled(false)           // (an ancestor turns clipping off for its scroll views; this row must clip)
+        .clipShape(Rectangle())
+        // clipped to the panel: unclipped (for the glow), a family of six pages (EDIT on an FM6 track) scrolled to its
+        // later words drew the earlier ones out over the pads (Scott, 2026-11-17). The line sits 8 in, so its 6 pt glow
+        // still fits inside the row
+        .onChange(of: current) { _, c in
+            guard let c else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(c, anchor: .center) }
+        }
+        .onAppear { if let current { proxy.scrollTo(current, anchor: .center) } }
+        }
     }
 
     private func reveal(_ f: FocusedPage?, _ proxy: ScrollViewProxy, animated: Bool) {

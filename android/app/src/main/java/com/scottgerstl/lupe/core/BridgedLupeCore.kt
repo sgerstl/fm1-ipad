@@ -34,6 +34,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     private val _fm1Screen = MutableStateFlow(Fm1ScreenState())
     private val _clock = MutableStateFlow(ClockState())
     private val _playhead = MutableStateFlow(PlayheadState())
+    private val _keys = MutableStateFlow(KeysState())
     private var clockChecked = false
     override val link: StateFlow<LinkState> = _link
     override val top: StateFlow<TopState> = _top
@@ -53,12 +54,16 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     override val fm1Screen: StateFlow<Fm1ScreenState> = _fm1Screen
     override val clock: StateFlow<ClockState> = _clock
     override val playhead: StateFlow<PlayheadState> = _playhead
+    override val keys: StateFlow<KeysState> = _keys
     private val _notice = MutableStateFlow(CoreNotice())
     override val notice: StateFlow<CoreNotice> = _notice
     private val _patterns = MutableStateFlow(PatternsState())
     override val patterns: StateFlow<PatternsState> = _patterns
     private val _patternPictures = MutableStateFlow(PatternPictures())
     override val patternPictures: StateFlow<PatternPictures> = _patternPictures
+    /** Phone projects' transfers (ProjectTransfer.kt): events, not state. Buffered so a burst of progress never blocks the UI thread. */
+    private val _transfers = kotlinx.coroutines.flow.MutableSharedFlow<TransferEvent>(extraBufferCapacity = 64)
+    override val transfers: kotlinx.coroutines.flow.SharedFlow<TransferEvent> = _transfers
 
     init {
         LupeNative.stateListener = { area, json -> receive(area, json) }
@@ -80,7 +85,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
     /** Swift calls this on the UI thread (the main actor). */
     fun receive(area: String, json: String) {
         val t = if (lagSince != 0L && (area == "page" || area == "shell")) SystemClock.uptimeMillis() else 0L
-        LinkLog.area(area, json)
+        LinkLog.area(area, if (json.length > 4000) json.take(4000) + "…" else json)   // (a transfer's read carries the whole project)
         if (t != 0L) {
             val doneAt = { lagMark("$area decoded in ${SystemClock.uptimeMillis() - t} ms (${json.length} bytes)") }
             receiveArea(area, json); doneAt()
@@ -113,6 +118,7 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                 "homeKnobs" -> _homeKnobs.value = lupeJson.decodeFromString(HomeKnobsState.serializer(), json)
                 "fm1Screen" -> _fm1Screen.value = lupeJson.decodeFromString(Fm1ScreenState.serializer(), json)
                 "playhead" -> _playhead.value = lupeJson.decodeFromString(PlayheadState.serializer(), json)
+                "keys" -> _keys.value = lupeJson.decodeFromString(KeysState.serializer(), json)
                 "clock" -> {
                     // atMs must be on SystemClock.uptimeMillis()'s clock: the screen moves the outlines and pass bars on from it every frame. If it isn't
                     // (a boot-time clock that counts sleep would put it hours off), take the time the frame arrived instead, and say so once.
@@ -122,7 +128,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
                     if (c.running && !clockChecked) { clockChecked = true; LinkLog.add("clock: atMs ${c.atMs}, uptimeMillis $now, apart $skew ms" + if (kotlin.math.abs(skew) > 1000) " (too far: using the arrival time)" else "") }
                     _clock.value = if (c.running && kotlin.math.abs(skew) > 1000) c.copy(atMs = now) else c
                 }
-                "notice" -> { val n = lupeJson.decodeFromString(CoreNotice.serializer(), json); if (n.text.isNotEmpty()) _notice.value = n.copy(seq = _notice.value.seq + 1, text = refusalWords(n.text)) }
+                "transfer" -> _transfers.tryEmit(lupeJson.decodeFromString(TransferEvent.serializer(), json))
+                "notice" -> { val n = lupeJson.decodeFromString(CoreNotice.serializer(), json); if (n.text.isNotEmpty()) _notice.value = n.copy(seq = _notice.value.seq + 1, text = if (n.kind == NoticeKind.Refusal) refusalWords(n.text) else n.text) }
                 else -> {}   // an area from a later phase: kept in LinkLog for the debug screen
             }
         } catch (e: Exception) {
@@ -135,6 +142,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
             lagSince = SystemClock.uptimeMillis(); lagWhat = intent.toString()
             LinkLog.add("lag kotlin $lagWhat +0 ms: sent (clock $lagSince)")
         }
+        // Try again also looks for an FM-1 that's plugged in but not open (the core's Retry only restarts the Session)
+        if (intent == Intent.Retry) LupeStartup.link?.rescan()
         when (intent) {
             is Intent.SetTab -> _shell.value = _shell.value.copy(tab = intent.tab)
             else -> scope.launch { LupeNative.intent(lupeJson.encodeToString(Intent.serializer(), intent)) }

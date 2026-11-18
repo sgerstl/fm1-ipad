@@ -26,6 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -67,7 +69,10 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, width: Dp = 220.dp, at: androidx.compose.ui.geometry.Offset? = null, content: @Composable () -> Unit) {
     val reduce = LocalReduceMotion.current
     var show by remember { mutableStateOf(false) }
-    val t = animatedFloat(if (open) 1f else 0f, if (open) Dur.FINGER else Dur.EXIT, if (open) EaseOut else EaseIn)
+    val t = animatedFloat(if (open) 1f else 0f, if (open) Dur.FINGER else 120, if (open) EaseOut else EaseIn)
+    // hybrid UI (spec §5, "popup or menu from a control"): it grows from 0.94 and drops 12 into place on the spring; the fade eases. Exits are quicker.
+    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val grow by com.scottgerstl.lupe.ui.theme.springFloat(if (open) 1f else 0f, if (open) hm.fingerMs else 120, if (open) hm.sheetBounce else 0f, spring = !reduce)
     if (open && !show) show = true
     LaunchedEffect(open, t.value) { if (!open && t.value <= 0.001f) show = false }
     if (!show) return
@@ -110,47 +115,64 @@ fun LupeMenu(open: Boolean, onDismiss: () -> Unit, alignEnd: Boolean = false, wi
                 .graphicsLayer {
                     alpha = t.value
                     if (!reduce) {
-                        val s = 0.96f + 0.04f * t.value
+                        val s = 0.94f + 0.06f * grow
                         scaleX = s; scaleY = s
+                        if (at == null) translationY = -12.dp.toPx() * (1f - grow)
                         transformOrigin = TransformOrigin(if (alignEnd) 1f else 0f, if (at != null) 0.2f else 0f)
                     }
-                    shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(12.dp); clip = true
+                    shadowElevation = 12.dp.toPx(); shape = RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.panel); clip = true
                     ambientShadowColor = androidx.compose.ui.graphics.Color.Black; spotShadowColor = androidx.compose.ui.graphics.Color.Black
                 }
-                .background(Tok.held, RoundedCornerShape(12.dp))
+                .background(Tok.held, RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.panel))
                 .verticalScroll(rememberScrollState())
-                .padding(vertical = 6.dp),
+                .padding(6.dp),
         ) { content() }
     }
 }
 
-/** A menu row, 48 dp tall; [checked] draws a tick, and the row says "selected" to TalkBack. */
+/**
+ * A menu row (spec 3.9): 44 tall (52 with a second line), radius 10. [checked] is shape as state: the row becomes a `lifted` pill with a tick,
+ * and says "selected" to TalkBack. The second line is `textSecondaryRaised` (the plain secondary grey is 4.13:1 on `held`).
+ */
 @Composable
 fun MenuRow(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, checked: Boolean? = null, enabled: Boolean = true, sub: String? = null) {
+    // the checked pill grows in from the row's middle and its tick fades in; moving the tick to another row, the old pill shrinks away
+    val reduce = LocalReduceMotion.current
+    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val on = checked == true
+    val lit by animatedFloat(if (on) 1f else 0f, Dur.STATE)
+    val grow by com.scottgerstl.lupe.ui.theme.springFloat(if (on) 1f else 0f, hm.fingerMs, hm.bounce, spring = !reduce)
     Row(
         modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = if (sub != null) 52.dp else 44.dp)
+            .drawBehind {
+                if (lit <= 0f) return@drawBehind
+                val g = if (reduce) 1f else (0.85f + 0.15f * grow).coerceIn(0.85f, 1.02f)
+                val w = size.width * g; val h = size.height * g
+                drawRoundRect(Tok.lifted.copy(alpha = lit), androidx.compose.ui.geometry.Offset((size.width - w) / 2, (size.height - h) / 2), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(h / 2))
+            }
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 if (checked == true) selected = true
                 if (!enabled) disabled()
             }
+            .clip(RoundedCornerShape(10.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            BasicText(text, style = LupeType.key.copy(color = if (enabled) Tok.text else Tok.text2))
-            if (sub != null) BasicText(sub, style = LupeType.small)
+            BasicText(text, style = LupeType.key.copy(fontSize = 16.sp, lineHeight = 19.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = if (enabled) Tok.text else Tok.text2Raised))
+            if (sub != null) BasicText(sub, style = LupeType.small.copy(color = Tok.text2Raised))
         }
-        if (checked == true) { Spacer(Modifier.width(8.dp)); Check(Tok.text) }
+        if (lit > 0f) { Spacer(Modifier.width(8.dp)); Box(Modifier.graphicsLayer { alpha = lit }) { Check(Tok.text) } }
     }
 }
 
 @Composable
 fun MenuHeading(text: String) =
-    BasicText(text.uppercase(), Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp), style = LupeType.label)
+    BasicText(text.uppercase(), Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 2.dp), style = LupeType.label.copy(color = Tok.text2Raised))
 
 @Composable
 fun MenuDivider() = Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(Tok.lifted))

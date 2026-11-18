@@ -130,18 +130,23 @@ extension PhoneCore {
             running = Self.stockName(found); identity = found
             offer = foreign(found)
         case .connected(let version):
-            running = version; identity = version
+            // (by name: "Skiff-Lupe 2.5.1" with the screen link, "Skiff 2.6" without; the app said "Skiff-Lupe" for any
+            // FM-1 with nothing on offer, so a stock 2.6 unit read "Skiff-Lupe 2.6 · up to date" after Not now, 2026-11-16)
+            let named = String(version.replacingOccurrences(of: "FELUCCA ", with: "").drop { !$0.isNumber })
+            running = s.dialect == .skiff && !named.isEmpty ? (s.screenLinked ? "Skiff-Lupe \(named)" : "Skiff \(named)") : version
+            identity = version
             if s.dialect != .skiff {
                 offer = make("install", "sloop", version, target, "Skiff-Lupe for this FM-1",
                              "This FM-1 runs \(version). The phone app is made for \(target.title) (Skiff with Lupe's screen link) and can install it now. SLOOP's projects stay on the FM-1, and Skiff converts them when it loads them. \(keeps)")
             } else {
                 // (the iPhone's rules, decision 42) newer than 2.5.1: a version Lupe's table doesn't know, above it
                 let nums = version.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
-                let newer = s.skiffFirmware == nil && (nums.count >= 2 && (nums[0], nums[1], nums.count > 2 ? nums[2] : 0) > (2, 5, 1))
+                let shortVersion = String(version.replacingOccurrences(of: "FELUCCA ", with: "").drop { !$0.isNumber })
+                let newer = (nums.count >= 2 && (nums[0], nums[1], nums.count > 2 ? nums[2] : 0) > (2, 5, 1))
                 if !s.screenLinked {
                     offer = newer
-                        ? make("install", "newerSkiff", version, target, "Skiff-Lupe for this FM-1",
-                               "This FM-1 runs \(version), which is newer than the Skiff Lupe is built on. \(target.title) is Skiff 2.5.1 with Lupe's screen link: installing it goes back to 2.5.1, so what the newer version added (CAST) goes. \(keeps)")
+                        ? make("install", "newerSkiff", version, target, "Get all of Lupe with Skiff-Lupe",
+                               "This FM-1 runs Skiff \(shortVersion). Lupe works with it, but Skiff-Lupe, a custom build of Skiff, turns on all of Lupe's features. The most important is the screen link, which keeps the FM-1 and Lupe fully linked in what they show and in their controls. Press a button or turn a knob on either one, and the other follows.\n\nSkiff-Lupe is built on Skiff 2.5.1, so installing it goes back from \(shortVersion), and CAST goes. Your projects stay, and Lupe backs them up first. It takes about a minute.")
                         : make("install", "stockSkiff", version, target, "Skiff-Lupe for this FM-1",
                                "This FM-1 runs \(version). \(target.title) is the same Skiff with Lupe's screen link: press a button on the FM-1 and the phone shows that page, and the other way round. \(keeps)")
                 } else if !newer, !(s.skiffFirmware == .v2_5_1 && s.screenCurrent) {
@@ -154,8 +159,16 @@ extension PhoneCore {
             // only a device the Session will never take (an update loader, a stock FM-1): see FirmwareLink.mayProbe
             // (nothing there, or the editor's own device still connecting: no offer, and what was said before goes)
             let installer = FirmwareInstaller(ports: link.ports, delays: link.delays)
-            if link.mayProbe(), let id = await installer.probe() {
+            let mayProbe = link.mayProbe()
+            let found = mayProbe ? await installer.probe() : nil
+            if found == nil, fwOffer?.kind == "finish", fwLoaderMisses < 2 {
+                // (a loader that missed one handshake still waits: keep its offer for two more rounds)
+                fwLoaderMisses += 1
+                return
+            }
+            if let id = found {
                 guard !fwActive else { return }
+                fwLoaderMisses = 0
                 fwSeen = id
                 identity = id.text
                 if id.isLoader {
@@ -249,8 +262,9 @@ extension PhoneCore {
         // (the phone carries no stock V15 file: the way back to stock is the iPad's, or M-VAVE's updater)
         guard !f.isStock else { refuse("Stock V15 can't be installed from the phone. Use Lupe on an iPad, or M-VAVE's own updater."); return }
         if let e = FirmwareInstaller.refusal(for: f, running: fwSeen) { refuse(e.message); return }
-        // never while a change from the editor is still going in
-        if session.skiffSong?.busy == true || !clearedPads.isEmpty && clearedPads.contains(where: { !$0.parked.isEmpty }) {
+        // never while a change from the editor is still going in. An undo still open doesn't count: it has no timer now
+        // (Scott, 2026-11-17, messages rule), and its kept pattern simply stays unused; only one being cleared does.
+        if session.skiffSong?.busy == true || clearedPads.contains(where: { !$0.undoable && !$0.parked.isEmpty }) {
             refuse("A change is still going to the FM-1. Wait a few seconds, then install."); return
         }
         if session.playing { refuse("Stop playback before installing firmware."); return }

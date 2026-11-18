@@ -45,22 +45,25 @@ object Roll {
     // ---- across the pattern: up to 64 steps in chunks of sixteen (batch item 9; Scott: it snaps to 16-step chunks, bar lines between them)
 
     /** How many chunks of sixteen a pattern of [total] steps is (the last may be shorter). */
-    fun chunks(total: Int): Int = max(1, (total + STEPS - 1) / STEPS)
+    fun chunks(total: Int, page: Int = STEPS): Int = max(1, (total + page - 1) / page)
+
+    /** The 8-step page (or chunk of [page]) holding step [i]. */
+    fun pageOf(i: Int, page: Int = STEPS): Int = max(0, i) / page
 
     /**
      * How far the grid can scroll: to the last chunk's start, and, with a panel docked over the right [dockPx], that much more so its last
      * step comes clear of it (decision 35, B: the steps keep their width and scroll under the panel).
      */
-    fun maxScroll(total: Int, chunkPx: Float, dockPx: Float): Float = (chunks(total) - 1) * chunkPx + max(0f, dockPx)
+    fun maxScroll(total: Int, chunkPx: Float, dockPx: Float, page: Int = STEPS): Float = (chunks(total, page) - 1) * chunkPx + max(0f, dockPx)
     fun clampScrollX(scroll: Float, maxScroll: Float): Float = scroll.coerceIn(0f, max(0f, maxScroll))
 
     /**
      * Where a scroll settles: the nearest chunk start, or (a panel docked) the nearest chunk start or that start plus the dock, which is
      * where its last steps come clear of the panel.
      */
-    fun snap(scroll: Float, total: Int, chunkPx: Float, dockPx: Float): Float {
+    fun snap(scroll: Float, total: Int, chunkPx: Float, dockPx: Float, page: Int = STEPS): Float {
         var best = 0f; var bestD = Float.MAX_VALUE
-        for (c in 0 until chunks(total)) for (o in if (dockPx > 0.5f) listOf(0f, dockPx) else listOf(0f)) {
+        for (c in 0 until chunks(total, page)) for (o in if (dockPx > 0.5f) listOf(0f, dockPx) else listOf(0f)) {
             val stop = c * chunkPx + o; val d = kotlin.math.abs(stop - scroll)
             if (d < bestD) { best = stop; bestD = d }
         }
@@ -78,15 +81,15 @@ object Roll {
      * The scroll that brings step [i] into view beside the dock: where it is if it already is, else the start of its chunk, else that start
      * plus the dock (its last steps). Always one of the places the grid settles.
      */
-    fun reveal(i: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int = STEPS): Float {
+    fun reveal(i: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int = STEPS, page: Int = STEPS): Float {
         if (i in inView(scroll, stepPx, viewPx, dockPx, total)) return scroll
-        val chunk = (i / STEPS) * STEPS * stepPx
+        val chunk = (i / page) * page * stepPx
         return if (i in inView(chunk, stepPx, viewPx, dockPx, total)) chunk else chunk + max(0f, dockPx)
     }
 
     /** While playing: null while the playhead's step is in view, else where to settle so it is (a page turn, not a crawl). */
-    fun follow(head: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int): Float? =
-        if (head < 0 || head >= total) null else reveal(head, scroll, stepPx, viewPx, dockPx, total).takeIf { abs(it - scroll) > 0.5f }
+    fun follow(head: Int, scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int, page: Int = STEPS): Float? =
+        if (head < 0 || head >= total) null else reveal(head, scroll, stepPx, viewPx, dockPx, total, page).takeIf { abs(it - scroll) > 0.5f }
 
     /** What is in view along the whole pattern, as the scroll indicator draws it: start and end, 0…1. */
     fun indicator(scroll: Float, stepPx: Float, viewPx: Float, dockPx: Float, total: Int): Pair<Float, Float> {
@@ -110,9 +113,96 @@ object Roll {
         else -> Tap.Add
     }
 
+    /** What a finger on the grid has become once it moved (Scott, 2026-11-17: a page swipe never places, removes or moves anything). */
+    enum class Move { Swipe, Drag }
+
+    /**
+     * A finger [movedPx] from where it went down, [heldMs] after: null while it is still within [slopPx] (it may yet be a tap or a hold).
+     * Past the slop it is a page [Move.Swipe], wherever it started, unless it was on a note or hit ([onItem]) and held still for [dwellMs]
+     * first (the pad drag's press-before-slide, 150 ms): then it is a [Move.Drag] of that note. Either way the pending tap is cancelled.
+     */
+    fun move(movedPx: Float, slopPx: Float, heldMs: Long, dwellMs: Long, onItem: Boolean): Move? = when {
+        movedPx <= slopPx -> null
+        onItem && heldMs >= dwellMs -> Move.Drag
+        else -> Move.Swipe
+    }
+
+    /**
+     * A note's right edge under a finger at content x [cx] (the grid's x plus its scroll) on [pitch]: the step the note starts on, or null.
+     * [notes] gives each step's pitches and [lengths] its length. The handle reaches [inPx] into the note and [outPx] past its end (only when
+     * the cell after it on that row is empty), so a one-step note keeps most of itself for moving and tapping (Scott, 2026-11-17).
+     */
+    fun edgeAt(notes: List<List<Int>>, lengths: List<Int>, pitch: Int, cx: Float, stepPx: Float, insetPx: Float, inPx: Float, outPx: Float): Int? {
+        for (s0 in notes.indices) {
+            if (pitch !in notes[s0]) continue
+            val len = lengths.getOrElse(s0) { 1 }.coerceAtLeast(1)
+            val right = (s0 + len) * stepPx - insetPx
+            val nextTaken = notes.getOrNull(s0 + len)?.contains(pitch) == true
+            if (cx >= right - inPx && cx <= right + (if (nextTaken) 0f else outPx)) return s0
+        }
+        return null
+    }
+
+    /**
+     * The note whose drawn body covers [step] on [pitch]: the step it starts on (the latest start at or before [step] whose length reaches it),
+     * or null for an empty cell. A touch anywhere on a long note belongs to it (Scott, 2026-11-17: a tap past its first step shortened it).
+     */
+    fun noteAt(notes: List<List<Int>>, lengths: List<Int>, pitch: Int, step: Int): Int? {
+        for (s0 in minOf(step, notes.lastIndex) downTo 0) {
+            if (pitch in notes[s0]) return if (s0 + lengths.getOrElse(s0) { 1 }.coerceAtLeast(1) > step) s0 else null
+        }
+        return null
+    }
+
+    /** The length a resize gives: the note's end at the step boundary nearest content x [cx], from [start], within 1…[maxLen]. */
+    fun resizeLength(start: Int, cx: Float, stepPx: Float, maxLen: Int): Int = (kotlin.math.round(cx / stepPx).toInt() - start).coerceIn(1, max(1, maxLen))
+
     /** The first and last visible rows' pitches for a scroll, a row more each way so partial rows draw. */
     fun visiblePitches(scrollY: Float, rowPx: Float, viewPx: Float): IntRange {
         val first = (scrollY / rowPx).toInt(); val last = ((scrollY + viewPx) / rowPx).toInt()
         return max(0, 127 - last)..min(127, 127 - first)
+    }
+
+    // ---- 8-step pages (hybrid UI, Scott 2026-11-17): with the sound panel docked the grid shows 8 steps a page beside it, not 16 under it
+
+    /** Steps a page: 8 while a panel is docked, else 16. */
+    const val PAGE_DOCKED = 8
+
+    /**
+     * Whether the grid turns its page for the playhead: with 8-step pages only when Follow is on (Scott, 2026-11-17); 16-step chunks keep
+     * following as built (batch item 9), unless a finger moved the steps a moment ago ([recentlyTouched]).
+     */
+    fun pagesFollow(page: Int, follow: Boolean, recentlyTouched: Boolean): Boolean = if (page == PAGE_DOCKED) follow else !recentlyTouched
+
+    /** The minimap's sixteen cells: the bar of 16 that holds [page] of [pageSteps] (its first step), so a 32-step pattern shows its second bar there. */
+    fun minimapStart(pageIndex: Int, pageSteps: Int): Int = (pageIndex * pageSteps / STEPS) * STEPS
+
+    /** The label at the minimap's left: "1–8", "9–16", "17–24"… (an en dash), clipped to the pattern's [total]. */
+    fun pageLabel(pageIndex: Int, pageSteps: Int, total: Int): String {
+        val a = pageIndex * pageSteps + 1; val b = min(total, (pageIndex + 1) * pageSteps)
+        return "$a\u2013$b"
+    }
+
+    /** A fling turns the page from this finger speed, in dp a second (Android's pagers use about 400). */
+    const val FLING_DP_S = 400f
+    /** …or a drag past this share of the page. */
+    const val TURN_SHARE = 0.2f
+
+    /**
+     * Where a let-go settles (Scott, 2026-11-17: "you really have to drag it all the way over"): the page the drag began on, or the next one
+     * either way once the finger flung ([fingerVelocity] px/s, the finger's x speed; leftward is negative, toward later steps) faster than
+     * [flingPx] or dragged more than [TURN_SHARE] of a page ([startScroll] → [scroll]). Never past the pattern's first or last page.
+     */
+    fun pageTarget(startScroll: Float, scroll: Float, fingerVelocity: Float, pagePx: Float, total: Int, page: Int, flingPx: Float): Float {
+        if (pagePx <= 0f) return 0f
+        val startPage = kotlin.math.round(startScroll / pagePx).toInt()
+        val moved = scroll - startScroll
+        val step = when {
+            fingerVelocity <= -flingPx -> 1
+            fingerVelocity >= flingPx -> -1
+            abs(moved) > TURN_SHARE * pagePx -> if (moved > 0) 1 else -1
+            else -> 0
+        }
+        return (startPage + step).coerceIn(0, chunks(total, page) - 1) * pagePx
     }
 }

@@ -125,6 +125,8 @@ data class ProjectsState(
     val name: String = "",
     val changed: Boolean = false,
     val busy: Boolean = false,
+    /** Changed since a phone project was last read or written (ProjectTransfer.kt); null: none was since the app started, so unknown. */
+    val phoneEdited: Boolean? = null,
 )
 
 /** Defaults for a core that doesn't publish P5 yet (the fake until P2 fills it). */

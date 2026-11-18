@@ -37,27 +37,28 @@ struct ProjectsSheet: View {
                 }
                 switch tab {
                 case .projects:
-                    if session.dialect == .skiff { SkiffProjectSlots(session: session, menu: $menu, prompt: $prompt) }
-                    Group {
+                    if session.dialect == .skiff {
+                        SkiffProjectSlots(session: session, store: store, menu: $menu, prompt: $prompt,
+                                          saveHere: { naming = .saveAs(store.nextName()) }, newProject: { request(nil) })
+                    } else {
                         Section {
                             Button { request(nil) } label: { Label("New project", systemImage: "plus") }
                                 .disabled(!session.isConnected || store.busy != nil)
                                 .accessibilityHint("Clears the music: each track's power-on sound, no patterns. The pattern pool keeps its patterns")
                             Button { naming = .saveAs(store.nextName()) } label: { Label("Save as…", systemImage: "square.and.arrow.down") }
                                 .disabled(!session.isConnected || store.busy != nil)
-                        } header: {
-                            Text("On this iPad")      // (beside the FM-1's own slots)
-                        } footer: {
-                            if !session.isConnected { Text("Plug in the FM-1 to open or save a project. You can still rename and delete.") }
-                            else { Text("Saving here or opening stops the FM-1. A project keeps its patterns with it; user sounds and samples stay on the FM-1.") }
                         }
-                        Section {
-                            if store.projects.isEmpty {
-                                Text("No projects yet. Save what's on the FM-1 to make your first one.")
-                                    .foregroundStyle(Theme.textSecondary)
-                            }
-                            ForEach(store.projects) { row($0) }
+                    }
+                    Section {
+                        if store.projects.isEmpty {
+                            Text("No projects yet. Save to… › This \(ThisDevice.name) keeps what's playing here.")
+                                .foregroundStyle(Theme.textSecondary)
                         }
+                        ForEach(store.projects) { row($0) }
+                    } header: {
+                        Text("On this \(ThisDevice.name)")
+                    } footer: {
+                        Text("No limit here. A project keeps its patterns with it; user sounds and samples stay on the FM-1. Opening one stops the FM-1.")
                     }
                 case .safety:
                     Section {
@@ -79,7 +80,7 @@ struct ProjectsSheet: View {
                         Text(store.safetyCopies.isEmpty ? "Safety copies" : "Safety copies (\(store.safetyCopies.count))").tag(Tab.safety)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 320)
+                    .frame(maxWidth: 320)
                 }
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
@@ -129,7 +130,7 @@ struct ProjectsSheet: View {
                     HStack(spacing: 8) {
                         Text(p.name).font(.lupe(17, .semibold)).foregroundStyle(Theme.text)
                         if onFM1 {
-                            Text(store.edited ? "On FM-1 · edited" : "On FM-1")
+                            Text(store.edited ? "Playing now · changed" : "Playing now")
                                 .font(.lupe(12, .semibold))
                                 .foregroundStyle(Theme.onColour)
                                 .padding(.horizontal, 8).padding(.vertical, 2)
@@ -263,7 +264,7 @@ extension View {
 }
 
 /// A row's ⋯ key: opens the row's menu under itself.
-private struct RowMenuKey: View {
+struct RowMenuKey: View {
     let name: String
     let hint: String
     let disabled: Bool

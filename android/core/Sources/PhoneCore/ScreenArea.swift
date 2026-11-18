@@ -17,6 +17,10 @@ public struct Fm1ScreenArea: Codable, Equatable, Sendable {
     public var menu: Bool
     /// A layer held on the FM-1 (0 none; 3 SCL's keys, which shows as SEL › SCALE; 7 ARP's PERFORM).
     public var layer: Int
+    /// SEQ › NOTES and FEEL only: the FM-1's step cursor (the selection's first step, 0-based) and, for a selection of several, its last;
+    /// the PRESETS encoder moves it (Skiff 2.5.1 ui_input.c cursor_turn). The phone's picked step follows it (the iPad's SeqCursor).
+    public var cursor: Int? = nil
+    public var cursor2: Int? = nil
 }
 
 extension PhoneCore {
@@ -33,7 +37,10 @@ extension PhoneCore {
         guard s.isConnected, s.dialect == .skiff, s.screenLinked, let sc = s.deviceScreen else { return nil }
         let menu = sc.menu != 0, layer = sc.layer
         func area(_ key: String, _ page: Int, _ title: String) -> Fm1ScreenArea {
-            Fm1ScreenArea(key: key, page: page, title: title, menu: menu, layer: layer)
+            var a = Fm1ScreenArea(key: key, page: page, title: title, menu: menu, layer: layer)
+            // the step cursor, on the two pages whose knobs edit the selection (NOTES 41, FEEL 42)
+            if key == "SEQ", page == 41 || page == 42, !menu, layer == 0 { a.cursor = sc.cursor; a.cursor2 = sc.cursor2 }
+            return a
         }
         // a sound page (2.5.1's FX › DELAY and REVERB too, and SCL held: SCALE): its family's key
         if let fw = Self.soundPage(of: sc), let p = SoundPage.page(s, fw: fw) { return area(p.family.rawValue, fw, p.title) }
@@ -46,10 +53,11 @@ extension PhoneCore {
         }
     }
 
-    private struct ScreenWire: Decodable { let intent: String; let screen: String?; let page: Int? }
+    private struct ScreenWire: Decodable { let intent: String; let screen: String?; let page: Int?; let cursor: Int? }
 
     /// `{"intent":"screenGoto","screen":"GLO"|"SAVE"|"SEQ"[,"page":n]}`: the FM-1 to that key's screen, its first page
-    /// (GLO MIXER, SAVE PRESETS, SEQ NOTES, as the key itself lands) or `page`, one of that key's. A write
+    /// (GLO MIXER, SAVE PRESETS, SEQ NOTES, as the key itself lands) or `page`, one of that key's; `cursor` (SEQ › NOTES and FEEL)
+    /// puts the FM-1's step cursor on that step, so its knobs edit it (the phone's Edit step panel, 2026-11-17). A write
     /// (SCREEN_GOTO): refused while read-only. True when `json` was it.
     func handleScreenJSON(_ json: String) -> Bool {
         guard let w = try? JSONDecoder().decode(ScreenWire.self, from: Data(json.utf8)), w.intent == "screenGoto" else { return false }
@@ -59,7 +67,7 @@ extension PhoneCore {
         let target = w.page.flatMap { p in pages.first { $0.page == p }?.page } ?? pages[0].page
         if let p = w.page, p != target { log("screenGoto: page \(p) isn't one of \(key)'s, its first instead") }
         lag.start("screenGoto \(key) \(target)")
-        session.showOnDevice(page: target)
+        session.showOnDevice(page: target, cursor: key == "SEQ" && (target == 41 || target == 42) ? w.cursor.map { max(0, $0) } : nil)
         publishNow(["shell", "page", "fm1Screen"])
         return true
     }

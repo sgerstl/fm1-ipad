@@ -79,3 +79,24 @@ fun Modifier.heightPx(px: Density.() -> Int): Modifier = layout { m, c ->
     val p = m.measure(c.copy(minHeight = h, maxHeight = h))
     layout(p.width, h) { p.place(0, 0) }
 }
+
+/**
+ * The hybrid UI's spring (design/hybrid-ui/spec.md §5): spatial changes (shape, size, position) travel on a spring with a little overshoot;
+ * colour and opacity ease out and never bounce. SwiftUI's `.spring(duration:bounce:)` maps to Compose as dampingRatio = 1 − bounce and a
+ * stiffness of (2π / duration)² at mass 1, so the spring lands near [durationMs]. Starting values live in Labs (Settings › Labs, "Hybrid motion").
+ */
+fun <T> lupeSpring(durationMs: Int, bounce: Float, visibility: T? = null): androidx.compose.animation.core.SpringSpec<T> {
+    val s = durationMs.coerceAtLeast(60) / 1000f
+    val w = (2f * Math.PI.toFloat() / s)
+    return androidx.compose.animation.core.spring(dampingRatio = (1f - bounce).coerceIn(0.3f, 1f), stiffness = w * w, visibilityThreshold = visibility)
+}
+
+/** An animated float that travels on [lupeSpring] whatever the system's duration scale; with Reduce Motion the caller passes [spring] = false and it eases out over 150 ms. */
+@Composable
+fun springFloat(target: Float, durationMs: Int, bounce: Float, spring: Boolean = true): State<Float> {
+    val anim = remember { Animatable(target) }
+    LaunchedEffect(target) {
+        withContext(UnscaledMotion) { anim.animateTo(target, if (spring) lupeSpring(durationMs, bounce) else tween(Dur.STATE, easing = EaseOut)) }
+    }
+    return remember { object : State<Float> { override val value: Float get() = anim.value } }
+}

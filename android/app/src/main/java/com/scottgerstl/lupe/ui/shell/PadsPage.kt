@@ -1,5 +1,7 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.ui.layout.layout
+
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -9,6 +11,7 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -102,7 +105,12 @@ private val SCENE_PAD = 4.dp
 @Composable
 fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     var store by rememberSaveable { mutableStateOf(false) }
-    var notice by remember { mutableStateOf<String?>(null) }
+    // a refusal goes to the app strip, never over the scene row (Scott, 2026-11-17, messages rule): the scene row stays the scene row
+    val messages = LocalMessages.current
+    // fixed: Store is on (the way to keep one), or that scene now holds something; then the refusal leaves without ✕
+    LaunchedEffect(store, pads.scenes) {
+        messages.fixed { f -> f.startsWith("scene:") && (store || pads.scenes.getOrNull(f.removePrefix("scene:").toIntOrNull() ?: -1)?.stored == true) }
+    }
     // Store over a kept scene asks once more, in place (Scott, 2026-11-14): the scene, and when it was asked
     var confirmScene by remember { mutableStateOf<Int?>(null) }
     var confirmAt by remember { mutableStateOf(0L) }
@@ -116,9 +124,22 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
     val mix by core.mix.collectAsStateWithLifecycle()
     // the clock reference: the pass bars and the waiting outlines move on from it every frame (read inside the draw, so a new reference recomposes nothing)
     val clock = core.clock.collectAsStateWithLifecycle()
+    // after a recording, the pad that holds the take becomes the picked pad, so Pads and Edit agree (Scott, 2026-11-18): the "New" pad once the
+    // FM-1 has kept it (its newAt goes and the entry is a pattern), or the pad it was on when the recording stops
+    val lastNew = remember { androidx.compose.runtime.mutableStateMapOf<Int, Int?>() }
+    val lastRec = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
+    androidx.compose.runtime.LaunchedEffect(pads.rows) {
+        for (r in pads.rows) {
+            val was = lastNew[r.track]
+            if (was != null && r.newAt == null && r.entries.getOrNull(was)?.kind == PadKind.Pattern) core.send(Intent.PadSelect(r.track, was))
+            else if (lastRec[r.track] == true && !r.recording && r.newAt == null) r.entries.indexOfFirst { it.play == PadPlay.Playing }.takeIf { it >= 0 }?.let { core.send(Intent.PadSelect(r.track, it)) }
+            lastNew[r.track] = r.newAt; lastRec[r.track] = r.recording
+        }
+    }
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val scenesH = 34.dp
+    // the page's content sits BAND_INSET in from its edges, so the selected track's band (which reaches that far past the row) isn't cut off by the page
+    BoxWithConstraints(modifier.fillMaxSize().padding(start = BAND_INSET, end = BAND_INSET, top = BAND_INSET)) {
+        val scenesH = 44.dp   // the scenes toolbar: 4 inside, scene keys 36 (spec 3.3 draws 40–48; the Pixel's height is the limit)
         val rows = pads.rows.ifEmpty { return@BoxWithConstraints }
         val rh = ((maxHeight - scenesH - 8.dp - GAP * (rows.size - 1)) / rows.size).coerceAtLeast(24.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -131,10 +152,15 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                     val y = animatedFloat(at.toFloat(), Dur.STATE)
                     val travelling = LocalTabTravelling.current
                     val band = trackBand(Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size])
+                    // an even inset round the row (BAND_INSET, half the row gap, so it never reaches the next row); the left end wraps the selected head
+                    // (12 dp) and the right end the last pad (10): each its radius plus the inset (nested corners, Scott 2026-11-18)
+                    val bandR = com.scottgerstl.lupe.ui.theme.Shape.pad + BAND_INSET
                     Box(
-                        Modifier.fillMaxWidth().height(rh + 4.dp).offset { IntOffset(0, ((rh + GAP).toPx() * y.value - 2.dp.toPx()).roundToInt()) }
-                            .selectedTrackAnchor()
-                            .drawBehind { if (!travelling) drawRoundRect(band, cornerRadius = CornerRadius(10.dp.toPx())) }
+                        Modifier.fillMaxWidth().padding(horizontal = 0.dp).height(rh + BAND_INSET * 2)
+                            .offset { IntOffset(-BAND_INSET.roundToPx(), ((rh + GAP).toPx() * y.value - BAND_INSET.toPx()).roundToInt()) }
+                            .layout { m, c -> val extra = (BAND_INSET * 2).roundToPx(); val p = m.measure(c.copy(minWidth = c.minWidth + extra, maxWidth = c.maxWidth + extra)); layout(c.maxWidth, p.height) { p.place(0, 0) } }
+                            .selectedTrackAnchor(leftR = HEAD_SELECTED_R + BAND_INSET, rightR = bandR)
+                            .drawBehind { if (!travelling) drawBand(band, Offset.Zero, size, (HEAD_SELECTED_R + BAND_INSET).toPx(), bandR.toPx()) }
                             .clearAndSetSemantics { },
                     )
                 }
@@ -196,17 +222,32 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
             Box(Modifier.fillMaxWidth().height(scenesH)) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {   // (8 between Store, the scenes and the knobs)
                     // the iPhone's short Store key with a dot (decision 33): the same word either way, lit while armed, so the scenes beside it never move
-                    Key({ store = !store }, "Store scene", width = 88.dp, height = scenesH, minTarget = scenesH, on = store,
-                        role = Role.Switch, state = if (store) "On: tap a scene to store what plays now" else "Off") { fg ->
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val armed = animatedFloat(if (store) 1f else 0f, Dur.STATE)
-                            androidx.compose.foundation.Canvas(Modifier.size(6.dp)) { drawCircle(androidx.compose.ui.graphics.lerp(Tok.text3, Tok.rec, armed.value)) }
-                            KeyLabel("Store", fg)
-                        }
+                    // the scenes toolbar (spec 3.3): one floating `panel` group at radius 24, 4 inside; Store a `lifted` pill with its dot, lit white while armed
+                    Row(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(com.scottgerstl.lupe.ui.theme.Shape.sheet)).background(Tok.panel).padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Store (Scott, 2026-11-17: "lose the little LED indicator… change shape"): disarmed a `held` pill; armed white with dark text, its
+                    // corners squaring to 12 on the spatial spring, the colour blending in 150 ms. The width never changes (S6)
+                    val armed = animatedFloat(if (store) 1f else 0f, Dur.STATE)
+                    val storeReduce = LocalReduceMotion.current
+                    val square by com.scottgerstl.lupe.ui.theme.spatialFloat(if (store) 1f else 0f, storeReduce)
+                    val storeSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(store, storeReduce)
+                    Box(
+                        Modifier.width(88.dp).fillMaxHeight()
+                            .graphicsLayer { val (qx, qy) = storeSquash(); scaleX = qx; scaleY = qy }
+                            .drawBehind {
+                                val pill = size.height / 2; val k = square.coerceIn(0f, 1.15f)
+                                drawRoundRect(lerp(Tok.held, Tok.text, armed.value), cornerRadius = CornerRadius((pill + (12.dp.toPx() - pill) * k).coerceAtLeast(4f)))
+                            }
+                            .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Store scene"; stateDescription = if (store) "On: tap a scene to store what plays now" else "Off" }
+                            .clickable(role = Role.Switch) { store = !store },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        KeyLabel("Store", lerp(Tok.text, Tok.onColour, armed.value), style = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal))
                     }
                     // the sixteen scroll across the room the HOME knobs leave (decision 50): the last recalled kept in view, a fade at a clipped edge
                     val sceneScroll = rememberScrollState()
                     val reduceMotion = LocalReduceMotion.current
+                    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
                     val keyPx = with(androidx.compose.ui.platform.LocalDensity.current) { (SCENE_KEY_W + GAP).toPx() }
                     val current = pads.scenes.indexOfFirst { it.current }
                     var viewPx by remember { mutableStateOf(0) }
@@ -228,39 +269,52 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                             .horizontalScroll(sceneScroll).padding(horizontal = SCENE_PAD),   // (the keys' press sink stays inside the clip)
                         horizontalArrangement = Arrangement.spacedBy(GAP), verticalAlignment = Alignment.CenterVertically,
                     ) {
+                    val armedNow = animatedFloat(if (store) 1f else 0f, Dur.STATE).value
                     pads.scenes.forEachIndexed { i, s ->
                         val kept = animatedFloat(if (s.stored || s.current) 1f else 0f, Dur.STATE); val cur = animatedFloat(if (s.current) 1f else 0f, Dur.STATE)
+                        // shape as state: the current scene squares to 12, a stored one is round, an empty one bare; a press squashes it (spec §5)
+                        var scenePressed by remember { mutableStateOf(false) }
+                        val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (s.current) 1f else 0f, reduceMotion)
+                        val sceneSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(s.current, reduceMotion)
+                        val squash by com.scottgerstl.lupe.ui.theme.springFloat(if (scenePressed) hm.pressScale else 1f, if (scenePressed) 100 else hm.fingerMs, hm.bounce, spring = !reduceMotion)
                         val label = "Scene ${i + 1}" + (if (!s.stored) ", empty" else if (s.current) ", current" else "") + if (s.waiting) ", waiting for the launch point" else ""
                         Box(
-                            Modifier.width(SCENE_KEY_W).height(scenesH)
-                                .clip(RoundedCornerShape(8.dp))
-                                // the current scene white, a stored one filled, an empty one only outlined (the fills and the outline blend, nothing pops)
+                            Modifier.width(SCENE_KEY_W).fillMaxHeight()
+                                .graphicsLayer { val k = if (reduceMotion) 1f else squash; val (sx, sy) = sceneSquash(); scaleX = k * sx; scaleY = k * sy }
+                                // the current scene white and square, a stored one `lifted` and round, an empty one bare with a grey number (fill and ink both carry it)
                                 .drawBehind {
-                                    val r = CornerRadius(8.dp.toPx())
-                                    if (kept.value > 0f) drawRoundRect(Tok.control.copy(alpha = kept.value), cornerRadius = r)
-                                    if (cur.value > 0f) drawRoundRect(Tok.primaryTop.copy(alpha = cur.value), cornerRadius = r)
-                                    if (kept.value < 1f) drawRoundRect(Tok.outline.copy(alpha = 1f - kept.value), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(7.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                                    val t = sq.coerceIn(0f, 1.15f)
+                                    val round = size.minDimension / 2; val square = com.scottgerstl.lupe.ui.theme.Shape.selected.toPx()
+                                    val r = CornerRadius((round + (square - round) * t).coerceAtLeast(2f))
+                                    fun layer(c: Color) { if (!reduceMotion) drawRoundRect(c, cornerRadius = r) else { val u = sq.coerceIn(0f, 1f); drawRoundRect(c.copy(alpha = c.alpha * (1f - u)), cornerRadius = CornerRadius(round)); drawRoundRect(c.copy(alpha = c.alpha * u), cornerRadius = CornerRadius(square)) } }
+                                    if (kept.value > 0f) layer(Tok.lifted.copy(alpha = kept.value))
+                                    // S2: while Store is armed the empty scenes show a stronger outline, so the targets read
+                                    if (kept.value < 1f && armedNow > 0f) drawRoundRect(Tok.primaryEdge.copy(alpha = armedNow * (1f - kept.value)), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(r.x - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                                    if (cur.value > 0f) layer(Tok.text.copy(alpha = cur.value))
                                 }
                                 .semantics(mergeDescendants = true) { role = Role.Button; contentDescription = label }
                                 .pointerInput(i, store, s.stored) {
-                                    detectTapGestures {
+                                    detectTapGestures(onPress = { scenePressed = true; tryAwaitRelease(); scenePressed = false }) {
                                         when {
-                                            store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis(); notice = null }   // a kept scene: ask first
+                                            store && s.stored -> { confirmScene = i; confirmAt = System.currentTimeMillis() }   // a kept scene: ask first
                                             store -> { core.send(Intent.SceneStore(i)); store = false; haptic.performHapticFeedback(HapticFeedbackType.Confirm) }
                                             s.stored -> core.send(Intent.SceneRecall(i))
-                                            else -> notice = "Scene ${i + 1} is empty. Tap Store scene, then a scene, to keep what plays now."
+                                            else -> messages.refuse("Scene ${i + 1} is empty. Tap Store scene, then a scene, to keep what plays now.", fix = "scene:$i")
                                         }
                                     }
                                 },
                             contentAlignment = Alignment.Center,
                         ) {
-                            BasicText("${i + 1}", style = LupeType.key.copy(color = if (s.current) Tok.onColour else if (s.stored) Tok.text else Tok.text2))
+                            BasicText("${i + 1}", style = LupeType.number.copy(fontSize = 17.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if (s.current) Tok.onColour else if (s.stored) Tok.text else Tok.text2))
                             // recalled while playing: it waits for the launch point, its outline drawn as that comes (a scene is global: white, or dark on the lit key)
-                            if (s.waiting) LaunchTrace({ clock.value.ticksLeft(s.launchTick, android.os.SystemClock.uptimeMillis()) }, if (s.current) Tok.onColour else Tok.text, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+                            if (s.waiting) LaunchTrace({ clock.value.ticksLeft(s.launchTick, android.os.SystemClock.uptimeMillis()) }, if (s.current) Tok.onColour else Tok.text, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f,
+                                corners = { sz -> val round = sz.minDimension / 2; val square = com.scottgerstl.lupe.ui.theme.Shape.selected.toPx()
+                                    val k = (round + (square - round) * sq.coerceIn(0f, 1.15f)).coerceAtLeast(2f); floatArrayOf(k, k, k, k) })
                         }
                     }
                     }   // the scenes' scroller
-                    SceneHomeKnobs(core, scenesH)
+                    }   // the toolbar
+                    SceneHomeKnobs(core, 34.dp)   // decision 50's row height: the toolbar grew, the knobs keep theirs
                 }
                 // Store over a kept scene: a red-outlined row naming it, Cancel beside it; a tap ignores the first 0.4 s
                 LupeCrossfade(confirmScene, Modifier.fillMaxSize()) { c ->
@@ -278,16 +332,6 @@ fun PadsPage(pads: PadsState, core: LupeCore, modifier: Modifier = Modifier) {
                             contentAlignment = Alignment.CenterStart,
                         ) { BasicText(words, style = LupeType.key, maxLines = 1) }
                         Key({ confirmScene = null }, "Cancel", width = 88.dp, height = scenesH, minTarget = scenesH) { fg -> KeyLabel("Cancel", fg) }
-                    }
-                }
-                // a refusal shows over the scenes until dismissed
-                LupeCrossfade(notice, Modifier.fillMaxSize()) { n ->
-                    if (n != null) Row(
-                        Modifier.fillMaxSize().background(Tok.held, RoundedCornerShape(8.dp)).padding(start = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        BasicText(n, Modifier.weight(1f), style = LupeType.small.copy(color = Tok.text), maxLines = 2)
-                        Key({ notice = null }, "Dismiss", width = 44.dp, height = scenesH, minTarget = scenesH) { fg -> BasicText("✕", style = LupeType.key.copy(color = fg)) }
                     }
                 }
             }
@@ -317,18 +361,28 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
     // the head's hold menu (the iPad's rows, and LEVEL and PAN now the track controls box is gone: decision 31): its sounds, level, pan, mute, solo
     val mixNow = core.mix.collectAsStateWithLifecycle()
     fun headItems() = listOf(
-        HoldItem("Sounds…", sub = engine.ifEmpty { null }) { soundsHost.open(r.track) },
-        HoldItem("LEVEL", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.level ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.levelText.orEmpty() }, 0, 127) { core.send(com.scottgerstl.lupe.core.SetLevel(r.track, it)) }),
-        HoldItem("PAN", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.pan ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.panText.orEmpty() }, -64, 63, bipolarAt = 0) { core.send(com.scottgerstl.lupe.core.SetPan(r.track, it)) }),
-        HoldItem("Mute", checked = r.muted) { core.send(Intent.TrackMute(r.track)) },
-        HoldItem("Solo", sub = "Plays this track alone", checked = solo) { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)) },
+        HoldItem("Sounds…", sub = engine.ifEmpty { null }, tile = true, short = "Sounds", tileSub = engine.ifEmpty { null }) { soundsHost.open(r.track) },
+        HoldItem("Mute", checked = r.muted, tile = true) { core.send(Intent.TrackMute(r.track)) },
+        HoldItem("Solo", sub = "Plays this track alone", checked = solo, tile = true) { core.send(com.scottgerstl.lupe.core.TrackSolo(r.track)) },
+        HoldItem("LEVEL", group = "Mix", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.level ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.levelText.orEmpty() }, 0, 127) { core.send(com.scottgerstl.lupe.core.SetLevel(r.track, it)) }),
+        HoldItem("PAN", group = "Mix", slide = HoldSlide({ mixNow.value.rows.getOrNull(r.track - 1)?.pan ?: 0 }, { mixNow.value.rows.getOrNull(r.track - 1)?.panText.orEmpty() }, -64, 63, bipolarAt = 0) { core.send(com.scottgerstl.lupe.core.SetPan(r.track, it)) }),
     )
+    // selected, the head's outline squares off to 12 on the shape spring, with a squash (Scott, 2026-11-18: "Square the outline"); the badge stays a circle
+    val reduceHead = LocalReduceMotion.current
+    val headSq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (selected) 1f else 0f, reduceHead)
+    val headSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(selected, reduceHead)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val headPx = with(density) { h.toPx() }; val selPx = with(density) { HEAD_SELECTED_R.toPx() }
+    val headR = { headRadius(headPx, selPx, headSq.coerceIn(0f, 1.15f)) }
     Box(Modifier.width(HEAD_W).height(h).onGloballyPositioned { headCoords = it }) {
+        // the head (spec 3.2): a pill on `control`; selected, the track's tint with a 2 dp edge in its colour on the squared shape
         Row(
-            Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
+            Modifier.fillMaxSize().graphicsLayer { val (qx, qy) = headSquash(); scaleX = qx; scaleY = qy }.clip(headShape(headR))
                 .drawBehind {
-                    drawRect(lerp(Tok.control, lerp(Tok.page, color, 0.30f), sel.value))
-                    if (press.value > 0f) drawRect(Color.Black.copy(alpha = 0.25f * press.value))
+                    val pillR = CornerRadius(headR())
+                    drawRoundRect(lerp(Tok.control, lerp(Tok.page, color, 0.30f), sel.value), cornerRadius = pillR)
+                    if (sel.value > 0f) drawRoundRect(color.copy(alpha = sel.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius((headR() - 1.dp.toPx()).coerceAtLeast(1f)), style = Stroke(2.dp.toPx()))
+                    if (press.value > 0f) drawRoundRect(Color.Black.copy(alpha = 0.25f * press.value), cornerRadius = pillR)
                 }
                 .semantics(mergeDescendants = true) {
                     role = Role.Button; contentDescription = "Track ${r.track}, $sound" + (if (engine.isNotEmpty()) ", $engine" else "") + (if (solo) ", solo" else ""); stateDescription = if (selected) "Selected" else ""
@@ -343,19 +397,23 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
                 .tapOrHoldMenu(r.track, color, { headItems() }, onTap = { core.send(Intent.TrackSelect(r.track)) }, pressed = { pressed = it }),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.width(30.dp).fillMaxHeight().background(color), contentAlignment = Alignment.Center) { BasicText("${r.track}", style = LupeType.key.copy(fontSize = 15.sp, color = Tok.onColour)) }
-            Column(Modifier.padding(start = 8.dp, end = 4.dp), verticalArrangement = Arrangement.Center) {
-                BasicText(sound, style = LupeType.key.copy(fontSize = 15.sp, lineHeight = 17.sp), maxLines = 1, softWrap = false,
+            Spacer(Modifier.width(((h - 30.dp) / 2).coerceAtLeast(4.dp)))
+            // the badge squares with the head (nested: 12 minus its inset from the outline's edge, the spacer before it)
+            com.scottgerstl.lupe.ui.mix.TrackBadge(r.track, color, selected, minOf(30.dp, h - 8.dp), 18,
+                squareTo = com.scottgerstl.lupe.ui.mix.nestedBadgeRadius(HEAD_SELECTED_R.value, ((h - 30.dp) / 2).coerceAtLeast(4.dp).value)?.dp)
+            Column(Modifier.padding(start = 8.dp, end = 12.dp), verticalArrangement = Arrangement.Center) {
+                BasicText(sound, style = LupeType.key.copy(fontSize = 14.5.sp, lineHeight = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1, softWrap = false,
                     autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 15.sp, stepSize = 1.sp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (engine.isNotEmpty()) BasicText(engine, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 1)
+                    if (engine.isNotEmpty()) BasicText(engine, style = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp, color = Tok.text2), maxLines = 1)
                     // solo: a lit pill with the word (never the colour alone)
                     if (solo) BasicText("SOLO", Modifier.background(Tok.primaryTop, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp), style = LupeType.label.copy(fontSize = 10.sp, lineHeight = 11.sp, color = Tok.onColour))
                 }
             }
         }
         // a solo that waits for the launch point: the head's outline drawn as it comes, in the track's colour
-        if (r.soloPending) LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) }, color, 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+        if (r.soloPending) LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) }, color, h / 2, 2.dp, Modifier.matchParentSize(), base = 0.6f,
+            corners = { val k = headR(); floatArrayOf(k, k, k, k) })
     }
 }
 
@@ -388,16 +446,27 @@ private fun MuteColumn(rows: List<PadRow>, rh: Dp, core: LupeCore, clock: androi
     ) {
         rows.forEach { r ->
             val lit = animatedFloat(if (r.muted) 1f else 0f, Dur.STATE)
+            // muted: the white grows out from the middle of the pill on the spring (Reduce Motion: it fades where it stands)
+            val muteGrow by com.scottgerstl.lupe.ui.theme.spatialFloat(if (r.muted) 1f else 0f, LocalReduceMotion.current)
+            val muteSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(r.muted, LocalReduceMotion.current)
+            val reduceMute = LocalReduceMotion.current
             val sound = r.name.substringAfter(" · ")
             Box(
-                Modifier.fillMaxWidth().height(rh).clip(RoundedCornerShape(8.dp)).background(lerp(Tok.control, Tok.primaryTop, lit.value))
+                Modifier.fillMaxWidth().height(rh).graphicsLayer { val (sx, sy) = muteSquash(); scaleX = sx; scaleY = sy }.clip(RoundedCornerShape(50)).background(Tok.control)
+                    .drawBehind {
+                        if (lit.value <= 0f) return@drawBehind
+                        val g = if (reduceMute) 1f else (0.5f + 0.5f * muteGrow).coerceIn(0.5f, 1.05f)
+                        val w = size.width * g; val hh = size.height * g
+                        drawRoundRect(Tok.primaryTop.copy(alpha = lit.value), Offset((size.width - w) / 2, (size.height - hh) / 2), Size(w, hh), CornerRadius(hh / 2))
+                    }
                     .semantics(mergeDescendants = true) { role = Role.Switch; contentDescription = "Mute $sound"; stateDescription = (if (r.muted) "Muted" else "Not muted") + if (r.mutePending != "none") ", changing at the launch point" else ""; onClick { core.send(Intent.TrackMute(r.track)); true } },
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText("MUTE", style = LupeType.key.copy(fontSize = 13.sp, color = lerp(Tok.text2Raised, Tok.onColour, lit.value)))
-                // a mute that waits for the launch point: the key's outline drawn as it comes, in the track's colour (dark on the lit, white key)
+                BasicText("Mute", style = LupeType.key.copy(fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = lerp(Tok.text2Raised, Tok.onColour, lit.value)))
+                // a mute that waits for the launch point: the key's outline drawn as it comes, in the tertiary grey, 2 dp, as on the Mix strip
+                // (Scott, 2026-11-17; was the track's colour, dark on the lit key)
                 if (r.mutePending != "none") LaunchTrace({ clock.value.ticksLeft(r.launchTick, android.os.SystemClock.uptimeMillis()) },
-                    if (r.muted) Tok.onColour else Tok.track[(r.track - 1) % Tok.track.size], 8.dp, 2.dp, Modifier.matchParentSize(), base = 0.6f)
+                    Tok.text3, rh / 2, 2.dp, Modifier.matchParentSize(), base = com.scottgerstl.lupe.ui.mix.LAUNCH_TRACE_BASE)
             }
         }
     }
@@ -417,16 +486,36 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     val ringMuted = animatedFloat(if (playing && row.muted) 1f else 0f, Dur.STATE)
     val wait = animatedFloat(if (e.play == PadPlay.Waiting) 1f else 0f, Dur.STATE)
     val next = animatedFloat(if (e.play == PadPlay.Next) 1f else 0f, Dur.STATE)
-    val sel = animatedFloat(if (selected) 1f else 0f, Dur.STATE)
+    // the selected ring fades out on the old pad while it fades in on the new one, 150 ms ease-out, each one fade with one target. It used to be
+    // `selected` × (1 − waiting), two fades multiplied: a pad tapped while playing is selected and waiting at once, so its ring flashed up to a
+    // quarter and back within ~150 ms as the trace came in (the "dither" Scott saw, 2026-11-17). A waiting pad shows the trace, not the ring
+    val sel = animatedFloat(if (selected && e.play != PadPlay.Waiting) 1f else 0f, Dur.STATE)
     var pressed by remember { mutableStateOf(false) }
     val press = animatedFloat(if (pressed) 1f else 0f, if (pressed) 60 else 100)
     val onRow = animatedFloat(if (pads.selected.track == row.track) 1f else 0f, Dur.STATE)
+    // shape as state (hybrid UI, spec 3.1): a playing pad is a full pill, every other state a 10-radius card; the shape travels on the spring,
+    // the colour eases (spec §5). A press morphs a playing pad back toward the card. With Reduce Motion the shape lands at once.
+    val reduceMotion = LocalReduceMotion.current
+    val hm = com.scottgerstl.lupe.ui.theme.hybridMotion
+    val editGrow = LocalEditGrow.current
+    // round 3 (Scott: "it should be clear that there is a shape transformation happening"): the shape rides M3 Expressive's default spatial
+    // spring (slower, so the change reads) and the pad squashes and stretches as it starts or stops (wider and shorter going into play, the
+    // reverse coming out). Reduce Motion: the two shapes cross-fade, no squash.
+    val livePlaying = playing && !row.muted
+    val pill by com.scottgerstl.lupe.ui.theme.spatialFloat(if (livePlaying && !pressed) 1f else 0f, reduceMotion)
+    val padSquash = com.scottgerstl.lupe.ui.theme.rememberSquash(livePlaying, reduceMotion)
     val letter = ('A' + idx).toString()
     // The entry its touches act on. An outlined slot past the row's one free entry stands for that entry (Skiff's list has no gaps, so
     // whatever is made there lands in the first free place): [target] is that entry, and the menu says where it goes.
     val at = target
     val goes = if (at != idx) "Goes in ${'A' + at}" else null
     val empty = e.kind == PadKind.Empty
+    // a recording that no pattern holds yet will be kept here (the FM-1 does it once stopped and idle: row.newAt); recording now, a steady red
+    // edge on the pad the take goes into (Scott, 2026-11-18: "it doesn't show on the pad")
+    val newHere = empty && row.newAt == target && target == idx
+    val recHere = row.recording && (newHere || (row.newAt == null && playing))
+    val recA = animatedFloat(if (recHere) 1f else 0f, Dur.STATE)
+    val newA = animatedFloat(if (newHere) 1f else 0f, Dur.STATE)
     val holdMenu = LocalHoldMenu.current
     val sheetHost = com.scottgerstl.lupe.ui.sheet.LocalSheetHost.current
     val pool by core.patterns.collectAsStateWithLifecycle()
@@ -462,53 +551,58 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         val idle = padMenuIdle(core.top.value.playing, tl.playing)
         val stopFirst = if (idle) null else "Stop first"
         if (e.kind == PadKind.Pattern) {
-            add(HoldItem("Edit steps") { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
+            // priority tiles (Scott, 2026-11-17, "C"): Edit steps, Sound, Pattern
+            // Edit grows out of this pad (tab motion C, Scott 2026-11-17)
+            add(HoldItem("Edit steps", tile = true) { padCoords?.takeIf { it.isAttached }?.let { editGrow.from(it.boundsInWindow(), color, 10f) }
+                core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) })
             // the Sounds sheet, for this pad's own sound on any track (as on the iPad: an entry can carry its own sound)
-            add(HoldItem("Select sound", sub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
+            add(HoldItem("Select sound", sub = row.name.substringAfter(" · "), tile = true, short = "Sound", tileSub = row.name.substringAfter(" · ")) { core.send(Intent.PadSelectSound(row.track, at)); soundsHost.open(row.track, letter) })
         }
         val kept0 = keptPatterns(pads)
         val fullPool = empty && (pads.patternsFree == 0 || kept0.size >= 64)
-        // a pad cleared a moment ago: the way back, here as well as in the Undo strip
+        // a pad cleared a moment ago: the way back, here as well as in the app strip
         val undo = pads.clearUndo.lastOrNull { !it.block && it.track == row.track && it.entry == at }
-        if (undo != null) add(HoldItem(if (undo.kind == "steps") "Undo clear steps" else "Undo clear", sub = if (undo.kind == "steps") "The notes come back" else undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
+        if (undo != null) add(HoldItem(if (undo.kind == "steps") "Undo clear steps" else "Undo clear", sub = if (undo.kind == "steps") "The notes come back" else undo.pattern?.let { "Pattern %02d comes back".format(it) } ?: "The REST comes back", group = "Undo") { core.send(com.scottgerstl.lupe.core.UndoClear(row.track, at)) })
         if (empty) {
             // no pattern number free: the FM-1 would refuse it, so the menu says so before the tap, and offers the ways on (board 79.4)
             val full = fullPool
-            add(HoldItem("New pattern", sub = if (full) com.scottgerstl.lupe.core.NO_PATTERN_FREE else goes, enabled = !full) { core.send(Intent.PadNew(row.track, at)) })
+            add(HoldItem("New pattern", sub = if (full) com.scottgerstl.lupe.core.NO_PATTERN_FREE else goes, enabled = !full, tile = true, short = "New", tileSub = if (full) "None free" else null) { core.send(Intent.PadNew(row.track, at)) })
             if (full) {
                 // a fresh pattern without a free number: the lowest unused one onto this pad, then emptied (stopped only); it names the number
                 val recycle = pool.recycle ?: pads.unused.minOrNull()
-                add(HoldItem("Recycle an unused pattern", sub = if (recycle == null) "None unused: saved projects hold them" else stopFirst ?: "Takes ${"%02d".format(recycle)}", enabled = idle && recycle != null) {
+                add(HoldItem("Recycle an unused pattern", sub = if (recycle == null) "None unused: saved projects hold them" else "Takes ${"%02d".format(recycle)}", enabled = recycle != null, group = "Pool", afterStop = !idle) {
                     core.send(com.scottgerstl.lupe.core.RecyclePattern(row.track, at)) })
                 // the sheet in pick mode: the pad then plays the same pattern as its other users
-                add(HoldItem("Put a kept pattern here…", sub = "Edits are shared") { sheetHost.showPatterns(row.track to at) })
+                add(HoldItem("Put a kept pattern here…", sub = "Edits are shared", group = "Pool") { sheetHost.showPatterns(row.track to at) })
             }
             // (a REST added at the list's end is one LIST SET, which Skiff takes while playing; if it can't, its refusal shows on screen)
-            add(HoldItem("Rest", sub = goes) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
+            add(HoldItem("Rest", sub = goes, tile = true) { core.send(com.scottgerstl.lupe.core.BlockInsert(row.track, at, 65)) })
         }
         val kept = keptPatterns(pads)
         // (with the pool full, "Put a kept pattern here…" above is the way to a kept one)
         if (!fullPool)         add(HoldItem(if (empty) "Pick a pattern…" else "Set pattern…", sub = if (kept.isEmpty()) "No patterns yet" else if (empty) goes else null, enabled = kept.isNotEmpty(),
+            tile = true, short = "Pattern", tileSub = if (empty) null else e.pattern?.let { "%02d".format(it) },
             children = { kept.map { p -> HoldItem("Pattern %02d".format(p), checked = e.pattern == p) { core.send(Intent.PadSet(row.track, at, p)) } } }))
-        if (empty) add(HoldItem("Patterns…", sub = if (pool.kept > 0) "${pool.kept} kept · ${pool.unused} unused" else null) { sheetHost.showPatterns() })
+        if (empty) add(HoldItem("Patterns…", sub = if (pool.kept > 0) "${pool.kept} kept · ${pool.unused} unused" else null, group = "Pool") { sheetHost.showPatterns() })
         if (!empty && block != null) {
             // how many passes it plays (the iPad's Play once more / less); a chain repeats whole, on its last entry's count
             val chained = block.last > block.first
-            add(HoldItem("Play once more", sub = stopFirst ?: (if (chained) "The chain: " else "") + "×${block.reps} to ×${minOf(16, block.reps + 1)}", enabled = idle && block.reps < 16) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps + 1)) })
-            add(HoldItem("Play once less", sub = stopFirst ?: (if (chained) "The chain: " else "") + "×${block.reps} to ×${maxOf(1, block.reps - 1)}", enabled = idle && block.reps > 1) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps - 1)) })
+            // while playing these wait for Stop (Skiff rewrites a list only while stopped): folded into one "N more after Stop" row
+            add(HoldItem("Play once more", sub = (if (chained) "The chain: " else "") + "×${block.reps} to ×${minOf(16, block.reps + 1)}", enabled = block.reps < 16, group = "Playback", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps + 1)) })
+            add(HoldItem("Play once less", sub = (if (chained) "The chain: " else "") + "×${block.reps} to ×${maxOf(1, block.reps - 1)}", enabled = block.reps > 1, group = "Playback", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockStretch(row.track, block.id, block.reps - 1)) })
             val full = (tl.tracks.firstOrNull { it.track == row.track }?.entriesUsed ?: 0) >= 16
-            add(HoldItem("Duplicate after", sub = stopFirst ?: if (full) "The track's 16 entries are full" else null, enabled = idle && !full) { sproutTo(row.track, block.last + 1); core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, block.id)) })
+            add(HoldItem("Duplicate after", sub = if (full) "The track's 16 entries are full" else null, enabled = !full, group = "Arrange", afterStop = !idle) { sproutTo(row.track, block.last + 1); core.send(com.scottgerstl.lupe.core.BlockDuplicate(row.track, block.id)) })
             val at = blocks.indexOfFirst { it.id == block.id }
-            add(HoldItem("Move earlier", sub = stopFirst, enabled = idle && at > 0) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, -1)) })
-            add(HoldItem("Move later", sub = stopFirst, enabled = idle && at in 0 until blocks.size - 1) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, 1)) })
+            add(HoldItem("Move earlier", enabled = at > 0, group = "Arrange", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, -1)) })
+            add(HoldItem("Move later", enabled = at in 0 until blocks.size - 1, group = "Arrange", afterStop = !idle) { core.send(com.scottgerstl.lupe.core.BlockMove(row.track, block.id, 1)) })
         }
         if (!empty) {
             val erases = e.kind == PadKind.Pattern && others.isEmpty()
-            // no confirm (batch item 13): it clears at once and an Undo strip, and "Undo clear" in this pad's menu, put it back for ten seconds
+            // no confirm (batch item 13): it clears at once and the app strip's Undo, and "Undo clear" in this pad's menu, put it back until the next edit (Scott, 2026-11-17, messages rule)
             // decision 41: Clear steps wipes the notes and keeps the pad (works while playing on the pattern the track is on; a pattern others use loses its notes there too);
             // Delete pattern takes the pad (stopped only: the FM-1 rewrites a list only while stopped)
-            if (e.kind == PadKind.Pattern) add(HoldItem("Clear steps", sub = if (others.isNotEmpty()) "Pattern %02d is shared: its notes clear on ${others.first()} too".format(e.pattern) else "Keeps the pad and the pattern") { core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at)) })
-            add(HoldItem("Delete pattern", sub = if (!core.top.value.playing || e.kind != PadKind.Pattern) (if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null) else "Stop first", enabled = !core.top.value.playing || e.kind != PadKind.Pattern) { core.send(Intent.PadClear(row.track, at)) })
+            if (e.kind == PadKind.Pattern) add(HoldItem("Clear steps", sub = if (others.isNotEmpty()) "Pattern %02d is shared: its notes clear on ${others.first()} too".format(e.pattern) else "Keeps the pad and the pattern", group = "Remove") { core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at)) })
+            add(HoldItem("Delete pattern", sub = if (others.isNotEmpty()) "Pattern %02d stays: ${others.first()} uses it".format(e.pattern) else null, group = "Remove", afterStop = core.top.value.playing && e.kind == PadKind.Pattern) { core.send(Intent.PadClear(row.track, at)) })
         }
     }
     val what = when (e.kind) { PadKind.Empty -> "empty"; PadKind.Rest -> "rest"; PadKind.Pattern -> "pattern ${e.pattern}" }
@@ -519,6 +613,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         PadPlay.Idle -> ""
     }
     val desc = "${row.name}, entry $letter, $what$stateWord" + (if (goes != null) ". ${goes.replaceFirst("Goes in", "What you add here goes in")}, the next free entry" else "") + if (selected) ", selected" else ""
+    val descFull = desc + (if (newHere) ", a recording the FM-1 keeps here when it stops" else "") + (if (recHere) ", recording" else "")
 
     // a tap selects the pad and its track (the editor follows) and still launches it (decision 29)
     // …an empty slot is only selected: the FM-1 refuses to play one, and selecting it is the way in that isn't a hold
@@ -570,7 +665,7 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
                     EdgeAction.Cancel -> Unit          // the pad goes back
                     // wipes the notes, keeps the pad: works while playing on the pattern the track is on; the core says otherwise (and Undo brings them back)
                     EdgeAction.ClearSteps -> core.send(com.scottgerstl.lupe.core.ClearSteps(row.track, at))
-                    // no confirm (batch item 13): the pad goes at once and the Undo strip puts it back; stopped only (the well is greyed while playing)
+                    // no confirm (batch item 13): the pad goes at once and the app strip puts it back; stopped only (the well is greyed while playing)
                     EdgeAction.Delete -> core.send(Intent.PadClear(row.track, at))
                     EdgeAction.Edit -> { core.send(Intent.PadSelect(row.track, at)); core.send(Intent.SetTab(com.scottgerstl.lupe.core.Tab.Edit)) }
                     EdgeAction.Duplicate -> duplicateIntoNext()
@@ -592,36 +687,50 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
     }
     val lifted = dragState?.drag?.let { it.track == row.track && it.from == at } == true
     val sproutHide = dragState?.sprout?.let { it.track == row.track && it.idx == idx && dragState.sproutHidden && e.kind != PadKind.Empty && usedNow > it.usedBefore } == true
-    Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (sproutHide) 0f else if (lifted) 0.35f else 1f }.onGloballyPositioned {
+    Box(modifier.width(PAD_W).height(h).bringIntoViewRequester(bring).graphicsLayer { alpha = if (sproutHide) 0f else if (lifted) 0.35f else 1f; val (sx, sy) = padSquash(); scaleX = sx; scaleY = sy }.onGloballyPositioned {
         padCoords = it
         dragState?.slots?.set(slotToken, DropSlot(row.track, idx, at, empty, it.boundsInWindow()))
+        if (selected) editGrow.selectedPad = EditOrigin(it.boundsInWindow(), color, 10f, 0L)
     }) {
         Box(
             Modifier.matchParentSize()
                 .drawBehind {
-                    val r = CornerRadius(8.dp.toPx())
-                    // an empty slot is an outline with its letter (decision 33); a filled one a key
-                    if (empty) drawRoundRect(emptyOutline(color, onRow.value), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(7.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
-                    else drawRoundRect(Tok.control, cornerRadius = r)
-                    if (fill.value > 0f) drawRoundRect(color.copy(alpha = fill.value), cornerRadius = r)
+                    val padR = com.scottgerstl.lupe.ui.theme.Shape.pad.toPx()
+                    val shapeT = pill.coerceIn(0f, 1.15f)
+                    val rr = (padR + (size.height / 2 - padR) * shapeT).coerceIn(2f, size.height / 2)
+                    val r = CornerRadius(rr)
+                    // a filled layer in the pad's shape: on the spring it changes shape; with Reduce Motion the card and the pill cross-fade
+                    fun layer(c: Color) {
+                        if (!reduceMotion) drawRoundRect(c, cornerRadius = r)
+                        else { val t = pill.coerceIn(0f, 1f); drawRoundRect(c.copy(alpha = c.alpha * (1f - t)), cornerRadius = CornerRadius(padR)); drawRoundRect(c.copy(alpha = c.alpha * t), cornerRadius = CornerRadius(size.height / 2)) }
+                    }
+                    // an empty slot is an outline with its letter (decision 33; its edge colour is A11, still open); a filled one a card
+                    if (empty) drawRoundRect(emptyOutline(color, onRow.value), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(rr - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                    else layer(androidx.compose.ui.graphics.lerp(Tok.control, Tok.lifted, next.value))
+                    if (fill.value > 0f) layer(color.copy(alpha = fill.value))
                     if (ringMuted.value > 0f) drawRoundRect(color.copy(alpha = ringMuted.value), cornerRadius = r, style = Stroke(4.dp.toPx()), topLeft = Offset.Zero)
                     if (ringMuted.value > 0f && !empty) drawRoundRect(Tok.control, topLeft = Offset(2.dp.toPx(), 2.dp.toPx()), size = Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()), cornerRadius = CornerRadius(6.dp.toPx()), alpha = ringMuted.value)
                     // (a waiting pad's outline is the LaunchTrace drawn over the pad, below)
-                    if (next.value > 0f) drawRoundRect(Tok.text2.copy(alpha = next.value), topLeft = Offset(0.75.dp.toPx(), 0.75.dp.toPx()), size = Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                    // queued for its next pass (spec 3.1): `lifted` with a 2 dp edge in the track's colour and the word "Next"
+                    if (next.value > 0f) drawRoundRect(color.copy(alpha = next.value), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
                     if (e.hasSound && !empty) drawPath(Path().apply { moveTo(size.width - 10.dp.toPx(), 0f); lineTo(size.width, 0f); lineTo(size.width, 10.dp.toPx()); close() }, Tok.page)
                     if (press.value > 0f) drawRoundRect(Color.Black.copy(alpha = 0.25f * press.value), cornerRadius = r)
                     // the selected pad: a ring in the track's colour (never white), with a dark gap inside it so it reads on a filled, playing pad
                     // …but not while it waits: a tap selects the pad it launches, and the ring (the same colour, the same place) hid the waiting outline
                     // drawn over it (Scott, 2026-11-14: "the outline timer still doesn't show"). The outline says both until it lands.
-                    val ringA = sel.value * (1f - wait.value)
+                    // the take's pad: "New" pending is a dashed edge in the track's colour; recording, a steady 2 dp edge in the record red
+                    if (newA.value > 0f && recA.value < 1f) drawRoundRect(color.copy(alpha = newA.value * (1f - recA.value)), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(rr - 1.dp.toPx()),
+                        style = Stroke(2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))))
+                    if (recA.value > 0f) drawRoundRect(Tok.rec.copy(alpha = recA.value), Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+                    val ringA = sel.value
                     if (ringA > 0f) {
-                        drawRoundRect(color.copy(alpha = ringA), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(7.dp.toPx()), style = Stroke(2.dp.toPx()))
-                        drawRoundRect(Tok.page.copy(alpha = ringA), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius(5.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+                        drawRoundRect(color.copy(alpha = ringA), topLeft = Offset(1.dp.toPx(), 1.dp.toPx()), size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()), cornerRadius = CornerRadius(rr - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+                        drawRoundRect(Tok.page.copy(alpha = ringA), topLeft = Offset(2.75.dp.toPx(), 2.75.dp.toPx()), size = Size(size.width - 5.5.dp.toPx(), size.height - 5.5.dp.toPx()), cornerRadius = CornerRadius((rr - 2.75.dp.toPx()).coerceAtLeast(1f)), style = Stroke(1.5.dp.toPx()))
                     }
                 }
                 .semantics(mergeDescendants = true) {
                     role = Role.Button
-                    contentDescription = desc
+                    contentDescription = descFull
                     onClick { tap(); true }
                     onLongClick("Pad menu") { padCoords?.takeIf { it.isAttached }?.let { c -> holdMenu?.open(c.localToWindow(Offset(c.size.width / 2f, c.size.height / 2f)), color, padItems()) }; true }
                     // every long-press has a non-hold way in (WCAG 2.5.7)
@@ -636,27 +745,29 @@ fun Pad(row: PadRow, idx: Int, e: PadEntry, h: Dp, selected: Boolean, core: Lupe
         ) {
             val fg = Color.lerp(Tok.text, Tok.onColour, fill.value)
             if (empty) {
-                BasicText(letter, Modifier.align(Alignment.CenterStart).padding(start = 8.dp), style = LupeType.label.copy(color = Tok.text2Raised))
+                BasicText(letter, Modifier.align(Alignment.CenterStart).padding(start = 12.dp), style = LupeType.label.copy(fontSize = 13.sp, color = Tok.text2Raised))
             } else if (e.kind == PadKind.Rest) {
-                BasicText("REST", Modifier.align(Alignment.CenterStart).padding(start = 8.dp), style = LupeType.label.copy(color = fg))
+                BasicText("Rest", Modifier.align(Alignment.CenterStart).padding(start = 12.dp), style = LupeType.key.copy(fontSize = 14.sp, color = fg))
             } else if (e.kind == PadKind.Pattern) {
-                Row(Modifier.align(Alignment.CenterStart).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BasicText(letter, style = LupeType.label.copy(color = Color.lerp(Tok.text2Raised, Tok.onColour, fill.value)))
-                    BasicText("%02d".format(e.pattern ?: 0), style = LupeType.number.copy(fontSize = 20.sp, color = fg))
+                Row(Modifier.align(Alignment.CenterStart).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    BasicText(letter, style = LupeType.label.copy(fontSize = 13.sp, color = Color.lerp(Tok.text2Raised, Tok.onColour, fill.value)))
+                    BasicText("%02d".format(e.pattern ?: 0), style = LupeType.number.copy(fontSize = 21.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = fg))
                 }
             }
             if (h >= 36.dp) {
                 val side = when {
-                    e.play == PadPlay.Next -> "next"
+                    newHere -> if (row.recording) "Rec" else "New"
+                    e.play == PadPlay.Next -> "Next"
                     e.passes != null && e.passes > 1 -> if (playing && e.pass != null) "${e.pass}/${e.passes}" else "×${e.passes}"
                     else -> null
                 }
                 if (side != null) BasicText(side, Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), style = LupeType.small.copy(fontSize = 11.sp, lineHeight = 11.sp, color = Color.lerp(Tok.text2Raised, Tok.onColour, fill.value), textAlign = androidx.compose.ui.text.style.TextAlign.End))
             }
             // the pass bar along the foot: it moves every frame, on from the core's last word by the clock's rate (never stepping on each publish)
-            if ((e.progress != null || row.passTicks != null) && playing && !row.muted) PassBar({ clock.value.passProgress(row.passStartTick, row.passTicks, android.os.SystemClock.uptimeMillis()) ?: e.progress }, Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = 3.dp).width(PAD_W - 12.dp).height(3.dp))
+            if ((e.progress != null || row.passTicks != null) && playing && !row.muted) PassBar({ clock.value.passProgress(row.passStartTick, row.passTicks, android.os.SystemClock.uptimeMillis()) ?: e.progress }, Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 4.dp).width(PAD_W - 24.dp).height(4.dp))
             // waiting for the launch point: the outline drawn as that comes, in the track's colour; dashed when there is no clock
-            if (wait.value > 0f) LaunchTrace({ clock.value.ticksLeft(e.launchTick ?: row.launchTick, android.os.SystemClock.uptimeMillis()) }, color, 8.dp, 2.dp, Modifier.matchParentSize().graphicsLayer { alpha = wait.value })
+            if (wait.value > 0f) LaunchTrace({ clock.value.ticksLeft(e.launchTick ?: row.launchTick, android.os.SystemClock.uptimeMillis()) }, color, com.scottgerstl.lupe.ui.theme.Shape.pad, 2.dp, Modifier.matchParentSize().graphicsLayer { alpha = wait.value },
+                corners = { sz -> val padR = com.scottgerstl.lupe.ui.theme.Shape.pad.toPx(); val k = (padR + (sz.height / 2 - padR) * pill.coerceIn(0f, 1.15f)).coerceIn(2f, sz.height / 2); floatArrayOf(k, k, k, k) })
         }
     }
 }
@@ -684,7 +795,7 @@ internal fun emptyOutline(track: Color, onBand: Float): Color = androidx.compose
 @Composable
 private fun EmptySlot(idx: Int, h: Dp, outline: () -> Color) {
     Box(Modifier.width(PAD_W).height(h).drawBehind {
-        drawRoundRect(outline(), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(7.25.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+        drawRoundRect(outline(), Offset(0.75.dp.toPx(), 0.75.dp.toPx()), Size(size.width - 1.5.dp.toPx(), size.height - 1.5.dp.toPx()), CornerRadius(com.scottgerstl.lupe.ui.theme.Shape.pad.toPx() - 0.75.dp.toPx()), style = Stroke(1.5.dp.toPx()))
     }.clearAndSetSemantics { }) {
         if (idx < 8) BasicText(('A' + idx).toString(), Modifier.align(Alignment.CenterStart).padding(start = 8.dp), style = LupeType.label.copy(color = Tok.text2Raised))
     }

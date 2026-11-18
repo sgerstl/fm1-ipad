@@ -327,7 +327,15 @@ struct MenuPanel: View {
                 } else if let icon = item.icon {
                     Image(systemName: icon).font(.system(size: 17)).frame(width: 24)
                 }
-                Text(item.title).font(.lupe(17)).lineLimit(1).minimumScaleFactor(0.8)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title).font(.lupe(17)).lineLimit(1).minimumScaleFactor(0.8)
+                    // what the choice costs or keeps, in a line (the fan menus drew it already; 2026-11-17)
+                    if let sub = item.sub {
+                        Text(sub).font(.lupe(13)).foregroundStyle(item.enabled ? Theme.textSecondaryRaised : Theme.textTertiary)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.vertical, item.sub == nil ? 0 : 6)
                 Spacer(minLength: 0)
                 if item.checked {
                     Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).accessibilityLabel("Current")
@@ -349,7 +357,7 @@ struct MenuPanel: View {
         .disabled(!item.enabled)
         .focused($focus, equals: index)
         .accessibilityAddTraits(item.checked ? .isSelected : [])
-        .accessibilityHint(item.children != nil ? "Opens a submenu" : "")
+        .accessibilityHint(item.children != nil ? "Opens a submenu" : (item.sub ?? ""))
     }
 }
 

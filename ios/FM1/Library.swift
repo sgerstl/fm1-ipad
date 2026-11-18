@@ -380,29 +380,14 @@ private struct UserSlotMore: View {
     }
 }
 
-/// The FM-1 kept the track's sound (Session.soundRefusal): said over the presets, gone after a few seconds or ✕.
+/// The FM-1 kept the track's sound (Session.soundRefusal): the panel's own home, until ✕ or the next change (the
+/// messages rule, 2026-11-17: refusals never leave on a timer).
 private struct SoundRefusalNote: View {
     let session: DeviceSession
     let refusal: DeviceSession.SoundRefusal
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle").foregroundStyle(Theme.caution).accessibilityHidden(true)
-            Text(refusal.text).font(.lupe(13)).foregroundStyle(Theme.text)
-            Spacer(minLength: 0)
-            Button { session.dismissSoundRefusal() } label: {
-                Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss")
-        }
-        .padding(.leading, 12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.control))
-        .accessibilityElement(children: .contain)
-        .task(id: refusal.at) {
-            AccessibilityNotification.Announcement(refusal.text).post()
-            try? await Task.sleep(for: .seconds(6))
-            if session.soundRefusal == refusal { session.dismissSoundRefusal() }
-        }
+        MessageRow(kind: .refusal, text: refusal.text, dismiss: { session.dismissSoundRefusal() })
+            .task(id: refusal.at) { MessageMotion.announce(refusal.text) }
     }
 }

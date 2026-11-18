@@ -92,27 +92,3 @@ struct PhoneSoundsSheet: View {
     }
 }
 
-// MARK: - Projects: the FM-1's four slots
-
-struct PhoneProjectsSheet: View {
-    let session: DeviceSession
-    let ui: EditorUI
-    @State private var menu: AppMenu?
-    @State private var prompt: TextPrompt?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Projects").font(.lupe(17, .semibold)).accessibilityAddTraits(.isHeader)
-                Text("on the FM-1").font(.lupe(13)).foregroundStyle(Theme.textSecondaryRaised)
-                Spacer(minLength: 0)
-                SheetClose(label: "Close Projects") { ui.projectsOpen = false }
-            }
-            List { SkiffProjectSlots(session: session, menu: $menu, prompt: $prompt) }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-        }
-        .overlay { AppMenuLayer(menu: $menu) }
-        .overlay { TextPromptLayer(prompt: $prompt) }
-    }
-}

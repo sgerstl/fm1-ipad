@@ -51,7 +51,7 @@ data class TimelineUi(
     val uses: Map<Int, Int> = emptyMap(),
     /** Entries in use on each track, of 16: where the next block would go, and whether one more fits. */
     val entries: Map<Int, Int> = emptyMap(),
-    /** Blocks deleted in the last ten seconds that can come back (batch item 13): the track and the block's id. */
+    /** Blocks deleted that can still come back (until the next edit) (batch item 13): the track and the block's id. */
     val deleted: List<com.scottgerstl.lupe.core.ClearedPad> = emptyList(),
 )
 
@@ -141,7 +141,7 @@ fun rememberTimeline(core: LupeCore): Triple<State<TimelineUi>, TimelineActions,
             stretch = { b, reps -> core.send(BlockStretch(b.track, b.id, reps)) },
             setPattern = { b, p -> core.send(BlockSetPattern(b.track, b.id, p, confirmed = true)) },
             duplicate = { core.send(BlockDuplicate(it.track, it.id)) },
-            // no confirm (batch item 13): it goes at once and an Undo strip, and the lane's menu, put it back for ten seconds
+            // no confirm (batch item 13): it goes at once and the app strip's Undo, and the lane's menu, put it back until the next edit (Scott, 2026-11-17, messages rule)
             delete = { core.send(BlockDelete(it.track, it.id)); selected = null },
             stop = { core.send(Intent.Stop) },
             openSounds = { sounds.open(it) },

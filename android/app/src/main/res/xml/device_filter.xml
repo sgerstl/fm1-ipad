@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lupe opens when the FM-1 is plugged in (Scott, 2026-11-18). The FM-1 on Skiff reports USB vendor 0x1209 (pid.codes, decimal 4617),
+     product 0x0001 ("Felucca", Hügelton Instruments): read from the Pixel 10 with the FM-1 attached (dumpsys usb), and the firmware's own
+     usb.c (FELUCCA_USB_PID 0x0001; its update loader is 0x0002, left out so a firmware update doesn't open Lupe). -->
+<resources>
+    <usb-device vendor-id="4617" product-id="1" />
+</resources>

@@ -1,0 +1,41 @@
+{
+  "proposal": "Additions to tokens/tokens.json for the hybrid UI (design/hybrid-ui/spec.md). Not merged into tokens.json: radii and shape rules can go in when Scott approves the look; motion values go to Labs first (CLAUDE.md rule 3) and graduate here when settled. Colours: none new; the hybrid uses existing surface and text tokens only.",
+  "date": "2026-11-17",
+  "radius": {
+    "keyPt": 8,
+    "padPt": 10,
+    "panelPt": 14,
+    "sheetPt": 24,
+    "pill": "half the element's height",
+    "note": "keyPt is today's chiclet.radiusPt. sheetPt is new: sheet top corners and docked panels. Nested corners follow DESIGN.md (outer = inner + padding)."
+  },
+  "shape": {
+    "note": "Shape as state: the second channel beside colour (spec 1.1). Code reads these pairs, not numbers.",
+    "pad": { "idle": "radius.padPt", "queued": "radius.padPt", "playing": "radius.pill", "pressed": "radius.padPt" },
+    "selectable": { "unselected": "radius.pill", "selected": "radius.keyPt + 4 (12 at 40 tall)", "applies": ["scene key", "track badge (30: 15 → 9)", "rail item", "preset row (selected → pill)"] },
+    "segment": { "selected": "radius.pill", "unselected": "radius.keyPt (outer ends pill)" },
+    "switch": { "thumbOffPt": 16, "thumbOnPt": 24 },
+    "transport": { "recordPt": 48, "playStopPt": 56, "shape": "round (decision 23); Play/Stop the largest key" }
+  },
+  "elevation": {
+    "note": "Unchanged. Menus, popups and the app strip use elevation 3 (held); sheets and docked panels elevation 1 (panel) with the sheet's upward shadow.",
+    "sheetShadow": { "y": -4, "blur": 16, "opacity": 0.4 }
+  },
+  "motion": {
+    "status": "starting values for Labs",
+    "spatial": { "spring": { "bounce": 0.25 }, "atFingerMs": 200, "panelMs": 300, "use": "shape, size, position" },
+    "effect": { "easing": "easeOut", "stateMs": 150, "use": "colour, opacity; never bounces" },
+    "exit": { "easing": "easeIn", "ms": 120 },
+    "sheet": { "spring": { "bounce": 0.2 }, "ms": 300, "contentStaggerMs": 30 },
+    "popup": { "spring": { "bounce": 0.2 }, "ms": 200, "fromScale": 0.94, "fromYPt": -12, "rowStaggerMs": 20 },
+    "holdMenu": { "fromScale": 0.94, "fromXPt": -16, "rowStaggerMs": 20, "ipadPillStaggerMs": 25 },
+    "press": { "scale": 0.92, "downMs": 100 },
+    "pageFlip": { "spring": { "bounce": 0.25 }, "ms": 280 },
+    "playheadGlideMs": 60,
+    "noteHit": { "scale": 1.12, "upMs": 50, "backMs": 200 },
+    "faderHold": { "handleScaleY": 1.6, "ms": 150 },
+    "loader": { "turnSeconds": 2.4, "pulseScale": 0.82 },
+    "reduceMotion": "nothing travels or changes size; state changes and arrivals cross-fade at about 150 ms (DESIGN.md)",
+    "compose": "Compose spring: bounce 0.25 ≈ dampingRatio 0.75, bounce 0.2 ≈ 0.8; pick stiffness to land near the duration"
+  }
+}

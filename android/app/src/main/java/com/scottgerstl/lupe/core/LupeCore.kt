@@ -34,6 +34,8 @@ interface LupeCore {
     val clock: StateFlow<ClockState> get() = ClockDefaults.clock
     /** The editor track's playing step (PlayheadState.kt): one small send per step, not part of the editor area. */
     val playhead: StateFlow<PlayheadState> get() = PlayheadDefaults.state
+    /** The FM-1's notes sounding now, by track (KeysState.kt). */
+    val keys: StateFlow<KeysState> get() = KeysDefaults.state
 
     /** The pattern pool (PatternsState.kt, board 79) and its pictures. */
     val patterns: StateFlow<PatternsState> get() = PatternsDefaults.patterns
@@ -41,6 +43,9 @@ interface LupeCore {
 
     /** The firmware the FM-1 runs, what the phone offers, and the install's progress (FirmwareState.kt; P1's fe3faaf). */
     val firmware: StateFlow<FirmwareState> get() = FirmwareDefaults.state
+
+    /** Answers to [ProjectTransfer] requests, as they happen (ProjectTransfer.kt). */
+    val transfers: kotlinx.coroutines.flow.SharedFlow<TransferEvent> get() = TransferDefaults.none
 
     /** The last thing refused, to show on screen (Notice.kt). */
     val notice: StateFlow<CoreNotice> get() = NoticeDefaults.notice

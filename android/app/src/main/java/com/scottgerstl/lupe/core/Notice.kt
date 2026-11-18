@@ -2,11 +2,12 @@ package com.scottgerstl.lupe.core
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
  * Something the FM-1 (or the core) has to say about an action: usually a refusal (what happened and what to do), sometimes an answer
- * ("Cleared 5 unused patterns. 5 pattern numbers are free."), so the strip that shows it is neutral, not an error's red. It is shown on the screen where the action was taken (Scott,
+ * ("Cleared 5 unused patterns. 5 pattern numbers are free."), so the strip that shows it is neutral, not an error's red; [kind] says which. It is shown on the screen where the action was taken (Scott,
  * 2026-11-14: New pattern "did nothing" on the Pixel; the FM-1 had refused it and only the log said so). [seq] grows with each one, so the
  * same words twice still show twice; 0 is "none yet". [track] (1…6) and [entry] (0-based) say where, when the core knows.
  *
@@ -14,7 +15,14 @@ import kotlinx.serialization.Serializable
  * Scott's Pixel 10, 2026-11-14).
  */
 @Serializable
-data class CoreNotice(val seq: Int = 0, val text: String = "", val track: Int? = null, val entry: Int? = null)
+data class CoreNotice(val seq: Int = 0, val text: String = "", val track: Int? = null, val entry: Int? = null, val kind: NoticeKind = NoticeKind.Refusal)
+
+/**
+ * The core's notice kind (PhoneCore Notice.swift, NoticeArea.Kind): a refusal stays until ✕ or until it's fixed, a confirmation leaves after
+ * 4 s (Scott, 2026-11-17, messages rule). Absent in the JSON means a refusal, as the core sent before it had kinds.
+ */
+@Serializable
+enum class NoticeKind { @SerialName("refusal") Refusal, @SerialName("confirmation") Confirmation }
 
 object NoticeDefaults { val notice: StateFlow<CoreNotice> = MutableStateFlow(CoreNotice()) }
 
@@ -48,4 +56,24 @@ fun clearUnusedWords(unused: List<Int>): String {
     val shown = unused.sorted().take(6).joinToString(", ") { "%02d".format(it) }
     val more = unused.size - 6
     return "Clears $shown" + (if (more > 0) " and $more more" else "") + " · can't be undone"
+}
+
+/**
+ * The intents that change the song, the same list as the core's (PhoneCore PadClearUndo.swift, songEdits): any of them ends an open Undo
+ * (Scott, 2026-11-17, messages rule). Copying a step changes nothing, so it isn't one.
+ */
+val SONG_EDITS = setOf(
+    "padNew", "padSet", "padClear", "padMove", "clearSteps", "setPatternSteps", "sceneStore",
+    "stepAdjust", "lockClear", "locksClearAll", "stepAction", "setStepNotes", "toggleStepNote", "toggleHit",
+    "blockInsert", "blockNew", "blockMove", "blockStretch", "blockDelete", "blockSetPattern", "blockDuplicate", "blockChain", "blockSplit",
+    "drawLane", "clearLane", "clearPatterns", "recyclePattern", "copyPattern", "clearUnusedPatterns",
+    "pickPreset", "pickUser", "clearEntrySound", "projectLoad",
+)
+
+/** Whether [intent] changes the song (its JSON name is in [SONG_EDITS]; a step copied is not). */
+fun isSongEdit(intent: Intent): Boolean {
+    val o = runCatching { lupeJson.encodeToJsonElement(Intent.serializer(), intent) as? kotlinx.serialization.json.JsonObject }.getOrNull() ?: return false
+    val name = (o["intent"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return false
+    if (name == "stepAction" && (o["action"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "copy") return false
+    return name in SONG_EDITS
 }

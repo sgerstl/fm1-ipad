@@ -6,8 +6,12 @@
 // entry names (bank.c song_put: `lists.ent[k][e][0] = p`); the pattern it named stays in the pool. So where a clear
 // would erase the pattern, the core sets the entry to a REST first and then clears the REST (song_clear_at: a REST
 // goes at once, nothing goes with it). The pad is empty and the pattern is still kept, named by nothing. Undo sets
-// the entry back. When the undo's time is up the core clears that pattern itself (POOL op 1, stopped only), if still
-// nothing uses it, which leaves the FM-1 as its own CLEAR would have.
+// the entry back. When the undo ends the core clears that pattern itself (POOL op 1, stopped only), if still nothing
+// uses it, which leaves the FM-1 as its own CLEAR would have.
+//
+// How long: until the next change to the song, never a timer (Scott, 2026-11-17, messages rule: "Undo: until the next
+// edit or ✕. Nothing with an action leaves on a timer."). Any other edit ends it (endUndos, from handle(json:)); the
+// strip's ✕ only hides the strip, so the pad's and the Timeline's menus keep "Undo clear" / "Undo delete" as long.
 import Foundation
 import SloopKit
 
@@ -31,7 +35,7 @@ struct ClearedPad {
     var track: Int, entry: Int           // 0-based
     var before: [SongEntry]              // the track's list before the clear
     var after: [SongEntry]               // … and after it, as the FM-1 answered
-    /// The patterns (1…64) kept alive for the undo: cleared for real when the undo's time is up.
+    /// The patterns (1…64) kept alive for the undo: cleared for real once the undo has ended.
     var parked: [Int] = []
     /// A Timeline block's delete: undone whole, or not at all.
     var block = false
@@ -45,8 +49,43 @@ struct ClearedPad {
 }
 
 extension PhoneCore {
-    /// How long a cleared pad can be put back.
-    static var undoClearWindow: TimeInterval = 10
+    /// The intents that change the song: what the lists hold (pads, blocks), the patterns (steps, notes, length, locks,
+    /// lanes), the scenes, the sounds on a track or pad, and the project itself. Any of them ends the undos (Scott,
+    /// 2026-11-17, messages rule). Not here, so an undo outlives them: transport, tempo, launch and playback mode,
+    /// selection, mute, solo, the mix's faders and the sound pages' knobs (playing the song, not editing it), the
+    /// screens' own choices, and undoClear itself.
+    static let songEdits: Set<String> = [
+        "padNew", "padSet", "padClear", "padMove", "clearSteps", "setPatternSteps", "sceneStore",
+        "stepAdjust", "lockClear", "locksClearAll", "stepAction", "setStepNotes", "toggleStepNote", "toggleHit",
+        "blockInsert", "blockNew", "blockMove", "blockStretch", "blockDelete", "blockSetPattern", "blockDuplicate", "blockChain", "blockSplit",
+        "drawLane", "clearLane", "clearPatterns", "recyclePattern", "copyPattern", "clearUnusedPatterns",
+        "pickPreset", "pickUser", "clearEntrySound", "projectLoad",
+    ]
+
+    private struct EditWire: Decodable { let intent: String; let action: String? }
+
+    /// Whether `json` is an intent that changes the song (songEdits; copying a step doesn't), and its name. Nil when
+    /// no undo is open, so the common case decodes nothing.
+    func songEdit(_ json: String) -> String? {
+        guard clearedPads.contains(where: \.undoable),
+              let w = try? JSONDecoder().decode(EditWire.self, from: Data(json.utf8)), Self.songEdits.contains(w.intent),
+              !(w.intent == "stepAction" && w.action == "copy") else { return nil }
+        return w.intent
+    }
+
+    /// After an edit's handler has run (handle(json:)): every undo still open ends. A write refused while read-only or
+    /// refused on the spot (`refusedNow`: "Stop to rearrange", "isn't playing that pad") changed nothing, so it ends
+    /// nothing. The handler's own sends are still to come, so a clear ends the clears before it and then offers its own.
+    func endUndos(after intent: String, refusedNow: Bool) {
+        guard !refusedNow, canWrite(), clearedPads.contains(where: \.undoable) else { return }
+        if intent == "projectLoad" {
+            // another project: its pattern numbers aren't the cleared pad's, so nothing parked is cleared on it
+            clearedPads.removeAll()
+        } else {
+            for i in clearedPads.indices { clearedPads[i].undoable = false }
+        }
+        pokeAreas(["pads", "timeline"])
+    }
 
     func clearUndos() -> [PadsArea.ClearUndo] {
         clearedPads.filter(\.undoable).map { .init(track: $0.track + 1, entry: $0.entry, pattern: $0.before[safe: $0.entry]?.poolIndex.map { $0 + 1 }, block: $0.block,
@@ -262,17 +301,12 @@ extension PhoneCore {
         return true
     }
 
-    /// The undo's time over: the record goes, and a pattern kept alive for it is cleared as the FM-1's CLEAR would
-    /// have (POOL op 1), once stopped, if nothing uses it. Called from the core's half-second loop.
+    /// An undo ended by the next edit (endUndosIfEdit): the record goes, and a pattern kept alive for it is cleared as
+    /// the FM-1's CLEAR would have (POOL op 1), once stopped, if nothing uses it. Called from the core's half-second loop.
     func pollClearedPads() async {
         guard !clearedPads.isEmpty else { return }
         let now = Date()
-        var changed = false
-        for i in clearedPads.indices where clearedPads[i].undoable && now.timeIntervalSince(clearedPads[i].at) > Self.undoClearWindow {
-            clearedPads[i].undoable = false; changed = true
-        }
         clearedPads.removeAll { !$0.undoable && $0.parked.isEmpty }
-        if changed { pokeAreas(["pads"]) }
         guard let store = session.skiffSong, session.isConnected else { clearedPads.removeAll(); return }
         // not in the middle of the person's own changes: a second quiet first (the store takes one change at a time)
         guard !session.playing, !store.busy, now.timeIntervalSince(store.lastChange) > 1, let pool = store.pool?.patterns, pool.count == 64,

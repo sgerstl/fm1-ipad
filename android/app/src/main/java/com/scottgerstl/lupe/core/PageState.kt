@@ -122,7 +122,11 @@ data class PickTile(val tile: Int) : Intent
  * Projects sheet, the editor). [screen] is "GLO", "SAVE" or "SEQ"; [page] (optional) is one of that key's pages in Lupe's numbers for a second press of a lit key (GLO 30-34, SAVE 35-38, SEQ 41-45). P1 fixed the shape. A write.
  */
 @Serializable @SerialName("screenGoto")
-data class ScreenGoto(val screen: String, val page: Int? = null) : Intent
+data class ScreenGoto(
+    val screen: String, val page: Int? = null,
+    /** SEQ › NOTES and FEEL: the FM-1's step cursor to this step (0-based), so its knobs 1–4 edit it (the Edit step panel, 2026-11-17). */
+    val cursor: Int? = null,
+) : Intent
 
 @Serializable @SerialName("goHome")
 data object GoHome : Intent
