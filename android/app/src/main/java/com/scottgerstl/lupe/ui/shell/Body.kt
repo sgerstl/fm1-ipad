@@ -181,7 +181,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 LupeCrossfade(shell.bottom.kind == BottomKind.FreeTake, Modifier.fillMaxSize(), Dur.PANEL) { take ->
                     if (take) com.scottgerstl.lupe.ui.freetake.FreeTakePicker(freeTake, core)
-                    else TabPager(shell.tab, Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size], labs.tabSlideMs) { tab ->
+                    else TabPager(shell.tab, Tok.track[(pads.selected.track - 1).coerceAtLeast(0) % Tok.track.size], labs.tabSlideMs, TabMotion(labs.tabStaggered, labs.tabSpeed)) { tab ->
                         when (tab) {
                             Tab.Pads -> PadsPage(pads, core)
                             Tab.Edit -> Box(Modifier.fillMaxSize()) {
@@ -236,9 +236,21 @@ private fun SoundKeysRail(open: String?, onKey: (String) -> Unit) {
  * (decision 29) still travels between its places on both tabs, over the fade. Reduce Motion: a plain 150 ms cross-fade.
  */
 @Composable
-private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: Int, content: @Composable (Tab) -> Unit) {
+internal fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: Int, motion: TabMotion = TabMotion(), onMotionStart: () -> Unit = {},
+    content: @Composable (Tab) -> Unit) {
     val reduce = LocalReduceMotion.current
     val anchors = remember { TrackAnchors() }
+    // each tab's page as movable content (2026-11-18, measured: every switch built both pages in its first frame, 50–212 ms): the page showing
+    // moves into the outgoing slot when a switch starts instead of being built again; the incoming one is built once
+    val contentNow by androidx.compose.runtime.rememberUpdatedState(content)
+    val pageHolders = remember { mutableMapOf<Tab, TabPage>() }
+    val pages = remember { mutableMapOf<Tab, @Composable (Boolean) -> Unit>() }
+    fun pageOf(t: Tab): @Composable (Boolean) -> Unit = pages.getOrPut(t) {
+        val holder = pageHolders.getOrPut(t) { TabPage(t, anchors) }
+        androidx.compose.runtime.movableContentOf { travelling: Boolean ->
+            CompositionLocalProvider(LocalTabPage provides holder, LocalTabTravelling provides travelling) { contentNow(t) }
+        }
+    }
     val grow = LocalEditGrow.current
     var shown by remember { mutableStateOf(tab) }
     var from by remember { mutableStateOf<Tab?>(null) }
@@ -267,7 +279,13 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: I
             shrink -> inView(grow.selectedPad)
             else -> null
         }
-        t.snapTo(0f); outA.snapTo(1f); inA.snapTo(0f); inS.snapTo(if (reduce || origin != null) 1f else 0.98f); g.snapTo(if (shrink) 1f else 0f)
+        val k = motion.speed
+        val staggered = motion.staggered
+        t.snapTo(0f); outA.snapTo(1f); inA.snapTo(0f); inS.snapTo(if (reduce || origin != null) 1f else if (staggered) 0.92f else 0.98f); g.snapTo(if (shrink) 1f else 0f)
+        // the clock starts after the switch's first frame has drawn: through that heavy frame the outgoing page stays fully there and the incoming
+        // at 0, and then the whole transition plays (it used to start counting at that frame, so a 100 ms frame ate half the fade)
+        awaitFirstFrame()
+        onMotionStart()
         com.scottgerstl.lupe.ui.theme.unscaled {
             kotlinx.coroutines.coroutineScope {
                 when {
@@ -277,23 +295,26 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: I
                         launch { t.animateTo(1f, androidx.compose.animation.core.tween(Dur.STATE)) }
                     }
                     shrink -> {
-                        // the reverse: Edit fades quickly, the surface shrinks from the page into the pad, Pads fades in under it
-                        launch { g.animateTo(0f, com.scottgerstl.lupe.ui.theme.lupeSpring(420, 0.15f)) }
-                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(100, easing = EaseIn)) }
-                        launch { kotlinx.coroutines.delay(60); inA.animateTo(1f, androidx.compose.animation.core.tween(260, easing = EaseOut)) }
-                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(420, easing = EaseOut)) }
+                        // the reverse: Edit fades quickly, the surface shrinks from the page into the pad, Pads fades in under it (Labs › Tab motion speed scales it all)
+                        launch { g.animateTo(0f, com.scottgerstl.lupe.ui.theme.lupeSpring(sc(420, k), 0.15f)) }
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(sc(100, k), easing = EaseIn)) }
+                        launch { kotlinx.coroutines.delay(sc(60, k).toLong()); inA.animateTo(1f, androidx.compose.animation.core.tween(sc(260, k), easing = EaseOut)) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(sc(420, k), easing = EaseOut)) }
                     }
                     origin != null -> {
-                        launch { g.animateTo(1f, com.scottgerstl.lupe.ui.theme.lupeSpring(420, 0.15f)) }
-                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(300, easing = EaseIn)) }
-                        launch { kotlinx.coroutines.delay(220); inA.animateTo(1f, androidx.compose.animation.core.tween(200, easing = EaseOut)) }
-                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(420, easing = EaseOut)) }
+                        launch { g.animateTo(1f, com.scottgerstl.lupe.ui.theme.lupeSpring(sc(420, k), 0.15f)) }
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(sc(300, k), easing = EaseIn)) }
+                        launch { kotlinx.coroutines.delay(sc(220, k).toLong()); inA.animateTo(1f, androidx.compose.animation.core.tween(sc(200, k), easing = EaseOut)) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(sc(420, k), easing = EaseOut)) }
                     }
                     else -> {
-                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(90, easing = EaseIn)) }
-                        launch { inA.animateTo(1f, androidx.compose.animation.core.tween(210, easing = EaseOut)) }
-                        launch { inS.animateTo(1f, m.spatial()) }
-                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(maxOf(210, minOf(ms, 380)), easing = EaseOut)) }
+                        // fade-through. Now: out 90 and in 210 together, from 0.98. Staggered (Material): out 90 ease-in, then in 210 ease-out from
+                        // 90 ms, from 0.92 on the spatial spring. Every duration, delay and spring settle scaled by Labs › Tab motion speed
+                        val inDelay = if (staggered) sc(90, k) else 0
+                        launch { outA.animateTo(0f, androidx.compose.animation.core.tween(sc(90, k), easing = EaseIn)) }
+                        launch { kotlinx.coroutines.delay(inDelay.toLong()); inA.animateTo(1f, androidx.compose.animation.core.tween(sc(210, k), easing = EaseOut)) }
+                        launch { kotlinx.coroutines.delay(inDelay.toLong()); inS.animateTo(1f, androidx.compose.animation.core.spring(m.spatialDamping, m.spatialStiffness / (k * k))) }
+                        launch { t.animateTo(1f, androidx.compose.animation.core.tween(sc(maxOf(210, minOf(ms, 380)), k) + inDelay, easing = EaseOut)) }
                     }
                 }
             }
@@ -303,9 +324,9 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: I
     Box(Modifier.fillMaxSize().clipToBounds().onGloballyPositioned { pagerBox = it }) {
         from?.let { old ->
             androidx.compose.runtime.key(old) {
-                val page = remember { TabPage(old, anchors) }
+                val page = pageHolders.getOrPut(old) { TabPage(old, anchors) }
                 Box(Modifier.fillMaxSize().graphicsLayer { alpha = outA.value }.onGloballyPositioned { page.box = it }.clearAndSetSemantics { }) {
-                    CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides true) { content(old) }
+                    pageOf(old)(true)      // moved here from the incoming slot, not built again
                 }
             }
         }
@@ -348,9 +369,9 @@ private fun TabPager(tab: Tab, colour: androidx.compose.ui.graphics.Color, ms: I
             }
         }
         androidx.compose.runtime.key(shown) {
-            val page = remember { TabPage(shown, anchors) }
+            val page = pageHolders.getOrPut(shown) { TabPage(shown, anchors) }
             Box(Modifier.fillMaxSize().graphicsLayer { if (from != null) { alpha = inA.value; scaleX = inS.value; scaleY = inS.value } }.onGloballyPositioned { page.box = it }) {
-                CompositionLocalProvider(LocalTabPage provides page, LocalTabTravelling provides (from != null)) { content(shown) }
+                pageOf(shown)(from != null)
             }
         }
         if (shrink) surface()
@@ -581,3 +602,13 @@ internal fun PanelHandle(description: String, onClose: () -> Unit, modifier: Mod
             .drawBehind { val w = 4.dp.toPx(); val h = 36.dp.toPx(); drawRoundRect(Tok.text2Raised, Offset((size.width - w) / 2 - (if (barCentred) 0f else 4.dp.toPx()), (size.height - h) / 2), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(w / 2)) },
     )
 }
+
+
+/** Labs › Tab motion (temporary, 2026-11-18): the fade-through's style and a speed that scales every duration, delay and spring settle. */
+data class TabMotion(val staggered: Boolean = true, val speed: Float = 1f)
+
+/** [ms] scaled by the Tab motion speed [k], whole milliseconds. */
+internal fun sc(ms: Int, k: Float): Int = kotlin.math.round(ms * k).toInt()
+
+/** Suspends until the frame after next: the switch's first (heavy) frame has been composed, laid out and drawn. */
+internal suspend fun awaitFirstFrame() { repeat(2) { androidx.compose.runtime.withFrameNanos { } } }

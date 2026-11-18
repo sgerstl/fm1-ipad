@@ -379,6 +379,12 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 |---|---|---|---|---|
 | 163 | Pads, then the Timeline: select one track, then another. Look closely at the badge in the selected head. | The selected head's badge squares off with the outline, together, with the same little squash; its corners run parallel to the head's (about 6 dp on Pads, 6 on the Timeline). The other heads' badges stay round. Mix's strips and Edit's bar keep round badges. | – | ☐ pass ☐ fail: |
 
+## Round 16c: tab changes (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 164 | Switch Mix → Pads, Pads → Edit, Edit → Pads, Timeline → Pads a few times. Then Settings › Labs › Tab motion: try Now, and Speed 1.3× and 1.6×. | No cut: the old page fades fully, then the new one fades in from nothing and settles (Staggered); the grow and shrink play from their start. Now overlaps the two; the speeds lengthen it all. Remove animations on: plain cross-fades, unchanged. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

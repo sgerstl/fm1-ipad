@@ -116,6 +116,12 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
             BasicText("Labs", Modifier.semantics { heading() }, style = LupeType.title.copy(fontSize = 17.sp))
             BasicText("Settings to try on the phone. Each starts off; keep what works.", Modifier.padding(top = 2.dp, bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
         }
+        // Tab motion (Scott, 2026-11-18: added back to play with; it leaves again once he settles). Segmented rows, not sliders
+        Text2("Tab motion", "How a tab change moves. Staggered fades the old page out, then the new one in; Now overlaps them. Speed makes it all longer.")
+        Segmented(options = listOf("Staggered", "Now"), selected = if (phone.tabStaggered) 0 else 1, name = "Tab motion style") { phone.chooseTabStaggered(it == 0) }
+        Spacer(Modifier.height(6.dp))
+        Segmented(options = listOf("1×", "1.3×", "1.6×"), selected = phone.tabSpeedIndex, name = "Tab motion speed") { phone.chooseTabSpeed(it) }
+        Spacer(Modifier.height(8.dp))
         SwitchRow("Pause following after a touch", "The sound page you touched holds for 3 s before it follows the FM-1 again", phone.pauseFollowing, trial = true) { phone.choosePauseFollowing(it) }
         // the motion and feel sliders left Labs on 2026-11-17 (Scott: "let's start over with all the sliders and the motion tuning… If I want to play with
         // something, I'll let you know and we can add the settings back in one by one"); their values are fixed at today's defaults in PhoneSettings
