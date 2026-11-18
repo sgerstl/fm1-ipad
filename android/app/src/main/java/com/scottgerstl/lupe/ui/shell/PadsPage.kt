@@ -398,7 +398,9 @@ private fun RowHead(r: PadRow, h: Dp, selected: Boolean, sound: String, engine: 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.width(((h - 30.dp) / 2).coerceAtLeast(4.dp)))
-            com.scottgerstl.lupe.ui.mix.TrackBadge(r.track, color, false, minOf(30.dp, h - 8.dp), 18)
+            // the badge squares with the head (nested: 12 minus its inset from the outline's edge, the spacer before it)
+            com.scottgerstl.lupe.ui.mix.TrackBadge(r.track, color, selected, minOf(30.dp, h - 8.dp), 18,
+                squareTo = com.scottgerstl.lupe.ui.mix.nestedBadgeRadius(HEAD_SELECTED_R.value, ((h - 30.dp) / 2).coerceAtLeast(4.dp).value)?.dp)
             Column(Modifier.padding(start = 8.dp, end = 12.dp), verticalArrangement = Arrangement.Center) {
                 BasicText(sound, style = LupeType.key.copy(fontSize = 14.5.sp, lineHeight = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1, softWrap = false,
                     autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 15.sp, stepSize = 1.sp))

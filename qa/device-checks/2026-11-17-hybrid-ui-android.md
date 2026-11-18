@@ -373,6 +373,12 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 | 161 | Lupe in the background (another app in front): unplug and plug the FM-1 in. | Lupe comes forward (the same window, where you left it) and links; Back doesn't show a second Lupe. | – | ☐ pass ☐ fail: |
 | 162 | Lupe open: unplug and plug the FM-1 in. | It stays one window and relinks straight away. | – | ☐ pass ☐ fail: |
 
+## Round 16b: the selected badge squares (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 163 | Pads, then the Timeline: select one track, then another. Look closely at the badge in the selected head. | The selected head's badge squares off with the outline, together, with the same little squash; its corners run parallel to the head's (about 6 dp on Pads, 6 on the Timeline). The other heads' badges stay round. Mix's strips and Edit's bar keep round badges. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

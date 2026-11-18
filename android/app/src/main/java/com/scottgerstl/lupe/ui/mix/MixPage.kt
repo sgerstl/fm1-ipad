@@ -208,22 +208,34 @@ internal fun panShort(text: String): String = when (text.trim().uppercase()) { "
  * when selected, on the spring (with Reduce Motion it lands at once; the colour never changes).
  */
 @Composable
-fun TrackBadge(number: Int, colour: Color, selected: Boolean, size: Dp, fontSize: Int) {
+fun TrackBadge(number: Int, colour: Color, selected: Boolean, size: Dp, fontSize: Int,
+    /** Squares off to this radius while [selected] (a head whose outline squares: the nested radius, 2026-11-18); null: round in every state. */
+    squareTo: Dp? = null) {
     val reduce = LocalReduceMotion.current
-    val m = hybridMotion
-    // round 3: M3 Expressive's spatial spring and a squash as it squares off; Reduce Motion: the circle and the square cross-fade
-    // the badge stays a circle in every state (Scott, 2026-11-18: "Square the outline": the head's outline squares instead)
-    val sq = 0f
-    val squash = { 1f to 1f }
+    // round, or squaring with its head on the same spring and squash (Scott, 2026-11-18: "a square with rounded corners as well to match");
+    // Reduce Motion: the circle and the square cross-fade
+    val squaring = squareTo != null && selected
+    val sq by com.scottgerstl.lupe.ui.theme.spatialFloat(if (squaring) 1f else 0f, reduce)
+    val squash = com.scottgerstl.lupe.ui.theme.rememberSquash(squaring, reduce)
+    val target = squareTo
     Box(
-        Modifier.size(size).graphicsLayer { val (sx, sy) = squash(); scaleX = sx; scaleY = sy }.drawBehind {
-            val half = this.size.minDimension / 2; val square = this.size.minDimension * 0.3f
+        Modifier.size(size).graphicsLayer { if (target != null) { val (sx, sy) = squash(); scaleX = sx; scaleY = sy } }.drawBehind {
+            val half = this.size.minDimension / 2
+            if (target == null) { drawRoundRect(colour, cornerRadius = CornerRadius(half)); return@drawBehind }
+            val square = target.toPx().coerceIn(2f, half)
             if (reduce) { val u = sq.coerceIn(0f, 1f); drawRoundRect(colour.copy(alpha = 1f - u), cornerRadius = CornerRadius(half)); drawRoundRect(colour.copy(alpha = u), cornerRadius = CornerRadius(square)) }
             else { val s = sq.coerceIn(0f, 1.25f); drawRoundRect(colour, cornerRadius = CornerRadius((half - (half - square) * s).coerceAtLeast(2f))) }
         },
         contentAlignment = Alignment.Center,
     ) { BasicText("$number", style = LupeType.number.copy(fontSize = fontSize.sp, lineHeight = fontSize.sp, fontWeight = FontWeight.Bold, color = Tok.onColour)) }
 }
+
+/**
+ * A badge's corner radius inside a head whose outline squares to [outlineR] (dp): the outline's radius minus the badge's inset from the outline's
+ * edge, so the curves run parallel (DESIGN.md nested corners). Null when that falls under [MIN_BADGE_R]: then the badge stays round.
+ */
+fun nestedBadgeRadius(outlineR: Float, inset: Float): Float? = (outlineR - inset).takeIf { it >= MIN_BADGE_R }
+const val MIN_BADGE_R = 4f
 
 /**
  * The level fader, drawn up (spec 3.13): a 32-wide `control` track at radius 14, the level in the track's colour (its top corners 5), and a line

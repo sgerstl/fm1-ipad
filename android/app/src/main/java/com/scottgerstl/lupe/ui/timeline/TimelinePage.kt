@@ -321,7 +321,8 @@ private fun TrackHead(track: Int, name: String, colour: Color, selected: Boolean
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        com.scottgerstl.lupe.ui.mix.TrackBadge(track, colour, false, 24.dp, 15)
+        // squares with the head: 12 minus the head's 6 dp side padding (2026-11-18)
+        com.scottgerstl.lupe.ui.mix.TrackBadge(track, colour, selected, 24.dp, 15, squareTo = com.scottgerstl.lupe.ui.mix.nestedBadgeRadius(com.scottgerstl.lupe.ui.shell.HEAD_SELECTED_R.value, 6f)?.dp)
         BasicText(name, Modifier.weight(1f).clearAndSetSemantics { }, style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp, color = Tok.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis,
             autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 0.5.sp))
     }
