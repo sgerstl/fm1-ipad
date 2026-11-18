@@ -191,6 +191,7 @@ fun EditTab(
     // the step panel: docked while Step is latched and something is picked; the shell's sound panel stands in front of it
     val panelOpen = ui.stepPanel && stepPicked
     val panelT = animatedFloat(if (panelOpen) 1f else 0f, if (panelOpen) Dur.PANEL else Dur.FINGER)
+    val stepSwipe = rememberPanelSwipe(panelOpen)
     val dock = maxOf(DOCK_W * panelT.value, soundDock)
     // the FM-1's knobs drive the picked step (Edit redesign, Scott 2026-11-17; the iPad's SeqCursor, both ways). Skiff 2.5.1: on SEQ › NOTES knobs
     // 1–4 are PITCH START LENGTH VELOCITY of the step under the FM-1's cursor, on FEEL CHANCE RATCHET NUDGE TYPE; its PRESETS encoder moves the cursor.
@@ -282,13 +283,10 @@ fun EditTab(
     // the step panel, docked at the tab's right: `panel`, its left corners at the sheet radius (spec 4.3); it slides in from the right (with Reduce Motion it only fades)
     if (panelT.value > 0.001f) Box(
             Modifier.align(Alignment.TopEnd).width(DOCK_W).fillMaxHeight()
-                .graphicsLayer { if (reduce) alpha = panelT.value else translationX = (1f - panelT.value) * size.width; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
+                .graphicsLayer { if (reduce) alpha = panelT.value; translationX = panelX(if (!reduce) (1f - panelT.value) * size.width else 0f, stepSwipe.offset.value); shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
                 .background(Tok.panel)
-                // a swipe to the right that no control took shuts it, the sound panel's gesture (round 7); it slides out on the panel's own motion
-                .pointerInput(Unit) {
-                    var total = 0f
-                    detectHorizontalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 32.dp.toPx()) { ui.stepPanel = false } }) { change, dx -> change.consume(); total += dx }
-                }
+                // a swipe to the right that no control took follows the finger and, far enough or flung, shuts it (2026-11-18, the sound panel's gesture)
+                .panelSwipe(stepSwipe) { ui.stepPanel = false }
                 .pointerInput(Unit) { detectTapGestures { } }      // a touch on the panel doesn't reach the grid under it
                 .semantics { paneTitle = "Step panel"; isTraversalGroup = true
                     customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the step panel") { ui.stepPanel = false; true }) }

@@ -378,6 +378,7 @@ private fun TimelineSlot(core: LupeCore) {
  */
 @Composable
 private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCore, notice: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier, graphics: Boolean = true) {
+    val swipe = rememberPanelSwipe(visible)
     val reduce = LocalReduceMotion.current
     var last by remember { mutableStateOf(page) }
     if (visible) last = page
@@ -398,13 +399,11 @@ private fun SoundPanel(t: Float, visible: Boolean, page: PageState, core: LupeCo
     Box(
         modifier.width(DOCK_W).fillMaxHeight()
             // hybrid UI (spec 4.3): `panel`, its left corners at the sheet radius, beside the grid rather than over it; no border, no track tint
-            .graphicsLayer { alpha = if (reduce) t else 1f; if (!reduce) translationX = (1f - t) * size.width; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
+            // its slide-in and, on top, the finger's drag (2026-11-18): it follows the swipe from the first movement
+            .graphicsLayer { alpha = if (reduce) t else 1f; translationX = panelX(if (!reduce) (1f - t) * size.width else 0f, swipe.offset.value); shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
             .background(Tok.panel)
-            // a swipe to the right that no dial took shuts it; taps on the panel don't reach what is under it
-            .pointerInput(Unit) {
-                var total = 0f
-                detectHorizontalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 32.dp.toPx()) onDismiss() }) { change, dx -> change.consume(); total += dx }
-            }
+            // a swipe to the right that no dial took moves it and, let go far enough or flung, shuts it; taps on the panel don't reach what is under it
+            .panelSwipe(swipe, onDismiss)
             .pointerInput(Unit) { detectTapGestures { } }
             .semantics {
                 paneTitle = "Sound page ${last.family}"; isTraversalGroup = true
