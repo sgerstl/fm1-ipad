@@ -188,7 +188,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                                 // the grid keeps its step width and scrolls under the docked panel (decision 35, B)
                                 // the docked sound panel's width as a target, not its animated width: Edit lays out once when it docks or leaves, and the
                                 // panel slides over as an offset (2026-11-18: reading the animated width re-laid out the shell and Edit every frame)
-                                EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = if (docked) DOCK_W else 0.dp)
+                                EditTab(editor, core, automation, pick, editUi, Modifier.countTouches(onSoundTouch), soundDock = if (docked) SOUND_DOCK_W else 0.dp)
                                 // the FREE TAKE offer and the landing sit on top of the editor
                                 com.scottgerstl.lupe.ui.freetake.TakeStrips(freeTake, core, Modifier.align(Alignment.TopCenter).padding(top = 2.dp), showOffer = labs.takeOffer == com.scottgerstl.lupe.ui.slide.PhoneSettings.TAKE_POPUP)
                             }
@@ -197,7 +197,7 @@ fun ShellBody(shell: ShellState, core: LupeCore, modifier: Modifier = Modifier) 
                                 // Mixer · Effects: the shared pages as effect cards (direction C, 2026-11-17), replacing the bus dials
                                 val launch = com.scottgerstl.lupe.ui.mix.MixLaunch(core.pads.collectAsStateWithLifecycle(), core.clock.collectAsStateWithLifecycle())
                                 androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.mix.LocalMixLaunch provides launch) {
-                                    com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = if (docked) DOCK_W else 0.dp, graphics = labs.showGraphics) } }
+                                    com.scottgerstl.lupe.ui.mix.MixTab(mix.first, mix.second, meters, soundDock = if (docked) SOUND_DOCK_W else 0.dp, graphics = labs.showGraphics) } }
                         }
                     }
                 }
@@ -405,7 +405,7 @@ internal fun SoundPanel(t: () -> Float, visible: Boolean, page: PageState, core:
     // 6.7:1 or better on it, the raised grey of the labels 4.5:1 or better (lime is the least, 4.52), the track's own colour (the dials' arcs)
     // 3.6:1 or better. At 40 % the labels fall under 4.5:1 on yellow and lime, so 35 it is. A line in the track's colour marks its left edge.
     Box(
-        modifier.width(DOCK_W).fillMaxHeight()
+        modifier.width(SOUND_DOCK_W).fillMaxHeight()
             // hybrid UI (spec 4.3): `panel`, its left corners at the sheet radius, beside the grid rather than over it; no border, no track tint
             // its slide-in and, on top, the finger's drag (2026-11-18): it follows the swipe from the first movement
             // the swipe outside the moving layer (fixed coordinates), only while open (2026-11-18)
@@ -423,8 +423,9 @@ internal fun SoundPanel(t: () -> Float, visible: Boolean, page: PageState, core:
             }
     ) {
         // the grab handle (Scott, 2026-11-17: no close key; EN 301 549 / WCAG 2.5.1: a swipe needs a single-tap way too): tap it to close, drag it to swipe
-        PanelHandle("Close the sound panel", onDismiss, Modifier.align(Alignment.CenterStart), fullHeight = true)
-        androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
+        // in its own gutter (2026-11-18): 24 dp from the panel's edge, the bar centred, 8 dp clear before the first dial
+        PanelHandle("Close the sound panel", onDismiss, Modifier.align(Alignment.CenterStart), fullHeight = true, barCentred = true)
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(start = STEP_GUTTER, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
         // the header: the page and, at its right end, "3 of 7" (the close key is gone)
         SoundDials(last, core, Modifier.fillMaxWidth().height(110.dp), notice, count = true)
         // the tiles and the picture share what height is left. A page whose knob picks from a list of names (MOD's routes, LANES, SOUND,

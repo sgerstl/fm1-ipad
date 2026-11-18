@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.dp
 import com.scottgerstl.lupe.core.AutomationState
 import com.scottgerstl.lupe.core.EditorState
@@ -92,5 +93,41 @@ class SoundPanelDockTest {
         rule.waitForIdle()                // throws if Edit never comes to rest
         dock = 0.dp
         rule.waitForIdle()
+    }
+
+    // the gutter (Scott, 2026-11-18, "Widen the panel"): a drag from the handle's lane closes the panel and leaves the first dial; a turn on the
+    // first dial (Slide to turn's default is up and down) changes it and leaves the panel where it is
+    private class SendCore(ed: EditorState) : LupeCore {
+        val sent = mutableListOf<Intent>()
+        override val link: StateFlow<LinkState> = MutableStateFlow(LinkState())
+        override val top: StateFlow<TopState> = MutableStateFlow(TopState())
+        override val shell: StateFlow<ShellState> = MutableStateFlow(ShellState())
+        override val pads: StateFlow<PadsState> = MutableStateFlow(PadsState())
+        override val editor: StateFlow<EditorState> = MutableStateFlow(ed)
+        override val page: StateFlow<PageState> = MutableStateFlow(PageState())
+        override fun send(intent: Intent) { sent += intent }
+    }
+    private val env = PageState(family = "ENV", title = "ENV", controls = listOf(
+        com.scottgerstl.lupe.core.PageControl("ATTACK", "10", raw = 10), com.scottgerstl.lupe.core.PageControl("DECAY", "40", raw = 40),
+        com.scottgerstl.lupe.core.PageControl("SUSTAIN", "90", raw = 90), com.scottgerstl.lupe.core.PageControl("RELEASE", "20", raw = 20)))
+
+    @Test fun aDragFromTheGutterClosesItAndLeavesTheFirstDial() {
+        var visible by mutableStateOf(true); val core = SendCore(ed)
+        rule.setContent { Box(Modifier.fillMaxSize()) { SoundPanel({ if (visible) 1f else 0f }, visible, env, core, null, { visible = false }, Modifier.align(Alignment.TopEnd)) } }
+        rule.waitForIdle()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Close the sound panel")).performTouchInput { swipe(center, center + Offset(220f, 0f), durationMillis = 250) }
+        rule.waitForIdle()
+        assertEquals("closed", false, visible)
+        assertEquals("first dial untouched: ${core.sent}", 0, core.sent.count { it is com.scottgerstl.lupe.core.SetParam && it.slot == 0 })
+    }
+
+    @Test fun aTurnOnTheFirstDialLeavesThePanel() {
+        var visible by mutableStateOf(true); val core = SendCore(ed)
+        rule.setContent { Box(Modifier.fillMaxSize()) { SoundPanel({ if (visible) 1f else 0f }, visible, env, core, null, { visible = false }, Modifier.align(Alignment.TopEnd)) } }
+        rule.waitForIdle()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("ATTACK", substring = true, ignoreCase = true)).performTouchInput { swipe(center, center - Offset(0f, 120f), durationMillis = 400) }
+        rule.waitForIdle()
+        assertEquals("still open", true, visible)
+        assertEquals("the first dial turned: ${core.sent}", true, core.sent.any { it is com.scottgerstl.lupe.core.SetParam && it.slot == 0 })
     }
 }

@@ -357,6 +357,12 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 |---|---|---|---|---|
 | 158 | Open the step panel. Drag sideways from the panel's left edge (the bar's lane); then slide ROOT/PITCH sideways starting on the tile; then swipe the sound panel and the step panel away from their middles. | The edge drag moves and closes the panel, the pitch unchanged; the tile slide changes the pitch and the panel stays. Both panels now follow the finger all the way and close when swiped past a third. Labels and values fit in the narrower tiles (CHANCE, VELOCITY, ROOT). | – | ☐ pass ☐ fail: |
 
+## Round 15i: the wider sound panel (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 159 | Open ENV on Edit, then on Mix › Effects and Mixer. Drag sideways from the panel's left edge; turn the first dial; look along the pattern bar and the effect cards. | A clear lane with the bar at the panel's left edge, the first dial starting after it. The edge drag closes the panel without touching the dial; the dial turns without moving the panel. Edit's pattern bar keys are all whole, the grid's steps fit; Mix's cards and strips aren't cut off. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

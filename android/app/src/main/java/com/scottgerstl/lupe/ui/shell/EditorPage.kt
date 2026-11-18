@@ -159,6 +159,11 @@ private val DIALS_W = 420.dp      // the dials area, at the right; the keyboard,
 val DOCK_W = 360.dp
 /** The step panel's leading padding: the grab handle's 24 dp lane plus 8 dp clear before the first control (2026-11-18). */
 val STEP_GUTTER = 32.dp
+/**
+ * The docked sound panel's width: the step panel's 360 plus 18 for the same handle gutter (Scott, 2026-11-18, "Widen the panel"), so its four
+ * 84 dp dials keep the width they had (334 inside) with the handle's lane clear of the first one.
+ */
+val SOUND_DOCK_W = DOCK_W + 18.dp
 
 /**
  * The Edit tab (decisions 31 and 35, board 75): the ruler, then the pattern as the iPhone's step grid: a melodic track's piano roll
