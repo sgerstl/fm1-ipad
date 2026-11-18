@@ -90,7 +90,7 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         )
         Plain("Theme", "Follows the FM-1 (SKIFF)")
 
-        com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { AudioSection(it) }
+        // (Audio left 2026-11-18: Play through the phone is the header's speaker key; what needs a hand and the Bluetooth note go to the message strip)
 
         Section("Touch")
         Text2("Slider gesture", "Which way a finger slides a value. Up and right raise it.")
@@ -121,21 +121,6 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom) { phone.choosePinBottom(it) }
       }
     }
-}
-
-/**
- * Audio: Play through the phone (the iPhone's "Play through the iPhone"). While it plays: where the sound goes, the phone's
- * share of the delay, what Bluetooth adds, and one technical line for the device check.
- */
-@Composable
-private fun AudioSection(through: com.scottgerstl.lupe.audio.AudioThrough) {
-    Section("Audio")
-    SwitchRow("Play through the phone", "The FM-1's sound on the phone's speaker or headphones, over the USB cable", through.enabled) { through.choose(it) }
-    if (!through.enabled) return
-    val state = through.state
-    com.scottgerstl.lupe.audio.ThroughModel.action(state)?.let { Plain("Needs a hand", it) }
-    // (Output, Delay and Details left on 2026-11-18, Scott; the Bluetooth note stays while the output is Bluetooth: it explains the lag)
-    if (state is com.scottgerstl.lupe.audio.ThroughState.Playing) com.scottgerstl.lupe.audio.ThroughModel.bluetoothNote(state.kind)?.let { Text2("Bluetooth", it) }
 }
 
 @Composable

@@ -409,6 +409,12 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 |---|---|---|---|---|
 | 168 | Stopped, hold a pad and drag it slowly up toward Clear steps, then across to Delete pattern, then let it go back. Start the transport and lift a pad again. Then open Settings in landscape and in portrait. | The two top wells have a clear gap, and it stays open (about 16 dp at least) as either one swells. Delete's bin is red from the start; nearing it, the well blends toward red, with dark words on it once full. Clear steps fills with the pad's colour as before. Playing: Delete is grey, "Stop first", no red. Settings in landscape: the sheet itself is narrower and centred, dimmed screen either side; portrait: full width. Nothing in it cut off. | d09be39 | ☐ pass ☐ fail: |
 
+## Round 16h: the speaker key and the four-item song menu (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 169 | With the FM-1 plugged in over USB, look at the header; tap the speaker key, then again. Open the song menu, then Settings. If you can, start play-through with Bluetooth headphones connected, and once with the FM-1's USB audio unplugged. | A round speaker key left of the Bar pill, outlined with a crossed-out speaker. Tapped: it fills white with a dark sounding speaker and the FM-1 plays through the phone; tapped again it fades back. TalkBack: "Play through the phone, switch, on/off". Song menu: Projects…, Settings…, Patterns… (pool count), Firmware… (firmware line), nothing else outside the demo. Settings: no Audio section. Bluetooth: a message for 4 s about the extra delay. No USB audio: a message that stays until it plays or you turn it off. With the FREE TAKE chip showing, nothing in the header overlaps. | 69e11a6 | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

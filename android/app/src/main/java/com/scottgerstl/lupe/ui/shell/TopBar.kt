@@ -84,21 +84,16 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
             HeaderPill({ menu = Menu.Fm1 }, "Song menu, project $project", project, textMax = if (give >= 1) 96.dp else 140.dp)
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
                 val sheets = LocalSheetHost.current
+                // the song menu (Scott, 2026-11-18: "the menu can be Projects... Settings... Patterns... Firmware..."); Play through the phone is the
+                // header's speaker key now. (Shared effects… left 2026-11-18: the Mix tab's sub-pages cover it; Labs left with the Labs section)
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
-                // (Shared effects… left the menu 2026-11-18: the Mix tab's sub-pages cover it; Labs left with the Labs section)
-                val firmwareHost = com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost.current
-                val fw by core.firmware.collectAsStateWithLifecycle()
-                MenuRow("FM-1 firmware…", { menu = null; firmwareHost?.info = true }, sub = com.scottgerstl.lupe.ui.firmware.firmwareLine(fw))
-                MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
+                MenuRow("Settings…", { menu = null; sheets.show(SheetKind.Settings) })
                 // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too
                 val poolNow by core.patterns.collectAsStateWithLifecycle()
                 MenuRow("Patterns…", { menu = null; sheets.showPatterns() }, sub = if (poolNow.kept > 0) "${poolNow.kept} kept · ${poolNow.unused} unused" else "The FM-1's 64 pattern numbers")
-                // Play through the phone (as the iPhone's "Play through the iPhone"): the FM-1's USB audio to the phone's output
-                com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { through ->
-                    MenuDivider()
-                    MenuRow("Play through the phone", { menu = null; through.choose(!through.enabled) }, checked = through.enabled,
-                        sub = if (through.enabled) through.summary else "The FM-1's sound on the phone's speaker or headphones")
-                }
+                val firmwareHost = com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost.current
+                val fw by core.firmware.collectAsStateWithLifecycle()
+                MenuRow("Firmware…", { menu = null; firmwareHost?.info = true }, sub = com.scottgerstl.lupe.ui.firmware.firmwareLine(fw))
                 val demo = LocalDemo.current
                 if (demo.inDemo) { MenuDivider(); MenuRow("Leave the demo", { menu = null; demo.leave() }, sub = "Back to looking for your FM-1") }
                 if (core is FakeLupeCore) FakeMenu(core) { menu = null }
@@ -109,6 +104,12 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
         Tabs(tab, onTab, padH = if (give >= 2) 12.dp else 16.dp)
         // the space that grows (a mock bug once left the room at the far right instead)
         Spacer(Modifier.weight(1f).width(12.dp))
+        // Play through the phone: the speaker key, left of the Launch pill and in its style (Scott, 2026-11-18); its messages go to the strip
+        com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { through ->
+            ThroughKey(through)
+            ThroughMessages(through)
+            Spacer(Modifier.width(12.dp))
+        }
         // Launch at: the Bar ⌄ pill, outlined; the waiting count as a small disc on it
         Box {
             HeaderPill({ menu = Menu.Launch }, "Launch at ${top.launch.word}" + if (top.waiting > 0) ", ${top.waiting} waiting" else "", top.launch.word, outlined = true,
