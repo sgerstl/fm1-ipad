@@ -36,6 +36,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.testTag
+import kotlin.math.roundToInt
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -70,10 +74,13 @@ private val EFFECT_TITLES = listOf("DELAY", "REVERB", "CHORUS", "GLOBAL")
 /** A collapsed card's width, and the gap between cards (dp). */
 internal const val CARD_NARROW = 112f
 internal const val CARD_GAP = 6f
-/** A collapsed card's one inset, and its picture box: [PICTURE_H] tall, [PICTURE_TOP] from the card's top, the inner width (Scott, 2026-11-17). */
+/** A collapsed card's one inset, and its picture box: at most [PICTURE_H] tall, the inner width, centred in the space between the caption and the values (Scott, 2026-11-18). */
 internal const val COLLAPSED_INSET = 14f
-internal const val PICTURE_TOP = 46f
 internal const val PICTURE_H = 62f
+/** Skiff's pictures draw from x 12 to 228 of 240; the collapsed card widens the canvas so that span lands on its text's left edge and inner width. */
+private const val SKIFF_W = 240f
+private const val SKIFF_L = 12f
+private const val SKIFF_SPAN = 216f
 
 /** A knob tile's least height: the hybrid tile's padding, label row, value and gauge, so its value always shows in full (Scott, 2026-11-17). */
 internal const val TILE_MIN_H = 80f
@@ -156,17 +163,29 @@ private fun EffectCard(i: Int, key: String, isPicked: Boolean, wideDp: Float, ca
             }
             .then(if (isPicked) Modifier else Modifier.clickable(source, null, role = Role.Tab) { actions.page(i + 1) }),
     ) {
-        // collapsed (Scott, 2026-11-17: "truncated and left aligned with all the rest of the card content… This sure goes for all of these cards"):
-        // one 14 dp left inset for everything; every line single and clipped to the inner width with an ellipsis; the picture in one fixed box
-        // (inner width × 62, 46 from the top) in every card, so they line up; the two value pairs pinned to the bottom inset
-        if (small.value > 0.001f) Box(Modifier.width(CARD_NARROW.dp).fillMaxHeight().graphicsLayer { alpha = small.value }.padding(horizontal = COLLAPSED_INSET.dp, vertical = COLLAPSED_INSET.dp)) {
+        // collapsed (Scott, 2026-11-17: "truncated and left aligned with all the rest of the card content… This sure goes for all of these cards";
+        // 2026-11-18: "graphics that are too high", the chorus words "left justified… and truncated"): one 14 dp left inset for everything, the
+        // picture included; every line single and clipped to the inner width with an ellipsis. The picture's own caption is set here as text under
+        // the title (the picture draws none), always one line even when empty so the cards line up; the picture box (at most 62, shrinking if the
+        // card is short) is centred in the space between the caption and the two value pairs at the bottom.
+        if (small.value > 0.001f) Column(Modifier.width(CARD_NARROW.dp).fillMaxHeight().graphicsLayer { alpha = small.value }.padding(horizontal = COLLAPSED_INSET.dp, vertical = COLLAPSED_INSET.dp)) {
             val inner = (CARD_NARROW - 2 * COLLAPSED_INSET).dp
-            BasicText(EFFECT_TITLES[i], Modifier.width(inner).align(Alignment.TopStart), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            val g = busGraphOf(key, card)
-            if (graphics && g != null) Box(Modifier.align(Alignment.TopStart).padding(top = (PICTURE_TOP - COLLAPSED_INSET).dp).width(inner).height(PICTURE_H.dp), contentAlignment = Alignment.CenterStart) {
-                com.scottgerstl.lupe.ui.page.GraphContent(g, Tok.text2Raised, -1, Modifier.fillMaxSize().clearAndSetSemantics { })
+            val small12 = LupeType.small.copy(fontSize = 12.sp, lineHeight = 14.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp)
+            BasicText(EFFECT_TITLES[i], Modifier.width(inner), style = LupeType.key.copy(fontSize = 14.sp, lineHeight = 16.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            val g = busGraphOf(key, card)?.takeIf { graphics }
+            BasicText(g?.let { com.scottgerstl.lupe.ui.page.pictureCaption(it) }.orEmpty(), Modifier.width(inner).padding(top = 5.dp).testTag("fx-caption-$key").clearAndSetSemantics { }, style = small12,
+                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Box(Modifier.width(inner).weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (g != null) Box(Modifier.fillMaxWidth().height(PICTURE_H.dp).testTag("fx-picture-$key").clipToBounds()) {
+                    com.scottgerstl.lupe.ui.page.GraphContent(g, Tok.text2Raised, -1, Modifier.fillMaxHeight().layout { m, c ->
+                        val w = (c.maxWidth * SKIFF_W / SKIFF_SPAN).roundToInt()
+                        val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, c.maxHeight))
+                        layout(c.maxWidth, c.maxHeight) { p.place(-(w * SKIFF_L / SKIFF_W).roundToInt(), 0) }
+                    }.clearAndSetSemantics { }, caption = false)
+                }
             }
-            Column(Modifier.align(Alignment.BottomStart).width(inner)) {
+            Spacer(Modifier.height(8.dp))
+            Column(Modifier.width(inner).testTag("fx-values-$key")) {
                 collapsedPair(key, card).forEachIndexed { n, (label, value) ->
                     BasicText(label, Modifier.width(inner), style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised, letterSpacing = 0.5.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     BasicText(value, Modifier.width(inner).padding(bottom = if (n == 0) 10.dp else 0.dp), style = LupeType.number.copy(fontSize = 22.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold),

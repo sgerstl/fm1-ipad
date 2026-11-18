@@ -29,7 +29,7 @@ class PadDragTest {
 
     @Test fun theTopHoldsClearStepsAndDeletePatternSideBySide() {
         val a = EdgeWellsGeometry.rect(EdgeAction.ClearSteps, w, h, 1f); val b = EdgeWellsGeometry.rect(EdgeAction.Delete, w, h, 1f)
-        assertEquals(0f, a.top, 0.01f); assertEquals(52f, a.height, 0.01f); assertEquals(8f, b.left - a.right, 0.01f)
+        assertEquals(0f, a.top, 0.01f); assertEquals(52f, a.height, 0.01f); assertEquals(24f, b.left - a.right, 0.01f)   // 24 apart (Scott, 2026-11-18)
         assertEquals(a.width, b.width, 0.01f); assertEquals(w / 2, (a.left + b.right) / 2, 0.01f)
         assertEquals(EdgeAction.ClearSteps, EdgeWellsGeometry.hot(Offset(a.center.x, 60f), w, h, 1f, feel))
         assertEquals(EdgeAction.Delete, EdgeWellsGeometry.hot(Offset(b.center.x, 60f), w, h, 1f, feel))

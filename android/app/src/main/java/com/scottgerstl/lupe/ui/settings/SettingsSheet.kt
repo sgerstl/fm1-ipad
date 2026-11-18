@@ -80,7 +80,7 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
     val slide = LocalSlideSettings.current
     val phone = LocalPhoneSettings.current
     val scroll = rememberScrollState()
-    LupeSheet(host.open == SheetKind.Settings, "Settings", { host.close() }, scroll = scroll) {
+    LupeSheet(host.open == SheetKind.Settings, "Settings", { host.close() }, scroll = scroll, widthCap = 608.dp) {
       // the content column: at most 560 wide, centred in the sheet (Scott, 2026-11-18: "narrow it down a little bit"), about 45–75 characters a
       // subtitle line; the sheet's surface stays full width, as the sheet is a full-width drawer from the bottom
       Column(Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 560.dp)) {

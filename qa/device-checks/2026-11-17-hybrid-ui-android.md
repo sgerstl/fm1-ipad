@@ -397,6 +397,18 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 |---|---|---|---|---|
 | 166 | Open Settings in landscape, then portrait; then set the system font to its largest and open it again. Find Following. Then hold a dial on a sound page and a tile in Edit's step panel, slide, and let go; once more with Remove animations on. | Rows sit in a centred column about half the landscape width, the sheet still full width. Segmented options are only as wide as their words, left-aligned; at the largest font nothing is cut off (options may wrap to two lines). Following, after Sound pages: Pause following (on) and Pin the sound page (off), plain switches. The magnifier rises from the finger with a slight overshoot and leaves quicker: a raised plate with the label and knob number on top, the big value, and a thin track (tiles) or a flat arc (dials). Remove animations: it fades in and out. | 167bda4 | ☐ pass ☐ fail: |
 
+## Round 16f: collapsed effect cards (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 167 | Mix › Effects. Pick Delay, then Chorus, then Global, then Delay again, so the other cards have been seen. Look at each collapsed card. | Under each name, one grey line starting at the same left edge as the name and the values, ending in "…" before the card's edge (Chorus: "DRY AND ITS DRIF…"; Global: "SWING 50:50", clear of the 1 2 3 4). The picture starts at that edge too and sits midway between that line and the values, at the same height in every card. Picking a card still grows and fades as before. | d09be39 | ☐ pass ☐ fail: |
+
+## Round 16g: drag wells and the Settings sheet (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 168 | Stopped, hold a pad and drag it slowly up toward Clear steps, then across to Delete pattern, then let it go back. Start the transport and lift a pad again. Then open Settings in landscape and in portrait. | The two top wells have a clear gap, and it stays open (about 16 dp at least) as either one swells. Delete's bin is red from the start; nearing it, the well blends toward red, with dark words on it once full. Clear steps fills with the pad's colour as before. Playing: Delete is grey, "Stop first", no red. Settings in landscape: the sheet itself is narrower and centred, dimmed screen either side; portrait: full width. Nothing in it cut off. | d09be39 | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

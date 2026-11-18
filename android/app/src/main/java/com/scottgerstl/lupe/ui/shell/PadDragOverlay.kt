@@ -99,8 +99,9 @@ fun PadDragOverlay(state: PadDragState, playing: Boolean, modifier: Modifier = M
                 }
                 if (p.value > 0.001f) {
                     val on = (drag ?: last)
-                    // hot, every well fills with the dragged pad's track colour (Scott, 2026-11-17: Clear steps and Delete too, not red, unless he says otherwise)
-                    val tint = on?.colour ?: Tok.text
+                    // hot, a well fills with the dragged pad's track colour; Delete pattern fills red (Scott, 2026-11-17: "not red, unless he says otherwise";
+                    // 2026-11-18: "Maybe the delete one should be red"), so the destructive one reads as such before you reach it
+                    val tint = if (a == EdgeAction.Delete) Tok.rec else on?.colour ?: Tok.text
                     Well(a, Rect(0f, 0f, w, h), d, p.value, hot == a, a in feel.off, state,
                         if (drag != null) EdgeWellsGeometry.closeness(a, drag.centre - state.origin, w, h, d, feel) else 0f, tint, reduce, feel, labels = false)
                 }
@@ -222,7 +223,9 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
     val e = a.edge
     val grown = when (e) {
         WellEdge.Bottom -> Rect(r.left - along, r.top - g, r.right + along, r.bottom)
-        WellEdge.Top -> Rect(r.left - along, r.top, r.right + along, r.bottom + g)
+        // the top pair's facing sides grow less, so they never come closer than 16 dp (Scott, 2026-11-18)
+        WellEdge.Top -> Rect(r.left - if (a == EdgeAction.Delete) EdgeWellsGeometry.innerAlong(along, d) else along, r.top,
+            r.right + if (a == EdgeAction.ClearSteps) EdgeWellsGeometry.innerAlong(along, d) else along, r.bottom + g)
         WellEdge.Right -> Rect(r.left - g, r.top - along, r.right, r.bottom + along)
         WellEdge.Left -> Rect(r.left, r.top - along, r.right + g, r.bottom + along)
     }
@@ -251,13 +254,15 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
         }
         if (labels) {
             val ink = androidx.compose.ui.graphics.lerp(Tok.text, Tok.onColour, hotT)
+            // Delete's icon is red at rest (rec on held 3.24:1) and blends into the label's ink as the well fills; off, it's grey like the rest
+            val iconInk = if (a == EdgeAction.Delete && !off) androidx.compose.ui.graphics.lerp(Tok.rec, ink, swell) else ink
             val icon = when (a) { EdgeAction.Cancel -> R.drawable.ms_close; EdgeAction.ClearSteps -> R.drawable.ms_delete_sweep; EdgeAction.Delete -> R.drawable.ms_delete; EdgeAction.Edit -> R.drawable.ms_edit; EdgeAction.Duplicate -> R.drawable.ms_library_add }
             val iconDp = (22f + 4f * swell).dp
             val labelBox = Modifier.align(Alignment.Center)
             val word = LupeType.key.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = ink)
             if (a.across) {
                 Row(labelBox, verticalAlignment = Alignment.CenterVertically) {
-                    Image(painterResource(icon), null, Modifier.size(iconDp), colorFilter = ColorFilter.tint(ink))
+                    Image(painterResource(icon), null, Modifier.size(iconDp), colorFilter = ColorFilter.tint(iconInk))
                     Column(Modifier.padding(start = 8.dp)) {
                         BasicText(a.title, style = word, maxLines = 1)
                         if (off) BasicText("Stop first", style = LupeType.small.copy(fontSize = 12.sp, color = Tok.text2Raised))
@@ -265,7 +270,7 @@ private fun Well(a: EdgeAction, full: Rect, d: Float, p: Float, hot: Boolean, of
                 }
             } else {
                 Column(labelBox, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(painterResource(icon), null, Modifier.size(iconDp), colorFilter = ColorFilter.tint(ink))
+                    Image(painterResource(icon), null, Modifier.size(iconDp), colorFilter = ColorFilter.tint(iconInk))
                     BasicText(a.title, Modifier.padding(top = 4.dp), style = word, maxLines = 1)
                 }
             }
