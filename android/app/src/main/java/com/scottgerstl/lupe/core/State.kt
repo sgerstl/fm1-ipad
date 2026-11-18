@@ -282,4 +282,7 @@ data class EditorState(
      */
     val patternSteps: Int = 16,
     val patternStepsMax: Int = 64,
+    /** Edit's undo (core StepUndo): what the next undo / redo would put back; null: nothing to undo / redo. */
+    val undoLabel: String? = null,
+    val redoLabel: String? = null,
 )

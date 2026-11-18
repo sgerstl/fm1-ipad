@@ -1,5 +1,9 @@
 package com.scottgerstl.lupe.ui.shell
 
+import androidx.compose.foundation.shape.CircleShape
+
+import androidx.compose.foundation.combinedClickable
+
 import androidx.compose.foundation.gestures.drag
 
 import androidx.compose.foundation.layout.defaultMinSize
@@ -167,6 +171,9 @@ fun EditTab(
     soundDock: Dp = 0.dp,
 ) {
     val ed = withChord(edArea, ui.chord)
+    val edNowForUndo = rememberUpdatedState(ed)
+    // a tile's slide in the step panel is one undo step, named by the tile and the step (Scott, 2026-11-18)
+    val undoMark: (String) -> Unit = remember(core) { { what -> core.send(com.scottgerstl.lupe.core.UndoMark("$what · step ${edNowForUndo.value.selected + 1}")) } }
     var tab by rememberSaveable { mutableStateOf(PanelTab.Notes) }
     val track = Tok.track[(ed.track - 1).coerceAtLeast(0) % Tok.track.size]
     if (ed.steps.isEmpty()) { Placeholder("No pattern", "Pick a pad on the Pads tab: hold it, then Edit steps", modifier); return }
@@ -287,8 +294,9 @@ fun EditTab(
                     customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Close the step panel") { ui.stepPanel = false; true }) }
                 .padding(12.dp),
         ) {
+            androidx.compose.runtime.CompositionLocalProvider(com.scottgerstl.lupe.ui.page.LocalUndoMark provides undoMark) {
             if (drum) HitPanel(ed, track, core, hit, narrow = true, onLane = { l -> hit = l to (hit?.second ?: ed.selected) },
-                onStep = { st -> hit = (hit?.first ?: "") to st; core.send(Intent.StepSelect(st)) }) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true)
+                onStep = { st -> hit = (hit?.first ?: "") to st; core.send(Intent.StepSelect(st)) }) { hit = null } else StepControls(ed, track, core, tab, { tab = it }, pick, narrow = true) }
             // the grab handle (Scott, 2026-11-17; WCAG 2.5.1): tap closes the panel as the swipe does
             PanelHandle("Close the step panel", { ui.stepPanel = false }, Modifier.align(Alignment.CenterStart).offset(x = (-12).dp))
         }
@@ -332,6 +340,8 @@ private fun Ruler(ed: EditorState, track: Color, core: LupeCore, stepPicked: Boo
     val locking = ed.lock != LockMode.Off
     LupeCrossfade(locking, Modifier.fillMaxWidth().height(44.dp)) { l ->
         if (l) LockBanner(ed, track) else Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            UndoKey(ed, core)
+            Spacer(Modifier.width(8.dp))
             Row(Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = "Editing track ${ed.track} ${ed.trackName}, entry ${ed.entry}, pattern ${ed.pattern}${if (ed.scale.isNotEmpty()) ", ${ed.scale}" else ""}"; heading() },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 com.scottgerstl.lupe.ui.mix.TrackBadge(ed.track, track, true, 30.dp, 18)
@@ -427,7 +437,7 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore, enabled: Boolean) {
                         StepMenuMode.Root -> {
                             MenuHeading("Step $n")
                             MenuRow("Copy step", { core.send(Intent.StepAction(ed.selected, StepActionKind.Copy)); open = false })
-                            MenuRow("Paste step", { if (held != null) { mode = StepMenuMode.PasteConfirm; armedAt = System.currentTimeMillis() } else { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false } },
+                            MenuRow("Paste step", { if (held != null) { mode = StepMenuMode.PasteConfirm; armedAt = System.currentTimeMillis() } else { core.send(com.scottgerstl.lupe.core.UndoMark("paste · step $n")); core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false } },
                                 sub = shortens("Pasting"))
                             MenuRow("Clear step", { mode = StepMenuMode.ClearConfirm; armedAt = System.currentTimeMillis() }, enabled = step?.on == true || held != null,
                                 sub = shortens("Clearing"))
@@ -440,12 +450,12 @@ private fun StepMenuKey(ed: EditorState, core: LupeCore, enabled: Boolean) {
                             }
                             val note = shortens("Clearing")
                             val words = (if (step?.on == true) "Clear step $n, removing $goes." else "Clear step $n.") + (note?.let { " $it" } ?: "")
-                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Clear)); open = false }
+                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(com.scottgerstl.lupe.core.UndoMark("step cleared · step $n")); core.send(Intent.StepAction(ed.selected, StepActionKind.Clear)); open = false }
                             MenuRow("Cancel", { mode = StepMenuMode.Root })
                         }
                         StepMenuMode.PasteConfirm -> {
                             val words = "Paste into step $n. ${shortens("Pasting") ?: ""}".trim()
-                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false }
+                            ConfirmBox(words, "Confirm: $words", armedAt) { core.send(com.scottgerstl.lupe.core.UndoMark("paste · step $n")); core.send(Intent.StepAction(ed.selected, StepActionKind.Paste)); open = false }
                             MenuRow("Cancel", { mode = StepMenuMode.Root })
                         }
                     }
@@ -718,12 +728,12 @@ private fun DrumGrid(ed: EditorState, track: Color, core: LupeCore, hit: Pair<St
                                                             if (j != to) { to = j; hitDrag = Triple(k, i, j); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
                                                         }
                                                         val target = edStepsHit(ed, to, k)
-                                                        if (to != i && !target) { core.send(ToggleHit(k, i)); core.send(ToggleHit(k, to)); onPick(lane to to); core.send(Intent.StepSelect(to)) }
+                                                        if (to != i && !target) { core.send(com.scottgerstl.lupe.core.UndoMark("$lane hit moved · step ${to + 1}")); core.send(ToggleHit(k, i)); core.send(ToggleHit(k, to)); onPick(lane to to); core.send(Intent.StepSelect(to)) }
                                                         else if (to != i) haptic.performHapticFeedback(HapticFeedbackType.Reject)
                                                         scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { hitLift.animateTo(0f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) }; hitDrag = null }
                                                     }
                                                     cancelled -> Unit
-                                                    up != null -> core.send(ToggleHit(k, i))
+                                                    up != null -> { core.send(com.scottgerstl.lupe.core.UndoMark("$lane ${if (on) "hit removed" else "hit added"} · step ${i + 1}")); core.send(ToggleHit(k, i)) }
                                                     else -> { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onPick(lane to i); core.send(Intent.StepSelect(i)); waitForUpOrCancellation() }
                                                 }
                                             }
@@ -1113,4 +1123,56 @@ internal fun firstHit(ed: EditorState): Pair<String, Int>? {
     val i = ed.steps.indices.firstOrNull { ed.steps[it].on && ed.steps[it].hits.isNotEmpty() } ?: return null
     val k = ed.steps[i].hits.first().lane
     return (ed.kitLanes.getOrNull(k) ?: return null) to i
+}
+
+
+/**
+ * Undo (Scott, 2026-11-18: "undo, with long press to redo"): 40 × 40 at the pattern bar's left. A tap undoes the last edit (a pad's clear
+ * first, while its Undo stands: one undo, not two); a long press redoes. Dimmed with nothing to undo; a long press with nothing to redo only
+ * ticks "no". After each, a confirmation in the app strip. The elastic press.
+ */
+@Composable
+private fun UndoKey(ed: EditorState, core: LupeCore) {
+    val pads by core.pads.collectAsStateWithLifecycle()
+    val clear = pads.clearUndo.lastOrNull()
+    val canUndo = clear != null || ed.undoLabel != null
+    val messages = LocalMessages.current
+    val haptic = LocalHapticFeedback.current
+    val reduce = LocalReduceMotion.current
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val press by com.scottgerstl.lupe.ui.theme.pressScale(pressed, reduce)
+    fun undo() {
+        when {
+            clear != null -> core.send(com.scottgerstl.lupe.core.UndoClear(clear.track, clear.entry))
+            ed.undoLabel != null -> { core.send(com.scottgerstl.lupe.core.StepUndo); messages.post(MessageKind.Confirmation, "Undid: ${ed.undoLabel}") }
+        }
+    }
+    fun redo() {
+        val r = ed.redoLabel
+        if (r == null) { haptic.performHapticFeedback(HapticFeedbackType.Reject); return }
+        core.send(com.scottgerstl.lupe.core.StepRedo); haptic.performHapticFeedback(HapticFeedbackType.Confirm); messages.post(MessageKind.Confirmation, "Redid: $r")
+    }
+    val next = clear?.let { com.scottgerstl.lupe.core.clearedWords(it) } ?: ed.undoLabel
+    Box(
+        Modifier.size(40.dp).graphicsLayer { scaleX = press; scaleY = press; alpha = if (canUndo) 1f else 0.4f }
+            .background(Tok.control, CircleShape)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = if (next != null) "Undo $next" else "Undo"
+                if (!canUndo) disabled()
+                customActions = listOf(CustomAccessibilityAction(ed.redoLabel?.let { "Redo $it" } ?: "Redo") { redo(); true })
+            }
+            .combinedClickable(interactionSource = source, indication = null, enabled = true, onLongClick = { redo() }) { if (canUndo) undo() },
+        contentAlignment = Alignment.Center,
+    ) {
+        // ↶: an open arc with its arrowhead at the left
+        Canvas(Modifier.size(18.dp)) {
+            val st = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val c = Tok.text
+            drawArc(c, startAngle = 200f, sweepAngle = 250f, useCenter = false, topLeft = Offset(2.dp.toPx(), 3.dp.toPx()), size = Size(14.dp.toPx(), 13.dp.toPx()), style = st)
+            val ax = 3.2.dp.toPx(); val ay = 6.8.dp.toPx()
+            drawPath(Path().apply { moveTo(ax - 3.dp.toPx(), ay - 1.dp.toPx()); lineTo(ax, ay + 2.dp.toPx()); lineTo(ax + 3.2.dp.toPx(), ay - 0.5.dp.toPx()) }, c, style = st)
+        }
+    }
 }

@@ -181,9 +181,9 @@ fun StepGrid(
                 val e = edNow; val s = e.steps.getOrNull(i) ?: Step()
                 when (Roll.tap(stepNotes(s), pitch, pickedNow == i, e.chord, e.maxNotes)) {
                     Roll.Tap.Pick -> pick(i)
-                    Roll.Tap.Remove -> { core.send(ToggleStepNote(i, pitch)); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
-                    Roll.Tap.Set -> { pick(i); core.send(SetStepNotes(i, listOf(pitch))); play(pitch); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
-                    Roll.Tap.Add -> { pick(i); core.send(ToggleStepNote(i, pitch)); play(pitch); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                    Roll.Tap.Remove -> { core.send(com.scottgerstl.lupe.core.UndoMark("note removed · step ${i + 1}")); core.send(ToggleStepNote(i, pitch)); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                    Roll.Tap.Set -> { pick(i); core.send(com.scottgerstl.lupe.core.UndoMark("note set · step ${i + 1}")); core.send(SetStepNotes(i, listOf(pitch))); play(pitch); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                    Roll.Tap.Add -> { pick(i); core.send(com.scottgerstl.lupe.core.UndoMark("note added · step ${i + 1}")); core.send(ToggleStepNote(i, pitch)); play(pitch); haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
                     Roll.Tap.Full -> { pick(i); haptic.performHapticFeedback(HapticFeedbackType.Reject) }
                 }
             }
@@ -283,7 +283,7 @@ fun StepGrid(
                                     } catch (e: kotlinx.coroutines.CancellationException) { ok = false; throw e }
                                     finally {
                                         // let go: the same LENGTH the step panel's knob 3 writes, on that step
-                                        if (ok && len != from) { onPick(edge); core.send(Intent.StepSelect(edge)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Length, len - from)) }
+                                        if (ok && len != from) { core.send(com.scottgerstl.lupe.core.UndoMark("length · step ${edge + 1}")); onPick(edge); core.send(Intent.StepSelect(edge)); core.send(Intent.StepAdjust(com.scottgerstl.lupe.core.StepField.Length, len - from)) }
                                         noteResize = null
                                     }
                                     return@awaitEachGesture
@@ -333,7 +333,7 @@ fun StepGrid(
                                     } catch (e: kotlinx.coroutines.CancellationException) { ok = false; throw e }
                                     finally {
                                         val fin = d
-                                        if (ok && (fin.toStep != fin.fromStep || fin.toPitch != fin.fromPitch)) moveNote(edNow, fin, core) { onPick(it); core.send(Intent.StepSelect(it)) }
+                                        if (ok && (fin.toStep != fin.fromStep || fin.toPitch != fin.fromPitch)) { core.send(com.scottgerstl.lupe.core.UndoMark("note moved · step ${fin.toStep + 1}")); moveNote(edNow, fin, core) { onPick(it); core.send(Intent.StepSelect(it)) } }
                                         scope.launch { com.scottgerstl.lupe.ui.theme.unscaled { lift.animateTo(0f, if (reduce) androidx.compose.animation.core.tween(150) else motion.spatial()) }; if (noteDrag == fin) noteDrag = null }
                                     }
                                     return@awaitEachGesture

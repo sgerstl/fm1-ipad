@@ -161,7 +161,7 @@ extension PhoneCore {
         // the playhead is the `playhead` area's (ClockArea.swift): this area doesn't change while a pattern plays
         let playhead = -1
         let scaleName = Music.scales[safe: tr.scale]?.name.lowercased() ?? ""
-        return EditorArea(
+        var area = EditorArea(
             track: t + 1, trackName: tr.displayName,
             entry: String(UnicodeScalar(UInt8(65 + max(0, min(25, entry))))),
             pattern: list?.entries[safe: entry]?.pattern ?? 0,
@@ -171,6 +171,10 @@ extension PhoneCore {
             lanes: lanes, lane: lane, laneValues: laneValues,
             maxNotes: kit ? 0 : Self.maxStepNotes, kitLanes: kit ? Self.laneShort : [], kitNotes: kit ? Music.skiffLaneNotes : [],
             patternSteps: max(1, min(s.stepCount, tr.length)), patternStepsMax: s.stepCount)
+        let uk = undoKey(t)
+        area.undoLabel = stepUndos[uk]?.last?.label ?? openUndo.flatMap { $0.key == uk && !$0.touched(self.session).isEmpty ? $0.label : nil }
+        area.redoLabel = stepRedos[uk]?.last?.label
+        return area
     }
 }
 

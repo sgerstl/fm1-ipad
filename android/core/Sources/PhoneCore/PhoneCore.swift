@@ -31,6 +31,12 @@ public final class PhoneCore {
     /// The FM-1's notes sounding now, by track (0…5, the channel Skiff sends on): Edit lights its piano edge and lane keys from them
     /// (Scott, 2026-11-17). Its keys, and while playing its sequencer's notes too (NOTES OUT ALL).
     var keysHeld: [Set<Int>] = Array(repeating: [], count: 6)
+    /// Edit's undo history (StepUndo.swift): a pattern's edits, newest last, and what was undone, by pattern.
+    var stepUndos: [String: [StepUndoEntry]] = [:]
+    var stepRedos: [String: [StepUndoEntry]] = [:]
+    var openUndo: StepUndoEntry?
+    var undoLabelNext: String?
+    var undoAfterTask: Task<Void, Never>?
     /// P5's screen-local state (P5Areas.swift): the Mix section on screen, Lupe's solos, the Sounds browser's target
     /// and the engine browsed, a project op going on.
     var mixSection = "mixer"
@@ -367,6 +373,8 @@ public final class PhoneCore {
     }
 
     private func dispatch(_ json: String) {
+        if handleStepUndoJSON(json) { return }
+        noteUndoable(json)
         if handlePageJSON(json) || handleFreeTakeJSON(json) || handleHomeJSON(json) || handleScreenJSON(json) || handleNoteJSON(json) || handleClearUnusedJSON(json) || handleProjectTransferJSON(json) || handlePatternsJSON(json) || handleUndoClearJSON(json) || handleFirmwareJSON(json) { return }       // setParam, pickPage, pickRoute, pickTile (PageArea.swift)
         do {
             if let p = try PadEditIntent.decode(json) { handle(p); return }   // P3's pads and editor

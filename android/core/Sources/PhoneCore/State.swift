@@ -180,6 +180,9 @@ public struct EditorArea: Codable, Equatable, Sendable {
     /// The pattern's step count (the FM-1's LENGTH, 1…`patternStepsMax`); setPatternSteps sets it.
     public var patternSteps = 16
     public var patternStepsMax = 64
+    /// Edit's undo (StepUndo.swift, Scott 2026-11-18): what the next undo and redo would put back; nil: nothing to undo / redo.
+    public var undoLabel: String? = nil
+    public var redoLabel: String? = nil
 }
 
 // MARK: diag

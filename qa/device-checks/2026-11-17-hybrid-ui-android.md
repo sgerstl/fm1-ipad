@@ -307,6 +307,16 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 | 142 | A track with patterns, a pad picked. Record a few notes and stop. | The playing pad has the red edge while recording; after stopping it is the picked pad. | – | ☐ pass ☐ fail: |
 | 143 | A track with patterns, no pad picked in Lupe (another track's pad picked). Select the track on the FM-1, record, stop. | The red edge on the pad the track is on; after stopping that pad is picked, and Edit shows it. | – | ☐ pass ☐ fail: |
 
+## Round 15: undo and redo on Edit (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 144 | Open Edit on a pattern you haven't touched this session. | A round ↶ key at the pattern bar's left, dimmed. A tap does nothing. | – | ☐ pass ☐ fail: |
+| 145 | Tap a note in; tap ↶. Then drag a note to another step; ↶. Then resize a note by its edge; ↶. | Each ↶ puts the grid back as it was before that one edit (the whole drag at once), with "Undid: …" in the app strip that leaves on its own. | – | ☐ pass ☐ fail: |
+| 146 | In the step panel slide VELOCITY a long way, let go; ↶. Then Clear step (confirm); ↶. | The whole slide comes back in one undo; the cleared step comes back. | – | ☐ pass ☐ fail: |
+| 147 | After an undo, long-press ↶. Then long-press again with nothing left to redo. | The first redoes it ("Redid: …"); the second only ticks. A new edit after an undo means a long-press has nothing to redo. | – | ☐ pass ☐ fail: |
+| 148 | Tap a note in, then turn the FM-1's knob 1 on that step, then ↶. Then clear a pad on Pads, go to Edit and tap ↶. | The undo is skipped with "Step N changed on the FM-1 since…". The pad's clear is undone by the same key. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

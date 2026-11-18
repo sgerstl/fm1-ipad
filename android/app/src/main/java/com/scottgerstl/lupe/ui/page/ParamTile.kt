@@ -64,6 +64,9 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
  * is clearly sideways, so a vertical drag passes on); double tap puts back what this tile changed. [num]/[min]/[max] give the gauge and TalkBack's
  * range; without them it reads a value with no range (PITCH). [locked] marks a lock on this step (◆ by the label).
  */
+/** Edit's undo: a tile's gesture starts an undo step named by the tile (EditTab provides it; elsewhere nothing). */
+val LocalUndoMark = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 @Composable
 fun ParamTile(
     label: String, knob: Int?, value: String, name: String, tint: Color, key: Any, modifier: Modifier = Modifier,
@@ -74,6 +77,8 @@ fun ParamTile(
 ) {
     val haptic = LocalHapticFeedback.current
     val send by rememberUpdatedState(onSteps)
+    val mark = LocalUndoMark.current
+    val what = name.lowercase()
     var net by remember(key) { mutableStateOf(0) }
     var last by remember { mutableStateOf(0) }
     var hot by remember { mutableStateOf(false) }
@@ -93,19 +98,19 @@ fun ParamTile(
                 role = Role.Button
                 if (num != null) {
                     progressBarRangeInfo = ProgressBarRangeInfo(num.toFloat(), min.toFloat()..max.toFloat(), (max - min - 1).coerceAtLeast(0))
-                    setProgress { v -> step(kotlin.math.round(v).toInt() - num); true }
+                    setProgress { v -> mark?.invoke(what); step(kotlin.math.round(v).toInt() - num); true }
                 }
                 customActions = listOf(
-                    CustomAccessibilityAction("Increase $name") { step(1); true },
-                    CustomAccessibilityAction("Decrease $name") { step(-1); true },
-                    CustomAccessibilityAction("Put $name back as it was") { val b = -net; net = 0; send(b); true },
+                    CustomAccessibilityAction("Increase $name") { mark?.invoke(what); step(1); true },
+                    CustomAccessibilityAction("Decrease $name") { mark?.invoke(what); step(-1); true },
+                    CustomAccessibilityAction("Put $name back as it was") { mark?.invoke(what); val b = -net; net = 0; send(b); true },
                 )
             })
-            .then(if (!enabled) Modifier else Modifier.pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) { send(b); haptic.performHapticFeedback(HapticFeedbackType.Confirm) } }) }
+            .then(if (!enabled) Modifier else Modifier.pointerInput(key) { detectTapGestures(onDoubleTap = { val b = -net; net = 0; if (b != 0) { mark?.invoke(what); send(b); haptic.performHapticFeedback(HapticFeedbackType.Confirm) } }) }
             .slideToTurn(
                 enabled = true, stepDp = dpPerStep,
                 face = remember(label, tint) { MagnifierFace(label, { shown }, { frac }, bipolar, ring = false, tint = tint) },
-                onStart = { last = 0; hot = true }, onSlide = { total -> step(total - last); last = total }, onEnd = { hot = false },
+                onStart = { last = 0; hot = true; mark?.invoke(what) }, onSlide = { total -> step(total - last); last = total }, onEnd = { hot = false },
                 bounds = { num?.let { n -> -(n - min)..(max - n) } },
                 onLimit = { haptic.performHapticFeedback(HapticFeedbackType.ContextClick) },
                 forceDirection = SlideDirection.Sideways, strictAxis = true,
