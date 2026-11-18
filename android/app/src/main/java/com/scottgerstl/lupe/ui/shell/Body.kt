@@ -516,11 +516,19 @@ private fun <T> followed(actual: T, pin: Boolean, pause: Boolean, touches: Int, 
 internal object PhoneHome { @Volatile var askedAt = 0L; const val WINDOW_MS = 1500L
     fun recent(): Boolean = android.os.SystemClock.uptimeMillis() - askedAt < WINDOW_MS }
 
+/**
+ * A change the phone itself asks for: it is never held by Labs' Pause following. The sound keys' page pick (PickPage) and GLO's ScreenGoto were
+ * missing (measured 2026-11-18: with Pause on, FX tapped within 3 s of a touch on Edit, closing the step panel for one, waited out the 3 s hold).
+ */
+internal fun isPhoneAsk(intent: Intent): Boolean =
+    intent is com.scottgerstl.lupe.core.PickPage || intent is com.scottgerstl.lupe.core.ScreenGoto || intent is com.scottgerstl.lupe.core.PickRoute ||
+        intent is com.scottgerstl.lupe.core.PickTile || intent is com.scottgerstl.lupe.core.MixSectionPick || intent == GoHome
+
 /** The core as the sound page sees it: a change the phone asks for tells the follower first. */
 private class AskingCore(private val base: LupeCore, private val asked: () -> Unit) : LupeCore by base {
     override fun send(intent: Intent) {
         if (intent == GoHome) PhoneHome.askedAt = android.os.SystemClock.uptimeMillis()
-        if (intent is com.scottgerstl.lupe.core.PickRoute || intent is com.scottgerstl.lupe.core.PickTile || intent is com.scottgerstl.lupe.core.MixSectionPick || intent == GoHome) asked()
+        if (isPhoneAsk(intent)) asked()
         base.send(intent)
     }
 }
