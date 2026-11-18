@@ -28,6 +28,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures { compose = true }
+    // Compose UI tests on the JVM (Robolectric): the step panel's open / close / reopen (2026-11-18)
+    testOptions { unitTests.isIncludeAndroidResources = true }
 
     // The fixtures live outside app/ so the Swift side (P1) writes to the same folder: assets/state/*.json
     sourceSets.getByName("main").assets.srcDir("../fixtures")
@@ -81,4 +83,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation(platform("androidx.compose:compose-bom:2025.09.00"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

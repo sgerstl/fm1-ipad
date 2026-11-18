@@ -333,6 +333,12 @@ Melodic track unless it says drum. The step panel open, so the grid pages by 8.
 | 153 | Close the panel (Step key, and a swipe). Watch the grid. | The grid changes with the panel, not after it: the wide layout fades in as the panel leaves, the 8-step one fades out; nothing catches up afterwards. Opening, the reverse. | – | ☐ pass ☐ fail: |
 | 154 | Swipe right from the panel's left edge (anywhere top to bottom), from its header and from the gap between tiles. Then slide a tile sideways. | Each edge, header or gap swipe moves the panel and, far enough or flung, closes it. A slide on a tile changes its value and leaves the panel. | – | ☐ pass ☐ fail: |
 
+## Round 15e: the step panel opens and closes every time (2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 155 | Edit: open and close the step panel with the Step key ten times quickly; close it by swiping and reopen at once; with it closed, tap notes on the grid's right side; open a sound page (ENV) right after closing the step panel. Then Remove animations on and repeat. | Every tap on Step opens or closes it; nothing is ever unresponsive; the grid's right side takes taps when the panel is closed; the sound panel opens straight away. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

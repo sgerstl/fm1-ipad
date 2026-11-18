@@ -293,9 +293,11 @@ fun EditTab(
     // the step panel, docked at the tab's right: `panel`, its left corners at the sheet radius (spec 4.3); it slides in from the right (with Reduce Motion it only fades)
     if (stepPicked) Box(
             Modifier.align(Alignment.TopEnd).width(DOCK_W).fillMaxHeight()
-                // closed, it waits off to the right (or invisible with Reduce Motion), takes no touches and says nothing
-                .then(if (panelOpen) Modifier else Modifier.clearAndSetSemantics { }.pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() } } })
-                .graphicsLayer { if (reduce) alpha = panelT.value; if (panelT.value <= 0.001f) alpha = 0f; translationX = panelX(if (!reduce) (1f - panelT.value) * size.width else 0f, stepSwipe.offset.value); shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
+                // closed, it says nothing to TalkBack and waits off to the right (below: moved by its layer, so it takes no touches there). No touch
+                // blocker here: a modifier before the layer isn't moved with it, and the first try (c38b22a) left an invisible strip over Edit's right
+                // side that swallowed every touch, the Step key's too
+                .then(if (panelOpen) Modifier else Modifier.clearAndSetSemantics { })
+                .graphicsLayer { if (reduce) alpha = panelT.value; translationX = stepPanelX(panelT.value, size.width, stepSwipe.offset.value, reduce); if (panelT.value <= 0.001f) alpha = 0f; shape = RoundedCornerShape(topStart = com.scottgerstl.lupe.ui.theme.Shape.sheet, bottomStart = com.scottgerstl.lupe.ui.theme.Shape.sheet); clip = true }
                 .background(Tok.panel)
                 // a swipe to the right that no control took follows the finger and, far enough or flung, shuts it (2026-11-18, the sound panel's gesture)
                 .panelSwipe(stepSwipe) { ui.stepPanel = false }
@@ -1186,3 +1188,12 @@ private fun UndoKey(ed: EditorState, core: LupeCore) {
         }
     }
 }
+
+
+/**
+ * The step panel's x (px) in its [width]: sliding in by [t] (0 closed … 1 open) plus the finger's [offset]; with Reduce Motion it fades rather
+ * than slides. Fully closed it always sits a whole width off to the right, Reduce Motion or not, so a panel kept composed while closed is never
+ * where a finger lands (2026-11-18).
+ */
+internal fun stepPanelX(t: Float, width: Float, offset: Float, reduce: Boolean): Float =
+    if (t <= 0.001f) maxOf(width, offset) else panelX(if (!reduce) (1f - t) * width else 0f, offset)
