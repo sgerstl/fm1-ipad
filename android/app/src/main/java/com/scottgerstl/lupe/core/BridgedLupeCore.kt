@@ -142,6 +142,8 @@ class BridgedLupeCore(private val scope: CoroutineScope) : LupeCore {
             lagSince = SystemClock.uptimeMillis(); lagWhat = intent.toString()
             LinkLog.add("lag kotlin $lagWhat +0 ms: sent (clock $lagSince)")
         }
+        // Try again also looks for an FM-1 that's plugged in but not open (the core's Retry only restarts the Session)
+        if (intent == Intent.Retry) LupeStartup.link?.rescan()
         when (intent) {
             is Intent.SetTab -> _shell.value = _shell.value.copy(tab = intent.tab)
             else -> scope.launch { LupeNative.intent(lupeJson.encodeToString(Intent.serializer(), intent)) }

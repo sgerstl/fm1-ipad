@@ -149,6 +149,7 @@ Motion follows `DESIGN.md` (an arrival says where it comes from). The timings ar
 ### Decision log
 
 - 2026-11-10: the held page hidden from VoiceOver, the loss and return announced (accessibility F6, F7).
+- 2026-11-18 (Android; Scott on the Pixel: "it doesn't seem to reconnect with the fm1 after the phone goes to sleep and is opened up again"). **Cause:** Lupe opens when the FM-1 is plugged in, so its window was started by the USB attach intent. When the phone slept, the screen turned (landscape to portrait on the lock screen) and Android rebuilt the window with that same intent; `onCreate` read it as a fresh plug-in and sent Retry. Retry restarts the Session, but the link's gate hands its one connection over the open ports out only once, and FM1Link never closed them (the FM-1 never left USB, so no callback came). The new Session got nothing and stayed on searching for good. "Try again" on the card did the same, so it couldn't help either. **Fix:** a relaunch no longer counts as a plug-in (`onFm1Attached(relaunch = …)`); Retry gives the restarted Session a fresh connection over the open ports (`LinkGate.renew`, via `PhoneCore.onRetry`), and also asks FM1Link to look again for an FM-1 that's plugged in but not open (`FM1Link.rescan`); `onStart` runs the same rescan whenever Lupe comes back in front. Tests: `AndroidTransportTests` (a restarted Session reaches INFO again over open ports), `UsbAttachTest` (a relaunch doesn't Retry). Device check 170.
 
 ## 4. Usage
 

@@ -60,4 +60,12 @@ class UsbAttachTest {
         assertFalse(onFm1Attached(AIntent(AIntent.ACTION_MAIN), core))
         assertEquals(listOf<Intent>(Intent.Retry, Intent.Retry), core.sent)
     }
+
+    // the sleep bug (Scott, 2026-11-18): the screen turning as the phone slept relaunched the window with the attach intent it opened
+    // with, and that Retry dropped a working connection
+    @Test fun aRelaunchWithTheSameIntentDoesNotRetry() {
+        val core = RecCore()
+        assertFalse(onFm1Attached(AIntent(UsbManager.ACTION_USB_DEVICE_ATTACHED), core, relaunch = true))
+        assertTrue(core.sent.isEmpty())
+    }
 }

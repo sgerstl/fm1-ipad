@@ -415,6 +415,12 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 |---|---|---|---|---|
 | 169 | With the FM-1 plugged in over USB, look at the header; tap the speaker key, then again. Open the song menu, then Settings. If you can, start play-through with Bluetooth headphones connected, and once with the FM-1's USB audio unplugged. | A round speaker key left of the Bar pill, outlined with a crossed-out speaker. Tapped: it fills white with a dark sounding speaker and the FM-1 plays through the phone; tapped again it fades back. TalkBack: "Play through the phone, switch, on/off". Song menu: Projects…, Settings…, Patterns… (pool count), Firmware… (firmware line), nothing else outside the demo. Settings: no Audio section. Bluetooth: a message for 4 s about the extra delay. No USB audio: a message that stays until it plays or you turn it off. With the FREE TAKE chip showing, nothing in the header overlaps. | 69e11a6 | ☐ pass ☐ fail: |
 
+## Round 16i: reconnecting after sleep (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 170 | With the FM-1 plugged in and Lupe connected, press the power button, wait 5 s, wake and unlock. Then the same with 60 s. Do both stopped and playing, and with the speaker key on and off (eight runs). Once, unplug the FM-1 with Lupe open, plug it back in, and tap Try again if the card shows. | After every wake Lupe is connected: the page is live, no "FM-1 disconnected" card (at most a short "Connecting" while it reads the FM-1 again). Playing: the FM-1 keeps playing; Lupe shows it. Speaker key on: the sound comes back through the phone. Unplug and replug: it reconnects; Try again now actually reconnects. | 92fd7b1 | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

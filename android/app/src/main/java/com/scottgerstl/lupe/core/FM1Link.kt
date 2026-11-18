@@ -64,6 +64,20 @@ class FM1Link(context: Context) {
     }
 
     /**
+     * Looks again for an FM-1 that is plugged in but not open (2026-11-18: after the phone slept, the FM-1 never left USB, so no
+     * added/removed callback came). Nothing while one is opening or open. The same pick as [start]: an editor firmware first.
+     */
+    fun rescan() {
+        handler.post {
+            if (state != State.None) return@post
+            val all = midi.getDevicesForTransport(MidiManager.TRANSPORT_MIDI_BYTE_STREAM)
+            val fm1 = all.firstOrNull { isFM1(it) && nameFor(it).contains("felucca", ignoreCase = true) } ?: all.firstOrNull(::isFM1)
+            log(if (fm1 == null) "rescan: no FM-1 listed" else "rescan: found device ${fm1.id}")
+            fm1?.let(::consider)
+        }
+    }
+
+    /**
      * Whether [info] may be the FM-1 (on an editor firmware, in its update loader, or stock; see [MATCH]). From the Pixel 10 Pro's own report (`dumpsys midi`, 2026-11-13, Skiff-Lupe 2.2):
      * USB, one port each way, manufacturer "Hügelton Instruments", product "Felucca", name "Hügelton Instruments
      * Felucca", USB vendor 0x1209 product 1. Skiff keeps Felucca's USB name, as the iPad's findDevice assumes.

@@ -53,6 +53,8 @@ public final class PhoneCore {
     var auditions: [Int: Task<Void, Never>] = [:]
     /// The firmware install (Firmware.swift): the link's ports and hold, where the app keeps files, and its state.
     public var firmwareLink: FirmwareLink?
+    /// Runs before Retry restarts the Session: the Android link gives it a fresh connection over the open ports (LinkGate.renew).
+    public var onRetry: (() -> Void)?
     public var appStorage: URL?
     /// Release files beside the app, for a build that carries them (the tests: the repository's firmware/releases).
     public var firmwareLocalReleases: URL?
@@ -390,6 +392,7 @@ public final class PhoneCore {
             // Session looks again every second on its own; retry restarts the loop at once (a wrong-firmware
             // FM-1 otherwise waits 3 s between looks).
             runTask?.cancel()
+            onRetry?()
             let s = session
             runTask = Task { await s.run() }
         case .play, .stop:
