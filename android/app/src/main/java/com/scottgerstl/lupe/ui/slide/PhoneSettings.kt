@@ -26,18 +26,12 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
 
     var haptics by mutableStateOf(prefs?.getBoolean(HAPTICS, true) ?: true)
         private set
-    /** Labs: the sound page holds for 3 s after you touch it (decision 3's "pause after a phone touch"). */
-    var pauseFollowing by mutableStateOf(prefs?.getBoolean(PAUSE, false) ?: false)
-        private set
-    /** Labs: the sound page and the sheets stop following the FM-1 (decision 3's pin). */
-    var pinBottom by mutableStateOf(prefs?.getBoolean(PIN, false) ?: false)
-        private set
-    /** Labs: a one-octave piano under the grid (decision 5). Stored; the piano itself isn't built yet. */
-    var piano by mutableStateOf(prefs?.getBoolean(PIANO, false) ?: false)
-        private set
-    /** Labs: the Timeline with time across, as the FM-1 and the iPad (decision 6). Stored; the Timeline is phase 6. */
-    var timelineAcross by mutableStateOf(prefs?.getBoolean(ACROSS, false) ?: false)
-        private set
+    /**
+     * Labs is gone (Scott, 2026-11-18): its two built trials are fixed at the values he had. The sound page holds for 3 s after you touch it
+     * (decision 3's "pause after a phone touch": on), and it never pins (decision 3's pin: off).
+     */
+    val pauseFollowing: Boolean get() = PAUSE_FOLLOWING
+    val pinBottom: Boolean get() = PIN_BOTTOM
 
     /**
      * Show graphics (decision 30, on by default): each sound page's picture appears under its four dials when a knob turns, and the Mix sheet's
@@ -145,10 +139,7 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     // (left-handed meant the rail on the left and menus opening to the right)
     var railLeft by mutableStateOf(prefs?.takeIf { it.contains(RAIL_LEFT) }?.getBoolean(RAIL_LEFT, false) ?: (prefs?.getBoolean(LEFT_HANDED, false) ?: false))
         private set
-    var menusRight by mutableStateOf(prefs?.takeIf { it.contains(MENUS_RIGHT) }?.getBoolean(MENUS_RIGHT, false) ?: (prefs?.getBoolean(LEFT_HANDED, false) ?: false))
-        private set
     fun chooseRailLeft(on: Boolean) { railLeft = on; put(RAIL_LEFT, on) }
-    fun chooseMenusRight(on: Boolean) { menusRight = on; put(MENUS_RIGHT, on) }
 
     /**
      * Sound keys (decision 32, off by default): a rail of FX SEL ENV LFO EDIT ARP down the edge, so the phone can open the sound panel too.
@@ -171,10 +162,6 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
     fun markKitHintShown() { if (!kitHintShown) { kitHintShown = true; put(KIT_HINT, true) } }
 
     fun chooseHaptics(on: Boolean) { haptics = on; put(HAPTICS, on) }
-    fun choosePauseFollowing(on: Boolean) { pauseFollowing = on; put(PAUSE, on) }
-    fun choosePinBottom(on: Boolean) { pinBottom = on; put(PIN, on) }
-    fun choosePiano(on: Boolean) { piano = on; put(PIANO, on) }
-    fun chooseTimelineAcross(on: Boolean) { timelineAcross = on; put(ACROSS, on) }
     private fun put(key: String, v: Boolean) { prefs?.edit()?.putBoolean(key, v)?.apply() }
 
     companion object {
@@ -185,7 +172,9 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
             "labs_motion_page_flip_ms", "labs_motion_press_scale", "labs_spatial_stiffness", "labs_spatial_damping", "labs_fast_spatial_stiffness", "labs_squash_pct",
             "labs_bounce_scale", "labs_bounce_up_ms", "labs_bounce_back_ms",
             // Labs › Tab motion, tried 2026-11-18 and locked in as "Now" at 1×
-            "labs_tab_staggered", "labs_tab_speed")
+            "labs_tab_staggered", "labs_tab_speed",
+            // Labs removed and Menus open fixed (Scott, 2026-11-18)
+            "labs_pause_following", "labs_pin_bottom", "labs_piano", "labs_timeline_across", "menus_right")
         const val HAPTICS = "haptics"
         const val TAKE_OFFER = "take_offer"
         const val TAKE_CHIP = 0
@@ -194,7 +183,6 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val KIT_HINT = "kit_hint_shown"
         const val LEFT_HANDED = "left_handed"       // (the old one, read once to fill the two below)
         const val RAIL_LEFT = "rail_left"
-        const val MENUS_RIGHT = "menus_right"
         const val SOUND_KEYS = "soundKeys"   // the same key as P4's branch, so either copy reads the other's
         const val TAB_MS = "labs_tab_slide_ms"
         const val MENU_SPRING = "labs_menu_spring"
@@ -219,10 +207,9 @@ class PhoneSettings(private val prefs: SharedPreferences? = null) {
         const val B_SCALE = "labs_bounce_scale"
         const val B_UP = "labs_bounce_up_ms"
         const val B_BACK = "labs_bounce_back_ms"
-        const val PAUSE = "labs_pause_following"
-        const val PIN = "labs_pin_bottom"
-        const val PIANO = "labs_piano"
-        const val ACROSS = "labs_timeline_across"
+        /** Labs' trials as Scott left them (2026-11-18): Pause following on, Pin off. */
+        const val PAUSE_FOLLOWING = true
+        const val PIN_BOTTOM = false
     }
 }
 

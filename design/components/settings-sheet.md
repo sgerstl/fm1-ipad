@@ -143,6 +143,7 @@ No iPad board; it's a system form. Phone row "Settings": `design/boards/phone-co
 
 - 2026-11-10: Labs keys merged without losing what was set (`Labs.migrate`).
 - 2026-11-18: **Offer played phrases**: Chip (default), Pop-up, Off, under Touch after Haptics (Scott: the FREE TAKE strip kept blocking the page).
+- 2026-11-18: **Settings cleaned up** (Scott). Audio keeps Play through the phone, Needs a hand and the Bluetooth note (only while the output is Bluetooth: it explains the lag); Output, Delay and Details are gone. "Slide to turn" is "Slider gesture" (label and TalkBack name; the subtitle stays). Menus open is gone: hold menus and pop-outs open to the right of the finger and flip left only when there's no room (the standing rule that menus open beside the touch point); its pref is cleared. Sound keys moved into Touch, directly above Sound keys side, which is dimmed, takes no touch and tells TalkBack "Turn on Sound keys first" while the keys are off. **Labs is gone**: Pause following after a touch is built in on and Pin the sound page off, as Scott had them (read from his phone); Piano under the grid and Timeline: time across were never built and are in `design/backlog.md`; their prefs are cleared on start. Sound pages keeps Show graphics. The Magnifier is untouched (a redesign is being mocked). Device check 165.
 
 ## 4. Usage
 

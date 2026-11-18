@@ -85,13 +85,11 @@ fun TopBar(top: TopState, core: LupeCore, tab: com.scottgerstl.lupe.core.Tab, on
             LupeMenu(menu == Menu.Fm1, { menu = null }) {
                 val sheets = LocalSheetHost.current
                 MenuRow("Projects…", { menu = null; sheets.show(SheetKind.Projects) })
-                // the shared effects are the Mix tab's sub-pages now (hybrid UI, 2026-11-17)
-                MenuRow("Shared effects…", { menu = null; onTab(com.scottgerstl.lupe.core.Tab.Mix); core.send(com.scottgerstl.lupe.core.ScreenGoto("GLO", com.scottgerstl.lupe.core.ScreenPages.GLO[1].first)) }, sub = "Delay, reverb, chorus, global")
+                // (Shared effects… left the menu 2026-11-18: the Mix tab's sub-pages cover it; Labs left with the Labs section)
                 val firmwareHost = com.scottgerstl.lupe.ui.firmware.LocalFirmwareHost.current
                 val fw by core.firmware.collectAsStateWithLifecycle()
                 MenuRow("FM-1 firmware…", { menu = null; firmwareHost?.info = true }, sub = com.scottgerstl.lupe.ui.firmware.firmwareLine(fw))
                 MenuRow("Settings", { menu = null; sheets.show(SheetKind.Settings) })
-                MenuRow("Labs", { menu = null; sheets.show(SheetKind.Settings, labs = true) }, sub = "Settings to try")
                 // Patterns… (decision 38, board 79): the pool's sheet, where unused patterns are cleared; a way in from the empty slot's menu and the full-pool notice too
                 val poolNow by core.patterns.collectAsStateWithLifecycle()
                 MenuRow("Patterns…", { menu = null; sheets.showPatterns() }, sub = if (poolNow.kept > 0) "${poolNow.kept} kept · ${poolNow.unused} unused" else "The FM-1's 64 pattern numbers")

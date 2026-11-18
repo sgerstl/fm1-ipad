@@ -385,6 +385,12 @@ USB IDs: vendor 0x1209 (4617), product 0x0001, "Felucca" by Hügelton Instrument
 |---|---|---|---|---|
 | 164 | Switch Mix → Pads, Pads → Edit, Edit → Pads, Timeline → Pads a few times. Then open Settings › Labs. | No cut: the old page fades out as the new one fades in (overlapping, as Scott chose), the new one from nothing; the grow and shrink play from their start. Labs no longer has Tab motion. Remove animations on: plain cross-fades, unchanged. | – | ☐ pass ☐ fail: |
 
+## Round 16d: menu and Settings cleaned up (Scott, 2026-11-18)
+
+| # | Do this | You should see | Backup | Result |
+|---|---|---|---|---|
+| 165 | Open the song menu; then Settings, top to bottom, with Play through on. Turn Sound keys off and on; hold a pad near the screen's right edge and in the middle. | Menu: no Shared effects…, no Labs. Audio: Play through and (if needed) Needs a hand; the Bluetooth note only on Bluetooth; no Output, Delay or Details. Touch: "Slider gesture"; Sound keys right above Sound keys side, which is dimmed and says "Turn on Sound keys first" with TalkBack while off; no Menus open. No Labs section. Hold menus open to the right of the finger, flipping left at the right edge. | – | ☐ pass ☐ fail: |
+
 **Not covered here** (needs a later round or Scott's call):
 - TalkBack: the strip's Pan and Reverb send actions, the minimap's "Show steps 9–16" action, the tabs' selected state. Belongs to the release accessibility pass (rule 6).
 - The Sounds and Projects sheets' row styling isn't built; they pick up only the shared keys, menus and sheet.

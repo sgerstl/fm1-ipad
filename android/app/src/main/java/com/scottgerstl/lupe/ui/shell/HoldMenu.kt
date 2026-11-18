@@ -386,7 +386,7 @@ fun HoldMenuHost(state: HoldMenuState, modifier: Modifier = Modifier, playing: B
         val geom = menuGeometry(m.items, lay, expanded)
         // the side is chosen when it opens and kept, so a change of layout shrinks toward the finger rather than jumping across it
         val side = remember(state.opened) { mutableStateOf<Boolean?>(null) }
-        val place0 = holdMenuPlace(fx, fy, sw, sh, geom.w, geom.h, labs.menusRight)
+        val place0 = holdMenuPlace(fx, fy, sw, sh, geom.w, geom.h, menusRight = true)
         val left = side.value ?: place0.left.also { side.value = it }
         val px = (if (left) fx - STRAIGHT_GAP - geom.w else fx + STRAIGHT_GAP).coerceIn(MENU_MARGIN, (sw - MENU_MARGIN - geom.w).coerceAtLeast(MENU_MARGIN))
         val py = place0.y
@@ -769,7 +769,7 @@ fun layoutHoldMenu(items: List<HoldItem>, maxH: Float, expanded: Boolean = false
 data class StraightPlace(val x: Float, val y: Float, val left: Boolean)
 
 /**
- * Beside the finger: to its left unless [menusRight] (Settings › Menus open), flipping when there's no room; its top 42 above the finger so
+ * Beside the finger: to its right (fixed since 2026-11-18, Settings › Menus open removed; [menusRight] false only for tests), flipping when there's no room; its top 42 above the finger so
  * the tiles sit level with it; under the header when it fits, never nearer an edge than [margin].
  */
 fun holdMenuPlace(fx: Float, fy: Float, screenW: Float, screenH: Float, menuW: Float, menuH: Float, menusRight: Boolean, margin: Float = MENU_MARGIN): StraightPlace {

@@ -1,5 +1,9 @@
 package com.scottgerstl.lupe.ui.settings
 
+import androidx.compose.ui.semantics.disabled
+
+import androidx.compose.ui.semantics.clearAndSetSemantics
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -61,10 +65,9 @@ import com.scottgerstl.lupe.ui.theme.animatedFloat
 import com.scottgerstl.lupe.ui.theme.unscaled
 
 /**
- * Settings, from the song-name menu (board 67; decision 33: the grouped sheet with both phones' options): the FM-1, Touch (Slide to turn,
- * the Magnifier, Handedness, Haptics), Sound pages (Show graphics, Sound keys), and
- * Labs, the trials, each off until you switch it on. These replace the adb extras (`--es slide`, `--ez magnifier`),
- * which stay for testing. Everything is kept the moment it changes.
+ * Settings, from the song-name menu (board 67; decision 33: the grouped sheet with both phones' options): the FM-1, Audio, Touch (Slider
+ * gesture, the Magnifier, Sound keys and their side, Haptics, played phrases), Sound pages (Show graphics). Labs left on 2026-11-18. These
+ * replace the adb extras (`--es slide`, `--ez magnifier`), which stay for testing. Everything is kept the moment it changes.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -73,9 +76,6 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
     val slide = LocalSlideSettings.current
     val phone = LocalPhoneSettings.current
     val scroll = rememberScrollState()
-    // the Labs heading's place in the scrolling content, so the FM-1 menu's Labs row can open the sheet scrolled to it
-    var labsY by remember { androidx.compose.runtime.mutableStateOf(-1) }
-    LaunchedEffect(host.open, host.toLabs, labsY) { if (host.open == SheetKind.Settings && host.toLabs && labsY >= 0) { kotlinx.coroutines.delay(350); scroll.animateScrollTo(labsY) } }
     LupeSheet(host.open == SheetKind.Settings, "Settings", { host.close() }, scroll = scroll) {
         Section("FM-1")
         Plain(
@@ -86,19 +86,18 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
         com.scottgerstl.lupe.audio.LocalAudioThrough.current?.let { AudioSection(it) }
 
         Section("Touch")
-        Text2("Slide to turn", "Which way a finger slides a value. Up and right raise it.")
+        Text2("Slider gesture", "Which way a finger slides a value. Up and right raise it.")
         Segmented(
             options = SlideDirection.entries.map { it.title },
             selected = SlideDirection.entries.indexOf(slide.direction),
-            name = "Slide to turn",
+            name = "Slider gesture",
         ) { slide.chooseDirection(SlideDirection.entries[it]) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Magnifier", "A bigger copy of the value floats above your finger as you slide", slide.magnifier) { slide.chooseMagnifier(it) }
-        Text2("Sound keys side", "Which edge the sound keys sit on (when Sound keys is on).")
-        Segmented(options = listOf("Left", "Right"), selected = if (phone.railLeft) 0 else 1, name = "Sound keys side") { phone.chooseRailLeft(it == 0) }
-        Spacer(Modifier.height(8.dp))
-        Text2("Menus open", "Which side of your finger hold menus and pop-outs open to; they flip when there is no room.")
-        Segmented(options = listOf("Left", "Right"), selected = if (phone.menusRight) 1 else 0, name = "Menus open") { phone.chooseMenusRight(it == 1) }
+        // Sound keys, then its side right under it; the side is dimmed and says why while the keys are off (2026-11-18)
+        SwitchRow("Sound keys", "Off, sound pages open from the FM-1's own keys. On, FX SEL ENV LFO EDIT ARP stay down the side, so the phone can open them too", phone.soundKeys) { phone.chooseSoundKeys(it) }
+        Text2("Sound keys side", "Which edge the sound keys sit on.")
+        Segmented(options = listOf("Left", "Right"), selected = if (phone.railLeft) 0 else 1, name = "Sound keys side", enabled = phone.soundKeys, disabledWhy = "Turn on Sound keys first") { phone.chooseRailLeft(it == 0) }
         Spacer(Modifier.height(8.dp))
         SwitchRow("Haptics", "On pads and value steps", phone.haptics) { phone.chooseHaptics(it) }
         Text2("Offer played phrases", "When you play a phrase on the FM-1 while stopped: a small chip by Record, a pop-up over Edit, or nothing.")
@@ -107,21 +106,9 @@ fun SettingsSheet(link: LinkState, fake: Boolean = false) {
 
         Section("Sound pages")
         SwitchRow("Show graphics", "Each sound page shows its picture with its dials, and the Mix pages show theirs. Off: dials only", phone.showGraphics) { phone.chooseShowGraphics(it) }
-        SwitchRow("Sound keys", "Off, sound pages open from the FM-1's own keys. On, FX SEL ENV LFO EDIT ARP stay down the side, so the phone can open them too", phone.soundKeys) { phone.chooseSoundKeys(it) }
 
-        Column(Modifier.onGloballyPositioned { labsY = it.positionInParent().y.toInt() }) {
-            Spacer(Modifier.height(12.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Tok.lifted))
-            Spacer(Modifier.height(16.dp))
-            BasicText("Labs", Modifier.semantics { heading() }, style = LupeType.title.copy(fontSize = 17.sp))
-            BasicText("Settings to try on the phone. Each starts off; keep what works.", Modifier.padding(top = 2.dp, bottom = 8.dp), style = LupeType.small.copy(fontSize = 13.sp))
-        }
-        SwitchRow("Pause following after a touch", "The sound page you touched holds for 3 s before it follows the FM-1 again", phone.pauseFollowing, trial = true) { phone.choosePauseFollowing(it) }
-        // the motion and feel sliders left Labs on 2026-11-17 (Scott: "let's start over with all the sliders and the motion tuning… If I want to play with
-        // something, I'll let you know and we can add the settings back in one by one"); their values are fixed at today's defaults in PhoneSettings
-        SwitchRow("Pin the sound page", "The sound page and the sheets stop following the FM-1 while this is on", phone.pinBottom, trial = true) { phone.choosePinBottom(it) }
-        SwitchRow("Piano under the grid", "A one-octave piano for entering notes without the FM-1. Not built yet", phone.piano, trial = true) { phone.choosePiano(it) }
-        SwitchRow("Timeline: time across", "Tracks as lanes, as on the FM-1 and the iPad. Not built yet: the Timeline runs time down", phone.timelineAcross, trial = true) { phone.chooseTimelineAcross(it) }
+        // Labs left on 2026-11-18 (Scott): Pause following and Pin are built in as he had them (PhoneSettings.PAUSE_FOLLOWING, PIN_BOTTOM); the
+        // piano under the grid and the Timeline with time across were never built and are in design/backlog.md
     }
 }
 
@@ -136,15 +123,8 @@ private fun AudioSection(through: com.scottgerstl.lupe.audio.AudioThrough) {
     if (!through.enabled) return
     val state = through.state
     com.scottgerstl.lupe.audio.ThroughModel.action(state)?.let { Plain("Needs a hand", it) }
-    if (state is com.scottgerstl.lupe.audio.ThroughState.Playing) {
-        Plain("Output", state.output)
-        val ms = com.scottgerstl.lupe.audio.ThroughModel.latencyText(through.stats)
-        Plain("Delay", if (ms == null) "Measuring…" else "$ms on the phone, from the USB cable to the output")
-        com.scottgerstl.lupe.audio.ThroughModel.bluetoothNote(state.kind)?.let { Text2("Bluetooth", it) }
-        Plain("Details", com.scottgerstl.lupe.audio.ThroughModel.details(through.stats))
-    } else if (state == com.scottgerstl.lupe.audio.ThroughState.Starting) {
-        Plain("Output", "Starting…")
-    }
+    // (Output, Delay and Details left on 2026-11-18, Scott; the Bluetooth note stays while the output is Bluetooth: it explains the lag)
+    if (state is com.scottgerstl.lupe.audio.ThroughState.Playing) com.scottgerstl.lupe.audio.ThroughModel.bluetoothNote(state.kind)?.let { Text2("Bluetooth", it) }
 }
 
 @Composable
@@ -222,6 +202,11 @@ fun LupeSwitch(on: Boolean) {
 
 /** A few choices as the connected group (spec 3.4), filling the width: the white pill slides between them (see `SegmentGroup`). */
 @Composable
-fun Segmented(options: List<String>, selected: Int, name: String, onPick: (Int) -> Unit) =
-    com.scottgerstl.lupe.ui.shell.SegmentGroup(options, selected, onPick, Modifier.fillMaxWidth(), height = 40.dp, padH = 8.dp,
+fun Segmented(options: List<String>, selected: Int, name: String, enabled: Boolean = true, disabledWhy: String? = null, onPick: (Int) -> Unit) {
+    // disabled: dimmed, takes no touch, and TalkBack hears one unfocusable-as-action node saying why
+    val m = if (enabled) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().graphicsLayer { alpha = 0.4f }
+        .clearAndSetSemantics { contentDescription = name; stateDescription = disabledWhy ?: "Off"; disabled() }
+        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() } } }
+    com.scottgerstl.lupe.ui.shell.SegmentGroup(options, selected, { if (enabled) onPick(it) }, m, height = 40.dp, padH = 8.dp,
         role = Role.RadioButton, descriptions = options.map { "$name: $it" }, fontSize = 15, fill = true)
+}
