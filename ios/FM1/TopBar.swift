@@ -143,7 +143,7 @@ struct TopBar: View {
         switch session.status {
         case .connected(let v): session.screenLinked ? "\(v) · screen link" : v
         case .wrongFirmware(let found, _): found.replacingOccurrences(of: "FELUCCA ", with: "")
-        default: "needs Skiff 2.2 or 2.5.1"
+        default: "needs \(SkiffFirmware.spoken)"
         }
     }
 

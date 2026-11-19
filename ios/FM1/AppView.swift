@@ -356,7 +356,7 @@ struct NotOnThisFirmware: View {
     @MainActor static func arrange(_ session: DeviceSession) -> NotOnThisFirmware {
         NotOnThisFirmware(title: "Update Skiff to use the Song tab",
                           detail: "This Skiff is older than 2.0, so it can't share its song with Lupe. "
-                              + "Install Skiff 2.2 from the menu (Install firmware…) to arrange here.")
+                              + "Install Skiff-Lupe from the menu (Install firmware…) to arrange here.")
     }
 
     var body: some View {
@@ -419,7 +419,7 @@ struct ConnectionState: View {
     private var detail: String {
         switch status {
         case .searching:
-            "Connect it with a USB-C cable and switch it on. It has to be running Skiff 2.2 or 2.5.1."
+            "Connect it with a USB-C cable and switch it on. It has to be running \(SkiffFirmware.spoken)."
         case .connecting:
             "Reading every track. This takes about a second."
         case .connected: ""

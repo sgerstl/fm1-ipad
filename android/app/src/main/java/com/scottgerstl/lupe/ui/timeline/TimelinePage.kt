@@ -55,6 +55,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -192,7 +193,8 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Canvas(
-                        Modifier.fillMaxSize().clearAndSetSemantics { }
+                        // clipped: a number scrolled past the left edge drew over the zoom keys ("17" in "+", 2026-11-19)
+                        Modifier.fillMaxSize().clipToBounds().clearAndSetSemantics { }
                             .pointerInput(Unit) { detectTransformGestures { c, pan, zoom, _ -> view.touchedAt = System.currentTimeMillis(); if (zoom != 1f) zoomTo(latest.value.second * zoom, c.x); view.scroll = scrollNow() - pan.x } },
                     ) {
                         val sc = scrollNow(); val step = rulerStep(barDp.value)
@@ -200,7 +202,7 @@ fun TimelinePage(uiState: State<TimelineUi>, actions: TimelineActions, head: Sta
                         for (b in first..minOf(bars, first + (size.width / barPx).toInt() + 1)) {
                             val x = b * barPx - sc
                             drawLine(if (b % 4 == 0) Tok.text3 else Tok.control, Offset(x, size.height - (if (b % 4 == 0) 10 else 6).dp.toPx()), Offset(x, size.height), 1.dp.toPx())
-                            if (b % step == 0 && b < bars) {
+                            if (b % step == 0 && b < bars && x >= 0f) {   // a number half scrolled off is left out, not cut
                                 val r = tm.measure("${b + 1}", LupeType.small.copy(fontSize = 12.sp, color = if (b >= ui.totalBars) Tok.text2 else Tok.text2Raised))
                                 drawText(r, topLeft = Offset(x + 4.dp.toPx(), 6.dp.toPx()))
                             }

@@ -40,3 +40,8 @@ import Testing
         #expect(s.tracks.count == 6)
     }
 }
+
+/// The iPad's messages name every release from one list (2026-11-19: they still said "2.2 or 2.5.1" after 2.6).
+@Test func theMessagesNameEverySkiffLupeSpeaks() {
+    #expect(SkiffFirmware.spoken == "Skiff 2.2, 2.5.1 or 2.6")
+}

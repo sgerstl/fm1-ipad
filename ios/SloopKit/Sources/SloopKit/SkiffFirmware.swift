@@ -30,6 +30,12 @@ public enum SkiffFirmware: String, CaseIterable, Sendable {
     public var isNewerThanLupe: Bool { self == .v2_6 }
     /// "2.2", "2.5.1", "2.6"
     public var short: String { String(rawValue.dropFirst("FELUCCA v".count)) }
+    /// "Skiff 2.2, 2.5.1 or 2.6": every release Lupe speaks, for messages, so the words follow the list (2026-11-19,
+    /// the iPad still said "2.2 or 2.5.1" after 2.6 was added).
+    public static var spoken: String {
+        let v = allCases.map(\.short)
+        return "Skiff " + (v.count < 2 ? v.joined() : v.dropLast().joined(separator: ", ") + " or " + v.last!)
+    }
 }
 
 /// Lupe's page numbers (Skiff 2.2's PAGES, plus FX › DELAY 46 and FX › REVERB 47) ↔ the connected firmware's.

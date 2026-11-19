@@ -496,7 +496,7 @@ struct FirmwareOfferCard: View {
                         .bodyText()
                     Text(ForkOfferCard.sloopProjects).bodyText()
                 } else {
-                    Text("This FM-1 runs \(Self.name(found)). Lupe works with Skiff 2.2 or 2.5.1, and can install Skiff-Lupe (Skiff with Lupe’s screen link, downloaded when you choose it). Installing takes about a minute; your projects are backed up first when the firmware allows it.")
+                    Text("This FM-1 runs \(Self.name(found)). Lupe works with \(SkiffFirmware.spoken), and can install Skiff-Lupe (Skiff with Lupe’s screen link, downloaded when you choose it). Installing takes about a minute; your projects are backed up first when the firmware allows it.")
                         .bodyText()
                 }
             } actions: {
