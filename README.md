@@ -4,6 +4,26 @@ An app for the M-VAVE FM-1 running [Skiff](https://github.com/illuminus5/skiff),
 
 It's a work in progress. I test it with my own FM-1, an iPad, a Pixel 7 and a Pixel 10 Pro.
 
+## Screenshots
+
+Lupe for Android 0.3.0, running the demo FM-1:
+
+<p>
+<img src="docs/screenshots/android-pads.png" width="49%" alt="Pads: six tracks of patterns, with the song playing at bar 5">
+<img src="docs/screenshots/android-edit.png" width="49%" alt="Edit: track 1's sixteen steps as notes on a piano roll">
+</p>
+<p>
+<img src="docs/screenshots/android-timeline.png" width="49%" alt="Timeline: each track's patterns laid out in bars as a song">
+<img src="docs/screenshots/android-mix.png" width="49%" alt="Mix: a fader, level meter, mute and solo for each track">
+</p>
+
+The iPad app, built from today's source and running the demo FM-1:
+
+<p>
+<img src="docs/screenshots/ipad-pads.png" width="49%" alt="iPad Pads, with track 1's step editor and piano roll below">
+<img src="docs/screenshots/ipad-timeline.png" width="49%" alt="iPad Timeline: the song's arrangement above the step editor">
+</p>
+
 Lupe began on [SLOOP](https://github.com/isod89/sloop-fm1) and spoke both firmwares until 2026-11-15, when it became Skiff-only. The last SLOOP state is the tag `sloop-archive-2026-11-15`; `design/archive/sloop.md` lists what went.
 
 ## What you need
